@@ -1,0 +1,118 @@
+// =============================================================================
+// SINGLE SOURCE OF TRUTH  —  every piece dimension, mass, colour and proportion.
+// Imported by BOTH the server (to build cannon-es colliders) and the client (to
+// build Three.js meshes). Keeping it all here is what stops the physics body and
+// the rendered mesh from drifting apart, and keeps magic numbers out of the code.
+// =============================================================================
+
+// --- Table ------------------------------------------------------------------
+export const TABLE = { x: 10, z: 7 };            // half-extents of the play surface
+
+// --- Colours ----------------------------------------------------------------
+// Values are hex ints (Three.js materials) or CSS strings (canvas textures);
+// Three.Color accepts either, so the ivory/ink strings work in both places.
+export const COLORS = {
+  neutralProp: 0x9aa0a6,                          // default colour for neutral props
+  cardSide:    0xffffff,                          // card edges
+  deckEdge:    0xf2efe6,                          // deck paper edge
+  boardEdge:   0x2a2a2a,                          // board rim
+  felt:        ['#3a3a3a', '#d9c7a0'],            // board checker squares [dark, light]
+  ivory:       '#f4f1ea',                         // blank die faces
+  ink:         '#141414',                         // die numbers
+  team: {                                         // fixed two-colour game sets [color0, color1]
+    checker: [0xb03030, 0x2a2a2a],                // red / black
+    go:      [0x111111, 0xf0f0f0],                // black / white
+    chess:   [0xe8e0d0, 0x2a2a2a],                // ivory / black
+  },
+};
+
+// --- Kinds (physics half) ---------------------------------------------------
+// mass + collider `shape`: 'die' (polyhedron from props.sides), 'prop' (per-shape
+// data in PROPS below), or { box:[hx,hy,hz] }. mass 0 = static/not grabbable.
+export const KINDS = {
+  die:   { mass: 1,    shape: 'die' },
+  card:  { mass: 0.08, shape: { box: [0.75, 0.015, 1.05] } },
+  prop:  { mass: 0.5,  shape: 'prop' },
+  deck:  { mass: 0.5,  shape: { box: [0.78, 0.04, 1.08] } }, // thin puck; grows via updateDeckCollider
+  board: { mass: 0,    shape: { box: [4.00, 0.05, 4.00] } },
+};
+
+// --- Deck -------------------------------------------------------------------
+export const DECK_VISUAL = [1.56, 0.06, 2.16];   // unit stack box; y scaled by deckHeight(count)
+export const CARD_ROUND = 0.08;                  // card & deck corner radius, as a fraction of card width (0 = square)
+// Deck stack height from card count — used by BOTH the client visual and the
+// server collider, so a flipped deck has a solid body where it's drawn.
+export const deckHeight = c => Math.max(0.06, Math.min(1.2, c * 0.02));
+
+// --- Props ------------------------------------------------------------------
+// Each preset: mass, a coarse proxy `collider` (box or sphere), a `render`
+// descriptor the client dispatches on, and optional `team` (which COLORS.team
+// palette to use; absent = neutral, uses the picked colour).
+// render.prim: box | sphere | cone | cyl | lens. (glb-model props use `model` instead.)
+export const PROPS = {
+  box:            { mass: 0.6, collider: { box: [0.5, 0.5, 0.5] },     render: { prim: 'box', size: [1, 1, 1] } },
+  pyramid:        { mass: 0.6, collider: { box: [0.55, 0.5, 0.55] },   render: { prim: 'cone', r: 0.72, h: 1, seg: 4 } },
+  sphere:         { mass: 0.6, collider: { sphere: 0.5 },              render: { prim: 'sphere', r: 0.5 } },
+  // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
+  coin:           { mass: 0.3, collider: { box: [0.36, 0.07, 0.36] }, model: '/models/pieces/misc/coin.glb', modelScale: 3.0, modelRot: [1.5708, 0, 0], ownMaterial: false }, // rotated flat; keeps its own look
+  poker_chip:     { mass: 0.25, collider: { box: [0.45, 0.045, 0.45] }, model: '/models/pieces/misc/poker_chip.glb', modelScale: 0.18, tintMaterial: 'c1' }, // colour picker tints only the body; white rim kept
+  token:          { mass: 0.4, collider: { box: [0.17, 0.50, 0.17] }, model: '/models/pieces/misc/token.glb', modelScale: 0.84, stand: true },
+  checker:        { mass: 0.3, collider: { box: [0.45, 0.12, 0.45] }, model: '/models/pieces/checkers/checker.glb', modelScale: 30, team: 'checker' },
+  go:             { mass: 0.2, collider: { box: [0.15, 0.075, 0.15] }, render: { prim: 'lens', r: 0.2, sy: 0.375 }, team: 'go' }, // ~0.4 wide, fits the go board grid
+  // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
+  // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
+  // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
+  'chess-pawn':   { mass: 0.4, collider: { box: [0.28, 0.50, 0.24] }, model: '/models/pieces/chess/pawn.glb',   modelScale: 2.124, team: 'chess', stand: true },
+  'chess-rook':   { mass: 0.5, collider: { box: [0.31, 0.59, 0.27] }, model: '/models/pieces/chess/rook.glb',   modelScale: 2.124, team: 'chess', stand: true },
+  'chess-knight': { mass: 0.5, collider: { box: [0.32, 0.54, 0.36] }, model: '/models/pieces/chess/knight.glb', modelScale: 2.124, team: 'chess', stand: true },
+  'chess-bishop': { mass: 0.5, collider: { box: [0.31, 0.64, 0.27] }, model: '/models/pieces/chess/bishop.glb', modelScale: 2.124, team: 'chess', stand: true },
+  'chess-queen':  { mass: 0.6, collider: { box: [0.31, 0.70, 0.27] }, model: '/models/pieces/chess/queen.glb',  modelScale: 2.124, team: 'chess', stand: true },
+  'chess-king':   { mass: 0.6, collider: { box: [0.31, 0.70, 0.27] }, model: '/models/pieces/chess/king.glb',   modelScale: 2.124, team: 'chess', stand: true },
+};
+// Ordered list for the spawn UI. team:true = fixed two-colour set; else colour picker.
+export const PROP_LIST = [
+  { id: 'box', name: 'Box' }, { id: 'pyramid', name: 'Pyramid' }, { id: 'sphere', name: 'Sphere' },
+  { id: 'coin', name: 'Coin' }, { id: 'poker_chip', name: 'Poker chip' }, { id: 'token', name: 'Token' },
+  { id: 'checker', name: 'Checker', team: true }, { id: 'go', name: 'Go stone', team: true },
+  { id: 'chess-pawn', name: 'Chess · Pawn', team: true }, { id: 'chess-rook', name: 'Chess · Rook', team: true },
+  { id: 'chess-knight', name: 'Chess · Knight', team: true }, { id: 'chess-bishop', name: 'Chess · Bishop', team: true },
+  { id: 'chess-queen', name: 'Chess · Queen', team: true }, { id: 'chess-king', name: 'Chess · King', team: true },
+];
+// Built-in board models (public/models/boards), CC0. Modeled ~0.43 units, so a
+// large modelScale fills the table; colliders precomputed (worldSize*scale/2).
+// box[1] (half-thickness) also sets how high the board sits so it rests on the table.
+export const BOARDS = {
+  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 18.7, box: [4.00, 0.22, 4.00] },
+  go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29] },
+};
+export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
+
+// --- Dice family ------------------------------------------------------------
+// Only raw vertices live here; both sides derive shape from them (client:
+// ConvexGeometry mesh, server: ConvexPolyhedron collider). d6 stays a pipped box.
+const PHI = (1 + Math.sqrt(5)) / 2, IPHI = 1 / PHI;
+const DIE_RAW = {
+  4:  [[1,1,1],[1,-1,-1],[-1,1,-1],[-1,-1,1]],                                   // tetrahedron
+  8:  [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0],[0,0,1],[0,0,-1]],                      // octahedron
+  20: [[-1,PHI,0],[1,PHI,0],[-1,-PHI,0],[1,-PHI,0],[0,-1,PHI],[0,1,PHI],         // icosahedron
+       [0,-1,-PHI],[0,1,-PHI],[PHI,0,-1],[PHI,0,1],[-PHI,0,-1],[-PHI,0,1]],
+  12: [[1,1,1],[1,1,-1],[1,-1,1],[1,-1,-1],[-1,1,1],[-1,1,-1],[-1,-1,1],[-1,-1,-1], // dodecahedron
+       [0,IPHI,PHI],[0,IPHI,-PHI],[0,-IPHI,PHI],[0,-IPHI,-PHI],
+       [IPHI,PHI,0],[IPHI,-PHI,0],[-IPHI,PHI,0],[-IPHI,-PHI,0],
+       [PHI,0,IPHI],[PHI,0,-IPHI],[-PHI,0,IPHI],[-PHI,0,-IPHI]],
+  10: (() => { const c = Math.cos(Math.PI/5), z0 = 0.115, h = z0*(c+1)/(1-c);  // pentagonal trapezohedron
+    const v = [[0,0,h],[0,0,-h]];                                              // apexes; h keeps kites planar
+    for (let i = 0; i < 5; i++) { const a = i*2*Math.PI/5;
+      v.push([Math.cos(a), Math.sin(a), z0]); v.push([Math.cos(a+Math.PI/5), Math.sin(a+Math.PI/5), -z0]); }
+    return v; })(),
+};
+export const DIE_RADIUS = { 4: 0.84, 6: 0.5, 8: 0.8, 10: 0.8, 12: 0.76, 20: 0.76 }; // 20% smaller
+export const DIE_SIDES = [4, 6, 8, 10, 12, 20];
+
+// Raw vertices scaled so the farthest sits at `radius`. null for d6/unknown.
+export function dieVerts(sides, radius = DIE_RADIUS[sides] || 1) {
+  const raw = DIE_RAW[sides]; if (!raw) return null;
+  let max = 0; for (const v of raw) max = Math.max(max, Math.hypot(v[0], v[1], v[2]));
+  const k = radius / max;
+  return raw.map(v => [v[0]*k, v[1]*k, v[2]*k]);
+}

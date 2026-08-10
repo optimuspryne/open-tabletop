@@ -1,0 +1,251 @@
+# Architecture
+
+A web-based, physics-driven tabletop where any game can be played, because the
+engine only ever simulates *physical objects* and lets humans enforce the rules.
+
+## Two worlds, kept apart
+
+The single most important idea: there are two parallel representations of the
+table, and separating them is what makes everything work.
+
+- **The physics world** lives in exactly one place — the server. It is a
+  cannon-es simulation of bodies (mass, position, velocity, colliders) and is
+  the sole source of truth for where everything is. It knows nothing about
+  "cards" or "dice", only shapes colliding.
+- **The render world** lives on every client — a Three.js scene of meshes.
+  Clients run **no physics at all**. They receive positions and draw them.
+
+Colyseus is the bridge: it keeps a chunk of server memory (the "state")
+synchronized to every client, sending only what changed, ~60×/second.
+
+    server simulates  →  Colyseus syncs state  →  clients interpolate & draw
+    clients send intent (grab/move/release/…)  →  server applies it
+
+Because one authoritative simulation owns all physics, no two clients can
+disagree and no client can cheat the physics — they aren't running any.
+cannon-es was chosen specifically because it is pure JavaScript, so the exact
+same physics code runs unchanged on Node.
+
+## Kinds vs. instances (where OO belongs)
+
+Two things both feel like "objects", but they are fundamentally different:
+
+- An **instance** is a specific die on the table right now. Instances live in
+  synced state — serialized and rebuilt on every client many times a second — so
+  they **must** be flat, plain records:
+  `{ type, props, owner, x/y/z, quaternion, count }`. A rich class instance
+  wouldn't survive serialization.
+- A **kind** is the *concept* "a d20", "the chess king", "the standard deck" —
+  geometry, collider, textures, behavior. One exists per type, created once.
+  **This is where object-orientation belongs.**
+
+So: **rich kinds, flat instances** — the *type-object / flyweight* pattern.
+Variation lives in `props`, not in a proliferation of types: one `die` kind
+reads `props.sides`; one `card` kind reads `props.front/back`; one `prop` kind
+reads `props.shape` (or a `.glb` `model`) and `props.scale/color/team`.
+
+## Files
+
+The client used to be one inline module; it is now a small **linear import
+chain** (`shared ← core ← graphics ← client`) so the codebase stays navigable:
+
+- **`shared/pieces.js`** — the single source of truth for physics dimensions,
+  masses, colours, dice vertices, and the prop/board registries. Imported by
+  *both* sides so a collider and its mesh are built from the same numbers.
+- **`server.js`** — the authority: the cannon-es world, the Colyseus room, all
+  message handlers, the disk asset library, and the private (non-synced) memory
+  that holds secrets. All physics tuning is in one `SIM` config block.
+- **`public/core.js`** — scene/camera/renderer/controls + the environment map,
+  plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks.
+- **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
+  the `.glb` model loading/measuring helpers, and the `KIND` registry. Pure:
+  props in, meshes out — no shared runtime state.
+- **`public/client.js`** — the tightly-coupled runtime: networking, interaction
+  (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
+  render loop. Holds the mutable session state (`room`, `down`, `inspect`,
+  `meshes`, `buffers`).
+- **`public/index.html` / `styles.css`** — the page shell and all UI styling.
+
+## Public vs. secret (how hidden information works)
+
+The **synced state is public** — anything in it is one devtools-peek from being
+read. It holds: each piece's transform/type/owner/props/count; each player's
+seat, hand *count*, name, color, avatar; and whose turn it is.
+
+Secrets live in plain server-only maps that are **never** put in synced state:
+
+- `deckCards` — a deck's actual ordered cards
+- `cardData` — the hidden face of a face-down table card
+- `hands` — each player's private cards, sent to that one player directly
+- `drafts` — a deck being built in chunks (pre-finish)
+- `pendingInspect` — a card drawn-to-inspect but not yet placed (yours alone)
+
+The invariant: **if it's synced it's public; if it's secret it's server-only.**
+A face-down card's face has never been transmitted to any client, so there is
+nothing to peek at. Revealing it *moves* the data from a secret map into public
+props — only then does any client learn it, and the client rebuilds that card's
+mesh from a blank back to a real face. Draw-to-inspect uses the same channel as
+a hand: the drawn front goes to the drawer alone and sits in `pendingInspect`
+until placed on the field / into a hand / back on the deck.
+
+## The heartbeat
+
+**Server, 60×/sec:** for every held piece, run the *velocity servo* (push the
+body's velocity toward that player's drag target, clamped) so a held piece
+follows the cursor while remaining a real dynamic body that shoves others; step
+the cannon world (fixed timestep, sub-stepped — see `SIM.step`); then copy every
+body's transform into synced state. Colyseus ships only changed fields, so
+resting pieces cost ~nothing.
+
+**Client, each frame:** as state patches arrive, push a timestamped snapshot of
+every piece into a small per-piece buffer. To draw, render each piece as it was
+**~60 ms ago** (`CONFIG.render.delay`), interpolating between the two real
+snapshots bracketing that moment (lerp position, slerp rotation).
+
+That deliberate delay is what makes motion smooth: rendering slightly in the past
+guarantees two real samples to interpolate *between*, so fast pieces glide
+instead of teleporting packet-to-packet. One uniform path for held/thrown/resting
+pieces — no prediction seams.
+
+## One action end to end: grab & throw
+
+1. Press + move past a small threshold → client distinguishes *drag* from
+   *click*, sends `grab {id}`.
+2. Server marks the piece `owner: you`.
+3. On move, client raycasts the cursor onto a horizontal plane (its height is
+   the scroll-adjustable grab height) and streams `move {id, x,y,z}`; the servo
+   pushes the body toward it. Meanwhile the client measures a smoothed cursor
+   velocity, and a translucent ring previews the straight-down landing spot.
+4. Release → client sends `release {id, v}` with that measured hand speed; the
+   server clears the owner and sets the body's velocity to `v` (clamped;
+   cards get a stricter cap to avoid tunnelling). Now it's a free body flying
+   with real momentum, interpolated onto every screen.
+
+Decoupling throw velocity (measured) from the servo (which only tracks the
+cursor) is what fixed the old rubberband/jitter: the servo tracks tightly *and*
+throws carry accurate momentum.
+
+## Pieces today
+
+Each **kind** is defined in two registries keyed by the same type id:
+
+- `shared/pieces.js` → `KINDS`: the physics half, `{ mass, shape }`. The server's
+  `buildCollider(type, props)` reads this; there are no per-type branches in
+  `spawn`.
+- client `KIND` (in `graphics.js`): the render + interaction half, `{ mesh,
+  grab, ldrag, lclick, rclick }`. The pointer handler looks up `KIND[type]` and
+  dispatches, instead of switching on type.
+
+The kinds:
+
+- **die** — parameterized by `props.sides` ∈ {4,6,8,10,12,20}. Numbered
+  (below).
+- **card** — thin box; faces are texture *references* (`front`, `back`).
+  Face-down keeps `front` server-side (`cardData`) and shows only the public
+  `back`, so uploaded card art is hidden exactly like ranks are. An **invisible
+  thicker collider** (`SIM.cards.colliderThick`) keeps stacks stable while the
+  mesh stays thin.
+- **deck** — a public `back` + private ordered fronts (`deckCards`); public
+  `count` scales the visible stack (`deckHeight`).
+- **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
+  box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Colour comes
+  from a picker, a two-colour **team** palette, or a per-material **tint**; a
+  `stand` flag self-rights standing pieces. Universal `props.scale`.
+- **board** — static (mass 0) but removable. A built-in model (`BOARDS`
+  registry), an uploaded `.glb`, or a procedural flat box with an optional
+  image. One board at a time; it's sat on the table by its half-height.
+
+Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
+card faces, checkerboard, player markers), created through a helper that applies
+**anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
+are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
+
+### Models: scale, orientation, colour
+
+- **Built-in model pieces** (chess/checkers/go/coin/chip/token) carry a fixed
+  `modelScale` and a **precomputed box collider** in `PROPS`, so a set keeps its
+  real relative sizes and the server never has to load a model. `.glb` files can
+  bake a node scale, so sizes are measured *as loaded*.
+- **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
+  the table); the client measures the model and sends the collider box with the
+  spawn.
+- **`modelRot`** reorients a mis-authored model (e.g. laying a coin flat).
+- **Tint modes** (in the loader): `team` recolours every slot; a colour-picker
+  prop recolours all; `tintMaterial:'name'` recolours **one** material slot and
+  de-metals the rest (e.g. a chip body but not its white rim); `ownMaterial`
+  keeps the model's materials. glTF defaults materials to metallic, so tinting
+  swaps in a clean matte material and de-metals kept slots.
+
+## The dice family
+
+A die is **one kind** parameterized by `props.sides`.
+
+- `shared/pieces.js` stores each solid's **vertices**. d6 stays a pipped box; the
+  rest are convex polyhedra (tetra/octa/icosa/dodeca + a pentagonal
+  trapezohedron for d10).
+- **Client** builds a flat-shaded `ConvexGeometry` mesh and drops a **number**
+  onto each logical face (coplanar triangles grouped by normal, a digit sprite at
+  each centroid).
+- **Server** builds a `CANNON.ConvexPolyhedron` from the *same* vertices (hull
+  faces from `convex-hull`, windings flipped outward) so the die tumbles and
+  settles on a face. Visual and physics can't diverge; adding a size is a
+  one-line vertex entry.
+
+## Seats, presence, turns
+
+On join the server assigns the lowest free seat, a colour, and a name, and
+creates a public `Player` (seat, hand count, name, colour, avatar). The client
+parks *your* camera at *your* seat, draws every *other* player's hand as N fanned
+face-down backs (from the public count — you see how many, never which), and
+stands a marker (avatar or silhouette + name) at each seat. `state.turn` holds a
+session id, highlighted in the panel; "Next turn" walks it around the seats.
+
+## Identity & reconnection
+
+On join the client saves a reconnection token in `sessionStorage`; on reload it
+calls `client.reconnect(token)` to rejoin as the same session (same seat, name,
+avatar, hand). The server holds the seat for 30 s on an unexpected disconnect
+(`allowReconnection`) and re-sends the private hand on `onReconnect`. Because
+`sessionStorage` is per-tab, separate tabs stay distinct.
+
+## The message protocol (intent up, state down)
+
+- **Up (client → server):** `grab`, `move`, `release`, `flip`, `dealToTable`,
+  `dealDrag`, `takeCard`, `playCard`, `shuffle`, `drawInspect`, `inspectPlace`,
+  `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`/`listDecks`/`loadDeck`/
+  `editDeck`, `saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard`,
+  `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`.
+- **Down (server → client):** synced state (pieces, players, turn) plus direct
+  messages — `hand` (your private cards), `dealt` (adopt a dealt card as the
+  dragged piece), `inspectCard` (a drawn front for you alone), `deckList`,
+  `boardList`, `propList` (saved-library listings).
+
+## Reset & room lifecycle
+
+**Reset** wipes the whole room to an empty table — every piece (boards included),
+all hands, and every private map. New rooms start **empty** (the default-seed
+call is disabled); you build the table from the toolbar.
+
+## Security & lobby (planned, not built)
+
+Public release target is a **role hierarchy** enforced server-side:
+**Admin → Game Master → Helper → Player**. Admins (accounts) own the asset
+library and uploads; GMs (accounts) create rooms, kick, spawn, and promote
+Helpers; Helpers and Players join by room code. Persistence: **PostgreSQL** for
+accounts (hashed), room metadata, and asset metadata; asset **files** stay on the
+volume; live table state stays in memory. A stateless hardening pass (glTF
+magic-byte validation, storage caps + rate limits, external-URI stripping,
+`.json`→extension allowlist, security headers/CORS, post-parse complexity limits)
+lands underneath, independent of the roles. Making uploads admin-only closes the
+public-upload hole by construction; the residual client-side-parser risk is
+reduced by the role gate + hardening (defense in depth, not provably safe).
+
+## Adding things
+
+- **A new piece type:** one `KINDS` entry (mass + shape) + one client `KIND`
+  entry (mesh + interaction). Everything downstream just works.
+- **A die size:** one vertex entry in the shared dice data.
+- **A built-in model piece:** a `PROPS` entry with `model` + `modelScale` +
+  precomputed `collider.box` (+ optional `team`/`tintMaterial`/`modelRot`/`stand`).
+- **A built-in board:** a `BOARDS` entry (`model`, `modelScale`, precomputed
+  `box`).

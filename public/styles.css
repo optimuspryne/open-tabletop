@@ -1,0 +1,114 @@
+  /* ===== DESIGN TOKENS — single source of truth for all UI styling ===== */
+  :root {
+    /* palette */
+    --bg:#14181d;                       /* page background */
+    --panel:rgba(20,24,29,.85);         /* translucent "glass" panels */
+    --panel-solid:#1c2127;              /* opaque panels (modals) */
+    --text:#e8e6e0;                     /* primary text */
+    --accent:#c9a25a;                   /* gold accent (hover, labels, highlights) */
+    --accent-soft:rgba(201,162,90,.25); /* accent tint (active turn row) */
+    --border:rgba(255,255,255,.12);     /* panel/control borders */
+    --field:rgba(255,255,255,.08);      /* input backgrounds */
+    --overlay:rgba(0,0,0,.55);          /* modal backdrop */
+    --shadow:0 2px 6px rgba(0,0,0,.35); /* hand-card lift */
+    --card:#fbfbf7;                     /* hand-card face */
+    --card-line:#ccc;                   /* hand-card border */
+    --ink:#141414;                      /* text on light cards */
+    --avatar:#3a4048;                   /* empty avatar background */
+    /* shape */
+    --r-sm:6px; --r:8px; --r-lg:10px; --r-xl:12px;  /* corner radii */
+    --blur:blur(6px);                   /* panel backdrop blur */
+    /* type */
+    --font:system-ui,sans-serif;        /* all UI text */
+    --font-card:Georgia;                /* rank on hand cards */
+    /* fluid structure — scale with the viewport (floor, preferred, ceiling) */
+    --inset:  clamp(10px, 1.4vw, 20px); /* panel distance from screen edges */
+    --gap:    clamp(6px, 0.7vw, 10px);  /* gaps between controls */
+    --fs:     clamp(12px, 0.95vw, 15px);/* base UI text */
+    --fs-sm:  clamp(11px, 0.85vw, 13px);/* small text */
+    --card-w: clamp(112px, 10.6vw, 138px); /* hand-card width (+50% baseline; ratio locked below) */
+  }
+
+  /* ===== base ===== */
+  * { box-sizing:border-box; }
+  html,body { margin:0; height:100%; overflow:hidden; background:var(--bg); }
+  #app { position:fixed; inset:0; }
+  canvas { display:block; }
+
+  /* ===== top-left toolbar ===== */
+  #ui { position:fixed; top:var(--inset); left:var(--inset); display:flex; gap:var(--gap); flex-wrap:wrap; align-items:center; font-family:var(--font); }
+  .grp { display:inline-flex; gap:4px; }
+  .grp button { padding:9px 10px; }
+  .menu { position:relative; display:inline-flex; }
+  #diceGrp { position:absolute; top:calc(100% + 6px); left:0; flex-direction:column; padding:6px;
+           background:var(--panel); border:1px solid var(--border); border-radius:var(--r);
+           backdrop-filter:var(--blur); z-index:5; }
+  #diceGrp[hidden] { display:none; }
+  button { background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:var(--r); padding:9px 14px; font-size:var(--fs); cursor:pointer; backdrop-filter:var(--blur); transition:border-color .15s,transform .05s; }
+  button:hover { border-color:var(--accent); }
+  button:active { transform:translateY(1px); }
+  #status { font:var(--fs-sm) var(--font); color:var(--text); padding:8px 12px; background:var(--panel); border:1px solid var(--border); border-radius:var(--r); backdrop-filter:var(--blur); }
+  #status b { color:var(--accent); }
+
+  #inspectHint { position:fixed; top:var(--inset); left:50%; transform:translateX(-50%); padding:8px 14px; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:var(--r); font:var(--fs-sm) var(--font); backdrop-filter:var(--blur); z-index:20; }
+  #inspectHint[hidden] { display:none; }
+  #drawActions { position:fixed; bottom:calc(var(--inset) + 84px); left:50%; transform:translateX(-50%); display:flex; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center; max-width:min(680px, 94vw); padding:10px 12px; background:var(--panel); border:1px solid var(--border); border-radius:var(--r-lg); backdrop-filter:var(--blur); z-index:20; }
+  #drawActions[hidden] { display:none; }
+  #drawActions .da-note { color:var(--text); opacity:.7; font:var(--fs-sm) var(--font); }
+  #drawActions kbd { font:600 11px var(--font); background:var(--field); border:1px solid var(--border); border-radius:4px; padding:1px 5px; margin-left:4px; }
+  /* ===== hint (bottom-left) ===== */
+  #hint { position:fixed; bottom:var(--inset); left:var(--inset); max-width:340px; padding:8px 12px; background:var(--panel); color:var(--text); border:1px solid var(--border); border-radius:var(--r); font:var(--fs-sm)/1.45 var(--font); backdrop-filter:var(--blur); }
+  #hintHead { display:flex; align-items:center; justify-content:space-between; gap:10px; cursor:pointer; user-select:none; }
+  #hintHead b { color:var(--accent); }
+  #hintToggle { color:var(--text); opacity:.7; font-size:.85em; }
+  #hint.collapsed #hintBody { display:none; }
+  #hintBody { margin-top:8px; max-height:min(62vh, 560px); overflow-y:auto; padding-right:4px; }
+  #hintBody .hcat { color:var(--accent); font-weight:600; margin:9px 0 2px; }
+  #hintBody .hcat:first-child { margin-top:0; }
+  #hintBody ul { margin:0 0 0 16px; padding:0; }
+  #hintBody ul ul { margin:2px 0 2px 14px; list-style:circle; }
+  #hintBody li { margin:2px 0; }
+  #hintBody b { color:var(--text); background:var(--field); border:1px solid var(--border); border-radius:4px; padding:0 5px; font-weight:600; }
+
+  /* ===== hand bar (bottom-center) ===== */
+  #hand { position:fixed; bottom:var(--inset); left:50%; transform:translateX(-50%); display:none; gap:6px; padding:8px; background:var(--panel); border:1px solid var(--border); border-radius:var(--r-lg); backdrop-filter:var(--blur); }
+  .handcard { width:var(--card-w); aspect-ratio:44/62; background:var(--card); border:1px solid var(--card-line); border-radius:var(--r-sm); display:flex; align-items:center; justify-content:center; font:bold calc(var(--card-w)*0.5) var(--font-card); cursor:pointer; box-shadow:var(--shadow); transition:transform .1s; }
+  .handcard.img { background-size:cover; background-position:center; }
+  .handcard.txt { font:600 calc(var(--card-w)*0.15)/1.1 var(--font); padding:3px; text-align:center; overflow:hidden; color:var(--ink); }
+  .handcard:hover { transform:translateY(-6px); }
+
+  /* ===== modals (custom deck / add prop) ===== */
+  #deckModal, #propModal, #boardModal, #customPropModal, #editPropModal, #editDeckModal { position:fixed; inset:0; background:var(--overlay); display:flex; align-items:center; justify-content:center; z-index:10; }
+  #deckModal[hidden], #propModal[hidden], #boardModal[hidden], #customPropModal[hidden], #editPropModal[hidden], #editDeckModal[hidden] { display:none; }
+  #editPropModal, #editDeckModal { z-index:15; } /* these open on top of the deck/prop modal, so they sit above it */
+  .modalCard { background:var(--panel-solid); color:var(--text); border:1px solid var(--border); border-radius:var(--r-xl); padding:20px 22px; width:min(340px, 92vw); font:var(--fs)/1.5 var(--font); }
+  .modalCard h3 { margin:0 0 12px; font-size:16px; }
+  .modalCard label { display:block; margin:10px 0 4px; color:var(--accent); }
+  .modalCard .modeRow { display:flex; gap:16px; margin-bottom:6px; }
+  .modalCard .modeRow label { color:var(--text); display:inline-flex; align-items:center; gap:5px; margin:0; }
+  .modalCard .backRow { display:flex; gap:8px; align-items:center; }
+  .modalCard input[type=color] { width:40px; height:32px; padding:0; border:1px solid var(--border); border-radius:var(--r-sm); background:none; }
+  .modalCard input[type=text], .modalCard textarea, .modalCard input[type=number] { flex:1; width:100%; background:var(--field); color:var(--text); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px 8px; font:var(--fs-sm) var(--font); }
+  .modalCard textarea { resize:vertical; }
+  .modalCard input[type=file] { width:100%; font:var(--fs-sm) var(--font); color:var(--text); }
+  .modalCard select { width:100%; background:var(--field); color:var(--text); border:1px solid var(--border); border-radius:var(--r-sm); padding:6px 8px; font:var(--fs-sm) var(--font); }
+  .modalCard select option { background:var(--panel-solid); color:var(--text); }
+  .modalCard .row { display:flex; gap:8px; justify-content:flex-end; margin-top:18px; }
+  .modalCard .note { font-size:12px; opacity:.7; margin-top:6px; }
+  .savedWrap { margin-top:12px; border-top:1px solid var(--border); padding-top:10px; }
+  .savedList { max-height:120px; overflow:auto; display:flex; flex-direction:column; gap:4px; }
+  .savedRow { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:var(--fs-sm); }
+  .savedRow button { padding:3px 10px; }
+
+  /* ===== player panel (top-right) ===== */
+  #panel { position:fixed; top:var(--inset); right:var(--inset); width:min(200px, 90vw); display:flex; flex-direction:column; gap:8px; font:var(--fs-sm)/1.6 var(--font); }
+  #players { padding:8px 10px; background:var(--panel); border:1px solid var(--border); border-bottom:none; border-radius:var(--r-lg) var(--r-lg) 0 0; backdrop-filter:var(--blur); color:var(--text); }
+  .prow { display:flex; align-items:center; gap:7px; padding:2px 5px; border-radius:var(--r-sm); }
+  .prow.turn { background:var(--accent-soft); font-weight:600; }
+  .dot { width:10px; height:10px; border-radius:50%; display:inline-block; flex:0 0 auto; }
+  .pav { width:18px; height:18px; border-radius:50%; object-fit:cover; flex:0 0 auto; }
+  #me { display:flex; gap:6px; align-items:center; padding:8px 10px; background:var(--panel); border:1px solid var(--border); border-radius:0 0 var(--r-lg) var(--r-lg); backdrop-filter:var(--blur); }
+  #me input[type=text] { flex:1; min-width:0; background:var(--field); color:var(--text); border:1px solid var(--border); border-radius:var(--r-sm); padding:5px 7px; font:var(--fs-sm) var(--font); }
+  #me .upload { color:var(--text); border:1px solid var(--border); border-radius:var(--r-sm); padding:5px 8px; cursor:pointer; white-space:nowrap; }
+  #me .upload:hover { border-color:var(--accent); }
+  .mav { width:26px; height:26px; border-radius:50%; background:var(--avatar) center/cover no-repeat; flex:0 0 auto; border:1px solid var(--border); }

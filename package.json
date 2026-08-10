@@ -1,0 +1,18 @@
+{
+  "name": "tabletop-mp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@colyseus/core": "^0.17.0",
+    "@colyseus/schema": "^4.0.7",
+    "@colyseus/ws-transport": "^0.17.0",
+    "cannon-es": "^0.20.0",
+    "convex-hull": "^1.0.3",
+    "express": "^4.19.2",
+    "three": "^0.161.0"
+  }
+}
