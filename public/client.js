@@ -330,6 +330,8 @@ const pickId = () => { ray.setFromCamera(pointer,camera);
   return o && o.userData.id; };
 
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault()); // right-click is ours
+renderer.domElement.addEventListener('mousedown', e => { // middle-click snaps a held piece's facing to 90°
+  if (e.button === 1) { e.preventDefault(); if (down && down.grabbed) room.send('snap', { id: down.id }); } });
 document.getElementById('hintHead').onclick = () => { const h = document.getElementById('hint'); const c = h.classList.toggle('collapsed');
   document.getElementById('hintToggle').innerHTML = c ? 'Show &#9656;' : 'Hide &#9662;'; }; // collapsible controls panel
 document.querySelectorAll('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place)); // drawn-card placement
@@ -473,6 +475,9 @@ addEventListener('keydown', e => {
     if (e.key === 'Backspace') e.preventDefault();
     const id = (down && down.id) || pickId();
     if (id) { room.send('remove', { id }); if (down && down.id === id) { down = null; controls.enabled = true; } }
+  } else if (e.key === 'u' || e.key === 'U') {          // toggle keep-upright / lie-flat on the held or hovered piece
+    const id = (down && down.id) || pickId();
+    if (id) room.send('setStand', { id });
   } else if (e.key === 's' || e.key === 'S') {
     const id = (down && down.id) || pickId(); // held or hovered
     if (id && meshes.get(id).type === 'deck') {

@@ -1,4 +1,4 @@
-# open-tabletop
+# Web Tabletop — Multiplayer (Colyseus)
 
 An authoritative-physics virtual tabletop where *any* game can be played,
 because the engine only simulates physical objects and lets people enforce the
@@ -162,4 +162,3 @@ construction. See the security notes in `ARCHITECTURE.md`.
 
 - `defineTypes()` (build-step-free schema) is deprecated but works in 0.17.
 - No client build step: Three.js via import map, Colyseus SDK via unpkg.
-

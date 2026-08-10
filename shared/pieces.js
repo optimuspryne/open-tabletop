@@ -57,8 +57,8 @@ export const PROPS = {
   coin:           { mass: 0.3, collider: { box: [0.36, 0.07, 0.36] }, model: '/models/pieces/misc/coin.glb', modelScale: 3.0, modelRot: [1.5708, 0, 0], ownMaterial: false }, // rotated flat; keeps its own look
   poker_chip:     { mass: 0.25, collider: { box: [0.45, 0.045, 0.45] }, model: '/models/pieces/misc/poker_chip.glb', modelScale: 0.18, tintMaterial: 'c1' }, // colour picker tints only the body; white rim kept
   token:          { mass: 0.4, collider: { box: [0.17, 0.50, 0.17] }, model: '/models/pieces/misc/token.glb', modelScale: 0.84, stand: true },
-  checker:        { mass: 0.3, collider: { box: [0.45, 0.12, 0.45] }, model: '/models/pieces/checkers/checker.glb', modelScale: 30, team: 'checker' },
-  go:             { mass: 0.2, collider: { box: [0.15, 0.075, 0.15] }, render: { prim: 'lens', r: 0.2, sy: 0.375 }, team: 'go' }, // ~0.4 wide, fits the go board grid
+  checker:        { mass: 0.3, collider: { box: [0.45, 0.12, 0.45] }, model: '/models/pieces/checkers/checker.glb', modelScale: 30, team: 'checker', stand: 'flat' },
+  go:             { mass: 0.2, collider: { box: [0.15, 0.075, 0.15] }, render: { prim: 'lens', r: 0.2, sy: 0.375 }, team: 'go', stand: 'flat' }, // ~0.4 wide, fits the go board grid
   // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
   // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
   // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
@@ -106,7 +106,7 @@ const DIE_RAW = {
       v.push([Math.cos(a), Math.sin(a), z0]); v.push([Math.cos(a+Math.PI/5), Math.sin(a+Math.PI/5), -z0]); }
     return v; })(),
 };
-export const DIE_RADIUS = { 4: 0.84, 6: 0.5, 8: 0.8, 10: 0.8, 12: 0.76, 20: 0.76 }; // 20% smaller
+export const DIE_RADIUS = { 4: 0.84, 6: 0.6, 8: 0.8, 10: 0.8, 12: 0.76, 20: 0.76 }; // 20% smaller
 export const DIE_SIDES = [4, 6, 8, 10, 12, 20];
 
 // Raw vertices scaled so the farthest sits at `radius`. null for d6/unknown.

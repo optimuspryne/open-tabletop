@@ -481,6 +481,21 @@ class TableRoom extends Room {
       this.deckCards.clear(); this.cardData.clear(); this.flips.clear(); this.targets.clear();
       for (const c of this.clients) this.sendHand(c);                   // empty every player's hidden hand
     });
+    this.onMessage('setStand', (client, { id }) => { // toggle a piece's keep-upright/flat behaviour
+      const p = this.state.pieces.get(id); if (!p) return;
+      const pr = JSON.parse(p.props || '{}');
+      pr.stand = this.standOf(p) ? false : this.naturalStand(p); // on -> off, or off -> its natural mode
+      p.props = JSON.stringify(pr);
+      const b = this.bodies.get(id); if (b) b.wakeUp();
+    });
+    this.onMessage('snap', (client, { id }) => { // snap a held piece's facing to the nearest 90° (and upright)
+      const p = this.state.pieces.get(id); if (!p || p.owner !== client.sessionId) return;
+      const b = this.bodies.get(id); if (!b) return;
+      const fwd = new CANNON.Vec3(0, 0, 1), wf = new CANNON.Vec3(); b.quaternion.vmult(fwd, wf);
+      const yaw = Math.round(Math.atan2(wf.x, wf.z) / (Math.PI / 2)) * (Math.PI / 2);
+      b.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + cardinal
+      b.angularVelocity.setZero(); b.wakeUp();
+    });
     this.onMessage('nextTurn', () => this.advanceTurn());
     this.onMessage('remove', (client, { id }) => { if (this.state.pieces.has(id)) this.removePiece(id); });
     this.onMessage('setName', (client, { name }) => {
@@ -544,6 +559,19 @@ class TableRoom extends Room {
       return true;
     } catch (e) { return false; }
   }
+  standOf(p) { // effective self-right mode: true (stand tall) | 'flat' (lie flat) | falsy (off)
+    const pr = JSON.parse(p.props || '{}');
+    if (pr.stand !== undefined) return pr.stand;                 // per-instance override (set by the toggle)
+    if (p.type === 'deck') return 'flat';                        // a deck sits flat by default
+    return (PROPS[pr.shape] || {}).stand;                        // else the prop shape's default
+  }
+  naturalStand(p) { // which mode to enable when the toggle turns self-right ON
+    if (p.type === 'deck') return 'flat';
+    const pr = JSON.parse(p.props || '{}'), def = PROPS[pr.shape] || {};
+    if (def.stand) return def.stand;
+    const box = def.collider && def.collider.box;                // no default: flat if the collider is thin on Y
+    return (box && box[1] <= box[0] && box[1] <= box[2]) ? 'flat' : true;
+  }
   removePiece(id) {
     const b = this.bodies.get(id); if (b) this.world.removeBody(b);
     this.bodies.delete(id); this.targets.delete(id); this.flips.delete(id);
@@ -591,25 +619,23 @@ class TableRoom extends Room {
       const L = Math.hypot(vx, vy, vz); if (L > MAX) { const s = MAX / L; vx *= s; vy *= s; vz *= s; }
       b.velocity.set(vx, vy, vz);
       b.angularVelocity.scale(SIM.servo.angDamp, b.angularVelocity);
-      if (p.type === 'prop') { const pr = JSON.parse(p.props || '{}'), def = PROPS[pr.shape];
-        if (pr.stand ?? (def && def.stand)) { // instance flag wins, else the shape's default
-          const q = b.quaternion, m = Math.hypot(q.w, q.y) || 1;
-          q.set(0, q.y / m, 0, q.w / m); b.angularVelocity.setZero();
-        } }
+      const sm = this.standOf(p);                                  // held: keep upright/flat (yaw only)
+      if (sm) { const q = b.quaternion, m = Math.hypot(q.w, q.y) || 1; q.set(0, q.y / m, 0, q.w / m); b.angularVelocity.setZero(); }
     });
 
-    // Standing props (pawn/chess) act bottom-heavy: when slightly tilted and not
-    // held, nudge them back upright so they settle cleanly instead of fiddling.
+    // Self-righting (not held): tall pieces stand, flat pieces (decks, checkers,
+    // coins…) lie flat. Same "local +Y → world-up" nudge; flat pieces right from
+    // any tilt, tall pieces only when near-upright (a toppled one stays down).
     const R = SIM.propRight, wup = new CANNON.Vec3(0, 1, 0), up = new CANNON.Vec3(), axis = new CANNON.Vec3();
     this.state.pieces.forEach((p, id) => {
-      if (p.type !== 'prop' || p.owner) return;
-      const pr = JSON.parse(p.props || '{}'), def = PROPS[pr.shape];
-      if (!(pr.stand ?? (def && def.stand))) return; // instance flag wins, else the shape's default
+      if (p.owner) return;
+      const sm = this.standOf(p); if (!sm) return;
       const b = this.bodies.get(id); if (!b || b.sleepState === CANNON.Body.SLEEPING) return;
-      b.quaternion.vmult(wup, up);          // the prop's own up-axis, in world space
+      b.quaternion.vmult(wup, up);          // the piece's own up-axis, in world space
       up.cross(wup, axis);                  // axis to rotate it back toward world-up
       const tilt = axis.length();           // = sin(tilt angle)
-      if (tilt > 0.02 && tilt < R.maxTilt) { // assist near-upright only; leave fully toppled pieces down
+      const cutoff = sm === 'flat' ? 1.5 : R.maxTilt; // flat: always; tall: near-upright only
+      if (tilt > 0.02 && tilt < cutoff) {
         axis.scale(1 / tilt, axis);
         b.angularVelocity.x += axis.x * tilt * R.strength;
         b.angularVelocity.y += axis.y * tilt * R.strength;
