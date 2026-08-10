@@ -493,7 +493,8 @@ class TableRoom extends Room {
       const p = this.state.pieces.get(id); if (!p || p.owner !== client.sessionId) return;
       const b = this.bodies.get(id); if (!b) return;
       const fwd = new CANNON.Vec3(0, 0, 1), wf = new CANNON.Vec3(); b.quaternion.vmult(fwd, wf);
-      const yaw = Math.round(Math.atan2(wf.x, wf.z) / (Math.PI / 2)) * (Math.PI / 2);
+      const step = Math.PI / 2; // advance one quarter-turn from the current grid position each click
+      const yaw = (Math.round(Math.atan2(wf.x, wf.z) / step) + 1) * step;
       b.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + cardinal
       b.angularVelocity.setZero(); b.wakeUp();
     });
