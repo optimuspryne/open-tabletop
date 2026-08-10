@@ -5,6 +5,7 @@
 // transforms to everyone via delta-compressed Schema state.
 
 import express from 'express';
+import helmet from 'helmet';
 import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
@@ -58,7 +59,7 @@ const ASSETS_DIR = process.env.ASSETS_DIR || './saved-assets';
 const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props'];
 for (const k of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, k), { recursive: true });
 const assetKind = k => ASSET_KINDS.includes(k) ? k : 'uploads';       // validate category
-const metaFile = (kind, slug) => path.join(ASSETS_DIR, kind, slug + '.json'); // decks/<slug>.json, boards/<slug>.json
+const metaFile = (kind, slug) => path.join(ASSETS_DIR, assetKind(kind), slugify(slug) + '.json'); // sink-guarded: kind allowlisted, slug stripped to [a-z0-9-] — no path traversal regardless of caller
 function saveAsset(kind, buf, ext = 'jpg') { // write bytes into a category folder, return its URL
   const name = crypto.randomBytes(9).toString('hex') + '.' + String(ext).replace(/[^a-z0-9]/gi, '');
   const k = assetKind(kind);
@@ -693,6 +694,20 @@ class TableRoom extends Room {
 
 // --- Boot: Colyseus + Express (serves the client on the same port) ----------
 const app = express();
+// Security headers (clickjacking, HSTS, nosniff, referrer, hide X-Powered-By, …).
+// CSP is left OFF for now: the client pulls Three.js/Colyseus from CDNs (esm.sh,
+// unpkg) and uses an inline import map, which a default CSP would block. To turn
+// CSP on, self-host those libs (or allowlist the CDNs) and test in a browser —
+// draft directives below.
+app.use(helmet({ contentSecurityPolicy: false }));
+// app.use(helmet.contentSecurityPolicy({ directives: {
+//   defaultSrc: ["'self'"],
+//   scriptSrc:  ["'self'", "https://esm.sh", "https://unpkg.com", "'unsafe-inline'"], // 'unsafe-inline' = the import map
+//   styleSrc:   ["'self'", "'unsafe-inline'"],
+//   imgSrc:     ["'self'", "data:", "blob:"],       // avatars are data: URLs
+//   connectSrc: ["'self'", "https://esm.sh", "ws:", "wss:"], // Colyseus websocket + module fetches
+//   workerSrc:  ["'self'", "blob:"],
+// }}));
 app.use(express.static('public'));
 app.use('/shared', express.static('shared'));
 app.use('/assets', (req, res, next) => { if (/\.json$/i.test(req.path)) return res.sendStatus(404); next(); }, express.static(ASSETS_DIR)); // images only; .json metadata is never served

@@ -24,9 +24,9 @@ const heldTarget = new THREE.Vector3(); // drag target sent to the server
   sessionStorage.setItem('tt_token', room.reconnectionToken);
   mySession = room.sessionId;
   statusEl.innerHTML = 'connected · <b>you</b>';
-  const $ = getStateCallbacks(room);
+  const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
-  $(room.state).pieces.onAdd((piece, id) => {
+  cb(room.state).pieces.onAdd((piece, id) => {
     const mesh = KIND[piece.type].mesh(JSON.parse(piece.props || '{}'));
     const cast = PHYS[piece.type].mass > 0;
     mesh.position.set(piece.x, piece.y, piece.z);
@@ -37,16 +37,16 @@ const heldTarget = new THREE.Vector3(); // drag target sent to the server
     buffers.set(id, [{ t: performance.now(), x:piece.x, y:piece.y, z:piece.z, qx:piece.qx, qy:piece.qy, qz:piece.qz, qw:piece.qw }]);
     if (piece.type === 'deck') { // stack height reflects how many cards remain
       const setH = (c) => { mesh.scale.y = deckHeight(c); }; // extruded prism is unit-height
-      setH(piece.count); $(piece).listen('count', setH);
+      setH(piece.count); cb(piece).listen('count', setH);
     }
     if (piece.type === 'card') { // swap face<->back when the card is flipped/revealed (props gains/loses rank)
-      $(piece).listen('props', () => rebuildCard(id, piece), false);
+      cb(piece).listen('props', () => rebuildCard(id, piece), false);
     }
     if (piece.type === 'board') { const bp = JSON.parse(piece.props || '{}'); // remember the surface height for the drop marker
       const bd = bp.board && BOARDS[bp.board], box = bd ? bd.box : ((bp.model && Array.isArray(bp.box)) ? bp.box : null);
       boardTopY = box ? box[1] * 2 : 0.1; }
   });
-  $(room.state).pieces.onRemove((piece, id) => {
+  cb(room.state).pieces.onRemove((piece, id) => {
     const e = meshes.get(id); if (e) scene.remove(e.mesh);
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
     if (inspect && inspect.origId === id) releaseInspect();
@@ -76,17 +76,17 @@ const heldTarget = new THREE.Vector3(); // drag target sent to the server
   });
 
   // seats, turn order, and other players' fanned hand-backs (all public info)
-  $(room.state).players.onAdd((player, sid) => {
+  cb(room.state).players.onAdd((player, sid) => {
     if (sid === mySession) { applySeat(player.seat); document.getElementById('nameInput').value = player.name; updateMyPreview(player.avatar); }
     refreshFan(sid); refreshMarker(sid); renderPlayers();
-    $(player).listen('hand', () => { refreshFan(sid); renderPlayers(); }, false);
-    $(player).listen('seat', () => { if (sid === mySession) applySeat(player.seat); refreshFan(sid); refreshMarker(sid); }, false);
-    $(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
-    $(player).listen('avatar', () => { if (sid === mySession) updateMyPreview(player.avatar); else refreshMarker(sid); renderPlayers(); }, false);
-    $(player).listen('color', () => { refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('hand', () => { refreshFan(sid); renderPlayers(); }, false);
+    cb(player).listen('seat', () => { if (sid === mySession) applySeat(player.seat); refreshFan(sid); refreshMarker(sid); }, false);
+    cb(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('avatar', () => { if (sid === mySession) updateMyPreview(player.avatar); else refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('color', () => { refreshMarker(sid); renderPlayers(); }, false);
   });
-  $(room.state).players.onRemove((player, sid) => { removePlayerVis(sid); renderPlayers(); });
-  $(room.state).listen('turn', renderPlayers, false);
+  cb(room.state).players.onRemove((player, sid) => { removePlayerVis(sid); renderPlayers(); });
+  cb(room.state).listen('turn', renderPlayers, false);
 
   const diceGrp = document.getElementById('diceGrp');
   const diceBtn = document.getElementById('diceBtn');
@@ -630,15 +630,22 @@ function refreshMarker(sid) {
 function removePlayerVis(sid) { removeFan(sid); const m = markers.get(sid); if (m) { scene.remove(m); markers.delete(sid); } }
 function updateMyPreview(av) { const e = document.getElementById('myAv'); if (e) e.style.backgroundImage = av ? `url(${av})` : 'none'; }
 
-function renderPlayers() {
+function renderPlayers() { // built with DOM + textContent so a player's name can never inject HTML
   const el = document.getElementById('players'); if (!el) return;
   const list = []; room.state.players.forEach((p, sid) => list.push([sid, p]));
   list.sort((a, b) => a[1].seat - b[1].seat);
-  el.innerHTML = list.map(([sid, p]) => {
-    const me = sid === mySession ? ' (you)' : '', turn = room.state.turn === sid ? ' turn' : '';
-    const ic = p.avatar ? `<img class="pav" src="${p.avatar}">` : `<span class="dot" style="background:${p.color}"></span>`;
-    return `<div class="prow${turn}">${ic}${p.name}${me} · ${p.hand}</div>`;
-  }).join('') || '<div class="prow">waiting…</div>';
+  el.replaceChildren();
+  if (!list.length) { const w = document.createElement('div'); w.className = 'prow'; w.textContent = 'waiting…'; el.appendChild(w); return; }
+  for (const [sid, p] of list) {
+    const row = document.createElement('div');
+    row.className = 'prow' + (room.state.turn === sid ? ' turn' : '');
+    if (p.avatar) { const img = document.createElement('img'); img.className = 'pav'; img.src = p.avatar; row.appendChild(img); } // server enforces a data:image URL
+    else { const dot = document.createElement('span'); dot.className = 'dot'; dot.style.background = p.color; row.appendChild(dot); } // color is a server palette value
+    const label = document.createElement('span');
+    label.textContent = `${p.name}${sid === mySession ? ' (you)' : ''} \u00b7 ${p.hand}`; // name via textContent = inert
+    row.appendChild(label);
+    el.appendChild(row);
+  }
 }
 
 // ===== render loop — buffered snapshot interpolation ========================
