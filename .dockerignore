@@ -1,0 +1,8 @@
+node_modules
+saved-assets
+npm-debug.log
+*.zip
+.git
+.gitignore
+Dockerfile
+.dockerignore
