@@ -17,6 +17,9 @@
   <button id="newDeck">+ Deck</button>
   <button id="newBoard">↷ Board</button>
   <button id="roll">↻ Dice</button>
+  <button id="notesBtn">✎ Notes</button>
+  <button id="timerBtn">⏱ Timer</button>
+  <button id="showBtn">🃏 Show</button>
 </div>
 <div id="panel">
   <span id="status">connecting…</span>
@@ -86,6 +89,36 @@
   </div>
 </div>
 <div id="hand"></div>
+<div id="showPanel" hidden>
+  <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
+  <div class="showLabel">To</div>
+  <div id="showAudience" class="chipRow"></div>
+  <div class="showLabel">What</div>
+  <div class="chipRow">
+    <button id="showScopeHand" class="chip on">Whole hand</button>
+    <button id="showScopeSel" class="chip">Selected cards</button>
+  </div>
+  <button id="showHold">Hold to show</button>
+</div>
+<div id="notes" hidden>
+  <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
+  <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
+</div>
+<div id="timer" hidden>
+  <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
+  <div id="timerReadout">00:00</div>
+  <div class="timerRow">
+    <button id="timerToggle">Start</button>
+    <button id="timerReset">Reset</button>
+    <select id="timerMode">
+      <option value="up">Stopwatch</option>
+      <option value="down">Countdown</option>
+    </select>
+  </div>
+  <div id="timerDurRow" class="timerRow" hidden>
+    <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
+  </div>
+</div>
 <div id="propModal" hidden>
   <div class="modalCard">
     <h3>Add a prop</h3>

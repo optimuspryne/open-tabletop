@@ -219,6 +219,148 @@ button:active { transform: translateY(1px); }
   color: var(--ink);
 }
 .handcard:hover { transform: translateY(-6px); }
+#hand.selecting .handcard { cursor: pointer; }
+.handcard.sel { outline: 3px solid var(--accent); outline-offset: 1px; transform: translateY(-10px); }
+
+/* ===== private notes (right edge, toggled) ===== */
+#notes {
+  position: fixed;
+  right: var(--inset);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(300px, 88vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  backdrop-filter: var(--blur);
+}
+#notesHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text);
+}
+#notesHead b { color: var(--accent); }
+#notesClose { cursor: pointer; opacity: .7; user-select: none; }
+#notesClose:hover { opacity: 1; }
+#notesText {
+  width: 100%;
+  min-height: 160px;
+  resize: vertical;
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px;
+  font: var(--fs-sm)/1.5 var(--font);
+}
+
+/* ===== shared timer (bottom-right, toggled) ===== */
+#timer {
+  position: fixed;
+  right: var(--inset);
+  bottom: var(--inset);
+  width: min(260px, 88vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  backdrop-filter: var(--blur);
+}
+#timerHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text);
+}
+#timerHead b { color: var(--accent); }
+#timerClose { cursor: pointer; opacity: .7; user-select: none; }
+#timerClose:hover { opacity: 1; }
+#timerReadout {
+  font: 600 34px ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text);
+  text-align: center;
+  letter-spacing: 1px;
+}
+.timerRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+.timerRow button { padding: 6px 10px; }
+#timerMode {
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 5px 6px;
+  font: var(--fs-sm) var(--font);
+}
+#timerMode option { background: var(--panel-solid); color: var(--text); }
+#timerDur {
+  width: 56px;
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 4px 6px;
+  font: var(--fs-sm) var(--font);
+}
+
+/* ===== show-cards panel (left edge, toggled) ===== */
+#showPanel {
+  position: fixed;
+  left: var(--inset);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(240px, 88vw);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  backdrop-filter: var(--blur);
+  z-index: 6;
+}
+#showHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text);
+}
+#showHead b { color: var(--accent); }
+#showClose { cursor: pointer; opacity: .7; user-select: none; }
+#showClose:hover { opacity: 1; }
+.showLabel { color: var(--accent); font-size: var(--fs-sm); margin-top: 2px; }
+.chipRow { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  padding: 5px 10px;
+  font-size: var(--fs-sm);
+  background: var(--field);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.chip.on { background: var(--accent-soft); border-color: var(--accent); }
+#showHold {
+  margin-top: 4px;
+  padding: 10px;
+  font-weight: 600;
+  user-select: none;
+  touch-action: none; /* a press-and-hold shouldn't scroll or select on touch */
+}
 
 /* ===== modals (custom deck / add prop) ===== */
 #deckModal, #propModal, #boardModal, #customPropModal, #editPropModal, #editDeckModal {
@@ -279,7 +421,7 @@ button:active { transform: translateY(1px); }
   position: fixed;
   top: var(--inset);
   right: var(--inset);
-  width: min(200px, 90vw);
+  width: min(230px, 90vw);
   display: flex;
   flex-direction: column;
   gap: 8px;

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls } from './core.js';
-import { KIND, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, COLORS, BOARDS, DIE_SIDES, deckHeight } from '/shared/pieces.js';
+import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel } from './graphics.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, COLORS, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
 
 // ===== Tiny DOM helpers =====================================================
 const byId = (id) => document.getElementById(id);
@@ -98,6 +98,7 @@ const applyTransform = (mesh, s) => {
     scene.add(mesh);
     meshes.set(id, { mesh, type: piece.type });
     buffers.set(id, [snapshot(performance.now(), piece)]);
+    cb(piece).listen('owner', () => updateHeldLabel(id, piece.owner), false); // name tag while held
 
     if (piece.type === 'deck') {
       // The extruded prism is unit-height; scale Y to reflect how many cards remain.
@@ -123,6 +124,7 @@ const applyTransform = (mesh, s) => {
     if (entry) scene.remove(entry.mesh);
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
     if (inspect && inspect.origId === id) releaseInspect();
+    updateHeldLabel(id, ''); // drop its name tag if any
     meshes.delete(id);
     buffers.delete(id);
   });
@@ -140,7 +142,13 @@ const applyTransform = (mesh, s) => {
     });
   });
 
-  room.onMessage('hand', renderHand); // your private hand — never seen by other clients
+  room.onMessage('hand', cards => { myHand = cards; renderHand(cards); }); // your private hand — never seen by other clients
+  room.onMessage('showFan', ({ sid, cards }) => { // cards another player is showing you, face-up in their fan
+    if (cards && cards.length) revealed.set(sid, cards); else revealed.delete(sid);
+    refreshFan(sid);
+  });
+  room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
+  room.onMessage('notebook', text => { byId('notesText').value = text || ''; }); // your private notes, restored on reconnect
   room.onMessage('shuffled', ({ id }) => startAnim(id, 'shuffle')); // cosmetic: everyone sees the deck riffle
   room.onMessage('inspectCard', ({ front, back }) => inspectMesh(cardMesh({ front, back }), { drawn: true, type: 'card' })); // drawn card — front is ours alone
   room.onMessage('dealt', ({ id }) => { // a card you dragged off a deck — adopt it as the dragged piece
@@ -165,6 +173,8 @@ const applyTransform = (mesh, s) => {
     cb(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('avatar', () => { if (sid === mySession) updateMyPreview(player.avatar); else refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('color', () => { refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('showing', () => refreshMarker(sid), false); // redraw the seat badge on show/stop
+    cb(player).listen('handBack', () => refreshFan(sid), false); // re-skin the fan backs when the deck's back changes
   });
   cb(room.state).players.onRemove((player, sid) => { removePlayerVis(sid); renderPlayers(); });
   cb(room.state).listen('turn', renderPlayers, false);
@@ -476,6 +486,100 @@ const applyTransform = (mesh, s) => {
     room.send('setAvatar', { data: canvas.toDataURL('image/jpeg', 0.7) });
   });
   byId('reset').onclick = () => room.send('reset');
+
+  // Private notes: a personal scratchpad. Never synced — the server just holds the
+  // text so it survives a reconnect (see the 'notebook' message below).
+  const notes = byId('notes'), notesText = byId('notesText');
+  byId('notesBtn').onclick = () => { notes.hidden = !notes.hidden; if (!notes.hidden) notesText.focus(); };
+  byId('notesClose').onclick = () => { notes.hidden = true; };
+  let notesTimer = null;
+  notesText.addEventListener('input', () => { // debounce so we persist without flooding the socket
+    clearTimeout(notesTimer);
+    notesTimer = setTimeout(() => room.send('notebook', { text: notesText.value }), 400);
+  });
+
+  // Shared timer: controls just send commands; the readout is computed locally
+  // from the synced anchor (state.timer), so it ticks smoothly with no per-second
+  // patches. The interval also mirrors another client's changes into the controls.
+  const timerPanel = byId('timer'), timerReadout = byId('timerReadout'), timerToggle = byId('timerToggle');
+  const timerMode = byId('timerMode'), timerDurRow = byId('timerDurRow'), timerDur = byId('timerDur');
+  const durMs = () => (+timerDur.value || 0) * 60000;
+  byId('timerBtn').onclick = () => { timerPanel.hidden = !timerPanel.hidden; };
+  byId('timerClose').onclick = () => { timerPanel.hidden = true; };
+  timerToggle.onclick = () => room.send('timer', { action: room.state.timer.running ? 'pause' : 'start' });
+  byId('timerReset').onclick = () => room.send('timer', { action: 'reset' });
+  timerMode.onchange = () => room.send('timer', { action: 'set', mode: timerMode.value, duration: durMs() });
+  timerDur.onchange = () => room.send('timer', { action: 'set', mode: 'down', duration: durMs() });
+  setInterval(() => {
+    if (timerPanel.hidden) return; // nothing to draw while the panel is closed
+    const t = room.state.timer;
+    if (!t) return;
+    timerReadout.textContent = fmtTime(timerLive(t, Date.now()));
+    timerToggle.textContent = t.running ? 'Pause' : 'Start';
+    if (timerMode.value !== t.mode) timerMode.value = t.mode; // reflect another client's switch
+    timerDurRow.hidden = t.mode !== 'down';
+    if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
+  }, 100);
+
+  // ---- Show cards: pick an audience + scope, then hold the button to reveal ----
+  const showPanel = byId('showPanel'), showAudience = byId('showAudience');
+  const scopeHand = byId('showScopeHand'), scopeSel = byId('showScopeSel'), showHold = byId('showHold');
+
+  function buildAudienceChips() { // rebuilt each open, so it tracks who's in the room
+    showAudience.replaceChildren();
+    const everyone = document.createElement('button');
+    everyone.className = 'chip'; everyone.dataset.sid = 'all'; everyone.textContent = 'Everyone';
+    everyone.onclick = () => {
+      everyone.classList.toggle('on');
+      if (everyone.classList.contains('on')) showAudience.querySelectorAll('.chip').forEach(c => { if (c !== everyone) c.classList.remove('on'); });
+    };
+    showAudience.appendChild(everyone);
+    const others = [];
+    room.state.players.forEach((p, sid) => { if (sid !== mySession) others.push([sid, p]); });
+    others.sort((a, b) => a[1].seat - b[1].seat);
+    for (const [sid, p] of others) {
+      const chip = document.createElement('button');
+      chip.className = 'chip'; chip.dataset.sid = sid;
+      chip.textContent = p.name; // textContent = safe from HTML in names
+      chip.style.borderColor = p.color;
+      chip.onclick = () => { everyone.classList.remove('on'); chip.classList.toggle('on'); };
+      showAudience.appendChild(chip);
+    }
+  }
+  const currentAudience = () => {
+    const everyone = showAudience.querySelector('[data-sid="all"]');
+    if (everyone && everyone.classList.contains('on')) return 'all';
+    return [...showAudience.querySelectorAll('.chip.on')].map(c => c.dataset.sid);
+  };
+  const enterSelectMode = () => { selectMode = true; selected.clear(); byId('hand').classList.add('selecting'); renderHand(myHand); };
+  const exitSelectMode = () => {
+    if (selectMode) { selectMode = false; selected.clear(); byId('hand').classList.remove('selecting'); renderHand(myHand); }
+    scopeSel.classList.remove('on'); scopeHand.classList.add('on'); // reset to whole-hand
+  };
+
+  byId('showBtn').onclick = () => {
+    showPanel.hidden = !showPanel.hidden;
+    if (!showPanel.hidden) buildAudienceChips(); else exitSelectMode();
+  };
+  byId('showClose').onclick = () => { showPanel.hidden = true; exitSelectMode(); };
+  scopeHand.onclick = () => { scopeHand.classList.add('on'); scopeSel.classList.remove('on'); if (selectMode) exitSelectMode(); };
+  scopeSel.onclick = () => { scopeHand.classList.remove('on'); scopeSel.classList.add('on'); enterSelectMode(); };
+
+  let showLive = false;
+  showHold.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const to = currentAudience();
+    if (to !== 'all' && !to.length) return; // no audience picked
+    const hids = scopeSel.classList.contains('on') ? [...selected] : 'all';
+    if (Array.isArray(hids) && !hids.length) return; // "selected" scope with nothing picked
+    showHold.setPointerCapture(e.pointerId);
+    showLive = true;
+    room.send('showStart', { to, hids });
+  });
+  const endShow = () => { if (showLive) { showLive = false; room.send('showStop'); } };
+  showHold.addEventListener('pointerup', endShow);
+  showHold.addEventListener('pointercancel', endShow);
+  showHold.addEventListener('lostpointercapture', endShow);
 })().catch(err => { statusEl.textContent = 'connection failed'; console.error(err); });
 
 // ===== Interaction — click vs. drag; the meaning depends on the piece ========
@@ -504,10 +608,11 @@ const pickId = () => {
 };
 
 renderer.domElement.addEventListener('contextmenu', e => e.preventDefault()); // right-click is ours
-renderer.domElement.addEventListener('mousedown', e => { // middle-click snaps a held piece's facing to 90°
+renderer.domElement.addEventListener('mousedown', e => { // middle-click: snap a held piece, else ping the table
   if (e.button === 1) {
     e.preventDefault();
     if (down && down.grabbed) room.send('snap', { id: down.id });
+    else { setPointer(e); sendPing(); }
   }
 });
 byId('hintHead').onclick = () => { // collapsible controls panel
@@ -745,6 +850,8 @@ addEventListener('keydown', e => {
       const name = prompt('Save this deck as:');
       if (name && name.trim()) room.send('saveDeck', { deckId: id, name: name.trim() });
     }
+  } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) { // ping the table at the cursor
+    sendPing();
   }
 });
 
@@ -766,6 +873,14 @@ function rebuildCard(id, piece) {
 
 // hidden hand: a private bottom bar only this client ever sees
 let handDrag = null; // dragging a card out of the hand onto the table
+
+// Show-cards feature state. revealed: cards another player is showing us, drawn
+// face-up in their fan. selectMode/selected: while the Show panel is picking
+// specific cards, the hand bar toggles selection instead of playing. myHand: the
+// last hand we received, so we can re-render on a select-mode toggle.
+const revealed = new Map(); // sid -> [{front,back}]
+const selected = new Set(); // hids picked to show
+let selectMode = false, myHand = [];
 addEventListener('pointermove', e => {
   if (!handDrag) return;
   if (!handDrag.dragging) {
@@ -820,7 +935,15 @@ function renderHand(cards) {
     }
     div.title = 'Left drag/click: face-down · Right drag/click: face-up';
     div.oncontextmenu = ev => ev.preventDefault(); // right-click is handled by the pointer events
+    if (selectMode && selected.has(card.hid)) div.classList.add('sel');
     div.addEventListener('pointerdown', ev => {
+      if (selectMode) { // picking cards to show — toggle instead of playing
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        if (selected.has(card.hid)) { selected.delete(card.hid); div.classList.remove('sel'); }
+        else { selected.add(card.hid); div.classList.add('sel'); }
+        return;
+      }
       if (ev.button === 0 || ev.button === 2) {
         ev.preventDefault();
         handDrag = { hid: card.hid, faceDown: ev.button === 0, sx: ev.clientX, sy: ev.clientY, dragging: false, ghost: null, el: div };
@@ -868,14 +991,19 @@ function refreshFan(sid) {
   const tangent = new THREE.Vector3(out.z, 0, -out.x); // along the table edge
   const yaw = Math.atan2(out.x, out.z);
   const count = Math.min(player.hand, 12);
+  const shown = revealed.get(sid) || []; // cards this player is showing us (face-up)
   for (let i = 0; i < count; i++) {
-    const back = KIND.card.mesh({}); // face-down (back-only)
-    back.castShadow = back.receiveShadow = false;
+    // Shown cards fill the leading fan slots face-up; the rest stay face-down,
+    // showing the hand's own back image (public) rather than a generic default.
+    const card = i < shown.length ? KIND.card.mesh({ front: shown[i].front, back: shown[i].back }) : KIND.card.mesh({ back: player.handBack || undefined });
+    card.castShadow = card.receiveShadow = false;
     const offset = i - (count - 1) / 2;
-    back.position.set(seat.hand[0] + tangent.x * offset * 0.55, seat.hand[1], seat.hand[2] + tangent.z * offset * 0.55);
-    back.rotation.y = yaw + offset * 0.06; // slight fan
-    back.scale.setScalar(0.8);
-    group.add(back);
+    // Lift each card a hair above the last so overlapping cards layer cleanly
+    // instead of z-fighting (coplanar backs share the stripe texture and tear).
+    card.position.set(seat.hand[0] + tangent.x * offset * 0.55, seat.hand[1] + i * 0.012, seat.hand[2] + tangent.z * offset * 0.55);
+    card.rotation.y = yaw + offset * 0.06; // slight fan
+    card.scale.setScalar(0.8);
+    group.add(card);
   }
 }
 
@@ -889,10 +1017,7 @@ function removeFan(sid) {
 const markers = new Map(); // sid -> THREE.Group
 function makePlayerTexture(player) {
   const width = 256, height = 320;
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext('2d');
+  const { canvas, ctx } = makeCanvas(width, height);
 
   const draw = (img) => {
     ctx.clearRect(0, 0, width, height);
@@ -928,6 +1053,16 @@ function makePlayerTexture(player) {
     ctx.font = 'bold 30px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText((player.name || 'Player').slice(0, 14), width / 2, 270);
+    if (player.showing > 0) { // public "is revealing cards" badge — count only, never the content
+      ctx.fillStyle = player.color;
+      roundRect(ctx, width / 2 - 64, 12, 128, 30, 15);
+      ctx.fill();
+      ctx.fillStyle = '#14181d';
+      ctx.font = 'bold 18px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('SHOWING ' + player.showing, width / 2, 28);
+      ctx.textBaseline = 'alphabetic';
+    }
     tex.needsUpdate = true;
   };
 
@@ -946,6 +1081,86 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+// A small floating name-tag texture: translucent pill, border in the player's
+// colour, their name centred. Shown over a piece while someone else holds it.
+function nameTag(name, color) {
+  const width = 256, height = 80;
+  const { canvas, ctx } = makeCanvas(width, height);
+  ctx.fillStyle = 'rgba(20,24,29,0.9)';
+  roundRect(ctx, 4, 4, width - 8, height - 8, 18);
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = color;
+  roundRect(ctx, 4, 4, width - 8, height - 8, 18);
+  ctx.stroke();
+  ctx.fillStyle = '#e8e6e0';
+  ctx.font = 'bold 34px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText((name || 'Player').slice(0, 14), width / 2, height / 2 + 2);
+  return cTex(canvas);
+}
+
+// Floating name tags over held pieces — everyone sees who's moving what. Created
+// and torn down as ownership changes; the render loop keeps each one over its
+// piece. Own pieces get no tag (you know it's you), matching the seat markers.
+const heldLabels = new Map(); // pieceId -> THREE.Sprite
+function updateHeldLabel(id, owner) {
+  const existing = heldLabels.get(id);
+  if (existing) {
+    scene.remove(existing);
+    existing.material.map.dispose();
+    existing.material.dispose();
+    heldLabels.delete(id);
+  }
+  if (!owner || owner === mySession) return;
+  const player = room.state.players.get(owner);
+  if (!player) return;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTag(player.name, player.color), transparent: true, depthTest: false }));
+  sprite.scale.set(CONFIG.label.w, CONFIG.label.h, 1);
+  sprite.renderOrder = 4; // above pieces and the drop marker
+  scene.add(sprite);
+  heldLabels.set(id, sprite);
+}
+
+// Attention pings: a translucent ring pulses out on the table with the pinger's
+// name. Triggered by middle-click or P (see the handlers), broadcast to everyone,
+// and animated + expired by the render loop.
+const pings = []; // { ring, label, start }
+function sendPing() { // raycast the cursor onto the table and ask the server to broadcast
+  if (!room) return;
+  ray.setFromCamera(pointer, camera);
+  const spot = new THREE.Vector3();
+  if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -boardTopY), spot)) {
+    room.send('ping', { x: spot.x, z: spot.z });
+  }
+}
+function spawnPing(sid, x, z) {
+  const player = room.state.players.get(sid);
+  const color = player ? player.color : '#ffffff';
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(CONFIG.ping.inner, CONFIG.ping.outer, 32),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75, side: THREE.DoubleSide, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, boardTopY + CONFIG.ping.lift, z);
+  ring.renderOrder = 5;
+  scene.add(ring);
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTag(player ? player.name : '', color), transparent: true, depthTest: false }));
+  label.scale.set(CONFIG.label.w, CONFIG.label.h, 1);
+  label.position.set(x, boardTopY + 0.6, z);
+  label.renderOrder = 6;
+  scene.add(label);
+  pings.push({ ring, label, start: performance.now() });
+}
+
+// Format milliseconds as m:ss (or h:mm:ss past an hour), flooring to whole seconds.
+function fmtTime(ms) {
+  const total = Math.floor(ms / 1000);
+  const s = total % 60, m = Math.floor(total / 60) % 60, h = Math.floor(total / 3600);
+  const pad = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
 function refreshMarker(sid) {
@@ -981,6 +1196,7 @@ function refreshMarker(sid) {
 
 function removePlayerVis(sid) {
   removeFan(sid);
+  revealed.delete(sid); // drop anything they were showing us
   const marker = markers.get(sid);
   if (marker) { scene.remove(marker); markers.delete(sid); }
 }
@@ -1089,6 +1305,23 @@ scene.add(dropMarker);
     const buf = buffers.get(id);
     if (buf) sample(buf, renderTime, mesh);
     if (anims.size) applyAnim(id, mesh);
+  }
+  for (const [id, sprite] of heldLabels) { // keep each name tag hovering over its piece
+    const entry = meshes.get(id);
+    if (entry) sprite.position.set(entry.mesh.position.x, entry.mesh.position.y + CONFIG.label.lift, entry.mesh.position.z);
+  }
+  for (let i = pings.length - 1; i >= 0; i--) { // expand + fade each active ping, then dispose
+    const p = pings[i], t = (performance.now() - p.start) / CONFIG.ping.dur;
+    if (t >= 1) {
+      scene.remove(p.ring); p.ring.geometry.dispose(); p.ring.material.dispose();
+      scene.remove(p.label); p.label.material.map.dispose(); p.label.material.dispose();
+      pings.splice(i, 1);
+      continue;
+    }
+    p.ring.scale.setScalar(1 + t * CONFIG.ping.grow);
+    p.ring.material.opacity = 0.75 * (1 - t);
+    p.label.material.opacity = t < 0.6 ? 1 : (1 - t) / 0.4; // hold, then fade near the end
+    p.label.position.y = boardTopY + 0.6 + t * 0.35;        // drift up a touch
   }
   const held = down && down.grabbed && meshes.get(down.id); // landing spot under the held piece
   if (held) {

@@ -42,9 +42,9 @@ function cardFront(rank, suit, color) {
 
   // The small rank-over-suit index, drawn at the current canvas origin.
   const drawIndex = () => {
-    ctx.font = 'bold 46px Georgia';
+    ctx.font = 'bold 66px Georgia';
     ctx.fillText(rank, 0, 0);
-    ctx.font = 'bold 40px Georgia';
+    ctx.font = 'bold 66px Georgia';
     ctx.fillText(suit, 0, 42);
   };
 
@@ -746,4 +746,4 @@ const KIND = {
   board: { mesh: boardMesh },
 };
 
-export { KIND, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel };
+export { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel };

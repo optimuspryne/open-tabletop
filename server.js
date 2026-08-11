@@ -15,7 +15,7 @@ import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Schema, MapSchema, defineTypes } from '@colyseus/schema';
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive } from './shared/pieces.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -266,11 +266,19 @@ defineTypes(Piece, {
   qx: 'number', qy: 'number', qz: 'number', qw: 'number',
 });
 class Player extends Schema {} // PUBLIC per-player info: seat + how many cards they hold (never which cards)
-defineTypes(Player, { seat: 'number', hand: 'number', name: 'string', color: 'string', avatar: 'string' });
-class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; }
+defineTypes(Player, { seat: 'number', hand: 'number', name: 'string', color: 'string', avatar: 'string', showing: 'number', handBack: 'string' }); // showing = how many hand cards this player is currently revealing (public badge; never the content); handBack = the (public) back image of their hand cards
+// PUBLIC shared timer. We sync only the anchor (running/mode/base/since), never a
+// ticking number — each client computes the live value with timerLive(), the same
+// way the render loop interpolates piece positions locally. base = ms frozen at
+// the last pause; since = server Date.now() at the last start (0 while paused).
+class Timer extends Schema {
+  constructor() { super(); this.running = false; this.mode = 'up'; this.base = 0; this.since = 0; this.duration = 300000; }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string' });
+defineTypes(Timer, { running: 'boolean', mode: 'string', base: 'number', since: 'number', duration: 'number' });
+class State extends Schema {
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); }
+}
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -362,6 +370,8 @@ class TableRoom extends Room {
     this.drafts = new Map();    // sessionId -> {back,cards} PRIVATE: a deck being built in chunks
     this.cardData = new Map();  // id -> { front }         PRIVATE: a face-down table card's hidden face
     this.hands = new Map();     // sessionId -> [{hid,front,back}]  PRIVATE: each player's hidden hand
+    this.notebooks = new Map(); // sessionId -> text               PRIVATE: each player's private notes (ephemeral; dies with the room)
+    this.shows = new Map();     // sessionId -> {to:Set,cards:[]}   PRIVATE: an active hold-to-show (who sees which of the shower's cards)
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.nextId = 1; this.nextHid = 1;
 
@@ -715,6 +725,9 @@ class TableRoom extends Room {
       this.cardData.clear();
       this.flips.clear();
       this.targets.clear();
+      for (const sid of [...this.shows.keys()]) this.stopShow(sid); // end any live reveals
+      const t = this.state.timer; // stop and zero the shared timer too
+      t.running = false; t.since = 0; t.base = t.mode === 'down' ? t.duration : 0;
       for (const client of this.clients) this.sendHand(client); // clear every player's hand
     });
 
@@ -758,6 +771,55 @@ class TableRoom extends Room {
       if (player && typeof data === 'string' && data.startsWith('data:image') && data.length < 60000) {
         player.avatar = data;
       }
+    });
+    this.onMessage('notebook', (client, { text }) => {
+      // Private per-player notes: never synced, just held so they survive a reconnect.
+      if (typeof text === 'string') this.notebooks.set(client.sessionId, text.slice(0, 4000));
+    });
+    this.onMessage('timer', (client, msg = {}) => {
+      const t = this.state.timer, now = Date.now();
+      if (t.running) { t.base = timerLive(t, now); t.running = false; t.since = 0; } // freeze at the live value first
+      if (msg.action === 'start') { t.since = now; t.running = true; }
+      else if (msg.action === 'reset') { t.base = t.mode === 'down' ? t.duration : 0; }
+      else if (msg.action === 'set') {
+        if (msg.mode === 'up' || msg.mode === 'down') t.mode = msg.mode;
+        if (typeof msg.duration === 'number' && isFinite(msg.duration)) t.duration = clamp(msg.duration, 0, 86400000);
+        t.base = t.mode === 'down' ? t.duration : 0; // switching mode / duration resets to the start value
+      }
+      // 'pause' needs nothing more — the freeze above already did it.
+    });
+    // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
+    // to the chosen audience. Content goes out privately (like a hand); everyone
+    // else just sees the public 'showing' count as a badge. Released → showStop.
+    this.onMessage('showStart', (client, { to, hids } = {}) => {
+      const sid = client.sessionId;
+      const hand = this.hands.get(sid) || [];
+      if (!hand.length) return;
+      const cards = hids === 'all' ? hand.slice()
+                  : Array.isArray(hids) ? hand.filter(c => hids.includes(c.hid))
+                  : null;
+      if (!cards || !cards.length) return;
+      const audience = new Set();
+      if (to === 'all') this.state.players.forEach((_, s) => { if (s !== sid) audience.add(s); });
+      else if (Array.isArray(to)) for (const s of to) { if (s !== sid && this.state.players.has(s)) audience.add(s); }
+      if (!audience.size) return;
+
+      this.stopShow(sid); // replace any prior show
+      this.shows.set(sid, { to: audience, cards });
+      const player = this.state.players.get(sid);
+      if (player) player.showing = cards.length; // public badge (count only)
+      const payload = cards.map(c => ({ front: c.front, back: c.back }));
+      for (const viewer of audience) {
+        const cl = this.clientBy(viewer);
+        if (cl) cl.send('showFan', { sid, cards: payload }); // private content, to the audience alone
+      }
+    });
+    this.onMessage('showStop', (client) => this.stopShow(client.sessionId));
+    this.onMessage('ping', (client, { x, z } = {}) => {
+      // A transient "look here" marker. Public by nature, so just clamp to the
+      // table and broadcast to everyone (the sender sees their own ping too).
+      if (!isFinite(x) || !isFinite(z)) return;
+      this.broadcast('ping', { sid: client.sessionId, x: clamp(x, -TABLE.x, TABLE.x), z: clamp(z, -TABLE.z, TABLE.z) });
     });
 
     this.setSimulationInterval((dt) => this.update(dt), 1000 / 60); // fixed 60Hz sim
@@ -925,8 +987,27 @@ class TableRoom extends Room {
   sendHand(client) {
     const hand = this.hands.get(client.sessionId) || [];
     const player = this.state.players.get(client.sessionId);
-    if (player) player.hand = hand.length; // public count only
+    if (player) {
+      player.hand = hand.length;                                    // public count only
+      player.handBack = hand.length ? (hand[0].back || '') : '';    // public back image (the front stays private)
+    }
     client.send('hand', hand);             // private contents, to this client alone
+  }
+
+  clientBy(sid) { return this.clients.find(c => c.sessionId === sid); }
+
+  // End a player's active hold-to-show: clear the public badge and tell every
+  // audience member to flip those cards back to face-down in the shower's fan.
+  stopShow(sid) {
+    const show = this.shows.get(sid);
+    if (!show) return;
+    this.shows.delete(sid);
+    const player = this.state.players.get(sid);
+    if (player) player.showing = 0;
+    for (const viewer of show.to) {
+      const client = this.clientBy(viewer);
+      if (client) client.send('showFan', { sid, cards: [] });
+    }
   }
 
   onJoin(client) {
@@ -939,6 +1020,7 @@ class TableRoom extends Room {
     const player = new Player();
     player.seat = seat;
     player.hand = 0;
+    player.showing = 0;
     player.name = 'Player ' + (seat + 1);
     player.color = PALETTE[seat % PALETTE.length];
     this.state.players.set(client.sessionId, player);
@@ -1095,6 +1177,8 @@ class TableRoom extends Room {
     }
 
     this.hands.delete(client.sessionId);
+    this.notebooks.delete(client.sessionId);
+    this.stopShow(client.sessionId); // clear any hold-to-show they had live
 
     // If they'd drawn a card to inspect but never placed it, return it to its deck.
     const pending = this.pendingInspect.get(client.sessionId);
@@ -1114,8 +1198,11 @@ class TableRoom extends Room {
     if (wasTurn) this.advanceTurn(); // don't strand the turn on a player who left
   }
 
-  // A player's hand isn't in shared state, so resend it when they reconnect.
-  onReconnect(client) { this.sendHand(client); }
+  // A player's hand and notes aren't in shared state, so resend them on reconnect.
+  onReconnect(client) {
+    this.sendHand(client);
+    client.send('notebook', this.notebooks.get(client.sessionId) || '');
+  }
 }
 
 // --- Boot: Colyseus + Express (both served on the same port) ----------------

@@ -116,3 +116,11 @@ export function dieVerts(sides, radius = DIE_RADIUS[sides] || 1) {
   const k = radius / max;
   return raw.map(v => [v[0]*k, v[1]*k, v[2]*k]);
 }
+// The shared timer's live value in ms, computed from its synced anchor (used by
+// both the server and every client, so the number never has to be synced tick by
+// tick). base = ms frozen at the last pause; since = start timestamp (0 = paused).
+export function timerLive(t, now) {
+  if (!t.running) return t.base;
+  const elapsed = now - t.since;
+  return t.mode === 'down' ? Math.max(0, t.base - elapsed) : t.base + elapsed;
+}
