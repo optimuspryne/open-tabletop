@@ -49,118 +49,209 @@ const SIM = {
   maxPieces: 80,
 };
 
-// --- Saved-asset library (persists to disk; mount ASSETS_DIR as a volume) -----
-// Layout: <ASSETS_DIR>/{uploads,decks,boards,props}/
-//   <rnd>.<ext>  images, served at /assets/<kind>/<rnd>
-//   <slug>.json  metadata, NEVER served (a guard blocks .json under /assets)
-// Filenames are random and metadata is unserved, so unrevealed card fronts
-// can't be enumerated — the hidden-info invariant survives on disk.
+// --- Saved-asset library -----------------------------------------------------
+// A shared, on-disk library of decks / boards / props that survives restarts
+// (mount ASSETS_DIR as a Docker volume to persist it). Layout:
+//
+//   <ASSETS_DIR>/{uploads,decks,boards,props}/
+//     <random>.<ext>   uploaded images / models, served at /assets/<kind>/<random>
+//     <slug>.json       metadata, NEVER web-served (a route guard blocks .json)
+//
+// Because filenames are random and the .json metadata is never served, a card
+// front that's meant to stay hidden can't be discovered by poking at /assets.
 const ASSETS_DIR = process.env.ASSETS_DIR || './saved-assets';
 const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props'];
-for (const k of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, k), { recursive: true });
-const assetKind = k => ASSET_KINDS.includes(k) ? k : 'uploads';       // validate category
-const metaFile = (kind, slug) => path.join(ASSETS_DIR, assetKind(kind), slugify(slug) + '.json'); // sink-guarded: kind allowlisted, slug stripped to [a-z0-9-] — no path traversal regardless of caller
-function saveAsset(kind, buf, ext = 'jpg') { // write bytes into a category folder, return its URL
+for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recursive: true });
+
+// Clamp a number into [min, max].
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+// Reduce a user-supplied name to a safe filename slug: lowercase, only [a-z0-9-],
+// at most 60 chars. This also defeats path traversal — "../../etc" becomes "etc".
+const slugify = (name) =>
+  String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+
+// Keep an untrusted category name inside the allowlist (falls back to 'uploads').
+const assetKind = (kind) => ASSET_KINDS.includes(kind) ? kind : 'uploads';
+
+// Path to a category's metadata file. Both inputs are sanitised here, so no
+// caller can escape the assets folder no matter what it passes in.
+const metaFile = (kind, slug) => path.join(ASSETS_DIR, assetKind(kind), slugify(slug) + '.json');
+
+const isDataURL = (value) => typeof value === 'string' && value.startsWith('data:image');
+
+// A card "ref" is whatever string the client sends for a card face: procedural
+// text, a URL, or an inline data-URL. We only bound its length here.
+const deckRefOk = (value) => typeof value === 'string' && value.length < 200000;
+
+// Write raw bytes into a category folder under a random name; return its URL.
+function saveAsset(kind, bytes, ext = 'jpg') {
+  const validKind = assetKind(kind);
   const name = crypto.randomBytes(9).toString('hex') + '.' + String(ext).replace(/[^a-z0-9]/gi, '');
-  const k = assetKind(kind);
-  fs.writeFileSync(path.join(ASSETS_DIR, k, name), buf);
-  return `/assets/${k}/${name}`;
+  fs.writeFileSync(path.join(ASSETS_DIR, validKind, name), bytes);
+  return `/assets/${validKind}/${name}`;
 }
 
-const slugify = s => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
-const isDataURL = s => typeof s === 'string' && s.startsWith('data:image');
-const deckRefOk = s => typeof s === 'string' && s.length < 200000; // a card ref: text/url/data-URL
-function saveImageRef(dataURL, kind = 'decks') { // write a data-URL into a category folder, return its URL
-  const m = /^data:(image\/\w+);base64,(.+)$/s.exec(dataURL);
-  if (!m) return null;
-  return saveAsset(kind, Buffer.from(m[2], 'base64'), m[1].split('/')[1].replace('jpeg', 'jpg'));
-}
-function listSavedDecks() {
-  try {
-    const dir = path.join(ASSETS_DIR, 'decks');
-    return fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => {
-      try { const d = JSON.parse(fs.readFileSync(path.join(dir, f))); return { slug: f.slice(0, -5), name: d.name, count: d.fronts.length }; }
-      catch { return null; }
-    }).filter(Boolean);
-  } catch { return []; }
-}
-// Saved boards live in the same folder with a .board.json suffix ({name,w,d,tex}).
-function listSavedProps() { // saved custom-model props (props/<slug>.json = {name, props})
-  try {
-    const dir = path.join(ASSETS_DIR, 'props');
-    return fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => {
-      try { const d = JSON.parse(fs.readFileSync(path.join(dir, f))); return { slug: f.slice(0, -5), name: d.name, props: d.props }; }
-      catch { return null; }
-    }).filter(Boolean);
-  } catch { return []; }
-}
-function listSavedBoards() {
-  try {
-    const dir = path.join(ASSETS_DIR, 'boards');
-    return fs.readdirSync(dir).filter(f => f.endsWith('.json')).map(f => {
-      try { const d = JSON.parse(fs.readFileSync(path.join(dir, f)));
-        const kind = d.board ? (BOARDS[d.board] ? BOARDS[d.board].name : d.board) : d.model ? 'model' : ((d.w||8) + '\u00d7' + (d.d||8));
-        return { slug: f.slice(0, -5), name: d.name, kind }; }
-      catch { return null; }
-    }).filter(Boolean);
-  } catch { return []; }
+// Move an inline base64 image (data-URL) onto disk and return its URL, or null
+// if the string isn't a data-URL. Used when saving a deck whose art was pasted
+// inline rather than uploaded as a file.
+function saveImageRef(dataURL, kind = 'decks') {
+  const match = /^data:(image\/\w+);base64,(.+)$/s.exec(dataURL);
+  if (!match) return null;
+  const [, mimeType, base64] = match;
+  const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
+  return saveAsset(kind, Buffer.from(base64, 'base64'), ext);
 }
 
-// Collider for any kind, from its shared shape descriptor.
+// Read every <slug>.json in a category folder and turn each into a list entry
+// via map(data, slug). A corrupt file is skipped; a missing folder yields [].
+// The three wrappers below differ only in the folder and the fields they surface.
+function listSaved(kind, map) {
+  try {
+    const folder = path.join(ASSETS_DIR, kind);
+    return fs.readdirSync(folder)
+      .filter(filename => filename.endsWith('.json'))
+      .map(filename => {
+        try {
+          const data = JSON.parse(fs.readFileSync(path.join(folder, filename)));
+          return map(data, filename.slice(0, -5)); // slug = filename without ".json"
+        } catch {
+          return null; // skip a corrupt file
+        }
+      })
+      .filter(Boolean); // drop the skipped ones
+  } catch {
+    return []; // folder doesn't exist yet
+  }
+}
+
+const listSavedDecks = () =>
+  listSaved('decks', (data, slug) => ({ slug, name: data.name, count: data.fronts.length }));
+
+const listSavedProps = () =>
+  listSaved('props', (data, slug) => ({ slug, name: data.name, props: data.props }));
+
+const listSavedBoards = () =>
+  listSaved('boards', (data, slug) => ({ slug, name: data.name, kind: boardKindLabel(data) }));
+
+// A short human-readable descriptor for a saved board, shown in the load menu:
+// a built-in board's name, "model" for an uploaded .glb, or "WIDTH×DEPTH".
+function boardKindLabel(data) {
+  if (data.board) return BOARDS[data.board] ? BOARDS[data.board].name : data.board;
+  if (data.model) return 'model';
+  return `${data.w || 8}\u00d7${data.d || 8}`;
+}
+
+// --- Colliders ---------------------------------------------------------------
+// Build the cannon-es collider for a piece from its shared shape descriptor.
+// The collider is always a simple primitive (box/sphere/convex-hull); the fancy
+// visual mesh is the client's job, and only needs to roughly match this.
 function buildCollider(type, props) {
   const shape = KINDS[type].shape;
+
   if (shape === 'die') return dieShape(props.sides || 6);
+
   if (shape === 'prop') {
-    if (props.model && Array.isArray(props.box)) { const b = props.box.map(v => Math.max(0.05, Math.min(4, +v || 0.5))); return new CANNON.Box(new CANNON.Vec3(b[0], b[1], b[2])); }
-    const c = (PROPS[props.shape] || PROPS.box).collider;
-    const k = Math.max(0.3, Math.min(3, +props.scale || 1)); // universal prop scale (matches the client mesh)
-    return c.sphere ? new CANNON.Sphere(c.sphere * k) : new CANNON.Box(new CANNON.Vec3(c.box[0]*k, c.box[1]*k, c.box[2]*k)); }
+    // A .glb model prop carries its own measured half-extents; clamp them sane.
+    if (props.model && Array.isArray(props.box)) {
+      const [hx, hy, hz] = props.box.map(v => clamp(+v || 0.5, 0.05, 4));
+      return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    }
+    // A built-in shape scales its template collider by the universal prop scale.
+    const collider = (PROPS[props.shape] || PROPS.box).collider;
+    const scale = clamp(+props.scale || 1, 0.3, 3); // matches the client's mesh scale
+    if (collider.sphere) return new CANNON.Sphere(collider.sphere * scale);
+    return new CANNON.Box(new CANNON.Vec3(collider.box[0] * scale, collider.box[1] * scale, collider.box[2] * scale));
+  }
+
   if (type === 'board') {
-    const bd = props.board && BOARDS[props.board];              // built-in model board
-    const box = bd ? bd.box : ((props.model && Array.isArray(props.box)) ? props.box : null); // or uploaded .glb board
-    if (box) { const b = box.map(v => Math.max(0.02, Math.min(2 * TABLE.x, +v || 0.05))); return new CANNON.Box(new CANNON.Vec3(b[0], b[1], b[2])); }
+    // A built-in model board or an uploaded .glb board — both supply a box.
+    const builtin = props.board && BOARDS[props.board];
+    const box = builtin ? builtin.box
+              : (props.model && Array.isArray(props.box)) ? props.box
+              : null;
+    if (box) {
+      const [hx, hy, hz] = box.map(v => clamp(+v || 0.05, 0.02, 2 * TABLE.x));
+      return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    }
+    // A plain procedural board, sized by width/depth.
+    if (props.w || props.d) {
+      const width = clamp(props.w || 8, 2, 2 * TABLE.x - 2);
+      const depth = clamp(props.d || 8, 2, 2 * TABLE.z - 2);
+      return new CANNON.Box(new CANNON.Vec3(width / 2, 0.05, depth / 2));
+    }
   }
-  if (type === 'board' && (props.w || props.d)) {
-    const w = Math.max(2, Math.min(2*TABLE.x - 2, props.w || 8)), d = Math.max(2, Math.min(2*TABLE.z - 2, props.d || 8));
-    return new CANNON.Box(new CANNON.Vec3(w/2, 0.05, d/2));
-  }
-  if (type === 'card') return new CANNON.Box(new CANNON.Vec3(shape.box[0], SIM.cards.colliderThick, shape.box[2])); // thicker than the mesh for stack stability
+
+  // A card's collider is intentionally thicker than the visible card, which is
+  // what keeps a stack of them stable instead of jittering apart.
+  if (type === 'card') return new CANNON.Box(new CANNON.Vec3(shape.box[0], SIM.cards.colliderThick, shape.box[2]));
+
   return new CANNON.Box(new CANNON.Vec3(...shape.box));
 }
 
-// Build a convex collider for a polyhedral die from its vertices. Hull triangles
-// that share a normal are MERGED into one polygon face (each kite/pentagon
-// becomes a single face) — coplanar triangles with a shared internal edge make
-// cannon's contact solver jitter, which is what made the d10 bounce on its own.
-const sub = (a, b) => [a[0]-b[0], a[1]-b[1], a[2]-b[2]];
-const cross = (a, b) => [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];
+// --- Small 3-vector helpers (plain [x, y, z] arrays) -------------------------
+const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
 const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-const norm = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/l, a[1]/l, a[2]/l]; };
+const norm = (a) => { const length = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/length, a[1]/length, a[2]/length]; };
+const averagePoint = (points) => {
+  const sum = points.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]], [0, 0, 0]);
+  return sum.map(component => component / points.length);
+};
+
+// Build the physics collider for a polyhedral die from the SAME vertices the
+// client uses for its mesh, so the two can never drift apart.
+//
+// We take the convex hull, then merge hull triangles that share a face-normal
+// into a single polygon face (a d10's kite faces become one face each). This
+// matters for stability: leaving a face as several coplanar triangles makes
+// cannon's contact solver jitter — that's what once made a resting d10 slowly
+// wander across the table on its own.
 function dieShape(sides) {
-  if (sides === 6) return new CANNON.Box(new CANNON.Vec3(DIE_RADIUS[6], DIE_RADIUS[6], DIE_RADIUS[6]));
-  const verts = dieVerts(sides, DIE_RADIUS[sides] || 1);
-  if (!verts) return new CANNON.Box(new CANNON.Vec3(DIE_RADIUS[6], DIE_RADIUS[6], DIE_RADIUS[6]));
+  const cubeCollider = () => new CANNON.Box(new CANNON.Vec3(DIE_RADIUS[6], DIE_RADIUS[6], DIE_RADIUS[6]));
+  if (sides === 6) return cubeCollider(); // a d6 is just a cube
+
+  const vertices = dieVerts(sides, DIE_RADIUS[sides] || 1);
+  if (!vertices) return cubeCollider(); // unknown die → fall back to a cube
+
   try {
-    const groups = [];
-    for (const [i, j, k] of convexHull(verts)) {
-      const n = norm(cross(sub(verts[j], verts[i]), sub(verts[k], verts[i])));
-      let g = groups.find(g => dot(g.n, n) > 0.999);
-      if (!g) { g = { n, idx: new Set() }; groups.push(g); }
-      g.idx.add(i); g.idx.add(j); g.idx.add(k);
+    // 1. Group the hull's triangles by shared normal — each group is one flat face.
+    const faceGroups = [];
+    for (const [a, b, c] of convexHull(vertices)) {
+      const normal = norm(cross(sub(vertices[b], vertices[a]), sub(vertices[c], vertices[a])));
+      let group = faceGroups.find(existing => dot(existing.normal, normal) > 0.999);
+      if (!group) {
+        group = { normal, indices: new Set() };
+        faceGroups.push(group);
+      }
+      group.indices.add(a);
+      group.indices.add(b);
+      group.indices.add(c);
     }
-    const faces = groups.map(g => {
-      const idx = [...g.idx];
-      const cen = idx.reduce((s, i) => [s[0]+verts[i][0], s[1]+verts[i][1], s[2]+verts[i][2]], [0,0,0]).map(x => x/idx.length);
-      const u = norm(sub(verts[idx[0]], cen)), w = cross(g.n, u);
-      idx.sort((p, q) => Math.atan2(dot(sub(verts[p], cen), w), dot(sub(verts[p], cen), u))
-                        - Math.atan2(dot(sub(verts[q], cen), w), dot(sub(verts[q], cen), u)));
-      const pn = cross(sub(verts[idx[1]], verts[idx[0]]), sub(verts[idx[2]], verts[idx[0]]));
-      if (dot(pn, g.n) < 0) idx.reverse(); // outward winding
-      return idx;
+
+    // 2. For each face, order its vertices around the centre, wound outward.
+    const faces = faceGroups.map(group => {
+      const indices = [...group.indices];
+      const centroid = averagePoint(indices.map(i => vertices[i]));
+
+      // Sort vertices by their angle within the face's own 2D plane.
+      const refAxis = norm(sub(vertices[indices[0]], centroid));
+      const perpAxis = cross(group.normal, refAxis);
+      const angleOf = (i) => Math.atan2(dot(sub(vertices[i], centroid), perpAxis), dot(sub(vertices[i], centroid), refAxis));
+      indices.sort((i, j) => angleOf(i) - angleOf(j));
+
+      // cannon needs faces wound so their normal points outward; flip if not.
+      const woundNormal = cross(sub(vertices[indices[1]], vertices[indices[0]]), sub(vertices[indices[2]], vertices[indices[0]]));
+      if (dot(woundNormal, group.normal) < 0) indices.reverse();
+      return indices;
     });
-    return new CANNON.ConvexPolyhedron({ vertices: verts.map(v => new CANNON.Vec3(v[0], v[1], v[2])), faces });
+
+    return new CANNON.ConvexPolyhedron({
+      vertices: vertices.map(v => new CANNON.Vec3(v[0], v[1], v[2])),
+      faces,
+    });
   } catch (e) {
-    return new CANNON.Box(new CANNON.Vec3(DIE_RADIUS[6], DIE_RADIUS[6], DIE_RADIUS[6])); // safety net
+    return cubeCollider(); // any hull failure → a safe cube
   }
 }
 
@@ -184,56 +275,79 @@ defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'st
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
 // --- Physics world (identical setup to the single-player client) ------------
+// --- Physics world -----------------------------------------------------------
+// Create the single cannon-es world: a static table to rest on, and four tall
+// walls so a hard throw can't fling a piece off the edge. Returns the world with
+// its shared contact material attached (spawn() reuses it for every piece).
 function buildWorld() {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, SIM.gravity, 0) });
   world.broadphase = new CANNON.SAPBroadphase(world);
-  world.allowSleep = true;
-  const mat = new CANNON.Material('s');
+  world.allowSleep = true; // let resting pieces sleep — cheap, and they sync nothing
   world.solver.iterations = SIM.solverIterations;
-  world.addContactMaterial(new CANNON.ContactMaterial(mat, mat, { friction: SIM.friction, restitution: SIM.restitution, contactEquationStiffness: SIM.contact.stiffness, contactEquationRelaxation: SIM.contact.relaxation }));
 
-  const table = new CANNON.Body({ mass: 0, material: mat });
+  // One material shared by everything; the contact settings tune how firm/bouncy
+  // collisions feel (see SIM.contact for the stack-stability trade-offs).
+  const material = new CANNON.Material('surface');
+  world.addContactMaterial(new CANNON.ContactMaterial(material, material, {
+    friction: SIM.friction,
+    restitution: SIM.restitution,
+    contactEquationStiffness: SIM.contact.stiffness,
+    contactEquationRelaxation: SIM.contact.relaxation,
+  }));
+
+  // The table surface sits just below y=0 so pieces rest at ~0.
+  const table = new CANNON.Body({ mass: 0, material });
   table.addShape(new CANNON.Box(new CANNON.Vec3(TABLE.x, SIM.tableThick, TABLE.z)));
   table.position.set(0, -SIM.tableThick, 0);
   world.addBody(table);
 
-  const wall = (px, pz, hx, hz) => {
-    const b = new CANNON.Body({ mass: 0, material: mat });
-    b.addShape(new CANNON.Box(new CANNON.Vec3(hx, SIM.wall.half, hz))); // tall so hard throws can't clear them
-    b.position.set(px, SIM.wall.half, pz);
-    world.addBody(b);
+  // A tall static wall centred at (px,pz) with half-extents (hx,hz).
+  const addWall = (px, pz, hx, hz) => {
+    const wall = new CANNON.Body({ mass: 0, material });
+    wall.addShape(new CANNON.Box(new CANNON.Vec3(hx, SIM.wall.half, hz))); // tall so throws can't clear it
+    wall.position.set(px, SIM.wall.half, pz);
+    world.addBody(wall);
   };
-  const t = SIM.wall.thick, o = SIM.wall.over; // half-thickness; corner overlap
-  wall(0, -(TABLE.z + t), TABLE.x + o, t); wall(0, TABLE.z + t, TABLE.x + o, t);
-  wall(-(TABLE.x + t), 0, t, TABLE.z + o); wall(TABLE.x + t, 0, t, TABLE.z + o);
+  const thick = SIM.wall.thick;    // wall half-thickness
+  const overlap = SIM.wall.over;   // extra length so the corners meet
+  addWall(0, -(TABLE.z + thick), TABLE.x + overlap, thick); // near / far
+  addWall(0,  (TABLE.z + thick), TABLE.x + overlap, thick);
+  addWall(-(TABLE.x + thick), 0, thick, TABLE.z + overlap); // left / right
+  addWall( (TABLE.x + thick), 0, thick, TABLE.z + overlap);
 
-  world.__mat = mat;
+  world.__mat = material; // stash the shared material for spawn() to reuse
   return world;
 }
 
 const rnd = () => [(Math.random() - 0.5) * 8, SIM.spawnY, (Math.random() - 0.5) * 6];
 
-const shuffle = (a) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+// Fisher–Yates in-place shuffle.
+const shuffle = (array) => {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.random() * (i + 1) | 0;
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+};
 // A card is identified by texture REFERENCES: 'rank:A:#111' (procedural face),
 // 'back' (procedural back), or a data-URL / URL for an uploaded/file image.
 // A deck = a shared back + an ordered list of front refs.
-function buildDeck() { // standard 52-card deck, shuffled
-  const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-  const blacksuites = ['♠','♣'];
-  const blackcolor = '#000000';
-  const redsuites = ['♥','♦'];
-  const redcolor = '#bd2500';
+// A standard, shuffled 52-card deck as a list of face "refs" (see deckRefOk).
+// A ref like "rank:A:♠:#000000" tells the client how to draw that face itself,
+// so we never ship 52 images — just 52 short strings.
+function buildSimpleDeck() {
+  const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+  const suits = [
+    { symbols: ['♠', '♣'], color: '#000000' }, // black
+    { symbols: ['♥', '♦'], color: '#bd2500' }, // red
+  ];
   const cards = [];
-  for (const suite of blacksuites) for (const rank of ranks) cards.push(`rank:${rank}:${suite}:${blackcolor}`);
-  for (const suite of redsuites) for (const rank of ranks) cards.push(`rank:${rank}:${suite}:${redcolor}`);
+  for (const { symbols, color } of suits)
+    for (const symbol of symbols)
+      for (const rank of ranks)
+        cards.push(`rank:${rank}:${symbol}:${color}`);
   return { back: 'back', cards: shuffle(cards) };
 }
-
-/*function seedPieces(room) {
-  [6, 6, 20, 8].forEach(sides => room.spawn('die', rnd(), { sides }));
-  [0x4a78c9, 0xc94a4a].forEach(color => room.spawn('prop', rnd(), { shape: 'pawn', color }));
-  room.spawn('deck', [-3, 0.3, 2]);
-}*/
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
@@ -251,455 +365,767 @@ class TableRoom extends Room {
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.nextId = 1; this.nextHid = 1;
 
-    this.spawn('board', [0, 0.05, 0]);
-    //seedPieces(this);
-
+    // --- Movement: grab → drag → release --------------------------------------
     this.onMessage('grab', (client, { id }) => {
-      const p = this.state.pieces.get(id);
-      if (p && !p.owner && !this.flips.has(id) && KINDS[p.type].mass > 0) p.owner = client.sessionId; // claim if free & movable
-    });
-    this.onMessage('move', (client, m) => {
-      const p = this.state.pieces.get(m.id);
-      if (p && p.owner === client.sessionId) this.targets.set(m.id, { x: m.x, y: m.y, z: m.z });
-    });
-    this.onMessage('release', (client, m) => {
-      const p = this.state.pieces.get(m.id);
-      if (!p || p.owner !== client.sessionId) return;
-      p.owner = ''; this.targets.delete(m.id);
-      const b = this.bodies.get(m.id);
-      if (b) {
-        if (m.v) { // apply the hand speed the client measured -> a real throw
-          let [vx, vy, vz] = m.v;
-          const V = Math.hypot(vx, vy, vz), CAP = p.type === 'card' ? SIM.cards.maxThrow : SIM.throwCap, s = V > CAP ? CAP / V : 1;
-          b.velocity.set(vx * s, vy * s, vz * s);
-        }
-        b.wakeUp();
+      const piece = this.state.pieces.get(id);
+      // Claim the piece if it's free, movable, and not mid-flip.
+      if (piece && !piece.owner && !this.flips.has(id) && KINDS[piece.type].mass > 0) {
+        piece.owner = client.sessionId;
       }
-      // drop a card onto a deck -> its front goes back onto the top of the stack
-      if (p.type === 'card' && b) {
+    });
+
+    this.onMessage('move', (client, msg) => {
+      const piece = this.state.pieces.get(msg.id);
+      // Only the owner can steer their piece; update the servo's drag target.
+      if (piece && piece.owner === client.sessionId) {
+        this.targets.set(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+      }
+    });
+
+    this.onMessage('release', (client, msg) => {
+      const piece = this.state.pieces.get(msg.id);
+      if (!piece || piece.owner !== client.sessionId) return;
+      piece.owner = '';
+      this.targets.delete(msg.id);
+
+      const body = this.bodies.get(msg.id);
+      if (body) {
+        // Turn the hand-speed the client measured into a real throw, capped so a
+        // frantic flick can't launch a piece across the room (cards cap lower).
+        if (msg.v) {
+          let [vx, vy, vz] = msg.v;
+          const speed = Math.hypot(vx, vy, vz);
+          const cap = piece.type === 'card' ? SIM.cards.maxThrow : SIM.throwCap;
+          const scale = speed > cap ? cap / speed : 1;
+          body.velocity.set(vx * scale, vy * scale, vz * scale);
+        }
+        body.wakeUp();
+      }
+
+      // If a card is dropped on top of a deck, absorb it back onto the stack.
+      if (piece.type === 'card' && body) {
         for (const [deckId, cards] of this.deckCards) {
-          const db = this.bodies.get(deckId); if (!db) continue;
-          if (Math.abs(b.position.x - db.position.x) < SIM.absorb.x && Math.abs(b.position.z - db.position.z) < SIM.absorb.z) {
-            const front = (this.cardData.get(m.id) || {}).front || JSON.parse(p.props || '{}').front;
+          const deckBody = this.bodies.get(deckId);
+          if (!deckBody) continue;
+          const onDeck = Math.abs(body.position.x - deckBody.position.x) < SIM.absorb.x
+                      && Math.abs(body.position.z - deckBody.position.z) < SIM.absorb.z;
+          if (onDeck) {
+            const front = (this.cardData.get(msg.id) || {}).front || JSON.parse(piece.props || '{}').front;
             if (front) cards.push(front);
             this.state.pieces.get(deckId).count = cards.length;
             this.updateDeckCollider(deckId);
-            this.removePiece(m.id);
+            this.removePiece(msg.id);
             break;
           }
         }
       }
     });
+
+    // --- Cards: flip, deal, take ----------------------------------------------
     this.onMessage('flip', (client, { id }) => {
-      const p = this.state.pieces.get(id), b = this.bodies.get(id);
-      if (!p || !b || p.type !== 'card') return;
-      // move the FRONT between public (synced props) and private (cardData); the back stays public
-      const cur = JSON.parse(p.props || '{}');
-      if (cur.front) { this.cardData.set(id, { front: cur.front }); delete cur.front; p.props = JSON.stringify(cur); }      // hide
-      else if (this.cardData.has(id)) { cur.front = this.cardData.get(id).front; this.cardData.delete(id); p.props = JSON.stringify(cur); } // reveal
-      b.wakeUp(); b.velocity.y = SIM.flipHop; // small hop for feedback (the client swaps the visible face)
+      const piece = this.state.pieces.get(id), body = this.bodies.get(id);
+      if (!piece || !body || piece.type !== 'card') return;
+      // A card's front lives in PUBLIC props when face-up, or PRIVATE cardData
+      // when face-down; flipping moves it between the two. The back is always
+      // public, so a face-down card's front is never sent to any client.
+      const props = JSON.parse(piece.props || '{}');
+      if (props.front) {                    // face-up → hide the front
+        this.cardData.set(id, { front: props.front });
+        delete props.front;
+      } else if (this.cardData.has(id)) {   // face-down → reveal the front
+        props.front = this.cardData.get(id).front;
+        this.cardData.delete(id);
+      }
+      piece.props = JSON.stringify(props);
+      body.wakeUp();
+      body.velocity.y = SIM.flipHop; // a small hop; the client plays the visual flip
     });
-    this.onMessage('dealToTable', (client, { deckId }) => { // top card -> face-down onto the table
-      const p = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      if (!p || p.type !== 'deck' || !cards || !cards.length) return;
-      const back = JSON.parse(p.props || '{}').back || 'back', front = cards.pop();
-      const db = this.bodies.get(deckId);
-      const id = this.spawn('card', [db.position.x + 1.7 + Math.random() * 0.4, 2.5, db.position.z + (Math.random() - 0.5) * 0.6], { back }); // only back is public
-      const b = this.bodies.get(id); b.quaternion.set(0, 0, 0, 1); this.writeTransform(this.state.pieces.get(id), b); // lie flat
+    // Deal the top card face-down onto the table, just beside the deck.
+    this.onMessage('dealToTable', (client, { deckId }) => {
+      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
+      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+
+      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const front = cards.pop();
+      const id = this.spawnCardFlat(this.besideDeck(this.bodies.get(deckId)), { back }); // only the back is public
       this.cardData.set(id, { front }); // front stays private until taken or flipped
-      p.count = cards.length;
-      if (!cards.length) this.removePiece(deckId); else this.updateDeckCollider(deckId);
+
+      deck.count = cards.length;
+      if (!cards.length) this.removePiece(deckId);
+      else this.updateDeckCollider(deckId);
     });
-    this.onMessage('dealDrag', (client, m) => { // deal the top card and hand control to the dealer to drag it out
-      const p = this.state.pieces.get(m.deckId), cards = this.deckCards.get(m.deckId);
-      if (!p || p.type !== 'deck' || !cards || !cards.length) return;
-      const back = JSON.parse(p.props || '{}').back || 'back', front = cards.pop();
-      const db = this.bodies.get(m.deckId);
-      const id = this.spawn('card', [db.position.x, 2.5, db.position.z], { back });
-      const b = this.bodies.get(id); b.quaternion.set(0, 0, 0, 1); this.writeTransform(this.state.pieces.get(id), b);
+
+    // Deal the top card AND immediately give the dealer control to drag it out.
+    this.onMessage('dealDrag', (client, msg) => {
+      const deck = this.state.pieces.get(msg.deckId), cards = this.deckCards.get(msg.deckId);
+      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+
+      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const front = cards.pop();
+      const deckBody = this.bodies.get(msg.deckId);
+      const id = this.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], { back });
       this.cardData.set(id, { front });
-      p.count = cards.length;
-      if (!cards.length) this.removePiece(m.deckId); else this.updateDeckCollider(m.deckId);
-      this.state.pieces.get(id).owner = client.sessionId; // dealer now drives it
-      this.targets.set(id, { x: m.x, y: m.y, z: m.z });
-      client.send('dealt', { id }); // tell the client which card it just picked up
+
+      deck.count = cards.length;
+      if (!cards.length) this.removePiece(msg.deckId);
+      else this.updateDeckCollider(msg.deckId);
+
+      // Hand the card straight to the dealer's cursor.
+      this.state.pieces.get(id).owner = client.sessionId;
+      this.targets.set(id, { x: msg.x, y: msg.y, z: msg.z });
+      client.send('dealt', { id }); // tell the client which card it now holds
     });
-    this.onMessage('takeCard', (client, { id }) => { // table card -> your hidden hand
-      const p = this.state.pieces.get(id); if (!p || p.type !== 'card') return;
-      const cur = JSON.parse(p.props || '{}');
-      const front = (this.cardData.get(id) || {}).front || cur.front, back = cur.back || 'back';
-      const hand = this.hands.get(client.sessionId) || [];
-      hand.push({ hid: 'h' + (this.nextHid++), front, back });
-      this.hands.set(client.sessionId, hand);
+
+    // Take a table card into your private hand (removing it from the table).
+    this.onMessage('takeCard', (client, { id }) => {
+      const piece = this.state.pieces.get(id);
+      if (!piece || piece.type !== 'card') return;
+      const props = JSON.parse(piece.props || '{}');
+      const front = (this.cardData.get(id) || {}).front || props.front;
+      const back = props.back || 'back';
+      this.addToHand(client, front, back);
       this.removePiece(id);
-      this.sendHand(client);
     });
-    // Draw the top card and let ONLY the drawer see its front (like a private hand of one).
-    // The card sits in limbo until placed; the deck count drops for everyone (public).
+
+    // Draw the top card so ONLY the drawer sees its front — like a private hand of
+    // one. The card sits in limbo (pendingInspect) until placed; the deck's count
+    // drops for everyone, but the deck itself stays so the card can be put back.
     this.onMessage('drawInspect', (client, { deckId }) => {
-      if (this.pendingInspect.has(client.sessionId)) return; // one draw at a time
-      const p = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      if (!p || p.type !== 'deck' || !cards || !cards.length) return;
-      const back = JSON.parse(p.props || '{}').back || 'back', front = cards.pop();
-      p.count = cards.length; this.updateDeckCollider(deckId); // keep the (maybe empty) deck so the card can return
+      if (this.pendingInspect.has(client.sessionId)) return; // one at a time
+      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
+      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+
+      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const front = cards.pop();
+      deck.count = cards.length;
+      this.updateDeckCollider(deckId);
+
       this.pendingInspect.set(client.sessionId, { deckId, front, back });
-      client.send('inspectCard', { front, back }); // PRIVATE: front goes only to the drawer
+      client.send('inspectCard', { front, back }); // PRIVATE: only the drawer sees the front
     });
+    // Place a drawn-to-inspect card: back on the deck, into your hand, or onto
+    // the field face-up (public front) / face-down (front stays private).
     this.onMessage('inspectPlace', (client, { where }) => {
-      const pend = this.pendingInspect.get(client.sessionId); if (!pend) return;
+      const pending = this.pendingInspect.get(client.sessionId);
+      if (!pending) return;
       this.pendingInspect.delete(client.sessionId);
-      const { deckId, front, back } = pend;
-      if (where === 'deck') { // put it back on top
+      const { deckId, front, back } = pending;
+
+      if (where === 'deck') { // return it to the top of the deck it came from
         const cards = this.deckCards.get(deckId);
-        if (cards) { cards.push(front); const dp = this.state.pieces.get(deckId); if (dp) dp.count = cards.length; this.updateDeckCollider(deckId); }
+        if (cards) {
+          cards.push(front);
+          const deck = this.state.pieces.get(deckId);
+          if (deck) deck.count = cards.length;
+          this.updateDeckCollider(deckId);
+        }
         return;
       }
+
       if (where === 'hand') {
-        const hand = this.hands.get(client.sessionId) || [];
-        hand.push({ hid: 'h' + (this.nextHid++), front, back });
-        this.hands.set(client.sessionId, hand); this.sendHand(client);
-      } else { // 'field-up' (public front) or 'field-down' (front stays private in cardData)
+        this.addToHand(client, front, back);
+      } else { // 'field-up' (front public) or 'field-down' (front stays private)
         const faceDown = where === 'field-down';
-        const db = this.bodies.get(deckId); // drop it just beside the deck it came from
-        const pos = db ? [db.position.x + 1.7 + Math.random() * 0.4, 2.5, db.position.z + (Math.random() - 0.5) * 0.6] : rnd();
-        const id = this.spawn('card', pos, faceDown ? { back } : { front, back });
-        const b = this.bodies.get(id); b.quaternion.set(0, 0, 0, 1); this.writeTransform(this.state.pieces.get(id), b); // lie flat
+        const deckBody = this.bodies.get(deckId);
+        const pos = deckBody ? this.besideDeck(deckBody) : rnd();
+        const id = this.spawnCardFlat(pos, faceDown ? { back } : { front, back });
         if (faceDown) this.cardData.set(id, { front });
       }
-      const cards = this.deckCards.get(deckId); // the card left the deck for good — drop an empty deck
+
+      // The card has left the deck for good — clean up an emptied deck.
+      const cards = this.deckCards.get(deckId);
       if (cards && cards.length === 0) this.removePiece(deckId);
     });
+
     this.onMessage('shuffle', (client, { deckId }) => {
-      const cards = this.deckCards.get(deckId); if (cards) shuffle(cards);
+      const cards = this.deckCards.get(deckId);
+      if (cards) {
+        shuffle(cards);
+        this.broadcast('shuffled', { id: deckId }); // every client plays the riffle animation
+      }
     });
     // Decks are built in chunks so no single message is large (text lists can be
     // hundreds of cards): deckBegin -> deckAppend (batches) -> deckFinish.
-    this.onMessage('deckBegin', (client, m) => {
-      this.drafts.set(client.sessionId, { back: (m && deckRefOk(m.back)) ? m.back : 'back', cards: [] });
+    // Decks are built in chunks so no single message is huge (a text list can be
+    // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
+    this.onMessage('deckBegin', (client, msg) => {
+      const back = (msg && deckRefOk(msg.back)) ? msg.back : 'back';
+      this.drafts.set(client.sessionId, { back, cards: [] });
     });
-    this.onMessage('deckAppend', (client, m) => {
-      const d = this.drafts.get(client.sessionId); if (!d || !m || !Array.isArray(m.fronts)) return;
-      for (const f of m.fronts) if (deckRefOk(f) && d.cards.length < 1000) d.cards.push(f);
+    this.onMessage('deckAppend', (client, msg) => {
+      const draft = this.drafts.get(client.sessionId);
+      if (!draft || !msg || !Array.isArray(msg.fronts)) return;
+      for (const front of msg.fronts) {
+        if (deckRefOk(front) && draft.cards.length < 1000) draft.cards.push(front);
+      }
     });
-    this.onMessage('deckFinish', (client, m) => {
-      const d = this.drafts.get(client.sessionId); this.drafts.delete(client.sessionId);
-      if (!d || !d.cards.length) return;
-      const id = this.spawn('deck', rnd(), { back: d.back, cards: d.cards });
-      if (m && m.name && this.saveDeckById(id, m.name)) client.send('deckList', listSavedDecks()); // save-on-create
+    this.onMessage('deckFinish', (client, msg) => {
+      const draft = this.drafts.get(client.sessionId);
+      this.drafts.delete(client.sessionId);
+      if (!draft || !draft.cards.length) return;
+      const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards });
+      // Optionally save it to the library in the same step (save-on-create).
+      if (msg && msg.name && this.saveDeckById(id, msg.name)) {
+        client.send('deckList', listSavedDecks());
+      }
     });
-    this.onMessage('saveDeck', (client, m) => { // persist a table deck to the shared disk library
-      if (this.saveDeckById(m && m.deckId, m && m.name)) client.send('deckList', listSavedDecks());
+
+    // --- Library: save / list / load decks, boards, props ---------------------
+    this.onMessage('saveDeck', (client, msg) => {
+      if (this.saveDeckById(msg && msg.deckId, msg && msg.name)) {
+        client.send('deckList', listSavedDecks());
+      }
     });
     this.onMessage('listDecks', (client) => client.send('deckList', listSavedDecks()));
-    this.onMessage('loadDeck', (client, m) => { // spawn a deck from the library (refs are URLs/text)
-      const file = metaFile('decks', slugify(m && m.slug));
-      try { if (fs.existsSync(file)) { const d = JSON.parse(fs.readFileSync(file)); this.spawn('deck', rnd(), { back: d.back, cards: d.fronts }); } }
-      catch (e) { /* ignore */ }
-    });
-    this.onMessage('saveBoard', (client, m) => { // persist a board's config to the shared disk library
-      const name = String((m && m.name) || '').slice(0, 60); if (!name) return;
-      const slug = slugify(name); if (!slug) return;
-      const b = (m && m.board) || {};
+    this.onMessage('loadDeck', (client, msg) => {
+      const file = metaFile('decks', slugify(msg && msg.slug));
       try {
-        let rec;
-        if (b.board && BOARDS[b.board]) rec = { name, board: b.board };                                    // built-in
-        else if (b.model) rec = { name, model: String(b.model).slice(0,300), modelScale: +b.modelScale || 1, box: Array.isArray(b.box) ? b.box.map(v=>+v) : undefined }; // uploaded .glb
-        else rec = { name, w: b.w, d: b.d, tex: b.tex || null };                                           // procedural
-        fs.writeFileSync(metaFile('boards', slug), JSON.stringify(rec));
+        if (fs.existsSync(file)) {
+          const data = JSON.parse(fs.readFileSync(file));
+          this.spawn('deck', rnd(), { back: data.back, cards: data.fronts });
+        }
+      } catch (e) { /* missing or corrupt file — ignore */ }
+    });
+
+    this.onMessage('saveBoard', (client, msg) => {
+      const name = String((msg && msg.name) || '').slice(0, 60);
+      if (!name) return;
+      const slug = slugify(name);
+      if (!slug) return;
+      const board = (msg && msg.board) || {};
+      try {
+        let record;
+        if (board.board && BOARDS[board.board]) {
+          record = { name, board: board.board }; // a built-in board
+        } else if (board.model) {
+          record = { name, model: String(board.model).slice(0, 300), modelScale: +board.modelScale || 1,
+                     box: Array.isArray(board.box) ? board.box.map(v => +v) : undefined }; // an uploaded .glb
+        } else {
+          record = { name, w: board.w, d: board.d, tex: board.tex || null }; // a procedural board
+        }
+        fs.writeFileSync(metaFile('boards', slug), JSON.stringify(record));
         client.send('boardList', listSavedBoards());
       } catch (e) { /* disk error — ignore */ }
     });
     this.onMessage('listBoards', (client) => client.send('boardList', listSavedBoards()));
-    this.onMessage('saveProp', (client, m) => { // persist a custom-model prop for one-click re-spawn
-      const name = String((m && m.name) || '').slice(0, 60); if (!name) return;
-      const slug = slugify(name); if (!slug) return;
-      const p = (m && m.props) || {}; if (!p.model) return; // only model props are saveable
+
+    this.onMessage('saveProp', (client, msg) => {
+      const name = String((msg && msg.name) || '').slice(0, 60);
+      if (!name) return;
+      const slug = slugify(name);
+      if (!slug) return;
+      const incoming = (msg && msg.props) || {};
+      if (!incoming.model) return; // only custom-model props are saveable
       try {
-        const props = { model: String(p.model).slice(0, 300), box: Array.isArray(p.box) ? p.box.map(v => +v) : undefined, stand: !!p.stand, scale: +p.scale || 1 };
-        if (p.color != null) props.color = p.color | 0;
+        const props = {
+          model: String(incoming.model).slice(0, 300),
+          box: Array.isArray(incoming.box) ? incoming.box.map(v => +v) : undefined,
+          stand: !!incoming.stand,
+          scale: +incoming.scale || 1,
+        };
+        if (incoming.color != null) props.color = incoming.color | 0;
         fs.writeFileSync(metaFile('props', slug), JSON.stringify({ name, props }));
         client.send('propList', listSavedProps());
       } catch (e) { /* disk error — ignore */ }
     });
     this.onMessage('listProps', (client) => client.send('propList', listSavedProps()));
-    this.onMessage('editDeck', (client, m) => { // shallow edit: swap back and/or append cards; overwrite or save-as-copy
-      const slug = slugify(m && m.slug); if (!slug) return;
+
+    // Shallow-edit a saved deck: swap the back and/or append cards, then either
+    // overwrite it or save a copy under a new name.
+    this.onMessage('editDeck', (client, msg) => {
+      const slug = slugify(msg && msg.slug);
+      if (!slug) return;
       try {
-        const file = metaFile('decks', slug); if (!fs.existsSync(file)) return;
-        const d = JSON.parse(fs.readFileSync(file));
-        if (m.back && deckRefOk(m.back)) d.back = m.back;
-        if (Array.isArray(m.addFronts)) for (const fr of m.addFronts) if (deckRefOk(fr) && d.fronts.length < 1000) d.fronts.push(fr);
-        const targetName = String(m.name || d.name).slice(0, 60);
-        const targetSlug = m.saveAs ? slugify(targetName) : slug; if (!targetSlug) return;
-        fs.writeFileSync(metaFile('decks', targetSlug), JSON.stringify({ name: targetName, back: d.back, fronts: d.fronts }));
+        const file = metaFile('decks', slug);
+        if (!fs.existsSync(file)) return;
+        const data = JSON.parse(fs.readFileSync(file));
+
+        if (msg.back && deckRefOk(msg.back)) data.back = msg.back;
+        if (Array.isArray(msg.addFronts)) {
+          for (const front of msg.addFronts) {
+            if (deckRefOk(front) && data.fronts.length < 1000) data.fronts.push(front);
+          }
+        }
+
+        const targetName = String(msg.name || data.name).slice(0, 60);
+        const targetSlug = msg.saveAs ? slugify(targetName) : slug; // save-as-copy vs overwrite
+        if (!targetSlug) return;
+        fs.writeFileSync(metaFile('decks', targetSlug), JSON.stringify({ name: targetName, back: data.back, fronts: data.fronts }));
         client.send('deckList', listSavedDecks());
       } catch (e) { /* disk error — ignore */ }
     });
-    this.onMessage('loadBoard', (client, m) => { // load a saved board (swaps the current one, centers it)
-      const file = metaFile('boards', slugify(m && m.slug));
-      try { if (fs.existsSync(file)) { const d = JSON.parse(fs.readFileSync(file));
-        const olds = []; this.state.pieces.forEach((p, id) => { if (p.type === 'board') olds.push(id); }); olds.forEach(id => this.removePiece(id));
-        const props = d.board ? { board: d.board } : d.model ? { model: d.model, modelScale: d.modelScale, box: d.box } : { w: d.w, d: d.d, tex: d.tex || undefined };
-        const bd = props.board && BOARDS[props.board];
-        const box = bd ? bd.box : (props.model && Array.isArray(props.box) ? props.box : null);
-        this.spawn('board', [0, box ? box[1] : 0.05, 0], props); } }
-      catch (e) { /* ignore */ }
+
+    this.onMessage('loadBoard', (client, msg) => {
+      const file = metaFile('boards', slugify(msg && msg.slug));
+      try {
+        if (!fs.existsSync(file)) return;
+        const data = JSON.parse(fs.readFileSync(file));
+        const props = data.board ? { board: data.board }
+                    : data.model ? { model: data.model, modelScale: data.modelScale, box: data.box }
+                    : { w: data.w, d: data.d, tex: data.tex || undefined };
+        this.swapBoard(props);
+      } catch (e) { /* missing or corrupt file — ignore */ }
     });
-    this.onMessage('playCard', (client, { hid, faceDown, x, z }) => { // hand -> table (face-down = hidden until revealed)
-      const hand = this.hands.get(client.sessionId); if (!hand) return;
-      const i = hand.findIndex(c => c.hid === hid); if (i < 0) return;
-      const [c] = hand.splice(i, 1);
-      const pos = (typeof x === 'number' && typeof z === 'number') ? [x, 3, z] : [(Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 3];
-      const id = this.spawn('card', pos, faceDown ? { back: c.back } : { front: c.front, back: c.back });
-      const b = this.bodies.get(id); b.quaternion.set(0, 0, 0, 1); this.writeTransform(this.state.pieces.get(id), b); // flat
-      if (faceDown) this.cardData.set(id, { front: c.front }); // front stays private until someone flips it
+    // Play a card from your hand onto the table, face-up or face-down.
+    this.onMessage('playCard', (client, { hid, faceDown, x, z }) => {
+      const hand = this.hands.get(client.sessionId);
+      if (!hand) return;
+      const index = hand.findIndex(card => card.hid === hid);
+      if (index < 0) return;
+      const [card] = hand.splice(index, 1);
+
+      const pos = (typeof x === 'number' && typeof z === 'number')
+        ? [x, 3, z]                                        // where the client dropped it
+        : [(Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 3]; // or scattered
+      const id = this.spawnCardFlat(pos, faceDown ? { back: card.back } : { front: card.front, back: card.back });
+      if (faceDown) this.cardData.set(id, { front: card.front }); // front private until flipped
       this.sendHand(client);
     });
-    this.onMessage('spawn', (client, m) => {
+
+    // --- Table-wide actions ----------------------------------------------------
+    this.onMessage('spawn', (client, msg) => {
       if (this.state.pieces.size >= SIM.maxPieces) return;
-      if (m.type === 'board') { // one board at a time; new board swaps the old and centers
-        const olds = []; this.state.pieces.forEach((p, id) => { if (p.type === 'board') olds.push(id); });
-        olds.forEach(id => this.removePiece(id));
-        const props = m.props || {}, bd = props.board && BOARDS[props.board];
-        const box = bd ? bd.box : ((props.model && Array.isArray(props.box)) ? props.box : null);
-        this.spawn('board', [0, box ? box[1] : 0.05, 0], props); // sit on the table by half-height
-      } else this.spawn(m.type, rnd(), m.props || {});
+      if (msg.type === 'board') {
+        this.swapBoard(msg.props || {}); // only one board at a time
+      } else {
+        this.spawn(msg.type, rnd(), msg.props || {});
+      }
     });
+
     this.onMessage('roll', () => {
-      this.state.pieces.forEach((p, id) => {
-        if (p.type !== 'die') return;
-        const b = this.bodies.get(id); b.wakeUp();
-        const r = SIM.roll;
-        b.velocity.set((Math.random() - 0.5) * r.spread, r.up, (Math.random() - 0.5) * r.spread);
-        b.angularVelocity.set((Math.random() - 0.5) * r.spin, (Math.random() - 0.5) * r.spin, (Math.random() - 0.5) * r.spin);
+      const roll = SIM.roll;
+      this.state.pieces.forEach((piece, id) => {
+        if (piece.type !== 'die') return;
+        const body = this.bodies.get(id);
+        body.wakeUp();
+        body.velocity.set((Math.random() - 0.5) * roll.spread, roll.up, (Math.random() - 0.5) * roll.spread);
+        body.angularVelocity.set((Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin);
       });
     });
-    this.onMessage('reset', () => { // wipe the whole room to an empty table
-      const doomed = [];
-      this.state.pieces.forEach((p, id) => doomed.push(id));            // every piece, boards included
-      for (const id of doomed) this.removePiece(id);
-      this.hands.clear(); this.pendingInspect.clear(); this.drafts.clear(); // private state not tied to a piece
-      this.deckCards.clear(); this.cardData.clear(); this.flips.clear(); this.targets.clear();
-      for (const c of this.clients) this.sendHand(c);                   // empty every player's hidden hand
+
+    // Wipe the room back to an empty table — pieces and all private state.
+    this.onMessage('reset', () => {
+      const ids = [];
+      this.state.pieces.forEach((piece, id) => ids.push(id));
+      for (const id of ids) this.removePiece(id);
+      this.hands.clear();
+      this.pendingInspect.clear();
+      this.drafts.clear();
+      this.deckCards.clear();
+      this.cardData.clear();
+      this.flips.clear();
+      this.targets.clear();
+      for (const client of this.clients) this.sendHand(client); // clear every player's hand
     });
-    this.onMessage('setStand', (client, { id }) => { // toggle a piece's keep-upright/flat behaviour
-      const p = this.state.pieces.get(id); if (!p) return;
-      const pr = JSON.parse(p.props || '{}');
-      pr.stand = this.standOf(p) ? false : this.naturalStand(p); // on -> off, or off -> its natural mode
-      p.props = JSON.stringify(pr);
-      const b = this.bodies.get(id); if (b) b.wakeUp();
+
+    // Toggle a piece's keep-upright/flat behaviour (the U key).
+    this.onMessage('setStand', (client, { id }) => {
+      const piece = this.state.pieces.get(id);
+      if (!piece) return;
+      const props = JSON.parse(piece.props || '{}');
+      props.stand = this.standOf(piece) ? false : this.naturalStand(piece); // on → off, or off → its natural mode
+      piece.props = JSON.stringify(props);
+      const body = this.bodies.get(id);
+      if (body) body.wakeUp();
     });
-    this.onMessage('snap', (client, { id }) => { // snap a held piece's facing to the nearest 90° (and upright)
-      const p = this.state.pieces.get(id); if (!p || p.owner !== client.sessionId) return;
-      const b = this.bodies.get(id); if (!b) return;
-      const fwd = new CANNON.Vec3(0, 0, 1), wf = new CANNON.Vec3(); b.quaternion.vmult(fwd, wf);
-      const step = Math.PI / 2; // advance one quarter-turn from the current grid position each click
-      const yaw = (Math.round(Math.atan2(wf.x, wf.z) / step) + 1) * step;
-      b.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + cardinal
-      b.angularVelocity.setZero(); b.wakeUp();
+
+    // Snap a held piece a quarter-turn onward, and level it (middle-click).
+    this.onMessage('snap', (client, { id }) => {
+      const piece = this.state.pieces.get(id);
+      if (!piece || piece.owner !== client.sessionId) return;
+      const body = this.bodies.get(id);
+      if (!body) return;
+
+      // Read the piece's current facing, then advance to the next 90° step.
+      const forward = new CANNON.Vec3(0, 0, 1), worldForward = new CANNON.Vec3();
+      body.quaternion.vmult(forward, worldForward);
+      const step = Math.PI / 2;
+      const yaw = (Math.round(Math.atan2(worldForward.x, worldForward.z) / step) + 1) * step;
+      body.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + cardinal
+      body.angularVelocity.setZero();
+      body.wakeUp();
     });
+
     this.onMessage('nextTurn', () => this.advanceTurn());
     this.onMessage('remove', (client, { id }) => { if (this.state.pieces.has(id)) this.removePiece(id); });
     this.onMessage('setName', (client, { name }) => {
-      const pl = this.state.players.get(client.sessionId);
-      if (pl && typeof name === 'string') pl.name = name.trim().slice(0, 20) || pl.name;
+      const player = this.state.players.get(client.sessionId);
+      if (player && typeof name === 'string') player.name = name.trim().slice(0, 20) || player.name;
     });
     this.onMessage('setAvatar', (client, { data }) => {
-      const pl = this.state.players.get(client.sessionId);
-      if (pl && typeof data === 'string' && data.startsWith('data:image') && data.length < 60000) pl.avatar = data;
+      const player = this.state.players.get(client.sessionId);
+      // Only accept a bounded image data-URL (see the client-side XSS-safe render).
+      if (player && typeof data === 'string' && data.startsWith('data:image') && data.length < 60000) {
+        player.avatar = data;
+      }
     });
 
     this.setSimulationInterval((dt) => this.update(dt), 1000 / 60); // fixed 60Hz sim
     this.setPatchRate(1000 / 60); // 60Hz state broadcast (delta-compressed; cheap on LAN)
   }
 
+  // Create a piece: a physics body + a synced Piece record, wired together by id.
+  // pos is [x,y,z]; props are the type-specific fields (shape, sides, back, …).
   spawn(type, pos, props = {}) {
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: this.mat });
     body.addShape(buildCollider(type, props));
     body.position.set(pos[0], pos[1], pos[2]);
-    if (KINDS[type].mass > 0 && type !== 'deck') body.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6); // board & deck stay flat
-    if (type === 'card') { body.angularDamping = SIM.cards.angDamp; body.linearDamping = SIM.cards.linDamp; body.sleepSpeedLimit = SIM.cards.sleepSpeed; body.sleepTimeLimit = SIM.cards.sleepTime; }
-    else body.angularDamping = (type === 'deck') ? SIM.damp.flat : SIM.damp.solid;
+
+    // Dice/props spawn at a random tumble; boards and decks stay flat.
+    if (KINDS[type].mass > 0 && type !== 'deck') {
+      body.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
+    }
+    // Cards get their own damping/sleep tuning so stacks settle nicely.
+    if (type === 'card') {
+      body.angularDamping = SIM.cards.angDamp;
+      body.linearDamping = SIM.cards.linDamp;
+      body.sleepSpeedLimit = SIM.cards.sleepSpeed;
+      body.sleepTimeLimit = SIM.cards.sleepTime;
+    } else {
+      body.angularDamping = (type === 'deck') ? SIM.damp.flat : SIM.damp.solid;
+    }
     this.world.addBody(body);
 
     const id = String(this.nextId++);
-    const p = new Piece();
-    p.type = type; p.owner = ''; p.count = 0; p.props = '{}';
+    const piece = new Piece();
+    piece.type = type;
+    piece.owner = '';
+    piece.count = 0;
+    piece.props = '{}';
+
     if (type === 'deck') {
-      const def = (props.cards && props.cards.length) ? { back: props.back || 'back', cards: props.cards } : buildDeck();
-      this.deckCards.set(id, def.cards.slice()); // PRIVATE — the fronts/order never enter synced state
-      p.count = def.cards.length;
-      p.props = JSON.stringify({ back: def.back }); // PUBLIC — only the shared back, so clients render the deck
+      // A deck's cards + order are PRIVATE (deckCards); only the shared back is
+      // published, which is all a client needs to render the face-down stack.
+      const deckData = (props.cards && props.cards.length)
+        ? { back: props.back || 'back', cards: props.cards }
+        : buildSimpleDeck();
+      this.deckCards.set(id, deckData.cards.slice());
+      piece.count = deckData.cards.length;
+      piece.props = JSON.stringify({ back: deckData.back });
     } else {
-      p.props = JSON.stringify(props);
+      piece.props = JSON.stringify(props);
     }
-    this.writeTransform(p, body);
-    this.state.pieces.set(id, p);
+
+    this.writeTransform(piece, body);
+    this.state.pieces.set(id, piece);
     this.bodies.set(id, body);
-    if (type === 'deck') this.updateDeckCollider(id); // solid body matches the visible stack height
+    if (type === 'deck') this.updateDeckCollider(id); // match the collider to the stack height
     return id;
   }
 
-  updateDeckCollider(deckId) { // rebuild the deck's box to match its card count
-    const b = this.bodies.get(deckId), p = this.state.pieces.get(deckId);
-    if (!b || !p) return;
-    while (b.shapes.length) b.removeShape(b.shapes[0]);
-    const dbox = KINDS.deck.shape.box; b.addShape(new CANNON.Box(new CANNON.Vec3(dbox[0], deckHeight(p.count) / 2, dbox[2])));
-    b.updateBoundingRadius(); b.updateMassProperties(); b.wakeUp();
+  // --- Small card helpers (shared by the deal/draw/play handlers) -------------
+
+  // Spawn a card lying flat at pos (no random tumble); returns its id. Callers
+  // set the private front (cardData) and/or owner afterward as needed.
+  spawnCardFlat(pos, publicProps) {
+    const id = this.spawn('card', pos, publicProps);
+    const body = this.bodies.get(id);
+    body.quaternion.set(0, 0, 0, 1);
+    this.writeTransform(this.state.pieces.get(id), body);
+    return id;
   }
 
-  saveDeckById(deckId, name) { // write a table deck to the disk library; returns true on success
-    const fronts = this.deckCards.get(deckId), p = this.state.pieces.get(deckId);
-    if (!fronts || !fronts.length || !p || p.type !== 'deck') return false;
-    const slug = slugify(name); if (!slug) return false;
-    try {
-      let back = JSON.parse(p.props || '{}').back || 'back';
-      if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back';          // images -> files + URL refs
-      const saved = fronts.map(f => isDataURL(f) ? (saveImageRef(f, 'decks') || f) : f);
-      fs.writeFileSync(metaFile('decks', slug), JSON.stringify({ name: String(name).slice(0, 60), back, fronts: saved }));
-      return true;
-    } catch (e) { return false; }
-  }
-  standOf(p) { // effective self-right mode: true (stand tall) | 'flat' (lie flat) | falsy (off)
-    const pr = JSON.parse(p.props || '{}');
-    if (pr.stand !== undefined) return pr.stand;                 // per-instance override (set by the toggle)
-    if (p.type === 'deck') return 'flat';                        // a deck sits flat by default
-    return (PROPS[pr.shape] || {}).stand;                        // else the prop shape's default
-  }
-  naturalStand(p) { // which mode to enable when the toggle turns self-right ON
-    if (p.type === 'deck') return 'flat';
-    const pr = JSON.parse(p.props || '{}'), def = PROPS[pr.shape] || {};
-    if (def.stand) return def.stand;
-    const box = def.collider && def.collider.box;                // no default: flat if the collider is thin on Y
-    return (box && box[1] <= box[0] && box[1] <= box[2]) ? 'flat' : true;
-  }
-  removePiece(id) {
-    const b = this.bodies.get(id); if (b) this.world.removeBody(b);
-    this.bodies.delete(id); this.targets.delete(id); this.flips.delete(id);
-    this.deckCards.delete(id); this.cardData.delete(id); this.state.pieces.delete(id);
+  // A drop spot just to the side of a deck, with a little random scatter.
+  besideDeck(deckBody) {
+    return [
+      deckBody.position.x + 1.7 + Math.random() * 0.4,
+      2.5,
+      deckBody.position.z + (Math.random() - 0.5) * 0.6,
+    ];
   }
 
-  sendHand(client) {
-    const h = this.hands.get(client.sessionId) || [];
-    const pl = this.state.players.get(client.sessionId);
-    if (pl) pl.hand = h.length;              // public count (not contents) so others can render your fan
-    client.send('hand', h);                  // private contents, to you only
-  }
-  onJoin(client) {
-    const used = new Set(); this.state.players.forEach(p => used.add(p.seat));
-    let seat = 0; while (used.has(seat)) seat++;               // lowest free seat
-    const pl = new Player();
-    pl.seat = seat; pl.hand = 0; pl.name = 'Player ' + (seat + 1); pl.color = PALETTE[seat % PALETTE.length];
-    this.state.players.set(client.sessionId, pl);
-    if (!this.state.turn) this.state.turn = client.sessionId;  // first player starts
+  // Add a card to a player's private hand and push the update to them alone.
+  addToHand(client, front, back) {
+    const hand = this.hands.get(client.sessionId) || [];
+    hand.push({ hid: 'h' + (this.nextHid++), front, back });
+    this.hands.set(client.sessionId, hand);
     this.sendHand(client);
   }
+
+  // Replace the current board with a new one (there's only ever one). The board
+  // rests on the table by its own half-height so it sits flush, not sunk in.
+  swapBoard(props) {
+    const oldBoards = [];
+    this.state.pieces.forEach((piece, id) => { if (piece.type === 'board') oldBoards.push(id); });
+    oldBoards.forEach(id => this.removePiece(id));
+
+    const builtin = props.board && BOARDS[props.board];
+    const box = builtin ? builtin.box
+              : (props.model && Array.isArray(props.box)) ? props.box
+              : null;
+    return this.spawn('board', [0, box ? box[1] : 0.05, 0], props);
+  }
+
+  // Rebuild a deck's collider box so its height matches its current card count.
+  updateDeckCollider(deckId) {
+    const body = this.bodies.get(deckId), piece = this.state.pieces.get(deckId);
+    if (!body || !piece) return;
+    while (body.shapes.length) body.removeShape(body.shapes[0]);
+    const box = KINDS.deck.shape.box;
+    body.addShape(new CANNON.Box(new CANNON.Vec3(box[0], deckHeight(piece.count) / 2, box[2])));
+    body.updateBoundingRadius();
+    body.updateMassProperties();
+    body.wakeUp();
+  }
+
+  // Write a table deck to the disk library; returns true on success. Any inline
+  // image art (data-URLs) is moved to files so the saved JSON stays small.
+  saveDeckById(deckId, name) {
+    const fronts = this.deckCards.get(deckId), piece = this.state.pieces.get(deckId);
+    if (!fronts || !fronts.length || !piece || piece.type !== 'deck') return false;
+    const slug = slugify(name);
+    if (!slug) return false;
+    try {
+      let back = JSON.parse(piece.props || '{}').back || 'back';
+      if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back';
+      const savedFronts = fronts.map(front => isDataURL(front) ? (saveImageRef(front, 'decks') || front) : front);
+      fs.writeFileSync(metaFile('decks', slug), JSON.stringify({ name: String(name).slice(0, 60), back, fronts: savedFronts }));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // The effective self-right mode for a piece:
+  //   true   → keep it standing tall (chess, tokens)
+  //   'flat' → keep it lying flat (decks, checkers, coins)
+  //   falsy  → don't self-right at all
+  standOf(piece) {
+    const props = JSON.parse(piece.props || '{}');
+    if (props.stand !== undefined) return props.stand; // per-instance override (the U-key toggle)
+    if (piece.type === 'deck') return 'flat';          // decks default to flat
+    return (PROPS[props.shape] || {}).stand;           // else the prop shape's default
+  }
+  // Which mode to switch a piece INTO when the toggle turns self-right on. Uses
+  // the shape's declared default, or infers "flat" when the collider is thin on Y
+  // (so a coin/checker lies down) and "stand tall" otherwise.
+  naturalStand(piece) {
+    if (piece.type === 'deck') return 'flat';
+    const props = JSON.parse(piece.props || '{}'), spec = PROPS[props.shape] || {};
+    if (spec.stand) return spec.stand;
+    const box = spec.collider && spec.collider.box;
+    return (box && box[1] <= box[0] && box[1] <= box[2]) ? 'flat' : true;
+  }
+
+  // Delete a piece everywhere: physics body, synced state, and every private map.
+  removePiece(id) {
+    const body = this.bodies.get(id);
+    if (body) this.world.removeBody(body);
+    this.bodies.delete(id);
+    this.targets.delete(id);
+    this.flips.delete(id);
+    this.deckCards.delete(id);
+    this.cardData.delete(id);
+    this.state.pieces.delete(id);
+  }
+
+  // Send a player their private hand, and publish only its COUNT to everyone
+  // else (so others can draw the right-sized fan without seeing the cards).
+  sendHand(client) {
+    const hand = this.hands.get(client.sessionId) || [];
+    const player = this.state.players.get(client.sessionId);
+    if (player) player.hand = hand.length; // public count only
+    client.send('hand', hand);             // private contents, to this client alone
+  }
+
+  onJoin(client) {
+    // Give the new player the lowest free seat and a colour to match.
+    const takenSeats = new Set();
+    this.state.players.forEach(existing => takenSeats.add(existing.seat));
+    let seat = 0;
+    while (takenSeats.has(seat)) seat++;
+
+    const player = new Player();
+    player.seat = seat;
+    player.hand = 0;
+    player.name = 'Player ' + (seat + 1);
+    player.color = PALETTE[seat % PALETTE.length];
+    this.state.players.set(client.sessionId, player);
+
+    if (!this.state.turn) this.state.turn = client.sessionId; // first player to arrive starts
+    this.sendHand(client);
+  }
+
+  // Advance the turn to the next player by seat order (wrapping around).
   advanceTurn() {
     const order = [];
-    this.state.players.forEach((p, sid) => order.push([sid, p.seat]));
+    this.state.players.forEach((player, sid) => order.push([sid, player.seat]));
     order.sort((a, b) => a[1] - b[1]);
     if (!order.length) { this.state.turn = ''; return; }
-    const ids = order.map(o => o[0]);
-    this.state.turn = ids[(ids.indexOf(this.state.turn) + 1) % ids.length]; // -1 wraps to first
+    const ids = order.map(([sid]) => sid);
+    this.state.turn = ids[(ids.indexOf(this.state.turn) + 1) % ids.length]; // indexOf -1 wraps to the first
   }
 
-  writeTransform(p, b) {
-    p.x = b.position.x; p.y = b.position.y; p.z = b.position.z;
-    p.qx = b.quaternion.x; p.qy = b.quaternion.y; p.qz = b.quaternion.z; p.qw = b.quaternion.w;
+  // Copy a physics body's position + orientation into its synced Piece record.
+  writeTransform(piece, body) {
+    piece.x = body.position.x;
+    piece.y = body.position.y;
+    piece.z = body.position.z;
+    piece.qx = body.quaternion.x;
+    piece.qy = body.quaternion.y;
+    piece.qz = body.quaternion.z;
+    piece.qw = body.quaternion.w;
   }
 
+  // The simulation heartbeat, run 60×/second. Three passes over the pieces
+  // (drive held ones, self-right the rest, advance flips), then step the world
+  // and publish the results. dtMs is the real time since the last tick.
   update(dtMs) {
-    const dt = dtMs / 1000, K = SIM.servo.stiffness, MAX = SIM.servo.maxSpeed;
-    // Servo held pieces toward their owner's drag target (stiff = tracks the cursor tightly)
-    this.state.pieces.forEach((p, id) => {
-      if (!p.owner) return;
-      const t = this.targets.get(id), b = this.bodies.get(id);
-      if (!t || !b) return;
-      b.wakeUp();
-      let vx = (t.x - b.position.x) * K, vy = (t.y - b.position.y) * K, vz = (t.z - b.position.z) * K;
-      const L = Math.hypot(vx, vy, vz); if (L > MAX) { const s = MAX / L; vx *= s; vy *= s; vz *= s; }
-      b.velocity.set(vx, vy, vz);
-      b.angularVelocity.scale(SIM.servo.angDamp, b.angularVelocity);
-      const sm = this.standOf(p);                                  // held: keep upright/flat (yaw only)
-      if (sm) { const q = b.quaternion, m = Math.hypot(q.w, q.y) || 1; q.set(0, q.y / m, 0, q.w / m); b.angularVelocity.setZero(); }
-    });
+    const dt = dtMs / 1000;
+    const stiffness = SIM.servo.stiffness, maxSpeed = SIM.servo.maxSpeed;
 
-    // Self-righting (not held): tall pieces stand, flat pieces (decks, checkers,
-    // coins…) lie flat. Same "local +Y → world-up" nudge; flat pieces right from
-    // any tilt, tall pieces only when near-upright (a toppled one stays down).
-    const R = SIM.propRight, wup = new CANNON.Vec3(0, 1, 0), up = new CANNON.Vec3(), axis = new CANNON.Vec3();
-    this.state.pieces.forEach((p, id) => {
-      if (p.owner) return;
-      const sm = this.standOf(p); if (!sm) return;
-      const b = this.bodies.get(id); if (!b || b.sleepState === CANNON.Body.SLEEPING) return;
-      b.quaternion.vmult(wup, up);          // the piece's own up-axis, in world space
-      up.cross(wup, axis);                  // axis to rotate it back toward world-up
-      const tilt = axis.length();           // = sin(tilt angle)
-      const cutoff = sm === 'flat' ? 1.5 : R.maxTilt; // flat: always; tall: near-upright only
-      if (tilt > 0.02 && tilt < cutoff) {
-        axis.scale(1 / tilt, axis);
-        b.angularVelocity.x += axis.x * tilt * R.strength;
-        b.angularVelocity.y += axis.y * tilt * R.strength;
-        b.angularVelocity.z += axis.z * tilt * R.strength;
-        b.angularVelocity.scale(R.damp, b.angularVelocity);
-        b.wakeUp();
+    // Pass 1 — held pieces. Instead of teleporting a held piece to the cursor, we
+    // set its VELOCITY toward the drag target ("servo"). It stays a real body, so
+    // it still shoves others and gets shoved, but tracks the cursor tightly.
+    this.state.pieces.forEach((piece, id) => {
+      if (!piece.owner) return;
+      const target = this.targets.get(id), body = this.bodies.get(id);
+      if (!target || !body) return;
+      body.wakeUp();
+
+      let vx = (target.x - body.position.x) * stiffness;
+      let vy = (target.y - body.position.y) * stiffness;
+      let vz = (target.z - body.position.z) * stiffness;
+      const speed = Math.hypot(vx, vy, vz);
+      if (speed > maxSpeed) { const scale = maxSpeed / speed; vx *= scale; vy *= scale; vz *= scale; }
+      body.velocity.set(vx, vy, vz);
+      body.angularVelocity.scale(SIM.servo.angDamp, body.angularVelocity);
+
+      // While held, a "stand" piece is kept level: strip its pitch/roll and keep
+      // only its yaw, so decks/chess pieces don't tumble in your hand.
+      const standMode = this.standOf(piece);
+      if (standMode) {
+        const quat = body.quaternion, mag = Math.hypot(quat.w, quat.y) || 1;
+        quat.set(0, quat.y / mag, 0, quat.w / mag);
+        body.angularVelocity.setZero();
       }
     });
-    // Advance any scripted card flips (kinematic slerp of a half-turn + a little arc)
-    for (const [id, f] of this.flips) {
-      const b = this.bodies.get(id); if (!b) { this.flips.delete(id); continue; }
-      f.t += dt;
-      const frac = Math.min(f.t / f.dur, 1);
-      f.start.slerp(f.end, frac, b.quaternion);
-      b.position.y = f.baseY + Math.sin(frac * Math.PI) * SIM.flipArc;
-      if (frac >= 1) { b.type = CANNON.Body.DYNAMIC; b.wakeUp(); b.velocity.setZero(); b.angularVelocity.setZero(); this.flips.delete(id); }
+
+    // Pass 2 — self-righting for pieces that aren't held. We nudge the piece's
+    // local +Y back toward world-up. For a tall piece that stands it upright; for
+    // a flat piece (deck, checker, coin) the thin axis IS +Y, so it lies flat.
+    // The only difference is the cutoff: a tall piece that has fully toppled is
+    // left down, but a flat piece is righted from any angle (it should always
+    // settle flat).
+    const right = SIM.propRight;
+    const worldUp = new CANNON.Vec3(0, 1, 0), pieceUp = new CANNON.Vec3(), axis = new CANNON.Vec3();
+    this.state.pieces.forEach((piece, id) => {
+      if (piece.owner) return;
+      const standMode = this.standOf(piece);
+      if (!standMode) return;
+      const body = this.bodies.get(id);
+      if (!body || body.sleepState === CANNON.Body.SLEEPING) return;
+
+      body.quaternion.vmult(worldUp, pieceUp); // the piece's up-axis, in world space
+      pieceUp.cross(worldUp, axis);            // rotation axis that brings it back to upright
+      const tilt = axis.length();              // = sin(angle between them)
+      const cutoff = standMode === 'flat' ? 1.5 : right.maxTilt; // flat: any tilt; tall: near-upright only
+      if (tilt > 0.02 && tilt < cutoff) {
+        axis.scale(1 / tilt, axis); // normalise
+        body.angularVelocity.x += axis.x * tilt * right.strength;
+        body.angularVelocity.y += axis.y * tilt * right.strength;
+        body.angularVelocity.z += axis.z * tilt * right.strength;
+        body.angularVelocity.scale(right.damp, body.angularVelocity);
+        body.wakeUp();
+      }
+    });
+
+    // Pass 3 — advance any in-progress card flips. A flip is a scripted animation
+    // (a kinematic half-turn plus a little hop) rather than a physical toss.
+    for (const [id, flip] of this.flips) {
+      const body = this.bodies.get(id);
+      if (!body) { this.flips.delete(id); continue; }
+      flip.t += dt;
+      const progress = Math.min(flip.t / flip.dur, 1);
+      flip.start.slerp(flip.end, progress, body.quaternion);
+      body.position.y = flip.baseY + Math.sin(progress * Math.PI) * SIM.flipArc; // arc up and back down
+      if (progress >= 1) { // hand it back to the physics engine
+        body.type = CANNON.Body.DYNAMIC;
+        body.wakeUp();
+        body.velocity.setZero();
+        body.angularVelocity.setZero();
+        this.flips.delete(id);
+      }
     }
 
     this.world.step(SIM.step.fixed, dt, SIM.step.maxSub);
 
-    // Safety net: anything that still escapes the play area gets dropped back
-    // onto the table (catches rare tunneling/overshoot the walls miss).
-    const OX = TABLE.x + SIM.bounds.margin, OZ = TABLE.z + SIM.bounds.margin;
-    this.bodies.forEach((b) => {
-      const p = b.position;
-      if (p.y < SIM.bounds.floor || p.y > SIM.bounds.ceiling || Math.abs(p.x) > OX || Math.abs(p.z) > OZ) {
-        p.set(Math.max(-TABLE.x + 1, Math.min(TABLE.x - 1, p.x)), 3, Math.max(-TABLE.z + 1, Math.min(TABLE.z - 1, p.z)));
-        b.velocity.setZero(); b.angularVelocity.setZero(); b.wakeUp();
+    // Safety net: if anything still escaped the walls (rare tunnelling on a very
+    // hard throw), drop it back onto the table instead of losing it into the void.
+    const limitX = TABLE.x + SIM.bounds.margin, limitZ = TABLE.z + SIM.bounds.margin;
+    this.bodies.forEach((body) => {
+      const pos = body.position;
+      const escaped = pos.y < SIM.bounds.floor || pos.y > SIM.bounds.ceiling || Math.abs(pos.x) > limitX || Math.abs(pos.z) > limitZ;
+      if (escaped) {
+        pos.set(clamp(pos.x, -TABLE.x + 1, TABLE.x - 1), 3, clamp(pos.z, -TABLE.z + 1, TABLE.z - 1));
+        body.velocity.setZero();
+        body.angularVelocity.setZero();
+        body.wakeUp();
       }
     });
 
-    // Publish transforms. Colyseus only ships fields that actually changed,
-    // so sleeping (resting) pieces cost zero bandwidth.
-    this.state.pieces.forEach((p, id) => {
-      const b = this.bodies.get(id); if (b) this.writeTransform(p, b);
+    // Publish transforms into synced state. Colyseus only ships fields that
+    // actually changed, so pieces sitting still (asleep) cost no bandwidth.
+    this.state.pieces.forEach((piece, id) => {
+      const body = this.bodies.get(id);
+      if (body) this.writeTransform(piece, body);
     });
   }
 
   async onLeave(client, arg) {
-    // free any piece they were dragging immediately (don't leave it stuck mid-air)
-    this.state.pieces.forEach((p, id) => { if (p.owner === client.sessionId) { p.owner = ''; this.targets.delete(id); } });
-    const consented = arg === true || arg === 4000; // boolean (older) or CloseCode.CONSENTED
+    // Immediately free any piece they were dragging, so it doesn't hang mid-air.
+    this.state.pieces.forEach((piece, id) => {
+      if (piece.owner === client.sessionId) {
+        piece.owner = '';
+        this.targets.delete(id);
+      }
+    });
+
+    // On an unexpected drop (not a deliberate leave), hold their seat briefly in
+    // case they reconnect. allowReconnection resolves if they come back in time.
+    const consented = arg === true || arg === 4000; // true/4000 = a deliberate leave
     if (!consented) {
-      try { await this.allowReconnection(client, 30); return; } catch (e) { /* didn't return in time */ }
+      try {
+        await this.allowReconnection(client, 30);
+        return; // they reconnected — keep everything
+      } catch (e) {
+        /* didn't return in time — fall through and clean up */
+      }
     }
-    this.hands.delete(client.sessionId); // gone for good
-    const pend = this.pendingInspect.get(client.sessionId); // return an un-placed drawn card to its deck
-    if (pend) { const cards = this.deckCards.get(pend.deckId); if (cards) { cards.push(pend.front); const dp = this.state.pieces.get(pend.deckId); if (dp) dp.count = cards.length; this.updateDeckCollider(pend.deckId); } this.pendingInspect.delete(client.sessionId); }
+
+    this.hands.delete(client.sessionId);
+
+    // If they'd drawn a card to inspect but never placed it, return it to its deck.
+    const pending = this.pendingInspect.get(client.sessionId);
+    if (pending) {
+      const cards = this.deckCards.get(pending.deckId);
+      if (cards) {
+        cards.push(pending.front);
+        const deck = this.state.pieces.get(pending.deckId);
+        if (deck) deck.count = cards.length;
+        this.updateDeckCollider(pending.deckId);
+      }
+      this.pendingInspect.delete(client.sessionId);
+    }
+
     const wasTurn = this.state.turn === client.sessionId;
     this.state.players.delete(client.sessionId);
-    if (wasTurn) this.advanceTurn();
+    if (wasTurn) this.advanceTurn(); // don't strand the turn on a player who left
   }
-  onReconnect(client) { this.sendHand(client); } // resend their private hand (it isn't in shared state)
+
+  // A player's hand isn't in shared state, so resend it when they reconnect.
+  onReconnect(client) { this.sendHand(client); }
 }
 
-// --- Boot: Colyseus + Express (serves the client on the same port) ----------
+// --- Boot: Colyseus + Express (both served on the same port) ----------------
 const app = express();
-// Security headers (clickjacking, HSTS, nosniff, referrer, hide X-Powered-By, …).
-// CSP is left OFF for now: the client pulls Three.js/Colyseus from CDNs (esm.sh,
-// unpkg) and uses an inline import map, which a default CSP would block. To turn
-// CSP on, self-host those libs (or allowlist the CDNs) and test in a browser —
-// draft directives below.
+
+// Security headers (clickjacking, HSTS, nosniff, referrer, hide X-Powered-By…).
+// CSP is intentionally OFF for now: the client loads Three.js/Colyseus from CDNs
+// (esm.sh, unpkg) via an inline import map, which a default CSP would block. To
+// enable CSP, self-host those libraries (or allowlist the CDNs) and test it in a
+// browser first — draft directives are below.
 app.use(helmet({ contentSecurityPolicy: false }));
 // app.use(helmet.contentSecurityPolicy({ directives: {
 //   defaultSrc: ["'self'"],
@@ -709,26 +1135,41 @@ app.use(helmet({ contentSecurityPolicy: false }));
 //   connectSrc: ["'self'", "https://esm.sh", "ws:", "wss:"], // Colyseus websocket + module fetches
 //   workerSrc:  ["'self'", "blob:"],
 // }}));
+
 app.use(express.static('public'));
 app.use('/shared', express.static('shared'));
-app.use('/assets', (req, res, next) => { if (/\.json$/i.test(req.path)) return res.sendStatus(404); next(); }, express.static(ASSETS_DIR)); // images only; .json metadata is never served
 
-// Image upload: one resized image per request (avoids the WebSocket payload limit).
-// Writes to a shared uploads folder with a random name; returns its URL ref.
+// Serve uploaded images/models, but NEVER the .json metadata beside them — that
+// keeps a hidden card front living on disk from being fetched directly.
+app.use('/assets',
+  (req, res, next) => {
+    if (/\.json$/i.test(req.path)) return res.sendStatus(404);
+    next();
+  },
+  express.static(ASSETS_DIR),
+);
+
+// Image upload: one image per request, sent as a raw body (this sidesteps the
+// WebSocket payload cap). Saved under a random name; responds with its URL ref.
 app.post('/upload', express.raw({ type: 'image/*', limit: '16mb' }), (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
-    const ext = ((req.headers['content-type'] || '').split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
+    const contentType = req.headers['content-type'] || '';
+    const ext = (contentType.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
     res.json({ url: saveAsset(req.query.kind, req.body, ext) }); // ?kind=uploads|decks|boards|props
-  } catch (e) { res.status(500).json({ error: 'save failed' }); }
+  } catch (e) {
+    res.status(500).json({ error: 'save failed' });
+  }
 });
 
-// Model upload: a raw .glb (any content-type). Saved into the props/ category.
+// Model upload: a raw .glb of any content-type. Saved into the props/ category.
 app.post('/upload-model', express.raw({ type: () => true, limit: '16mb' }), (req, res) => {
   try {
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
     res.json({ url: saveAsset(req.query.kind || 'props', req.body, 'glb') });
-  } catch (e) { res.status(500).json({ error: 'save failed' }); }
+  } catch (e) {
+    res.status(500).json({ error: 'save failed' });
+  }
 });
 
 const httpServer = createServer(app);
