@@ -1,4 +1,4 @@
-# Web Tabletop — Multiplayer (Colyseus)
+# Open Tabletop — Multiplayer (Colyseus)
 
 An authoritative-physics virtual tabletop where *any* game can be played,
 because the engine only simulates physical objects and lets people enforce the
