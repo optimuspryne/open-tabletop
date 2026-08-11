@@ -35,7 +35,7 @@ classDiagram
     class Server["server.js"] {
         +SIM config
         +buildWorld() / buildCollider(type,props) / dieShape(sides)
-        +buildDeck() / saveImageRef() / listSavedDecks/Boards/Props()
+        +buildSimpleDeck() / saveImageRef() / listSavedDecks/Boards/Props()
         +/upload  /upload-model  endpoints
     }
     class TableRoom {
@@ -157,8 +157,12 @@ Pure data + two functions, imported by both sides.
   → built-in/uploaded box (by half-height) else procedural `w×d`.
 - **`dieShape(sides)`** — convex hull of `dieVerts`, coplanar triangles merged,
   windings outward. d6 ⇒ box.
-- **`buildDeck()`** — a standard 52-card deck of `rank:…` refs.
+- **`buildSimpleDeck()`** — a standard 52-card deck of `rank:…` refs.
 - **`buildWorld()`**, **`rnd()`**, **`shuffle()`**.
+- Small shared helpers keep the handlers flat: **`clamp`**, **`addWall`** /
+  **`cubeCollider`** (world + collider building), **`spawnCardFlat`** /
+  **`besideDeck`** / **`addToHand`** (deal/hand placement), **`swapBoard`**,
+  **`boardKindLabel`**, **`averagePoint`**.
 
 ### Schema (synced state)
 
@@ -201,9 +205,9 @@ Exports `scene`, `camera`, `renderer`, `controls`, and the config:
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `input`
   (click/drag thresholds), `tex` (die/board resolution).
-- **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnv` scales the
-  baked `RoomEnvironment` for the env-map strength.
-- **`clamp(v, lo, hi)`**.
+- **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
+  scales the baked `RoomEnvironment` for the env-map strength.
+- **`clamp(value, min, max)`**.
 
 ---
 
@@ -213,6 +217,8 @@ Exports `scene`, `camera`, `renderer`, `controls`, and the config:
 
 - **`cTex(canvas, srgb?)`** — wraps every canvas texture with **max anisotropy**
   (+ colour space) so text/numbers stay sharp. All builders route through it.
+  Builders allocate their canvas via a shared **`makeCanvas(w,h)`**, and the
+  filtering is centralized in **`maxAnisotropy()`**.
 - **`cardFront(rank,suite,color)`** (corner index + centre rank), **`cardBack()`**,
   **`boardTex()`** (procedural checkerboard).
 - **`drawNumber` / `digitTexture` / `numberFaceTexture` / `numberLabel`** — die
@@ -231,6 +237,8 @@ Exports `scene`, `camera`, `renderer`, `controls`, and the config:
 - **`measureGlb(url)`** → `{ size, center }` (true loaded bounds). **`fitModel(obj,
   {scale|target})`** — centre at origin + scale (fixed or normalize). **`measureModel`**
   / **`measureBoard`** build on `measureGlb` to return collider boxes.
+- The two model-mesh builders (`propMesh`, `boardMesh`) share a single
+  **`loadModelGroup`** loader, and image-backed textures a **`loadImageTexture`**.
 
 ### Mesh builders + `KIND`
 
@@ -255,20 +263,27 @@ listeners create/update/remove `meshes` and player UI; also tracks `boardTopY`
 (for the drop marker). Direct messages: `hand` → `renderHand`, `dealt` (adopt a
 dealt card), `inspectCard` → open draw-to-inspect, `deckList`/`boardList`/
 `propList` (library listings). All modal/button wiring lives here (prop, custom-
-model, deck, board, edit dialogs), plus **`sendDeck`** (chunked build).
+model, deck, board, edit dialogs), plus **`sendDeck`** (chunked build). Shared
+UI helpers cut the repetition: **`byId`/`qs`/`qsa`** (DOM shorthands),
+**`renderSavedList`** (one builder for the deck/prop/board library lists), and
+**`withBusyButton`** (wraps an async upload so the button shows busy then
+restores). Snapshot buffering runs through **`snapshot`** (build a timestamped
+record) and **`applyTransform`** (copy it onto a mesh), shared by the add,
+card-rebuild, and render paths.
 
 ### Interaction (`meshes`, `buffers`, `down`, `inspect`)
 
-- **`setP` / `pickId`** — pointer → NDC → raycast → id (walks up to the id-stamped
-  root so nested model meshes pick correctly).
+- **`setPointer` / `pickId`** — pointer → NDC → raycast → id (walks up to the
+  id-stamped root so nested model meshes pick correctly).
 - **`pointerdown/move/up` + `endGesture`** — click vs. drag; dispatch grab/deal/
   click via `KIND`; **wheel** raises/lowers a held piece; the drag plane height is
   the scroll-adjustable grab height, and a translucent ring previews the landing.
 - **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
   double-click a piece to inspect (rotate-drag), double-click a deck to
   draw-to-inspect with F/D/H/R placement.
-- **`keydown`** — Delete removes; S saves a hovered deck; F/D/H/R place a drawn
-  card.
+- **`keydown`** — Delete removes, U toggles keep-upright, S saves a hovered deck
+  (each acts on **`heldOrHoveredId`** — the held piece, else whatever's hovered);
+  F/D/H/R place a drawn card.
 
 ### Seats, hands, turns
 
