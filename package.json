@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node --env-file-if-exists=.env server.js",
+    "import-assets": "node import-assets.js"
   },
   "dependencies": {
     "@colyseus/core": "^0.17.0",
@@ -14,6 +15,10 @@
     "convex-hull": "^1.0.3",
     "express": "^4.19.2",
     "helmet": "^7.2.0",
+    "pg": "^8.23.0",
     "three": "^0.161.0"
+  },
+  "allowScripts": {
+    "msgpackr-extract@3.0.4": true
   }
 }

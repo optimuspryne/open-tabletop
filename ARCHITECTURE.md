@@ -53,8 +53,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   masses, colours, dice vertices, and the prop/board registries. Imported by
   *both* sides so a collider and its mesh are built from the same numbers.
 - **`server.js`** — the authority: the cannon-es world, the Colyseus room, all
-  message handlers, the disk asset library, and the private (non-synced) memory
-  that holds secrets. All physics tuning is in one `SIM` config block.
+  message handlers, the Postgres-backed asset library (via `db.js`), and the
+  private (non-synced) memory that holds secrets. All physics tuning is in one
+  `SIM` config block.
+- **`db.js`** — the Postgres connection pool and the saved-library queries
+  (deck/board/prop *metadata*; the image/model files stay on disk). Config comes
+  from the environment only (`DATABASE_URL` / `DATABASE_URL_FILE`).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
   plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks.
 - **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
@@ -70,7 +74,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 
 The **synced state is public** — anything in it is one devtools-peek from being
 read. It holds: each piece's transform/type/owner/props/count; each player's
-seat, hand *count*, name, color, avatar; and whose turn it is.
+seat, hand *count*, name, color, avatar, `showing` count (how many cards they're
+revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
+and whose turn it is.
 
 Secrets live in plain server-only maps that are **never** put in synced state:
 
@@ -79,6 +85,9 @@ Secrets live in plain server-only maps that are **never** put in synced state:
 - `hands` — each player's private cards, sent to that one player directly
 - `drafts` — a deck being built in chunks (pre-finish)
 - `pendingInspect` — a card drawn-to-inspect but not yet placed (yours alone)
+- `notebooks` — each player's private notes (ephemeral; resent on reconnect)
+- `shows` — an active hold-to-show: who is showing which of their cards to whom
+  (the card *content* goes only to that audience; the public part is the badge count)
 
 The invariant: **if it's synced it's public; if it's secret it's server-only.**
 A face-down card's face has never been transmitted to any client, so there is
@@ -191,6 +200,40 @@ A die is **one kind** parameterized by `props.sides`.
   settles on a face. Visual and physics can't diverge; adding a size is a
   one-line vertex entry.
 
+## Live table tools
+
+Small shared/private utilities that reuse the existing channels rather than new
+machinery:
+
+- **Timer** (shared) — the synced `timer` holds only an *anchor*
+  (`running/mode/base/since/duration`), never a ticking number. Each client
+  computes the live value locally via `timerLive()` (in `shared/pieces.js`, used
+  by both sides), so a running clock produces **zero** per-second patches — the
+  same "sync the minimum, compute presentation locally" idea as the render loop.
+- **Notebook** (private) — a per-player scratchpad in the server-only `notebooks`
+  map; never synced, resent on reconnect like a hand.
+- **Show cards** (hold-to-show) — while held, the chosen cards go **face-up in the
+  shower's seat fan, but only for the audience**: content is sent privately
+  (`showFan`) exactly like a hand, while everyone — audience or not — sees a public
+  `showing` badge count. Content and audience never enter synced state.
+- **Held name tags** — a client-only sprite over any piece whose public `owner`
+  isn't you. **Attention ping** (middle-click / `P`) — a table-location marker
+  clamped to the table server-side and broadcast to all; public by nature, so no
+  routing.
+
+## Persistence: the asset library
+
+The saved **library** (custom decks/boards/props) is split across two stores:
+**metadata in Postgres** (`custom_decks` / `custom_boards` / `custom_objects`,
+keyed by a bigint `id`), **image/model files on disk** under `ASSETS_DIR`, served
+from `/assets`. A card face or model is stored as a *reference* (a `/assets/…`
+URL or a procedural string), never bytes, so rows stay small and unrevealed art
+isn't in the DB. `db.js` normalizes a model's URL into the `file_url` column and
+puts the rest in a `props` jsonb bag, splicing them back on read. The running
+server connects as a **CRUD-only role** (`tabletop_app`) — it can't run DDL — so a
+leaked app credential can't reshape or drop the schema. `owner_id` columns exist
+but stay NULL until the auth layer lands.
+
 ## Seats, presence, turns
 
 On join the server assigns the lowest free seat, a colour, and a name, and
@@ -214,17 +257,22 @@ avatar, hand). The server holds the seat for 30 s on an unexpected disconnect
   `dealDrag`, `takeCard`, `playCard`, `shuffle`, `drawInspect`, `inspectPlace`,
   `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`/`listDecks`/`loadDeck`/
   `editDeck`, `saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard`,
-  `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`.
-- **Down (server → client):** synced state (pieces, players, turn) plus direct
-  messages — `hand` (your private cards), `dealt` (adopt a dealt card as the
-  dragged piece), `inspectCard` (a drawn front for you alone), `deckList`,
-  `boardList`, `propList` (saved-library listings).
+  `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
+  `notebook`, `timer`, `showStart`/`showStop`, `ping`. (Library load/edit key on
+  a row **`id`** — the Postgres primary key — not a filename slug.)
+- **Down (server → client):** synced state (pieces, players, turn, timer) plus
+  direct messages — `hand` (your private cards), `dealt` (adopt a dealt card as the
+  dragged piece), `inspectCard` (a drawn front for you alone), `notebook` (your
+  private notes, on reconnect), `showFan` (cards someone is showing *you*), `ping`
+  (a broadcast attention marker), `deckList`, `boardList`, `propList` (saved-library
+  listings).
 
 ## Reset & room lifecycle
 
 **Reset** wipes the whole room to an empty table — every piece (boards included),
-all hands, and every private map. New rooms start **empty** (the default-seed
-call is disabled); you build the table from the toolbar.
+all hands, every private map, any active shows, and the shared timer. New rooms
+start **empty** (the default-seed call is disabled); you build the table from the
+toolbar.
 
 ## Security & lobby (planned, not built)
 
@@ -233,12 +281,15 @@ Public release target is a **role hierarchy** enforced server-side:
 library and uploads; GMs (accounts) create rooms, kick, spawn, and promote
 Helpers; Helpers and Players join by room code. Persistence: **PostgreSQL** for
 accounts (hashed), room metadata, and asset metadata; asset **files** stay on the
-volume; live table state stays in memory. A stateless hardening pass (glTF
+volume; live table state stays in memory. **Done so far:** asset *metadata* is
+already in Postgres (the `custom_*` tables, with nullable `owner_id` awaiting the
+users table), and the running server uses a **least-privilege CRUD-only role**;
+credentials come from the environment, never code. **Still to come:** the accounts
+table + `owner_id` FK, the role gate itself, and a stateless hardening pass (glTF
 magic-byte validation, storage caps + rate limits, external-URI stripping,
-`.json`→extension allowlist, security headers/CORS, post-parse complexity limits)
-lands underneath, independent of the roles. Making uploads admin-only closes the
-public-upload hole by construction; the residual client-side-parser risk is
-reduced by the role gate + hardening (defense in depth, not provably safe).
+security headers/CORS, post-parse complexity limits). Making uploads admin-only
+closes the public-upload hole by construction; the residual client-side-parser
+risk is reduced by the role gate + hardening (defense in depth, not provably safe).
 
 ## Adding things
 

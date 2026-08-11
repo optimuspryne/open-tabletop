@@ -8,7 +8,8 @@ The codebase:
 | File | Runtime | Role |
 |------|---------|------|
 | `shared/pieces.js` | both | Single source of truth: dimensions, masses, colours, dice verts, prop/board registries |
-| `server.js` | Node | Authoritative physics + Colyseus room + HTTP + disk asset library |
+| `server.js` | Node | Authoritative physics + Colyseus room + HTTP + Postgres asset library |
+| `db.js` | Node | Postgres pool + saved-library queries (deck/board/prop metadata) |
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
 | `public/client.js` | browser | Runtime: networking, interaction, seats, render loop |
@@ -30,21 +31,28 @@ classDiagram
         +PROP_LIST[] {id, name, team}
         +BOARDS {key → model, modelScale, box}
         +DECK_VISUAL / CARD_ROUND / DIE_RADIUS / DIE_SIDES / BOARD_SIZE
-        +deckHeight(count) / dieVerts(sides, r)
+        +deckHeight(count) / dieVerts(sides, r) / timerLive(t, now)
     }
     class Server["server.js"] {
         +SIM config
         +buildWorld() / buildCollider(type,props) / dieShape(sides)
-        +buildSimpleDeck() / saveImageRef() / listSavedDecks/Boards/Props()
+        +buildSimpleDeck() / saveAsset() / saveImageRef()
         +/upload  /upload-model  endpoints
+    }
+    class Db["db.js"] {
+        <<Postgres>>
+        +listDecks/getDeck/insertDeck/updateDeck
+        +listBoards/getBoard/insertBoard
+        +listProps/insertProp / close
     }
     class TableRoom {
         <<Colyseus Room>>
         world, state
         bodies, targets, flips: Map
         deckCards, cardData, hands, drafts, pendingInspect: Map
+        notebooks, shows: Map
         +spawn() update() updateDeckCollider() removePiece()
-        +saveDeckById() saveWho() sendHand() advanceTurn()
+        +saveDeckById() sendHand() clientBy() stopShow() advanceTurn()
         +onJoin/onLeave/onReconnect + message handlers
     }
     class Core["public/core.js"] {
@@ -71,6 +79,7 @@ classDiagram
     Core <.. Client
     Graphics <.. Client
     Server *-- TableRoom
+    TableRoom ..> Db : saved-library queries
     TableRoom <..> Client : Colyseus sync + messages
 ```
 
@@ -126,6 +135,10 @@ Pure data + two functions, imported by both sides.
   *and* server collider so a flipped deck is solid.
 - **`dieVerts(sides, radius?) → number[][] | null`** — polyhedron vertices scaled
   to `radius`; `null` for d6. One input for mesh (client) and collider (server).
+- **`timerLive(t, now) → ms`** — the shared timer's current value from its synced
+  anchor (`running/mode/base/since`): counts up from `base`, or down toward 0.
+  Used by the server handler *and* every client, so the number is never synced tick
+  by tick.
 
 ---
 
@@ -139,16 +152,19 @@ Pure data + two functions, imported by both sides.
   card collider that stabilizes stacks — plus `linDamp`/`angDamp`/`maxThrow`/
   sleep).
 
-### Disk asset library (module scope)
+### Asset files (disk) + library (Postgres)
+
+The image/model **files** stay on disk; their **metadata** moved to Postgres (see
+`db.js` below). Assets are keyed by a row **id**, not a filename slug.
 
 - **`ASSETS_DIR`** = `process.env.ASSETS_DIR || './saved-assets'`, with category
-  subfolders `uploads/ decks/ boards/ props/`.
+  subfolders `uploads/ decks/ boards/ props/` — **files only** now.
 - **`saveAsset(kind, buf, ext) → /assets/<kind>/<name>`** — writes a random-named
-  file into a validated category folder.
-- **`saveImageRef(dataURL, kind)`**, **`metaFile(kind, slug)`**, **`slugify`**,
-  **`isDataURL`**, **`deckRefOk`** — path/ref helpers.
-- **`listSavedDecks()`**, **`listSavedBoards()`**, **`listSavedProps()`** — read
-  the `*.json` metadata for each category.
+  file into a validated category folder (`assetKind`).
+- **`saveImageRef(dataURL, kind)`** — an inline `data:` image → a disk file → URL.
+- **`isDataURL`**, **`deckRefOk`** — ref validators (kept for the save paths).
+  *(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
+  gone — that logic now lives in `db.js`.)*
 
 ### Physics helpers (module scope)
 
@@ -162,32 +178,43 @@ Pure data + two functions, imported by both sides.
 - Small shared helpers keep the handlers flat: **`clamp`**, **`addWall`** /
   **`cubeCollider`** (world + collider building), **`spawnCardFlat`** /
   **`besideDeck`** / **`addToHand`** (deal/hand placement), **`swapBoard`**,
-  **`boardKindLabel`**, **`averagePoint`**.
+  **`averagePoint`**.
 
 ### Schema (synced state)
 
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
   `x,y,z,qx,qy,qz,qw`.
-- **`Player`** — `seat, hand`, `name, color, avatar`.
-- **`State`** — `pieces`, `players`, `turn`.
+- **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
+  cards being revealed — the public badge), **`handBack`** (the hand's public back
+  image).
+- **`Timer`** — `running, mode` (`'up'`/`'down'`), `base, since, duration`; the
+  synced anchor (`timerLive()` computes the live value).
+- **`State`** — `pieces`, `players`, `turn`, **`timer`**.
 
 ### `TableRoom extends Room`
 
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
-`cardData`, `hands`, `drafts`, **`pendingInspect`** (a drawn-but-unplaced card).
+`cardData`, `hands`, `drafts`, **`pendingInspect`** (a drawn-but-unplaced card),
+**`notebooks`** (per-player private notes), **`shows`** (an active hold-to-show:
+`{ to:Set, cards }`).
 
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
 out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
-**`writeTransform`**, **`sendHand`**, **`saveDeckById(id,name)`** (shared by
-save-on-create and the S key), **`advanceTurn`**, `onJoin/onLeave/onReconnect`.
+**`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
+**`stopShow(sid)`** (ends a hold-to-show, clears the badge + audience views),
+**`saveDeckById(id,name)`** (async — inserts via `db`; shared by save-on-create
+and the S key), **`advanceTurn`**, `onJoin/onLeave/onReconnect`.
 
 Message handlers: `grab`, `move`, `release`, `flip`, `dealToTable`, `dealDrag`,
 `takeCard`, `playCard`, `shuffle`, **`drawInspect`/`inspectPlace`** (private
 draw-to-inspect), `deckBegin`/`deckAppend`/`deckFinish` (chunked build,
 `deckFinish` optionally saves), `saveDeck`/`listDecks`/`loadDeck`/`editDeck`,
-`saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard`, `spawn`
-(boards swap + sit by half-height), `roll`, `reset` (full clear), `nextTurn`,
-`remove`, `setName`, `setAvatar`.
+`saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard` (all **async**, via
+`db`; load/edit key on a row **id**), `spawn` (boards swap + sit by half-height),
+`roll`, `reset` (full clear — pieces, hands, shows, timer), `nextTurn`, `remove`,
+`setName`, `setAvatar`, **`notebook`** (store private notes), **`timer`** (action:
+`start`/`pause`/`reset`/`set`), **`showStart`/`showStop`** (hold-to-show),
+**`ping`** (clamp to table + broadcast).
 
 ### HTTP (Express)
 
@@ -198,13 +225,37 @@ draw-to-inspect), `deckBegin`/`deckAppend`/`deckFinish` (chunked build,
 
 ---
 
+## `db.js` — Postgres saved-library
+
+The connection string comes from **`DATABASE_URL_FILE`** (a path to a secret file,
+priority) or **`DATABASE_URL`** — no hardcoded fallback; missing config throws at
+startup. Metadata only: a model's URL is the canonical `file_url` column, the rest
+rides in a `props` jsonb bag, and reads splice them back into the record shape the
+game expects (so nothing is stored twice). Assets are keyed by a bigint **`id`**
+(pg returns it as a string).
+
+- **Decks** — `listDecks() → [{id,name,count}]`, `getDeck(id) → {name,back,fronts}`,
+  `insertDeck({name,back,fronts}) → id`, `updateDeck(id, {…})`.
+- **Boards** — `listBoards() → [{id,name,kind}]`, `getBoard(id) → record`,
+  `insertBoard(name, record) → id`. `record` is one of `{board}` / `{model,…}` /
+  `{w,d,tex}`; `kind` is the load-menu label.
+- **Props** — `listProps() → [{id,name,props}]`, `insertProp(name, props) → id`.
+- **`close()`** — end the pool (for the one-off `import-assets.js`).
+
+List functions swallow errors → `[]`; getters → `null`; inserts/updates throw
+(handlers catch). `import-assets.js` is a one-time loader for pre-Postgres
+`saved-assets/*.json`.
+
+---
+
 ## `public/core.js` — setup + tunables
 
 Exports `scene`, `camera`, `renderer`, `controls`, and the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
-  `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `input`
-  (click/drag thresholds), `tex` (die/board resolution).
+  `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
+  tag), `ping` (attention-ping ring), `input` (click/drag thresholds), `tex`
+  (die/board resolution).
 - **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
   scales the baked `RoomEnvironment` for the env-map strength.
 - **`clamp(value, min, max)`**.
@@ -261,15 +312,17 @@ Exports `scene`, `camera`, `renderer`, `controls`, and the config:
 Connects to the `table` room (reconnect token in `sessionStorage`). State
 listeners create/update/remove `meshes` and player UI; also tracks `boardTopY`
 (for the drop marker). Direct messages: `hand` → `renderHand`, `dealt` (adopt a
-dealt card), `inspectCard` → open draw-to-inspect, `deckList`/`boardList`/
-`propList` (library listings). All modal/button wiring lives here (prop, custom-
-model, deck, board, edit dialogs), plus **`sendDeck`** (chunked build). Shared
-UI helpers cut the repetition: **`byId`/`qs`/`qsa`** (DOM shorthands),
-**`renderSavedList`** (one builder for the deck/prop/board library lists), and
-**`withBusyButton`** (wraps an async upload so the button shows busy then
-restores). Snapshot buffering runs through **`snapshot`** (build a timestamped
-record) and **`applyTransform`** (copy it onto a mesh), shared by the add,
-card-rebuild, and render paths.
+dealt card), `inspectCard` → open draw-to-inspect, `notebook` (restore your private
+notes), `showFan` (cards someone is showing you → face-up in their fan), `ping`
+(spawn an attention marker), `deckList`/`boardList`/`propList` (library listings,
+keyed by **id**). All modal/button wiring lives here (prop, custom-model, deck,
+board, edit dialogs, plus the notebook / timer / show-cards panels), plus
+**`sendDeck`** (chunked build). Shared UI helpers cut the repetition:
+**`byId`/`qs`/`qsa`** (DOM shorthands), **`renderSavedList`** (one builder for the
+deck/prop/board library lists), and **`withBusyButton`** (wraps an async upload so
+the button shows busy then restores). Snapshot buffering runs through
+**`snapshot`** (build a timestamped record) and **`applyTransform`** (copy it onto
+a mesh), shared by the add, card-rebuild, and render paths.
 
 ### Interaction (`meshes`, `buffers`, `down`, `inspect`)
 
@@ -278,23 +331,31 @@ card-rebuild, and render paths.
 - **`pointerdown/move/up` + `endGesture`** — click vs. drag; dispatch grab/deal/
   click via `KIND`; **wheel** raises/lowers a held piece; the drag plane height is
   the scroll-adjustable grab height, and a translucent ring previews the landing.
+  **Middle-click** snaps a held piece's facing, or — with nothing held — drops a
+  ping (`sendPing` → raycast to the table).
 - **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
   double-click a piece to inspect (rotate-drag), double-click a deck to
   draw-to-inspect with F/D/H/R placement.
 - **`keydown`** — Delete removes, U toggles keep-upright, S saves a hovered deck
   (each acts on **`heldOrHoveredId`** — the held piece, else whatever's hovered);
-  F/D/H/R place a drawn card.
+  F/D/H/R place a drawn card; **P** drops a ping at the cursor.
 
 ### Seats, hands, turns
 
-Seat layout, standing avatar/name markers, other players' fanned face-down hands
-(from public counts), the turn panel, **`renderHand(cards)`** for your own bar
-(left = face-down, right = face-up).
+Seat layout, standing avatar/name markers (with a public **"SHOWING n"** badge
+via `makePlayerTexture` when a player is revealing), other players' fanned hands —
+face-down using the player's own **`handBack`**, with any **revealed** cards drawn
+face-up in the leading fan slots (`refreshFan` + the `revealed` map), height-
+staggered to avoid z-fighting. The turn panel, and **`renderHand(cards)`** for
+your own bar (left = face-down, right = face-up; also a **select mode** while the
+show panel is picking cards). **`nameTag(name,color)`** builds the pill texture
+shared by held-piece labels and pings.
 
 ### Render loop
 
 Each piece keeps a small `buffers` queue of timestamped snapshots; the loop
 renders every piece as it was `CONFIG.render.delay` in the past (lerp/slerp
-between the bracketing snapshots), and parks the drop-marker ring under a held
-piece at the current board's surface height. One uniform path for held, thrown,
-and resting pieces.
+between the bracketing snapshots), parks the drop-marker ring under a held piece
+at the current board's surface height, keeps each held-piece **name tag**
+(`heldLabels`) hovering over its mesh, and expands + fades + disposes active
+**pings**. One uniform path for held, thrown, and resting pieces.

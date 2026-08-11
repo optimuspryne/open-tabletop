@@ -16,6 +16,7 @@ import { Schema, MapSchema, defineTypes } from '@colyseus/schema';
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
 import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive } from './shared/pieces.js';
+import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -66,17 +67,8 @@ for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recu
 // Clamp a number into [min, max].
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
-// Reduce a user-supplied name to a safe filename slug: lowercase, only [a-z0-9-],
-// at most 60 chars. This also defeats path traversal — "../../etc" becomes "etc".
-const slugify = (name) =>
-  String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
-
 // Keep an untrusted category name inside the allowlist (falls back to 'uploads').
 const assetKind = (kind) => ASSET_KINDS.includes(kind) ? kind : 'uploads';
-
-// Path to a category's metadata file. Both inputs are sanitised here, so no
-// caller can escape the assets folder no matter what it passes in.
-const metaFile = (kind, slug) => path.join(ASSETS_DIR, assetKind(kind), slugify(slug) + '.json');
 
 const isDataURL = (value) => typeof value === 'string' && value.startsWith('data:image');
 
@@ -101,45 +93,6 @@ function saveImageRef(dataURL, kind = 'decks') {
   const [, mimeType, base64] = match;
   const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
   return saveAsset(kind, Buffer.from(base64, 'base64'), ext);
-}
-
-// Read every <slug>.json in a category folder and turn each into a list entry
-// via map(data, slug). A corrupt file is skipped; a missing folder yields [].
-// The three wrappers below differ only in the folder and the fields they surface.
-function listSaved(kind, map) {
-  try {
-    const folder = path.join(ASSETS_DIR, kind);
-    return fs.readdirSync(folder)
-      .filter(filename => filename.endsWith('.json'))
-      .map(filename => {
-        try {
-          const data = JSON.parse(fs.readFileSync(path.join(folder, filename)));
-          return map(data, filename.slice(0, -5)); // slug = filename without ".json"
-        } catch {
-          return null; // skip a corrupt file
-        }
-      })
-      .filter(Boolean); // drop the skipped ones
-  } catch {
-    return []; // folder doesn't exist yet
-  }
-}
-
-const listSavedDecks = () =>
-  listSaved('decks', (data, slug) => ({ slug, name: data.name, count: data.fronts.length }));
-
-const listSavedProps = () =>
-  listSaved('props', (data, slug) => ({ slug, name: data.name, props: data.props }));
-
-const listSavedBoards = () =>
-  listSaved('boards', (data, slug) => ({ slug, name: data.name, kind: boardKindLabel(data) }));
-
-// A short human-readable descriptor for a saved board, shown in the load menu:
-// a built-in board's name, "model" for an uploaded .glb, or "WIDTH×DEPTH".
-function boardKindLabel(data) {
-  if (data.board) return BOARDS[data.board] ? BOARDS[data.board].name : data.board;
-  if (data.model) return 'model';
-  return `${data.w || 8}\u00d7${data.d || 8}`;
 }
 
 // --- Colliders ---------------------------------------------------------------
@@ -569,112 +522,96 @@ class TableRoom extends Room {
         if (deckRefOk(front) && draft.cards.length < 1000) draft.cards.push(front);
       }
     });
-    this.onMessage('deckFinish', (client, msg) => {
+    this.onMessage('deckFinish', async (client, msg) => {
       const draft = this.drafts.get(client.sessionId);
       this.drafts.delete(client.sessionId);
       if (!draft || !draft.cards.length) return;
       const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards });
       // Optionally save it to the library in the same step (save-on-create).
-      if (msg && msg.name && this.saveDeckById(id, msg.name)) {
-        client.send('deckList', listSavedDecks());
+      if (msg && msg.name && await this.saveDeckById(id, msg.name)) {
+        client.send('deckList', await db.listDecks());
       }
     });
 
     // --- Library: save / list / load decks, boards, props ---------------------
-    this.onMessage('saveDeck', (client, msg) => {
-      if (this.saveDeckById(msg && msg.deckId, msg && msg.name)) {
-        client.send('deckList', listSavedDecks());
+    this.onMessage('saveDeck', async (client, msg) => {
+      if (await this.saveDeckById(msg && msg.deckId, msg && msg.name)) {
+        client.send('deckList', await db.listDecks());
       }
     });
-    this.onMessage('listDecks', (client) => client.send('deckList', listSavedDecks()));
-    this.onMessage('loadDeck', (client, msg) => {
-      const file = metaFile('decks', slugify(msg && msg.slug));
-      try {
-        if (fs.existsSync(file)) {
-          const data = JSON.parse(fs.readFileSync(file));
-          this.spawn('deck', rnd(), { back: data.back, cards: data.fronts });
-        }
-      } catch (e) { /* missing or corrupt file — ignore */ }
+    this.onMessage('listDecks', async (client) => client.send('deckList', await db.listDecks()));
+    this.onMessage('loadDeck', async (client, msg) => {
+      const deck = await db.getDeck(msg && msg.id);
+      if (deck) this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts });
     });
 
-    this.onMessage('saveBoard', (client, msg) => {
-      const name = String((msg && msg.name) || '').slice(0, 60);
+    this.onMessage('saveBoard', async (client, msg) => {
+      const name = String((msg && msg.name) || '').slice(0, 60).trim();
       if (!name) return;
-      const slug = slugify(name);
-      if (!slug) return;
       const board = (msg && msg.board) || {};
+      let record;
+      if (board.board && BOARDS[board.board]) {
+        record = { board: board.board }; // a built-in board
+      } else if (board.model) {
+        record = { model: String(board.model).slice(0, 300), modelScale: +board.modelScale || 1,
+                   box: Array.isArray(board.box) ? board.box.map(v => +v) : undefined }; // an uploaded .glb
+      } else {
+        record = { w: board.w, d: board.d, tex: board.tex || null }; // a procedural board
+      }
       try {
-        let record;
-        if (board.board && BOARDS[board.board]) {
-          record = { name, board: board.board }; // a built-in board
-        } else if (board.model) {
-          record = { name, model: String(board.model).slice(0, 300), modelScale: +board.modelScale || 1,
-                     box: Array.isArray(board.box) ? board.box.map(v => +v) : undefined }; // an uploaded .glb
-        } else {
-          record = { name, w: board.w, d: board.d, tex: board.tex || null }; // a procedural board
-        }
-        fs.writeFileSync(metaFile('boards', slug), JSON.stringify(record));
-        client.send('boardList', listSavedBoards());
-      } catch (e) { /* disk error — ignore */ }
+        await db.insertBoard(name, record);
+        client.send('boardList', await db.listBoards());
+      } catch (e) { console.error('[saveBoard]', e.message); }
     });
-    this.onMessage('listBoards', (client) => client.send('boardList', listSavedBoards()));
+    this.onMessage('listBoards', async (client) => client.send('boardList', await db.listBoards()));
 
-    this.onMessage('saveProp', (client, msg) => {
-      const name = String((msg && msg.name) || '').slice(0, 60);
+    this.onMessage('saveProp', async (client, msg) => {
+      const name = String((msg && msg.name) || '').slice(0, 60).trim();
       if (!name) return;
-      const slug = slugify(name);
-      if (!slug) return;
       const incoming = (msg && msg.props) || {};
       if (!incoming.model) return; // only custom-model props are saveable
+      const props = {
+        model: String(incoming.model).slice(0, 300),
+        box: Array.isArray(incoming.box) ? incoming.box.map(v => +v) : undefined,
+        stand: !!incoming.stand,
+        scale: +incoming.scale || 1,
+      };
+      if (incoming.color != null) props.color = incoming.color | 0;
       try {
-        const props = {
-          model: String(incoming.model).slice(0, 300),
-          box: Array.isArray(incoming.box) ? incoming.box.map(v => +v) : undefined,
-          stand: !!incoming.stand,
-          scale: +incoming.scale || 1,
-        };
-        if (incoming.color != null) props.color = incoming.color | 0;
-        fs.writeFileSync(metaFile('props', slug), JSON.stringify({ name, props }));
-        client.send('propList', listSavedProps());
-      } catch (e) { /* disk error — ignore */ }
+        await db.insertProp(name, props);
+        client.send('propList', await db.listProps());
+      } catch (e) { console.error('[saveProp]', e.message); }
     });
-    this.onMessage('listProps', (client) => client.send('propList', listSavedProps()));
+    this.onMessage('listProps', async (client) => client.send('propList', await db.listProps()));
 
     // Shallow-edit a saved deck: swap the back and/or append cards, then either
     // overwrite it or save a copy under a new name.
-    this.onMessage('editDeck', (client, msg) => {
-      const slug = slugify(msg && msg.slug);
-      if (!slug) return;
-      try {
-        const file = metaFile('decks', slug);
-        if (!fs.existsSync(file)) return;
-        const data = JSON.parse(fs.readFileSync(file));
+    this.onMessage('editDeck', async (client, msg) => {
+      const deck = await db.getDeck(msg && msg.id);
+      if (!deck) return;
 
-        if (msg.back && deckRefOk(msg.back)) data.back = msg.back;
-        if (Array.isArray(msg.addFronts)) {
-          for (const front of msg.addFronts) {
-            if (deckRefOk(front) && data.fronts.length < 1000) data.fronts.push(front);
-          }
+      if (msg.back && deckRefOk(msg.back)) deck.back = msg.back;
+      if (Array.isArray(msg.addFronts)) {
+        for (const front of msg.addFronts) {
+          if (deckRefOk(front) && deck.fronts.length < 1000) deck.fronts.push(front);
         }
+      }
 
-        const targetName = String(msg.name || data.name).slice(0, 60);
-        const targetSlug = msg.saveAs ? slugify(targetName) : slug; // save-as-copy vs overwrite
-        if (!targetSlug) return;
-        fs.writeFileSync(metaFile('decks', targetSlug), JSON.stringify({ name: targetName, back: data.back, fronts: data.fronts }));
-        client.send('deckList', listSavedDecks());
-      } catch (e) { /* disk error — ignore */ }
+      const targetName = String(msg.name || deck.name || '').slice(0, 60).trim() || 'deck';
+      try {
+        if (msg.saveAs) await db.insertDeck({ name: targetName, back: deck.back, fronts: deck.fronts }); // clone
+        else await db.updateDeck(msg.id, { name: targetName, back: deck.back, fronts: deck.fronts });    // overwrite
+        client.send('deckList', await db.listDecks());
+      } catch (e) { console.error('[editDeck]', e.message); }
     });
 
-    this.onMessage('loadBoard', (client, msg) => {
-      const file = metaFile('boards', slugify(msg && msg.slug));
-      try {
-        if (!fs.existsSync(file)) return;
-        const data = JSON.parse(fs.readFileSync(file));
-        const props = data.board ? { board: data.board }
-                    : data.model ? { model: data.model, modelScale: data.modelScale, box: data.box }
-                    : { w: data.w, d: data.d, tex: data.tex || undefined };
-        this.swapBoard(props);
-      } catch (e) { /* missing or corrupt file — ignore */ }
+    this.onMessage('loadBoard', async (client, msg) => {
+      const data = await db.getBoard(msg && msg.id);
+      if (!data) return;
+      const props = data.board ? { board: data.board }
+                  : data.model ? { model: data.model, modelScale: data.modelScale, box: data.box }
+                  : { w: data.w, d: data.d, tex: data.tex || undefined };
+      this.swapBoard(props);
     });
     // Play a card from your hand onto the table, face-up or face-down.
     this.onMessage('playCard', (client, { hid, faceDown, x, z }) => {
@@ -933,18 +870,19 @@ class TableRoom extends Room {
 
   // Write a table deck to the disk library; returns true on success. Any inline
   // image art (data-URLs) is moved to files so the saved JSON stays small.
-  saveDeckById(deckId, name) {
+  async saveDeckById(deckId, name) {
     const fronts = this.deckCards.get(deckId), piece = this.state.pieces.get(deckId);
     if (!fronts || !fronts.length || !piece || piece.type !== 'deck') return false;
-    const slug = slugify(name);
-    if (!slug) return false;
+    const cleanName = String(name || '').slice(0, 60).trim();
+    if (!cleanName) return false;
     try {
       let back = JSON.parse(piece.props || '{}').back || 'back';
-      if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back';
+      if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back';   // inline art -> file, store the URL
       const savedFronts = fronts.map(front => isDataURL(front) ? (saveImageRef(front, 'decks') || front) : front);
-      fs.writeFileSync(metaFile('decks', slug), JSON.stringify({ name: String(name).slice(0, 60), back, fronts: savedFronts }));
+      await db.insertDeck({ name: cleanName, back, fronts: savedFronts });
       return true;
     } catch (e) {
+      console.error('[saveDeckById]', e.message);
       return false;
     }
   }

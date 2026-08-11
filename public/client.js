@@ -206,7 +206,7 @@ const applyTransform = (mesh, s) => {
     labelFor: d => `${d.name} · ${d.count}`,
     buttonsFor: d => [
       { text: 'Edit', onClick: () => openEditDeck(d) },
-      { text: 'Load', onClick: () => { room.send('loadDeck', { slug: d.slug }); byId('deckModal').hidden = true; } },
+      { text: 'Load', onClick: () => { room.send('loadDeck', { id: d.id }); byId('deckModal').hidden = true; } },
     ],
   }));
   byId('newDeck').onclick = () => { byId('deckModal').hidden = false; room.send('listDecks'); };
@@ -301,7 +301,7 @@ const applyTransform = (mesh, s) => {
       for (const line of lines) addFronts.push('text:' + faceColor + ':' + bg + ':' + line);
       for (const img of byId('editDeckImgs').files) addFronts.push(await uploadImage(img, CONFIG.upload.cardW, CONFIG.upload.cardH, undefined, 'decks'));
 
-      room.send('editDeck', { slug: editingDeck.slug, name, back, addFronts, saveAs });
+      room.send('editDeck', { id: editingDeck.id, name, back, addFronts, saveAs });
       byId('editDeckModal').hidden = true;
     } catch (e) {
       alert('Edit failed — an image upload may have errored.');
@@ -388,7 +388,7 @@ const applyTransform = (mesh, s) => {
   room.onMessage('boardList', boards => renderSavedList('boardSavedList', boards, {
     labelFor: b => b.name + (b.kind ? ` (${b.kind})` : ''),
     buttonsFor: b => [
-      { text: 'Load', onClick: () => { room.send('loadBoard', { slug: b.slug }); byId('boardModal').hidden = true; } },
+      { text: 'Load', onClick: () => { room.send('loadBoard', { id: b.id }); byId('boardModal').hidden = true; } },
     ],
   }));
   byId('boardCancel').onclick = () => byId('boardModal').hidden = true;
