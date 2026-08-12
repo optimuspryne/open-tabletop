@@ -5,45 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Open Tabletop</title>
 <link rel="stylesheet" href="/styles.css">
-<style>
-  body.landing { display: flex; align-items: center; justify-content: center; overflow: auto; }
-  #topbar { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 18px; z-index: 10; }
-  #topbar .brand { font: 600 18px var(--font); color: var(--text); }
-  #topbar .brand .accent { color: var(--accent); }
-  #landing {
-    width: min(440px, 92vw); margin: 9vh auto; background: var(--panel-solid); border: 1px solid var(--border);
-    border-radius: var(--r-xl); padding: 26px 26px 22px; color: var(--text); font: var(--fs)/1.5 var(--font);
-  }
-  #landing h1 { margin: 0 0 4px; font-size: 22px; }
-  #landing h1 .accent { color: var(--accent); }
-  #landing .tag { margin: 0 0 20px; color: var(--text); opacity: .6; font-size: var(--fs-sm); }
-  #landing h2 { font-size: 15px; margin: 0 0 10px; color: var(--accent); }
-  #landing label { display: block; margin: 12px 0 4px; font-size: var(--fs-sm); opacity: .85; }
-  #landing input[type=text], #landing input[type=email], #landing input[type=password] {
-    width: 100%; background: var(--field); color: var(--text);
-    border: 1px solid var(--border); border-radius: var(--r-sm); padding: 9px 11px; font: var(--fs) var(--font);
-  }
-  #landing .row { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
-  #landing .row.between { justify-content: space-between; }
-  #landing button.primary { background: var(--accent-soft); border-color: var(--accent); }
-  #landing a { color: var(--accent); cursor: pointer; text-decoration: none; font-size: var(--fs-sm); }
-  #landing .muted { opacity: .55; font-size: var(--fs-sm); }
-  #landing .err { color: #d9776b; font-size: var(--fs-sm); min-height: 1.2em; margin-top: 8px; }
-  #landing .note { color: var(--accent); font-size: var(--fs-sm); min-height: 1.2em; margin-top: 8px; }
-  #landing .hint { font-size: var(--fs-sm); opacity: .6; margin-top: 12px; }
-  #landing .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
-  #landing ul { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-  #landing .roomRow { display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px 10px; }
-  #landing .roomActions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  #landing button.mini { padding: 4px 8px; font-size: var(--fs-sm); }
-  #landing .who { display: flex; align-items: center; gap: 10px; }
-  #landing .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--avatar) center/cover no-repeat;
-    border: 1px solid var(--border); flex: 0 0 auto; }
-  #landing .check { display: flex; align-items: center; gap: 6px; margin-top: 12px; font-size: var(--fs-sm); }
-  #landing .check input { width: auto; }
-</style>
 </head>
 <body class="landing">
 <header id="topbar">

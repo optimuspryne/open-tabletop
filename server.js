@@ -515,8 +515,6 @@ class TableRoom extends Room {
         this.broadcast('shuffled', { id: deckId }); // every client plays the riffle animation
       }
     });
-    // Decks are built in chunks so no single message is large (text lists can be
-    // hundreds of cards): deckBegin -> deckAppend (batches) -> deckFinish.
     // Decks are built in chunks so no single message is huge (a text list can be
     // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
     this.onMessage('deckBegin', (client, msg) => {
@@ -1278,12 +1276,6 @@ class TableRoom extends Room {
     const wasTurn = this.state.turn === client.sessionId;
     this.state.players.delete(client.sessionId);
     if (wasTurn) this.advanceTurn(); // don't strand the turn on a player who left
-  }
-
-  // A player's hand and notes aren't in shared state, so resend them on reconnect.
-  onReconnect(client) {
-    this.sendHand(client);
-    client.send('notebook', this.notebooks.get(client.sessionId) || '');
   }
 }
 

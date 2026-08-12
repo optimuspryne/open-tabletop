@@ -29,6 +29,9 @@ pool.on('error', (err) => console.error('[db] pool error:', err.message)); // do
 
 export const close = () => pool.end(); // for one-off scripts to let the process exit
 
+// pg returns bigint as a string; keep ids as strings, but preserve NULL as null.
+const idOrNull = (v) => (v == null ? null : String(v));
+
 // ===== Decks =================================================================
 // cards = the ordered front refs (jsonb array); props = { back }.
 // Visibility: is_public gates who can spawn; owner_id records the admin who made
@@ -39,14 +42,14 @@ export async function listDecks({ includePrivate = false } = {}) {
     const { rows } = await pool.query(
       `SELECT id, name, jsonb_array_length(cards) AS count, is_public, owner_id FROM custom_decks
        ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count), isPublic: r.is_public, ownerId: r.owner_id == null ? null : String(r.owner_id) }));
+    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count), isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
   } catch (e) { console.error('[db] listDecks:', e.message); return []; }
 }
 export async function getDeck(id) {
   try {
     const { rows } = await pool.query('SELECT name, cards, props, is_public, owner_id FROM custom_decks WHERE id = $1', [id]);
     if (!rows[0]) return null;
-    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back', isPublic: rows[0].is_public, ownerId: rows[0].owner_id == null ? null : String(rows[0].owner_id) };
+    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back', isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
   } catch (e) { console.error('[db] getDeck:', e.message); return null; }
 }
 export function insertDeck({ name, back, fronts, ownerId = null, isPublic = false }) {
@@ -76,7 +79,7 @@ export async function listBoards({ includePrivate = false } = {}) {
     const { rows } = await pool.query(
       `SELECT id, name, file_url, props, is_public, owner_id FROM custom_boards
        ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)), isPublic: r.is_public, ownerId: r.owner_id == null ? null : String(r.owner_id) }));
+    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)), isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
   } catch (e) { console.error('[db] listBoards:', e.message); return []; }
 }
 // Returns a wrapper: .rec is the spawn record, plus visibility/owner for gating.
@@ -84,7 +87,7 @@ export async function getBoard(id) {
   try {
     const { rows } = await pool.query('SELECT name, file_url, props, is_public, owner_id FROM custom_boards WHERE id = $1', [id]);
     if (!rows[0]) return null;
-    return { rec: boardRecord(rows[0]), name: rows[0].name, isPublic: rows[0].is_public, ownerId: rows[0].owner_id == null ? null : String(rows[0].owner_id) };
+    return { rec: boardRecord(rows[0]), name: rows[0].name, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
   } catch (e) { console.error('[db] getBoard:', e.message); return null; }
 }
 export function insertBoard(name, rec, { ownerId = null, isPublic = false } = {}) {
@@ -104,7 +107,7 @@ export async function listProps({ includePrivate = false } = {}) {
     const { rows } = await pool.query(
       `SELECT id, name, file_url, props, is_public, owner_id FROM custom_objects
        ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, props: propRecord(r), isPublic: r.is_public, ownerId: r.owner_id == null ? null : String(r.owner_id) }));
+    return rows.map(r => ({ id: String(r.id), name: r.name, props: propRecord(r), isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
   } catch (e) { console.error('[db] listProps:', e.message); return []; }
 }
 export function insertProp(name, props, { ownerId = null, isPublic = false } = {}) {
@@ -124,7 +127,7 @@ export async function getAssetMeta(kind, id) {
   try {
     const { rows } = await pool.query(`SELECT id, name, is_public, owner_id FROM ${table} WHERE id = $1`, [id]);
     if (!rows[0]) return null;
-    return { id: String(rows[0].id), name: rows[0].name, isPublic: rows[0].is_public, ownerId: rows[0].owner_id == null ? null : String(rows[0].owner_id) };
+    return { id: String(rows[0].id), name: rows[0].name, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
   } catch (e) { console.error('[db] getAssetMeta:', e.message); return null; }
 }
 export function setAssetPublic(kind, id, isPublic) {

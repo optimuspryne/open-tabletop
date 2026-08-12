@@ -4,8 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js",
-    "import-assets": "node import-assets.js"
+    "start": "node --env-file-if-exists=.env server.js"
   },
   "dependencies": {
     "@colyseus/core": "^0.17.0",
