@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Open Tabletop</title>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="ui">
+  <button id="lobbyBtn">← Lobby</button>
+  <span class="menu">
+    <button id="diceBtn">☰ + Dice</button>
+    <div class="grp" id="diceGrp" hidden></div>
+  </span>
+  <button id="newProp">+ Object</button>
+  <button id="newDeck">+ Deck</button>
+  <button id="newBoard">↷ Board</button>
+  <button id="roll">↻ Dice</button>
+  <button id="notesBtn">✎ Notes</button>
+  <button id="timerBtn">⏱ Timer</button>
+  <button id="showBtn">🃏 Show</button>
+  <button id="membersBtn" hidden>👥 Members</button>
+</div>
+<div id="panel">
+  <span id="status">connecting…</span>
+  <div>
+    <div id="players"></div>
+    <div id="me">
+      <span id="myAv" class="mav"></span>
+      <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
+      <label class="upload">Avatar<input id="avatarInput" type="file" accept="image/*" hidden></label>
+    </div>
+  </div>
+  <button id="nextTurn">Next turn</button>
+  <button id="reset">Reset</button>
+</div>
+<div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
+<div id="drawActions" hidden>
+  <span class="da-note">Drag to rotate</span>
+  <button data-place="field-up">To field ↑ face-up <kbd>F</kbd></button>
+  <button data-place="field-down">To field face-down <kbd>D</kbd></button>
+  <button data-place="hand">To hand <kbd>H</kbd></button>
+  <button data-place="deck">Return to deck <kbd>R</kbd></button>
+</div>
+<div id="hint">
+  <div id="hintHead"><b>Controls</b><span id="hintToggle">Hide &#9662;</span></div>
+  <div id="hintBody">
+    <div class="hcat">Left-Click</div>
+    <ul>
+      <li>Take any card on the field and put it in your hand.</li>
+      <li>Take top card of a deck and place it face-down next to the deck.</li>
+      <li>Place card from your hand face-down in a pre-determined location on the field.</li>
+      <li>After clicking an object, press <b>Delete</b> to remove it.</li>
+      <li>With an object held or hovered, press <b>U</b> to toggle stand-upright / lie-flat (on by default for chess, go, checkers, tokens &amp; decks).</li>
+    </ul>
+    <div class="hcat">Double Left-Click</div>
+    <ul>
+      <li>Inspect objects/cards on the field.
+        <ul><li>Click and drag to rotate them.</li></ul></li>
+      <li>Inspect the top card of a deck.
+        <ul>
+          <li>Press <b>F</b> to place it next to the deck face-up.</li>
+          <li>Press <b>D</b> to place it next to the deck face-down.</li>
+          <li>Press <b>H</b> to place it in your hand.</li>
+          <li>Press <b>R</b> (or click outside the preview) to return it to the top of the deck.</li>
+        </ul></li>
+    </ul>
+    <div class="hcat">Left-Click + Drag</div>
+    <ul>
+      <li>Rotate your view of the board.</li>
+      <li>Pick up / move / throw objects &amp; cards. Scroll the wheel to change height.</li>
+      <li>While holding, <b>Middle-Click</b> to snap facing to the nearest 90°.</li>
+      <li>Draw the top card from a deck and move/throw it.</li>
+      <li>Drag a card out of your hand onto the field, face-down.</li>
+    </ul>
+    <div class="hcat">Right-Click</div>
+    <ul>
+      <li>Shuffle any deck.</li>
+      <li>After clicking a deck, press <b>S</b> to save it.</li>
+      <li>Reveal the face of any card on the field.</li>
+      <li>Place a card from your hand onto the field, face-up.</li>
+    </ul>
+    <div class="hcat">Right-Click + Drag</div>
+    <ul>
+      <li>Pan your view of the board.</li>
+      <li>Hold and move any deck.</li>
+      <li>Drag a card out of your hand onto the field, face-up.</li>
+    </ul>
+  </div>
+</div>
+<div id="hand"></div>
+<div id="showPanel" hidden>
+  <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
+  <div class="showLabel">To</div>
+  <div id="showAudience" class="chipRow"></div>
+  <div class="showLabel">What</div>
+  <div class="chipRow">
+    <button id="showScopeHand" class="chip on">Whole hand</button>
+    <button id="showScopeSel" class="chip">Selected cards</button>
+  </div>
+  <button id="showHold">Hold to show</button>
+</div>
+<div id="notes" hidden>
+  <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
+  <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
+</div>
+<div id="membersPanel" hidden>
+  <div id="membersHead"><b>Members</b><span id="membersClose">✕</span></div>
+  <ul id="memberList"></ul>
+</div>
+<div id="timer" hidden>
+  <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
+  <div id="timerReadout">00:00</div>
+  <div class="timerRow">
+    <button id="timerToggle">Start</button>
+    <button id="timerReset">Reset</button>
+    <select id="timerMode">
+      <option value="up">Stopwatch</option>
+      <option value="down">Countdown</option>
+    </select>
+  </div>
+  <div id="timerDurRow" class="timerRow" hidden>
+    <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
+  </div>
+</div>
+<div id="propModal" hidden>
+  <div class="modalCard">
+    <h3>Add a prop</h3>
+    <label>Shape</label>
+    <select id="propShape"></select>
+    <div id="propColorWrap"><label>Color</label><div class="backRow"><input id="propColor" type="color" value="#9aa0a6"></div></div>
+    <div id="propTeamWrap" hidden><label>Color set</label>
+      <select id="propTeam"><option value="0">Color 1</option><option value="1">Color 2</option></select></div>
+    <label>Quantity</label>
+    <input id="propQty" type="number" value="1" min="1" max="12" style="width:70px">
+    <label>Scale</label>
+    <input id="propScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
+    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="propStand" type="checkbox"> Stands upright (self-rights when placed)</label>
+    <div class="row"><button id="propCustom" style="margin-right:auto">Custom...</button><button id="propCancel">Cancel</button><button id="propSpawn">Spawn</button></div>
+  </div>
+</div>
+<div id="customPropModal" hidden>
+  <div class="modalCard">
+    <h3 id="cpModalTitle">Custom model prop</h3>
+    <div class="admin-wrap">
+    <label>Model (.glb)</label>
+    <input id="cpModel" type="file" accept=".glb,model/gltf-binary">
+    <label>Quantity</label>
+    <input id="cpQty" type="number" value="1" min="1" max="12" style="width:70px">
+    <label>Scale</label>
+    <input id="cpScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
+    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="cpStand" type="checkbox"> Stands upright (self-rights when placed)</label>
+    <div class="modeRow" style="margin-top:6px">
+      <label><input type="radio" name="cpColorMode" value="own" checked> Model's own colours</label>
+      <label><input type="radio" name="cpColorMode" value="tint"> Tint <input id="cpTintColor" type="color" value="#c0c0c0"></label>
+    </div>
+    <input id="cpName" type="text" placeholder="Save this model as… (optional)" style="margin-top:6px">
+    <div class="note">A model gets a box collider sized to its bounds. Tint recolours it; leave off to keep its own look.</div>
+    </div>
+    <div class="savedWrap"><label>Saved models</label><div id="propSavedList" class="savedList"></div></div>
+    <div class="row"><button id="cpCancel">Cancel</button><button id="cpSpawn" class="admin-only">Spawn</button></div>
+  </div>
+</div>
+<div id="boardModal" hidden>
+  <div class="modalCard">
+    <h3>Add a board</h3>
+    <label>Built-in boards</label>
+    <div class="backRow" id="builtinBoards" style="flex-wrap:wrap"></div>
+    <label class="admin-only">Upload a board model (.glb)</label>
+    <div class="backRow admin-only"><input id="boardModel" type="file" accept=".glb,model/gltf-binary" style="flex:1"><button id="boardModelSpawn">Add</button></div>
+    <div class="note" style="margin:8px 0 2px">— or make a plain flat board —</div>
+    <label>Width</label>
+    <input id="boardW" type="number" value="10" min="2" max="18" step="0.5" style="width:90px">
+    <label>Depth</label>
+    <input id="boardD" type="number" value="10" min="2" max="12" step="0.5" style="width:90px">
+    <label>Image (optional — stretched to fit)</label>
+    <input id="boardImg" type="file" accept="image/*">
+    <div class="note">Replaces the current board and sits at table centre.</div>
+    <div class="savedWrap"><label>Boards</label>
+      <div class="savedRow admin-only"><span class="note" style="margin:0">Save the current board</span><button id="boardSave">Save…</button></div>
+      <div id="boardSavedList" class="savedList"></div>
+    </div>
+    <div class="row"><button id="boardCancel">Cancel</button><button id="boardCreate">Create flat board</button></div>
+  </div>
+</div>
+<div id="editPropModal" hidden>
+  <div class="modalCard">
+    <h3>Edit model prop</h3>
+    <div class="note" id="editPropModel">model</div>
+    <label>Scale</label>
+    <input id="editPropScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
+    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="editPropStand" type="checkbox"> Stands upright</label>
+    <div class="modeRow" style="margin-top:6px">
+      <label><input type="radio" name="editPropColorMode" value="own" checked> Model's own colours</label>
+      <label><input type="radio" name="editPropColorMode" value="tint"> Tint <input id="editPropTintColor" type="color" value="#c0c0c0"></label>
+    </div>
+    <label>Copy name (for “Save as copy”)</label>
+    <input id="editPropName" type="text">
+    <div class="row"><button id="editPropCancel">Cancel</button><button id="editPropCopy">Save as copy</button><button id="editPropSave">Save</button></div>
+  </div>
+</div>
+<div id="editDeckModal" hidden>
+  <div class="modalCard">
+    <h3>Edit deck</h3>
+    <div class="note" id="editDeckInfo">deck</div>
+    <label>Replace back image (optional)</label>
+    <input id="editDeckBack" type="file" accept="image/*">
+    <label>Add text cards (one per line)</label>
+    <textarea id="editDeckText" rows="3"></textarea>
+    <div class="backRow"><input id="editDeckFaceColor" type="color" value="#141414" title="Text colour"><input id="editDeckFaceBg" type="color" value="#fbfbf7" title="Background"><span class="note" style="margin:0">⇞ new text-card colours</span></div>
+    <label>Add image cards (optional)</label>
+    <input id="editDeckImgs" type="file" accept="image/*" multiple>
+    <label>Copy name (for “Save as copy”)</label>
+    <input id="editDeckName" type="text">
+    <div class="row"><button id="editDeckCancel">Cancel</button><button id="editDeckCopy">Save as copy</button><button id="editDeckSave">Save</button></div>
+  </div>
+</div>
+<div id="deckModal" hidden>
+  <div class="modalCard">
+    <h3 id="deckModalTitle">Create a custom deck</h3>
+    <div class="admin-wrap">
+    <div class="modeRow">
+      <label><input type="radio" name="deckMode" value="text" checked> Text</label>
+      <label><input type="radio" name="deckMode" value="image"> Images</label>
+    </div>
+    <div id="textMode">
+      <label>Customize the 'back' of the Cards</label>
+      <span class="note" style="margin:0">BG Color | Text Color | Optional Text</span>
+      <div class="backRow">
+        <input id="backColor" type="color" value="#7d2b2b" title="Back background">
+        <input id="backTextColor" type="color" value="#f4f1ea" title="Back text color">
+        <input id="backText" type="text" placeholder="Optional Text...">
+      </div>
+      <label>Customize the 'face' of the Cards</label>
+      <span class="note" style="margin:0">BG Color | Text Color</span>
+      <div class="backRow"><input id="faceBg" type="color" value="#fbfbf7" title="Face background"><input id="faceColor" type="color" value="#141414" title="Face text color"></div>
+      <span class="note" style="margin:0">Enter text here.  One-per-line, commma-separated or JSON</span>
+      <textarea id="faceText" rows="6" placeholder="First card&#10;Second card&#10;Third card"></textarea>
+    </div>
+    <div id="imageMode" hidden>
+      <label>Card back (one image)</label>
+      <input id="deckBack" type="file" accept="image/*">
+      <label>Card fronts (select many)</label>
+      <input id="deckFronts" type="file" accept="image/*" multiple>
+    </div>
+    <div class="note">Card faces stay private until a card is revealed.</div>
+    <input id="deckSaveName" type="text" placeholder="Save this deck as… (optional)">
+    </div>
+    <div class="savedWrap"><label>Load a saved deck</label><div id="savedList" class="savedList"></div></div>
+    <div class="row"><button data-spawn="deck">Quick 52</button><button id="deckCancel">Cancel</button><button id="deckCreate" class="admin-only">Create deck</button></div>
+  </div>
+</div>
+
+<!-- Colyseus client (UMD global `Colyseus`) -->
+<script src="https://unpkg.com/@colyseus/sdk@^0.17.0/dist/colyseus.js"></script>
+<!-- Three.js via import map (kept ESM) -->
+<script type="importmap">
+{ "imports": {
+  "three": "https://esm.sh/three@0.161.0",
+  "three/addons/": "https://esm.sh/three@0.161.0/examples/jsm/"
+}}
+</script>
+
+<script type="module" src="/client.js"></script>
+</body>
+</html>

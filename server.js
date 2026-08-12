@@ -10,13 +10,14 @@ import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import { Server, Room } from '@colyseus/core';
+import { Server, Room, ServerError, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Schema, MapSchema, defineTypes } from '@colyseus/schema';
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
 import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
+import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -219,7 +220,11 @@ defineTypes(Piece, {
   qx: 'number', qy: 'number', qz: 'number', qw: 'number',
 });
 class Player extends Schema {} // PUBLIC per-player info: seat + how many cards they hold (never which cards)
-defineTypes(Player, { seat: 'number', hand: 'number', name: 'string', color: 'string', avatar: 'string', showing: 'number', handBack: 'string' }); // showing = how many hand cards this player is currently revealing (public badge; never the content); handBack = the (public) back image of their hand cards
+defineTypes(Player, { seat: 'number', hand: 'number', name: 'string', color: 'string', avatar: 'string', showing: 'number', handBack: 'string', role: 'string' }); // showing = how many hand cards this player is currently revealing (public badge; never the content); handBack = the (public) back image of their hand cards; role = their per-room role (owner/gm/helper/player)
+
+// Per-room role ladder — the server gates privileged actions by rank, and the
+// client hides tools it can't use (courtesy only; these checks are the real rule).
+const RANK = { player: 0, helper: 1, gm: 2, owner: 3 };
 // PUBLIC shared timer. We sync only the anchor (running/mode/base/since), never a
 // ticking number — each client computes the live value with timerLive(), the same
 // way the render loop interpolates piece positions locally. base = ms frozen at
@@ -312,10 +317,13 @@ function buildSimpleDeck() {
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
-  onCreate() {
+  async onCreate(options) {
     this.setState(new State());
     this.world = buildWorld();
     this.mat = this.world.__mat;
+    this.roomCode = (options && options.code) || null;
+    const roomRec = this.roomCode ? await db.findRoomByCode(this.roomCode) : null;
+    this.roomId = roomRec ? roomRec.id : null; // this live table's persistent room id (for membership)
     this.bodies = new Map();  // id -> CANNON.Body   (physics, not synced)
     this.targets = new Map(); // id -> {x,y,z}       (drag target of the owner)
     this.flips = new Map();   // id -> scripted half-flip in progress
@@ -512,6 +520,7 @@ class TableRoom extends Room {
     // Decks are built in chunks so no single message is huge (a text list can be
     // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
     this.onMessage('deckBegin', (client, msg) => {
+      if (!this.isAdmin(client)) return; // building library decks is admin-only
       const back = (msg && deckRefOk(msg.back)) ? msg.back : 'back';
       this.drafts.set(client.sessionId, { back, cards: [] });
     });
@@ -523,29 +532,35 @@ class TableRoom extends Room {
       }
     });
     this.onMessage('deckFinish', async (client, msg) => {
+      if (!this.isAdmin(client)) return;
       const draft = this.drafts.get(client.sessionId);
       this.drafts.delete(client.sessionId);
       if (!draft || !draft.cards.length) return;
-      const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards });
-      // Optionally save it to the library in the same step (save-on-create).
-      if (msg && msg.name && await this.saveDeckById(id, msg.name)) {
-        client.send('deckList', await db.listDecks());
+      const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards }); // spawn to test it live
+      // Optionally save it to the library in the same step (save-on-create, private).
+      if (msg && msg.name && await this.saveDeckById(id, msg.name, client.auth.userId)) {
+        this.sendAssetList(client, 'deck');
       }
     });
 
     // --- Library: save / list / load decks, boards, props ---------------------
     this.onMessage('saveDeck', async (client, msg) => {
-      if (await this.saveDeckById(msg && msg.deckId, msg && msg.name)) {
-        client.send('deckList', await db.listDecks());
+      if (!this.isAdmin(client)) return;
+      if (await this.saveDeckById(msg && msg.deckId, msg && msg.name, client.auth.userId)) {
+        this.sendAssetList(client, 'deck');
       }
     });
-    this.onMessage('listDecks', async (client) => client.send('deckList', await db.listDecks()));
+    this.onMessage('listDecks', (client) => this.sendAssetList(client, 'deck'));
     this.onMessage('loadDeck', async (client, msg) => {
+      if (this.rank(client) < RANK.helper) return;
       const deck = await db.getDeck(msg && msg.id);
-      if (deck) this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts });
+      if (!deck) return;
+      if (!deck.isPublic && !this.isAdmin(client)) return; // private assets: admins only
+      this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts });
     });
 
     this.onMessage('saveBoard', async (client, msg) => {
+      if (!this.isAdmin(client)) return; // library curation is admin-only
       const name = String((msg && msg.name) || '').slice(0, 60).trim();
       if (!name) return;
       const board = (msg && msg.board) || {};
@@ -559,13 +574,14 @@ class TableRoom extends Room {
         record = { w: board.w, d: board.d, tex: board.tex || null }; // a procedural board
       }
       try {
-        await db.insertBoard(name, record);
-        client.send('boardList', await db.listBoards());
+        await db.insertBoard(name, record, { ownerId: client.auth.userId }); // private by default
+        this.sendAssetList(client, 'board');
       } catch (e) { console.error('[saveBoard]', e.message); }
     });
-    this.onMessage('listBoards', async (client) => client.send('boardList', await db.listBoards()));
+    this.onMessage('listBoards', (client) => this.sendAssetList(client, 'board'));
 
     this.onMessage('saveProp', async (client, msg) => {
+      if (!this.isAdmin(client)) return;
       const name = String((msg && msg.name) || '').slice(0, 60).trim();
       if (!name) return;
       const incoming = (msg && msg.props) || {};
@@ -578,15 +594,34 @@ class TableRoom extends Room {
       };
       if (incoming.color != null) props.color = incoming.color | 0;
       try {
-        await db.insertProp(name, props);
-        client.send('propList', await db.listProps());
+        await db.insertProp(name, props, { ownerId: client.auth.userId }); // private by default
+        this.sendAssetList(client, 'prop');
       } catch (e) { console.error('[saveProp]', e.message); }
     });
-    this.onMessage('listProps', async (client) => client.send('propList', await db.listProps()));
+    this.onMessage('listProps', (client) => this.sendAssetList(client, 'prop'));
+
+    // --- Asset admin (site admins): toggle visibility, rename, delete ----------
+    this.onMessage('assetPublic', async (client, msg) => {
+      if (!this.isAdmin(client) || !msg) return;
+      try { await db.setAssetPublic(msg.kind, msg.id, !!msg.isPublic); this.sendAssetList(client, msg.kind); }
+      catch (e) { console.error('[assetPublic]', e.message); }
+    });
+    this.onMessage('assetRename', async (client, msg) => {
+      if (!this.isAdmin(client) || !msg) return;
+      const name = String(msg.name || '').slice(0, 60).trim(); if (!name) return;
+      try { await db.renameAsset(msg.kind, msg.id, name); this.sendAssetList(client, msg.kind); }
+      catch (e) { console.error('[assetRename]', e.message); }
+    });
+    this.onMessage('assetDelete', async (client, msg) => {
+      if (!this.isAdmin(client) || !msg) return;
+      try { await db.deleteAsset(msg.kind, msg.id); this.sendAssetList(client, msg.kind); }
+      catch (e) { console.error('[assetDelete]', e.message); }
+    });
 
     // Shallow-edit a saved deck: swap the back and/or append cards, then either
     // overwrite it or save a copy under a new name.
     this.onMessage('editDeck', async (client, msg) => {
+      if (!this.isAdmin(client)) return;
       const deck = await db.getDeck(msg && msg.id);
       if (!deck) return;
 
@@ -599,18 +634,21 @@ class TableRoom extends Room {
 
       const targetName = String(msg.name || deck.name || '').slice(0, 60).trim() || 'deck';
       try {
-        if (msg.saveAs) await db.insertDeck({ name: targetName, back: deck.back, fronts: deck.fronts }); // clone
+        if (msg.saveAs) await db.insertDeck({ name: targetName, back: deck.back, fronts: deck.fronts, ownerId: client.auth.userId }); // clone (private)
         else await db.updateDeck(msg.id, { name: targetName, back: deck.back, fronts: deck.fronts });    // overwrite
-        client.send('deckList', await db.listDecks());
+        this.sendAssetList(client, 'deck');
       } catch (e) { console.error('[editDeck]', e.message); }
     });
 
     this.onMessage('loadBoard', async (client, msg) => {
+      if (this.rank(client) < RANK.gm) return; // changing the board reshapes the table: GM+
       const data = await db.getBoard(msg && msg.id);
       if (!data) return;
-      const props = data.board ? { board: data.board }
-                  : data.model ? { model: data.model, modelScale: data.modelScale, box: data.box }
-                  : { w: data.w, d: data.d, tex: data.tex || undefined };
+      if (!data.isPublic && !this.isAdmin(client)) return; // private assets: admins only
+      const rec = data.rec;
+      const props = rec.board ? { board: rec.board }
+                  : rec.model ? { model: rec.model, modelScale: rec.modelScale, box: rec.box }
+                  : { w: rec.w, d: rec.d, tex: rec.tex || undefined };
       this.swapBoard(props);
     });
     // Play a card from your hand onto the table, face-up or face-down.
@@ -633,8 +671,10 @@ class TableRoom extends Room {
     this.onMessage('spawn', (client, msg) => {
       if (this.state.pieces.size >= SIM.maxPieces) return;
       if (msg.type === 'board') {
+        if (this.rank(client) < RANK.gm) return;   // reshaping the table is GM+
         this.swapBoard(msg.props || {}); // only one board at a time
       } else {
+        if (this.rank(client) < RANK.helper) return; // spawning pieces is Helper+
         this.spawn(msg.type, rnd(), msg.props || {});
       }
     });
@@ -651,7 +691,8 @@ class TableRoom extends Room {
     });
 
     // Wipe the room back to an empty table — pieces and all private state.
-    this.onMessage('reset', () => {
+    this.onMessage('reset', (client) => {
+      if (this.rank(client) < RANK.gm) return; // wiping the table is GM+
       const ids = [];
       this.state.pieces.forEach((piece, id) => ids.push(id));
       for (const id of ids) this.removePiece(id);
@@ -696,8 +737,47 @@ class TableRoom extends Room {
       body.wakeUp();
     });
 
+    // --- Member management (GM tools): admit pending joiners, kick, promote ----
+    // Pending joiners aren't connected (onAuth turned them away), so the list comes
+    // from the DB, not the live room. All gated server-side; the client only shows
+    // the panel to GMs.
+    this.onMessage('members', (client) => {
+      if (this.rank(client) < RANK.gm) return;
+      this.sendMembers(client);
+    });
+    this.onMessage('admit', async (client, { userId } = {}) => {
+      if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
+      await db.admitMember(this.roomId, userId);
+      this.broadcastMembers();
+    });
+    this.onMessage('kick', async (client, { userId } = {}) => {
+      if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
+      if (String(userId) === String(client.auth.userId)) return; // no kicking yourself
+      const m = await db.getMembership(this.roomId, userId);
+      if (!m || !this.canManage(this.rank(client), m.role)) return;
+      await db.kickMember(this.roomId, userId);
+      const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
+      if (live) { live.send('kicked'); setTimeout(() => { try { live.leave(4000); } catch (e) {} }, 150); } // notice, then drop (consented → no reconnection)
+      this.broadcastMembers();
+    });
+    this.onMessage('setRole', async (client, { userId, role } = {}) => {
+      if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
+      if (String(userId) === String(client.auth.userId)) return; // no changing your own role
+      if (!['helper', 'player', 'gm'].includes(role)) return;
+      const m = await db.getMembership(this.roomId, userId);
+      if (!m || !this.canSetRole(this.rank(client), m.role, role)) return;
+      await db.setMemberRole(this.roomId, userId, role);
+      const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
+      if (live) { // reflect the change live so their tools update immediately
+        const p = this.state.players.get(live.sessionId);
+        if (p) p.role = role;
+        if (live.auth) live.auth.role = role;
+      }
+      this.broadcastMembers();
+    });
+
     this.onMessage('nextTurn', () => this.advanceTurn());
-    this.onMessage('remove', (client, { id }) => { if (this.state.pieces.has(id)) this.removePiece(id); });
+    this.onMessage('remove', (client, { id }) => { if (this.rank(client) < RANK.helper) return; if (this.state.pieces.has(id)) this.removePiece(id); });
     this.onMessage('setName', (client, { name }) => {
       const player = this.state.players.get(client.sessionId);
       if (player && typeof name === 'string') player.name = name.trim().slice(0, 20) || player.name;
@@ -870,7 +950,7 @@ class TableRoom extends Room {
 
   // Write a table deck to the disk library; returns true on success. Any inline
   // image art (data-URLs) is moved to files so the saved JSON stays small.
-  async saveDeckById(deckId, name) {
+  async saveDeckById(deckId, name, ownerId = null) {
     const fronts = this.deckCards.get(deckId), piece = this.state.pieces.get(deckId);
     if (!fronts || !fronts.length || !piece || piece.type !== 'deck') return false;
     const cleanName = String(name || '').slice(0, 60).trim();
@@ -879,7 +959,7 @@ class TableRoom extends Room {
       let back = JSON.parse(piece.props || '{}').back || 'back';
       if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back';   // inline art -> file, store the URL
       const savedFronts = fronts.map(front => isDataURL(front) ? (saveImageRef(front, 'decks') || front) : front);
-      await db.insertDeck({ name: cleanName, back, fronts: savedFronts });
+      await db.insertDeck({ name: cleanName, back, fronts: savedFronts, ownerId }); // private by default
       return true;
     } catch (e) {
       console.error('[saveDeckById]', e.message);
@@ -934,6 +1014,45 @@ class TableRoom extends Room {
 
   clientBy(sid) { return this.clients.find(c => c.sessionId === sid); }
 
+  // Send a client the library list for one asset kind. Admins get everything
+  // (incl. private); everyone else gets only published (public) assets.
+  async sendAssetList(client, kind) {
+    const includePrivate = this.isAdmin(client);
+    if (kind === 'deck') client.send('deckList', await db.listDecks({ includePrivate }));
+    else if (kind === 'board') client.send('boardList', await db.listBoards({ includePrivate }));
+    else if (kind === 'prop') client.send('propList', await db.listProps({ includePrivate }));
+  }
+
+  // --- Member-management authorization + list delivery ---
+  // GMs manage helpers/players; only an owner manages GMs; nobody manages the owner.
+  canManage(actorRank, targetRole) {
+    if (targetRole === 'owner') return false;
+    if (targetRole === 'gm') return actorRank >= RANK.owner;
+    return actorRank >= RANK.gm;
+  }
+  // Role changes: co-GM promote/demote is owner-only; the owner role is never set here.
+  canSetRole(actorRank, currentRole, newRole) {
+    if (newRole === 'owner' || currentRole === 'owner') return false;
+    if (newRole === 'gm' || currentRole === 'gm') return actorRank >= RANK.owner;
+    return actorRank >= RANK.gm;
+  }
+  async sendMembers(client) {
+    if (this.roomId) client.send('memberList', await db.listMembers(this.roomId));
+  }
+  async broadcastMembers() { // push the fresh list to every GM viewing the panel
+    if (!this.roomId) return;
+    const list = await db.listMembers(this.roomId);
+    for (const c of this.clients) if (this.rank(c) >= RANK.gm) c.send('memberList', list);
+  }
+
+  // Called via the matchmaker when the owner closes the room from the lobby: tell
+  // everyone why, then disconnect them all and dispose the live table. The brief
+  // delay lets the 'roomClosed' notice flush before the sockets close.
+  closeAndDispose() {
+    this.broadcast('roomClosed');
+    setTimeout(() => { try { this.disconnect(); } catch (e) {} }, 300);
+  }
+
   // End a player's active hold-to-show: clear the public badge and tell every
   // audience member to flip those cards back to face-down in the shower's fan.
   stopShow(sid) {
@@ -948,7 +1067,28 @@ class TableRoom extends Room {
     }
   }
 
+  // The door. Runs before onJoin: resolve the device token to a user, confirm
+  // they're an ADMITTED member of the room this code belongs to, and hand their
+  // role to onJoin as client.auth. Anyone else is turned away. (Site admins may
+  // enter any room.) filterBy(['code']) already segregates the live rooms; this is
+  // the authorization on top of that segregation.
+  async onAuth(client, options) {
+    const user = options && options.token ? await db.findUserByToken(hashToken(options.token)) : null;
+    if (!user) throw new ServerError(401, 'Please sign in first.');
+    const room = options && options.code ? await db.findRoomByCode(options.code) : null;
+    if (!room) throw new ServerError(404, 'That room no longer exists.');
+    const m = await db.getMembership(room.id, user.id);
+    let role = (m && m.status === 'admitted') ? m.role : null;
+    if (!role && user.isAdmin) role = 'gm'; // site admins can enter any room
+    if (!role) throw new ServerError(403, m ? 'Waiting for a GM to admit you.' : 'You are not a member of this room.');
+    return { userId: user.id, username: user.username, avatar: user.avatar, role, isAdmin: user.isAdmin };
+  }
+
+  rank(client) { return RANK[client.auth && client.auth.role] || 0; }
+  isAdmin(client) { return !!(client.auth && client.auth.isAdmin); } // site admin — curates the library, spawns private assets anywhere
+
   onJoin(client) {
+    const auth = client.auth || {};
     // Give the new player the lowest free seat and a colour to match.
     const takenSeats = new Set();
     this.state.players.forEach(existing => takenSeats.add(existing.seat));
@@ -959,12 +1099,16 @@ class TableRoom extends Room {
     player.seat = seat;
     player.hand = 0;
     player.showing = 0;
-    player.name = 'Player ' + (seat + 1);
+    player.name = auth.username || ('Player ' + (seat + 1)); // identity from the account
     player.color = PALETTE[seat % PALETTE.length];
+    player.avatar = auth.avatar || '';
+    player.role = auth.role || 'player';
     this.state.players.set(client.sessionId, player);
 
     if (!this.state.turn) this.state.turn = client.sessionId; // first player to arrive starts
     this.sendHand(client);
+    if (this.rank(client) >= RANK.gm) this.sendMembers(client); // GMs get the member list up front (pending pulse)
+    client.send('whoami', { isAdmin: this.isAdmin(client) }); // lets the client hide library-creation UI from non-admins
   }
 
   // Advance the turn to the next player by seat order (wrapping around).
@@ -1143,6 +1287,19 @@ class TableRoom extends Room {
   }
 }
 
+// The library editor: a full table (physics, spawning, asset CRUD — all inherited)
+// that only SITE ADMINS may enter. It has no DB room row, so roomId stays null and
+// the member-management handlers no-op; it's a shared admin sandbox for building and
+// testing library assets live. The admin joins at max role + admin rights.
+class EditorRoom extends TableRoom {
+  async onAuth(client, options) {
+    const user = options && options.token ? await db.findUserByToken(hashToken(options.token)) : null;
+    if (!user) throw new ServerError(401, 'Please sign in first.');
+    if (!user.isAdmin) throw new ServerError(403, 'The library editor is for site admins only.');
+    return { userId: user.id, username: user.username, avatar: user.avatar, role: 'owner', isAdmin: true };
+  }
+}
+
 // --- Boot: Colyseus + Express (both served on the same port) ----------------
 const app = express();
 
@@ -1197,9 +1354,186 @@ app.post('/upload-model', express.raw({ type: () => true, limit: '16mb' }), (req
   }
 });
 
+// --- Auth (HTTP): signup / login / token-resolve --------------------------
+// The landing page talks to these before joining any room. Passwords use scrypt;
+// a successful signup or login also issues a durable device token — the raw value
+// is returned once (stored client-side) so return visits log in without a password.
+const clientUser = (u) => u && ({ id: u.id, username: u.username, email: u.email, avatar: u.avatar, isAdmin: u.isAdmin, canOwnRooms: u.canOwnRooms });
+const validUsername = (s) => typeof s === 'string' && /^[a-zA-Z0-9_-]{3,20}$/.test(s.trim());
+const validEmail = (s) => typeof s === 'string' && s.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.trim());
+
+app.post('/auth/signup', express.json({ limit: '1kb' }), async (req, res) => {
+  const { username, email, password } = req.body || {};
+  if (!validUsername(username)) return res.status(400).json({ error: 'username must be 3–20 chars (letters, numbers, _ or -)' });
+  if (!validEmail(email)) return res.status(400).json({ error: 'invalid email' });
+  if (password != null && String(password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
+  try {
+    const passwordHash = password ? await hashPassword(String(password)) : null; // password => a GM account
+    const raw = makeToken();
+    const user = await db.createUser({ username: username.trim(), email: email.trim(), passwordHash, loginTokenHash: hashToken(raw) });
+    res.json({ user: clientUser(user), token: raw }); // client stores `token` for auto-login
+  } catch (e) {
+    if (e.conflict) return res.status(409).json({ error: `that ${e.conflict} is already taken`, field: e.conflict });
+    console.error('[signup]', e.message); res.status(500).json({ error: 'signup failed' });
+  }
+});
+
+app.post('/auth/login', express.json({ limit: '1kb' }), async (req, res) => {
+  const { login, password } = req.body || {};
+  if (!login || !password) return res.status(400).json({ error: 'login and password required' });
+  const u = await db.findUserByLogin(String(login).trim());
+  // Same response whether the account is missing, passwordless, or the password is
+  // wrong — don't reveal which. (Passwordless players can't password-login.)
+  if (!u || !u.passwordHash || !(await verifyPassword(String(password), u.passwordHash))) {
+    return res.status(401).json({ error: 'invalid login or password' });
+  }
+  const raw = makeToken();
+  await db.setLoginToken(u.id, hashToken(raw)); // rotate the device token on each login
+  res.json({ user: clientUser(u), token: raw });
+});
+
+app.post('/auth/token', express.json({ limit: '1kb' }), async (req, res) => {
+  const u = await db.findUserByToken(hashToken(String((req.body && req.body.token) || '')));
+  if (!u) return res.status(401).json({ error: 'invalid or expired token' });
+  res.json({ user: clientUser(u) }); // auto-login on a return visit
+});
+
+// --- Rooms (HTTP): the lobby the landing page uses -------------------------
+// Token-authenticated: the client sends its device token as a Bearer header and
+// we resolve it to the acting user. (Enforcing membership/roles inside the live
+// table is the next slice; this just creates rooms + records who's joined.)
+async function requireUser(req, res) {
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const user = token ? await db.findUserByToken(hashToken(token)) : null;
+  if (!user) { res.status(401).json({ error: 'not signed in' }); return null; }
+  return user;
+}
+const roomCode = () => crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 hex chars
+
+app.get('/rooms', async (req, res) => {
+  const user = await requireUser(req, res); if (!user) return;
+  res.json({ rooms: await db.listRoomsForUser(user.id) });
+});
+
+app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
+  const user = await requireUser(req, res); if (!user) return;
+  if (!user.canOwnRooms) return res.status(403).json({ error: 'only accounts with a password can create rooms' });
+  const name = String((req.body && req.body.name) || '').trim().slice(0, 60) || 'Untitled Table';
+  const requireApproval = !(req.body && req.body.requireApproval === false); // default true
+  for (let attempt = 0; attempt < 5; attempt++) { // retry the rare code collision
+    try {
+      const room = await db.createRoom({ ownerId: user.id, code: roomCode(), name, requireApproval });
+      return res.json({ room });
+    } catch (e) {
+      if (e.conflict === 'code') continue;
+      console.error('[create room]', e.message); return res.status(500).json({ error: 'could not create room' });
+    }
+  }
+  res.status(500).json({ error: 'could not allocate a room code' });
+});
+
+app.post('/rooms/join', express.json({ limit: '1kb' }), async (req, res) => {
+  const user = await requireUser(req, res); if (!user) return;
+  const code = String((req.body && req.body.code) || '').trim().toUpperCase();
+  const room = await db.findRoomByCode(code);
+  if (!room) return res.status(404).json({ error: 'no active room with that code' });
+  const membership = await db.joinRoom({ roomId: room.id, userId: user.id, requireApproval: room.requireApproval });
+  // If they land pending, nudge any live table so its GMs' Members button pulses.
+  if (membership && membership.status === 'pending') {
+    try {
+      const live = await matchMaker.query({ name: 'table', code });
+      for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'broadcastMembers');
+    } catch (e) { /* no live table; GMs will see it when they open the panel */ }
+  }
+  res.json({ room, membership }); // membership.status is 'pending' or 'admitted'
+});
+
+// Room lifecycle (owner or site-admin only): rename, toggle join policy, close.
+async function ownedRoom(req, res) {
+  const user = await requireUser(req, res); if (!user) return null;
+  const room = await db.getRoom(req.params.id);
+  if (!room || room.deletedAt) { res.status(404).json({ error: 'room not found' }); return null; }
+  if (String(room.ownerId) !== String(user.id) && !user.isAdmin) { res.status(403).json({ error: 'not your room' }); return null; }
+  return { user, room };
+}
+
+app.patch('/rooms/:id', express.json({ limit: '1kb' }), async (req, res) => {
+  const ctx = await ownedRoom(req, res); if (!ctx) return;
+  const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 60) : null;
+  if (name) await db.renameRoom(ctx.room.id, name);
+  if (req.body && typeof req.body.requireApproval === 'boolean') await db.setRoomPolicy(ctx.room.id, req.body.requireApproval);
+  res.json({ room: await db.getRoom(ctx.room.id) });
+});
+
+app.delete('/rooms/:id', async (req, res) => {
+  const ctx = await ownedRoom(req, res); if (!ctx) return;
+  await db.softDeleteRoom(ctx.room.id); // soft delete: hidden + unjoinable; code frees up
+  // Shut down the live table if one is running for this code (kick everyone out).
+  try {
+    const live = await matchMaker.query({ name: 'table', code: ctx.room.code });
+    for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'closeAndDispose');
+  } catch (e) { console.error('[close] dispose live room:', e.message); }
+  res.json({ ok: true });
+});
+
+// --- Admin console (site superusers only) ---------------------------------
+async function requireAdmin(req, res) {
+  const user = await requireUser(req, res); if (!user) return null;
+  if (!user.isAdmin) { res.status(403).json({ error: 'admin only' }); return null; }
+  return user;
+}
+async function disposeLive(code) { // shut down a running table for this code, if any
+  try {
+    const live = await matchMaker.query({ name: 'table', code });
+    for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'closeAndDispose');
+  } catch (e) { /* none running */ }
+}
+
+app.get('/admin/rooms', async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json({ rooms: await db.listRooms({ includeDeleted: true }) }); // active + soft-deleted, with owner name
+});
+app.get('/admin/users', async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json({ users: await db.listUsers() });
+});
+app.post('/admin/rooms/:id/restore', async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  await db.restoreRoom(req.params.id); // clears deleted_at (only works if the code is still free)
+  res.json({ ok: true });
+});
+app.delete('/admin/rooms/:id', async (req, res) => { // permanent purge (cascades members)
+  if (!await requireAdmin(req, res)) return;
+  const room = await db.getRoom(req.params.id);
+  if (room) await disposeLive(room.code);
+  await db.purgeRoom(req.params.id);
+  res.json({ ok: true });
+});
+app.post('/admin/users/:id/admin', express.json({ limit: '1kb' }), async (req, res) => {
+  const me = await requireAdmin(req, res); if (!me) return;
+  const makeAdmin = !!(req.body && req.body.isAdmin);
+  if (String(req.params.id) === String(me.id) && !makeAdmin) {
+    return res.status(400).json({ error: 'you cannot remove your own admin rights' }); // avoid locking out the last admin
+  }
+  await db.setAdmin(req.params.id, makeAdmin);
+  res.json({ ok: true });
+});
+app.delete('/admin/users/:id', async (req, res) => {
+  const me = await requireAdmin(req, res); if (!me) return;
+  if (String(req.params.id) === String(me.id)) return res.status(400).json({ error: 'you cannot delete your own account' });
+  const target = await db.findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'user not found' });
+  for (const r of await db.roomsOwnedBy(req.params.id)) await disposeLive(r.code); // kick anyone in their live tables
+  try { await db.purgeUser(req.params.id); }
+  catch (e) { console.error('[purge user]', e.message); return res.status(500).json({ error: 'could not delete user' }); }
+  res.json({ ok: true });
+});
+
 const httpServer = createServer(app);
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer, maxPayload: 4 * 1024 * 1024 }) });
-gameServer.define('table', TableRoom);
+gameServer.define('table', TableRoom).filterBy(['code']); // one live table per room code
+gameServer.define('editor', EditorRoom); // single shared admin-only library workshop
 
 const PORT = process.env.PORT || 2567;
-gameServer.listen(PORT).then(() => console.log(`\n  Tabletop running →  http://localhost:${PORT}\n`));
+gameServer.listen(PORT).then(() => console.log(`\n  Open Tabletop running →  http://localhost:${PORT}\n`));
