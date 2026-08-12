@@ -48,16 +48,27 @@ async function loadUsers() {
   const body = $('usersBody'); body.replaceChildren();
   let users = [];
   try { ({ users } = await api('/admin/users')); } catch (e) { alert(e.message); return; }
+  const pending = users.filter((u) => u.hostStatus === 'pending' && !u.isAdmin).length;
+  $('pendingBadge').textContent = pending ? `\u2014 ${pending} host request${pending > 1 ? 's' : ''} pending` : '';
   for (const u of users) {
     const tr = document.createElement('tr');
     const tags = [];
     if (u.isAdmin) tags.push('admin');
-    tags.push(u.canOwnRooms ? 'host' : 'player');
+    // admins host implicitly; only show host state for non-admins
+    if (u.isAdmin) tags.push('host');
+    else tags.push(u.hostStatus === 'approved' ? 'host' : u.hostStatus === 'pending' ? 'host pending' : 'player');
     tr.append(cell(u.username), cell(u.email), cell(tags.join(', ')));
     const acts = document.createElement('div'); acts.className = 'acts';
     if (String(u.id) === String(myId)) {
       const you = document.createElement('span'); you.className = 'muted'; you.textContent = '(you)'; acts.appendChild(you);
     } else {
+      if (!u.isAdmin) { // host queue only applies to non-admins
+        if (u.hostStatus === 'pending') {
+          acts.append(btn('Approve', () => setHost(u, 'approved')), btn('Reject', () => setHost(u, 'none'), 'danger'));
+        } else if (u.hostStatus === 'approved') {
+          acts.append(btn('Revoke host', () => setHost(u, 'none'), 'danger'));
+        }
+      }
       if (u.isAdmin) acts.append(btn('Revoke admin', () => setAdmin(u, false), 'danger'));
       else acts.append(btn('Make admin', () => setAdmin(u, true)));
       acts.append(btn('Delete', () => deleteUser(u), 'danger'));
@@ -65,6 +76,12 @@ async function loadUsers() {
     tr.append(cell(acts));
     body.appendChild(tr);
   }
+}
+
+async function setHost(u, status) {
+  if (status === 'none' && !confirm(`${u.hostStatus === 'pending' ? 'Reject' : 'Revoke host access for'} ${u.username}?`)) return;
+  try { await api('/admin/users/' + u.id + '/host', { method: 'POST', body: { status } }); loadUsers(); }
+  catch (e) { alert(e.message); }
 }
 
 async function renameRoom(r) {

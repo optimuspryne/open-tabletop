@@ -149,18 +149,21 @@ export function deleteAsset(kind, id) {
 // this module except to the auth path — the *public* shape omits them.
 const publicUser = (r) => r && ({
   id: String(r.id), username: r.username, email: r.email, avatar: r.avatar,
-  isAdmin: r.is_admin, canOwnRooms: !!r.password_hash, // "has a password" = a GM account
+  isAdmin: r.is_admin, hostStatus: r.host_status, hasPassword: !!r.password_hash,
+  canOwnRooms: r.host_status === 'approved' || r.is_admin, // approved host, or any admin
 });
 const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash, loginTokenHash: r.login_token_hash });
 
-// Create an account. passwordHash set => can own rooms (GM); null => passwordless
-// player. Throws with err.conflict = 'username' | 'email' if that field is taken.
+// Create an account. A password sets host_status = 'pending' (must be approved by
+// an admin before hosting); passwordless => 'none'. Throws with err.conflict =
+// 'username' | 'email' if that field is taken.
 export async function createUser({ username, email, passwordHash = null, loginTokenHash = null, isAdmin = false }) {
   try {
+    const hostStatus = passwordHash ? 'pending' : 'none';
     const { rows } = await pool.query(
-      `INSERT INTO users (username, email, password_hash, login_token_hash, is_admin)
-       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-      [username, email, passwordHash, loginTokenHash, isAdmin]);
+      `INSERT INTO users (username, email, password_hash, login_token_hash, is_admin, host_status)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+      [username, email, passwordHash, loginTokenHash, isAdmin, hostStatus]);
     return publicUser(rows[0]);
   } catch (e) {
     if (e.code === '23505') {
@@ -212,6 +215,15 @@ export async function listUsers() {
 }
 export function setAdmin(userId, isAdmin) {
   return pool.query('UPDATE users SET is_admin = $2 WHERE id = $1', [userId, !!isAdmin]);
+}
+export function setHostStatus(userId, status) { // 'none' | 'pending' | 'approved'
+  return pool.query('UPDATE users SET host_status = $2 WHERE id = $1', [userId, status]);
+}
+export async function countPendingHosts() {
+  try {
+    const { rows } = await pool.query("SELECT count(*)::int AS n FROM users WHERE host_status = 'pending' AND is_admin = false");
+    return rows[0].n;
+  } catch (e) { console.error('[db] countPendingHosts:', e.message); return 0; }
 }
 // Rooms this user owns (active + soft-deleted) — codes let the caller dispose live tables.
 export async function roomsOwnedBy(userId) {

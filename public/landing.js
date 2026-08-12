@@ -30,15 +30,49 @@ function setView(view) {
 const showQuickJoin = () => setView('quick');
 function showAuth() { setView('auth'); $('loginForm').hidden = false; $('signupForm').hidden = true; }
 
+let me = null;
 async function showHome(user) {
+  me = user;
   setView('home');
   $('who').textContent = user.username;
   const ok = typeof user.avatar === 'string' && /^(\/assets\/|data:image\/|https?:\/\/)/.test(user.avatar);
   $('avatar').style.backgroundImage = ok ? `url("${user.avatar}")` : 'none';
-  $('gmTools').hidden = !user.canOwnRooms;
-  $('gmNote').hidden = !!user.canOwnRooms;
+
+  // Hosting: approved (or admin) → the create form; pending → a waiting note; else
+  // → a "request host access" button.
+  const canHost = user.canOwnRooms;
+  $('gmTools').hidden = !canHost;
+  $('hostReq').hidden = canHost;
+  if (!canHost) {
+    const pending = user.hostStatus === 'pending';
+    $('hostNote').textContent = pending
+      ? 'Your host access is pending admin approval.'
+      : 'Want to host your own games? Request access — an admin will review it.';
+    $('requestHostBtn').hidden = pending;
+  }
+
   $('adminLink').hidden = !user.isAdmin;
+  if (user.isAdmin) updateAdminBadge();
   await refreshRooms();
+}
+
+async function updateAdminBadge() {
+  try {
+    const { pending } = await api('/admin/pending-count', { auth: true });
+    $('adminLink').textContent = pending > 0 ? `Admin (${pending})` : 'Admin';
+  } catch { /* leave as-is */ }
+}
+
+async function onRequestHost() {
+  let password;
+  if (!me.hasPassword) {
+    password = prompt('Hosting needs a password. Set one (8+ characters):');
+    if (!password) return;
+  }
+  try {
+    const { user } = await api('/host/request', { method: 'POST', auth: true, body: password ? { password } : {} });
+    await showHome(user);
+  } catch (e) { $('hostNote').textContent = e.message; }
 }
 
 // ---- rooms + live approval ----
@@ -202,6 +236,7 @@ $('suBtn').onclick = onSignup;
 $('createBtn').onclick = onCreateRoom;
 $('joinBtn').onclick = onJoin;
 $('logoutBtn').onclick = onLogout;
+$('requestHostBtn').onclick = onRequestHost;
 $('toSignup').onclick = (e) => { e.preventDefault(); $('loginForm').hidden = true; $('signupForm').hidden = false; };
 $('toLogin').onclick = (e) => { e.preventDefault(); $('signupForm').hidden = true; $('loginForm').hidden = false; };
 $('qjCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuickJoin(); });
