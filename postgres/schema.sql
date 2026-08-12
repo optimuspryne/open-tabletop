@@ -45,6 +45,10 @@ CREATE TABLE rooms (
   code              text        NOT NULL,
   name              text        NOT NULL,
   require_approval  boolean     NOT NULL DEFAULT true,  -- valid code still needs a GM to admit
+  scoreboard        jsonb       NOT NULL DEFAULT '[]'::jsonb, -- durable {id,label,score} rows (helper+ edits)
+  notes             text        NOT NULL DEFAULT '',    -- durable GM room notes (GM-only edits)
+  table_x           real        NOT NULL DEFAULT 10,    -- play-surface half-extents (GM-resizable)
+  table_z           real        NOT NULL DEFAULT 7,
   created_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz
 );
@@ -105,5 +109,17 @@ CREATE TABLE custom_objects (
 CREATE INDEX custom_decks_owner_idx   ON custom_decks   (owner_id);
 CREATE INDEX custom_boards_owner_idx  ON custom_boards  (owner_id);
 CREATE INDEX custom_objects_owner_idx ON custom_objects (owner_id);
+
+-- Scenes: a saved whole-table setup (table size + board + pieces), curated like
+-- the other library assets.
+CREATE TABLE custom_scenes (
+  id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  owner_id    bigint      CONSTRAINT fk_scene_owner REFERENCES users(id),
+  name        text        NOT NULL,
+  props       jsonb       NOT NULL DEFAULT '{}'::jsonb,  -- payload: { table:{x,z}, pieces:[...] }
+  is_public   boolean     NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX custom_scenes_owner_idx ON custom_scenes (owner_id);
 
 COMMIT;

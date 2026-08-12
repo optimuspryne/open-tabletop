@@ -56,9 +56,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   message handlers, the Postgres-backed asset library (via `db.js`), and the
   private (non-synced) memory that holds secrets. All physics tuning is in one
   `SIM` config block.
-- **`db.js`** — the Postgres connection pool and the saved-library queries
-  (deck/board/prop *metadata*; the image/model files stay on disk). Config comes
-  from the environment only (`DATABASE_URL` / `DATABASE_URL_FILE`).
+- **`db.js`** — the Postgres connection pool and **every** query: the saved
+  library (deck/board/prop *metadata*; image/model files stay on disk) plus
+  users, rooms, and membership. Config comes from the environment only
+  (`DATABASE_URL` / `DATABASE_URL_FILE`).
+- **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
+  Node's `crypto` alone (no dependencies).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
   plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks.
 - **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
@@ -68,7 +71,14 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
   render loop. Holds the mutable session state (`room`, `down`, `inspect`,
   `meshes`, `buffers`).
-- **`public/index.html` / `styles.css`** — the page shell and all UI styling.
+- **The pages** — `index.html` + `landing.js` (the lobby: quick-join, login, room
+  list, host request), `table.html` (the game table, which loads the client
+  chain), `editor.html` + `editor-panel.js` (the admin-only library editor,
+  reusing the game client), `admin.html` + `admin.js` (the admin console), and
+  `styles.css` (all UI styling — the design-token `:root` block, shared page
+  chrome, and per-page layouts).
+- **Project dirs** — `postgres/` (SQL migrations, applied `002`→`003`→`004`),
+  `docs/` (these documents), `docker/` (the Dockerfile).
 
 ## Public vs. secret (how hidden information works)
 
@@ -231,8 +241,16 @@ URL or a procedural string), never bytes, so rows stay small and unrevealed art
 isn't in the DB. `db.js` normalizes a model's URL into the `file_url` column and
 puts the rest in a `props` jsonb bag, splicing them back on read. The running
 server connects as a **CRUD-only role** (`tabletop_app`) — it can't run DDL — so a
-leaked app credential can't reshape or drop the schema. `owner_id` columns exist
-but stay NULL until the auth layer lands.
+leaked app credential can't reshape or drop the schema.
+
+Each asset now carries an `owner_id` (the admin who created it) and an `is_public`
+flag, and the library is **admin-curated**: creation/edit/delete is admin-only,
+while listing and spawning are visibility-gated — public assets are spawnable by
+GMs/helpers, private ones only by admins (who can also spawn them into any game
+room). Admins build and test assets in a dedicated **editor room** (`EditorRoom`,
+with an admin-only `onAuth`) that reuses the whole table engine; at a game table
+the same asset handlers refuse non-admin creation and the client hides those
+controls. See "Accounts, rooms & roles" below.
 
 ## Seats, presence, turns
 
@@ -248,8 +266,9 @@ session id, highlighted in the panel; "Next turn" walks it around the seats.
 On join the client saves a reconnection token in `sessionStorage`; on reload it
 calls `client.reconnect(token)` to rejoin as the same session (same seat, name,
 avatar, hand). The server holds the seat for 30 s on an unexpected disconnect
-(`allowReconnection`) and re-sends the private hand on `onReconnect`. Because
-`sessionStorage` is per-tab, separate tabs stay distinct.
+(`allowReconnection`); on reconnect the client re-requests its own private hand
+and notes (they aren't in shared state). Because `sessionStorage` is per-tab,
+separate tabs stay distinct.
 
 ## The message protocol (intent up, state down)
 
@@ -257,15 +276,18 @@ avatar, hand). The server holds the seat for 30 s on an unexpected disconnect
   `dealDrag`, `takeCard`, `playCard`, `shuffle`, `drawInspect`, `inspectPlace`,
   `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`/`listDecks`/`loadDeck`/
   `editDeck`, `saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard`,
+  `assetPublic`/`assetRename`/`assetDelete` (admin curation),
+  `members`/`admit`/`kick`/`setRole` (GM member management),
   `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
   `notebook`, `timer`, `showStart`/`showStop`, `ping`. (Library load/edit key on
   a row **`id`** — the Postgres primary key — not a filename slug.)
 - **Down (server → client):** synced state (pieces, players, turn, timer) plus
   direct messages — `hand` (your private cards), `dealt` (adopt a dealt card as the
   dragged piece), `inspectCard` (a drawn front for you alone), `notebook` (your
-  private notes, on reconnect), `showFan` (cards someone is showing *you*), `ping`
-  (a broadcast attention marker), `deckList`, `boardList`, `propList` (saved-library
-  listings).
+  private notes), `showFan` (cards someone is showing *you*), `ping` (a broadcast
+  attention marker), `whoami` (your admin flag — gates the creation UI),
+  `memberList` (the room's members, for GMs), `roomClosed`/`kicked` (lifecycle
+  notices), `deckList`, `boardList`, `propList` (saved-library listings).
 
 ## Reset & room lifecycle
 
@@ -274,22 +296,45 @@ all hands, every private map, any active shows, and the shared timer. New rooms
 start **empty** (the default-seed call is disabled); you build the table from the
 toolbar.
 
-## Security & lobby (planned, not built)
+## Accounts, rooms & roles
 
-Public release target is a **role hierarchy** enforced server-side:
-**Admin → Game Master → Helper → Player**. Admins (accounts) own the asset
-library and uploads; GMs (accounts) create rooms, kick, spawn, and promote
-Helpers; Helpers and Players join by room code. Persistence: **PostgreSQL** for
-accounts (hashed), room metadata, and asset metadata; asset **files** stay on the
-volume; live table state stays in memory. **Done so far:** asset *metadata* is
-already in Postgres (the `custom_*` tables, with nullable `owner_id` awaiting the
-users table), and the running server uses a **least-privilege CRUD-only role**;
-credentials come from the environment, never code. **Still to come:** the accounts
-table + `owner_id` FK, the role gate itself, and a stateless hardening pass (glTF
-magic-byte validation, storage caps + rate limits, external-URI stripping,
-security headers/CORS, post-parse complexity limits). Making uploads admin-only
-closes the public-upload hole by construction; the residual client-side-parser
-risk is reduced by the role gate + hardening (defense in depth, not provably safe).
+The lobby/auth layer is built and enforced server-side. **Postgres** holds
+accounts (passwords hashed with scrypt in `auth.js`; passwordless players carry a
+hashed device token instead), rooms, and per-room membership; asset **files** stay
+on the volume and live table state stays in memory. Credentials come from the
+environment, never code.
+
+**Accounts.** A *player* is passwordless (display name + device token); a *host*
+has a password. `onAuth` resolves the token to a user and the room code to a room,
+admits only admitted members (else rejects with a waiting/forbidden message), and
+stamps the membership **role** — and the account's admin flag — onto the connection
+(`client.auth`).
+
+**Rooms & roles.** A room has an owner, a join code, and an optional
+require-approval gate; roles rank **owner → GM → helper → player** (`RANK`), and
+every privileged handler checks `this.rank(client)` — spawn = helper+,
+reshape/reset/board = GM+, member management = GM+. **Admins** are a global flag
+(`is_admin`), threaded through `onAuth` as `client.auth.isAdmin`: they join any
+room as a GM and can act on private library assets anywhere. GMs manage members
+(admit / kick / promote) live from the Members panel; the server pushes
+`memberList` to GMs plus a pending-join pulse.
+
+**Host approval.** Creating a room needs approved host access (`host_status =
+'approved'`, or admin). A password signup starts **pending**; a passwordless
+player can request host access (which sets a password); an admin approves /
+rejects / revokes from the console (revoke keeps the password, so they can
+re-request). Admins host regardless and are excluded from the pending count.
+
+**Admin console.** `/admin.html` (guarded by `is_admin`) manages all rooms
+(restore / purge soft-deleted) and users (grant/revoke admin, approve/reject/
+revoke host, delete-with-cascade).
+
+**Still to come — hardening.** The role gate plus admin-only uploads close the
+public-upload hole by construction, but a stateless hardening pass remains before
+public exposure: glTF magic-byte validation, storage caps + rate limits,
+external-URI stripping on uploaded models, security headers / CSP (once the CDN
+libraries are self-hosted), and post-parse complexity limits. Defense in depth,
+not provably safe.
 
 ## Adding things
 

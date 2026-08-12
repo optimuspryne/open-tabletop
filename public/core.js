@@ -86,4 +86,10 @@ tableMesh.position.y = -0.5; // top surface sits at y = 0
 tableMesh.receiveShadow = true;
 scene.add(tableMesh);
 
-export { CONFIG, clamp, scene, camera, renderer, controls };
+// Rebuild the felt at new half-extents (the GM resized the play surface).
+function resizeTable(hx, hz) {
+  tableMesh.geometry.dispose();
+  tableMesh.geometry = new THREE.BoxGeometry(hx * 2, 1, hz * 2);
+}
+
+export { CONFIG, clamp, scene, camera, renderer, controls, resizeTable };

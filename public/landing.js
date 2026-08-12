@@ -51,7 +51,7 @@ async function showHome(user) {
     $('requestHostBtn').hidden = pending;
   }
 
-  $('adminLink').hidden = !user.isAdmin;
+  $('adminBtn').hidden = !user.isAdmin;
   if (user.isAdmin) updateAdminBadge();
   await refreshRooms();
 }
@@ -59,7 +59,7 @@ async function showHome(user) {
 async function updateAdminBadge() {
   try {
     const { pending } = await api('/admin/pending-count', { auth: true });
-    $('adminLink').textContent = pending > 0 ? `Admin (${pending})` : 'Admin';
+    $('adminBtn').textContent = pending > 0 ? `⚙️ Admin (${pending})` : '⚙️ Admin';
   } catch { /* leave as-is */ }
 }
 
@@ -223,9 +223,41 @@ async function onJoin() {
   } catch (e) { err.textContent = e.message; }
 }
 
-const onLogout = () => { stopPolling(); clearToken(); showQuickJoin(); };
+const onLogout = () => { $('adminBtn').hidden=true; stopPolling(); clearToken(); showQuickJoin(); };
+
+// Center-crop + shrink a chosen image to a small square JPEG data-URL (kept tiny
+// so it fits the same bounded rule the server enforces).
+function fileToAvatarDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const size = 96, c = document.createElement('canvas');
+      c.width = c.height = size;
+      const ctx = c.getContext('2d');
+      const scale = Math.max(size / img.width, size / img.height);
+      const w = img.width * scale, h = img.height * scale;
+      ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+      resolve(c.toDataURL('image/jpeg', 0.7));
+    };
+    img.onerror = reject;
+    const fr = new FileReader();
+    fr.onload = () => { img.src = fr.result; };
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+async function onAvatarPick(e) {
+  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+  try {
+    const data = await fileToAvatarDataURL(file);
+    const { avatar } = await api('/me/avatar', { method: 'POST', auth: true, body: { data } });
+    $('avatar').style.backgroundImage = `url("${avatar}")`;
+  } catch (err) { alert('Could not update your avatar.'); }
+}
 
 // ---- wire + boot ----
+$('avatar').onclick = () => $('avatarFile').click();
+$('avatarFile').onchange = onAvatarPick;
 $('accountBtn').onclick = showAuth;
 $('qjBtn').onclick = onQuickJoin;
 $('qjToLogin').onclick = (e) => { e.preventDefault(); showAuth(); };

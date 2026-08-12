@@ -164,7 +164,15 @@
 </div>
 <div id="boardModal" hidden>
   <div class="modalCard">
-    <h3>Add a board</h3>
+    <h3>Table &amp; board</h3>
+    <label>Table surface — width × depth</label>
+    <div class="backRow">
+      <input id="tableW" type="number" min="8" max="40" step="1" style="width:76px"><span>×</span>
+      <input id="tableD" type="number" min="6" max="32" step="1" style="width:76px">
+      <button id="tableResize">Resize table</button>
+    </div>
+    <div class="note">The play surface itself (not a board on it).</div>
+    <hr class="divider">
     <label>Built-in boards</label>
     <div class="backRow" id="builtinBoards" style="flex-wrap:wrap"></div>
     <label>Upload a board model (.glb)</label>
@@ -257,6 +265,11 @@
   <div class="libSection"><h4>Decks</h4><ul id="libDecks" class="libList"></ul></div>
   <div class="libSection"><h4>Boards</h4><ul id="libBoards" class="libList"></ul></div>
   <div class="libSection"><h4>Props</h4><ul id="libProps" class="libList"></ul></div>
+  <div class="libSection">
+    <h4>Scenes</h4>
+    <button id="sceneSaveBtn" class="sceneSaveBtn">Save current table as scene…</button>
+    <ul id="libScenes" class="libList"></ul>
+  </div>
 </div>
 
 <!-- Colyseus client (UMD global `Colyseus`) -->

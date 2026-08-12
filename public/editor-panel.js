@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const btn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
 
 let ROOM = null;
-const LIST_UL = { deck: 'libDecks', board: 'libBoards', prop: 'libProps' };
+const LIST_UL = { deck: 'libDecks', board: 'libBoards', prop: 'libProps', scene: 'libScenes' };
 const spawnOf = {
   deck: (it) => ROOM.send('loadDeck', { id: it.id }),
   board: (it) => ROOM.send('loadBoard', { id: it.id }),
@@ -24,8 +24,12 @@ function renderList(kind, list) {
     const name = document.createElement('span'); name.className = 'libName'; name.textContent = it.name + extra;
     const badge = document.createElement('span'); badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv'); badge.textContent = it.isPublic ? 'public' : 'private';
     const acts = document.createElement('span'); acts.className = 'libActs';
+    // Scenes load (replace the whole editor table); other assets spawn onto it.
+    const primary = kind === 'scene'
+      ? btn('Load', () => { if (confirm(`Load "${it.name}" into the editor? This clears the current table.`)) ROOM.send('sceneLoad', { id: it.id }); })
+      : btn('Spawn', () => spawnOf[kind](it));
     acts.append(
-      btn('Spawn', () => spawnOf[kind](it)),
+      primary,
       btn(it.isPublic ? 'Unpublish' : 'Publish', () => ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic })),
       btn('Rename', () => { const n = prompt('Rename:', it.name); if (n && n.trim()) ROOM.send('assetRename', { kind, id: it.id, name: n.trim() }); }),
       btn('Delete', () => { if (confirm(`Delete "${it.name}"? This cannot be undone.`)) ROOM.send('assetDelete', { kind, id: it.id }); }, 'danger'),
@@ -42,8 +46,10 @@ window.onLibraryList = (kind, list) => renderList(kind, list);
 window.onOttRoom = (room) => {
   ROOM = room;
   const panel = $('libraryPanel');
-  const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); };
+  const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); };
   $('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
   $('libraryClose').onclick = () => { panel.hidden = true; };
+  const saveScene = $('sceneSaveBtn');
+  if (saveScene) saveScene.onclick = () => { const n = prompt('Save the current table as a scene named:'); if (n && n.trim()) room.send('sceneSave', { name: n.trim() }); };
   refresh(); // prime the lists so the panel is populated on first open
 };

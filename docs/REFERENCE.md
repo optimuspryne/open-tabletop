@@ -8,12 +8,14 @@ The codebase:
 | File | Runtime | Role |
 |------|---------|------|
 | `shared/pieces.js` | both | Single source of truth: dimensions, masses, colours, dice verts, prop/board registries |
-| `server.js` | Node | Authoritative physics + Colyseus room + HTTP + Postgres asset library |
-| `db.js` | Node | Postgres pool + saved-library queries (deck/board/prop metadata) |
+| `server.js` | Node | Authoritative physics + Colyseus rooms + HTTP (auth/rooms/admin) + Postgres |
+| `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
+| `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
-| `public/client.js` | browser | Runtime: networking, interaction, seats, render loop |
-| `public/index.html` + `styles.css` | browser | Page shell + UI styling |
+| `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |
+| `public/{landing,admin,editor-panel}.js` | browser | Lobby, admin console, library-editor UI (HTTP + room) |
+| `public/*.html` + `styles.css` | browser | Page shells (table/editor/index/admin) + UI styling |
 
 Client import chain (no cycles): `shared ← core ← graphics ← client`.
 
@@ -37,23 +39,33 @@ classDiagram
         +SIM config
         +buildWorld() / buildCollider(type,props) / dieShape(sides)
         +buildSimpleDeck() / saveAsset() / saveImageRef()
-        +/upload  /upload-model  endpoints
+        +HTTP: /upload /auth/* /rooms/* /host/* /admin/*
+        +requireUser / requireAdmin / clientUser
+    }
+    class Auth["auth.js"] {
+        +hashPassword / verifyPassword (scrypt)
+        +makeToken / hashToken (device tokens)
     }
     class Db["db.js"] {
         <<Postgres>>
-        +listDecks/getDeck/insertDeck/updateDeck
-        +listBoards/getBoard/insertBoard
-        +listProps/insertProp / close
+        +library: list/get/insert/update + asset-admin
+        +users: createUser/find*/setAdmin/setHostStatus/purgeUser
+        +rooms: createRoom/find/list/policy/softDelete/purge
+        +members: joinRoom/admit/kick/setRole/listMembers
     }
     class TableRoom {
         <<Colyseus Room>>
-        world, state
-        bodies, targets, flips: Map
-        deckCards, cardData, hands, drafts, pendingInspect: Map
-        notebooks, shows: Map
-        +spawn() update() updateDeckCollider() removePiece()
-        +saveDeckById() sendHand() clientBy() stopShow() advanceTurn()
-        +onJoin/onLeave/onReconnect + message handlers
+        world, state, RANK
+        bodies, deckCards, cardData, hands, drafts: Map
+        notebooks, shows, pendingInspect: Map
+        +onAuth() rank() isAdmin()
+        +spawn() update() sendHand() saveDeckById() advanceTurn()
+        +sendMembers/broadcastMembers/sendAssetList/closeAndDispose
+        +gameplay + library + member handlers
+    }
+    class EditorRoom {
+        <<admin-only>>
+        onAuth rejects non-admins
     }
     class Core["public/core.js"] {
         +CONFIG / LIGHTING / clamp
@@ -66,10 +78,14 @@ classDiagram
         +mesh builders + KIND registry
     }
     class Client["public/client.js"] {
-        room, meshes, buffers, down, inspect
-        +networking + UI wiring
+        room, meshes, buffers, down, inspect, myIsAdmin
+        +networking + UI wiring (whoami-gated)
         +interaction (pointer/inspect/wheel/keys)
         +seats/markers + render loop
+    }
+    class Pages["landing.js · admin.js · editor-panel.js"] {
+        +lobby / admin console / library editor UI
+        +fetch to the HTTP API
     }
     Shared <.. Server
     Shared <.. Core
@@ -79,8 +95,12 @@ classDiagram
     Core <.. Client
     Graphics <.. Client
     Server *-- TableRoom
-    TableRoom ..> Db : saved-library queries
+    TableRoom <|-- EditorRoom
+    Server ..> Auth
+    Server ..> Db
+    TableRoom ..> Db : library / rooms / members
     TableRoom <..> Client : Colyseus sync + messages
+    Pages ..> Server : HTTP (auth/rooms/admin)
 ```
 
 ## The core loop (intent up, state down)
@@ -193,6 +213,12 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 
 ### `TableRoom extends Room`
 
+**`onAuth(client, options)`** resolves the device token → user and the room code →
+room (via `db`), admits only *admitted* members (an admin gets `gm` in any room),
+and returns `{ userId, username, avatar, role, isAdmin }` onto `client.auth`.
+Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** and
+**`isAdmin(client)`** back the gates.
+
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
 `cardData`, `hands`, `drafts`, **`pendingInspect`** (a drawn-but-unplaced card),
 **`notebooks`** (per-player private notes), **`shows`** (an active hold-to-show:
@@ -201,50 +227,123 @@ Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
 out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
-**`stopShow(sid)`** (ends a hold-to-show, clears the badge + audience views),
-**`saveDeckById(id,name)`** (async — inserts via `db`; shared by save-on-create
-and the S key), **`advanceTurn`**, `onJoin/onLeave/onReconnect`.
+**`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
+**`advanceTurn`**, **`sendMembers`/`broadcastMembers`** (push the member list to
+GMs), **`sendAssetList(client,kind)`** (a library listing, private-inclusive for
+admins), **`swapBoard`**, **`closeAndDispose`** (broadcast `roomClosed`, then
+dispose — invoked by `matchMaker.remoteRoomCall`), `onJoin/onLeave`.
 
-Message handlers: `grab`, `move`, `release`, `flip`, `dealToTable`, `dealDrag`,
-`takeCard`, `playCard`, `shuffle`, **`drawInspect`/`inspectPlace`** (private
-draw-to-inspect), `deckBegin`/`deckAppend`/`deckFinish` (chunked build,
-`deckFinish` optionally saves), `saveDeck`/`listDecks`/`loadDeck`/`editDeck`,
-`saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard` (all **async**, via
-`db`; load/edit key on a row **id**), `spawn` (boards swap + sit by half-height),
-`roll`, `reset` (full clear — pieces, hands, shows, timer), `nextTurn`, `remove`,
-`setName`, `setAvatar`, **`notebook`** (store private notes), **`timer`** (action:
-`start`/`pause`/`reset`/`set`), **`showStart`/`showStop`** (hold-to-show),
-**`ping`** (clamp to table + broadcast).
+Gameplay handlers (rank-gated): `grab`, `move`, `release`, `flip`, `dealToTable`,
+`dealDrag`, `takeCard`, `playCard`, `shuffle`, **`drawInspect`/`inspectPlace`**
+(private draw-to-inspect), `spawn` (helper+), `roll`, `reset` (gm+ — full clear),
+`nextTurn`, `remove`, `setName`, `setAvatar`, **`notebook`**, **`timer`** (action:
+`start`/`pause`/`reset`/`set`), **`showStart`/`showStop`**, **`ping`**.
+
+Library handlers (all async, via `db`; keyed on a row **id**): creation —
+`deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp`,
+`editDeck` — is **admin-only** and stamps `owner_id` + private; `loadDeck`/
+`loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
+**visibility-gated** (public for GMs/helpers, everything for admins); the admin
+curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
+
+Member-management handlers (gm+, keyed on the DB room): `members` (send the list),
+`admit`, `kick` (also disconnects the live client), `setRole` (owner is
+untouchable; managing a GM is owner-only).
+
+On join the room also sends each client **`whoami`** (`{ isAdmin }`), which the
+client uses to hide creation UI from non-admins.
+
+### `EditorRoom extends TableRoom`
+
+The library **editor** — the same engine with an admin-only `onAuth` (non-admins
+rejected) that seats the admin at `owner` role with `isAdmin`. It has no DB room
+row, so `roomId` is null and the member-management handlers no-op; it's a shared
+admin sandbox for building and testing library assets live. Registered as the
+`editor` room type (`table` stays `filterBy(['code'])`).
 
 ### HTTP (Express)
 
 - `express.static` for `public/`, `/shared`; **`/assets`** serves category files
   but a guard 404s any `.json` (metadata stays private).
-- **`POST /upload?kind=`** — one resized image → file → `{ url }`.
-- **`POST /upload-model?kind=props`** — a raw `.glb` → file → `{ url }`.
+- **Uploads:** `POST /upload?kind=` (one resized image → `{ url }`),
+  `POST /upload-model?kind=props` (a raw `.glb` → `{ url }`).
+- **Auth:** `POST /auth/signup` (with a password → host, pending approval; without
+  → passwordless player), `POST /auth/login` (rotates the device token),
+  `POST /auth/token` (resolve a token → current user). `requireUser` is the
+  Bearer-token guard; `clientUser` is the safe projection sent to clients
+  (`isAdmin`, `canOwnRooms`, `hostStatus`, `hasPassword`).
+- **Rooms:** `GET /rooms` (your rooms), `POST /rooms` (create — approved-host or
+  admin only, with a pending-aware 403), `POST /rooms/join` (join or waitlist by
+  code), `PATCH /rooms/:id` (rename / approval — owner or admin), `DELETE
+  /rooms/:id` (soft-delete + dispose the live room).
+- **Host:** `POST /host/request` (request host access; sets a password first if
+  the account is passwordless → `pending`).
+- **Admin** (`requireAdmin`): `GET /admin/rooms`, `GET /admin/users`,
+  `GET /admin/pending-count`, `POST /admin/rooms/:id/restore`, `DELETE
+  /admin/rooms/:id` (purge), `POST /admin/users/:id/admin` (grant/revoke — can't
+  revoke your own), `POST /admin/users/:id/host` (approve/reject/revoke),
+  `DELETE /admin/users/:id` (purge, cascades owned rooms + memberships).
 
 ---
 
-## `db.js` — Postgres saved-library
+## `db.js` — Postgres (library · users · rooms)
 
 The connection string comes from **`DATABASE_URL_FILE`** (a path to a secret file,
 priority) or **`DATABASE_URL`** — no hardcoded fallback; missing config throws at
-startup. Metadata only: a model's URL is the canonical `file_url` column, the rest
-rides in a `props` jsonb bag, and reads splice them back into the record shape the
-game expects (so nothing is stored twice). Assets are keyed by a bigint **`id`**
-(pg returns it as a string).
+startup. For the library, a model's URL is the canonical `file_url` column and the
+rest rides in a `props` jsonb bag, spliced back on read; bigint **`id`**s come back
+as strings (nullable `owner_id` via the `idOrNull` helper).
 
-- **Decks** — `listDecks() → [{id,name,count}]`, `getDeck(id) → {name,back,fronts}`,
-  `insertDeck({name,back,fronts}) → id`, `updateDeck(id, {…})`.
-- **Boards** — `listBoards() → [{id,name,kind}]`, `getBoard(id) → record`,
-  `insertBoard(name, record) → id`. `record` is one of `{board}` / `{model,…}` /
-  `{w,d,tex}`; `kind` is the load-menu label.
-- **Props** — `listProps() → [{id,name,props}]`, `insertProp(name, props) → id`.
-- **`close()`** — end the pool (for the one-off `import-assets.js`).
+**Library.** Assets carry `owner_id` (the creating admin) and `is_public`. List
+functions take `{ includePrivate }` (admins pass true; otherwise public-only) and
+return the flag:
+
+- **Decks** — `listDecks({includePrivate}) → [{id,name,count,isPublic,ownerId}]`,
+  `getDeck(id) → {name,back,fronts,isPublic,ownerId}`,
+  `insertDeck({name,back,fronts,ownerId,isPublic}) → id`, `updateDeck(id, {…})`.
+- **Boards** — `listBoards({includePrivate}) → [{id,name,kind,isPublic,ownerId}]`,
+  `getBoard(id) → {rec,name,isPublic,ownerId}` (`rec` is one of `{board}` /
+  `{model,…}` / `{w,d,tex}`), `insertBoard(name, rec, {ownerId,isPublic}) → id`.
+- **Props** — `listProps({includePrivate}) → [{id,name,props,isPublic,ownerId}]`,
+  `insertProp(name, props, {ownerId,isPublic}) → id`.
+- **Asset admin** (generic over the three tables via an `ASSET_TABLE` whitelist,
+  `kind ∈ deck|board|prop`) — `getAssetMeta(kind,id) → {id,name,isPublic,ownerId}`,
+  `setAssetPublic(kind,id,isPublic)`, `renameAsset(kind,id,name)`,
+  `deleteAsset(kind,id)`.
+
+**Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,
+hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admin`;
+`authUser` adds the hashes (used only on the password-verify path).
+
+- `createUser({username,email,passwordHash,loginTokenHash,isAdmin}) → user` (a
+  password ⇒ `host_status='pending'`; throws with `err.conflict = 'username' |
+  'email'` on a taken field), `findUserByLogin`, `findUserByToken`,
+  `findUserById`, `setLoginToken`, `setPassword`, `setUserAvatar`, `listUsers`,
+  `setAdmin`, `setHostStatus`, `countPendingHosts` (excludes admins),
+  `roomsOwnedBy`, `purgeUser` (one transaction: null-out the user's asset
+  ownership, delete their owned rooms, delete the user — cascades memberships).
+
+**Rooms & membership.** `createRoom({ownerId,code,name,requireApproval}) → room`
+(atomic room + owner-membership CTE), `findRoomByCode`, `getRoom`,
+`listRoomsForUser`, `listRooms({includeDeleted})`, `setRoomPolicy`, `renameRoom`,
+`softDeleteRoom`, `restoreRoom`, `purgeRoom`; `joinRoom` (idempotent — a returning
+member keeps their standing), `getMembership`, `admitMember`, `kickMember` (hard
+delete), `setMemberRole`, `listMembers`.
+
+- **`close()`** — end the pool (for one-off scripts).
 
 List functions swallow errors → `[]`; getters → `null`; inserts/updates throw
-(handlers catch). `import-assets.js` is a one-time loader for pre-Postgres
-`saved-assets/*.json`.
+(handlers catch).
+
+---
+
+## `auth.js` — credentials (no dependencies)
+
+Node `crypto` only. Passwords: **`hashPassword(pw)`** / **`verifyPassword(pw,
+stored)`** — salted scrypt in a `scrypt$salt$hash` string, compared in constant
+time. Device tokens (for passwordless players and "remember me"): **`makeToken()`**
+mints a 256-bit base64url token; **`hashToken(token)`** sha256-hashes it for
+storage and lookup, so a DB leak never exposes a live token.
 
 ---
 
@@ -309,13 +408,19 @@ Exports `scene`, `camera`, `renderer`, `controls`, and the config:
 
 ### Networking
 
-Connects to the `table` room (reconnect token in `sessionStorage`). State
-listeners create/update/remove `meshes` and player UI; also tracks `boardTopY`
-(for the drop marker). Direct messages: `hand` → `renderHand`, `dealt` (adopt a
-dealt card), `inspectCard` → open draw-to-inspect, `notebook` (restore your private
-notes), `showFan` (cards someone is showing you → face-up in their fan), `ping`
-(spawn an attention marker), `deckList`/`boardList`/`propList` (library listings,
-keyed by **id**). All modal/button wiring lives here (prop, custom-model, deck,
+Connects to the `table` room — or the admin-only **`editor`** room when
+`window.OTT_EDITOR` is set (editor.html), handing the live room to the panel via
+`window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
+create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
+marker). Direct messages: `hand` → `renderHand`, `dealt` (adopt a dealt card),
+`inspectCard` → open draw-to-inspect, `notebook` (restore your private notes),
+`showFan` (cards someone is showing you → face-up in their fan), `ping` (spawn an
+attention marker), `memberList` → the Members panel (with the pending-join pulse),
+`whoami` → sets `myIsAdmin` and toggles `body.not-admin` (hides library-creation
+UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList`
+(library listings, keyed by **id**; also fanned out to the editor panel via
+`window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
+reshape/reset/members gm+). All modal/button wiring lives here (prop, custom-model, deck,
 board, edit dialogs, plus the notebook / timer / show-cards panels), plus
 **`sendDeck`** (chunked build). Shared UI helpers cut the repetition:
 **`byId`/`qs`/`qsa`** (DOM shorthands), **`renderSavedList`** (one builder for the
@@ -359,3 +464,32 @@ between the bracketing snapshots), parks the drop-marker ring under a held piece
 at the current board's surface height, keeps each held-piece **name tag**
 (`heldLabels`) hovering over its mesh, and expands + fades + disposes active
 **pings**. One uniform path for held, thrown, and resting pieces.
+
+---
+
+## The lobby & admin pages (standalone)
+
+Plain modules that talk to the HTTP API with `fetch` — no Three.js, no Colyseus.
+A shared `api(path, {method, auth, body})` helper attaches the Bearer token and
+unwraps errors; the device token lives in `localStorage`.
+
+- **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
+  'home')` switches between quick-join (passwordless signup + join), login/
+  password signup, and the signed-in home. `showHome(user)` renders the room list
+  and picks one of three host states from `canOwnRooms` / `hostStatus` (create
+  form · pending note · **Request host access** button → `onRequestHost`, which
+  prompts for a password if the account is passwordless). Owners get
+  rename/approval/close controls; a pending joiner **polls** `/rooms` and
+  auto-forwards on admission. Admins see an **Admin** link with a pending-host
+  count badge (`updateAdminBadge`).
+- **`public/admin.js`** (admin.html) — the admin console. Guards on `/auth/token`
+  → `isAdmin`, then renders the rooms table (rename / approval / close / restore /
+  purge) and the users table (grant/revoke admin, **approve/reject/revoke host**,
+  delete). Admins host implicitly, so they're kept out of the host queue and the
+  header's pending badge.
+- **`public/editor-panel.js`** (editor.html) — the library-management panel. Rides
+  on the game client's room via `window.onOttRoom`, and gets listings through
+  `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).
+  Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
+  Rename · Delete**, sending `loadDeck`/`loadBoard`/`spawn` and the
+  `assetPublic`/`assetRename`/`assetDelete` curation messages.

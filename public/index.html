@@ -9,7 +9,7 @@
 <body class="landing">
 <header id="topbar">
   <div class="brand">Open <span class="accent">Tabletop</span></div>
-  <button id="accountBtn" hidden>Log in</button>
+  <a href="\admin.html"><button id="adminBtn" hidden>⚙️ Admin</button></a>
 </header>
 <main id="landing">
   <!-- ===== quick join (default when signed out) ===== -->
@@ -23,7 +23,7 @@
     <label>Room code</label>
     <input id="qjCode" type="text" style="text-transform:uppercase">
     <div class="err" id="qjErr"></div>
-    <div class="row"><button id="qjBtn" class="primary">Join game</button></div>
+    <div class="row"><button id="qjBtn" class="primary">Join game</button><button id="accountBtn" hidden>Log in</button></div>
     <p class="hint">Want to host your own games? <a id="qjToLogin">Log in or create an account</a>.</p>
   </section>
 
@@ -65,9 +65,8 @@
   <!-- ===== home (signed in) ===== -->
   <section id="homeView" hidden>
     <div class="row between">
-      <div class="who"><span class="avatar" id="avatar"></span> <span>Signed in as <b id="who"></b></span></div>
-      <div><a id="adminLink" href="/admin.html" hidden style="margin-right:12px">Admin</a><button id="logoutBtn">Log out</button></div>
-    </div>
+      <div class="who"><span class="avatar editable" id="avatar" title="Change your avatar"></span><input id="avatarFile" type="file" accept="image/*" hidden> <span>Signed in as <b id="who"></b></span></div>
+      <button id="logoutBtn">Log out</button></div>
 
     <hr class="divider">
 

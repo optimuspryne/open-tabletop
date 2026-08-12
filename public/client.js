@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CONFIG, clamp, scene, camera, renderer, controls } from './core.js';
+import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable } from './core.js';
 import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel } from './graphics.js';
 import { KINDS as PHYS, PROPS, PROP_LIST, COLORS, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
 
@@ -66,6 +66,7 @@ const meshes = new Map();  // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
 let room, mySession;
 let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
+let myRank = 0;        // set by applyRole; gates scoreboard (helper+) + room notes (gm+) editing
 const heldTarget = new THREE.Vector3(); // drag target sent to the server
 
 // One timestamped transform snapshot (a server state at time t), for interpolation.
@@ -95,6 +96,10 @@ const applyTransform = (mesh, s) => {
   }
   mySession = room.sessionId;
   statusEl.innerHTML = 'connected · <b>you</b>';
+  if (!editorMode) { // room code, top-right — applyRole reveals it to GM+ only
+    const rc = byId('roomCode');
+    if (rc) { rc.textContent = 'Room Code: ' + code; rc.title = 'Click to copy'; rc.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(code); }; }
+  }
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
   cb(room.state).pieces.onAdd((piece, id) => {
@@ -209,19 +214,34 @@ const applyTransform = (mesh, s) => {
 
   // seats, turn order, and other players' fanned hand-backs (all public info)
   cb(room.state).players.onAdd((player, sid) => {
-    if (sid === mySession) { applySeat(player.seat); applyRole(player.role); byId('nameInput').value = player.name; updateMyPreview(player.avatar); }
+    if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); applyRole(player.role); byId('nameInput').value = player.name; updateMyPreview(player.avatar); refreshMyChip(); }
     refreshFan(sid); refreshMarker(sid); renderPlayers();
     cb(player).listen('hand', () => { refreshFan(sid); renderPlayers(); }, false);
-    cb(player).listen('seat', () => { if (sid === mySession) applySeat(player.seat); refreshFan(sid); refreshMarker(sid); }, false);
+    cb(player).listen('seat', () => { if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); refreshMyChip(); } refreshFan(sid); refreshMarker(sid); }, false);
     cb(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('role', () => { if (sid === mySession) applyRole(player.role); renderPlayers(); }, false);
     cb(player).listen('avatar', () => { if (sid === mySession) updateMyPreview(player.avatar); else refreshMarker(sid); renderPlayers(); }, false);
-    cb(player).listen('color', () => { refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('color', () => { if (sid === mySession) refreshMyChip(); refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('showing', () => refreshMarker(sid), false); // redraw the seat badge on show/stop
     cb(player).listen('handBack', () => refreshFan(sid), false); // re-skin the fan backs when the deck's back changes
   });
   cb(room.state).players.onRemove((player, sid) => { removePlayerVis(sid); renderPlayers(); });
   cb(room.state).listen('turn', renderPlayers, false);
+
+  // Durable scoreboard + room notes (synced like the timer). Register
+  // unconditionally: right after join the nested fields haven't decoded yet
+  // (room.state.scores is briefly undefined), but the callback proxy tracks them
+  // by schema and fires once they arrive. renderScores guards the empty window.
+  // The try/catch only covers a theoretical old server missing these fields.
+  try {
+    cb(room.state).scores.onAdd((row) => { renderScores(); cb(row).listen('score', renderScores, false); cb(row).listen('label', renderScores, false); });
+    cb(room.state).scores.onRemove(() => renderScores());
+    cb(room.state).listen('notes', updateRoomNotes, false);
+    cb(room.state).listen('tableX', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
+    cb(room.state).listen('tableZ', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
+  } catch (e) { /* older server without these fields — feature stays inert */ }
+  renderScores(); updateRoomNotes();
+  if (room.state.tableX) { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); } // initial size (may be default until decode)
 
   const diceGrp = byId('diceGrp');
   const diceBtn = byId('diceBtn');
@@ -234,6 +254,30 @@ const applyTransform = (mesh, s) => {
     button.onclick = () => room.send('spawn', { type: 'die', props: { sides } });
     diceGrp.appendChild(button);
   }
+
+  // The game table and the editor have different toolbars but share this file, so
+  // every page-specific control is wired defensively (no-op if it isn't on the page).
+  const wire = (id, fn) => { const el = byId(id); if (el) el.onclick = fn; };
+  const menu = (btnId, grpId) => {
+    const b = byId(btnId), g = byId(grpId); if (!b || !g) return;
+    b.onclick = (e) => { e.stopPropagation(); const open = g.hidden; qsa('.grp').forEach(x => { if (x !== g) x.hidden = true; }); g.hidden = !open; };
+    g.onclick = (e) => e.stopPropagation();
+    document.addEventListener('click', () => g.hidden = true);
+  };
+  // Game-table spawn menus + Room Controls (absent in the editor).
+  menu('objBtn', 'objGrp'); menu('deckBtn', 'deckGrp'); menu('boardBtn', 'boardGrp'); menu('roomBtn', 'roomGrp');
+  wire('objBuiltin', () => { byId('objGrp').hidden = true; byId('propModal').hidden = false; });
+  wire('objLibrary', () => { byId('objGrp').hidden = true; byId('customPropModal').hidden = false; room.send('listProps'); });
+  wire('deckQuick', () => { byId('deckGrp').hidden = true; room.send('spawn', { type: 'deck', props: {} }); });
+  wire('deckLibrary', () => { byId('deckGrp').hidden = true; byId('deckModal').hidden = false; room.send('listDecks'); });
+  wire('boardBuiltin', () => { byId('boardGrp').hidden = true; byId('boardModal').hidden = false; });
+  wire('boardLibrary', () => { byId('boardGrp').hidden = true; byId('boardLibraryModal').hidden = false; room.send('listBoards'); });
+  wire('boardLibraryCancel', () => byId('boardLibraryModal').hidden = true);
+  wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); });
+  wire('roomScene', () => { byId('roomGrp').hidden = true; byId('scenesModal').hidden = false; room.send('listScenes'); });
+  wire('roomTable', () => { byId('roomGrp').hidden = true; byId('tableModal').hidden = false; byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); });
+  wire('tableCancel', () => byId('tableModal').hidden = true);
+  wire('roomReset', () => { byId('roomGrp').hidden = true; if (confirm('Reset the table? This clears all pieces.')) room.send('reset'); });
   qsa('[data-spawn]').forEach(b => b.onclick = () => {
     const type = b.dataset.spawn;
     let props = {};
@@ -249,11 +293,11 @@ const applyTransform = (mesh, s) => {
     emptyNote: 'none saved yet',
     labelFor: d => `${d.name} · ${d.count}`,
     buttonsFor: d => [
-      ...(myIsAdmin ? [{ text: 'Edit', onClick: () => openEditDeck(d) }] : []),
+      ...(window.OTT_EDITOR ? [{ text: 'Edit', onClick: () => openEditDeck(d) }] : []),
       { text: 'Load', onClick: () => { room.send('loadDeck', { id: d.id }); byId('deckModal').hidden = true; } },
     ],
   }); if (window.onLibraryList) window.onLibraryList('deck', decks); });
-  byId('newDeck').onclick = () => { byId('deckModal').hidden = false; room.send('listDecks'); };
+  wire('newDeck', () => { byId('deckModal').hidden = false; room.send('listDecks'); });
 
   // Prop picker
   const propShapeSel = byId('propShape');
@@ -274,10 +318,11 @@ const applyTransform = (mesh, s) => {
   };
   propShapeSel.onchange = syncPropControls;
   syncPropControls();
-  byId('newProp').onclick = () => { byId('propModal').hidden = false; };
-  byId('propCustom').onclick = () => { byId('propModal').hidden = true; byId('customPropModal').hidden = false; room.send('listProps'); };
-  byId('cpCancel').onclick = () => byId('customPropModal').hidden = true;
-  byId('cpTintColor').oninput = () => { qs('input[name="cpColorMode"][value="tint"]').checked = true; }; // picking a colour implies you want it tinted
+  wire('newProp', () => { byId('propModal').hidden = false; });
+  wire('propCustom', () => { byId('propModal').hidden = true; byId('customPropModal').hidden = false; room.send('listProps'); });
+  wire('cpCancel', () => byId('customPropModal').hidden = true);
+  const cpTint = byId('cpTintColor');
+  if (cpTint) cpTint.oninput = () => { qs('input[name="cpColorMode"][value="tint"]').checked = true; }; // picking a colour implies you want it tinted
 
   // ---- edit / clone a saved model prop (client-side; scale re-derives the collider box) ----
   let editingProp = null;
@@ -359,7 +404,7 @@ const applyTransform = (mesh, s) => {
   room.onMessage('propList', props => { renderSavedList('propSavedList', props, {
     labelFor: sp => sp.name,
     buttonsFor: sp => [
-      ...(myIsAdmin ? [{ text: 'Edit', onClick: () => openEditProp(sp) }] : []),
+      ...(window.OTT_EDITOR ? [{ text: 'Edit', onClick: () => openEditProp(sp) }] : []),
       { text: 'Spawn', onClick: () => room.send('spawn', { type: 'prop', props: sp.props }) },
     ],
   }); if (window.onLibraryList) window.onLibraryList('prop', props); });
@@ -375,7 +420,7 @@ const applyTransform = (mesh, s) => {
     for (let i = 0; i < qty; i++) room.send('spawn', { type: 'prop', props });
     byId('propModal').hidden = true;
   };
-  byId('cpSpawn').onclick = async () => { // custom .glb prop
+  wire('cpSpawn', async () => { // custom .glb prop
     const modelFile = byId('cpModel').files[0];
     if (!modelFile) { alert('Choose a .glb file first.'); return; }
     const stand = byId('cpStand').checked;
@@ -397,8 +442,34 @@ const applyTransform = (mesh, s) => {
     byId('cpModel').value = '';
     byId('cpName').value = '';
     byId('customPropModal').hidden = true;
+  });
+  wire('newBoard', () => {
+    byId('boardModal').hidden = false; room.send('listBoards');
+    const tw = byId('tableW'), td = byId('tableD'); // editor's board modal also carries table size
+    if (tw) tw.value = Math.round(room.state.tableX * 2); // full size = 2 x half-extent
+    if (td) td.value = Math.round(room.state.tableZ * 2);
+  });
+  const tableResizeBtn = byId('tableResize');
+  if (tableResizeBtn) tableResizeBtn.onclick = () => {
+    room.send('table', { x: (+byId('tableW').value || 20) / 2, z: (+byId('tableD').value || 14) / 2 });
+    const tm = byId('tableModal'); if (tm) tm.hidden = true;
   };
-  byId('newBoard').onclick = () => { byId('boardModal').hidden = false; room.send('listBoards'); };
+
+  // Scene picker (GM+): load a published scene, replacing the whole table. The
+  // message handler always registers (the editor panel gets scenes via the hook);
+  // the toolbar/modal wiring is game-page only.
+  room.onMessage('sceneList', scenes => {
+    const el = byId('sceneSavedList');
+    if (el) renderSavedList('sceneSavedList', scenes, {
+      emptyNote: 'no scenes published yet',
+      labelFor: s => s.name,
+      buttonsFor: s => [
+        { text: 'Load', onClick: () => { if (confirm(`Load "${s.name}"? This clears the current table.`)) { room.send('sceneLoad', { id: s.id }); byId('scenesModal').hidden = true; } } },
+      ],
+    });
+    if (window.onLibraryList) window.onLibraryList('scene', scenes);
+  });
+  wire('scenesCancel', () => byId('scenesModal').hidden = true); // roomScene is already wired above (opens + closes the menu)
   { // built-in model boards
     const container = byId('builtinBoards');
     for (const key of Object.keys(BOARDS)) {
@@ -408,7 +479,7 @@ const applyTransform = (mesh, s) => {
       container.appendChild(button);
     }
   }
-  byId('boardModelSpawn').onclick = async () => {
+  wire('boardModelSpawn', async () => {
     const file = byId('boardModel').files[0];
     if (!file) { alert('Choose a .glb file first.'); return; }
 
@@ -421,26 +492,27 @@ const applyTransform = (mesh, s) => {
 
     byId('boardModel').value = '';
     byId('boardModal').hidden = true;
-  };
-  byId('boardSave').onclick = () => {
+  });
+  wire('boardSave', () => {
     let board = null;
     room.state.pieces.forEach(p => { if (p.type === 'board') board = JSON.parse(p.props || '{}'); });
     if (!board) { alert('No board on the table to save.'); return; }
     const name = prompt('Save board as:');
     if (name && name.trim()) room.send('saveBoard', { name: name.trim(), board });
-  };
+  });
   room.onMessage('boardList', boards => { renderSavedList('boardSavedList', boards, {
     labelFor: b => b.name + (b.kind ? ` (${b.kind})` : ''),
     buttonsFor: b => [
-      { text: 'Load', onClick: () => { room.send('loadBoard', { id: b.id }); byId('boardModal').hidden = true; } },
+      { text: 'Load', onClick: () => { room.send('loadBoard', { id: b.id }); byId('boardModal').hidden = true; const blm = byId('boardLibraryModal'); if (blm) blm.hidden = true; } },
     ],
   }); if (window.onLibraryList) window.onLibraryList('board', boards); });
-  byId('boardCancel').onclick = () => byId('boardModal').hidden = true;
+  wire('boardCancel', () => byId('boardModal').hidden = true);
   byId('boardCreate').onclick = async () => {
     const btn = byId('boardCreate');
     const w = clamp(+byId('boardW').value || 8, ...CONFIG.ranges.boardW);
     const d = clamp(+byId('boardD').value || 8, ...CONFIG.ranges.boardD);
-    const imgFile = byId('boardImg').files[0];
+    const boardImgEl = byId('boardImg');                 // image upload is editor-only
+    const imgFile = boardImgEl && boardImgEl.files[0];
     const props = { w, d };
     if (imgFile) { // only this path uploads, so show the button busy just around it
       const label = btn.textContent;
@@ -458,7 +530,7 @@ const applyTransform = (mesh, s) => {
     }
     room.send('spawn', { type: 'board', props });
     byId('boardModal').hidden = true;
-    byId('boardImg').value = '';
+    if (boardImgEl) boardImgEl.value = '';
   };
   byId('deckCancel').onclick = () => byId('deckModal').hidden = true;
   qsa('input[name=deckMode]').forEach(r => r.onchange = () => {
@@ -478,7 +550,7 @@ const applyTransform = (mesh, s) => {
     }
     return raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
   };
-  byId('deckCreate').onclick = async () => {
+  wire('deckCreate', async () => {
     const btn = byId('deckCreate');
     const mode = qs('input[name=deckMode]:checked').value;
     let back = 'back', fronts = [];
@@ -516,8 +588,9 @@ const applyTransform = (mesh, s) => {
     byId('deckFronts').value = '';
     byId('faceText').value = '';
     byId('deckSaveName').value = '';
-  };
+  });
   byId('roll').onclick = () => room.send('roll');
+  wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
   byId('nextTurn').onclick = () => room.send('nextTurn');
   byId('nameInput').addEventListener('change', e => {
     const name = e.target.value.trim();
@@ -529,7 +602,8 @@ const applyTransform = (mesh, s) => {
     const canvas = await resizeToCanvas(file, 96, 96); // small square keeps the data-URL tiny for state sync
     room.send('setAvatar', { data: canvas.toDataURL('image/jpeg', 0.7) });
   });
-  byId('reset').onclick = () => room.send('reset');
+  wire('myAv', () => byId('avatarInput').click()); // click the avatar circle to upload
+  wire('reset', () => room.send('reset'));
 
   // Private notes: a personal scratchpad. Never synced — the server just holds the
   // text so it survives a reconnect (see the 'notebook' message below).
@@ -550,6 +624,20 @@ const applyTransform = (mesh, s) => {
   const durMs = () => (+timerDur.value || 0) * 60000;
   byId('timerBtn').onclick = () => { timerPanel.hidden = !timerPanel.hidden; };
   byId('timerClose').onclick = () => { timerPanel.hidden = true; };
+
+  // Scoreboard + room notes panel (game table only — not present in the editor)
+  const scorePanel = byId('scorePanel');
+  if (scorePanel) {
+    byId('scoreBtn').onclick = () => { scorePanel.hidden = !scorePanel.hidden; if (!scorePanel.hidden) { renderScores(); updateRoomNotes(); } };
+    byId('scoreClose').onclick = () => { scorePanel.hidden = true; };
+    byId('scoreAdd').onclick = () => { const n = byId('scoreAddName'); room.send('score', { action: 'add', label: n.value.trim() || 'Player' }); n.value = ''; };
+    byId('scoreAddName').onkeydown = (e) => { if (e.key === 'Enter') byId('scoreAdd').click(); };
+    byId('scoreClear').onclick = () => { if (confirm('Clear the whole scoreboard?')) room.send('score', { action: 'clear' }); };
+    const roomNotesEl = byId('roomNotes');
+    let roomNotesTimer;
+    roomNotesEl.oninput = () => { clearTimeout(roomNotesTimer); roomNotesTimer = setTimeout(() => room.send('roomNotes', { text: roomNotesEl.value }), 400); };
+    roomNotesEl.onblur = () => { clearTimeout(roomNotesTimer); room.send('roomNotes', { text: roomNotesEl.value }); };
+  }
   timerToggle.onclick = () => room.send('timer', { action: room.state.timer.running ? 'pause' : 'start' });
   byId('timerReset').onclick = () => room.send('timer', { action: 'reset' });
   timerMode.onchange = () => room.send('timer', { action: 'set', mode: timerMode.value, duration: durMs() });
@@ -567,7 +655,7 @@ const applyTransform = (mesh, s) => {
 
   // ---- Members (GM tools): admit / kick / promote ----
   const membersPanel = byId('membersPanel');
-  byId('membersBtn').onclick = () => { membersPanel.hidden = !membersPanel.hidden; if (!membersPanel.hidden) room.send('members'); };
+  wire('membersBtn', () => { membersPanel.hidden = !membersPanel.hidden; if (!membersPanel.hidden) room.send('members'); });
   byId('membersClose').onclick = () => { membersPanel.hidden = true; };
 
   // ---- Show cards: pick an audience + scope, then hold the button to reveal ----
@@ -1023,16 +1111,35 @@ function renderHand(cards) {
 }
 
 // ===== seats, other players' fanned hands, and turn order ===================
-// Seats around the 20x14 table. Each client parks its camera at its own seat,
-// and renders every OTHER player's hand as `hand` face-down backs at their seat.
-const seatLayout = [
-  { hand:[0,0.25,6.2],    out:[0,0,1],   cam:{pos:[0,13,17],    target:[0,0,1]} },   // front  (+z)
-  { hand:[0,0.25,-6.2],   out:[0,0,-1],  cam:{pos:[0,13,-17],   target:[0,0,-1]} },  // back   (-z)
-  { hand:[9.2,0.25,0],    out:[1,0,0],   cam:{pos:[17,13,0],    target:[1,0,0]} },   // right  (+x)
-  { hand:[-9.2,0.25,0],   out:[-1,0,0],  cam:{pos:[-17,13,0],   target:[-1,0,0]} },  // left   (-x)
-  { hand:[6.6,0.25,4.8],  out:[1,0,1],   cam:{pos:[14,13,11],   target:[0,0,0]} },   // front-right
-  { hand:[-6.6,0.25,-4.8],out:[-1,0,-1], cam:{pos:[-14,13,-11], target:[0,0,0]} },   // back-left
-];
+// Seats scale with the current table half-extents (state.tableX/tableZ): hands sit
+// just inside each edge and cameras pull back proportionally, so markers/hands stay
+// at the table's edge on any size. Each client parks its camera at its own seat and
+// renders every OTHER player's hand as face-down backs at their seat.
+let mySeat = 0;
+function seatLayoutFor(hx, hz) {
+  const m = 0.8;                          // hand inset from the edge
+  const cx = hx * 0.66, cz = hz * 0.69;   // diagonal (corner) seat positions
+  const sx = hx / 10, sz = hz / 7, sy = (sx + sz) / 2; // camera scale vs the default 20x14 table
+  const cam = (p, t) => ({ pos: [p[0] * sx, p[1] * sy, p[2] * sz], target: [t[0] * sx, t[1] * sy, t[2] * sz] });
+  return [
+    { hand:[0, 0.25, hz - m],    out:[0,0,1],   cam: cam([0,13,17],    [0,0,1]) },   // front  (+z)
+    { hand:[0, 0.25, -(hz - m)], out:[0,0,-1],  cam: cam([0,13,-17],   [0,0,-1]) },  // back   (-z)
+    { hand:[hx - m, 0.25, 0],    out:[1,0,0],   cam: cam([17,13,0],    [1,0,0]) },   // right  (+x)
+    { hand:[-(hx - m), 0.25, 0], out:[-1,0,0],  cam: cam([-17,13,0],   [-1,0,0]) },  // left   (-x)
+    { hand:[cx, 0.25, cz],       out:[1,0,1],   cam: cam([14,13,11],   [0,0,0]) },   // front-right
+    { hand:[-cx, 0.25, -cz],     out:[-1,0,-1], cam: cam([-14,13,-11], [0,0,0]) },   // back-left
+  ];
+}
+let seatLayout = seatLayoutFor(10, 7);
+
+// Recompute seats when the table resizes, then reposition everyone's markers, fans,
+// and the "YOU" chip. The camera stays put (use the My Seat button to reframe).
+function rebuildSeats() {
+  if (!room || !room.state) return;
+  seatLayout = seatLayoutFor(room.state.tableX || 10, room.state.tableZ || 7);
+  room.state.players.forEach((p, sid) => { refreshMarker(sid); refreshFan(sid); });
+  refreshMyChip();
+}
 const handGroups = new Map(); // sid -> THREE.Group of face-down backs
 
 function applySeat(seat) {
@@ -1047,12 +1154,57 @@ function applySeat(seat) {
 // gates every one of these actions too, so hiding a button protects no one; it
 // just keeps people from clicking things that would be ignored.
 function applyRole(role) {
-  const rank = ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
+  myRank = ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
+  const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
-  gate('diceBtn', 1); gate('newProp', 1); gate('newDeck', 1); // spawn objects: Helper+
-  gate('newBoard', 2); gate('reset', 2);                       // reshape table / wipe: GM+
-  gate('membersBtn', 2);                                        // manage members: GM+
+  gate('diceBtn', 1);                                          // roll dice: Helper+
+  gate('objBtn', 1); gate('deckBtn', 1);                       // game-table spawn menus: Helper+
+  gate('boardBtn', 2); gate('roomBtn', 2);                     // game-table board + Room Controls: GM+
+  gate('roomCode', 2);                                         // room code display: GM+/owner/admin only
+  gate('newProp', 1); gate('newDeck', 1); gate('newBoard', 2); // editor creation toolbar (absent on the table)
+  gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
   if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
+  applyBoardRole(); // scoreboard (helper+) and notes (gm+) edit affordances
+}
+
+// Scoreboard is helper+ editable, room notes GM+; everyone else sees them read-only.
+function applyBoardRole() {
+  const edit = byId('scoreEdit'); if (edit) edit.hidden = myRank < 1;
+  const notes = byId('roomNotes'); if (notes) notes.readOnly = myRank < 2;
+  renderScores();
+}
+
+function renderScores() {
+  const tbody = byId('scoreRows'); if (!tbody || !room || !room.state || !room.state.scores) return;
+  const mk = (t, fn, cls) => { const b = document.createElement('button'); b.textContent = t; if (cls) b.className = cls; b.onclick = fn; return b; };
+  const canEdit = myRank >= 1;
+  tbody.replaceChildren();
+  room.state.scores.forEach((row, id) => {
+    const tr = document.createElement('tr');
+    const name = document.createElement('td'); name.className = 'scoreName';
+    if (canEdit) {
+      const inp = document.createElement('input'); inp.value = row.label; inp.maxLength = 40;
+      inp.onchange = () => room.send('score', { action: 'label', id, label: inp.value });
+      name.appendChild(inp);
+    } else { name.textContent = row.label; }
+    const val = document.createElement('td'); val.className = 'scoreVal'; val.textContent = row.score;
+    const acts = document.createElement('td'); acts.className = 'scoreActs';
+    if (canEdit) acts.append(
+      mk('\u2212', () => room.send('score', { action: 'adjust', id, delta: -1 })),
+      mk('+', () => room.send('score', { action: 'adjust', id, delta: 1 })),
+      mk('\u00d7', () => room.send('score', { action: 'remove', id }), 'danger'),
+    );
+    tr.append(name, val, acts);
+    tbody.appendChild(tr);
+  });
+  if (!room.state.scores.size) { const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan = 3; td.className = 'scoreEmpty'; td.textContent = 'No scores yet.'; tr.appendChild(td); tbody.appendChild(tr); }
+}
+
+function updateRoomNotes() {
+  const el = byId('roomNotes'); if (!el || !room || !room.state) return;
+  if (document.activeElement === el) return;          // don't stomp a GM mid-type
+  const notes = room.state.notes || '';
+  if (el.value !== notes) el.value = notes;
 }
 
 // Rebuild the fanned face-down backs shown at another player's seat.
@@ -1264,9 +1416,9 @@ function refreshMarker(sid) {
   group.add(disc);
 
   const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.4, 1.75),
+    new THREE.PlaneGeometry(2.20, 3.00),
     new THREE.MeshBasicMaterial({ map: makePlayerTexture(player), transparent: true }));
-  plane.position.set(px, 1.05, pz);
+  plane.position.set(px, 1.55, pz);
   plane.lookAt(0, 1.05, 0); // face the table centre
   group.add(plane);
 
@@ -1279,6 +1431,39 @@ function removePlayerVis(sid) {
   revealed.delete(sid); // drop anything they were showing us
   const marker = markers.get(sid);
   if (marker) { scene.remove(marker); markers.delete(sid); }
+}
+
+// A flat "YOU" chip laid on the felt at your own seat, so you know which edge is
+// yours (your standing billboard is skipped — no need to see yourself).
+let myChip = null;
+function makeYouChipTexture(color) {
+  const { canvas, ctx } = makeCanvas(128, 128);
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.beginPath(); ctx.arc(64, 64, 58, 0, 7);
+  ctx.fillStyle = 'rgba(20,24,29,0.5)'; ctx.fill();
+  ctx.lineWidth = 8; ctx.strokeStyle = color; ctx.stroke();
+  ctx.fillStyle = color; ctx.font = 'bold 42px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('YOU', 64, 66);
+  return cTex(canvas);
+}
+function refreshMyChip() {
+  if (myChip) { scene.remove(myChip); myChip = null; }
+  if (!room || !room.state) return;
+  const me = room.state.players.get(mySession);
+  if (!me) return;                 // wait until we know our own seat
+  const seat = seatLayout[mySeat];
+  if (!seat) return;
+  const color = me.color || '#c9a25a';
+  const out = new THREE.Vector3(...seat.out).normalize();
+  const px = seat.hand[0] + out.x * 0.3, pz = seat.hand[2] + out.z * 0.3; // on the felt, at your edge
+  const chip = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.5, 1.5),
+    new THREE.MeshBasicMaterial({ map: makeYouChipTexture(color), transparent: true, depthWrite: false }));
+  chip.rotation.x = -Math.PI / 2; // lie flat on the felt
+  chip.position.set(px, 0.03, pz);
+  scene.add(chip);
+  myChip = chip;
 }
 
 function updateMyPreview(avatar) {
@@ -1330,8 +1515,11 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
 // Pulse the Members button in the accent colour while any join is pending, so a
 // GM sees new requests without opening the panel.
 function updateMembersPulse(list) {
-  const btn = byId('membersBtn'); if (!btn) return;
-  btn.classList.toggle('pulse', list.some((m) => m.status === 'pending'));
+  const pending = list.some((m) => m.status === 'pending');
+  const roomBtn = byId('roomBtn') || byId('membersBtn'); // Room menu on the table; standalone in the editor
+  if (roomBtn) roomBtn.classList.toggle('pulse', pending);
+  const roomMembers = byId('roomMembers');              // the Members item inside the Room menu
+  if (roomMembers) roomMembers.classList.toggle('pulse', pending);
 }
 
 // The GM-only Members panel: the full membership (incl. offline/pending, from the

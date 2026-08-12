@@ -233,18 +233,26 @@ class Timer extends Schema {
   constructor() { super(); this.running = false; this.mode = 'up'; this.base = 0; this.since = 0; this.duration = 300000; }
 }
 defineTypes(Timer, { running: 'boolean', mode: 'string', base: 'number', since: 'number', duration: 'number' });
-class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); }
+// A durable scoreboard row: a free label + a number, keyed by id in State.scores.
+class ScoreRow extends Schema {
+  constructor(label = '', score = 0) { super(); this.label = label; this.score = score; }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer });
+defineTypes(ScoreRow, { label: 'string', score: 'number' });
+class State extends Schema {
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; }
+}
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number' });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
 // --- Physics world (identical setup to the single-player client) ------------
+// GM-resizable table: half-extent bounds (default is TABLE = 10 x 7).
+const TABLE_LIMIT = { minX: 4, maxX: 20, minZ: 3, maxZ: 16 };
+
 // --- Physics world -----------------------------------------------------------
-// Create the single cannon-es world: a static table to rest on, and four tall
-// walls so a hard throw can't fling a piece off the edge. Returns the world with
-// its shared contact material attached (spawn() reuses it for every piece).
+// Create the single cannon-es world. The table surface + containment walls are
+// added separately by buildBounds() so the GM can resize them at runtime.
+// Returns the world with its shared contact material attached (spawn() reuses it).
 function buildWorld() {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, SIM.gravity, 0) });
   world.broadphase = new CANNON.SAPBroadphase(world);
@@ -261,27 +269,7 @@ function buildWorld() {
     contactEquationRelaxation: SIM.contact.relaxation,
   }));
 
-  // The table surface sits just below y=0 so pieces rest at ~0.
-  const table = new CANNON.Body({ mass: 0, material });
-  table.addShape(new CANNON.Box(new CANNON.Vec3(TABLE.x, SIM.tableThick, TABLE.z)));
-  table.position.set(0, -SIM.tableThick, 0);
-  world.addBody(table);
-
-  // A tall static wall centred at (px,pz) with half-extents (hx,hz).
-  const addWall = (px, pz, hx, hz) => {
-    const wall = new CANNON.Body({ mass: 0, material });
-    wall.addShape(new CANNON.Box(new CANNON.Vec3(hx, SIM.wall.half, hz))); // tall so throws can't clear it
-    wall.position.set(px, SIM.wall.half, pz);
-    world.addBody(wall);
-  };
-  const thick = SIM.wall.thick;    // wall half-thickness
-  const overlap = SIM.wall.over;   // extra length so the corners meet
-  addWall(0, -(TABLE.z + thick), TABLE.x + overlap, thick); // near / far
-  addWall(0,  (TABLE.z + thick), TABLE.x + overlap, thick);
-  addWall(-(TABLE.x + thick), 0, thick, TABLE.z + overlap); // left / right
-  addWall( (TABLE.x + thick), 0, thick, TABLE.z + overlap);
-
-  world.__mat = material; // stash the shared material for spawn() to reuse
+  world.__mat = material; // stash the shared material for spawn() and buildBounds() to reuse
   return world;
 }
 
@@ -324,6 +312,16 @@ class TableRoom extends Room {
     this.roomCode = (options && options.code) || null;
     const roomRec = this.roomCode ? await db.findRoomByCode(this.roomCode) : null;
     this.roomId = roomRec ? roomRec.id : null; // this live table's persistent room id (for membership)
+    if (this.roomId) { // restore the durable scoreboard, notes, and table size for this room
+      const rs = await db.getRoomState(this.roomId);
+      for (const row of rs.scoreboard) {
+        if (row && row.id) this.state.scores.set(String(row.id), new ScoreRow(String(row.label || '').slice(0, 40), Number(row.score) || 0));
+      }
+      this.state.notes = String(rs.notes || '').slice(0, 8000);
+      this.state.tableX = clamp(rs.tableX, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
+      this.state.tableZ = clamp(rs.tableZ, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
+    }
+    this.buildBounds(this.state.tableX, this.state.tableZ); // table surface + walls at the current size
     this.bodies = new Map();  // id -> CANNON.Body   (physics, not synced)
     this.targets = new Map(); // id -> {x,y,z}       (drag target of the owner)
     this.flips = new Map();   // id -> scripted half-flip in progress
@@ -616,6 +614,24 @@ class TableRoom extends Room {
       catch (e) { console.error('[assetDelete]', e.message); }
     });
 
+    // --- Scenes: a saved whole-table setup ------------------------------------
+    this.onMessage('listScenes', (client) => this.sendAssetList(client, 'scene'));
+    this.onMessage('sceneSave', async (client, msg = {}) => {
+      if (!this.isAdmin(client)) return; // scenes are curated in the editor (admin-only)
+      const name = String(msg.name || '').slice(0, 60).trim(); if (!name) return;
+      try {
+        await db.insertScene({ name, payload: this.serializeScene(), ownerId: client.auth.userId }); // private by default
+        this.sendAssetList(client, 'scene');
+      } catch (e) { console.error('[sceneSave]', e.message); }
+    });
+    this.onMessage('sceneLoad', async (client, msg = {}) => {
+      if (this.rank(client) < RANK.gm) return; // replacing the whole table is GM+
+      const scene = await db.getScene(msg.id);
+      if (!scene) return;
+      if (!scene.isPublic && !this.isAdmin(client)) return; // private scenes: admins only
+      this.applyScene(scene.payload);
+    });
+
     // Shallow-edit a saved deck: swap the back and/or append cards, then either
     // overwrite it or save a copy under a new name.
     this.onMessage('editDeck', async (client, msg) => {
@@ -691,20 +707,9 @@ class TableRoom extends Room {
     // Wipe the room back to an empty table — pieces and all private state.
     this.onMessage('reset', (client) => {
       if (this.rank(client) < RANK.gm) return; // wiping the table is GM+
-      const ids = [];
-      this.state.pieces.forEach((piece, id) => ids.push(id));
-      for (const id of ids) this.removePiece(id);
-      this.hands.clear();
-      this.pendingInspect.clear();
-      this.drafts.clear();
-      this.deckCards.clear();
-      this.cardData.clear();
-      this.flips.clear();
-      this.targets.clear();
-      for (const sid of [...this.shows.keys()]) this.stopShow(sid); // end any live reveals
+      this.clearTable();
       const t = this.state.timer; // stop and zero the shared timer too
       t.running = false; t.since = 0; t.base = t.mode === 'down' ? t.duration : 0;
-      for (const client of this.clients) this.sendHand(client); // clear every player's hand
     });
 
     // Toggle a piece's keep-upright/flat behaviour (the U key).
@@ -753,6 +758,8 @@ class TableRoom extends Room {
       if (String(userId) === String(client.auth.userId)) return; // no kicking yourself
       const m = await db.getMembership(this.roomId, userId);
       if (!m || !this.canManage(this.rank(client), m.role)) return;
+      const target = await db.findUserById(userId);
+      if (target && target.isAdmin) return; // site admins can't be kicked
       await db.kickMember(this.roomId, userId);
       const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
       if (live) { live.send('kicked'); setTimeout(() => { try { live.leave(4000); } catch (e) {} }, 150); } // notice, then drop (consented → no reconnection)
@@ -764,6 +771,8 @@ class TableRoom extends Room {
       if (!['helper', 'player', 'gm'].includes(role)) return;
       const m = await db.getMembership(this.roomId, userId);
       if (!m || !this.canSetRole(this.rank(client), m.role, role)) return;
+      const target = await db.findUserById(userId);
+      if (target && target.isAdmin) return; // site admins keep full control — can't be demoted
       await db.setMemberRole(this.roomId, userId, role);
       const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
       if (live) { // reflect the change live so their tools update immediately
@@ -785,6 +794,8 @@ class TableRoom extends Room {
       // Only accept a bounded image data-URL (see the client-side XSS-safe render).
       if (player && typeof data === 'string' && data.startsWith('data:image') && data.length < 60000) {
         player.avatar = data;
+        // Persist to the account so it follows the user across sessions and rooms.
+        if (client.auth && client.auth.userId) db.setUserAvatar(client.auth.userId, data).catch(e => console.error('[setAvatar]', e.message));
       }
     });
     this.onMessage('notebook', (client, { text }) => {
@@ -802,6 +813,48 @@ class TableRoom extends Room {
         t.base = t.mode === 'down' ? t.duration : 0; // switching mode / duration resets to the start value
       }
       // 'pause' needs nothing more — the freeze above already did it.
+    });
+
+    // Durable scoreboard (helper+): add / remove / rename / adjust / set / clear.
+    // Its own clear action — the table Reset deliberately leaves it alone.
+    this.onMessage('score', (client, msg = {}) => {
+      if (this.rank(client) < RANK.helper) return;
+      const s = this.state.scores;
+      if (msg.action === 'add') {
+        s.set(rnd(), new ScoreRow(String(msg.label || 'Player').slice(0, 40), 0));
+      } else if (msg.action === 'remove') {
+        s.delete(String(msg.id));
+      } else if (msg.action === 'label') {
+        const row = s.get(String(msg.id)); if (row) row.label = String(msg.label || '').slice(0, 40);
+      } else if (msg.action === 'adjust') {
+        const row = s.get(String(msg.id)); if (row && isFinite(msg.delta)) row.score = clamp(row.score + Math.trunc(msg.delta), -1e9, 1e9);
+      } else if (msg.action === 'set') {
+        const row = s.get(String(msg.id)); if (row && isFinite(msg.score)) row.score = clamp(Math.trunc(msg.score), -1e9, 1e9);
+      } else if (msg.action === 'clear') {
+        s.clear();
+      } else return;
+      this.scheduleSave();
+    });
+
+    // Durable room notes (GM only): the shared free-text field. GM-only editing
+    // sidesteps concurrent-edit merges (effectively one writer).
+    this.onMessage('roomNotes', (client, { text } = {}) => {
+      if (this.rank(client) < RANK.gm || typeof text !== 'string') return;
+      this.state.notes = text.slice(0, 8000);
+      this.scheduleSave();
+    });
+
+    // Resize the play surface (GM+): rebuild the physics bounds + sync the new
+    // size so clients rebuild the felt. Durable; the out-of-bounds net nudges any
+    // now-outside pieces back in on the next tick.
+    this.onMessage('table', (client, msg = {}) => {
+      if (this.rank(client) < RANK.gm) return;
+      const hx = clamp(+msg.x, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
+      const hz = clamp(+msg.z, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
+      if (!isFinite(hx) || !isFinite(hz)) return;
+      this.state.tableX = hx; this.state.tableZ = hz;
+      this.buildBounds(hx, hz);
+      this.scheduleSave();
     });
     // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
     // to the chosen audience. Content goes out privately (like a hand); everyone
@@ -834,7 +887,7 @@ class TableRoom extends Room {
       // A transient "look here" marker. Public by nature, so just clamp to the
       // table and broadcast to everyone (the sender sees their own ping too).
       if (!isFinite(x) || !isFinite(z)) return;
-      this.broadcast('ping', { sid: client.sessionId, x: clamp(x, -TABLE.x, TABLE.x), z: clamp(z, -TABLE.z, TABLE.z) });
+      this.broadcast('ping', { sid: client.sessionId, x: clamp(x, -this.state.tableX, this.state.tableX), z: clamp(z, -this.state.tableZ, this.state.tableZ) });
     });
 
     this.setSimulationInterval((dt) => this.update(dt), 1000 / 60); // fixed 60Hz sim
@@ -843,14 +896,16 @@ class TableRoom extends Room {
 
   // Create a piece: a physics body + a synced Piece record, wired together by id.
   // pos is [x,y,z]; props are the type-specific fields (shape, sides, back, …).
-  spawn(type, pos, props = {}) {
+  spawn(type, pos, props = {}, quat = null) {
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: this.mat });
     body.addShape(buildCollider(type, props));
     body.position.set(pos[0], pos[1], pos[2]);
 
-    // Dice/props spawn at a random tumble; boards and decks stay flat.
-    if (KINDS[type].mass > 0 && type !== 'deck') {
+    // An exact orientation (scene load) wins; otherwise dice/props tumble, boards/decks stay flat.
+    if (quat && quat.length === 4) {
+      body.quaternion.set(quat[0], quat[1], quat[2], quat[3]);
+    } else if (KINDS[type].mass > 0 && type !== 'deck') {
       body.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
     }
     // Cards get their own damping/sleep tuning so stacks settle nicely.
@@ -1012,6 +1067,91 @@ class TableRoom extends Room {
 
   clientBy(sid) { return this.clients.find(c => c.sessionId === sid); }
 
+  // Build (or rebuild) the table surface + four containment walls at the given
+  // half-extents. Called on create and whenever the GM resizes the table.
+  buildBounds(hx, hz) {
+    const w = this.world, mat = w.__mat;
+    for (const b of (this._bounds || [])) w.removeBody(b); // drop the previous surface + walls
+    this._bounds = [];
+    const add = (body) => { w.addBody(body); this._bounds.push(body); };
+    const table = new CANNON.Body({ mass: 0, material: mat }); // surface sits just below y=0
+    table.addShape(new CANNON.Box(new CANNON.Vec3(hx, SIM.tableThick, hz)));
+    table.position.set(0, -SIM.tableThick, 0);
+    add(table);
+    const thick = SIM.wall.thick, overlap = SIM.wall.over;
+    const wall = (px, pz, whx, whz) => { const b = new CANNON.Body({ mass: 0, material: mat }); b.addShape(new CANNON.Box(new CANNON.Vec3(whx, SIM.wall.half, whz))); b.position.set(px, SIM.wall.half, pz); add(b); };
+    wall(0, -(hz + thick), hx + overlap, thick); // near / far
+    wall(0,  (hz + thick), hx + overlap, thick);
+    wall(-(hx + thick), 0, thick, hz + overlap); // left / right
+    wall( (hx + thick), 0, thick, hz + overlap);
+  }
+
+  // Wipe every piece + its private bookkeeping (shared by Reset and scene load).
+  // Leaves the timer, scoreboard, notes, and table size alone.
+  clearTable() {
+    const ids = [];
+    this.state.pieces.forEach((piece, id) => ids.push(id));
+    for (const id of ids) this.removePiece(id);
+    this.hands.clear();
+    this.pendingInspect.clear();
+    this.drafts.clear();
+    this.deckCards.clear();
+    this.cardData.clear();
+    this.flips.clear();
+    this.targets.clear();
+    for (const sid of [...this.shows.keys()]) this.stopShow(sid); // end any live reveals
+    for (const client of this.clients) this.sendHand(client);      // clear every player's hand
+  }
+
+  // Serialize the current table into a scene payload: the table size, and every
+  // piece with its transform. A deck's private card list rides along so it comes
+  // back as a real deck; a face-down card carries its private front.
+  serializeScene() {
+    const pieces = [];
+    this.state.pieces.forEach((piece, id) => {
+      let props = JSON.parse(piece.props || '{}');
+      if (piece.type === 'deck') props = { back: props.back || 'back', cards: (this.deckCards.get(id) || []).slice() };
+      else if (piece.type === 'card') { const cd = this.cardData.get(id); if (cd && cd.front) props = { ...props, front: cd.front, faceDown: true }; }
+      pieces.push({ type: piece.type, props, x: piece.x, y: piece.y, z: piece.z, q: [piece.qx, piece.qy, piece.qz, piece.qw] });
+    });
+    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces };
+  }
+
+  // Replace the whole table with a scene: clear, resize, then rebuild every piece
+  // at its saved transform. Boards go through swapBoard; everything else keeps its
+  // exact orientation via the spawn quaternion.
+  applyScene(scene) {
+    if (!scene || typeof scene !== 'object') return;
+    this.clearTable();
+    const tx = clamp(+(scene.table && scene.table.x) || TABLE.x, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
+    const tz = clamp(+(scene.table && scene.table.z) || TABLE.z, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
+    this.state.tableX = tx; this.state.tableZ = tz; this.buildBounds(tx, tz);
+    for (const e of (Array.isArray(scene.pieces) ? scene.pieces : [])) {
+      if (this.state.pieces.size >= SIM.maxPieces) break;
+      if (!e || !KINDS[e.type]) continue;
+      const props = e.props || {};
+      if (e.type === 'board') { this.swapBoard(props); continue; }
+      const id = this.spawn(e.type, [+e.x || 0, +e.y || 2, +e.z || 0], props, Array.isArray(e.q) ? e.q : null);
+      if (e.type === 'card' && props.faceDown && props.front) this.cardData.set(id, { front: props.front });
+    }
+    this.scheduleSave(); // the new table size is durable
+  }
+
+  // Persist the durable room state (scoreboard + notes + table size). Debounced —
+  // score clicks arrive in bursts, and saveStateNow always reads the latest state.
+  scheduleSave() {
+    if (!this.roomId || this._saveTimer) return;
+    this._saveTimer = setTimeout(() => { this._saveTimer = null; this.saveStateNow(); }, 800);
+  }
+  saveStateNow() {
+    if (!this.roomId) return;
+    const rows = [];
+    this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
+    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ })
+      .catch(e => console.error('[saveState]', e.message));
+  }
+  onDispose() { if (this._saveTimer) { clearTimeout(this._saveTimer); this.saveStateNow(); } } // flush a pending save
+
   // Send a client the library list for one asset kind. Admins get everything
   // (incl. private); everyone else gets only published (public) assets.
   async sendAssetList(client, kind) {
@@ -1019,6 +1159,7 @@ class TableRoom extends Room {
     if (kind === 'deck') client.send('deckList', await db.listDecks({ includePrivate }));
     else if (kind === 'board') client.send('boardList', await db.listBoards({ includePrivate }));
     else if (kind === 'prop') client.send('propList', await db.listProps({ includePrivate }));
+    else if (kind === 'scene') client.send('sceneList', await db.listScenes({ includePrivate }));
   }
 
   // --- Member-management authorization + list delivery ---
@@ -1077,7 +1218,7 @@ class TableRoom extends Room {
     if (!room) throw new ServerError(404, 'That room no longer exists.');
     const m = await db.getMembership(room.id, user.id);
     let role = (m && m.status === 'admitted') ? m.role : null;
-    if (!role && user.isAdmin) role = 'gm'; // site admins can enter any room
+    if (user.isAdmin) role = 'owner'; // site admins get full control in any room, member or not
     if (!role) throw new ServerError(403, m ? 'Waiting for a GM to admit you.' : 'You are not a member of this room.');
     return { userId: user.id, username: user.username, avatar: user.avatar, role, isAdmin: user.isAdmin };
   }
@@ -1215,12 +1356,13 @@ class TableRoom extends Room {
 
     // Safety net: if anything still escaped the walls (rare tunnelling on a very
     // hard throw), drop it back onto the table instead of losing it into the void.
-    const limitX = TABLE.x + SIM.bounds.margin, limitZ = TABLE.z + SIM.bounds.margin;
+    const tx = this.state.tableX, tz = this.state.tableZ;
+    const limitX = tx + SIM.bounds.margin, limitZ = tz + SIM.bounds.margin;
     this.bodies.forEach((body) => {
       const pos = body.position;
       const escaped = pos.y < SIM.bounds.floor || pos.y > SIM.bounds.ceiling || Math.abs(pos.x) > limitX || Math.abs(pos.z) > limitZ;
       if (escaped) {
-        pos.set(clamp(pos.x, -TABLE.x + 1, TABLE.x - 1), 3, clamp(pos.z, -TABLE.z + 1, TABLE.z - 1));
+        pos.set(clamp(pos.x, -tx + 1, tx - 1), 3, clamp(pos.z, -tz + 1, tz - 1));
         body.velocity.setZero();
         body.angularVelocity.setZero();
         body.wakeUp();
@@ -1405,7 +1547,8 @@ const roomCode = () => crypto.randomBytes(4).toString('hex').toUpperCase(); // 8
 
 app.get('/rooms', async (req, res) => {
   const user = await requireUser(req, res); if (!user) return;
-  res.json({ rooms: await db.listRoomsForUser(user.id) });
+  const rooms = user.isAdmin ? await db.listRoomsForAdmin(user.id) : await db.listRoomsForUser(user.id);
+  res.json({ rooms });
 });
 
 app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
@@ -1427,6 +1570,18 @@ app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
     }
   }
   res.status(500).json({ error: 'could not allocate a room code' });
+});
+
+// Set the signed-in user's avatar from the lobby (no room needed). Same bounded
+// image-data-URL rule as the in-room setAvatar handler.
+app.post('/me/avatar', express.json({ limit: '128kb' }), async (req, res) => {
+  const user = await requireUser(req, res); if (!user) return;
+  const data = req.body && req.body.data;
+  if (typeof data !== 'string' || !data.startsWith('data:image') || data.length >= 60000) {
+    return res.status(400).json({ error: 'invalid image' });
+  }
+  try { await db.setUserAvatar(user.id, data); res.json({ ok: true, avatar: data }); }
+  catch (e) { console.error('[me/avatar]', e.message); res.status(500).json({ error: 'could not save avatar' }); }
 });
 
 // A player asks to become a host. Sets host_status = pending for an admin to

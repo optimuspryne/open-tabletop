@@ -117,11 +117,33 @@ export function insertProp(name, props, { ownerId = null, isPublic = false } = {
     [name, model, JSON.stringify(rest), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
 
-// ===== Asset admin (generic across the three tables) =========================
+// ===== Scenes (a saved whole-table setup) ===================================
+export async function listScenes({ includePrivate = false } = {}) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, is_public, owner_id FROM custom_scenes
+       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
+    return rows.map(r => ({ id: String(r.id), name: r.name, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
+  } catch (e) { console.error('[db] listScenes:', e.message); return []; }
+}
+export async function getScene(id) {
+  try {
+    const { rows } = await pool.query('SELECT name, props, is_public, owner_id FROM custom_scenes WHERE id = $1', [id]);
+    if (!rows[0]) return null;
+    return { name: rows[0].name, payload: rows[0].props || {}, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
+  } catch (e) { console.error('[db] getScene:', e.message); return null; }
+}
+export function insertScene({ name, payload, ownerId = null, isPublic = false }) {
+  return pool.query(
+    'INSERT INTO custom_scenes (name, props, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
+    [name, JSON.stringify(payload || {}), ownerId, isPublic]).then(r => String(r.rows[0].id));
+}
+
+// ===== Asset admin (generic across the asset tables) =========================
 // Editing/visibility/deletion is admin-only (enforced server-side); these just run
 // the query for whichever kind. Unknown kinds are rejected so the table name can
 // never come from untrusted input.
-const ASSET_TABLE = { deck: 'custom_decks', board: 'custom_boards', prop: 'custom_objects' };
+const ASSET_TABLE = { deck: 'custom_decks', board: 'custom_boards', prop: 'custom_objects', scene: 'custom_scenes' };
 export async function getAssetMeta(kind, id) {
   const table = ASSET_TABLE[kind]; if (!table) return null;
   try {
@@ -300,6 +322,18 @@ export async function listRoomsForUser(userId) {
     return rows.map(r => ({ ...roomShape(r), role: r.role, status: r.status }));
   } catch (e) { console.error('[db] listRoomsForUser:', e.message); return []; }
 }
+// Every active room, shaped for the lobby — for site admins, who can see and
+// enter any room. Their own rooms keep the 'owner' role (so lobby management
+// still shows); the rest read as 'admin'. Always 'admitted' so Enter is enabled.
+export async function listRoomsForAdmin(adminId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.*, u.username AS owner_name FROM rooms r JOIN users u ON u.id = r.owner_id
+       WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`);
+    return rows.map(r => ({ ...roomShape(r), ownerName: r.owner_name, status: 'admitted',
+      role: String(r.owner_id) === String(adminId) ? 'owner' : 'admin' }));
+  } catch (e) { console.error('[db] listRoomsForAdmin:', e.message); return []; }
+}
 // All rooms with owner name — the admin console (optionally including soft-deleted).
 export async function listRooms({ includeDeleted = false } = {}) {
   try {
@@ -314,6 +348,19 @@ export function setRoomPolicy(roomId, requireApproval) {
 }
 export function renameRoom(roomId, name) {
   return pool.query('UPDATE rooms SET name = $2 WHERE id = $1', [roomId, name]);
+}
+// Durable per-room state: scoreboard (array of {id,label,score}), GM notes, and
+// the play-surface half-extents. All survive restarts and are Reset-exempt.
+export async function getRoomState(roomId) {
+  try {
+    const { rows } = await pool.query('SELECT scoreboard, notes, table_x, table_z FROM rooms WHERE id = $1', [roomId]);
+    if (!rows[0]) return { scoreboard: [], notes: '', tableX: 10, tableZ: 7 };
+    return { scoreboard: rows[0].scoreboard || [], notes: rows[0].notes || '', tableX: Number(rows[0].table_x) || 10, tableZ: Number(rows[0].table_z) || 7 };
+  } catch (e) { console.error('[db] getRoomState:', e.message); return { scoreboard: [], notes: '', tableX: 10, tableZ: 7 }; }
+}
+export function saveRoomState(roomId, { scoreboard, notes, tableX, tableZ }) {
+  return pool.query('UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5 WHERE id = $1',
+    [roomId, JSON.stringify(scoreboard), notes, tableX, tableZ]);
 }
 export function softDeleteRoom(roomId) { // owner or admin — hides it, keeps the row
   return pool.query('UPDATE rooms SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [roomId]);

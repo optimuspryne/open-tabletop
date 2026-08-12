@@ -9,32 +9,41 @@
 <body>
 <div id="app"></div>
 <div id="ui">
-  <button id="lobbyBtn">← Lobby</button>
+  <button id="lobbyBtn">🔙 Lobby</button>
   <span class="menu">
-    <button id="diceBtn">☰ + Dice</button>
+    <button id="diceBtn">☰ 🎲 Add Dice</button>
     <div class="grp" id="diceGrp" hidden></div>
   </span>
-  <button id="newProp">+ Object</button>
-  <button id="newDeck">+ Deck</button>
-  <button id="newBoard">↷ Board</button>
-  <button id="roll">↻ Dice</button>
-  <button id="notesBtn">✎ Notes</button>
-  <button id="timerBtn">⏱ Timer</button>
-  <button id="showBtn">🃏 Show</button>
-  <button id="membersBtn" hidden>👥 Members</button>
-</div>
-<div id="panel">
-  <span id="status">connecting…</span>
-  <div>
-    <div id="players"></div>
-    <div id="me">
-      <span id="myAv" class="mav"></span>
-      <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
-      <label class="upload">Avatar<input id="avatarInput" type="file" accept="image/*" hidden></label>
+  <span class="menu">
+    <button id="objBtn">☰ ♟️ Add 3D Objects</button>
+    <div class="grp" id="objGrp" hidden>
+      <button id="objBuiltin">🛠️ Built-In Objects</button>
+      <button id="objLibrary">📚 Custom Library</button>
     </div>
-  </div>
-  <button id="nextTurn">Next turn</button>
-  <button id="reset">Reset</button>
+  </span>
+  <span class="menu">
+    <button id="deckBtn">☰ 🎴 Add Decks</button>
+    <div class="grp" id="deckGrp" hidden>
+      <button id="deckQuick">🛠️ Built-In Deck</button>
+      <button id="deckLibrary">📚 Custom Library</button>
+    </div>
+  </span>
+  <span class="menu">
+    <button id="boardBtn">☰ 🟫 Change Game Board</button>
+    <div class="grp" id="boardGrp" hidden>
+      <button id="boardBuiltin">🛠️ Built-In Boards</button>
+      <button id="boardLibrary">📚 Custom Library</button>
+    </div>
+  </span>
+  <span class="menu">
+    <button id="roomBtn">☰ ⚙️ Room Controls</button>
+    <div class="grp" id="roomGrp" hidden>
+      <button id="roomMembers">👥 Members List</button>
+      <button id="roomScene">📽️ Load a Scene</button>
+      <button id="roomTable">↔️ Table Size</button>
+      <button id="roomReset" class="danger">🧹 Reset</button>
+    </div>
+  </span>
 </div>
 <div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
 <div id="drawActions" hidden>
@@ -91,43 +100,79 @@
   </div>
 </div>
 <div id="hand"></div>
-<div id="showPanel" hidden>
-  <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
-  <div class="showLabel">To</div>
-  <div id="showAudience" class="chipRow"></div>
-  <div class="showLabel">What</div>
-  <div class="chipRow">
-    <button id="showScopeHand" class="chip on">Whole hand</button>
-    <button id="showScopeSel" class="chip">Selected cards</button>
+<div id="rightRail">
+<div id="roomCode" hidden></div>
+<div id="panel">
+  <span id="status">connecting…</span>
+  <div>
+    <div id="players"></div>
+    <div id="me">
+      <span id="myAv" class="mav editable" title="Change your avatar"></span>
+      <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
+      <input id="avatarInput" type="file" accept="image/*" hidden>
+    </div>
   </div>
-  <button id="showHold">Hold to show</button>
+  <button id="nextTurn">Next turn</button>
 </div>
-<div id="notes" hidden>
-  <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
-  <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
+<div id="toolsDock">
+  <div id="toolsMenu">
+    <div class="toolsLabel">Tools</div>
+    <button id="roll">🔄 Roll Dice</button>
+    <button id="notesBtn">📝 Private Notes</button>
+    <button id="scoreBtn">📊 Scoreboard</button>
+    <button id="timerBtn">⏱️ Timer</button>
+    <button id="showBtn">🃏 Show Hand</button>
+    <button id="mySeatBtn">↩ My Seat</button>
+  </div>
+  <div id="showPanel" hidden>
+    <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
+    <div class="showLabel">To</div>
+    <div id="showAudience" class="chipRow"></div>
+    <div class="showLabel">What</div>
+    <div class="chipRow">
+      <button id="showScopeHand" class="chip on">Whole hand</button>
+      <button id="showScopeSel" class="chip">Selected cards</button>
+    </div>
+    <button id="showHold">Hold to show</button>
+  </div>
+  <div id="notes" hidden>
+    <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
+    <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
+  </div>
+  <div id="scorePanel" hidden>
+    <div id="scoreHead"><b>Scoreboard</b><span id="scoreClose">✕</span></div>
+    <table id="scoreTable"><tbody id="scoreRows"></tbody></table>
+    <div id="scoreEdit" hidden>
+      <div class="scoreAddRow"><input id="scoreAddName" type="text" placeholder="Add player / team…" maxlength="40"><button id="scoreAdd">Add</button></div>
+      <button id="scoreClear" class="danger">Clear all</button>
+    </div>
+    <div class="scoreNotesLabel">Room notes</div>
+    <textarea id="roomNotes" rows="5" placeholder="GM notes for the room — house rules, current objective…"></textarea>
+  </div>
+  <div id="timer" hidden>
+    <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
+    <div id="timerReadout">00:00</div>
+    <div class="timerRow">
+      <button id="timerToggle">Start</button>
+      <button id="timerReset">Reset</button>
+      <select id="timerMode">
+        <option value="up">Stopwatch</option>
+        <option value="down">Countdown</option>
+      </select>
+    </div>
+    <div id="timerDurRow" class="timerRow" hidden>
+      <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
+    </div>
+  </div>
+</div>
 </div>
 <div id="membersPanel" hidden>
   <div id="membersHead"><b>Members</b><span id="membersClose">✕</span></div>
   <ul id="memberList"></ul>
 </div>
-<div id="timer" hidden>
-  <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
-  <div id="timerReadout">00:00</div>
-  <div class="timerRow">
-    <button id="timerToggle">Start</button>
-    <button id="timerReset">Reset</button>
-    <select id="timerMode">
-      <option value="up">Stopwatch</option>
-      <option value="down">Countdown</option>
-    </select>
-  </div>
-  <div id="timerDurRow" class="timerRow" hidden>
-    <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
-  </div>
-</div>
 <div id="propModal" hidden>
   <div class="modalCard">
-    <h3>Add a prop</h3>
+    <h3>Add an object</h3>
     <label>Shape</label>
     <select id="propShape"></select>
     <div id="propColorWrap"><label>Color</label><div class="backRow"><input id="propColor" type="color" value="#9aa0a6"></div></div>
@@ -138,51 +183,58 @@
     <label>Scale</label>
     <input id="propScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
     <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="propStand" type="checkbox"> Stands upright (self-rights when placed)</label>
-    <div class="row"><button id="propCustom" style="margin-right:auto">Custom...</button><button id="propCancel">Cancel</button><button id="propSpawn">Spawn</button></div>
+    <div class="row"><button id="propCancel">Cancel</button><button id="propSpawn">Spawn</button></div>
   </div>
 </div>
 <div id="customPropModal" hidden>
   <div class="modalCard">
-    <h3 id="cpModalTitle">Custom model prop</h3>
-    <div class="admin-wrap">
-    <label>Model (.glb)</label>
-    <input id="cpModel" type="file" accept=".glb,model/gltf-binary">
-    <label>Quantity</label>
-    <input id="cpQty" type="number" value="1" min="1" max="12" style="width:70px">
-    <label>Scale</label>
-    <input id="cpScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
-    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="cpStand" type="checkbox"> Stands upright (self-rights when placed)</label>
-    <div class="modeRow" style="margin-top:6px">
-      <label><input type="radio" name="cpColorMode" value="own" checked> Model's own colours</label>
-      <label><input type="radio" name="cpColorMode" value="tint"> Tint <input id="cpTintColor" type="color" value="#c0c0c0"></label>
-    </div>
-    <input id="cpName" type="text" placeholder="Save this model as… (optional)" style="margin-top:6px">
-    <div class="note">A model gets a box collider sized to its bounds. Tint recolours it; leave off to keep its own look.</div>
-    </div>
-    <div class="savedWrap"><label>Saved models</label><div id="propSavedList" class="savedList"></div></div>
-    <div class="row"><button id="cpCancel">Cancel</button><button id="cpSpawn" class="admin-only">Spawn</button></div>
+    <h3>Spawn a saved object</h3>
+    <div class="savedWrap"><label>Custom Library</label><div id="propSavedList" class="savedList"></div></div>
+    <div class="row"><button id="cpCancel">Cancel</button></div>
   </div>
 </div>
+<div id="scenesModal" hidden>
+  <div class="modalCard">
+    <h3>Load a scene</h3>
+    <div class="note">A scene replaces the whole table — its size, board, and pieces. This clears the current table.</div>
+    <div class="savedWrap"><div id="sceneSavedList" class="savedList"></div></div>
+    <div class="row"><button id="scenesCancel">Cancel</button></div>
+  </div>
+</div>
+
 <div id="boardModal" hidden>
   <div class="modalCard">
-    <h3>Add a board</h3>
+    <h3>Built-in board</h3>
     <label>Built-in boards</label>
     <div class="backRow" id="builtinBoards" style="flex-wrap:wrap"></div>
-    <label class="admin-only">Upload a board model (.glb)</label>
-    <div class="backRow admin-only"><input id="boardModel" type="file" accept=".glb,model/gltf-binary" style="flex:1"><button id="boardModelSpawn">Add</button></div>
     <div class="note" style="margin:8px 0 2px">— or make a plain flat board —</div>
     <label>Width</label>
     <input id="boardW" type="number" value="10" min="2" max="18" step="0.5" style="width:90px">
     <label>Depth</label>
     <input id="boardD" type="number" value="10" min="2" max="12" step="0.5" style="width:90px">
-    <label>Image (optional — stretched to fit)</label>
-    <input id="boardImg" type="file" accept="image/*">
     <div class="note">Replaces the current board and sits at table centre.</div>
-    <div class="savedWrap"><label>Boards</label>
-      <div class="savedRow admin-only"><span class="note" style="margin:0">Save the current board</span><button id="boardSave">Save…</button></div>
-      <div id="boardSavedList" class="savedList"></div>
-    </div>
     <div class="row"><button id="boardCancel">Cancel</button><button id="boardCreate">Create flat board</button></div>
+  </div>
+</div>
+
+<div id="boardLibraryModal" hidden>
+  <div class="modalCard">
+    <h3>Spawn a saved board</h3>
+    <div class="savedWrap"><label>Custom Library</label><div id="boardSavedList" class="savedList"></div></div>
+    <div class="row"><button id="boardLibraryCancel">Cancel</button></div>
+  </div>
+</div>
+
+<div id="tableModal" hidden>
+  <div class="modalCard">
+    <h3>Table size</h3>
+    <label>Width × depth</label>
+    <div class="backRow">
+      <input id="tableW" type="number" min="8" max="40" step="1" style="width:76px"><span>×</span>
+      <input id="tableD" type="number" min="6" max="32" step="1" style="width:76px">
+    </div>
+    <div class="note">The play surface itself (not a board on it).</div>
+    <div class="row"><button id="tableCancel">Cancel</button><button id="tableResize">Resize table</button></div>
   </div>
 </div>
 <div id="editPropModal" hidden>
@@ -219,37 +271,9 @@
 </div>
 <div id="deckModal" hidden>
   <div class="modalCard">
-    <h3 id="deckModalTitle">Create a custom deck</h3>
-    <div class="admin-wrap">
-    <div class="modeRow">
-      <label><input type="radio" name="deckMode" value="text" checked> Text</label>
-      <label><input type="radio" name="deckMode" value="image"> Images</label>
-    </div>
-    <div id="textMode">
-      <label>Customize the 'back' of the Cards</label>
-      <span class="note" style="margin:0">BG Color | Text Color | Optional Text</span>
-      <div class="backRow">
-        <input id="backColor" type="color" value="#7d2b2b" title="Back background">
-        <input id="backTextColor" type="color" value="#f4f1ea" title="Back text color">
-        <input id="backText" type="text" placeholder="Optional Text...">
-      </div>
-      <label>Customize the 'face' of the Cards</label>
-      <span class="note" style="margin:0">BG Color | Text Color</span>
-      <div class="backRow"><input id="faceBg" type="color" value="#fbfbf7" title="Face background"><input id="faceColor" type="color" value="#141414" title="Face text color"></div>
-      <span class="note" style="margin:0">Enter text here.  One-per-line, commma-separated or JSON</span>
-      <textarea id="faceText" rows="6" placeholder="First card&#10;Second card&#10;Third card"></textarea>
-    </div>
-    <div id="imageMode" hidden>
-      <label>Card back (one image)</label>
-      <input id="deckBack" type="file" accept="image/*">
-      <label>Card fronts (select many)</label>
-      <input id="deckFronts" type="file" accept="image/*" multiple>
-    </div>
-    <div class="note">Card faces stay private until a card is revealed.</div>
-    <input id="deckSaveName" type="text" placeholder="Save this deck as… (optional)">
-    </div>
-    <div class="savedWrap"><label>Load a saved deck</label><div id="savedList" class="savedList"></div></div>
-    <div class="row"><button data-spawn="deck">Quick 52</button><button id="deckCancel">Cancel</button><button id="deckCreate" class="admin-only">Create deck</button></div>
+    <h3>Spawn a saved deck</h3>
+    <div class="savedWrap"><label>Custom Library</label><div id="savedList" class="savedList"></div></div>
+    <div class="row"><button id="deckCancel">Cancel</button></div>
   </div>
 </div>
 
