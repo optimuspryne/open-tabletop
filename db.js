@@ -31,24 +31,28 @@ export const close = () => pool.end(); // for one-off scripts to let the process
 
 // ===== Decks =================================================================
 // cards = the ordered front refs (jsonb array); props = { back }.
-export async function listDecks() {
+// Visibility: is_public gates who can spawn; owner_id records the admin who made
+// it (editing stays admin-only regardless). Lists are public-only unless the
+// caller passes includePrivate (admins).
+export async function listDecks({ includePrivate = false } = {}) {
   try {
     const { rows } = await pool.query(
-      'SELECT id, name, jsonb_array_length(cards) AS count FROM custom_decks ORDER BY name, id');
-    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count) }));
+      `SELECT id, name, jsonb_array_length(cards) AS count, is_public, owner_id FROM custom_decks
+       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
+    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count), isPublic: r.is_public, ownerId: r.owner_id == null ? null : String(r.owner_id) }));
   } catch (e) { console.error('[db] listDecks:', e.message); return []; }
 }
 export async function getDeck(id) {
   try {
-    const { rows } = await pool.query('SELECT name, cards, props FROM custom_decks WHERE id = $1', [id]);
+    const { rows } = await pool.query('SELECT name, cards, props, is_public, owner_id FROM custom_decks WHERE id = $1', [id]);
     if (!rows[0]) return null;
-    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back' };
+    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back', isPublic: rows[0].is_public, ownerId: rows[0].owner_id == null ? null : String(rows[0].owner_id) };
   } catch (e) { console.error('[db] getDeck:', e.message); return null; }
 }
-export function insertDeck({ name, back, fronts }) {
+export function insertDeck({ name, back, fronts, ownerId = null, isPublic = false }) {
   return pool.query(
-    "INSERT INTO custom_decks (name, type, cards, props) VALUES ($1, 'mixed', $2, $3) RETURNING id",
-    [name, JSON.stringify(fronts), JSON.stringify({ back })]).then(r => String(r.rows[0].id));
+    "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
+    [name, JSON.stringify(fronts), JSON.stringify({ back }), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
 export function updateDeck(id, { name, back, fronts }) {
   return pool.query(
@@ -67,23 +71,27 @@ function boardKind(rec) { // short descriptor for the load menu
 }
 const boardRecord = (row) => { const rec = { ...(row.props || {}) }; if (row.file_url) rec.model = row.file_url; return rec; };
 
-export async function listBoards() {
+export async function listBoards({ includePrivate = false } = {}) {
   try {
-    const { rows } = await pool.query('SELECT id, name, file_url, props FROM custom_boards ORDER BY name, id');
-    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)) }));
+    const { rows } = await pool.query(
+      `SELECT id, name, file_url, props, is_public, owner_id FROM custom_boards
+       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
+    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)), isPublic: r.is_public, ownerId: r.owner_id == null ? null : String(r.owner_id) }));
   } catch (e) { console.error('[db] listBoards:', e.message); return []; }
 }
+// Returns a wrapper: .rec is the spawn record, plus visibility/owner for gating.
 export async function getBoard(id) {
   try {
-    const { rows } = await pool.query('SELECT file_url, props FROM custom_boards WHERE id = $1', [id]);
-    return rows[0] ? boardRecord(rows[0]) : null;
+    const { rows } = await pool.query('SELECT name, file_url, props, is_public, owner_id FROM custom_boards WHERE id = $1', [id]);
+    if (!rows[0]) return null;
+    return { rec: boardRecord(rows[0]), name: rows[0].name, isPublic: rows[0].is_public, ownerId: rows[0].owner_id == null ? null : String(rows[0].owner_id) };
   } catch (e) { console.error('[db] getBoard:', e.message); return null; }
 }
-export function insertBoard(name, rec) {
+export function insertBoard(name, rec, { ownerId = null, isPublic = false } = {}) {
   const { model, ...rest } = rec;
   return pool.query(
-    'INSERT INTO custom_boards (name, type, file_url, props) VALUES ($1, $2, $3, $4) RETURNING id',
-    [name, boardType(rec), model || null, JSON.stringify(rest)]).then(r => String(r.rows[0].id));
+    'INSERT INTO custom_boards (name, type, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+    [name, boardType(rec), model || null, JSON.stringify(rest), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
 
 // ===== Props (custom model objects) ==========================================
@@ -91,15 +99,255 @@ export function insertBoard(name, rec) {
 // ({ box, stand, scale, color? }). Reads splice model back in for spawning.
 const propRecord = (row) => ({ model: row.file_url, ...(row.props || {}) });
 
-export async function listProps() {
+export async function listProps({ includePrivate = false } = {}) {
   try {
-    const { rows } = await pool.query('SELECT id, name, file_url, props FROM custom_objects ORDER BY name, id');
-    return rows.map(r => ({ id: String(r.id), name: r.name, props: propRecord(r) }));
+    const { rows } = await pool.query(
+      `SELECT id, name, file_url, props, is_public, owner_id FROM custom_objects
+       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
+    return rows.map(r => ({ id: String(r.id), name: r.name, props: propRecord(r), isPublic: r.is_public, ownerId: r.owner_id == null ? null : String(r.owner_id) }));
   } catch (e) { console.error('[db] listProps:', e.message); return []; }
 }
-export function insertProp(name, props) {
+export function insertProp(name, props, { ownerId = null, isPublic = false } = {}) {
   const { model, ...rest } = props;
   return pool.query(
-    'INSERT INTO custom_objects (name, file_url, props) VALUES ($1, $2, $3) RETURNING id',
-    [name, model, JSON.stringify(rest)]).then(r => String(r.rows[0].id));
+    'INSERT INTO custom_objects (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+    [name, model, JSON.stringify(rest), ownerId, isPublic]).then(r => String(r.rows[0].id));
+}
+
+// ===== Asset admin (generic across the three tables) =========================
+// Editing/visibility/deletion is admin-only (enforced server-side); these just run
+// the query for whichever kind. Unknown kinds are rejected so the table name can
+// never come from untrusted input.
+const ASSET_TABLE = { deck: 'custom_decks', board: 'custom_boards', prop: 'custom_objects' };
+export async function getAssetMeta(kind, id) {
+  const table = ASSET_TABLE[kind]; if (!table) return null;
+  try {
+    const { rows } = await pool.query(`SELECT id, name, is_public, owner_id FROM ${table} WHERE id = $1`, [id]);
+    if (!rows[0]) return null;
+    return { id: String(rows[0].id), name: rows[0].name, isPublic: rows[0].is_public, ownerId: rows[0].owner_id == null ? null : String(rows[0].owner_id) };
+  } catch (e) { console.error('[db] getAssetMeta:', e.message); return null; }
+}
+export function setAssetPublic(kind, id, isPublic) {
+  const table = ASSET_TABLE[kind]; if (!table) return Promise.reject(new Error('bad kind'));
+  return pool.query(`UPDATE ${table} SET is_public = $2 WHERE id = $1`, [id, !!isPublic]);
+}
+export function renameAsset(kind, id, name) {
+  const table = ASSET_TABLE[kind]; if (!table) return Promise.reject(new Error('bad kind'));
+  return pool.query(`UPDATE ${table} SET name = $2 WHERE id = $1`, [id, name]);
+}
+export function deleteAsset(kind, id) {
+  const table = ASSET_TABLE[kind]; if (!table) return Promise.reject(new Error('bad kind'));
+  return pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
+}
+
+// ===== Users ================================================================
+// This layer only stores/compares hash STRINGS — hashing is the server's job.
+// Passwords use a slow salted hash (bcrypt/argon2) and are verified after a
+// username lookup. Device tokens are high-entropy random strings hashed with a
+// FAST deterministic hash (e.g. sha256) so they can be looked up by equality;
+// storing the hash means a DB leak doesn't expose live tokens. Hashes never leave
+// this module except to the auth path — the *public* shape omits them.
+const publicUser = (r) => r && ({
+  id: String(r.id), username: r.username, email: r.email, avatar: r.avatar,
+  isAdmin: r.is_admin, canOwnRooms: !!r.password_hash, // "has a password" = a GM account
+});
+const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash, loginTokenHash: r.login_token_hash });
+
+// Create an account. passwordHash set => can own rooms (GM); null => passwordless
+// player. Throws with err.conflict = 'username' | 'email' if that field is taken.
+export async function createUser({ username, email, passwordHash = null, loginTokenHash = null, isAdmin = false }) {
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO users (username, email, password_hash, login_token_hash, is_admin)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [username, email, passwordHash, loginTokenHash, isAdmin]);
+    return publicUser(rows[0]);
+  } catch (e) {
+    if (e.code === '23505') {
+      const field = e.constraint === 'users_email_key' ? 'email' : 'username';
+      const err = new Error(`${field} already taken`); err.conflict = field; throw err;
+    }
+    throw e;
+  }
+}
+
+// Login/join entry point: look up by username OR email (case-insensitive). Returns
+// the AUTH shape (with hashes) so the server can verify a password.
+export async function findUserByLogin(login) {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1) LIMIT 1', [login]);
+    return authUser(rows[0]) || null;
+  } catch (e) { console.error('[db] findUserByLogin:', e.message); return null; }
+}
+// Resolve a device token (pass its HASH) to its user — the passwordless "login".
+export async function findUserByToken(tokenHash) {
+  if (!tokenHash) return null;
+  try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE login_token_hash = $1', [tokenHash]);
+    return publicUser(rows[0]) || null; // the token match already authenticated them
+  } catch (e) { console.error('[db] findUserByToken:', e.message); return null; }
+}
+export async function findUserById(id) {
+  try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
+    return publicUser(rows[0]) || null;
+  } catch (e) { console.error('[db] findUserById:', e.message); return null; }
+}
+export function setLoginToken(userId, tokenHash) {
+  return pool.query('UPDATE users SET login_token_hash = $2 WHERE id = $1', [userId, tokenHash]);
+}
+export function setPassword(userId, passwordHash) { // a player upgrading to a GM account
+  return pool.query('UPDATE users SET password_hash = $2 WHERE id = $1', [userId, passwordHash]);
+}
+export function setUserAvatar(userId, avatar) {
+  return pool.query('UPDATE users SET avatar = $2 WHERE id = $1', [userId, avatar]);
+}
+// Admin console: everyone, no hashes (publicUser omits them).
+export async function listUsers() {
+  try {
+    const { rows } = await pool.query('SELECT * FROM users ORDER BY created_at');
+    return rows.map((r) => ({ ...publicUser(r), createdAt: r.created_at }));
+  } catch (e) { console.error('[db] listUsers:', e.message); return []; }
+}
+export function setAdmin(userId, isAdmin) {
+  return pool.query('UPDATE users SET is_admin = $2 WHERE id = $1', [userId, !!isAdmin]);
+}
+// Rooms this user owns (active + soft-deleted) — codes let the caller dispose live tables.
+export async function roomsOwnedBy(userId) {
+  try {
+    const { rows } = await pool.query('SELECT id, code FROM rooms WHERE owner_id = $1', [userId]);
+    return rows.map((r) => ({ id: String(r.id), code: r.code }));
+  } catch (e) { console.error('[db] roomsOwnedBy:', e.message); return []; }
+}
+// Permanently delete a user and everything that would otherwise block/​orphan it,
+// in one transaction: release their library assets (kept as shared), purge the
+// rooms they own (cascading those rooms' members), then delete the user (their own
+// memberships cascade via FK). RESTRICT FKs stay as safety rails; this clears deps
+// deliberately rather than relying on a blanket DB cascade.
+export async function purgeUser(userId) {
+  const c = await pool.connect();
+  try {
+    await c.query('BEGIN');
+    await c.query('UPDATE custom_decks   SET owner_id = NULL WHERE owner_id = $1', [userId]);
+    await c.query('UPDATE custom_boards  SET owner_id = NULL WHERE owner_id = $1', [userId]);
+    await c.query('UPDATE custom_objects SET owner_id = NULL WHERE owner_id = $1', [userId]);
+    await c.query('DELETE FROM rooms WHERE owner_id = $1', [userId]); // cascades those rooms' members
+    await c.query('DELETE FROM users WHERE id = $1', [userId]);       // cascades this user's memberships
+    await c.query('COMMIT');
+  } catch (e) { await c.query('ROLLBACK'); throw e; }
+  finally { c.release(); }
+}
+
+// ===== Rooms ================================================================
+const roomShape = (r) => r && ({
+  id: String(r.id), ownerId: String(r.owner_id), code: r.code, name: r.name,
+  requireApproval: r.require_approval, createdAt: r.created_at, deletedAt: r.deleted_at,
+});
+
+// Create a room AND its owner membership atomically (one CTE). Throws with
+// err.conflict = 'code' if the code is already in use by an active room.
+export async function createRoom({ ownerId, code, name, requireApproval = true }) {
+  try {
+    const { rows } = await pool.query(
+      `WITH r AS (
+         INSERT INTO rooms (owner_id, code, name, require_approval) VALUES ($1,$2,$3,$4) RETURNING *
+       ), m AS (
+         INSERT INTO room_members (room_id, user_id, role, status) SELECT id, $1, 'owner', 'admitted' FROM r
+       )
+       SELECT * FROM r`,
+      [ownerId, code, name, requireApproval]);
+    return roomShape(rows[0]);
+  } catch (e) {
+    if (e.code === '23505') { const err = new Error('room code already in use'); err.conflict = 'code'; throw err; }
+    throw e;
+  }
+}
+// Active room by code (soft-deleted rooms are invisible) — the join entry point.
+export async function findRoomByCode(code) {
+  try {
+    const { rows } = await pool.query('SELECT * FROM rooms WHERE code = $1 AND deleted_at IS NULL', [code]);
+    return roomShape(rows[0]) || null;
+  } catch (e) { console.error('[db] findRoomByCode:', e.message); return null; }
+}
+export async function getRoom(id) {
+  try {
+    const { rows } = await pool.query('SELECT * FROM rooms WHERE id = $1', [id]);
+    return roomShape(rows[0]) || null;
+  } catch (e) { console.error('[db] getRoom:', e.message); return null; }
+}
+// Rooms a user belongs to, with their role/status there (active rooms only).
+export async function listRoomsForUser(userId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.*, m.role, m.status FROM rooms r JOIN room_members m ON m.room_id = r.id
+       WHERE m.user_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`, [userId]);
+    return rows.map(r => ({ ...roomShape(r), role: r.role, status: r.status }));
+  } catch (e) { console.error('[db] listRoomsForUser:', e.message); return []; }
+}
+// All rooms with owner name — the admin console (optionally including soft-deleted).
+export async function listRooms({ includeDeleted = false } = {}) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT r.*, u.username AS owner_name FROM rooms r JOIN users u ON u.id = r.owner_id
+       ${includeDeleted ? '' : 'WHERE r.deleted_at IS NULL'} ORDER BY r.created_at DESC`);
+    return rows.map(r => ({ ...roomShape(r), ownerName: r.owner_name }));
+  } catch (e) { console.error('[db] listRooms:', e.message); return []; }
+}
+export function setRoomPolicy(roomId, requireApproval) {
+  return pool.query('UPDATE rooms SET require_approval = $2 WHERE id = $1', [roomId, requireApproval]);
+}
+export function renameRoom(roomId, name) {
+  return pool.query('UPDATE rooms SET name = $2 WHERE id = $1', [roomId, name]);
+}
+export function softDeleteRoom(roomId) { // owner or admin — hides it, keeps the row
+  return pool.query('UPDATE rooms SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [roomId]);
+}
+export function restoreRoom(roomId) { // admin — undo a soft-delete
+  return pool.query('UPDATE rooms SET deleted_at = NULL WHERE id = $1', [roomId]);
+}
+export function purgeRoom(roomId) { // admin only — permanent; cascades members
+  return pool.query('DELETE FROM rooms WHERE id = $1', [roomId]);
+}
+
+// ===== Membership ===========================================================
+const memberShape = (r) => r && ({ roomId: String(r.room_id), userId: String(r.user_id), role: r.role, status: r.status });
+
+// Join: create a membership if absent (status per the room's policy). Idempotent —
+// a returning member keeps their existing role/status (no reset to pending).
+export async function joinRoom({ roomId, userId, requireApproval }) {
+  try {
+    const status = requireApproval ? 'pending' : 'admitted';
+    const { rows } = await pool.query(
+      `INSERT INTO room_members (room_id, user_id, status) VALUES ($1,$2,$3)
+       ON CONFLICT (room_id, user_id) DO NOTHING RETURNING *`, [roomId, userId, status]);
+    if (rows[0]) return memberShape(rows[0]);  // fresh join
+    return getMembership(roomId, userId);       // already a member — keep their standing
+  } catch (e) { console.error('[db] joinRoom:', e.message); return null; }
+}
+// The per-room role/status lookup that feeds every server-side permission check.
+export async function getMembership(roomId, userId) {
+  try {
+    const { rows } = await pool.query('SELECT * FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
+    return memberShape(rows[0]) || null;
+  } catch (e) { console.error('[db] getMembership:', e.message); return null; }
+}
+export function admitMember(roomId, userId) { // GM approves a pending joiner
+  return pool.query("UPDATE room_members SET status='admitted' WHERE room_id=$1 AND user_id=$2", [roomId, userId]);
+}
+export function kickMember(roomId, userId) { // hard delete (kick = remove the row)
+  return pool.query('DELETE FROM room_members WHERE room_id=$1 AND user_id=$2', [roomId, userId]);
+}
+export function setMemberRole(roomId, userId, role) { // flag helper / add co-gm / demote
+  return pool.query('UPDATE room_members SET role=$3 WHERE room_id=$1 AND user_id=$2', [roomId, userId, role]);
+}
+// Everyone in a room with their identity — the player list + approval queue.
+export async function listMembers(roomId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT m.user_id, m.role, m.status, u.username, u.avatar FROM room_members m
+       JOIN users u ON u.id = m.user_id WHERE m.room_id = $1
+       ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'gm' THEN 1 WHEN 'helper' THEN 2 ELSE 3 END, u.username`, [roomId]);
+    return rows.map(r => ({ userId: String(r.user_id), username: r.username, avatar: r.avatar, role: r.role, status: r.status }));
+  } catch (e) { console.error('[db] listMembers:', e.message); return []; }
 }

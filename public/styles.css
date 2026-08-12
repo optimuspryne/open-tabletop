@@ -362,6 +362,63 @@ button:active { transform: translateY(1px); }
   touch-action: none; /* a press-and-hold shouldn't scroll or select on touch */
 }
 
+/* ===== members panel (GM tools) ===== */
+#membersPanel {
+  position: fixed;
+  right: var(--inset);
+  top: 50%;
+  transform: translateY(-50%);
+  width: min(320px, 90vw);
+  max-height: 70vh;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  backdrop-filter: var(--blur);
+}
+#membersHead { display: flex; align-items: center; justify-content: space-between; color: var(--text); }
+#membersHead b { color: var(--accent); }
+#membersClose { cursor: pointer; opacity: .7; user-select: none; }
+#membersClose:hover { opacity: 1; }
+#memberList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.memberRow {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: var(--panel-solid); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 8px;
+  color: var(--text); font-size: var(--fs-sm);
+}
+.memberActions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.memberActions button { padding: 3px 8px; font-size: var(--fs-sm); }
+
+/* ===== library editor panel ===== */
+#libraryPanel {
+  position: fixed; right: var(--inset); top: 50%; transform: translateY(-50%);
+  width: min(380px, 92vw); max-height: 80vh; overflow: auto;
+  display: flex; flex-direction: column; gap: 10px; padding: 12px 14px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg); backdrop-filter: var(--blur);
+  color: var(--text);
+}
+#libraryHead { display: flex; align-items: center; justify-content: space-between; }
+#libraryHead b { color: var(--accent); }
+#libraryClose { cursor: pointer; opacity: .7; user-select: none; }
+#libraryClose:hover { opacity: 1; }
+.libHint { font-size: var(--fs-sm); opacity: .6; margin: 0; }
+.libSection h4 { margin: 6px 0 4px; font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .5px; color: var(--accent); opacity: .85; }
+.libList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.libEmpty { opacity: .45; font-size: var(--fs-sm); padding: 2px 4px; }
+.libRow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  background: var(--panel-solid); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 8px; font-size: var(--fs-sm); }
+.libName { font-weight: 600; }
+.libBadge { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; border-radius: 4px; padding: 0 5px; }
+.libBadge.pub { color: #7fb069; border: 1px solid #7fb069; }
+.libBadge.priv { color: var(--text); opacity: .5; border: 1px solid var(--border); }
+.libActs { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+.libActs button { padding: 3px 7px; font-size: var(--fs-sm); }
+.libActs button.danger { border-color: #a15147; color: #d9776b; }
+
 /* ===== modals (custom deck / add prop) ===== */
 #deckModal, #propModal, #boardModal, #customPropModal, #editPropModal, #editDeckModal {
   position: fixed;
@@ -437,6 +494,19 @@ button:active { transform: translateY(1px); }
   color: var(--text);
 }
 .prow { display: flex; align-items: center; gap: 7px; padding: 2px 5px; border-radius: var(--r-sm); }
+.rolebadge { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 5px; }
+
+/* Library creation controls: shown to admins, hidden for everyone else.
+   admin-wrap uses display:contents so wrapping a block doesn't disturb layout. */
+.admin-wrap { display: contents; }
+body.not-admin .admin-wrap, body.not-admin .admin-only { display: none !important; }
+
+/* Members button pulses while a join is pending */
+#membersBtn.pulse { animation: memberPulse 1.4s ease-in-out infinite; border-color: var(--accent); color: var(--accent); }
+@keyframes memberPulse {
+  0%, 100% { box-shadow: 0 0 0 0 var(--accent-soft); }
+  50%      { box-shadow: 0 0 0 4px var(--accent-soft); border-color: var(--accent); }
+}
 .prow.turn { background: var(--accent-soft); font-weight: 600; }
 .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
 .pav { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; flex: 0 0 auto; }

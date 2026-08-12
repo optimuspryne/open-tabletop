@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Open Tabletop — Admin</title>
+<link rel="stylesheet" href="/styles.css">
+<style>
+  body.admin { display: block; overflow: auto; }
+  #topbar { position: fixed; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; background: var(--panel); border-bottom: 1px solid var(--border); z-index: 10; }
+  #topbar .brand { font: 600 18px var(--font); color: var(--text); }
+  #topbar .brand .accent { color: var(--accent); }
+  #topbar a { color: var(--accent); text-decoration: none; font-size: var(--fs-sm); }
+  #admin { max-width: 940px; margin: 84px auto 48px; padding: 0 20px; color: var(--text); font: var(--fs)/1.5 var(--font); }
+  #admin h2 { color: var(--accent); font-size: 16px; margin: 28px 0 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); font-size: var(--fs-sm); vertical-align: middle; }
+  th { color: var(--accent); font-weight: 600; }
+  tr.deleted td { opacity: .5; }
+  .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .acts button { padding: 3px 8px; font-size: var(--fs-sm); }
+  .acts button.danger { border-color: #a15147; color: #d9776b; }
+  .muted { opacity: .55; }
+  #denied { text-align: center; margin: 22vh auto; color: var(--text); font: var(--fs)/1.6 var(--font); }
+  #denied a { color: var(--accent); display: block; margin-top: 16px; text-decoration: none; }
+</style>
+</head>
+<body class="admin">
+<header id="topbar">
+  <div class="brand">Open <span class="accent">Tabletop</span> · Admin</div>
+  <div><a href="/editor.html" style="margin-right:16px">📚 Library editor</a><a href="/">← Lobby</a></div>
+</header>
+
+<main id="admin" hidden>
+  <h2>Rooms</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Code</th><th>Owner</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody id="roomsBody"></tbody>
+  </table>
+
+  <h2>Users</h2>
+  <table>
+    <thead><tr><th>Username</th><th>Email</th><th>Type</th><th>Actions</th></tr></thead>
+    <tbody id="usersBody"></tbody>
+  </table>
+</main>
+
+<section id="denied" hidden>
+  <p>You need admin access to view this page.</p>
+  <a href="/">← Back to lobby</a>
+</section>
+
+<script type="module" src="/admin.js"></script>
+</body>
+</html>

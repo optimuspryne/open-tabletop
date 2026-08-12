@@ -65,6 +65,7 @@ const statusEl = byId('status');
 const meshes = new Map();  // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
 let room, mySession;
+let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
 const heldTarget = new THREE.Vector3(); // drag target sent to the server
 
 // One timestamped transform snapshot (a server state at time t), for interpolation.
@@ -77,12 +78,21 @@ const applyTransform = (mesh, s) => {
 
 (async () => {
   const client = new Client(location.origin.replace(/^http/, 'ws'));
-  const saved = sessionStorage.getItem('tt_token'); // per-tab: survives refresh, distinct across browsers/tabs
-  if (saved) {
-    try { room = await client.reconnect(saved); } catch (e) { room = null; }
+  const params = new URLSearchParams(location.search);
+  const editorMode = !!window.OTT_EDITOR;                          // set by editor.html
+  const code = (params.get('room') || 'LOBBY').toUpperCase();      // which table (handed over by the lobby)
+  const authToken = localStorage.getItem('tabletop.token') || '';  // who you are (for the onAuth gate)
+  const key = 'tt_token:' + code; // per-room reconnection token: survives refresh, distinct per table
+  if (editorMode) {
+    room = await client.joinOrCreate('editor', { token: authToken }); // admin-only workshop; no code, no reconnect
+  } else {
+    const saved = sessionStorage.getItem(key);
+    if (saved) {
+      try { room = await client.reconnect(saved); } catch (e) { room = null; }
+    }
+    if (!room) room = await client.joinOrCreate('table', { code, token: authToken });
+    sessionStorage.setItem(key, room.reconnectionToken);
   }
-  if (!room) room = await client.joinOrCreate('table');
-  sessionStorage.setItem('tt_token', room.reconnectionToken);
   mySession = room.sessionId;
   statusEl.innerHTML = 'connected · <b>you</b>';
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
@@ -148,6 +158,39 @@ const applyTransform = (mesh, s) => {
     refreshFan(sid);
   });
   room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
+  room.onMessage('memberList', (list) => { renderMembers(list); updateMembersPulse(list); }); // panel data + pending-pulse
+
+  // Library creation/editing is admin-only; hide those controls for everyone else,
+  // leaving the spawn pickers + built-in shapes. (The server enforces it too.)
+  room.onMessage('whoami', ({ isAdmin }) => {
+    myIsAdmin = !!isAdmin;
+    document.body.classList.toggle('not-admin', !myIsAdmin);
+    if (!myIsAdmin) { // the modals become spawn-only pickers — relabel so they read right
+      const dt = byId('deckModalTitle'); if (dt) dt.textContent = 'Spawn a deck';
+      const ct = byId('cpModalTitle'); if (ct) ct.textContent = 'Spawn a saved prop';
+    }
+  });
+
+  // Forced exits: the GM kicked me, or the owner closed the room. These end the
+  // session for good, so also drop the stale reconnection token — otherwise the
+  // next visit tries to resume a seat the server already released, which logs
+  // Colyseus's "reconnection token invalid" warning before falling back.
+  let leaving = false;
+  let exitReason = '';
+  room.onMessage('roomClosed', () => { exitReason = 'This room was closed by the owner.'; sessionStorage.removeItem(key); });
+  room.onMessage('kicked', () => { exitReason = 'You have been removed from this room by a GM.'; sessionStorage.removeItem(key); });
+  room.onLeave(() => { if (!leaving) showExit(exitReason || 'You have been disconnected from the table.'); });
+
+  // Leaving on purpose is a deliberate leave (no reconnection window), so clear the
+  // token before we go — re-entering the same room should join fresh, not reconnect.
+  byId('lobbyBtn').onclick = () => { leaving = true; sessionStorage.removeItem(key); try { room.leave(); } catch (e) {} location.href = '/'; };
+
+  if (editorMode) { // workshop chrome: no member management, back to the admin console, hand the room to the panel
+    const mb = byId('membersBtn'); if (mb) mb.hidden = true;
+    const lb = byId('lobbyBtn'); lb.textContent = '← Admin';
+    lb.onclick = () => { leaving = true; try { room.leave(); } catch (e) {} location.href = '/admin.html'; };
+    if (window.onOttRoom) window.onOttRoom(room);
+  }
   room.onMessage('notebook', text => { byId('notesText').value = text || ''; }); // your private notes, restored on reconnect
   room.onMessage('shuffled', ({ id }) => startAnim(id, 'shuffle')); // cosmetic: everyone sees the deck riffle
   room.onMessage('inspectCard', ({ front, back }) => inspectMesh(cardMesh({ front, back }), { drawn: true, type: 'card' })); // drawn card — front is ours alone
@@ -166,11 +209,12 @@ const applyTransform = (mesh, s) => {
 
   // seats, turn order, and other players' fanned hand-backs (all public info)
   cb(room.state).players.onAdd((player, sid) => {
-    if (sid === mySession) { applySeat(player.seat); byId('nameInput').value = player.name; updateMyPreview(player.avatar); }
+    if (sid === mySession) { applySeat(player.seat); applyRole(player.role); byId('nameInput').value = player.name; updateMyPreview(player.avatar); }
     refreshFan(sid); refreshMarker(sid); renderPlayers();
     cb(player).listen('hand', () => { refreshFan(sid); renderPlayers(); }, false);
     cb(player).listen('seat', () => { if (sid === mySession) applySeat(player.seat); refreshFan(sid); refreshMarker(sid); }, false);
     cb(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('role', () => { if (sid === mySession) applyRole(player.role); renderPlayers(); }, false);
     cb(player).listen('avatar', () => { if (sid === mySession) updateMyPreview(player.avatar); else refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('color', () => { refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('showing', () => refreshMarker(sid), false); // redraw the seat badge on show/stop
@@ -201,14 +245,14 @@ const applyTransform = (mesh, s) => {
     byId('deckModal').hidden = true;
     room.send('spawn', { type, props });
   });
-  room.onMessage('deckList', decks => renderSavedList('savedList', decks, {
+  room.onMessage('deckList', decks => { renderSavedList('savedList', decks, {
     emptyNote: 'none saved yet',
     labelFor: d => `${d.name} · ${d.count}`,
     buttonsFor: d => [
-      { text: 'Edit', onClick: () => openEditDeck(d) },
+      ...(myIsAdmin ? [{ text: 'Edit', onClick: () => openEditDeck(d) }] : []),
       { text: 'Load', onClick: () => { room.send('loadDeck', { id: d.id }); byId('deckModal').hidden = true; } },
     ],
-  }));
+  }); if (window.onLibraryList) window.onLibraryList('deck', decks); });
   byId('newDeck').onclick = () => { byId('deckModal').hidden = false; room.send('listDecks'); };
 
   // Prop picker
@@ -312,13 +356,13 @@ const applyTransform = (mesh, s) => {
   byId('editDeckSave').onclick = () => commitDeckEdit(false);
   byId('editDeckCopy').onclick = () => commitDeckEdit(true);
 
-  room.onMessage('propList', props => renderSavedList('propSavedList', props, {
+  room.onMessage('propList', props => { renderSavedList('propSavedList', props, {
     labelFor: sp => sp.name,
     buttonsFor: sp => [
-      { text: 'Edit', onClick: () => openEditProp(sp) },
+      ...(myIsAdmin ? [{ text: 'Edit', onClick: () => openEditProp(sp) }] : []),
       { text: 'Spawn', onClick: () => room.send('spawn', { type: 'prop', props: sp.props }) },
     ],
-  }));
+  }); if (window.onLibraryList) window.onLibraryList('prop', props); });
   byId('propCancel').onclick = () => byId('propModal').hidden = true;
   byId('propSpawn').onclick = () => { // built-in shape prop
     const shape = propShapeSel.value;
@@ -385,12 +429,12 @@ const applyTransform = (mesh, s) => {
     const name = prompt('Save board as:');
     if (name && name.trim()) room.send('saveBoard', { name: name.trim(), board });
   };
-  room.onMessage('boardList', boards => renderSavedList('boardSavedList', boards, {
+  room.onMessage('boardList', boards => { renderSavedList('boardSavedList', boards, {
     labelFor: b => b.name + (b.kind ? ` (${b.kind})` : ''),
     buttonsFor: b => [
       { text: 'Load', onClick: () => { room.send('loadBoard', { id: b.id }); byId('boardModal').hidden = true; } },
     ],
-  }));
+  }); if (window.onLibraryList) window.onLibraryList('board', boards); });
   byId('boardCancel').onclick = () => byId('boardModal').hidden = true;
   byId('boardCreate').onclick = async () => {
     const btn = byId('boardCreate');
@@ -521,6 +565,11 @@ const applyTransform = (mesh, s) => {
     if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
   }, 100);
 
+  // ---- Members (GM tools): admit / kick / promote ----
+  const membersPanel = byId('membersPanel');
+  byId('membersBtn').onclick = () => { membersPanel.hidden = !membersPanel.hidden; if (!membersPanel.hidden) room.send('members'); };
+  byId('membersClose').onclick = () => { membersPanel.hidden = true; };
+
   // ---- Show cards: pick an audience + scope, then hold the button to reveal ----
   const showPanel = byId('showPanel'), showAudience = byId('showAudience');
   const scopeHand = byId('showScopeHand'), scopeSel = byId('showScopeSel'), showHold = byId('showHold');
@@ -580,7 +629,26 @@ const applyTransform = (mesh, s) => {
   showHold.addEventListener('pointerup', endShow);
   showHold.addEventListener('pointercancel', endShow);
   showHold.addEventListener('lostpointercapture', endShow);
-})().catch(err => { statusEl.textContent = 'connection failed'; console.error(err); });
+})().catch(err => {
+  // onAuth rejections (not signed in / not a member / awaiting approval / no such
+  // room) land here — show the reason and a way back to the lobby.
+  showExit((err && err.message) || 'Could not join the table.');
+  console.error(err);
+});
+
+// A full-screen "you're out" message with a link back to the lobby — used for a
+// rejected join, a kick, or the room being closed under you.
+function showExit(msg) {
+  document.body.replaceChildren();
+  const box = document.createElement('div');
+  box.style.cssText = 'color:#e8e6e0;font:16px/1.5 system-ui,sans-serif;padding:48px;text-align:center;max-width:520px;margin:10vh auto';
+  box.textContent = msg;
+  const link = document.createElement('a');
+  link.href = '/'; link.textContent = '← Back to lobby';
+  link.style.cssText = 'color:#c9a25a;display:block;margin-top:20px;text-decoration:none';
+  box.appendChild(link);
+  document.body.appendChild(box);
+}
 
 // ===== Interaction — click vs. drag; the meaning depends on the piece ========
 const ray = new THREE.Raycaster(), pointer = new THREE.Vector2();
@@ -975,6 +1043,18 @@ function applySeat(seat) {
   controls.update();
 }
 
+// Show/hide the toolbar by the player's per-room role. Courtesy only — the server
+// gates every one of these actions too, so hiding a button protects no one; it
+// just keeps people from clicking things that would be ignored.
+function applyRole(role) {
+  const rank = ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
+  const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
+  gate('diceBtn', 1); gate('newProp', 1); gate('newDeck', 1); // spawn objects: Helper+
+  gate('newBoard', 2); gate('reset', 2);                       // reshape table / wipe: GM+
+  gate('membersBtn', 2);                                        // manage members: GM+
+  if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
+}
+
 // Rebuild the fanned face-down backs shown at another player's seat.
 function refreshFan(sid) {
   if (sid === mySession) return; // I see my own cards in the bottom bar
@@ -1237,7 +1317,58 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
     const label = document.createElement('span');
     label.textContent = `${player.name}${sid === mySession ? ' (you)' : ''} \u00b7 ${player.hand}`; // textContent = inert
     row.appendChild(label);
+    if (player.role && player.role !== 'player') { // badge for helper/gm/owner
+      const badge = document.createElement('span');
+      badge.className = 'rolebadge';
+      badge.textContent = player.role;
+      row.appendChild(badge);
+    }
     el.appendChild(row);
+  }
+}
+
+// Pulse the Members button in the accent colour while any join is pending, so a
+// GM sees new requests without opening the panel.
+function updateMembersPulse(list) {
+  const btn = byId('membersBtn'); if (!btn) return;
+  btn.classList.toggle('pulse', list.some((m) => m.status === 'pending'));
+}
+
+// The GM-only Members panel: the full membership (incl. offline/pending, from the
+// server's DB list) with admit/kick/promote controls. Buttons just send messages;
+// the server authorizes and pushes a fresh list back.
+function renderMembers(list) {
+  const ul = byId('memberList'); if (!ul) return;
+  ul.replaceChildren();
+  const me = room.state.players.get(mySession);
+  const myName = me ? me.name : '';
+  const myRank = ({ owner: 3, gm: 2, helper: 1, player: 0 })[me ? me.role : 'player'] ?? 0;
+  const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; return b; };
+  if (!list.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No members.'; ul.appendChild(li); return; }
+  for (const m of list) {
+    const li = document.createElement('li'); li.className = 'memberRow';
+    const info = document.createElement('span');
+    info.textContent = m.username;
+    const tag = document.createElement('span'); tag.className = 'muted';
+    tag.textContent = ` \u00b7 ${m.role}${m.status === 'pending' ? ' \u00b7 pending' : ''}`;
+    info.appendChild(tag);
+    li.appendChild(info);
+    const acts = document.createElement('span'); acts.className = 'memberActions';
+    const isSelf = m.username === myName;
+    if (m.status === 'pending') {
+      acts.append(btn('Admit', () => room.send('admit', { userId: m.userId })),
+                  btn('Reject', () => room.send('kick', { userId: m.userId })));
+    } else if (!isSelf && m.role !== 'owner') {
+      if (m.role === 'player') acts.appendChild(btn('→ Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
+      if (m.role === 'helper') acts.appendChild(btn('→ Player', () => room.send('setRole', { userId: m.userId, role: 'player' })));
+      if (myRank >= 3) { // owner manages co-GMs
+        if (m.role !== 'gm') acts.appendChild(btn('→ GM', () => room.send('setRole', { userId: m.userId, role: 'gm' })));
+        else acts.appendChild(btn('→ Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
+      }
+      if (m.role !== 'gm' || myRank >= 3) acts.appendChild(btn('Kick', () => room.send('kick', { userId: m.userId })));
+    }
+    li.appendChild(acts);
+    ul.appendChild(li);
   }
 }
 
