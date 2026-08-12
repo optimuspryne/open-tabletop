@@ -1358,7 +1358,7 @@ app.post('/upload-model', express.raw({ type: () => true, limit: '16mb' }), (req
 // The landing page talks to these before joining any room. Passwords use scrypt;
 // a successful signup or login also issues a durable device token — the raw value
 // is returned once (stored client-side) so return visits log in without a password.
-const clientUser = (u) => u && ({ id: u.id, username: u.username, email: u.email, avatar: u.avatar, isAdmin: u.isAdmin, canOwnRooms: u.canOwnRooms });
+const clientUser = (u) => u && ({ id: u.id, username: u.username, email: u.email, avatar: u.avatar, isAdmin: u.isAdmin, canOwnRooms: u.canOwnRooms, hostStatus: u.hostStatus, hasPassword: u.hasPassword });
 const validUsername = (s) => typeof s === 'string' && /^[a-zA-Z0-9_-]{3,20}$/.test(s.trim());
 const validEmail = (s) => typeof s === 'string' && s.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.trim());
 
@@ -1418,7 +1418,11 @@ app.get('/rooms', async (req, res) => {
 
 app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
   const user = await requireUser(req, res); if (!user) return;
-  if (!user.canOwnRooms) return res.status(403).json({ error: 'only accounts with a password can create rooms' });
+  if (!user.canOwnRooms) {
+    return res.status(403).json({ error: user.hostStatus === 'pending'
+      ? 'Your host access is pending admin approval.'
+      : 'You need approved host access to create rooms.' });
+  }
   const name = String((req.body && req.body.name) || '').trim().slice(0, 60) || 'Untitled Table';
   const requireApproval = !(req.body && req.body.requireApproval === false); // default true
   for (let attempt = 0; attempt < 5; attempt++) { // retry the rare code collision
@@ -1431,6 +1435,21 @@ app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
     }
   }
   res.status(500).json({ error: 'could not allocate a room code' });
+});
+
+// A player asks to become a host. Sets host_status = pending for an admin to
+// approve. A passwordless player must set a password in the same step (hosting
+// needs one). No-op if they can already host.
+app.post('/host/request', express.json({ limit: '1kb' }), async (req, res) => {
+  const user = await requireUser(req, res); if (!user) return;
+  if (user.canOwnRooms) return res.json({ user: clientUser(user) });
+  if (!user.hasPassword) {
+    const pw = req.body && req.body.password;
+    if (!pw || String(pw).length < 8) return res.status(400).json({ error: 'set a password (8+ characters) to request host access' });
+    await db.setPassword(user.id, await hashPassword(String(pw)));
+  }
+  await db.setHostStatus(user.id, 'pending');
+  res.json({ user: clientUser(await db.findUserById(user.id)) });
 });
 
 app.post('/rooms/join', express.json({ limit: '1kb' }), async (req, res) => {
@@ -1497,6 +1516,17 @@ app.get('/admin/rooms', async (req, res) => {
 app.get('/admin/users', async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.json({ users: await db.listUsers() });
+});
+app.get('/admin/pending-count', async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json({ pending: await db.countPendingHosts() }); // for the console/lobby badge
+});
+app.post('/admin/users/:id/host', express.json({ limit: '1kb' }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const status = req.body && req.body.status;
+  if (!['approved', 'pending', 'none'].includes(status)) return res.status(400).json({ error: 'bad status' });
+  await db.setHostStatus(req.params.id, status); // approve -> 'approved', reject/revoke -> 'none'
+  res.json({ ok: true });
 });
 app.post('/admin/rooms/:id/restore', async (req, res) => {
   if (!await requireAdmin(req, res)) return;
