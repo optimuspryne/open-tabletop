@@ -18,20 +18,30 @@ LAN → use your machine's IP) and move pieces around together.
 
 ## Database
 
-The saved-asset **library** (custom decks/boards/props *metadata*) lives in
-Postgres; live game state and hands are still all in-memory. One-time setup:
+Postgres now backs three things: the saved-asset **library** (deck/board/prop
+metadata), **user accounts**, and **rooms + membership**. Live game state and
+private hands are still all in-memory. One-time setup:
 
 1. **Database + owner role** (as a superuser):
    `CREATE ROLE tabletop LOGIN PASSWORD '…';` then
    `CREATE DATABASE tabletop OWNER tabletop;`
-2. **Migration** (as the owner): `psql -U tabletop -d tabletop -f 001_custom_assets.sql`
-3. **Least-privilege app role** (as a superuser):
-   `psql -U postgres -d tabletop -f grants_app_role.sql` — creates `tabletop_app`,
-   a CRUD-only role (no `CREATE`/`DROP`/`TRUNCATE`/`ALTER`) that the running server uses.
+2. **Least-privilege app role** (as a superuser): create `tabletop_app`, a
+   CRUD-only role (no `CREATE`/`DROP`/`TRUNCATE`/`ALTER`) that the running
+   server connects as. Grant it `SELECT/INSERT/UPDATE/DELETE` on the tables and
+   `USAGE` on the sequences.
+3. **Schema** (as the *owner*). For a **fresh install** (a new Docker volume, a
+   clean dev DB), apply the consolidated baseline in one shot:
+   `psql -U tabletop -d tabletop -f postgres/schema.sql`.
+   To **upgrade an existing database**, apply the numbered migrations in order
+   instead — `001_custom_assets.sql` → `002_auth.sql` → `003_asset_visibility.sql`
+   → `004_host_status.sql`. (`schema.sql` is the flattened end state of those four;
+   the per-migration backfills matter on a populated DB but are no-ops on an empty
+   one, so they're dropped from the baseline.)
 4. **Point the app at it:** `cp .env.example .env`, set `DATABASE_URL` to the
    `tabletop_app` connection string. `npm start` auto-loads `.env`.
-5. **(Optional) import an old disk library:** run once as the *owner* role —
-   `node --env-file=.env import-assets.js`.
+5. **Bootstrap the first admin** (once you've signed up an account): flip the
+   flag directly — `UPDATE users SET is_admin = true WHERE lower(username) =
+   lower('you');`. Admins can then grant admin/host to others from the console.
 
 Config comes from `DATABASE_URL`, or `DATABASE_URL_FILE` (a path to a file holding
 it — the Docker-secrets pattern, taking priority). There's no hardcoded fallback, so
@@ -61,26 +71,47 @@ turn on `ssl` server-side.
   or the whole table (🃏, revealed face-up in your seat fan with a public "SHOWING
   n" badge), floating **name tags** over pieces others are holding, and an
   **attention ping** (middle-click / **P**) that pulses a colored ring at a spot.
+- **Accounts, rooms & roles** — sign up as a passwordless **player** (quick-join)
+  or a password **host**; create rooms with join codes and an optional
+  admit-to-join gate. Membership carries a **role** (owner → GM → helper →
+  player) that gates the table tools, managed live from an in-table Members
+  panel. See "Accounts, rooms & roles" below.
+- **Admin console & curated library** — site **admins** manage all rooms and
+  users at `/admin.html`, and curate the shared asset library in a dedicated
+  **editor** (`/editor.html`): every deck/board/prop is **public or private**,
+  admins create/edit, and GMs/helpers spawn only what's been published. See
+  "The asset library" below.
 
 ## Files
 
 ```
-server.js            Colyseus room + authoritative cannon-es physics + HTTP + Postgres library
-db.js                Postgres pool + saved-library queries (deck/board/prop metadata)
-import-assets.js     one-time: import existing saved-assets/*.json metadata into Postgres
+server.js            Colyseus rooms + authoritative cannon-es physics + HTTP (auth/rooms/admin) + Postgres
+db.js                Postgres pool + all queries (library, users, rooms, membership)
+auth.js              password hashing (scrypt) + device-token hashing (no deps)
 shared/pieces.js     piece specs (mass, colliders, palettes, dice verts, prop/board registries) + timerLive
+postgres/            SQL migrations — 002_auth, 003_asset_visibility, 004_host_status (apply in order)
+docs/                ARCHITECTURE.md, REFERENCE.md, ASSET_CREDITS.md
+docker/              Dockerfile
 public/
-  index.html         page shell: importmap + <link>/<script> to the files below
-  styles.css         all UI styling (design-token :root block)
+  index.html         landing / lobby page (quick-join, login, room list, host request)
+  landing.js         landing-page logic (auth calls, room list, host-access request)
+  table.html         the game table shell: importmap + toolbar + panels + modals
+  editor.html        admin-only library editor (reuses the table engine)
+  editor-panel.js    the editor's library-management panel (publish / rename / delete / spawn)
+  admin.html         admin console shell (rooms + users tables)
+  admin.js           admin-console logic (room/user management, host approvals)
+  styles.css         all UI styling (design-token :root block, shared chrome, page layouts)
   core.js            scene/camera/renderer/controls + the CONFIG and LIGHTING tunables
   graphics.js        every texture & mesh builder, model loading, the KIND registry
-  client.js          the runtime: networking, interaction, seats, render loop
+  client.js          the game-table runtime: networking, interaction, seats, render loop
   models/            bundled CC0 .glb assets (chess, checkers, go, misc, boards)
 ```
 
-The client is split into a **linear import chain**: `shared ← core ← graphics ←
-client`. `index.html` loads `client.js`; its `import`s pull in the rest. Nothing
-is bundled — Three.js comes from a CDN import map, Colyseus from unpkg.
+The game client is a **linear import chain**: `shared ← core ← graphics ←
+client`. `table.html` and `editor.html` load `client.js`; its `import`s pull in
+the rest (the editor also loads `editor-panel.js`). The landing and admin pages
+are standalone (`landing.js` / `admin.js`, plain `fetch` to the HTTP API).
+Nothing is bundled — Three.js comes from a CDN import map, Colyseus from unpkg.
 
 ## Tuning knobs (edit and reload)
 
@@ -137,21 +168,30 @@ Card faces are texture *references*: `rank:A:♠:#000` (procedural), `text:…`
 uploaded images, with a **"Save this deck as…"** field to persist it on creation.
 There's also a "Spawn Built-in Deck" for a standard 52.
 
-## Saving, editing & cloning (shared library)
+## The asset library (admin-curated)
 
-- **Decks** save on creation (name field) or via **S** on a hovered deck. **Edit**
-  a saved deck to swap its back image or append cards; **Save** overwrites,
-  **Save as copy** clones.
-- **Custom model props** save from the Custom-model dialog; **Edit** a saved prop
-  to change scale/tint/stands, then **Save** or **Save as copy**.
-- **Boards** save/load from the Board dialog (built-in, uploaded `.glb`, or flat).
+The saved deck/board/prop library is **global** (every room sees it) and
+**admin-curated**. Site admins create, edit, and delete library assets in a
+dedicated **editor** (`/editor.html`) — an admin-only room that reuses the table
+engine, so an asset can be spawned and tested live as it's built. Every asset
+carries a **public/private** flag:
 
-The library is global (every room sees it). **Metadata lives in Postgres**
-(`custom_decks` / `custom_boards` / `custom_objects`), keyed by a row **id**;
-uploaded **image and model files stay on disk** under `ASSETS_DIR` and are served
-from `/assets`. Uploaded images are **POSTed to `/upload`** (not sent over the
-socket); `.glb` models to **`/upload-model`**. Files get random names, so
-unrevealed fronts stay hidden.
+- **private** (a new asset's default) — only admins can spawn or edit it;
+- **public** — admins still own editing, but GMs and helpers can now spawn it
+  into their games too.
+
+At a game table, GMs/helpers get a **spawn picker** over the public library (plus
+built-in shapes, dice, and table reshaping); the creation/upload/save controls
+are hidden and server-refused for non-admins. Admins can spawn *private* assets
+anywhere (handy for prepping a campaign). Editing an asset is always admin-only —
+the public flag widens *spawn* rights, never *edit* rights.
+
+**Metadata lives in Postgres** (`custom_decks` / `custom_boards` /
+`custom_objects`), keyed by a row **id**, with `owner_id` (the creating admin)
+and `is_public`; uploaded **image and model files stay on disk** under
+`ASSETS_DIR` and are served from `/assets`. Uploaded images are **POSTed to
+`/upload`** (not sent over the socket); `.glb` models to **`/upload-model`**.
+Files get random names, so unrevealed fronts stay hidden.
 
 ```
 saved-assets/            (ASSETS_DIR, default ./saved-assets — image/model FILES only)
@@ -172,7 +212,43 @@ fit the table), given a box collider from their measured bounds, and can be
 **tinted**. Built-in model pieces (chess, checkers, go, coin, chip, token) use a
 fixed per-piece scale and precomputed colliders so a set keeps its real
 proportions. `modelScale`, `modelRot`, and the tint mode all live in
-`shared/pieces.js`. See `ASSET_CREDITS.md` for bundled-asset licensing (all CC0).
+`shared/pieces.js`. See `docs/ASSET_CREDITS.md` for bundled-asset licensing (all CC0).
+
+## Accounts, rooms & roles
+
+Two kinds of account: a **player** (passwordless — a display name plus a device
+token kept in the browser, created by quick-join) and a **host** (has a
+password). Anyone can join a room by code; only an **approved host** (or an
+admin) can create one.
+
+**Rooms** have a join code, an owner, and an optional **require-approval** gate.
+With approval on, a joiner waits as *pending* until a GM admits them (the landing
+page polls and auto-forwards on approval); with it off, they're admitted
+immediately. Owners rename, toggle approval, and close their rooms from the
+lobby; closing disposes the live room.
+
+**Roles** rank **owner → GM → helper → player**, are per-room membership, and are
+stamped onto the connection at join and enforced server-side:
+
+- **player** — move/throw pieces, play their own hand.
+- **helper** (+) — spawn built-in props/dice and public library decks/props.
+- **GM** (+) — reshape/reset the table, spawn public boards, and manage members
+  (admit / kick / promote) from the in-table Members panel.
+- **owner** — the room's creator; a GM other GMs can't manage.
+
+A site **admin** is a global flag, not a room role: admins join any room as a GM,
+can spawn private library assets anywhere, and curate the library.
+
+**Host approval:** creating rooms requires approved host access. Signing up with
+a password lands an account in a **pending** state (they can still play, just not
+host); a passwordless player can **request host access** (which sets a password).
+An admin approves / rejects / revokes from the console — revoking keeps the
+password, so they can re-request. Admins host regardless and stay out of the queue.
+
+**The admin console** (`/admin.html`, admins only) lists every room (including
+soft-deleted, with restore / purge) and every user (grant/revoke admin,
+approve/reject/revoke host, delete). A pending-host count shows on the Users
+header and on the lobby's Admin link.
 
 ## Docker
 
@@ -189,12 +265,15 @@ secret. Live game state and hands are in-memory by design; new rooms start empty
 
 ## Roadmap (not yet built)
 
-A **role/auth + lobby layer** (Admin → Game Master → Helper → Player), with
-Postgres-backed **accounts and room metadata** (asset metadata already landed —
-see Database; the `owner_id` columns are in place, nullable until users exist),
-unlocking GM-only variants of the table tools. Plus a stateless hardening pass
-(glTF validation, upload caps/rate limits, external-URI stripping, security
-headers) and admin-only uploads. See the security notes in `ARCHITECTURE.md`.
+The accounts / rooms / roles / admin / library-curation layer described above is
+built. What's still open is mostly a **hardening pass** before any public
+exposure — glTF validation, upload caps and rate limits, external-URI stripping
+on uploaded models, and security headers (a real CSP once the CDN libraries are
+self-hosted) — plus a few niceties: account **avatar uploads** (the `setUserAvatar`
+db stub is in place), a real socket **push** for the "you're admitted" signal
+(currently a short-poll), per-user **live kick** across rooms, and **env-var admin
+bootstrapping** as an alternative to the manual SQL flip. See the security notes
+in `docs/ARCHITECTURE.md`.
 
 ## Notes
 
