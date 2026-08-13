@@ -24,6 +24,13 @@
     <thead><tr><th>Username</th><th>Email</th><th>Type</th><th>Actions</th></tr></thead>
     <tbody id="usersBody"></tbody>
   </table>
+
+  <h2>Storage</h2>
+  <p class="muted">Find image &amp; model files under <code>saved-assets/</code> that nothing references anymore (from deleted decks, boards, props, skyboxes…). Files newer than a day and anything still in use — including live tables — are left alone. Cleanup moves files to <code>saved-assets/.trash/</code>, so it's recoverable.</p>
+  <div id="cleanup">
+    <button id="scanOrphans">Scan for orphaned files</button>
+    <div id="cleanupResult" class="muted" style="margin-top:8px"></div>
+  </div>
 </main>
 
 <section id="denied" hidden>

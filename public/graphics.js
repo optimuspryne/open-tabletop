@@ -124,8 +124,9 @@ function cTex(canvas, srgb = true) {
 
 // Draw a die number centred on a `size`×`size` canvas, shrinking the font until
 // it fits. 6 and 9 get an underline so they can't be confused upside-down.
-function drawNumber(ctx, size, value) {
-  ctx.fillStyle = COLORS.ink;
+function drawNumber(ctx, size, value, color) {
+  const ink = color || COLORS.ink;
+  ctx.fillStyle = ink;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
@@ -139,7 +140,7 @@ function drawNumber(ctx, size, value) {
   ctx.fillText(text, size / 2, size / 2 + size * 0.016);
 
   if (value === 6 || value === 9) {
-    ctx.strokeStyle = COLORS.ink;
+    ctx.strokeStyle = ink;
     ctx.lineWidth = size * 0.047;
     ctx.beginPath();
     ctx.moveTo(size * 0.34, size * 0.74);
@@ -152,33 +153,36 @@ function drawNumber(ctx, size, value) {
 // polyhedral dice, and ivory-background digits for the flat d6 box faces.
 const _digitTex = new Map(), _faceTex = new Map();
 
-function digitTexture(value) {
-  if (_digitTex.has(value)) return _digitTex.get(value);
+function digitTexture(value, text) {
+  const def = text == null;
+  if (def && _digitTex.has(value)) return _digitTex.get(value);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
-  drawNumber(ctx, size, value);
+  drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
   const texture = cTex(canvas);
-  _digitTex.set(value, texture);
+  if (def) _digitTex.set(value, texture);
   return texture;
 }
 
-function numberFaceTexture(value) {
-  if (_faceTex.has(value)) return _faceTex.get(value);
+const hexOf = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
+function numberFaceTexture(value, body, text) {
+  const def = body == null && text == null;                 // the shared, cached ivory face
+  if (def && _faceTex.has(value)) return _faceTex.get(value);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
-  ctx.fillStyle = COLORS.ivory;
+  ctx.fillStyle = body != null ? hexOf(body) : COLORS.ivory;
   ctx.fillRect(0, 0, size, size);
-  drawNumber(ctx, size, value);
+  drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
   const texture = cTex(canvas);
-  _faceTex.set(value, texture);
+  if (def) _faceTex.set(value, texture);                    // only the default is cached (custom faces are per-die)
   return texture;
 }
 
 // A flat plane showing one die number, for laying onto a polyhedron's face.
-function numberLabel(value, size) {
+function numberLabel(value, size, text) {
   return new THREE.Mesh(
     new THREE.PlaneGeometry(size, size),
-    new THREE.MeshBasicMaterial({ map: digitTexture(value), transparent: true, depthWrite: false }),
+    new THREE.MeshBasicMaterial({ map: digitTexture(value, text), transparent: true, depthWrite: false }),
   );
 }
 
@@ -186,10 +190,10 @@ function numberLabel(value, size) {
 // each face. ConvexGeometry gives us triangles, so we recover the real polygon
 // faces by grouping triangles that share a normal (same trick as the server's
 // collider), then drop a numbered label at each face's centre.
-function convexDie(sides) {
+function convexDie(sides, color, textColor) {
   const points = dieVerts(sides, DIE_RADIUS[sides] || 1).map(v => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(points);
-  const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: COLORS.ivory, roughness: 0.45, flatShading: true }));
+  const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color ?? COLORS.ivory, roughness: 0.45, flatShading: true }));
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -232,7 +236,7 @@ function convexDie(sides) {
     verts.forEach(v => circumRadius = Math.max(circumRadius, v.distanceTo(centroid)));
     const inRadius = circumRadius * Math.cos(Math.PI / verts.length);
 
-    const label = numberLabel(index + 1, inRadius * 1.25);
+    const label = numberLabel(index + 1, inRadius * 1.25, textColor);
     label.position.copy(centroid).addScaledVector(face.normal, 0.015); // float just above the surface
     label.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), face.normal);
     group.add(label);
@@ -242,10 +246,10 @@ function convexDie(sides) {
 
 // A d4 is read by its top vertex, not a top face — so each of the 4 vertices
 // carries a number, printed at that corner on all three faces touching it.
-function numberedD4() {
+function numberedD4(color, textColor) {
   const verts = dieVerts(4, DIE_RADIUS[4]).map(v => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(verts);
-  const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: COLORS.ivory, roughness: 0.45, flatShading: true }));
+  const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color ?? COLORS.ivory, roughness: 0.45, flatShading: true }));
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -281,7 +285,7 @@ function numberedD4() {
     // One label per corner of this face, oriented so the digit points outward
     // toward its own vertex (that's why each number appears three times).
     for (const corner of [a, b, c]) {
-      const label = numberLabel(vertexNumber(corner), circumRadius * 0.55);
+      const label = numberLabel(vertexNumber(corner), circumRadius * 0.55, textColor);
       up.subVectors(corner, centroid).normalize();
       right.crossVectors(up, normal).normalize();
       up.crossVectors(normal, right).normalize();
@@ -519,11 +523,11 @@ function dieMesh(props = {}) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
       new THREE.BoxGeometry(DIE_RADIUS[6] * 2, DIE_RADIUS[6] * 2, DIE_RADIUS[6] * 2),
-      faceOrder.map(n => new THREE.MeshStandardMaterial({ map: numberFaceTexture(n), roughness: 0.5 })),
+      faceOrder.map(n => new THREE.MeshStandardMaterial({ map: numberFaceTexture(n, props.color, props.textColor), roughness: 0.5 })),
     );
   }
-  if (sides === 4) return numberedD4();
-  return convexDie(sides);
+  if (sides === 4) return numberedD4(props.color, props.textColor);
+  return convexDie(sides, props.color, props.textColor);
 }
 
 // A rounded-rectangle alpha mask (white card shape on black), so cards render

@@ -62,11 +62,30 @@ const SIM = {
 // Because filenames are random and the .json metadata is never served, a card
 // front that's meant to stay hidden can't be discovered by poking at /assets.
 const ASSETS_DIR = process.env.ASSETS_DIR || './saved-assets';
-const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props'];
+const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props', 'sky'];
 for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recursive: true });
 
 // Clamp a number into [min, max].
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+// A bounded image data-URL (the only avatar shape we accept — small enough to
+// sync in state, and never an arbitrary URL/script). Used by setAvatar + /me/avatar.
+const isBoundedImageDataURL = (data) => typeof data === 'string' && data.startsWith('data:image') && data.length < 60000;
+// A whiteboard stroke: a flat [x0,y0,x1,y1,...] path in normalized [0,1] board UV,
+// plus a colour + width. Bounded so a bad client can't push junk or a huge payload.
+const validStroke = (s) => s && Array.isArray(s.pts) && s.pts.length >= 2 && s.pts.length <= 2000
+  && s.pts.every(n => typeof n === 'number' && n >= 0 && n <= 1)
+  && typeof s.color === 'string' && s.color.length <= 24
+  && typeof s.width === 'number' && isFinite(s.width) && s.width > 0 && s.width <= 0.2;
+// A skybox reference: '' (default), a local equirect URL, or a cube descriptor
+// {"t":"cube","f":[6 local urls]}. Only local /assets/sky/ or /sky/ paths, never
+// external — every client loads it.
+const skyUrlOk = (u) => typeof u === 'string' && u.length < 300 && !u.includes('..') && (u.startsWith('/assets/sky/') || u.startsWith('/sky/'));
+const validSky = (v) => {
+  if (v === '') return true;
+  if (typeof v !== 'string' || v.length > 2000) return false;
+  if (v[0] === '{') { let d; try { d = JSON.parse(v); } catch { return false; } return !!d && d.t === 'cube' && Array.isArray(d.f) && d.f.length === 6 && d.f.every(skyUrlOk); }
+  return skyUrlOk(v);
+};
 
 // Keep an untrusted category name inside the allowlist (falls back to 'uploads').
 const assetKind = (kind) => ASSET_KINDS.includes(kind) ? kind : 'uploads';
@@ -94,6 +113,47 @@ function saveImageRef(dataURL, kind = 'decks') {
   const [, mimeType, base64] = match;
   const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
   return saveAsset(kind, Buffer.from(base64, 'base64'), ext);
+}
+
+// ---- Orphaned-asset cleanup (admin) ---------------------------------------
+// Files under saved-assets/ that nothing references anymore. "Referenced" is
+// gathered conservatively (broad regex over every library row + room skybox +
+// every LIVE table's state), and we skip anything newer than a day so an
+// in-progress upload can't be swept. public/ is never touched (built-ins live there).
+const LIVE_ROOMS = new Set();                 // in-process TableRoom instances (see onCreate/onDispose)
+const ASSET_PATH_RE = /\/assets\/(?:uploads|decks|boards|props|sky)\/[A-Za-z0-9._-]+/g;
+const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+const extractAssetPaths = (str, set) => { const m = String(str).match(ASSET_PATH_RE); if (m) for (const p of m) set.add(p); };
+
+async function findOrphanAssets() {
+  const referenced = new Set();
+  for (const blob of await db.allAssetRefBlobs()) extractAssetPaths(blob, referenced); // DB refs (throws → abort)
+  for (const room of LIVE_ROOMS) extractAssetPaths(JSON.stringify(room.state.toJSON()), referenced); // live tables
+  const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
+  const orphans = [];
+  for (const kind of ASSET_KINDS) {
+    let names = [];
+    try { names = fs.readdirSync(path.join(ASSETS_DIR, kind)); } catch { continue; }
+    for (const name of names) {
+      let st; try { st = fs.statSync(path.join(ASSETS_DIR, kind, name)); } catch { continue; }
+      if (!st.isFile() || st.mtimeMs > cutoff) continue;               // skip dirs and too-new files
+      if (referenced.has(`/assets/${kind}/${name}`)) continue;         // still in use
+      orphans.push({ url: `/assets/${kind}/${name}`, kind, name, size: st.size });
+    }
+  }
+  return orphans;
+}
+function trashOrphans(orphans) {
+  const moved = [];
+  for (const o of orphans) {
+    try {
+      const destDir = path.join(ASSETS_DIR, '.trash', o.kind);
+      fs.mkdirSync(destDir, { recursive: true });
+      fs.renameSync(path.join(ASSETS_DIR, o.kind, o.name), path.join(destDir, o.name));
+      moved.push(o.url);
+    } catch (e) { console.error('[cleanup] move', o.url, e.message); }
+  }
+  return moved;
 }
 
 // --- Colliders ---------------------------------------------------------------
@@ -238,16 +298,30 @@ class ScoreRow extends Schema {
   constructor(label = '', score = 0) { super(); this.label = label; this.score = score; }
 }
 defineTypes(ScoreRow, { label: 'string', score: 'number' });
-class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; }
+// The whiteboard is a synced singleton (like the timer), NOT a physics piece: it
+// rides a circular track behind the players (angle), one person "owns" it to draw,
+// and it's dark (chalkboard) or light (whiteboard). Strokes are held server-side,
+// not in the schema. Ephemeral — gone on room dispose.
+class Whiteboard extends Schema {
+  constructor() { super(); this.enabled = false; this.angle = 0; this.owner = ''; this.dark = true; }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number' });
+defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', dark: 'boolean' });
+class State extends Schema {
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; }
+}
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string' });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
 // --- Physics world (identical setup to the single-player client) ------------
 // GM-resizable table: half-extent bounds (default is TABLE = 10 x 7).
 const TABLE_LIMIT = { minX: 4, maxX: 20, minZ: 3, maxZ: 16 };
+// Backstop against a scene inlining raw image data (the normal flow stores card/
+// model art as file refs, so a real scene is tiny; this only catches the edge case).
+const SCENE_MAX_BYTES = 2_000_000;
+// Whiteboard: cap the server-held stroke history (a knob — raise/lower freely).
+const WHITEBOARD_MAX_STROKES = 2000;
+const TWO_PI = Math.PI * 2;
 
 // --- Physics world -----------------------------------------------------------
 // Create the single cannon-es world. The table surface + containment walls are
@@ -309,6 +383,7 @@ class TableRoom extends Room {
     this.setState(new State());
     this.world = buildWorld();
     this.mat = this.world.__mat;
+    LIVE_ROOMS.add(this); // so orphan cleanup can see this table's live asset references
     this.roomCode = (options && options.code) || null;
     const roomRec = this.roomCode ? await db.findRoomByCode(this.roomCode) : null;
     this.roomId = roomRec ? roomRec.id : null; // this live table's persistent room id (for membership)
@@ -320,6 +395,7 @@ class TableRoom extends Room {
       this.state.notes = String(rs.notes || '').slice(0, 8000);
       this.state.tableX = clamp(rs.tableX, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
       this.state.tableZ = clamp(rs.tableZ, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
+      this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
     }
     this.buildBounds(this.state.tableX, this.state.tableZ); // table surface + walls at the current size
     this.bodies = new Map();  // id -> CANNON.Body   (physics, not synced)
@@ -330,6 +406,7 @@ class TableRoom extends Room {
     this.cardData = new Map();  // id -> { front }         PRIVATE: a face-down table card's hidden face
     this.hands = new Map();     // sessionId -> [{hid,front,back}]  PRIVATE: each player's hidden hand
     this.notebooks = new Map(); // sessionId -> text               PRIVATE: each player's private notes (ephemeral; dies with the room)
+    this.strokes = [];          // whiteboard stroke history (server-held; sent to late-joiners, gone on dispose)
     this.shows = new Map();     // sessionId -> {to:Set,cards:[]}   PRIVATE: an active hold-to-show (who sees which of the shower's cards)
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.nextId = 1; this.nextHid = 1;
@@ -513,6 +590,29 @@ class TableRoom extends Room {
         this.broadcast('shuffled', { id: deckId }); // every client plays the riffle animation
       }
     });
+    // Split a deck in two: the original keeps the top half, a new (ephemeral) deck
+    // with the bottom half drops in beside it. Anyone who can touch decks can split.
+    this.onMessage('splitDeck', (client, { deckId } = {}) => {
+      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
+      if (!deck || deck.type !== 'deck' || !cards || cards.length < 2) return;      // need 2+ cards to split
+      if (this.state.pieces.size >= SIM.maxPieces) return;
+      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const bottom = cards.splice(Math.floor(cards.length / 2));                    // original keeps the top half
+      deck.count = cards.length;
+      this.updateDeckCollider(deckId);
+      const p = this.bodies.get(deckId)?.position || { x: 0, z: 0 };
+      this.spawn('deck', [p.x + 2.2, SIM.spawnY, p.z], { back, cards: bottom });     // the bottom half, beside it
+    });
+    // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
+    this.onMessage('recolor', (client, { id, color, textColor } = {}) => {
+      const piece = this.state.pieces.get(id);
+      if (!piece || (piece.type !== 'die' && piece.type !== 'prop')) return;
+      const ok = (c) => Number.isInteger(c) && c >= 0 && c <= 0xffffff;
+      const props = JSON.parse(piece.props || '{}');
+      if (color != null) { const c = Number(color); if (!ok(c)) return; props.color = c; }
+      if (piece.type === 'die' && textColor != null) { const t = Number(textColor); if (!ok(t)) return; props.textColor = t; } // die number colour
+      piece.props = JSON.stringify(props); // synced → every client rebuilds the piece with the new tint
+    });
     // Decks are built in chunks so no single message is huge (a text list can be
     // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
     this.onMessage('deckBegin', (client, msg) => {
@@ -619,8 +719,13 @@ class TableRoom extends Room {
     this.onMessage('sceneSave', async (client, msg = {}) => {
       if (!this.isAdmin(client)) return; // scenes are curated in the editor (admin-only)
       const name = String(msg.name || '').slice(0, 60).trim(); if (!name) return;
+      const payload = this.serializeScene();
+      if (JSON.stringify(payload).length > SCENE_MAX_BYTES) { // don't let inline art bloat the row
+        client.send('sceneError', { message: 'Scene is too large to save. Save its decks to the library first so their card art is stored as files, then try again.' });
+        return;
+      }
       try {
-        await db.insertScene({ name, payload: this.serializeScene(), ownerId: client.auth.userId }); // private by default
+        await db.insertScene({ name, payload, ownerId: client.auth.userId }); // private by default
         this.sendAssetList(client, 'scene');
       } catch (e) { console.error('[sceneSave]', e.message); }
     });
@@ -791,8 +896,7 @@ class TableRoom extends Room {
     });
     this.onMessage('setAvatar', (client, { data }) => {
       const player = this.state.players.get(client.sessionId);
-      // Only accept a bounded image data-URL (see the client-side XSS-safe render).
-      if (player && typeof data === 'string' && data.startsWith('data:image') && data.length < 60000) {
+      if (player && isBoundedImageDataURL(data)) {
         player.avatar = data;
         // Persist to the account so it follows the user across sessions and rooms.
         if (client.auth && client.auth.userId) db.setUserAvatar(client.auth.userId, data).catch(e => console.error('[setAvatar]', e.message));
@@ -821,6 +925,7 @@ class TableRoom extends Room {
       if (this.rank(client) < RANK.helper) return;
       const s = this.state.scores;
       if (msg.action === 'add') {
+        if (s.size >= 50) return; // cap the scoreboard so it can't be spammed unbounded
         s.set(rnd(), new ScoreRow(String(msg.label || 'Player').slice(0, 40), 0));
       } else if (msg.action === 'remove') {
         s.delete(String(msg.id));
@@ -855,6 +960,70 @@ class TableRoom extends Room {
       this.state.tableX = hx; this.state.tableZ = hz;
       this.buildBounds(hx, hz);
       this.scheduleSave();
+    });
+
+    // --- Whiteboard: a synced singleton on a track behind the players ----------
+    this.onMessage('wbEnable', (client, { on } = {}) => {
+      if (this.rank(client) < RANK.gm) return;             // spawn/enable is GM+
+      this.state.whiteboard.enabled = !!on;
+      if (!on) { this.strokes = []; this.state.whiteboard.owner = ''; this.broadcast('wbClear'); }
+    });
+    this.onMessage('wbSet', (client, msg = {}) => {         // slide on the track / flip dark<->light (GM+)
+      if (this.rank(client) < RANK.gm) return;
+      const wb = this.state.whiteboard;
+      if (isFinite(msg.angle)) wb.angle = ((msg.angle % TWO_PI) + TWO_PI) % TWO_PI;
+      if (typeof msg.dark === 'boolean') wb.dark = msg.dark;
+    });
+    this.onMessage('wbClaim', (client) => {                 // double-click to own it (must be enabled + free)
+      const wb = this.state.whiteboard;
+      if (wb.enabled && !wb.owner) wb.owner = client.sessionId;
+    });
+    this.onMessage('wbRelease', (client) => {               // exit inspect -> release
+      const wb = this.state.whiteboard;
+      if (wb.owner === client.sessionId) wb.owner = '';
+    });
+    this.onMessage('wbStroke', (client, stroke) => {        // owner draws; everyone else replays it
+      if (this.state.whiteboard.owner !== client.sessionId || !validStroke(stroke)) return;
+      stroke.sid = client.sessionId;                        // tag the drawer so their own echo is ignored client-side
+      this.strokes.push(stroke);
+      if (this.strokes.length > WHITEBOARD_MAX_STROKES) this.strokes.shift();
+      this.broadcast('wbStroke', stroke);                   // to everyone (matches ping/wbClear, which deliver reliably)
+    });
+    this.onMessage('wbClear', (client) => {                 // owner or GM+ wipes it
+      if (this.state.whiteboard.owner !== client.sessionId && this.rank(client) < RANK.gm) return;
+      this.strokes = [];
+      this.broadcast('wbClear');
+    });
+    this.onMessage('wbStrokes', (client) => client.send('wbStrokes', { strokes: this.strokes })); // late-join replay
+
+    // --- Skybox: per-room panorama, GM-applied + synced; library is admin-only ---
+    this.onMessage('skybox', (client, { url } = {}) => {
+      if (this.rank(client) < RANK.gm) return;             // changing the room's skybox is GM+
+      const u = url == null ? '' : String(url);
+      if (!validSky(u)) return;
+      this.state.skybox = u;
+      this.scheduleSave();                                 // durable, like the board/table
+    });
+    this.onMessage('listSkyboxes', (client) => this.sendAssetList(client, 'sky'));
+    this.onMessage('handSync', (client) => this.sendHand(client)); // re-send private hand (e.g. after a page refresh/reconnect)
+    this.onMessage('saveSkybox', async (client, msg = {}) => {
+      if (!this.isAdmin(client)) return;                   // curating the library is admin-only
+      const fail = (message) => client.send('skyError', { message });
+      const name = String(msg.name || '').slice(0, 60).trim();
+      if (!name) return fail('Give it a name.');
+      let ref;                                             // the stored reference: an equirect URL or a cube descriptor
+      if (msg.type === 'cube') {
+        const faces = Array.isArray(msg.faces) ? msg.faces.map(String) : [];
+        if (faces.length !== 6) return fail('A cubemap needs exactly six faces.');
+        if (!faces.every(u => u.startsWith('/assets/sky/') && skyUrlOk(u))) return fail('Each face must be an uploaded image.');
+        ref = JSON.stringify({ t: 'cube', f: faces });
+      } else {
+        const url = String(msg.url || '');
+        if (!url.startsWith('/assets/sky/') || !skyUrlOk(url)) return fail('Upload a panorama image first.');
+        ref = url;
+      }
+      try { await db.insertSkybox({ name, url: ref, ownerId: client.auth.userId, isPublic: msg.isPublic !== false }); this.sendAssetList(client, 'sky'); }
+      catch (e) { console.error('[saveSkybox]', e.message); fail('Server error saving the skybox.'); }
     });
     // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
     // to the chosen audience. Content goes out privately (like a hand); everyone
@@ -1131,7 +1300,7 @@ class TableRoom extends Room {
       if (!e || !KINDS[e.type]) continue;
       const props = e.props || {};
       if (e.type === 'board') { this.swapBoard(props); continue; }
-      const id = this.spawn(e.type, [+e.x || 0, +e.y || 2, +e.z || 0], props, Array.isArray(e.q) ? e.q : null);
+      const id = this.spawn(e.type, [+e.x || 0, Number.isFinite(+e.y) ? +e.y : 2, +e.z || 0], props, Array.isArray(e.q) ? e.q : null);
       if (e.type === 'card' && props.faceDown && props.front) this.cardData.set(id, { front: props.front });
     }
     this.scheduleSave(); // the new table size is durable
@@ -1147,10 +1316,10 @@ class TableRoom extends Room {
     if (!this.roomId) return;
     const rows = [];
     this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
-    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ })
+    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox })
       .catch(e => console.error('[saveState]', e.message));
   }
-  onDispose() { if (this._saveTimer) { clearTimeout(this._saveTimer); this.saveStateNow(); } } // flush a pending save
+  onDispose() { LIVE_ROOMS.delete(this); if (this._saveTimer) { clearTimeout(this._saveTimer); this.saveStateNow(); } } // flush a pending save
 
   // Send a client the library list for one asset kind. Admins get everything
   // (incl. private); everyone else gets only published (public) assets.
@@ -1160,6 +1329,7 @@ class TableRoom extends Room {
     else if (kind === 'board') client.send('boardList', await db.listBoards({ includePrivate }));
     else if (kind === 'prop') client.send('propList', await db.listProps({ includePrivate }));
     else if (kind === 'scene') client.send('sceneList', await db.listScenes({ includePrivate }));
+    else if (kind === 'sky') client.send('skyList', await db.listSkyboxes({ includePrivate }));
   }
 
   // --- Member-management authorization + list delivery ---
@@ -1385,6 +1555,9 @@ class TableRoom extends Room {
         this.targets.delete(id);
       }
     });
+    // Free the whiteboard right away if they were drawing — don't hold it locked
+    // through the reconnection window (others should be able to claim it at once).
+    if (this.state.whiteboard.owner === client.sessionId) this.state.whiteboard.owner = '';
 
     // On an unexpected drop (not a deliberate leave), hold their seat briefly in
     // case they reconnect. allowReconnection resolves if they come back in time.
@@ -1577,7 +1750,7 @@ app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
 app.post('/me/avatar', express.json({ limit: '128kb' }), async (req, res) => {
   const user = await requireUser(req, res); if (!user) return;
   const data = req.body && req.body.data;
-  if (typeof data !== 'string' || !data.startsWith('data:image') || data.length >= 60000) {
+  if (!isBoundedImageDataURL(data)) {
     return res.status(400).json({ error: 'invalid image' });
   }
   try { await db.setUserAvatar(user.id, data); res.json({ ok: true, avatar: data }); }
@@ -1659,6 +1832,22 @@ async function disposeLive(code) { // shut down a running table for this code, i
 app.get('/admin/rooms', async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.json({ rooms: await db.listRooms({ includeDeleted: true }) }); // active + soft-deleted, with owner name
+});
+app.get('/admin/orphans', async (req, res) => {     // dry-run: report unreferenced files, delete nothing
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const orphans = await findOrphanAssets();
+    res.json({ count: orphans.length, totalBytes: orphans.reduce((s, o) => s + o.size, 0), files: orphans.slice(0, 200).map(o => ({ url: o.url, size: o.size })) });
+  } catch (e) { console.error('[orphans scan]', e.message); res.status(500).json({ error: 'scan failed — nothing was deleted' }); }
+});
+app.post('/admin/orphans/purge', async (req, res) => { // re-scan fresh, then move orphans to .trash
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const orphans = await findOrphanAssets();          // never trust a stale client list
+    const bytes = orphans.reduce((s, o) => s + o.size, 0);
+    const moved = trashOrphans(orphans);
+    res.json({ moved: moved.length, totalBytes: bytes });
+  } catch (e) { console.error('[orphans purge]', e.message); res.status(500).json({ error: 'scan failed — nothing was deleted' }); }
 });
 app.get('/admin/users', async (req, res) => {
   if (!await requireAdmin(req, res)) return;

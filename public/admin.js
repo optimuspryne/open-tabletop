@@ -112,6 +112,26 @@ async function deleteUser(u) {
   try { await api('/admin/users/' + u.id, { method: 'DELETE' }); await loadUsers(); await loadRooms(); } catch (e) { alert(e.message); }
 }
 
+async function scanOrphans() {
+  const out = $('cleanupResult'); out.textContent = 'Scanning…';
+  try {
+    const { count, totalBytes } = await api('/admin/orphans');
+    if (!count) { out.textContent = 'No orphaned files found.'; return; }
+    out.replaceChildren();
+    const s = document.createElement('span');
+    s.textContent = `${count} orphaned file(s), ${(totalBytes / 1048576).toFixed(1)} MB.  `;
+    out.append(s, btn(`Move ${count} to trash`, () => purgeOrphans(count), 'danger'));
+  } catch (e) { out.textContent = e.message; }
+}
+async function purgeOrphans(count) {
+  if (!confirm(`Move ${count} orphaned file(s) to saved-assets/.trash/? They stay recoverable there until you delete the folder.`)) return;
+  const out = $('cleanupResult'); out.textContent = 'Moving…';
+  try {
+    const { moved, totalBytes } = await api('/admin/orphans/purge', { method: 'POST' });
+    out.textContent = `Moved ${moved} file(s) (${(totalBytes / 1048576).toFixed(1)} MB) to .trash.`;
+  } catch (e) { out.textContent = e.message; }
+}
+
 (async function boot() {
   if (!token()) { $('denied').hidden = false; return; }
   let me;
@@ -120,6 +140,7 @@ async function deleteUser(u) {
   if (!me.isAdmin) { $('denied').hidden = false; return; }
   myId = me.id;
   $('admin').hidden = false;
+  $('scanOrphans').onclick = scanOrphans;
   await loadRooms();
   await loadUsers();
 })();

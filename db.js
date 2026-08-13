@@ -139,19 +139,41 @@ export function insertScene({ name, payload, ownerId = null, isPublic = false })
     [name, JSON.stringify(payload || {}), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
 
+// ===== Skyboxes (admin-curated equirectangular panoramas) ===================
+export async function listSkyboxes({ includePrivate = false } = {}) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, name, file_url, is_public, owner_id FROM custom_skyboxes
+       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
+    return rows.map(r => ({ id: String(r.id), name: r.name, url: r.file_url, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
+  } catch (e) { console.error('[db] listSkyboxes:', e.message); return []; }
+}
+export function insertSkybox({ name, url, ownerId = null, isPublic = false }) {
+  return pool.query(
+    'INSERT INTO custom_skyboxes (name, file_url, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
+    [name, url, ownerId, isPublic]).then(r => String(r.rows[0].id));
+}
+
+// Every stored blob that could name an asset file — the reference set for orphan
+// cleanup. SELECT * (not named columns) so a newly-added column can never silently
+// un-protect a file. Throws on any error, so the caller aborts rather than over-delete.
+export async function allAssetRefBlobs() {
+  const out = [];
+  const dump = async (sql) => { const { rows } = await pool.query(sql); for (const r of rows) out.push(JSON.stringify(r)); };
+  await dump('SELECT * FROM custom_decks');
+  await dump('SELECT * FROM custom_boards');
+  await dump('SELECT * FROM custom_objects');
+  await dump('SELECT * FROM custom_scenes');
+  await dump('SELECT * FROM custom_skyboxes');
+  await dump("SELECT skybox FROM rooms WHERE skybox <> ''");
+  return out;
+}
+
 // ===== Asset admin (generic across the asset tables) =========================
 // Editing/visibility/deletion is admin-only (enforced server-side); these just run
 // the query for whichever kind. Unknown kinds are rejected so the table name can
 // never come from untrusted input.
-const ASSET_TABLE = { deck: 'custom_decks', board: 'custom_boards', prop: 'custom_objects', scene: 'custom_scenes' };
-export async function getAssetMeta(kind, id) {
-  const table = ASSET_TABLE[kind]; if (!table) return null;
-  try {
-    const { rows } = await pool.query(`SELECT id, name, is_public, owner_id FROM ${table} WHERE id = $1`, [id]);
-    if (!rows[0]) return null;
-    return { id: String(rows[0].id), name: rows[0].name, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
-  } catch (e) { console.error('[db] getAssetMeta:', e.message); return null; }
-}
+const ASSET_TABLE = { deck: 'custom_decks', board: 'custom_boards', prop: 'custom_objects', scene: 'custom_scenes', sky: 'custom_skyboxes' };
 export function setAssetPublic(kind, id, isPublic) {
   const table = ASSET_TABLE[kind]; if (!table) return Promise.reject(new Error('bad kind'));
   return pool.query(`UPDATE ${table} SET is_public = $2 WHERE id = $1`, [id, !!isPublic]);
@@ -353,14 +375,14 @@ export function renameRoom(roomId, name) {
 // the play-surface half-extents. All survive restarts and are Reset-exempt.
 export async function getRoomState(roomId) {
   try {
-    const { rows } = await pool.query('SELECT scoreboard, notes, table_x, table_z FROM rooms WHERE id = $1', [roomId]);
-    if (!rows[0]) return { scoreboard: [], notes: '', tableX: 10, tableZ: 7 };
-    return { scoreboard: rows[0].scoreboard || [], notes: rows[0].notes || '', tableX: Number(rows[0].table_x) || 10, tableZ: Number(rows[0].table_z) || 7 };
-  } catch (e) { console.error('[db] getRoomState:', e.message); return { scoreboard: [], notes: '', tableX: 10, tableZ: 7 }; }
+    const { rows } = await pool.query('SELECT scoreboard, notes, table_x, table_z, skybox FROM rooms WHERE id = $1', [roomId]);
+    if (!rows[0]) return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '' };
+    return { scoreboard: rows[0].scoreboard || [], notes: rows[0].notes || '', tableX: Number(rows[0].table_x) || 10, tableZ: Number(rows[0].table_z) || 7, skybox: rows[0].skybox || '' };
+  } catch (e) { console.error('[db] getRoomState:', e.message); return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '' }; }
 }
-export function saveRoomState(roomId, { scoreboard, notes, tableX, tableZ }) {
-  return pool.query('UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5 WHERE id = $1',
-    [roomId, JSON.stringify(scoreboard), notes, tableX, tableZ]);
+export function saveRoomState(roomId, { scoreboard, notes, tableX, tableZ, skybox }) {
+  return pool.query('UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6 WHERE id = $1',
+    [roomId, JSON.stringify(scoreboard), notes, tableX, tableZ, skybox]);
 }
 export function softDeleteRoom(roomId) { // owner or admin — hides it, keeps the row
   return pool.query('UPDATE rooms SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [roomId]);

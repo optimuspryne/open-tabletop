@@ -203,13 +203,21 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 ### Schema (synced state)
 
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
-  `x,y,z,qx,qy,qz,qw`.
+  `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the `props` JSON, not the schema:
+  `color` (die body / prop tint) and `textColor` (die numbers).
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
-  image).
+  image), **`role`** (the per-room owner/gm/helper/player rank).
 - **`Timer`** — `running, mode` (`'up'`/`'down'`), `base, since, duration`; the
   synced anchor (`timerLive()` computes the live value).
-- **`State`** — `pieces`, `players`, `turn`, **`timer`**.
+- **`ScoreRow`** — `label, score`; one scoreboard entry (in the `scores` map).
+- **`Whiteboard`** — `enabled, angle, owner, dark`; the shared tilt-up sketch
+  surface's *public* state. Strokes themselves are **not** synced — they're sent
+  as messages and replayed onto a texture (see the protocol below).
+- **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
+  **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
+  **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
+  `{"t":"cube","f":[…6…]}` cubemap descriptor).
 
 ### `TableRoom extends Room`
 
@@ -222,7 +230,9 @@ Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** an
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
 `cardData`, `hands`, `drafts`, **`pendingInspect`** (a drawn-but-unplaced card),
 **`notebooks`** (per-player private notes), **`shows`** (an active hold-to-show:
-`{ to:Set, cards }`).
+`{ to:Set, cards }`), and **`strokes`** (the whiteboard's stroke history, capped
+at `WHITEBOARD_MAX_STROKES`, replayed to late joiners). Module-scope **`LIVE_ROOMS`**
+(a Set of live rooms) lets the orphan-cleanup scan see in-play asset references.
 
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
 out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
@@ -230,14 +240,32 @@ out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`*
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
 **`advanceTurn`**, **`sendMembers`/`broadcastMembers`** (push the member list to
 GMs), **`sendAssetList(client,kind)`** (a library listing, private-inclusive for
-admins), **`swapBoard`**, **`closeAndDispose`** (broadcast `roomClosed`, then
-dispose — invoked by `matchMaker.remoteRoomCall`), `onJoin/onLeave`.
+admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`** (persist the room's
+durable settings — scoreboard, notes, table size, skybox — now / debounced via
+`db.saveRoomState`), **`closeAndDispose`** (broadcast `roomClosed`, then dispose —
+invoked by `matchMaker.remoteRoomCall`), `onJoin/onLeave`.
 
 Gameplay handlers (rank-gated): `grab`, `move`, `release`, `flip`, `dealToTable`,
-`dealDrag`, `takeCard`, `playCard`, `shuffle`, **`drawInspect`/`inspectPlace`**
-(private draw-to-inspect), `spawn` (helper+), `roll`, `reset` (gm+ — full clear),
-`nextTurn`, `remove`, `setName`, `setAvatar`, **`notebook`**, **`timer`** (action:
-`start`/`pause`/`reset`/`set`), **`showStart`/`showStop`**, **`ping`**.
+`dealDrag`, `takeCard`, `playCard`, `shuffle`, **`splitDeck`** (deal a deck in
+two — original keeps the top half, a new ephemeral deck gets the rest),
+**`drawInspect`/`inspectPlace`** (private draw-to-inspect), **`recolor`**
+(`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+),
+`roll`, `reset` (gm+ — full clear), `nextTurn`, `remove`, `setName`, `setAvatar`,
+**`notebook`**, **`handSync`** (re-send my private hand after a reconnect),
+**`timer`** (action: `start`/`pause`/`reset`/`set`), **`showStart`/`showStop`**,
+**`ping`**. Room settings (gm+, persisted via `scheduleSave`): **`score`**
+(scoreboard add/set/clear), **`roomNotes`**, **`tableSize`** (resize the felt),
+**`skybox`** (apply a background).
+
+Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
+**`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**
+(tilt angle / dark toggle), **`wbStroke`** (one stroke — appended to `strokes`,
+capped, and broadcast to everyone else to replay), **`wbClear`** (wipe),
+**`wbStrokes`** (a late joiner requests the full history).
+
+Scene & skybox library handlers: **`sceneSave`/`sceneLoad`/`listScenes`** (a whole
+table snapshot — pieces + settings — as an admin-curated library asset) and
+**`saveSkybox`/`listSkyboxes`** (equirect URL or a 6-face cubemap, admin-curated).
 
 Library handlers (all async, via `db`; keyed on a row **id**): creation —
 `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp`,
@@ -282,7 +310,10 @@ admin sandbox for building and testing library assets live. Registered as the
   `GET /admin/pending-count`, `POST /admin/rooms/:id/restore`, `DELETE
   /admin/rooms/:id` (purge), `POST /admin/users/:id/admin` (grant/revoke — can't
   revoke your own), `POST /admin/users/:id/host` (approve/reject/revoke),
-  `DELETE /admin/users/:id` (purge, cascades owned rooms + memberships).
+  `DELETE /admin/users/:id` (purge, cascades owned rooms + memberships),
+  **`GET /admin/orphans`** (dry-run: `/assets` files no library row, room, or live
+  table references — old enough to be safe), **`POST /admin/orphans/purge`**
+  (re-scan, move them to `saved-assets/.trash/`).
 
 ---
 
@@ -306,10 +337,20 @@ return the flag:
   `{model,…}` / `{w,d,tex}`), `insertBoard(name, rec, {ownerId,isPublic}) → id`.
 - **Props** — `listProps({includePrivate}) → [{id,name,props,isPublic,ownerId}]`,
   `insertProp(name, props, {ownerId,isPublic}) → id`.
-- **Asset admin** (generic over the three tables via an `ASSET_TABLE` whitelist,
-  `kind ∈ deck|board|prop`) — `getAssetMeta(kind,id) → {id,name,isPublic,ownerId}`,
-  `setAssetPublic(kind,id,isPublic)`, `renameAsset(kind,id,name)`,
-  `deleteAsset(kind,id)`.
+- **Scenes** (whole-table snapshots) — `listScenes`, `getScene(id)`,
+  `insertScene({name,payload,ownerId,isPublic})`.
+- **Skyboxes** — `listSkyboxes`, `insertSkybox({name,url,ownerId,isPublic})`
+  (`url` is an equirect `/assets/sky/…` or a cubemap descriptor).
+- **Asset admin** (generic over the tables via an `ASSET_TABLE` whitelist,
+  `kind ∈ deck|board|prop|scene|sky`) — `setAssetPublic(kind,id,isPublic)`,
+  `renameAsset(kind,id,name)`, `deleteAsset(kind,id)`.
+- **Orphan cleanup** — `allAssetRefBlobs()` returns every stored row (all asset
+  tables + `rooms.skybox`) as JSON strings, the reference set the orphan scan
+  greps for `/assets/…` paths.
+
+**Per-room durable state.** A room's non-piece settings survive restarts:
+`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, skybox}` and
+`saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
 
 **Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,
 hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admin`;

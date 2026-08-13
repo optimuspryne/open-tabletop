@@ -49,6 +49,7 @@ CREATE TABLE rooms (
   notes             text        NOT NULL DEFAULT '',    -- durable GM room notes (GM-only edits)
   table_x           real        NOT NULL DEFAULT 10,    -- play-surface half-extents (GM-resizable)
   table_z           real        NOT NULL DEFAULT 7,
+  skybox            text        NOT NULL DEFAULT '',    -- durable per-room skybox URL (GM-set; '' = default)
   created_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz
 );
@@ -121,5 +122,16 @@ CREATE TABLE custom_scenes (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX custom_scenes_owner_idx ON custom_scenes (owner_id);
+
+-- Admin-curated skyboxes: equirectangular panorama images, applied per-room by a GM.
+CREATE TABLE custom_skyboxes (
+  id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  owner_id    bigint      CONSTRAINT fk_skybox_owner REFERENCES users(id),
+  name        text        NOT NULL,
+  file_url    text        NOT NULL,  -- the uploaded panorama, served from /assets/sky/
+  is_public   boolean     NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX custom_skyboxes_owner_idx ON custom_skyboxes (owner_id);
 
 COMMIT;

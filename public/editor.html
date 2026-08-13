@@ -17,6 +17,7 @@
   <button id="newProp">+ Object</button>
   <button id="newDeck">+ Deck</button>
   <button id="newBoard">↷ Board</button>
+  <button id="newSky">🌄 Skybox</button>
   <button id="roll">↻ Dice</button>
   <button id="notesBtn">✎ Notes</button>
   <button id="timerBtn">⏱ Timer</button>
@@ -258,13 +259,45 @@
   </div>
 </div>
 
+<div id="skyModal" hidden>
+  <div class="modalCard">
+    <h3>Skybox library</h3>
+    <div class="note">Upload panoramas or cubemaps for GMs to apply in their rooms. Click one to preview it here.</div>
+    <div id="skyList" class="savedList"></div>
+    <div id="skyAdmin">
+      <hr class="divider">
+      <label>Add to the library</label>
+      <div class="modeRow">
+        <label><input type="radio" name="skyType" value="equirect" checked> Equirectangular (1 image, 2:1)</label>
+        <label><input type="radio" name="skyType" value="cube"> Cubemap (6 images)</label>
+      </div>
+      <input id="skyName" type="text" placeholder="Name" maxlength="60">
+      <div id="skyEqui"><input id="skyFile" type="file" accept="image/*"></div>
+      <div id="skyCube" hidden>
+        <div class="cubeGrid">
+          <label>Right +X<input id="skyPX" type="file" accept="image/*"></label>
+          <label>Left −X<input id="skyNX" type="file" accept="image/*"></label>
+          <label>Top +Y<input id="skyPY" type="file" accept="image/*"></label>
+          <label>Bottom −Y<input id="skyNY" type="file" accept="image/*"></label>
+          <label>Front +Z<input id="skyPZ" type="file" accept="image/*"></label>
+          <label>Back −Z<input id="skyNZ" type="file" accept="image/*"></label>
+        </div>
+      </div>
+      <div class="row"><button id="skyAdd">Upload &amp; add</button></div>
+      <div class="err" id="skyErr"></div>
+    </div>
+    <div class="row"><button id="skyClose">Close</button></div>
+  </div>
+</div>
+
 <!-- library management panel (editor only) -->
 <div id="libraryPanel" hidden>
   <div id="libraryHead"><b>Library</b><span id="libraryClose">✕</span></div>
-  <p class="libHint">Build assets with the toolbar (+ Deck / + Object / ↷ Board) — they save <b>private</b>. Publish here to let GMs &amp; helpers spawn them.</p>
+  <p class="libHint">Build assets with the toolbar (+ Deck / + Object / ↷ Board / 🌄 Skybox) — they save <b>private</b>. Publish here to let GMs &amp; helpers spawn them.</p>
   <div class="libSection"><h4>Decks</h4><ul id="libDecks" class="libList"></ul></div>
   <div class="libSection"><h4>Boards</h4><ul id="libBoards" class="libList"></ul></div>
   <div class="libSection"><h4>Props</h4><ul id="libProps" class="libList"></ul></div>
+  <div class="libSection"><h4>Skyboxes</h4><ul id="libSky" class="libList"></ul></div>
   <div class="libSection">
     <h4>Scenes</h4>
     <button id="sceneSaveBtn" class="sceneSaveBtn">Save current table as scene…</button>

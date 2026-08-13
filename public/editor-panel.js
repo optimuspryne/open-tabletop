@@ -7,7 +7,7 @@ const $ = (id) => document.getElementById(id);
 const btn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
 
 let ROOM = null;
-const LIST_UL = { deck: 'libDecks', board: 'libBoards', prop: 'libProps', scene: 'libScenes' };
+const LIST_UL = { deck: 'libDecks', board: 'libBoards', prop: 'libProps', scene: 'libScenes', sky: 'libSky' };
 const spawnOf = {
   deck: (it) => ROOM.send('loadDeck', { id: it.id }),
   board: (it) => ROOM.send('loadBoard', { id: it.id }),
@@ -20,14 +20,16 @@ function renderList(kind, list) {
   if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet.'; ul.appendChild(li); return; }
   for (const it of list) {
     const li = document.createElement('li'); li.className = 'libRow';
-    const extra = kind === 'deck' && it.count != null ? ` \u00b7 ${it.count}` : (kind === 'board' && it.kind ? ` \u00b7 ${it.kind}` : '');
+    const extra = kind === 'deck' && it.count != null ? ` \u00b7 ${it.count}` : (kind === 'board' && it.kind ? ` \u00b7 ${it.kind}` : (kind === 'sky' && typeof it.url === 'string' && it.url[0] === '{' ? ' \u00b7 cube' : ''));
     const name = document.createElement('span'); name.className = 'libName'; name.textContent = it.name + extra;
     const badge = document.createElement('span'); badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv'); badge.textContent = it.isPublic ? 'public' : 'private';
     const acts = document.createElement('span'); acts.className = 'libActs';
-    // Scenes load (replace the whole editor table); other assets spawn onto it.
+    // Scenes load (replace the whole editor table); skyboxes apply to the room; other assets spawn onto it.
     const primary = kind === 'scene'
       ? btn('Load', () => { if (confirm(`Load "${it.name}" into the editor? This clears the current table.`)) ROOM.send('sceneLoad', { id: it.id }); })
-      : btn('Spawn', () => spawnOf[kind](it));
+      : kind === 'sky'
+        ? btn('Apply', () => ROOM.send('skybox', { url: it.url }))
+        : btn('Spawn', () => spawnOf[kind](it));
     acts.append(
       primary,
       btn(it.isPublic ? 'Unpublish' : 'Publish', () => ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic })),
@@ -46,7 +48,7 @@ window.onLibraryList = (kind, list) => renderList(kind, list);
 window.onOttRoom = (room) => {
   ROOM = room;
   const panel = $('libraryPanel');
-  const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); };
+  const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); room.send('listSkyboxes'); };
   $('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
   $('libraryClose').onclick = () => { panel.hidden = true; };
   const saveScene = $('sceneSaveBtn');

@@ -57,9 +57,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   private (non-synced) memory that holds secrets. All physics tuning is in one
   `SIM` config block.
 - **`db.js`** — the Postgres connection pool and **every** query: the saved
-  library (deck/board/prop *metadata*; image/model files stay on disk) plus
-  users, rooms, and membership. Config comes from the environment only
-  (`DATABASE_URL` / `DATABASE_URL_FILE`).
+  library (deck / board / prop / scene / skybox *metadata*; image/model files stay
+  on disk) plus users, rooms, membership, and each room's durable settings. Config
+  comes from the environment only (`DATABASE_URL` / `DATABASE_URL_FILE`).
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
@@ -199,12 +199,16 @@ are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
 
 A die is **one kind** parameterized by `props.sides`.
 
-- `shared/pieces.js` stores each solid's **vertices**. d6 stays a pipped box; the
-  rest are convex polyhedra (tetra/octa/icosa/dodeca + a pentagonal
+- `shared/pieces.js` stores each solid's **vertices**. d6 is an axis-aligned box;
+  the rest are convex polyhedra (tetra/octa/icosa/dodeca + a pentagonal
   trapezohedron for d10).
-- **Client** builds a flat-shaded `ConvexGeometry` mesh and drops a **number**
-  onto each logical face (coplanar triangles grouped by normal, a digit sprite at
-  each centroid).
+- **Client** numbers every die: the d6 bakes a digit onto each box face, and the
+  polyhedra lay a digit plane on each logical face (coplanar triangles grouped by
+  normal, a sprite at each centroid). Both honour an optional per-die **body
+  colour** and **number colour** (`props.color` / `props.textColor`), baked into
+  the face textures so the two stay independent. Double-click a die (or prop) to
+  inspect it and the overlay offers those colour pickers; committing sends
+  `recolor` and the tint syncs to everyone.
 - **Server** builds a `CANNON.ConvexPolyhedron` from the *same* vertices (hull
   faces from `convex-hull`, windings flipped outward) so the die tumbles and
   settles on a face. Visual and physics can't diverge; adding a size is a
@@ -230,18 +234,46 @@ machinery:
   isn't you. **Attention ping** (middle-click / `P`) — a table-location marker
   clamped to the table server-side and broadcast to all; public by nature, so no
   routing.
+- **Whiteboard** (shared) — a tilt-up sketch surface. Its *public* state
+  (`enabled/angle/owner/dark`) is synced schema, but **strokes are not**: each
+  stroke is a `wbStroke` message appended to a capped server history and broadcast
+  to replay onto every client's canvas texture, with a late joiner pulling the
+  backlog via `wbStrokes`. One drawer at a time (`wbClaim`/`wbRelease`). Same
+  "sync the minimum" instinct as the timer — the picture is rebuilt from messages,
+  never diffed as state.
+- **Skybox** (shared, durable) — a room background: an equirect image or a 6-face
+  cubemap, applied by GMs and curated in the editor library. The chosen `skybox`
+  (a `/assets/sky/…` URL or a cubemap descriptor) is synced and persisted per room.
+- **Scoreboard & room notes** (shared, durable) — a `scores` map (label/score
+  rows) and a GM `notes` string, both synced and saved with the room.
+- **Lean in** (client-only) — an Interactions-menu toggle that eases the camera
+  toward the orbit target for a closer look. Applied as a per-frame offset that's
+  undone before `controls.update()`, so it never corrupts the real orbit distance
+  and never touches the network.
 
 ## Persistence: the asset library
 
-The saved **library** (custom decks/boards/props) is split across two stores:
-**metadata in Postgres** (`custom_decks` / `custom_boards` / `custom_objects`,
-keyed by a bigint `id`), **image/model files on disk** under `ASSETS_DIR`, served
-from `/assets`. A card face or model is stored as a *reference* (a `/assets/…`
-URL or a procedural string), never bytes, so rows stay small and unrevealed art
-isn't in the DB. `db.js` normalizes a model's URL into the `file_url` column and
-puts the rest in a `props` jsonb bag, splicing them back on read. The running
-server connects as a **CRUD-only role** (`tabletop_app`) — it can't run DDL — so a
-leaked app credential can't reshape or drop the schema.
+The saved **library** is split across two stores: **metadata in Postgres**
+(`custom_decks` / `custom_boards` / `custom_objects` for props / `custom_scenes`
+for whole-table snapshots / `custom_skyboxes`, each keyed by a bigint `id`),
+**image/model files on disk** under `ASSETS_DIR`, served from `/assets`. A card
+face or model is stored as a *reference* (a `/assets/…` URL or a procedural
+string), never bytes, so rows stay small and unrevealed art isn't in the DB.
+`db.js` normalizes a model's URL into the `file_url` column and puts the rest in a
+`props` jsonb bag, splicing them back on read. The running server connects as a
+**CRUD-only role** (`tabletop_app`) — it can't run DDL — so a leaked app credential
+can't reshape or drop the schema.
+
+Separately, each **room** persists its non-piece **settings** — scoreboard, GM
+notes, table size, and skybox — in the `rooms` row (via `getRoomState`/
+`saveRoomState`, debounced by the room's `scheduleSave`). So those survive a
+restart or an empty-table reset even though live pieces and hands stay in memory.
+
+Because unreferenced `/assets` files pile up as the library and tables churn
+(deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)
+grep-scans every DB row *and* every live table for `/assets/…` references, then
+moves anything unreferenced and older than a day to `saved-assets/.trash/`
+(recoverable, never a hard delete).
 
 Each asset now carries an `owner_id` (the admin who created it) and an `is_public`
 flag, and the library is **admin-curated**: creation/edit/delete is admin-only,
@@ -273,28 +305,38 @@ separate tabs stay distinct.
 ## The message protocol (intent up, state down)
 
 - **Up (client → server):** `grab`, `move`, `release`, `flip`, `dealToTable`,
-  `dealDrag`, `takeCard`, `playCard`, `shuffle`, `drawInspect`, `inspectPlace`,
-  `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`/`listDecks`/`loadDeck`/
-  `editDeck`, `saveProp`/`listProps`, `listBoards`/`saveBoard`/`loadBoard`,
+  `dealDrag`, `takeCard`, `playCard`, `shuffle`, `splitDeck`, `drawInspect`,
+  `inspectPlace`, `recolor`, `deckBegin`/`deckAppend`/`deckFinish`,
+  `saveDeck`/`listDecks`/`loadDeck`/`editDeck`, `saveProp`/`listProps`,
+  `listBoards`/`saveBoard`/`loadBoard`, `sceneSave`/`sceneLoad`/`listScenes`,
+  `saveSkybox`/`listSkyboxes`/`skybox`,
   `assetPublic`/`assetRename`/`assetDelete` (admin curation),
   `members`/`admit`/`kick`/`setRole` (GM member management),
+  `wbEnable`/`wbClaim`/`wbRelease`/`wbSet`/`wbStroke`/`wbClear`/`wbStrokes`
+  (whiteboard), `score`/`roomNotes`/`tableSize` (durable room settings),
   `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
-  `notebook`, `timer`, `showStart`/`showStop`, `ping`. (Library load/edit key on
-  a row **`id`** — the Postgres primary key — not a filename slug.)
-- **Down (server → client):** synced state (pieces, players, turn, timer) plus
-  direct messages — `hand` (your private cards), `dealt` (adopt a dealt card as the
-  dragged piece), `inspectCard` (a drawn front for you alone), `notebook` (your
-  private notes), `showFan` (cards someone is showing *you*), `ping` (a broadcast
-  attention marker), `whoami` (your admin flag — gates the creation UI),
-  `memberList` (the room's members, for GMs), `roomClosed`/`kicked` (lifecycle
-  notices), `deckList`, `boardList`, `propList` (saved-library listings).
+  `notebook`, `timer`, `showStart`/`showStop`, `ping`, `handSync` (re-request my
+  private hand after a reconnect). (Library load/edit key on a row **`id`** — the
+  Postgres primary key — not a filename slug.)
+- **Down (server → client):** synced state (pieces, players, turn, timer, scores,
+  notes, tableX/Z, whiteboard, skybox) plus direct messages — `hand` (your private
+  cards), `dealt` (adopt a dealt card as the dragged piece), `inspectCard` (a drawn
+  front for you alone), `notebook` (your private notes), `showFan` (cards someone
+  is showing *you*), `ping` (a broadcast attention marker), `shuffled` (play the
+  riffle), `wbStroke`/`wbStrokes`/`wbClear` (whiteboard replay), `whoami` (your
+  admin flag — gates the creation UI), `memberList` (the room's members, for GMs),
+  `roomClosed`/`kicked` (lifecycle notices), and the library listings
+  `deckList`/`boardList`/`propList`/`sceneList`/`skyList` (plus `skyError`/
+  `sceneError` on a rejected save).
 
 ## Reset & room lifecycle
 
 **Reset** wipes the whole room to an empty table — every piece (boards included),
-all hands, every private map, any active shows, and the shared timer. New rooms
-start **empty** (the default-seed call is disabled); you build the table from the
-toolbar.
+all hands, every private map, any active shows, and the shared timer. Two things
+it leaves alone: the room's **durable settings** (scoreboard, GM notes, table
+size, skybox — room configuration, not table contents), and the **whiteboard
+drawing**, which clears only on an explicit `wbClear`. New rooms start **empty**
+(the default-seed call is disabled); you build the table from the toolbar.
 
 ## Accounts, rooms & roles
 

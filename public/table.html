@@ -41,11 +41,17 @@
       <button id="roomMembers">👥 Members List</button>
       <button id="roomScene">📽️ Load a Scene</button>
       <button id="roomTable">↔️ Table Size</button>
+      <button id="roomWhiteboard">🖊️ Whiteboard</button>
+      <button id="roomSky">🌄 Skybox</button>
       <button id="roomReset" class="danger">🧹 Reset</button>
     </div>
   </span>
 </div>
 <div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
+<div id="inspectColorRow" hidden>
+  <label id="inspectBodyLab">Colour <input type="color" id="inspectColorBody" value="#ffffff"></label>
+  <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
+</div>
 <div id="drawActions" hidden>
   <span class="da-note">Drag to rotate</span>
   <button data-place="field-up">To field ↑ face-up <kbd>F</kbd></button>
@@ -53,51 +59,12 @@
   <button data-place="hand">To hand <kbd>H</kbd></button>
   <button data-place="deck">Return to deck <kbd>R</kbd></button>
 </div>
-<div id="hint">
-  <div id="hintHead"><b>Controls</b><span id="hintToggle">Hide &#9662;</span></div>
-  <div id="hintBody">
-    <div class="hcat">Left-Click</div>
-    <ul>
-      <li>Take any card on the field and put it in your hand.</li>
-      <li>Take top card of a deck and place it face-down next to the deck.</li>
-      <li>Place card from your hand face-down in a pre-determined location on the field.</li>
-      <li>After clicking an object, press <b>Delete</b> to remove it.</li>
-      <li>With an object held or hovered, press <b>U</b> to toggle stand-upright / lie-flat (on by default for chess, go, checkers, tokens &amp; decks).</li>
-    </ul>
-    <div class="hcat">Double Left-Click</div>
-    <ul>
-      <li>Inspect objects/cards on the field.
-        <ul><li>Click and drag to rotate them.</li></ul></li>
-      <li>Inspect the top card of a deck.
-        <ul>
-          <li>Press <b>F</b> to place it next to the deck face-up.</li>
-          <li>Press <b>D</b> to place it next to the deck face-down.</li>
-          <li>Press <b>H</b> to place it in your hand.</li>
-          <li>Press <b>R</b> (or click outside the preview) to return it to the top of the deck.</li>
-        </ul></li>
-    </ul>
-    <div class="hcat">Left-Click + Drag</div>
-    <ul>
-      <li>Rotate your view of the board.</li>
-      <li>Pick up / move / throw objects &amp; cards. Scroll the wheel to change height.</li>
-      <li>While holding, <b>Middle-Click</b> to snap facing to the nearest 90°.</li>
-      <li>Draw the top card from a deck and move/throw it.</li>
-      <li>Drag a card out of your hand onto the field, face-down.</li>
-    </ul>
-    <div class="hcat">Right-Click</div>
-    <ul>
-      <li>Shuffle any deck.</li>
-      <li>After clicking a deck, press <b>S</b> to save it.</li>
-      <li>Reveal the face of any card on the field.</li>
-      <li>Place a card from your hand onto the field, face-up.</li>
-    </ul>
-    <div class="hcat">Right-Click + Drag</div>
-    <ul>
-      <li>Pan your view of the board.</li>
-      <li>Hold and move any deck.</li>
-      <li>Drag a card out of your hand onto the field, face-up.</li>
-    </ul>
-  </div>
+<div id="wbTools" hidden>
+  <span class="da-note">Whiteboard</span>
+  <button id="wbPen" class="on">✏️ Pen</button>
+  <button id="wbEraser">🧽 Eraser</button>
+  <button id="wbClearBtn" class="danger">Clear</button>
+  <button id="wbDone">Done <kbd>Esc</kbd></button>
 </div>
 <div id="hand"></div>
 <div id="rightRail">
@@ -116,24 +83,11 @@
 </div>
 <div id="toolsDock">
   <div id="toolsMenu">
-    <div class="toolsLabel">Tools</div>
-    <button id="roll">🔄 Roll Dice</button>
+    <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
     <button id="notesBtn">📝 Private Notes</button>
     <button id="scoreBtn">📊 Scoreboard</button>
     <button id="timerBtn">⏱️ Timer</button>
-    <button id="showBtn">🃏 Show Hand</button>
-    <button id="mySeatBtn">↩ My Seat</button>
-  </div>
-  <div id="showPanel" hidden>
-    <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
-    <div class="showLabel">To</div>
-    <div id="showAudience" class="chipRow"></div>
-    <div class="showLabel">What</div>
-    <div class="chipRow">
-      <button id="showScopeHand" class="chip on">Whole hand</button>
-      <button id="showScopeSel" class="chip">Selected cards</button>
-    </div>
-    <button id="showHold">Hold to show</button>
+    <button id="controlsBtn">❔ How to Play</button>
   </div>
   <div id="notes" hidden>
     <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
@@ -165,6 +119,28 @@
     </div>
   </div>
 </div>
+</div>
+<div id="leftRail">
+  <div id="interactDock">
+    <div id="interactMenu">
+      <div class="toolsLabel" id="interactToggle">Interactions <span class="toolsChev">▾</span></div>
+      <button id="leanBtn">🔎 Lean In</button>
+      <button id="mySeatBtn">↩ My Seat</button>
+      <button id="roll">🔄 Roll Dice</button>
+      <button id="showBtn">🃏 Show Hand</button>
+    </div>
+    <div id="showPanel" hidden>
+      <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
+      <div class="showLabel">To</div>
+      <div id="showAudience" class="chipRow"></div>
+      <div class="showLabel">What</div>
+      <div class="chipRow">
+        <button id="showScopeHand" class="chip on">Whole hand</button>
+        <button id="showScopeSel" class="chip">Selected cards</button>
+      </div>
+      <button id="showHold">Hold to show</button>
+    </div>
+  </div>
 </div>
 <div id="membersPanel" hidden>
   <div id="membersHead"><b>Members</b><span id="membersClose">✕</span></div>
@@ -237,6 +213,21 @@
     <div class="row"><button id="tableCancel">Cancel</button><button id="tableResize">Resize table</button></div>
   </div>
 </div>
+<div id="whiteboardModal" hidden>
+  <div class="modalCard">
+    <h3>Whiteboard</h3>
+    <label class="backRow"><input id="wbEnabled" type="checkbox"> Show the whiteboard</label>
+    <label>Style</label>
+    <div class="backRow">
+      <label><input type="radio" name="wbStyle" value="dark" checked> Chalkboard</label>
+      <label><input type="radio" name="wbStyle" value="light"> Whiteboard</label>
+    </div>
+    <label>Position around the table</label>
+    <input id="wbAngle" type="range" min="0" max="360" step="5" value="0" style="width:100%">
+    <div class="note">Rides a track behind the players. Drawing on it comes next.</div>
+    <div class="row"><button id="wbCancel">Close</button></div>
+  </div>
+</div>
 <div id="editPropModal" hidden>
   <div class="modalCard">
     <h3>Edit model prop</h3>
@@ -274,6 +265,94 @@
     <h3>Spawn a saved deck</h3>
     <div class="savedWrap"><label>Custom Library</label><div id="savedList" class="savedList"></div></div>
     <div class="row"><button id="deckCancel">Cancel</button></div>
+  </div>
+</div>
+
+<div id="skyModal" hidden>
+  <div class="modalCard">
+    <h3>Skybox</h3>
+    <div class="note">Wraps the whole room — everyone here sees the same backdrop. Admins add new ones in the editor.</div>
+    <div id="skyList" class="savedList"></div>
+    <div class="row"><button id="skyClose">Close</button></div>
+  </div>
+</div>
+
+<div id="controlsModal" hidden>
+  <div class="modalCard helpCard">
+    <h3>How to Play</h3>
+    <div class="helpScroll">
+      <div class="helpSec">
+        <h4>Getting around</h4>
+        <ul>
+          <li><b>Left-drag</b> the empty table to orbit the camera; <b>right-drag</b> to pan.</li>
+          <li><b>Scroll wheel</b> to zoom (or raise/lower a piece you're holding).</li>
+          <li><b>Middle-mouse-click</b> anywhere on the table to send a visual ping to other players.</li>
+          <li><b>Interactions → ↩ My Seat</b> snaps the camera back to your seat.</li>
+          <li><b>Interactions → 🔎 Lean In</b> zooms your view slightly. As if you were leaning over the table to get a closer look.</li>
+        </ul>
+      </div>
+      <div class="helpSec">
+        <h4>Pieces &amp; Objects &amp; Dice</h4>
+        <ul>
+          <li><b>Left-drag</b> a piece or die to pick it up, move, and throw it. Scroll to change its height; <b>middle-click</b> while holding snaps its facing to 90°.</li>
+          <li><b>Double-Left-click</b> a piece, card, or die to inspect it up close. When inspecting, you can change the colors using the color picker(s), drag it to rotate, and click away to close.</li>
+          <li>After clicking a piece, press <b>Delete</b> to remove it, or <b>U</b> to stand it upright / lay it flat.</li>
+        </ul>
+      </div>
+      <div class="helpSec">
+        <h4>Cards &amp; Decks</h4>
+        <ul>
+          <li><b>Left-click</b> a card on the table to take it into your hand; <b>right-click</b> it to flip it face-up.</li>
+          <li><b>Left-drag</b> from a deck to draw the top card; <b>left-click</b> the deck to deal it face-down beside the deck.</li>
+          <li><b>Double-Left-click</b> a deck to peek at the top card, then <b>F</b> (face-up), <b>D</b> (face-down), <b>H</b> (to hand), or <b>R</b> (return).</li>
+          <li><b>Right-click</b> a deck to shuffle it; <b>right-drag</b> to move the whole deck.</li>
+          <li><b>Double-Right-click</b> a deck to 'split' it.</li>
+        </ul>
+      </div>
+      <div class="helpSec">
+        <h4>Your Hand</h4>
+        <ul>
+          <li>Your hand sits at the bottom of the screen — only you can see it.</li>
+          <li><b>Drag a card out</b> onto the table: from a left-drag (or left-click) it lands face-down, from a right-drag (or right-click) face-up.</li>
+          <li>Click the <b>▲</b> on the right to hide your hand from your view.  Click the <b>'🃏 View Hand'</b> button to bring it back.</li>
+          <li><b>Interactions → 🃏 Show Hand</b> briefly reveals chosen cards to players you pick.</li>
+        </ul>
+      </div>
+      <div class="helpSec">
+        <h4>Tools</h4>
+        <ul>
+          <li><b>📝 Private Notes</b> is a scratchpad only you see.</li>
+          <li><b>📊 Scoreboard</b> shows the shared scores. It's GM+Helper controlled. </li>
+          <li><b>⏱️ Timer</b> is a shared stopwatch / countdown.</li>
+          <li><b>🖊️ Whiteboard</b> — when the GM has it out, <b>double-click</b> the board to draw. Pen, eraser, and clear appear while you draw; <b>Esc</b> or <b>Done</b> hands it back.</li>
+        </ul>
+        <h4>Interactions</h4>
+        <ul>
+          <li><b>🔎 Lean In</b> zooms your view slightly. As if you were leaning over the table to get a closer look.</li>
+          <li><b>↩ My Seat</b> snaps the camera back to your seat.</li>
+          <li><b>🔄 Roll Dice</b> rolls every die on the table.</li>
+          <li><b>🃏 Show Hand</b> briefly reveals chosen cards to players you pick.</li>
+        </ul>
+      </div>
+      <div class="helpSec" id="ctrlHelper" hidden>
+        <h4>Helper abilities</h4>
+        <ul>
+          <li>Use the top toolbar to add <b>🎲 Dice</b>, <b>♟️ 3D Objects</b>, and <b>🎴 Decks</b> — built-in or from the library.</li>
+          <li>In the <b>Scoreboard</b> you can add, rename, adjust, and clear score rows.</li>
+        </ul>
+      </div>
+      <div class="helpSec" id="ctrlGM" hidden>
+        <h4>GM controls</h4>
+        <ul>
+          <li><b>🟫 Change Game Board</b> swaps the board (built-in or library).</li>
+          <li><b>⚙️ Room Controls</b> — admit / kick / promote members, load a scene, resize the table, load a new skybox, toggle the whiteboard, and reset the table.</li>
+          <li><b>Room notes</b> (inside the Scoreboard) are shared GM notes only you can edit.</li>
+          <li><b>🖊️ Whiteboard</b> — show or hide it, slide it around the table, and pick chalkboard or whiteboard.</li>
+          <li><b>Next turn</b> passes the active turn to the next seat.</li>
+        </ul>
+      </div>
+    </div>
+    <div class="row"><button id="controlsClose">Close</button></div>
   </div>
 </div>
 

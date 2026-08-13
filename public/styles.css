@@ -114,7 +114,16 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
   backdrop-filter: var(--blur);
   z-index: 20;
 }
-#drawActions {
+#inspectColorRow {
+  position: fixed; top: calc(var(--inset) + 40px); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 16px; z-index: 20;
+  padding: 6px 14px; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--r);
+  font: var(--fs-sm) var(--font); backdrop-filter: var(--blur);
+}
+#inspectColorRow label { display: inline-flex; align-items: center; gap: 6px; }
+#inspectColorRow input[type=color] { width: 40px; height: 26px; padding: 0; border: 1px solid var(--border); border-radius: 4px; background: none; cursor: pointer; }
+#drawActions, #wbTools {
   position: fixed;
   bottom: calc(var(--inset) + 84px);
   left: 50%;
@@ -132,7 +141,8 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
   backdrop-filter: var(--blur);
   z-index: 20;
 }
-#drawActions .da-note { color: var(--text); opacity: .7; font: var(--fs-sm) var(--font); }
+#wbTools button.on { border-color: var(--accent); color: var(--accent); }
+#drawActions .da-note, #wbTools .da-note { color: var(--text); opacity: .7; font: var(--fs-sm) var(--font); }
 #drawActions kbd {
   font: 600 11px var(--font);
   background: var(--field);
@@ -142,50 +152,21 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
   margin-left: 4px;
 }
 
-/* ===== hint (bottom-left) ===== */
-#hint {
-  position: fixed;
-  bottom: var(--inset);
-  left: var(--inset);
-  max-width: 340px;
-  padding: 8px 12px;
-  background: var(--panel);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  font: var(--fs-sm)/1.45 var(--font);
-  backdrop-filter: var(--blur);
-}
-#hintHead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  cursor: pointer;
-  user-select: none;
-}
-#hintHead b { color: var(--accent); }
-#hintToggle { color: var(--text); opacity: .7; font-size: .85em; }
-#hint.collapsed #hintBody { display: none; }
-#hintBody {
-  margin-top: 8px;
-  max-height: min(62vh, 560px);
-  overflow-y: auto;
-  padding-right: 4px;
-}
-#hintBody .hcat { color: var(--accent); font-weight: 600; margin: 9px 0 2px; }
-#hintBody .hcat:first-child { margin-top: 0; }
-#hintBody ul { margin: 0 0 0 16px; padding: 0; }
-#hintBody ul ul { margin: 2px 0 2px 14px; list-style: circle; }
-#hintBody li { margin: 2px 0; }
-#hintBody b {
-  color: var(--text);
-  background: var(--field);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0 5px;
-  font-weight: 600;
-}
+/* ===== Tools menu collapse ===== */
+.toolsLabel { cursor: pointer; user-select: none; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.toolsChev { font-size: .8em; opacity: .7; transition: transform .15s; }
+#toolsMenu.collapsed .toolsChev, #interactMenu.collapsed .toolsChev { transform: rotate(-90deg); }
+#toolsMenu.collapsed button, #interactMenu.collapsed button { display: none; }
+#leanBtn.on { border-color: var(--accent); color: var(--accent); }
+
+/* ===== How to Play modal ===== */
+.modalCard.helpCard { width: min(720px, 94vw); max-height: 86vh; display: flex; flex-direction: column; text-align: left; }
+.helpScroll { overflow-y: auto; margin: 6px 0 12px; padding-right: 4px; }
+.helpSec { margin-bottom: 14px; }
+.helpSec h4 { color: var(--accent); margin: 0 0 5px; font: 600 var(--fs) var(--font); }
+.helpSec ul { margin: 0 0 0 18px; padding: 0; }
+.helpSec li { margin: 4px 0; line-height: 1.45; color: var(--text); }
+.helpSec b { color: var(--text); font-weight: 600; }
 
 /* ===== hand bar (bottom-center) ===== */
 #hand {
@@ -226,6 +207,10 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 .handcard:hover { transform: translateY(-6px); }
 #hand.selecting .handcard { cursor: pointer; }
 .handcard.sel { outline: 3px solid var(--accent); outline-offset: 1px; transform: translateY(-10px); }
+.handToggle { cursor: pointer; font-size: var(--fs-sm); padding: 6px 12px; }
+.handToggle.hide { align-self: flex-start; padding: 2px 7px; opacity: .6; }
+.handToggle.hide:hover { opacity: 1; }
+#hand.collapsed { padding: 4px; }
 
 /* ===== private notes (right edge, toggled) ===== */
 #notes {
@@ -425,7 +410,7 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 
 /* ===== modals (custom deck / add prop) ===== */
 #deckModal, #propModal, #boardModal, #customPropModal, #editPropModal, #editDeckModal,
-#scenesModal, #boardLibraryModal, #tableModal {
+#scenesModal, #boardLibraryModal, #tableModal, #whiteboardModal, #controlsModal, #skyModal {
   position: fixed;
   inset: 0;
   background: var(--overlay);
@@ -477,6 +462,14 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 .savedList { max-height: 120px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
 .savedRow { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: var(--fs-sm); }
 .savedRow button { padding: 3px 10px; }
+#skyList { max-height: 220px; }
+#skyList button.on { border-color: var(--accent); color: var(--accent); }
+.skyRow { display: flex; gap: 4px; align-items: stretch; }
+.skyRow .skyPick { flex: 1; text-align: left; }
+.skyRow .skyDel { flex: 0 0 auto; padding: 3px 9px; }
+body.not-admin #skyAdmin { display: none; } /* only admins curate the skybox library */
+.cubeGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0; }
+.cubeGrid label { display: flex; flex-direction: column; gap: 2px; font-size: var(--fs-sm); }
 
 /* ===== player panel (top-right) ===== */
 #panel {
@@ -674,7 +667,14 @@ body.admin { display: block; overflow: auto; }
 }
 #rightRail > #panel { position: static; inset: auto; width: 100%; }
 #toolsDock { display: flex; flex-direction: column; gap: var(--gap); width: 100%; }
-#toolsMenu {
+/* ===== Left rail — Interactions menu + its panels, bottom-left ===== */
+#leftRail {
+  position: fixed; bottom: var(--inset); left: var(--inset); z-index: 6;
+  width: min(240px, 70vw);
+  display: flex; flex-direction: column; gap: var(--gap);
+}
+#interactDock { display: flex; flex-direction: column-reverse; gap: var(--gap); width: 100%; }
+#toolsMenu, #interactMenu {
   display: flex; flex-direction: column; gap: 6px; padding: 10px 12px;
   background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg);
   backdrop-filter: var(--blur);
@@ -683,12 +683,12 @@ body.admin { display: block; overflow: auto; }
   color: var(--accent); text-align: center; letter-spacing: 1px;
   text-transform: uppercase; font-weight: 600; padding-bottom: 2px;
 }
-#toolsMenu button { width: 100%; }
-/* the four tool panels flow within the dock, right below the menu (not floating) */
-#toolsDock > #showPanel,
+#toolsMenu button, #interactMenu button { width: 100%; }
+/* the tool/interaction panels flow within their dock, right below the menu (not floating) */
 #toolsDock > #notes,
 #toolsDock > #scorePanel,
-#toolsDock > #timer {
+#toolsDock > #timer,
+#interactDock > #showPanel {
   position: static; inset: auto; transform: none;
   width: 100%; box-sizing: border-box; margin: 0; max-height: none;
 }

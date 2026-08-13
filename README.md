@@ -18,9 +18,10 @@ LAN → use your machine's IP) and move pieces around together.
 
 ## Database
 
-Postgres now backs three things: the saved-asset **library** (deck/board/prop
-metadata), **user accounts**, and **rooms + membership**. Live game state and
-private hands are still all in-memory. One-time setup:
+Postgres now backs three things: the saved-asset **library** (deck / board / prop
+/ scene / skybox metadata), **user accounts**, and **rooms + membership** (plus
+each room's durable settings — scoreboard, notes, table size, skybox). Live piece
+state and private hands are still all in-memory. One-time setup:
 
 1. **Database + owner role** (as a superuser):
    `CREATE ROLE tabletop LOGIN PASSWORD '…';` then
@@ -34,7 +35,9 @@ private hands are still all in-memory. One-time setup:
    `psql -U tabletop -d tabletop -f postgres/schema.sql`.
    To **upgrade an existing database**, apply the numbered migrations in order
    instead — `001_custom_assets.sql` → `002_auth.sql` → `003_asset_visibility.sql`
-   → `004_host_status.sql`. (`schema.sql` is the flattened end state of those four;
+   → `004_host_status.sql` → `005_room_board.sql` → `006_room_table.sql` →
+   `007_scenes.sql` → `008_room_skybox.sql`. (`schema.sql` is the flattened end
+   state of all of them;
    the per-migration backfills matter on a populated DB but are no-ops on an empty
    one, so they're dropped from the baseline.)
 4. **Point the app at it:** `cp .env.example .env`, set `DATABASE_URL` to the
@@ -52,33 +55,43 @@ turn on `ssl` server-side.
 ## What's in the box
 
 - **Dice** d4–d20 (`↻ Dice` / the `☰ + Dice` menu). One `die` kind parameterized
-  by `props.sides`; d6 is a pipped box, the rest are numbered convex polyhedra
-  whose mesh (client) and collider (server) come from one vertex list.
+  by `props.sides`; d6 is a numbered box, the rest numbered convex polyhedra
+  whose mesh (client) and collider (server) come from one vertex list. Inspect a
+  die (or prop) to recolor it — dice get **independent body and number colours**.
 - **Props** (`+ Object`): built-in shapes (box, sphere, cone, pyramid, checker,
   go stone, coin, chip, token, chess set) and **custom `.glb` uploads**. Every
   prop has a **Scale**; models can be **tinted** (whole, one material slot, or
   left as-is) and **saved** for one-click re-spawn.
 - **Cards, decks & hidden hands** — face-down stacks, private hands, custom
-  decks from text or images, save/edit/clone. See below.
+  decks from text or images, save/edit/clone, and **double-right-click to split**
+  a deck in two. See below.
 - **Boards** (`↷ Board`): two built-in `.glb` boards (Chess/Checkers, Go),
   **custom `.glb` board upload**, or a plain sized flat board.
 - **Inspect** — double-click a piece to enlarge & rotate it; double-click a deck
   to privately **draw a card into inspect**, then send it to the field or hand.
+  **Lean in** (Interactions menu) eases the camera closer for a look.
+- **Whiteboard & skybox** — a shared tilt-up **whiteboard** to sketch on (one
+  drawer at a time), and a room **skybox** (equirect or cubemap background,
+  GM-applied, curated in the editor library).
 - **Seats, presence & turns** — a seat per player, standing name/avatar markers,
-  a turn indicator, private hand bar.
-- **Live table tools** — a shared **timer** (⏱, stopwatch or countdown), a private
-  per-player **notebook** (✎, ephemeral), **hold-to-show** cards to chosen players
-  or the whole table (🃏, revealed face-up in your seat fan with a public "SHOWING
-  n" badge), floating **name tags** over pieces others are holding, and an
-  **attention ping** (middle-click / **P**) that pulses a colored ring at a spot.
+  a turn indicator, private hand bar (collapsible).
+- **Live table tools** — a shared **timer** (⏱, stopwatch or countdown), a
+  **scoreboard** + GM room notes, a private per-player **notebook** (✎,
+  ephemeral), **hold-to-show** cards to chosen players or the whole table (🃏,
+  revealed face-up in your seat fan with a public "SHOWING n" badge), floating
+  **name tags** over pieces others are holding, and an **attention ping**
+  (middle-click / **P**) that pulses a colored ring at a spot. Player-facing
+  actions live in a left **Interactions** menu, table utilities in a right
+  **Tools** menu.
 - **Accounts, rooms & roles** — sign up as a passwordless **player** (quick-join)
   or a password **host**; create rooms with join codes and an optional
   admit-to-join gate. Membership carries a **role** (owner → GM → helper →
   player) that gates the table tools, managed live from an in-table Members
   panel. See "Accounts, rooms & roles" below.
 - **Admin console & curated library** — site **admins** manage all rooms and
-  users at `/admin.html`, and curate the shared asset library in a dedicated
-  **editor** (`/editor.html`): every deck/board/prop is **public or private**,
+  users at `/admin.html` (including a **storage cleanup** that trashes orphaned
+  asset files), and curate the shared asset library in a dedicated **editor**
+  (`/editor.html`): every deck/board/prop/scene/skybox is **public or private**,
   admins create/edit, and GMs/helpers spawn only what's been published. See
   "The asset library" below.
 
@@ -89,7 +102,7 @@ server.js            Colyseus rooms + authoritative cannon-es physics + HTTP (au
 db.js                Postgres pool + all queries (library, users, rooms, membership)
 auth.js              password hashing (scrypt) + device-token hashing (no deps)
 shared/pieces.js     piece specs (mass, colliders, palettes, dice verts, prop/board registries) + timerLive
-postgres/            SQL migrations — 002_auth, 003_asset_visibility, 004_host_status (apply in order)
+postgres/            SQL migrations 001–008 + schema.sql (fresh-install baseline) + grants_app_role.sql
 docs/                ARCHITECTURE.md, REFERENCE.md, ASSET_CREDITS.md
 docker/              Dockerfile
 public/
@@ -123,6 +136,10 @@ Nothing is bundled — Three.js comes from a CDN import map, Colyseus from unpkg
   look, spawn-input ranges, texture resolutions.
 - **`LIGHTING`** in `public/core.js` — hemisphere fill, sun, environment-map
   strength (three numbers).
+- **Feature dials** — named constants you can nudge: `WHITEBOARD_MAX_STROKES` /
+  `WHITEBOARD_RES` (whiteboard history cap + canvas resolution),
+  `LEAN_AMOUNT` (how far "Lean in" dollies, `client.js`), `ORPHAN_MIN_AGE_MS`
+  (cleanup age guard), `SCENE_MAX_BYTES` and `TABLE_LIMIT` (server guards).
 
 ## Add a new piece type
 
@@ -170,7 +187,8 @@ There's also a "Spawn Built-in Deck" for a standard 52.
 
 ## The asset library (admin-curated)
 
-The saved deck/board/prop library is **global** (every room sees it) and
+The saved library (decks, boards, props, scenes, skyboxes) is **global** (every
+room sees it) and
 **admin-curated**. Site admins create, edit, and delete library assets in a
 dedicated **editor** (`/editor.html`) — an admin-only room that reuses the table
 engine, so an asset can be spawned and tested live as it's built. Every asset

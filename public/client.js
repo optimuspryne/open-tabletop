@@ -125,6 +125,9 @@ const applyTransform = (mesh, s) => {
       // Rebuild the card mesh when its props change (front revealed/hidden on flip).
       cb(piece).listen('props', () => rebuildCard(id, piece), false);
     }
+    if (piece.type === 'die' || piece.type === 'prop') {
+      cb(piece).listen('props', () => rebuildPiece(id, piece), false); // recolor / prop tweaks
+    }
     if (piece.type === 'board') {
       // Remember the board's top surface height so the drop marker sits on it.
       const boardProps = JSON.parse(piece.props || '{}');
@@ -155,14 +158,22 @@ const applyTransform = (mesh, s) => {
       buf.push(snapshot(now, piece));
       if (buf.length > 24) buf.shift();
     });
+    syncWhiteboard(state.whiteboard); // reflect enable / slide / style changes
+    syncSkybox(state.skybox);         // reflect the room's skybox
   });
 
   room.onMessage('hand', cards => { myHand = cards; renderHand(cards); }); // your private hand — never seen by other clients
+  room.send('handSync'); // re-fetch our hand now the handler is ready (onJoin's send is missed on reconnect)
   room.onMessage('showFan', ({ sid, cards }) => { // cards another player is showing you, face-up in their fan
     if (cards && cards.length) revealed.set(sid, cards); else revealed.delete(sid);
     refreshFan(sid);
   });
   room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
+  room.onMessage('wbStroke', (s) => { if (!s || s.sid === mySession) return; pushStroke(s); }); // another player drew (skip our own echo)
+  room.onMessage('wbStrokes', ({ strokes } = {}) => { wbStrokesLocal.length = 0; for (const s of (strokes || [])) wbStrokesLocal.push(s); redrawStrokes(); }); // full replay (late join)
+  room.onMessage('wbClear', () => { wbStrokesLocal.length = 0; if (wbTex) wbClearCanvas(); });
+  room.onMessage('skyList', (list) => { skyCache = list || []; renderSkyList(); const e = byId('skyErr'); if (e) e.textContent = ''; if (window.onLibraryList) window.onLibraryList('sky', list || []); }); // modal + library panel
+  room.onMessage('skyError', ({ message } = {}) => { const e = byId('skyErr'); if (e) e.textContent = message || 'Could not add that skybox.'; });
   room.onMessage('memberList', (list) => { renderMembers(list); updateMembersPulse(list); }); // panel data + pending-pulse
 
   // Library creation/editing is admin-only; hide those controls for everyone else,
@@ -277,6 +288,22 @@ const applyTransform = (mesh, s) => {
   wire('roomScene', () => { byId('roomGrp').hidden = true; byId('scenesModal').hidden = false; room.send('listScenes'); });
   wire('roomTable', () => { byId('roomGrp').hidden = true; byId('tableModal').hidden = false; byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); });
   wire('tableCancel', () => byId('tableModal').hidden = true);
+  wire('roomWhiteboard', () => { // GM: show/hide, slide, and style the whiteboard
+    byId('roomGrp').hidden = true;
+    const wb = room.state.whiteboard;
+    byId('wbEnabled').checked = wb.enabled;
+    const styleEl = qs(`input[name="wbStyle"][value="${wb.dark ? 'dark' : 'light'}"]`); if (styleEl) styleEl.checked = true;
+    byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
+    byId('whiteboardModal').hidden = false;
+  });
+  wire('wbCancel', () => byId('whiteboardModal').hidden = true);
+  { const el = byId('wbEnabled'); if (el) el.onchange = () => room.send('wbEnable', { on: el.checked }); }
+  { const el = byId('wbAngle'); if (el) el.oninput = () => room.send('wbSet', { angle: (+el.value) * Math.PI / 180 }); }
+  qsa('input[name="wbStyle"]').forEach(r => r.onchange = () => room.send('wbSet', { dark: r.value === 'dark' }));
+  wire('wbPen', () => { wbTool = 'pen'; wbSyncToolButtons(); });
+  wire('wbEraser', () => { wbTool = 'eraser'; wbSyncToolButtons(); });
+  wire('wbClearBtn', () => room.send('wbClear'));
+  wire('wbDone', () => room.send('wbRelease'));
   wire('roomReset', () => { byId('roomGrp').hidden = true; if (confirm('Reset the table? This clears all pieces.')) room.send('reset'); });
   qsa('[data-spawn]').forEach(b => b.onclick = () => {
     const type = b.dataset.spawn;
@@ -469,6 +496,7 @@ const applyTransform = (mesh, s) => {
     });
     if (window.onLibraryList) window.onLibraryList('scene', scenes);
   });
+  room.onMessage('sceneError', ({ message } = {}) => alert(message || 'Could not save the scene.'));
   wire('scenesCancel', () => byId('scenesModal').hidden = true); // roomScene is already wired above (opens + closes the menu)
   { // built-in model boards
     const container = byId('builtinBoards');
@@ -747,6 +775,12 @@ let dragHeight = GRAB_HEIGHT;
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -GRAB_HEIGHT), hit = new THREE.Vector3();
 const prevTarget = new THREE.Vector3(), throwVel = new THREE.Vector3(); // hand speed → throw velocity
 let lastMoveSent = 0, prevThrowTime = 0, down = null;
+// "Lean in": a Tools toggle that dollies the camera toward the orbit target for a
+// closer look. Applied as a per-frame visual offset (undone before controls.update)
+// so it never corrupts the real orbit distance; toggle off and it eases back.
+let leanActive = false, leanT = 0;
+const leanOffset = new THREE.Vector3();
+const LEAN_AMOUNT = 0.35;   // fraction of the way to the target at full lean (a knob)
 
 // Convert a pointer event to normalized device coordinates (−1..1) for raycasting.
 const setPointer = (e) => {
@@ -771,11 +805,105 @@ renderer.domElement.addEventListener('mousedown', e => { // middle-click: snap a
     else { setPointer(e); sendPing(); }
   }
 });
-byId('hintHead').onclick = () => { // collapsible controls panel
-  const collapsed = byId('hint').classList.toggle('collapsed');
-  byId('hintToggle').innerHTML = collapsed ? 'Show &#9656;' : 'Hide &#9662;';
-};
+{ const t = byId('toolsToggle'); if (t) t.onclick = () => byId('toolsMenu').classList.toggle('collapsed'); } // collapse/expand the Tools menu
+{ const t = byId('interactToggle'); if (t) t.onclick = () => byId('interactMenu').classList.toggle('collapsed'); } // collapse/expand Interactions
+{ const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
+{ const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
+{ const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); b.textContent = leanActive ? '🔎 Lean Out' : '🔎 Lean In'; }; } // toggle the closer-look camera
+
+// ===== Skybox (GM-applied, synced to the room; library is admin-curated) =====
+const BUILTIN_SKIES = [ // baked-in: drop files in public/sky/ and add entries here
+  // equirect: { name: 'Observatory', url: '/sky/observatory.jpg' }
+  // cubemap:  { name: 'Space', faces: ['/sky/px.jpg','/sky/nx.jpg','/sky/py.jpg','/sky/ny.jpg','/sky/pz.jpg','/sky/nz.jpg'] }
+];
+const skyDefault = scene.background;   // the flat colour it ships with
+let skyLast = null, skyCache = [];     // last applied ref; last library list from the server
+// A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
+function applySkybox(ref) {
+  if (!ref) { scene.background = skyDefault; return; }
+  const set = (tex) => { if (skyLast === ref) scene.background = tex; }; // ignore a stale load if it changed
+  const fail = () => { if (skyLast === ref) scene.background = skyDefault; };
+  if (ref[0] === '{') { // cubemap
+    let d; try { d = JSON.parse(ref); } catch { return fail(); }
+    if (d && d.t === 'cube' && Array.isArray(d.f) && d.f.length === 6)
+      new THREE.CubeTextureLoader().load(d.f, (tex) => { tex.colorSpace = THREE.SRGBColorSpace; set(tex); }, undefined, fail);
+    else fail();
+  } else { // equirectangular
+    new THREE.TextureLoader().load(ref, (tex) => { tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace; set(tex); }, undefined, fail);
+  }
+}
+function syncSkybox(ref) { ref = ref || ''; if (ref === skyLast) return; skyLast = ref; applySkybox(ref); }
+function renderSkyList() {
+  const el = byId('skyList'); if (!el || !room) return;
+  el.replaceChildren();
+  const cur = room.state.skybox || '';
+  const built = BUILTIN_SKIES.map(s => ({ name: s.name, ref: s.faces ? JSON.stringify({ t: 'cube', f: s.faces }) : (s.url || '') }));
+  const custom = skyCache.map(s => ({ name: s.name, ref: s.url || '', id: s.id })); // id → deletable library entry
+  const opts = [{ name: 'Default (none)', ref: '' }, ...built, ...custom];
+  for (const opt of opts) {
+    const row = document.createElement('div'); row.className = 'skyRow';
+    const pick = document.createElement('button'); pick.className = 'skyPick' + (opt.ref === cur ? ' on' : '');
+    pick.textContent = (opt.ref === cur ? '✓ ' : '') + opt.name + (opt.ref && opt.ref[0] === '{' ? '  ·  cube' : '');
+    pick.onclick = () => { room.send('skybox', { url: opt.ref }); byId('skyModal').hidden = true; };
+    row.appendChild(pick);
+    if (opt.id && window.OTT_EDITOR && myIsAdmin) { // remove from the library (editor + admin only)
+      const del = document.createElement('button'); del.className = 'danger skyDel'; del.textContent = '✕'; del.title = 'Delete from library';
+      del.onclick = () => { if (confirm(`Delete "${opt.name}" from the library? This cannot be undone.`)) room.send('assetDelete', { kind: 'sky', id: opt.id }); };
+      row.appendChild(del);
+    }
+    el.appendChild(row);
+  }
+}
+async function onSkyAdd() {
+  const name = byId('skyName').value.trim(), err = byId('skyErr'); err.textContent = '';
+  if (!name) { err.textContent = 'Give it a name.'; return; }
+  const sel = qs('input[name="skyType"]:checked');
+  const cube = sel && sel.value === 'cube';
+  try {
+    if (cube) {
+      const files = ['skyPX', 'skyNX', 'skyPY', 'skyNY', 'skyPZ', 'skyNZ'].map(id => byId(id).files[0]);
+      if (files.some(f => !f)) { err.textContent = 'Pick all six faces.'; return; }
+      err.textContent = 'Uploading…';
+      const faces = [];
+      for (const f of files) faces.push(await uploadImage(f, 1024, 1024, 'stretch', 'sky')); // square faces
+      room.send('saveSkybox', { name, type: 'cube', faces });
+    } else {
+      const file = byId('skyFile').files[0];
+      if (!file) { err.textContent = 'Pick a 2:1 image.'; return; }
+      err.textContent = 'Uploading…';
+      const url = await uploadImage(file, 2048, 1024, 'stretch', 'sky'); // 2:1 panorama
+      room.send('saveSkybox', { name, url });
+    }
+    byId('skyName').value = ''; err.textContent = '';
+    for (const id of ['skyFile', 'skyPX', 'skyNX', 'skyPY', 'skyNY', 'skyPZ', 'skyNZ']) { const f = byId(id); if (f) f.value = ''; }
+  } catch (e) { err.textContent = 'Upload failed.'; }
+}
+{ const b = byId('roomSky'); if (b) b.onclick = () => { byId('roomGrp').hidden = true; renderSkyList(); byId('skyModal').hidden = false; room.send('listSkyboxes'); }; } // table: GM apply-picker
+{ const b = byId('newSky'); if (b) b.onclick = () => { renderSkyList(); byId('skyModal').hidden = false; room.send('listSkyboxes'); }; } // editor: admin library curation
+{ const b = byId('skyClose'); if (b) b.onclick = () => { byId('skyModal').hidden = true; }; }
+{ const b = byId('skyAdd'); if (b) b.onclick = onSkyAdd; }
+qsa('input[name="skyType"]').forEach(r => r.onchange = () => { // swap the equirect / cubemap inputs
+  const isCube = qs('input[name="skyType"]:checked').value === 'cube';
+  const eq = byId('skyEqui'), cu = byId('skyCube');
+  if (eq) eq.hidden = isCube; if (cu) cu.hidden = !isCube;
+});
 qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place)); // drawn-card placement
+{ const body = byId('inspectColorBody'), text = byId('inspectColorText');
+  const commit = () => {
+    if (!inspect || !inspect.origId) return;
+    const b = parseInt(body.value.slice(1), 16);
+    if (inspect.type === 'die') {
+      const t = parseInt(text.value.slice(1), 16);
+      inspect.props = { ...(inspect.props || {}), color: b, textColor: t };
+      swapInspectDie(inspect.props);                                                   // preview on the inspected die
+      room.send('recolor', { id: inspect.origId, color: b, textColor: t });
+    } else {
+      room.send('recolor', { id: inspect.origId, color: b });
+    }
+  };
+  if (body) { body.oninput = () => { if (inspect && inspect.type === 'prop') tintInspect(parseInt(body.value.slice(1), 16)); }; body.onchange = commit; } // props preview live via material tint
+  if (text) text.onchange = commit;
+}
 
 // Map a click-action name to the server message it sends.
 const sendAction = (action, id) => {
@@ -818,10 +946,43 @@ function inspectMesh(mesh, opts = {}) {
   camera.add(pivot);
   pivot.position.set(0, -CONFIG.inspect.drop, -CONFIG.inspect.dist);
 
-  inspect = { pivot, origId: opts.origId || null, drag: null, drawn: !!opts.drawn, placed: false };
+  inspect = { pivot, origId: opts.origId || null, type: opts.type, props: null, drag: null, drawn: !!opts.drawn, placed: false };
   controls.enabled = false;
   byId('inspectHint').hidden = !!opts.drawn; // a drawn card shows the action panel instead
   byId('drawActions').hidden = !opts.drawn;
+  const colorable = (opts.type === 'die' || opts.type === 'prop') && !opts.drawn;
+  const row = byId('inspectColorRow');
+  if (row) {
+    row.hidden = !colorable;
+    if (colorable) {
+      const piece = opts.origId && room.state.pieces.get(opts.origId);
+      inspect.props = piece ? JSON.parse(piece.props || '{}') : {};
+      const isDie = opts.type === 'die';
+      byId('inspectBodyLab').firstChild.nodeValue = isDie ? 'Body '  : 'Colour ';
+      byId('inspectColorBody').value = hexStr(inspect.props.color ?? (isDie ? 0xf4f1ea : 0xffffff)); // die = ivory blank face
+      byId('inspectTextLab').hidden = !isDie;                       // dice also get a number colour
+      if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414);       // die = ink numbers
+    }
+  }
+}
+const hexStr = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
+// Swap the inspected die's mesh for one built with new colours (live preview).
+function swapInspectDie(props) {
+  if (!inspect || inspect.type !== 'die' || !inspect.pivot) return;
+  const old = inspect.pivot.children[0];
+  if (old) inspect.pivot.remove(old);
+  const mesh = KIND.die.mesh(props);
+  mesh.userData.id = inspect.origId;
+  inspect.pivot.add(mesh);
+}
+
+// Live-tint the inspected mesh (its materials are its own — see enterInspect).
+function tintInspect(color) {
+  if (!inspect || !inspect.pivot) return;
+  inspect.pivot.traverse(node => {
+    if (node.isMesh && node.material)
+      (Array.isArray(node.material) ? node.material : [node.material]).forEach(m => m.color && m.color.setHex(color));
+  });
 }
 
 // Inspect an on-table piece by cloning its mesh (the clone respects hidden info —
@@ -829,7 +990,11 @@ function inspectMesh(mesh, opts = {}) {
 function enterInspect(id) {
   const entry = meshes.get(id);
   if (!entry) return;
-  inspectMesh(entry.mesh.clone(true), { origId: id, type: entry.type });
+  const piece = room.state.pieces.get(id);
+  const fresh = (entry.type === 'die' || entry.type === 'prop') && piece
+    ? KIND[entry.type].mesh(JSON.parse(piece.props || '{}')) // own materials → live-recolorable, no shared-material bleed
+    : entry.mesh.clone(true);                                // clone respects hidden info (face-down card = back only)
+  inspectMesh(fresh, { origId: id, type: entry.type });
   entry.mesh.visible = false;
 }
 
@@ -843,6 +1008,7 @@ function releaseInspect() {
   controls.enabled = true;
   byId('inspectHint').hidden = true;
   byId('drawActions').hidden = true;
+  const row = byId('inspectColorRow'); if (row) row.hidden = true;
 }
 
 // Resolve a drawn card to its destination: field-up | field-down | hand | deck.
@@ -857,26 +1023,39 @@ function placeDrawn(where) {
 // briefly for a possible double-click (inspect / draw); everything else fires now.
 function handleClick(gesture) {
   const { id, button, type } = gesture;
-  const wantsDouble = button === 0 && (INSPECTABLE(type) || type === 'deck');
+  const wantsDouble = (button === 0 && (INSPECTABLE(type) || type === 'deck')) || (button === 2 && type === 'deck');
 
   if (!wantsDouble) {
     sendAction(button === 0 ? gesture.kind.lclick : gesture.kind.rclick, id); // right-click / non-inspectable
     return;
   }
 
-  const isSecondClick = pendingClick && pendingClick.id === id && performance.now() - pendingClick.t < CONFIG.input.dblMs;
+  const isSecondClick = pendingClick && pendingClick.id === id && pendingClick.button === button && performance.now() - pendingClick.t < CONFIG.input.dblMs;
   if (isSecondClick) {
     clearTimeout(pendingClick.timer);
     pendingClick = null;
-    if (type === 'deck') room.send('drawInspect', { deckId: id }); // double-click a deck = draw to inspect
-    else enterInspect(id);                                          // double-click a piece = inspect it
+    if (button === 2) room.send('splitDeck', { deckId: id });        // double-right-click a deck = split it
+    else if (type === 'deck') room.send('drawInspect', { deckId: id }); // double-left a deck = draw to inspect
+    else enterInspect(id);                                            // double-left a piece = inspect it
   } else {
     if (pendingClick) clearTimeout(pendingClick.timer);
-    const action = gesture.kind.lclick; // undefined for die/prop → harmless no-op
-    pendingClick = { id, t: performance.now(), timer: setTimeout(() => { pendingClick = null; sendAction(action, id); }, CONFIG.input.clickMs) };
+    const single = button === 0 ? gesture.kind.lclick : gesture.kind.rclick; // deferred single (shuffle for right-click on a deck)
+    pendingClick = { id, button, t: performance.now(), timer: setTimeout(() => { pendingClick = null; sendAction(single, id); }, CONFIG.input.clickMs) };
   }
 }
 renderer.domElement.addEventListener('pointerdown', e => {
+  if (wbOwning) { // drawing on the whiteboard: start a stroke
+    if (e.button === 0) {
+      setPointer(e);
+      const uv = wbHitUV();
+      if (uv) {
+        wbCur = { pts: [uv[0], uv[1]], color: wbTool === 'eraser' ? wbBg() : wbMyColor(), width: wbTool === 'eraser' ? 0.03 : 0.005, erase: wbTool === 'eraser' };
+        wbActive = true;
+        renderer.domElement.setPointerCapture(e.pointerId);
+      }
+    }
+    return;
+  }
   if (inspect) { // in inspect mode, a left-drag spins the item (trackball)
     if (e.button === 0) {
       inspect.drag = { sx: e.clientX, sy: e.clientY, px: e.clientX, py: e.clientY, moved: false };
@@ -907,6 +1086,20 @@ renderer.domElement.addEventListener('wheel', e => {
 }, { passive: false });
 
 renderer.domElement.addEventListener('pointermove', e => {
+  if (wbOwning) { // extend the current stroke along the board surface
+    if (wbActive && wbCur) {
+      setPointer(e);
+      const uv = wbHitUV();
+      if (uv && wbCur.pts.length < 1998) {
+        const n = wbCur.pts.length, lx = wbCur.pts[n - 2], ly = wbCur.pts[n - 1];
+        if (Math.hypot(uv[0] - lx, uv[1] - ly) > 0.003) { // min spacing → fewer, smoother points
+          wbCur.pts.push(uv[0], uv[1]);
+          drawSegment(lx, ly, uv[0], uv[1], wbCur.color, wbCur.width); // live ink
+        }
+      }
+    }
+    return;
+  }
   if (inspect) { // spin the inspected item with a screen-aligned trackball
     const drag = inspect.drag;
     if (drag) {
@@ -952,6 +1145,11 @@ renderer.domElement.addEventListener('pointermove', e => {
   }
 });
 const endGesture = e => {
+  if (wbOwning) { // finish the stroke and send it
+    if (wbActive) endWbStroke();
+    try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
+    return;
+  }
   if (inspect) { // releasing in inspect mode: a plain click (no drag) closes it
     const drag = inspect.drag;
     if (drag) {
@@ -974,6 +1172,16 @@ const endGesture = e => {
 };
 renderer.domElement.addEventListener('pointerup', endGesture);
 renderer.domElement.addEventListener('pointercancel', endGesture);
+renderer.domElement.addEventListener('dblclick', e => { // double-click the board to own it and draw
+  if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled || wbOwning || room.state.whiteboard.owner) return;
+  const surf = wbGroup && wbGroup.getObjectByName('wbSurface'); if (!surf) return;
+  setPointer(e);
+  ray.setFromCamera(pointer, camera);
+  const bh = ray.intersectObject(surf)[0]; if (!bh) return;
+  const ph = ray.intersectObjects([...meshes.values()].map(m => m.mesh))[0];
+  if (ph && ph.distance < bh.distance) return; // a piece is in front → that's an inspect, not the board
+  room.send('wbClaim'); e.preventDefault();
+});
 
 // The piece to act on for a keyboard shortcut: the held one, else whatever's hovered.
 const heldOrHoveredId = () => (down && down.id) || pickId();
@@ -982,6 +1190,7 @@ const heldOrHoveredId = () => (down && down.id) || pickId();
 // a piece, U toggles its upright/flat behaviour, S saves a hovered deck.
 addEventListener('keydown', e => {
   if (!room) return;
+  if (e.key === 'Escape' && wbOwning) { room.send('wbRelease'); return; }
   if (e.key === 'Escape' && inspect) { releaseInspect(); return; }
   if (inspect && inspect.drawn) { // f/d/h/r place a drawn card
     const where = { f: 'field-up', d: 'field-down', h: 'hand', r: 'deck' }[e.key.toLowerCase()];
@@ -1027,6 +1236,21 @@ function rebuildCard(id, piece) {
   entry.mesh = mesh;
 }
 
+// Rebuild a die/prop mesh from its current props (used on recolor).
+function rebuildPiece(id, piece) {
+  const entry = meshes.get(id);
+  if (!entry) return;
+  scene.remove(entry.mesh);
+  const mesh = KIND[piece.type].mesh(JSON.parse(piece.props || '{}'));
+  const casts = PHYS[piece.type].mass > 0;
+  mesh.traverse(node => { node.userData.id = id; if (node.isMesh) { node.castShadow = casts; node.receiveShadow = true; } });
+  const buf = buffers.get(id), last = buf && buf[buf.length - 1];
+  if (last) applyTransform(mesh, last);
+  scene.add(mesh);
+  entry.mesh = mesh;
+  if (inspect && inspect.origId === id) entry.mesh.visible = false; // keep it hidden behind the inspect view
+}
+
 // hidden hand: a private bottom bar only this client ever sees
 let handDrag = null; // dragging a card out of the hand onto the table
 
@@ -1037,6 +1261,9 @@ let handDrag = null; // dragging a card out of the hand onto the table
 const revealed = new Map(); // sid -> [{front,back}]
 const selected = new Set(); // hids picked to show
 let selectMode = false, myHand = [];
+let handCollapsed = false;
+try { handCollapsed = localStorage.getItem('ott.handHidden') === '1'; } catch {} // personal view preference, remembered across refreshes
+function setHandCollapsed(v) { handCollapsed = v; try { localStorage.setItem('ott.handHidden', v ? '1' : '0'); } catch {} renderHand(myHand); }
 addEventListener('pointermove', e => {
   if (!handDrag) return;
   if (!handDrag.dragging) {
@@ -1071,6 +1298,17 @@ addEventListener('pointerup', e => {
 function renderHand(cards) {
   const el = byId('hand');
   el.innerHTML = '';
+  el.classList.remove('collapsed');
+  if (handCollapsed && cards.length && !selectMode) { // hidden: show only a peek tab (never while picking cards to show)
+    el.classList.add('collapsed');
+    const tab = document.createElement('button');
+    tab.className = 'handToggle';
+    tab.textContent = `🃏 Show hand (${cards.length})`;
+    tab.onclick = () => setHandCollapsed(false);
+    el.appendChild(tab);
+    el.style.display = 'flex';
+    return;
+  }
   for (const card of cards) {
     const div = document.createElement('div');
     div.className = 'handcard';
@@ -1107,6 +1345,14 @@ function renderHand(cards) {
     });
     el.appendChild(div);
   }
+  if (cards.length && !selectMode) { // a small handle to hide the hand from your view
+    const hide = document.createElement('button');
+    hide.className = 'handToggle hide';
+    hide.textContent = '▾';
+    hide.title = 'Hide your hand';
+    hide.onclick = () => setHandCollapsed(true);
+    el.appendChild(hide);
+  }
   el.style.display = cards.length ? 'flex' : 'none';
 }
 
@@ -1139,6 +1385,7 @@ function rebuildSeats() {
   seatLayout = seatLayoutFor(room.state.tableX || 10, room.state.tableZ || 7);
   room.state.players.forEach((p, sid) => { refreshMarker(sid); refreshFan(sid); });
   refreshMyChip();
+  positionWhiteboard(); // the track radius scales with the table
 }
 const handGroups = new Map(); // sid -> THREE.Group of face-down backs
 
@@ -1161,6 +1408,7 @@ function applyRole(role) {
   gate('objBtn', 1); gate('deckBtn', 1);                       // game-table spawn menus: Helper+
   gate('boardBtn', 2); gate('roomBtn', 2);                     // game-table board + Room Controls: GM+
   gate('roomCode', 2);                                         // room code display: GM+/owner/admin only
+  gate('ctrlHelper', 1); gate('ctrlGM', 2);                    // How-to-Play sections revealed by role
   gate('newProp', 1); gate('newDeck', 1); gate('newBoard', 2); // editor creation toolbar (absent on the table)
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
   if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
@@ -1471,6 +1719,134 @@ function updateMyPreview(avatar) {
   if (el) el.style.backgroundImage = avatar ? `url(${avatar})` : 'none';
 }
 
+// ===== Whiteboard: a synced board on a circular track behind the players ======
+// Slice 1: placement only — a blank chalkboard/whiteboard the GM can show, slide
+// around the track, and style. It carries no physics; drawing comes next.
+const WHITEBOARD_RES = 1024;               // drawing-canvas resolution (a knob)
+const WHITEBOARD_MAX_STROKES = 2000;       // local stroke-mirror cap (match the server knob)
+const WB = { w: 8, h: 4.5, margin: 5, gap: 0.5 }; // board size + track clearance
+let wbGroup = null, wbCanvas = null, wbCtx = null, wbTex = null;
+const wbLast = { enabled: null, angle: null, dark: null, owner: null };
+const wbStrokesLocal = [];              // mirror of the server's strokes (for replay on a dark<->light flip)
+let wbOwning = false, wbActive = false, wbCur = null, wbTool = 'pen', wbCamSave = null;
+
+function wbBg() { return room.state.whiteboard.dark ? '#1b1b1b' : '#f4f1ea'; }
+function ensureWbCanvas() {
+  if (wbCanvas) return;
+  wbCanvas = document.createElement('canvas');
+  wbCanvas.width = WHITEBOARD_RES;
+  wbCanvas.height = Math.round(WHITEBOARD_RES * WB.h / WB.w);
+  wbCtx = wbCanvas.getContext('2d');
+  wbTex = cTex(wbCanvas); // app's texture helper (correct colorSpace + reliable re-upload on needsUpdate)
+}
+function wbClearCanvas() { ensureWbCanvas(); wbCtx.fillStyle = wbBg(); wbCtx.fillRect(0, 0, wbCanvas.width, wbCanvas.height); wbTex.needsUpdate = true; }
+
+function buildWhiteboard() {
+  if (wbGroup) { scene.remove(wbGroup); wbGroup = null; }
+  if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled) return;
+  ensureWbCanvas(); wbClearCanvas();
+  const g = new THREE.Group();
+  const frame = new THREE.Mesh(new THREE.PlaneGeometry(WB.w + 0.4, WB.h + 0.4),
+    new THREE.MeshStandardMaterial({ color: 0x4a3b2a, roughness: 0.85 }));
+  frame.position.z = -0.03;
+  const surf = new THREE.Mesh(new THREE.PlaneGeometry(WB.w, WB.h), new THREE.MeshBasicMaterial({ map: wbTex }));
+  surf.name = 'wbSurface'; // slice 2 raycasts against this to draw
+  surf.frustumCulled = false; // always render so its texture uploads even when off to the side
+  g.add(frame, surf);
+  scene.add(g);
+  wbGroup = g;
+  positionWhiteboard();
+  if (room) room.send('wbStrokes'); // fetch the current drawing (late-join replay)
+}
+function positionWhiteboard() {
+  if (!wbGroup || !room) return;
+  const s = room.state.whiteboard;
+  const R = Math.max(room.state.tableX, room.state.tableZ) + WB.margin; // outside the seat ring
+  const cy = WB.h / 2 + WB.gap;
+  wbGroup.position.set(Math.sin(s.angle) * R, cy, Math.cos(s.angle) * R);
+  wbGroup.lookAt(0, cy, 0); // drawing face toward the table centre
+}
+// Reflect enable/slide/style/owner changes from synced state (called each state patch).
+function syncWhiteboard(s) {
+  if (!s) return;
+  if (s.enabled !== wbLast.enabled) { wbLast.enabled = s.enabled; buildWhiteboard(); }
+  if (wbGroup && s.angle !== wbLast.angle) positionWhiteboard();
+  if (s.dark !== wbLast.dark) { wbLast.dark = s.dark; if (wbGroup) redrawStrokes(); } // recolour + replay
+  if (s.owner !== wbLast.owner) { wbLast.owner = s.owner; if (s.owner === mySession) enterWbDraw(); else exitWbDraw(); }
+  wbLast.angle = s.angle;
+}
+
+// --- drawing: strokes are [x0,y0,x1,y1,...] in canvas-normalized [0,1] (y top-down) ---
+function wbMyColor() { const p = room.state.players.get(mySession); return (p && p.color) || '#e8e6e0'; }
+function drawSegment(x0, y0, x1, y1, color, width) {
+  ensureWbCanvas();
+  const W = wbCanvas.width, H = wbCanvas.height;
+  wbCtx.strokeStyle = color; wbCtx.lineWidth = Math.max(1.5, width * W);
+  wbCtx.lineCap = 'round'; wbCtx.lineJoin = 'round';
+  wbCtx.beginPath(); wbCtx.moveTo(x0 * W, y0 * H); wbCtx.lineTo(x1 * W, y1 * H); wbCtx.stroke();
+  wbTex.needsUpdate = true;
+}
+function drawStroke(s) {
+  const pts = s && s.pts ? Array.from(s.pts) : null;
+  if (!pts || pts.length < 4) return; // ignore anything malformed instead of aborting the whole repaint
+  ensureWbCanvas();
+  const W = wbCanvas.width, H = wbCanvas.height;
+  wbCtx.strokeStyle = s.erase ? wbBg() : (s.color || '#e8e6e0'); wbCtx.lineWidth = Math.max(1.5, (s.width || 0.005) * W);
+  wbCtx.lineCap = 'round'; wbCtx.lineJoin = 'round';
+  wbCtx.beginPath();
+  for (let i = 0; i < pts.length; i += 2) (i === 0 ? wbCtx.moveTo : wbCtx.lineTo).call(wbCtx, pts[i] * W, pts[i + 1] * H);
+  wbCtx.stroke(); wbTex.needsUpdate = true;
+}
+function redrawStrokes() { wbClearCanvas(); for (const s of wbStrokesLocal) drawStroke(s); } // clear bg + replay all (dark-flip / late-join)
+function pushStroke(s) {
+  wbStrokesLocal.push(s);
+  if (wbStrokesLocal.length > WHITEBOARD_MAX_STROKES) wbStrokesLocal.shift();
+  drawStroke(s); // just ink the new stroke — cheap, and needsUpdate re-uploads fine
+}
+
+// Raycast the pointer onto the board surface -> [x, y] in canvas-normalized [0,1], or null.
+function wbHitUV() {
+  const surf = wbGroup && wbGroup.getObjectByName('wbSurface'); if (!surf) return null;
+  ray.setFromCamera(pointer, camera);
+  const h = ray.intersectObject(surf)[0];
+  return h && h.uv ? [h.uv.x, 1 - h.uv.y] : null; // UV y is bottom-up; canvas y is top-down
+}
+function endWbStroke() {
+  wbActive = false;
+  if (wbCur && wbCur.pts.length >= 4) { // >= 2 points
+    room.send('wbStroke', wbCur);
+    wbStrokesLocal.push(wbCur); // already drawn live; just keep it for replay
+    if (wbStrokesLocal.length > WHITEBOARD_MAX_STROKES) wbStrokesLocal.shift();
+  }
+  wbCur = null;
+}
+function wbSyncToolButtons() {
+  const pen = byId('wbPen'), er = byId('wbEraser');
+  if (pen) pen.classList.toggle('on', wbTool === 'pen');
+  if (er) er.classList.toggle('on', wbTool === 'eraser');
+}
+// Own the board: face it straight-on, lock the camera, show the pen toolbar.
+function enterWbDraw() {
+  if (wbOwning || !wbGroup) return;
+  wbOwning = true; wbTool = 'pen';
+  wbCamSave = { pos: camera.position.clone(), target: controls.target.clone() };
+  const s = room.state.whiteboard;
+  const R = Math.max(room.state.tableX, room.state.tableZ) + WB.margin, cy = WB.h / 2 + WB.gap;
+  const dir = new THREE.Vector3(Math.sin(s.angle), 0, Math.cos(s.angle));
+  const boardPos = dir.clone().multiplyScalar(R); boardPos.y = cy;
+  camera.position.copy(boardPos.clone().sub(dir.clone().multiplyScalar(6.5))); camera.position.y = cy + 0.4;
+  controls.target.copy(boardPos); controls.update(); controls.enabled = false;
+  const tb = byId('wbTools'); if (tb) tb.hidden = false;
+  wbSyncToolButtons();
+}
+function exitWbDraw() {
+  if (!wbOwning) return;
+  wbOwning = false; wbActive = false; wbCur = null;
+  if (wbCamSave) { camera.position.copy(wbCamSave.pos); controls.target.copy(wbCamSave.target); controls.update(); wbCamSave = null; }
+  controls.enabled = true;
+  const tb = byId('wbTools'); if (tb) tb.hidden = true;
+}
+
 function renderPlayers() { // built with DOM + textContent so a player's name can never inject HTML
   const el = byId('players');
   if (!el) return;
@@ -1649,7 +2025,12 @@ scene.add(dropMarker);
   } else {
     dropMarker.visible = false;
   }
+  camera.position.sub(leanOffset);   // undo last frame's lean so controls sees the true orbit position
   controls.update();
+  leanT += ((leanActive ? 1 : 0) - leanT) * 0.18; // ease toward held / released
+  if (leanT < 0.0005) leanT = 0;
+  leanOffset.copy(controls.target).sub(camera.position).multiplyScalar(leanT * LEAN_AMOUNT);
+  camera.position.add(leanOffset);   // apply the lean for this frame's render
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 })();
