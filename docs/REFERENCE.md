@@ -189,8 +189,11 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 ### Physics helpers (module scope)
 
 - **`buildCollider(type, props) → CANNON.Shape`** — dice → `dieShape`; props →
-  model/precomputed box, else `PROPS` box/sphere scaled by `props.scale`; boards
-  → built-in/uploaded box (by half-height) else procedural `w×d`.
+  a model's precomputed box, or a per-object `props.collider` override
+  (`sphere`/`cylinder`/`cone`, or `flat`-mat — a thin base-offset footprint so
+  pieces slide over it), else `PROPS` box/sphere scaled by `props.scale`; boards
+  → built-in/uploaded box (by half-height) else procedural `w×d`. Off-centre
+  shapes (flat) return `{shape, offset}`, which `spawn` attaches accordingly.
 - **`dieShape(sides)`** — convex hull of `dieVerts`, coplanar triangles merged,
   windings outward. d6 ⇒ box.
 - **`buildSimpleDeck()`** — a standard 52-card deck of `rank:…` refs.
@@ -269,7 +272,9 @@ table snapshot — pieces + settings — as an admin-curated library asset) and
 
 Library handlers (all async, via `db`; keyed on a row **id**): creation —
 `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp`,
-`editDeck` — is **admin-only** and stamps `owner_id` + private; `loadDeck`/
+`editDeck` — is **admin-only** and stamps `owner_id` + private (note: the deck-edit
+UI has since been removed, so the `editDeck` handler is retained but no longer sent
+by any client); `loadDeck`/
 `loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
 **visibility-gated** (public for GMs/helpers, everything for admins); the admin
 curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
@@ -461,12 +466,12 @@ attention marker), `memberList` → the Members panel (with the pending-join pul
 UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList`
 (library listings, keyed by **id**; also fanned out to the editor panel via
 `window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
-reshape/reset/members gm+). All modal/button wiring lives here (prop, custom-model, deck,
-board, edit dialogs, plus the notebook / timer / show-cards panels), plus
-**`sendDeck`** (chunked build). Shared UI helpers cut the repetition:
-**`byId`/`qs`/`qsa`** (DOM shorthands), **`renderSavedList`** (one builder for the
-deck/prop/board library lists), and **`withBusyButton`** (wraps an async upload so
-the button shows busy then restores). Snapshot buffering runs through
+reshape/reset/members gm+). Game-play + Room Controls wiring lives here (spawn,
+grab/inspect, whiteboard, table size, scene load, skybox apply, plus the
+notebook / timer / show-cards panels); asset **creation** and the View Library /
+Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
+`window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
+**`renderSavedList`** (the scenes list). Snapshot buffering runs through
 **`snapshot`** (build a timestamped record) and **`applyTransform`** (copy it onto
 a mesh), shared by the add, card-rebuild, and render paths.
 

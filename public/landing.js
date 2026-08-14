@@ -7,6 +7,9 @@ const token = () => localStorage.getItem(TOKEN_KEY) || '';
 const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
 const clearToken = () => localStorage.removeItem(TOKEN_KEY);
 
+// Fetch wrapper: JSON-encodes a body, attaches the Bearer token when
+// { auth: true } (opt-in per call, unlike admin.js's always-on), and THROWS on
+// any non-2xx — so callers just try/catch and show the message.
 async function api(path, { method = 'GET', body, auth = false } = {}) {
   const headers = {};
   if (body) headers['Content-Type'] = 'application/json';
@@ -21,6 +24,7 @@ async function api(path, { method = 'GET', body, auth = false } = {}) {
 const enterRoom = (code) => { location.href = 'table.html?room=' + encodeURIComponent(code); };
 
 // ---- views: quick | auth | home ----
+// Show exactly one of the three top-level views (quick-join / auth / home).
 function setView(view) {
   $('quickJoinView').hidden = view !== 'quick';
   $('authView').hidden = view !== 'auth';
@@ -30,13 +34,15 @@ function setView(view) {
 const showQuickJoin = () => setView('quick');
 function showAuth() { setView('auth'); $('loginForm').hidden = false; $('signupForm').hidden = true; }
 
+// The cached signed-in user — kept module-side so handlers like onRequestHost can
+// re-check fields (e.g. hasPassword) without another round-trip.
 let me = null;
 async function showHome(user) {
   me = user;
   setView('home');
   $('who').textContent = user.username;
-  const ok = typeof user.avatar === 'string' && /^(\/assets\/|data:image\/|https?:\/\/)/.test(user.avatar);
-  $('avatar').style.backgroundImage = ok ? `url("${user.avatar}")` : 'none';
+  const validAvatar = typeof user.avatar === 'string' && /^(\/assets\/|data:image\/|https?:\/\/)/.test(user.avatar);
+  $('avatar').style.backgroundImage = validAvatar ? `url("${user.avatar}")` : 'none';
 
   // Hosting: approved (or admin) → the create form; pending → a waiting note; else
   // → a "request host access" button.
@@ -76,6 +82,9 @@ async function onRequestHost() {
 }
 
 // ---- rooms + live approval ----
+// While any of your rooms is pending admission, poll /rooms every 3s and watch for
+// the transition: pending -> admitted auto-forwards you into the table; pending ->
+// gone (declined or closed) shows a notice. Polling stops once nothing is pending.
 let lastStatus = {};   // code -> status from the previous fetch (to spot pending -> admitted)
 let pollTimer = null;
 const stopPolling = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
@@ -86,28 +95,28 @@ async function refreshRooms() {
 
   for (const code in lastStatus) { // spot pending -> admitted (approved) or pending -> gone (declined/closed)
     if (lastStatus[code] !== 'pending') continue;
-    const now = rooms.find((r) => r.code === code);
-    if (now && now.status === 'admitted') { onApproved(now); return; }
-    if (!now) onDeclined();
+    const current = rooms.find((room) => room.code === code);
+    if (current && current.status === 'admitted') { onApproved(current); return; }
+    if (!current) onDeclined();
   }
-  lastStatus = Object.fromEntries(rooms.map((r) => [r.code, r.status]));
+  lastStatus = Object.fromEntries(rooms.map((room) => [room.code, room.status]));
 
   renderRoomList(rooms);
 
-  const anyPending = rooms.some((r) => r.status === 'pending');
+  const anyPending = rooms.some((room) => room.status === 'pending');
   if (anyPending && !pollTimer) pollTimer = setInterval(refreshRooms, 3000); // watch for approval
   if (!anyPending) stopPolling();
 }
 
 function onApproved(room) {
   stopPolling();
-  const err = $('joinErr'); err.className = 'note';
-  err.textContent = `\u2713 You have been approved for ${room.name} \u2014 entering\u2026`;
+  const errEl = $('joinErr'); errEl.className = 'note';
+  errEl.textContent = `\u2713 You have been approved for ${room.name} \u2014 entering\u2026`;
   setTimeout(() => enterRoom(room.code), 800);
 }
 function onDeclined() {
-  const err = $('joinErr'); err.className = 'err';
-  err.textContent = 'Your join request was declined, or the room was closed.';
+  const errEl = $('joinErr'); errEl.className = 'err';
+  errEl.textContent = 'Your join request was declined, or the room was closed.';
 }
 
 function renderRoomList(rooms) {
@@ -117,110 +126,112 @@ function renderRoomList(rooms) {
     list.appendChild(li); return;
   }
   const mkBtn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
-  for (const r of rooms) {
+  for (const room of rooms) {
     const li = document.createElement('li'); li.className = 'roomRow';
     const info = document.createElement('div');
-    const name = document.createElement('b'); name.textContent = r.name;
+    const name = document.createElement('b'); name.textContent = room.name;
     const meta = document.createElement('span'); meta.className = 'muted';
-    meta.textContent = ` \u00b7 ${r.code} \u00b7 ${r.role}${r.status === 'pending' ? ' \u2014 awaiting approval' : ''}`;
+    meta.textContent = ` \u00b7 ${room.code} \u00b7 ${room.role}${room.status === 'pending' ? ' \u2014 awaiting approval' : ''}`;
     info.append(name, meta);
     const actions = document.createElement('div'); actions.className = 'roomActions';
-    const enter = mkBtn('Enter', () => enterRoom(r.code)); enter.disabled = r.status === 'pending';
+    const enter = mkBtn('Enter', () => enterRoom(room.code)); enter.disabled = room.status === 'pending';
     actions.appendChild(enter);
-    if (r.role === 'owner') { // owner room management
-      actions.appendChild(mkBtn('Rename', () => renameRoom(r), 'mini'));
-      actions.appendChild(mkBtn(r.requireApproval ? 'Approval: on' : 'Approval: off', () => togglePolicy(r), 'mini'));
-      actions.appendChild(mkBtn('Close', () => closeRoom(r), 'mini'));
+    if (room.role === 'owner') { // owner room management
+      actions.appendChild(mkBtn('Rename', () => renameRoom(room), 'mini'));
+      actions.appendChild(mkBtn(room.requireApproval ? 'Approval: on' : 'Approval: off', () => togglePolicy(room), 'mini'));
+      actions.appendChild(mkBtn('Close', () => closeRoom(room), 'mini'));
     }
     li.append(info, actions);
     list.appendChild(li);
   }
 }
 
-async function renameRoom(r) {
-  const name = prompt('Rename room:', r.name);
+async function renameRoom(room) {
+  const name = prompt('Rename room:', room.name);
   if (name == null || !name.trim()) return;
-  try { await api('/rooms/' + r.id, { method: 'PATCH', auth: true, body: { name: name.trim() } }); refreshRooms(); }
+  try { await api('/rooms/' + room.id, { method: 'PATCH', auth: true, body: { name: name.trim() } }); refreshRooms(); }
   catch (e) { alert(e.message); }
 }
-async function togglePolicy(r) {
-  try { await api('/rooms/' + r.id, { method: 'PATCH', auth: true, body: { requireApproval: !r.requireApproval } }); refreshRooms(); }
+async function togglePolicy(room) {
+  try { await api('/rooms/' + room.id, { method: 'PATCH', auth: true, body: { requireApproval: !room.requireApproval } }); refreshRooms(); }
   catch (e) { alert(e.message); }
 }
-async function closeRoom(r) {
-  if (!confirm(`Close "${r.name}"? Anyone at the table is sent back to the lobby, and no one can join.`)) return;
-  try { await api('/rooms/' + r.id, { method: 'DELETE', auth: true }); refreshRooms(); }
+async function closeRoom(room) {
+  if (!confirm(`Close "${room.name}"? Anyone at the table is sent back to the lobby, and no one can join.`)) return;
+  try { await api('/rooms/' + room.id, { method: 'DELETE', auth: true }); refreshRooms(); }
   catch (e) { alert(e.message); }
 }
 
 // ---- handlers ----
 // Quick join: create a passwordless account, then join by code — the default path.
 async function onQuickJoin() {
-  const err = $('qjErr'); err.textContent = ''; err.className = 'err';
+  const errEl = $('qjErr'); errEl.textContent = ''; errEl.className = 'err';
   const username = $('qjName').value.trim(), email = $('qjEmail').value.trim(), code = $('qjCode').value.trim();
-  if (!username || !email || !code) { err.textContent = 'Fill in all three fields.'; return; }
+  if (!username || !email || !code) { errEl.textContent = 'Fill in all three fields.'; return; }
   let user;
   try {
-    const r = await api('/auth/signup', { method: 'POST', body: { username, email } }); // passwordless
-    user = r.user; setToken(r.token);
+    const signup = await api('/auth/signup', { method: 'POST', body: { username, email } }); // passwordless
+    user = signup.user; setToken(signup.token);
   } catch (e) {
-    err.textContent = /taken/i.test(e.message || '') ? `${e.message} Pick another, or log in (top right).` : e.message;
+    errEl.textContent = /taken/i.test(e.message || '') ? `${e.message} Pick another, or log in (top right).` : e.message;
     return;
   }
   try { // now signed in — join the room
     const { room, membership } = await api('/rooms/join', { method: 'POST', auth: true, body: { code } });
     if (membership && membership.status === 'admitted') { enterRoom(room.code); return; }
     await showHome(user); // pending: land on home, which polls and auto-forwards on approval
-    const je = $('joinErr'); je.className = 'note'; je.textContent = 'Request sent \u2014 waiting for a GM to admit you\u2026';
+    const joinErrEl = $('joinErr'); joinErrEl.className = 'note'; joinErrEl.textContent = 'Request sent \u2014 waiting for a GM to admit you\u2026';
   } catch (e) {
     await showHome(user); // account exists now; let them retry from the lobby
-    const je = $('joinErr'); je.className = 'err'; je.textContent = e.message;
+    const joinErrEl = $('joinErr'); joinErrEl.className = 'err'; joinErrEl.textContent = e.message;
   }
 }
 
 async function onLogin() {
-  const err = $('loginErr'); err.textContent = '';
+  const errEl = $('loginErr'); errEl.textContent = '';
   try {
+    // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/login', { method: 'POST',
       body: { login: $('loginId').value.trim(), password: $('loginPw').value } });
     setToken(t); showHome(user);
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { errEl.textContent = e.message; }
 }
 
 async function onSignup() {
-  const err = $('suErr'); err.textContent = '';
+  const errEl = $('suErr'); errEl.textContent = '';
   const password = $('suPw').value;
-  if (password.length < 8) { err.textContent = 'Password must be at least 8 characters.'; return; }
+  if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
   try {
+    // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/signup', { method: 'POST',
       body: { username: $('suUser').value.trim(), email: $('suEmail').value.trim(), password } });
     setToken(t); showHome(user);
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { errEl.textContent = e.message; }
 }
 
 async function onCreateRoom() {
-  const err = $('createErr'); err.textContent = '';
+  const errEl = $('createErr'); errEl.textContent = '';
   try {
     const { room } = await api('/rooms', { method: 'POST', auth: true,
       body: { name: $('roomName').value.trim(), requireApproval: $('approval').checked } });
     enterRoom(room.code);
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { errEl.textContent = e.message; }
 }
 
 async function onJoin() {
-  const err = $('joinErr'); err.textContent = ''; err.className = 'err';
+  const errEl = $('joinErr'); errEl.textContent = ''; errEl.className = 'err';
   try {
     const { room, membership } = await api('/rooms/join', { method: 'POST', auth: true,
       body: { code: $('joinCode').value.trim() } });
     if (membership && membership.status === 'admitted') {
-      err.className = 'note'; err.textContent = '\u2713 Entering\u2026';
+      errEl.className = 'note'; errEl.textContent = '\u2713 Entering\u2026';
       setTimeout(() => enterRoom(room.code), 400);
     } else {
-      err.className = 'note';
-      err.textContent = 'Request sent \u2014 waiting for a GM. You\u2019ll be forwarded once approved.';
+      errEl.className = 'note';
+      errEl.textContent = 'Request sent \u2014 waiting for a GM. You\u2019ll be forwarded once approved.';
       refreshRooms();
     }
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { errEl.textContent = e.message; }
 }
 
 const onLogout = () => { $('adminBtn').hidden=true; stopPolling(); clearToken(); showQuickJoin(); };
@@ -246,13 +257,13 @@ function fileToAvatarDataURL(file) {
     fr.readAsDataURL(file);
   });
 }
-async function onAvatarPick(e) {
-  const file = e.target.files[0]; e.target.value = ''; if (!file) return;
+async function onAvatarPick(event) {
+  const file = event.target.files[0]; event.target.value = ''; if (!file) return;
   try {
     const data = await fileToAvatarDataURL(file);
     const { avatar } = await api('/me/avatar', { method: 'POST', auth: true, body: { data } });
     $('avatar').style.backgroundImage = `url("${avatar}")`;
-  } catch (err) { alert('Could not update your avatar.'); }
+  } catch (e) { alert('Could not update your avatar.'); }
 }
 
 // ---- wire + boot ----
@@ -276,10 +287,15 @@ $('loginPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onLogin
 $('suPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onSignup(); });
 $('joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onJoin(); });
 
+// Boot: if a stored token still resolves to a user, land on home; otherwise (no
+// token, a stale one that 401s, or a 2xx that somehow lacks a user) show quick-join.
 (async function boot() {
   if (token()) {
-    try { const { user } = await api('/auth/token', { method: 'POST', body: { token: token() } }); return showHome(user); }
-    catch { clearToken(); } // stale/lost token — fall through to quick join
+    try {
+      const { user } = await api('/auth/token', { method: 'POST', body: { token: token() } });
+      if (user) return showHome(user); // a 2xx without a user → treat as signed-out rather than half-render home
+      clearToken();
+    } catch { clearToken(); } // stale/lost token — fall through to quick join
   }
   showQuickJoin();
 })();

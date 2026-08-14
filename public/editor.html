@@ -9,36 +9,71 @@
 <body>
 <div id="app"></div>
 <div id="ui">
-  <button id="lobbyBtn">← Lobby</button>
+  <button id="lobbyBtn">🔙 Lobby</button>
   <span class="menu">
-    <button id="diceBtn">☰ + Dice</button>
+    <button id="diceBtn">☰ 🎲 Add Dice</button>
     <div class="grp" id="diceGrp" hidden></div>
   </span>
-  <button id="newProp">+ Object</button>
-  <button id="newDeck">+ Deck</button>
-  <button id="newBoard">↷ Board</button>
-  <button id="newSky">🌄 Skybox</button>
-  <button id="roll">↻ Dice</button>
-  <button id="notesBtn">✎ Notes</button>
-  <button id="timerBtn">⏱ Timer</button>
-  <button id="showBtn">🃏 Show</button>
-  <button id="membersBtn" hidden>👥 Members</button>
-  <button id="libraryBtn">📚 Library</button>
+  <span class="menu">
+    <button id="roomBtn">☰ ⚙️ Room Controls</button>
+    <div class="grp" id="roomGrp" hidden>
+      <button id="roomScene">📽️ Load a Scene</button>
+      <button id="roomTable">↔️ Table Size</button>
+      <button id="roomWhiteboard">🖊️ Whiteboard</button>
+      <button id="roomSky">🌄 Skybox</button>
+      <button id="roomReset" class="danger">🧹 Reset</button>
+    </div>
+  </span>
+  <button id="libraryBtn">📚 View Library</button>
+  <button id="builtinBtn">🧱 Built-Ins</button>
+  <button id="addBtn">➕ Add to Library</button>
+  <button id="sceneSaveBtn">🎬 Save Scene</button>
 </div>
+<div id="rightRail">
 <div id="panel">
   <span id="status">connecting…</span>
   <div>
     <div id="players"></div>
     <div id="me">
-      <span id="myAv" class="mav"></span>
+      <span id="myAv" class="mav editable" title="Change your avatar"></span>
       <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
-      <label class="upload">Avatar<input id="avatarInput" type="file" accept="image/*" hidden></label>
+      <input id="avatarInput" type="file" accept="image/*" hidden>
     </div>
   </div>
   <button id="nextTurn">Next turn</button>
-  <button id="reset">Reset</button>
+</div>
+<div id="toolsDock">
+  <div id="toolsMenu">
+    <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
+    <button id="notesBtn">📝 Private Notes</button>
+    <button id="timerBtn">⏱️ Timer</button>
+  </div>
+  <div id="notes" hidden>
+    <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
+    <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
+  </div>
+  <div id="timer" hidden>
+    <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
+    <div id="timerReadout">00:00</div>
+    <div class="timerRow">
+      <button id="timerToggle">Start</button>
+      <button id="timerReset">Reset</button>
+      <select id="timerMode">
+        <option value="up">Stopwatch</option>
+        <option value="down">Countdown</option>
+      </select>
+    </div>
+    <div id="timerDurRow" class="timerRow" hidden>
+      <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
+    </div>
+  </div>
+</div>
 </div>
 <div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
+<div id="inspectColorRow" hidden>
+  <label id="inspectBodyLab">Colour <input type="color" id="inspectColorBody" value="#ffffff"></label>
+  <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
+</div>
 <div id="drawActions" hidden>
   <span class="da-note">Drag to rotate</span>
   <button data-place="field-up">To field ↑ face-up <kbd>F</kbd></button>
@@ -46,262 +81,247 @@
   <button data-place="hand">To hand <kbd>H</kbd></button>
   <button data-place="deck">Return to deck <kbd>R</kbd></button>
 </div>
-<div id="hint">
-  <div id="hintHead"><b>Controls</b><span id="hintToggle">Hide &#9662;</span></div>
-  <div id="hintBody">
-    <div class="hcat">Left-Click</div>
-    <ul>
-      <li>Take any card on the field and put it in your hand.</li>
-      <li>Take top card of a deck and place it face-down next to the deck.</li>
-      <li>Place card from your hand face-down in a pre-determined location on the field.</li>
-      <li>After clicking an object, press <b>Delete</b> to remove it.</li>
-      <li>With an object held or hovered, press <b>U</b> to toggle stand-upright / lie-flat (on by default for chess, go, checkers, tokens &amp; decks).</li>
-    </ul>
-    <div class="hcat">Double Left-Click</div>
-    <ul>
-      <li>Inspect objects/cards on the field.
-        <ul><li>Click and drag to rotate them.</li></ul></li>
-      <li>Inspect the top card of a deck.
-        <ul>
-          <li>Press <b>F</b> to place it next to the deck face-up.</li>
-          <li>Press <b>D</b> to place it next to the deck face-down.</li>
-          <li>Press <b>H</b> to place it in your hand.</li>
-          <li>Press <b>R</b> (or click outside the preview) to return it to the top of the deck.</li>
-        </ul></li>
-    </ul>
-    <div class="hcat">Left-Click + Drag</div>
-    <ul>
-      <li>Rotate your view of the board.</li>
-      <li>Pick up / move / throw objects &amp; cards. Scroll the wheel to change height.</li>
-      <li>While holding, <b>Middle-Click</b> to snap facing to the nearest 90°.</li>
-      <li>Draw the top card from a deck and move/throw it.</li>
-      <li>Drag a card out of your hand onto the field, face-down.</li>
-    </ul>
-    <div class="hcat">Right-Click</div>
-    <ul>
-      <li>Shuffle any deck.</li>
-      <li>After clicking a deck, press <b>S</b> to save it.</li>
-      <li>Reveal the face of any card on the field.</li>
-      <li>Place a card from your hand onto the field, face-up.</li>
-    </ul>
-    <div class="hcat">Right-Click + Drag</div>
-    <ul>
-      <li>Pan your view of the board.</li>
-      <li>Hold and move any deck.</li>
-      <li>Drag a card out of your hand onto the field, face-up.</li>
-    </ul>
-  </div>
+<div id="wbTools" hidden>
+  <span class="da-note">Whiteboard</span>
+  <button id="wbPen" class="on">✏️ Pen</button>
+  <button id="wbEraser">🧽 Eraser</button>
+  <button id="wbClearBtn" class="danger">Clear</button>
+  <button id="wbDone">Done <kbd>Esc</kbd></button>
 </div>
 <div id="hand"></div>
-<div id="showPanel" hidden>
-  <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
-  <div class="showLabel">To</div>
-  <div id="showAudience" class="chipRow"></div>
-  <div class="showLabel">What</div>
-  <div class="chipRow">
-    <button id="showScopeHand" class="chip on">Whole hand</button>
-    <button id="showScopeSel" class="chip">Selected cards</button>
+<div id="leftRail">
+  <div id="interactDock">
+    <div id="interactMenu">
+      <div class="toolsLabel" id="interactToggle">Interactions <span class="toolsChev">▾</span></div>
+      <button id="leanBtn">🔎 Lean In</button>
+      <button id="mySeatBtn">↩ My Seat</button>
+      <button id="roll">🔄 Roll Dice</button>
+      <button id="showBtn">🃏 Show Hand</button>
+    </div>
+    <div id="showPanel" hidden>
+      <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
+      <div class="showLabel">To</div>
+      <div id="showAudience" class="chipRow"></div>
+      <div class="showLabel">What</div>
+      <div class="chipRow">
+        <button id="showScopeHand" class="chip on">Whole hand</button>
+        <button id="showScopeSel" class="chip">Selected cards</button>
+      </div>
+      <button id="showHold">Hold to show</button>
+    </div>
   </div>
-  <button id="showHold">Hold to show</button>
-</div>
-<div id="notes" hidden>
-  <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
-  <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
 </div>
 <div id="membersPanel" hidden>
   <div id="membersHead"><b>Members</b><span id="membersClose">✕</span></div>
   <ul id="memberList"></ul>
 </div>
-<div id="timer" hidden>
-  <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
-  <div id="timerReadout">00:00</div>
-  <div class="timerRow">
-    <button id="timerToggle">Start</button>
-    <button id="timerReset">Reset</button>
-    <select id="timerMode">
-      <option value="up">Stopwatch</option>
-      <option value="down">Countdown</option>
-    </select>
-  </div>
-  <div id="timerDurRow" class="timerRow" hidden>
-    <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
-  </div>
-</div>
-<div id="propModal" hidden>
-  <div class="modalCard">
-    <h3>Add a prop</h3>
-    <label>Shape</label>
-    <select id="propShape"></select>
-    <div id="propColorWrap"><label>Color</label><div class="backRow"><input id="propColor" type="color" value="#9aa0a6"></div></div>
-    <div id="propTeamWrap" hidden><label>Color set</label>
-      <select id="propTeam"><option value="0">Color 1</option><option value="1">Color 2</option></select></div>
-    <label>Quantity</label>
-    <input id="propQty" type="number" value="1" min="1" max="12" style="width:70px">
-    <label>Scale</label>
-    <input id="propScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
-    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="propStand" type="checkbox"> Stands upright (self-rights when placed)</label>
-    <div class="row"><button id="propCustom" style="margin-right:auto">Custom...</button><button id="propCancel">Cancel</button><button id="propSpawn">Spawn</button></div>
-  </div>
-</div>
-<div id="customPropModal" hidden>
-  <div class="modalCard">
-    <h3>Custom model prop</h3>
-    <label>Model (.glb)</label>
-    <input id="cpModel" type="file" accept=".glb,model/gltf-binary">
-    <label>Quantity</label>
-    <input id="cpQty" type="number" value="1" min="1" max="12" style="width:70px">
-    <label>Scale</label>
-    <input id="cpScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
-    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="cpStand" type="checkbox"> Stands upright (self-rights when placed)</label>
-    <div class="modeRow" style="margin-top:6px">
-      <label><input type="radio" name="cpColorMode" value="own" checked> Model's own colours</label>
-      <label><input type="radio" name="cpColorMode" value="tint"> Tint <input id="cpTintColor" type="color" value="#c0c0c0"></label>
+
+<div id="skyPickModal" hidden>
+  <div class="modalCard libraryCard">
+    <div id="skyPickHead"><b>Skybox</b><span id="skyPickClose">✕</span></div>
+    <p class="libHint">Set the room's backdrop — applies for everyone at the table.</p>
+    <div class="libTabs">
+      <button class="libTab on" data-tab="builtin">Built-In</button>
+      <button class="libTab" data-tab="custom">Custom</button>
     </div>
-    <input id="cpName" type="text" placeholder="Save this model as… (optional)" style="margin-top:6px">
-    <div class="note">A model gets a box collider sized to its bounds. Tint recolours it; leave off to keep its own look.</div>
-    <div class="savedWrap"><label>Saved models</label><div id="propSavedList" class="savedList"></div></div>
-    <div class="row"><button id="cpCancel">Cancel</button><button id="cpSpawn">Spawn</button></div>
-  </div>
-</div>
-<div id="boardModal" hidden>
-  <div class="modalCard">
-    <h3>Table &amp; board</h3>
-    <label>Table surface — width × depth</label>
-    <div class="backRow">
-      <input id="tableW" type="number" min="8" max="40" step="1" style="width:76px"><span>×</span>
-      <input id="tableD" type="number" min="6" max="32" step="1" style="width:76px">
-      <button id="tableResize">Resize table</button>
-    </div>
-    <div class="note">The play surface itself (not a board on it).</div>
-    <hr class="divider">
-    <label>Built-in boards</label>
-    <div class="backRow" id="builtinBoards" style="flex-wrap:wrap"></div>
-    <label>Upload a board model (.glb)</label>
-    <div class="backRow"><input id="boardModel" type="file" accept=".glb,model/gltf-binary" style="flex:1"><button id="boardModelSpawn">Add</button></div>
-    <div class="note" style="margin:8px 0 2px">— or make a plain flat board —</div>
-    <label>Width</label>
-    <input id="boardW" type="number" value="10" min="2" max="18" step="0.5" style="width:90px">
-    <label>Depth</label>
-    <input id="boardD" type="number" value="10" min="2" max="12" step="0.5" style="width:90px">
-    <label>Image (optional — stretched to fit)</label>
-    <input id="boardImg" type="file" accept="image/*">
-    <div class="note">Replaces the current board and sits at table centre.</div>
-    <div class="savedWrap"><label>Save / load</label>
-      <div class="savedRow"><span class="note" style="margin:0">Save the current board</span><button id="boardSave">Save…</button></div>
-      <div id="boardSavedList" class="savedList"></div>
-    </div>
-    <div class="row"><button id="boardCancel">Cancel</button><button id="boardCreate">Create flat board</button></div>
-  </div>
-</div>
-<div id="editPropModal" hidden>
-  <div class="modalCard">
-    <h3>Edit model prop</h3>
-    <div class="note" id="editPropModel">model</div>
-    <label>Scale</label>
-    <input id="editPropScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
-    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="editPropStand" type="checkbox"> Stands upright</label>
-    <div class="modeRow" style="margin-top:6px">
-      <label><input type="radio" name="editPropColorMode" value="own" checked> Model's own colours</label>
-      <label><input type="radio" name="editPropColorMode" value="tint"> Tint <input id="editPropTintColor" type="color" value="#c0c0c0"></label>
-    </div>
-    <label>Copy name (for “Save as copy”)</label>
-    <input id="editPropName" type="text">
-    <div class="row"><button id="editPropCancel">Cancel</button><button id="editPropCopy">Save as copy</button><button id="editPropSave">Save</button></div>
-  </div>
-</div>
-<div id="editDeckModal" hidden>
-  <div class="modalCard">
-    <h3>Edit deck</h3>
-    <div class="note" id="editDeckInfo">deck</div>
-    <label>Replace back image (optional)</label>
-    <input id="editDeckBack" type="file" accept="image/*">
-    <label>Add text cards (one per line)</label>
-    <textarea id="editDeckText" rows="3"></textarea>
-    <div class="backRow"><input id="editDeckFaceColor" type="color" value="#141414" title="Text colour"><input id="editDeckFaceBg" type="color" value="#fbfbf7" title="Background"><span class="note" style="margin:0">⇞ new text-card colours</span></div>
-    <label>Add image cards (optional)</label>
-    <input id="editDeckImgs" type="file" accept="image/*" multiple>
-    <label>Copy name (for “Save as copy”)</label>
-    <input id="editDeckName" type="text">
-    <div class="row"><button id="editDeckCancel">Cancel</button><button id="editDeckCopy">Save as copy</button><button id="editDeckSave">Save</button></div>
-  </div>
-</div>
-<div id="deckModal" hidden>
-  <div class="modalCard">
-    <h3>Create a custom deck</h3>
-    <div class="modeRow">
-      <label><input type="radio" name="deckMode" value="text" checked> Text</label>
-      <label><input type="radio" name="deckMode" value="image"> Images</label>
-    </div>
-    <div id="textMode">
-      <label>Customize the 'back' of the Cards</label>
-      <span class="note" style="margin:0">BG Color | Text Color | Optional Text</span>
-      <div class="backRow">
-        <input id="backColor" type="color" value="#7d2b2b" title="Back background">
-        <input id="backTextColor" type="color" value="#f4f1ea" title="Back text color">
-        <input id="backText" type="text" placeholder="Optional Text...">
-      </div>
-      <label>Customize the 'face' of the Cards</label>
-      <span class="note" style="margin:0">BG Color | Text Color</span>
-      <div class="backRow"><input id="faceBg" type="color" value="#fbfbf7" title="Face background"><input id="faceColor" type="color" value="#141414" title="Face text color"></div>
-      <span class="note" style="margin:0">Enter text here.  One-per-line, commma-separated or JSON</span>
-      <textarea id="faceText" rows="6" placeholder="First card&#10;Second card&#10;Third card"></textarea>
-    </div>
-    <div id="imageMode" hidden>
-      <label>Card back (one image)</label>
-      <input id="deckBack" type="file" accept="image/*">
-      <label>Card fronts (select many)</label>
-      <input id="deckFronts" type="file" accept="image/*" multiple>
-    </div>
-    <div class="note">Card faces stay private until a card is revealed.</div>
-    <input id="deckSaveName" type="text" placeholder="Save this deck as… (optional)">
-    <div class="savedWrap"><label>Load a saved deck</label><div id="savedList" class="savedList"></div></div>
-    <div class="row"><button data-spawn="deck">Quick 52</button><button id="deckCancel">Cancel</button><button id="deckCreate">Create deck</button></div>
+    <div class="libPane" data-pane="builtin"><ul id="skyPickBuiltin" class="libList"></ul></div>
+    <div class="libPane" data-pane="custom" hidden><ul id="skyPickCustom" class="libList"></ul></div>
   </div>
 </div>
 
-<div id="skyModal" hidden>
+<div id="tableModal" hidden>
   <div class="modalCard">
-    <h3>Skybox library</h3>
-    <div class="note">Upload panoramas or cubemaps for GMs to apply in their rooms. Click one to preview it here.</div>
-    <div id="skyList" class="savedList"></div>
-    <div id="skyAdmin">
-      <hr class="divider">
-      <label>Add to the library</label>
-      <div class="modeRow">
-        <label><input type="radio" name="skyType" value="equirect" checked> Equirectangular (1 image, 2:1)</label>
-        <label><input type="radio" name="skyType" value="cube"> Cubemap (6 images)</label>
-      </div>
-      <input id="skyName" type="text" placeholder="Name" maxlength="60">
-      <div id="skyEqui"><input id="skyFile" type="file" accept="image/*"></div>
-      <div id="skyCube" hidden>
-        <div class="cubeGrid">
-          <label>Right +X<input id="skyPX" type="file" accept="image/*"></label>
-          <label>Left −X<input id="skyNX" type="file" accept="image/*"></label>
-          <label>Top +Y<input id="skyPY" type="file" accept="image/*"></label>
-          <label>Bottom −Y<input id="skyNY" type="file" accept="image/*"></label>
-          <label>Front +Z<input id="skyPZ" type="file" accept="image/*"></label>
-          <label>Back −Z<input id="skyNZ" type="file" accept="image/*"></label>
-        </div>
-      </div>
-      <div class="row"><button id="skyAdd">Upload &amp; add</button></div>
-      <div class="err" id="skyErr"></div>
+    <h3>Table size</h3>
+    <label>Width × depth</label>
+    <div class="backRow">
+      <input id="tableW" type="number" min="8" max="40" step="1" style="width:76px"><span>×</span>
+      <input id="tableD" type="number" min="6" max="32" step="1" style="width:76px">
     </div>
-    <div class="row"><button id="skyClose">Close</button></div>
+    <div class="note">The play surface itself (not a board on it).</div>
+    <div class="row"><button id="tableCancel">Cancel</button><button id="tableResize">Resize table</button></div>
+  </div>
+</div>
+<div id="scenesModal" hidden>
+  <div class="modalCard">
+    <h3>Load a scene</h3>
+    <div class="note">A scene replaces the whole table — its size, board, and pieces. This clears the current table.</div>
+    <div class="savedWrap"><div id="sceneSavedList" class="savedList"></div></div>
+    <div class="row"><button id="scenesCancel">Cancel</button></div>
+  </div>
+</div>
+<div id="whiteboardModal" hidden>
+  <div class="modalCard">
+    <h3>Whiteboard</h3>
+    <label class="backRow"><input id="wbEnabled" type="checkbox"> Show the whiteboard</label>
+    <label>Style</label>
+    <div class="backRow">
+      <label><input type="radio" name="wbStyle" value="dark" checked> Chalkboard</label>
+      <label><input type="radio" name="wbStyle" value="light"> Whiteboard</label>
+    </div>
+    <label>Position around the table</label>
+    <input id="wbAngle" type="range" min="0" max="360" step="5" value="0" style="width:100%">
+    <div class="note">Rides a track behind the players. Drawing on it comes next.</div>
+    <div class="row"><button id="wbCancel">Close</button></div>
   </div>
 </div>
 
 <!-- library management panel (editor only) -->
 <div id="libraryPanel" hidden>
+  <div class="modalCard libraryCard">
   <div id="libraryHead"><b>Library</b><span id="libraryClose">✕</span></div>
-  <p class="libHint">Build assets with the toolbar (+ Deck / + Object / ↷ Board / 🌄 Skybox) — they save <b>private</b>. Publish here to let GMs &amp; helpers spawn them.</p>
-  <div class="libSection"><h4>Decks</h4><ul id="libDecks" class="libList"></ul></div>
-  <div class="libSection"><h4>Boards</h4><ul id="libBoards" class="libList"></ul></div>
-  <div class="libSection"><h4>Props</h4><ul id="libProps" class="libList"></ul></div>
-  <div class="libSection"><h4>Skyboxes</h4><ul id="libSky" class="libList"></ul></div>
-  <div class="libSection">
-    <h4>Scenes</h4>
-    <button id="sceneSaveBtn" class="sceneSaveBtn">Save current table as scene…</button>
+  <p class="libHint">Browse, spawn, publish &amp; manage saved assets. Create new ones with <b>➕ Add to Library</b>.</p>
+  <div class="libTabs">
+    <button class="libTab on" data-tab="decks">Decks</button>
+    <button class="libTab" data-tab="boards">Boards</button>
+    <button class="libTab" data-tab="props">Objects</button>
+    <button class="libTab" data-tab="sky">Skyboxes</button>
+    <button class="libTab" data-tab="scenes">Scenes</button>
+  </div>
+  <div class="libPane" data-pane="decks">
+    <ul id="libDecks" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="boards" hidden>
+    <ul id="libBoards" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="props" hidden>
+    <ul id="libProps" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="sky" hidden>
+    <ul id="libSky" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="scenes" hidden>
     <ul id="libScenes" class="libList"></ul>
+  </div>
+  </div>
+</div>
+
+<!-- built-in asset library (editor only) — read-only, spawn built-ins -->
+<div id="builtinModal" hidden>
+  <div class="modalCard libraryCard">
+    <div id="builtinHead"><b>Built-In Library</b><span id="builtinClose">✕</span></div>
+    <p class="libHint">Ready-made pieces bundled with Open Tabletop. Spawn them straight onto the table.</p>
+    <div class="libTabs">
+      <button class="libTab on" data-tab="dice">Dice</button>
+      <button class="libTab" data-tab="decks">Decks</button>
+      <button class="libTab" data-tab="boards">Boards</button>
+      <button class="libTab" data-tab="objects">Objects</button>
+      <button class="libTab" data-tab="sky">Skyboxes</button>
+    </div>
+    <div class="libPane" data-pane="dice"><ul id="biDice" class="libList"></ul></div>
+    <div class="libPane" data-pane="decks" hidden><ul id="biDecks" class="libList"></ul></div>
+    <div class="libPane" data-pane="boards" hidden><ul id="biBoards" class="libList"></ul></div>
+    <div class="libPane" data-pane="objects" hidden><ul id="biObjects" class="libList"></ul></div>
+    <div class="libPane" data-pane="sky" hidden><ul id="biSky" class="libList"></ul></div>
+  </div>
+</div>
+
+<!-- add-to-library builder (editor only) — create + save new assets -->
+<div id="addModal" hidden>
+  <div class="modalCard libraryCard">
+    <div id="addHead"><b>Add to Library</b><span id="addClose">✕</span></div>
+    <div class="libTabs">
+      <button class="libTab on" data-tab="decks">Decks</button>
+      <button class="libTab" data-tab="boards">Boards</button>
+      <button class="libTab" data-tab="objects">Objects</button>
+      <button class="libTab" data-tab="sky">Skyboxes</button>
+    </div>
+    <div class="libPane" data-pane="decks">
+      <div class="addDeckCols">
+        <div class="addCol">
+          <h4>Image Decks</h4>
+          <div class="addRow">
+            <div class="uploadSq sqCard"><input id="adImgBack" type="file" accept="image/*" hidden><span class="sqLabel">Card back</span></div>
+            <div class="uploadSq sqCard"><input id="adImgFronts" type="file" accept="image/*" multiple hidden><span class="sqLabel">Card fronts (many)</span></div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;color:var(--text);margin-top:6px"><input id="adImgNoCrop" type="checkbox"> Fit whole image (no crop)</label>
+          <div class="addColorRow" id="adImgPadRow" hidden><span>Pad color</span><input id="adImgPad" type="color" value="#ffffff"></div>
+          <input id="adImgName" type="text" placeholder="Name this deck">
+          <div class="row"><button id="adImgSave">Save</button><button id="adImgSpawn" class="primary">Save + Spawn</button></div>
+        </div>
+        <div class="addCol">
+          <h4>Text Decks</h4>
+          <label>Back text (optional)</label>
+          <input id="adBackText" type="text" placeholder="Text on the card back">
+          <div class="addColorRow"><span>Fill</span><input id="adBackFill" type="color" value="#7d2b2b"><span>Text</span><input id="adBackTextC" type="color" value="#f4f1ea"><span>Accent</span><input id="adBackAccent" type="color" value="#dddddd"></div>
+          <label>Fronts</label>
+          <div class="addColorRow"><span>Fill</span><input id="adFrontFill" type="color" value="#fbfbf7"><span>Text</span><input id="adFrontTextC" type="color" value="#141414"><span>Accent</span><input id="adFrontAccent" type="color" value="#dddddd"></div>
+          <label>Card fronts — one per line, comma-separated, or JSON</label>
+          <textarea id="adFaces" rows="4" placeholder="First&#10;Second&#10;Third"></textarea>
+          <div class="addRow"><span class="note" style="margin:0">…or load a .csv / .txt file</span><input id="adFacesFile" type="file" accept=".csv,.txt,text/csv,text/plain"></div>
+          <div class="addRow"><div class="cardPrev" id="adTxtBackPrev"></div><div class="cardPrev" id="adTxtFrontPrev"></div></div>
+          <input id="adTxtName" type="text" placeholder="Name this deck">
+          <div class="row"><button id="adTxtSave">Save</button><button id="adTxtSpawn" class="primary">Save + Spawn</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="libPane" data-pane="boards" hidden>
+      <div class="addDeckCols">
+        <div class="addCol">
+          <h4>Model Boards (.glb)</h4>
+          <div class="uploadSq sqBoard"><input id="adBoardGlb" type="file" accept=".glb,model/gltf-binary" hidden><span class="sqLabel">Board model (.glb)</span></div>
+          <input id="adBoardGlbName" type="text" placeholder="Name this board">
+          <div class="row"><button id="adBoardGlbSave">Save</button><button id="adBoardGlbSpawn" class="primary">Save + Spawn</button></div>
+        </div>
+        <div class="addCol">
+          <h4>Image Boards</h4>
+          <div class="uploadSq sqBoard"><input id="adBoardImg" type="file" accept="image/*" hidden><span class="sqLabel">Board image (optional)</span></div>
+          <label>Size — width × depth</label>
+          <div class="addColorRow"><input id="adBoardW" type="number" value="10" min="2" max="40" step="0.5" style="width:80px"><span>×</span><input id="adBoardD" type="number" value="10" min="2" max="32" step="0.5" style="width:80px"></div>
+          <div class="note">Sized to the table when spawned — a bigger table allows a bigger board.</div>
+          <input id="adBoardImgName" type="text" placeholder="Name this board">
+          <div class="row"><button id="adBoardImgSave">Save</button><button id="adBoardImgSpawn" class="primary">Save + Spawn</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="libPane" data-pane="objects" hidden>
+      <div class="addDeckCols">
+        <div class="addCol">
+          <h4>Model (.glb)</h4>
+          <div class="uploadSq sqBoard"><input id="adObjGlb" type="file" accept=".glb,model/gltf-binary" hidden><span class="sqLabel">Object model (.glb)</span></div>
+          <div class="note">Uploaded models keep their own colours — recolour a spawned copy with double-click → inspect.</div>
+        </div>
+        <div class="addCol">
+          <h4>Options</h4>
+          <label>Scale &amp; collider</label>
+          <div class="addRow">
+            <input id="adObjScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
+            <div id="adObjColliders" class="colliderRow">
+              <button class="colliderBtn on" data-collider="box" title="Box"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg></button>
+              <button class="colliderBtn" data-collider="sphere" title="Sphere"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="8.5" ry="3.2"/></svg></button>
+              <button class="colliderBtn" data-collider="cylinder" title="Cylinder"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13M19 5.5v13"/><path d="M5 18.5a7 2.5 0 0 0 14 0"/></svg></button>
+              <button class="colliderBtn" data-collider="cone" title="Cone"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3L5 18.5M12 3l7 15.5"/><path d="M5 18.5a7 2.5 0 0 0 14 0"/></svg></button>
+              <button class="colliderBtn" data-collider="flat" title="Flat / mat"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 9l8 3.5-8 3.5-8-3.5z"/><path d="M4 12.5v1.5l8 3.5 8-3.5v-1.5"/></svg></button>
+            </div>
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;color:var(--text);margin-top:8px"><input id="adObjStand" type="checkbox"> Stands upright (self-rights when placed)</label>
+          <input id="adObjName" type="text" placeholder="Name this object">
+          <div class="row"><button id="adObjSave">Save</button><button id="adObjSpawn" class="primary">Save + Spawn</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="libPane" data-pane="sky" hidden>
+      <div class="addDeckCols">
+        <div class="addCol">
+          <h4>Equirectangular (360° panorama)</h4>
+          <div class="uploadSq sqWide"><input id="adSkyEq" type="file" accept="image/*" hidden><span class="sqLabel">Panorama image (2:1)</span></div>
+          <input id="adSkyEqName" type="text" placeholder="Name this skybox">
+          <div class="row"><button id="adSkyEqSave">Save</button><button id="adSkyEqApply" class="primary">Save + Apply</button></div>
+        </div>
+        <div class="addCol">
+          <h4>Cubemap (6 faces)</h4>
+          <div class="skyCross">
+            <div class="uploadSq" style="grid-area:top"><input id="adSkyPY" type="file" accept="image/*" hidden><span class="sqLabel">Top +Y</span></div>
+            <div class="uploadSq" style="grid-area:left"><input id="adSkyNX" type="file" accept="image/*" hidden><span class="sqLabel">Left −X</span></div>
+            <div class="uploadSq" style="grid-area:front"><input id="adSkyPZ" type="file" accept="image/*" hidden><span class="sqLabel">Front +Z</span></div>
+            <div class="uploadSq" style="grid-area:right"><input id="adSkyPX" type="file" accept="image/*" hidden><span class="sqLabel">Right +X</span></div>
+            <div class="uploadSq" style="grid-area:back"><input id="adSkyNZ" type="file" accept="image/*" hidden><span class="sqLabel">Back −Z</span></div>
+            <div class="uploadSq" style="grid-area:bottom"><input id="adSkyNY" type="file" accept="image/*" hidden><span class="sqLabel">Bottom −Y</span></div>
+          </div>
+          <input id="adSkyCubeName" type="text" placeholder="Name this skybox">
+          <div class="row"><button id="adSkyCubeSave">Save</button><button id="adSkyCubeApply" class="primary">Save + Apply</button></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

@@ -188,21 +188,25 @@ There's also a "Spawn Built-in Deck" for a standard 52.
 ## The asset library (admin-curated)
 
 The saved library (decks, boards, props, scenes, skyboxes) is **global** (every
-room sees it) and
-**admin-curated**. Site admins create, edit, and delete library assets in a
-dedicated **editor** (`/editor.html`) — an admin-only room that reuses the table
-engine, so an asset can be spawned and tested live as it's built. Every asset
-carries a **public/private** flag:
+room sees it) and **admin-curated**. Site admins create assets through an
+**Add to Library** builder in a dedicated **editor** (`/editor.html`) — an
+admin-only room that reuses the table engine, so an asset can be spawned and
+tested live as it's built — and manage them (**publish/unpublish, rename, delete**)
+from the shared **View Library**. Every asset carries a **public/private** flag:
 
-- **private** (a new asset's default) — only admins can spawn or edit it;
-- **public** — admins still own editing, but GMs and helpers can now spawn it
+- **private** (a new asset's default) — only admins can spawn it;
+- **public** — admins still own curation, but GMs and helpers can now spawn it
   into their games too.
 
-At a game table, GMs/helpers get a **spawn picker** over the public library (plus
-built-in shapes, dice, and table reshaping); the creation/upload/save controls
-are hidden and server-refused for non-admins. Admins can spawn *private* assets
-anywhere (handy for prepping a campaign). Editing an asset is always admin-only —
-the public flag widens *spawn* rights, never *edit* rights.
+Both the editor and the game table share the same asset UI — a **View Library**
+(browse + spawn/apply saved assets) and a **Built-Ins** picker (bundled shapes,
+dice, boards, skyboxes) — plus a Room Controls **Skybox** picker (built-in +
+custom, applied to the room). At a game table, helpers see only the decks/objects
+they can spawn; boards, skyboxes and scenes are GM+. **Add to Library** (creation)
+is editor-only, and the publish/rename/delete controls only appear for admins —
+non-admin curation is server-refused as well. Admins can spawn *private* assets
+anywhere (handy for prepping a campaign); the public flag widens *spawn* rights,
+never *curation* rights.
 
 **Metadata lives in Postgres** (`custom_decks` / `custom_boards` /
 `custom_objects`), keyed by a row **id**, with `owner_id` (the creating admin)

@@ -15,27 +15,6 @@
     <div class="grp" id="diceGrp" hidden></div>
   </span>
   <span class="menu">
-    <button id="objBtn">☰ ♟️ Add 3D Objects</button>
-    <div class="grp" id="objGrp" hidden>
-      <button id="objBuiltin">🛠️ Built-In Objects</button>
-      <button id="objLibrary">📚 Custom Library</button>
-    </div>
-  </span>
-  <span class="menu">
-    <button id="deckBtn">☰ 🎴 Add Decks</button>
-    <div class="grp" id="deckGrp" hidden>
-      <button id="deckQuick">🛠️ Built-In Deck</button>
-      <button id="deckLibrary">📚 Custom Library</button>
-    </div>
-  </span>
-  <span class="menu">
-    <button id="boardBtn">☰ 🟫 Change Game Board</button>
-    <div class="grp" id="boardGrp" hidden>
-      <button id="boardBuiltin">🛠️ Built-In Boards</button>
-      <button id="boardLibrary">📚 Custom Library</button>
-    </div>
-  </span>
-  <span class="menu">
     <button id="roomBtn">☰ ⚙️ Room Controls</button>
     <div class="grp" id="roomGrp" hidden>
       <button id="roomMembers">👥 Members List</button>
@@ -46,6 +25,8 @@
       <button id="roomReset" class="danger">🧹 Reset</button>
     </div>
   </span>
+  <button id="libraryBtn">📚 View Library</button>
+  <button id="builtinBtn">🧱 Built-Ins</button>
 </div>
 <div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
 <div id="inspectColorRow" hidden>
@@ -146,29 +127,6 @@
   <div id="membersHead"><b>Members</b><span id="membersClose">✕</span></div>
   <ul id="memberList"></ul>
 </div>
-<div id="propModal" hidden>
-  <div class="modalCard">
-    <h3>Add an object</h3>
-    <label>Shape</label>
-    <select id="propShape"></select>
-    <div id="propColorWrap"><label>Color</label><div class="backRow"><input id="propColor" type="color" value="#9aa0a6"></div></div>
-    <div id="propTeamWrap" hidden><label>Color set</label>
-      <select id="propTeam"><option value="0">Color 1</option><option value="1">Color 2</option></select></div>
-    <label>Quantity</label>
-    <input id="propQty" type="number" value="1" min="1" max="12" style="width:70px">
-    <label>Scale</label>
-    <input id="propScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
-    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="propStand" type="checkbox"> Stands upright (self-rights when placed)</label>
-    <div class="row"><button id="propCancel">Cancel</button><button id="propSpawn">Spawn</button></div>
-  </div>
-</div>
-<div id="customPropModal" hidden>
-  <div class="modalCard">
-    <h3>Spawn a saved object</h3>
-    <div class="savedWrap"><label>Custom Library</label><div id="propSavedList" class="savedList"></div></div>
-    <div class="row"><button id="cpCancel">Cancel</button></div>
-  </div>
-</div>
 <div id="scenesModal" hidden>
   <div class="modalCard">
     <h3>Load a scene</h3>
@@ -178,28 +136,7 @@
   </div>
 </div>
 
-<div id="boardModal" hidden>
-  <div class="modalCard">
-    <h3>Built-in board</h3>
-    <label>Built-in boards</label>
-    <div class="backRow" id="builtinBoards" style="flex-wrap:wrap"></div>
-    <div class="note" style="margin:8px 0 2px">— or make a plain flat board —</div>
-    <label>Width</label>
-    <input id="boardW" type="number" value="10" min="2" max="18" step="0.5" style="width:90px">
-    <label>Depth</label>
-    <input id="boardD" type="number" value="10" min="2" max="12" step="0.5" style="width:90px">
-    <div class="note">Replaces the current board and sits at table centre.</div>
-    <div class="row"><button id="boardCancel">Cancel</button><button id="boardCreate">Create flat board</button></div>
-  </div>
-</div>
 
-<div id="boardLibraryModal" hidden>
-  <div class="modalCard">
-    <h3>Spawn a saved board</h3>
-    <div class="savedWrap"><label>Custom Library</label><div id="boardSavedList" class="savedList"></div></div>
-    <div class="row"><button id="boardLibraryCancel">Cancel</button></div>
-  </div>
-</div>
 
 <div id="tableModal" hidden>
   <div class="modalCard">
@@ -228,52 +165,17 @@
     <div class="row"><button id="wbCancel">Close</button></div>
   </div>
 </div>
-<div id="editPropModal" hidden>
-  <div class="modalCard">
-    <h3>Edit model prop</h3>
-    <div class="note" id="editPropModel">model</div>
-    <label>Scale</label>
-    <input id="editPropScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
-    <label style="display:flex;align-items:center;gap:6px;color:var(--text)"><input id="editPropStand" type="checkbox"> Stands upright</label>
-    <div class="modeRow" style="margin-top:6px">
-      <label><input type="radio" name="editPropColorMode" value="own" checked> Model's own colours</label>
-      <label><input type="radio" name="editPropColorMode" value="tint"> Tint <input id="editPropTintColor" type="color" value="#c0c0c0"></label>
-    </div>
-    <label>Copy name (for “Save as copy”)</label>
-    <input id="editPropName" type="text">
-    <div class="row"><button id="editPropCancel">Cancel</button><button id="editPropCopy">Save as copy</button><button id="editPropSave">Save</button></div>
-  </div>
-</div>
-<div id="editDeckModal" hidden>
-  <div class="modalCard">
-    <h3>Edit deck</h3>
-    <div class="note" id="editDeckInfo">deck</div>
-    <label>Replace back image (optional)</label>
-    <input id="editDeckBack" type="file" accept="image/*">
-    <label>Add text cards (one per line)</label>
-    <textarea id="editDeckText" rows="3"></textarea>
-    <div class="backRow"><input id="editDeckFaceColor" type="color" value="#141414" title="Text colour"><input id="editDeckFaceBg" type="color" value="#fbfbf7" title="Background"><span class="note" style="margin:0">⇞ new text-card colours</span></div>
-    <label>Add image cards (optional)</label>
-    <input id="editDeckImgs" type="file" accept="image/*" multiple>
-    <label>Copy name (for “Save as copy”)</label>
-    <input id="editDeckName" type="text">
-    <div class="row"><button id="editDeckCancel">Cancel</button><button id="editDeckCopy">Save as copy</button><button id="editDeckSave">Save</button></div>
-  </div>
-</div>
-<div id="deckModal" hidden>
-  <div class="modalCard">
-    <h3>Spawn a saved deck</h3>
-    <div class="savedWrap"><label>Custom Library</label><div id="savedList" class="savedList"></div></div>
-    <div class="row"><button id="deckCancel">Cancel</button></div>
-  </div>
-</div>
 
-<div id="skyModal" hidden>
-  <div class="modalCard">
-    <h3>Skybox</h3>
-    <div class="note">Wraps the whole room — everyone here sees the same backdrop. Admins add new ones in the editor.</div>
-    <div id="skyList" class="savedList"></div>
-    <div class="row"><button id="skyClose">Close</button></div>
+<div id="skyPickModal" hidden>
+  <div class="modalCard libraryCard">
+    <div id="skyPickHead"><b>Skybox</b><span id="skyPickClose">✕</span></div>
+    <p class="libHint">Set the room's backdrop — applies for everyone at the table.</p>
+    <div class="libTabs">
+      <button class="libTab on" data-tab="builtin">Built-In</button>
+      <button class="libTab" data-tab="custom">Custom</button>
+    </div>
+    <div class="libPane" data-pane="builtin"><ul id="skyPickBuiltin" class="libList"></ul></div>
+    <div class="libPane" data-pane="custom" hidden><ul id="skyPickCustom" class="libList"></ul></div>
   </div>
 </div>
 
@@ -286,52 +188,40 @@
         <ul>
           <li><b>Left-drag</b> the empty table to orbit the camera; <b>right-drag</b> to pan.</li>
           <li><b>Scroll wheel</b> to zoom (or raise/lower a piece you're holding).</li>
-          <li><b>Middle-mouse-click</b> anywhere on the table to send a visual ping to other players.</li>
-          <li><b>Interactions → ↩ My Seat</b> snaps the camera back to your seat.</li>
-          <li><b>Interactions → 🔎 Lean In</b> zooms your view slightly. As if you were leaning over the table to get a closer look.</li>
+          <li><b>Tools → ↩ My Seat</b> snaps the camera back to your seat.</li>
         </ul>
       </div>
       <div class="helpSec">
-        <h4>Pieces &amp; Objects &amp; Dice</h4>
+        <h4>Pieces &amp; objects</h4>
         <ul>
-          <li><b>Left-drag</b> a piece or die to pick it up, move, and throw it. Scroll to change its height; <b>middle-click</b> while holding snaps its facing to 90°.</li>
-          <li><b>Double-Left-click</b> a piece, card, or die to inspect it up close. When inspecting, you can change the colors using the color picker(s), drag it to rotate, and click away to close.</li>
+          <li><b>Left-drag</b> a piece to pick it up, move, and throw it. Scroll to change its height; <b>middle-click</b> while holding snaps its facing to 90°.</li>
+          <li><b>Double-click</b> a piece to inspect it up close — drag to rotate, click away to close.</li>
           <li>After clicking a piece, press <b>Delete</b> to remove it, or <b>U</b> to stand it upright / lay it flat.</li>
         </ul>
       </div>
       <div class="helpSec">
-        <h4>Cards &amp; Decks</h4>
+        <h4>Cards &amp; decks</h4>
         <ul>
           <li><b>Left-click</b> a card on the table to take it into your hand; <b>right-click</b> it to flip it face-up.</li>
           <li><b>Left-drag</b> from a deck to draw the top card; <b>left-click</b> the deck to deal it face-down beside the deck.</li>
-          <li><b>Double-Left-click</b> a deck to peek at the top card, then <b>F</b> (face-up), <b>D</b> (face-down), <b>H</b> (to hand), or <b>R</b> (return).</li>
+          <li><b>Double-click</b> a deck to peek at the top card, then <b>F</b> (face-up), <b>D</b> (face-down), <b>H</b> (to hand), or <b>R</b> (return).</li>
           <li><b>Right-click</b> a deck to shuffle it; <b>right-drag</b> to move the whole deck.</li>
-          <li><b>Double-Right-click</b> a deck to 'split' it.</li>
         </ul>
       </div>
       <div class="helpSec">
-        <h4>Your Hand</h4>
+        <h4>Your hand</h4>
         <ul>
           <li>Your hand sits at the bottom of the screen — only you can see it.</li>
-          <li><b>Drag a card out</b> onto the table: from a left-drag (or left-click) it lands face-down, from a right-drag (or right-click) face-up.</li>
-          <li>Click the <b>▲</b> on the right to hide your hand from your view.  Click the <b>'🃏 View Hand'</b> button to bring it back.</li>
-          <li><b>Interactions → 🃏 Show Hand</b> briefly reveals chosen cards to players you pick.</li>
+          <li><b>Drag a card out</b> onto the table: from a left-drag it lands face-down, from a right-drag face-up.</li>
+          <li><b>Tools → 🃏 Show Hand</b> briefly reveals chosen cards to players you pick.</li>
         </ul>
       </div>
       <div class="helpSec">
         <h4>Tools</h4>
         <ul>
-          <li><b>📝 Private Notes</b> is a scratchpad only you see.</li>
-          <li><b>📊 Scoreboard</b> shows the shared scores. It's GM+Helper controlled. </li>
-          <li><b>⏱️ Timer</b> is a shared stopwatch / countdown.</li>
+          <li><b>🔄 Roll Dice</b> rolls every die on the table. <b>📝 Private Notes</b> is a scratchpad only you see.</li>
+          <li><b>📊 Scoreboard</b> shows the shared scores; <b>⏱️ Timer</b> is a shared stopwatch / countdown.</li>
           <li><b>🖊️ Whiteboard</b> — when the GM has it out, <b>double-click</b> the board to draw. Pen, eraser, and clear appear while you draw; <b>Esc</b> or <b>Done</b> hands it back.</li>
-        </ul>
-        <h4>Interactions</h4>
-        <ul>
-          <li><b>🔎 Lean In</b> zooms your view slightly. As if you were leaning over the table to get a closer look.</li>
-          <li><b>↩ My Seat</b> snaps the camera back to your seat.</li>
-          <li><b>🔄 Roll Dice</b> rolls every die on the table.</li>
-          <li><b>🃏 Show Hand</b> briefly reveals chosen cards to players you pick.</li>
         </ul>
       </div>
       <div class="helpSec" id="ctrlHelper" hidden>
@@ -345,7 +235,7 @@
         <h4>GM controls</h4>
         <ul>
           <li><b>🟫 Change Game Board</b> swaps the board (built-in or library).</li>
-          <li><b>⚙️ Room Controls</b> — admit / kick / promote members, load a scene, resize the table, load a new skybox, toggle the whiteboard, and reset the table.</li>
+          <li><b>⚙️ Room Controls</b> — admit / kick / promote members, load a scene, resize the table, toggle the whiteboard, and reset the table.</li>
           <li><b>Room notes</b> (inside the Scoreboard) are shared GM notes only you can edit.</li>
           <li><b>🖊️ Whiteboard</b> — show or hide it, slide it around the table, and pick chalkboard or whiteboard.</li>
           <li><b>Next turn</b> passes the active turn to the next seat.</li>
@@ -357,6 +247,56 @@
 </div>
 
 <!-- Colyseus client (UMD global `Colyseus`) -->
+<!-- library management panel (editor only) -->
+<div id="libraryPanel" hidden>
+  <div class="modalCard libraryCard">
+  <div id="libraryHead"><b>Library</b><span id="libraryClose">✕</span></div>
+  <p class="libHint">Browse and spawn shared assets. GMs can publish and manage them.</p>
+  <div class="libTabs">
+    <button class="libTab on" data-tab="decks">Decks</button>
+    <button class="libTab" data-tab="boards">Boards</button>
+    <button class="libTab" data-tab="props">Objects</button>
+    <button class="libTab" data-tab="sky">Skyboxes</button>
+    <button class="libTab" data-tab="scenes">Scenes</button>
+  </div>
+  <div class="libPane" data-pane="decks">
+    <ul id="libDecks" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="boards" hidden>
+    <ul id="libBoards" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="props" hidden>
+    <ul id="libProps" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="sky" hidden>
+    <ul id="libSky" class="libList"></ul>
+  </div>
+  <div class="libPane" data-pane="scenes" hidden>
+    <ul id="libScenes" class="libList"></ul>
+  </div>
+  </div>
+</div>
+
+<!-- built-in asset library (editor only) — read-only, spawn built-ins -->
+<div id="builtinModal" hidden>
+  <div class="modalCard libraryCard">
+    <div id="builtinHead"><b>Built-In Library</b><span id="builtinClose">✕</span></div>
+    <p class="libHint">Ready-made pieces bundled with Open Tabletop. Spawn them straight onto the table.</p>
+    <div class="libTabs">
+      <button class="libTab on" data-tab="dice">Dice</button>
+      <button class="libTab" data-tab="decks">Decks</button>
+      <button class="libTab" data-tab="boards">Boards</button>
+      <button class="libTab" data-tab="objects">Objects</button>
+      <button class="libTab" data-tab="sky">Skyboxes</button>
+    </div>
+    <div class="libPane" data-pane="dice"><ul id="biDice" class="libList"></ul></div>
+    <div class="libPane" data-pane="decks" hidden><ul id="biDecks" class="libList"></ul></div>
+    <div class="libPane" data-pane="boards" hidden><ul id="biBoards" class="libList"></ul></div>
+    <div class="libPane" data-pane="objects" hidden><ul id="biObjects" class="libList"></ul></div>
+    <div class="libPane" data-pane="sky" hidden><ul id="biSky" class="libList"></ul></div>
+  </div>
+</div>
+
 <script src="https://unpkg.com/@colyseus/sdk@^0.17.0/dist/colyseus.js"></script>
 <!-- Three.js via import map (kept ESM) -->
 <script type="importmap">
@@ -367,5 +307,6 @@
 </script>
 
 <script type="module" src="/client.js"></script>
+<script type="module" src="/editor-panel.js"></script>
 </body>
 </html>

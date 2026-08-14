@@ -5,6 +5,8 @@ const TOKEN_KEY = 'tabletop.token';
 const $ = (id) => document.getElementById(id);
 const token = () => localStorage.getItem(TOKEN_KEY) || '';
 
+// Authenticated fetch wrapper: attaches the Bearer token, JSON-encodes a body,
+// and THROWS on any non-2xx — so callers just try/catch and alert the message.
 async function api(path, { method = 'GET', body } = {}) {
   const headers = { Authorization: 'Bearer ' + token() };
   if (body) headers['Content-Type'] = 'application/json';
@@ -15,123 +17,131 @@ async function api(path, { method = 'GET', body } = {}) {
   return data;
 }
 
+// Small DOM factories: a <button> from label + click handler (+ optional class),
+// and a <td> wrapping either a string or an existing node.
 const btn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
 const cell = (content) => { const c = document.createElement('td'); if (typeof content === 'string') c.textContent = content; else c.appendChild(content); return c; };
 
+// The signed-in admin's own id — used to mark their "(you)" row and to withhold
+// action buttons on their own account (no self-delete / self-demote).
 let myId = null;
 
 async function loadRooms() {
-  const body = $('roomsBody'); body.replaceChildren();
+  const tbody = $('roomsBody'); tbody.replaceChildren();
   let rooms = [];
   try { ({ rooms } = await api('/admin/rooms')); } catch (e) { alert(e.message); return; }
-  for (const r of rooms) {
-    const tr = document.createElement('tr'); if (r.deletedAt) tr.className = 'deleted';
-    tr.append(cell(r.name), cell(r.code), cell(r.ownerName || '\u2014'), cell(r.deletedAt ? 'deleted' : 'active'));
+  for (const room of rooms) {
+    const tr = document.createElement('tr'); if (room.deletedAt) tr.className = 'deleted';
+    tr.append(cell(room.name), cell(room.code), cell(room.ownerName || '\u2014'), cell(room.deletedAt ? 'deleted' : 'active'));
     const acts = document.createElement('div'); acts.className = 'acts';
-    if (!r.deletedAt) {
+    if (!room.deletedAt) {
       acts.append(
-        btn('Rename', () => renameRoom(r)),
-        btn(r.requireApproval ? 'Approval: on' : 'Approval: off', () => togglePolicy(r)),
-        btn('Close', () => closeRoom(r)),
+        btn('Rename', () => renameRoom(room)),
+        btn(room.requireApproval ? 'Approval: on' : 'Approval: off', () => togglePolicy(room)),
+        btn('Close', () => closeRoom(room)),
       );
     } else {
-      acts.append(btn('Restore', () => restoreRoom(r)));
+      acts.append(btn('Restore', () => restoreRoom(room)));
     }
-    acts.append(btn('Purge', () => purgeRoom(r), 'danger'));
+    acts.append(btn('Purge', () => purgeRoom(room), 'danger'));
     tr.append(cell(acts));
-    body.appendChild(tr);
+    tbody.appendChild(tr);
   }
-  if (!rooms.length) { const tr = document.createElement('tr'); tr.appendChild(cell('No rooms.')); body.appendChild(tr); }
+  if (!rooms.length) { const tr = document.createElement('tr'); tr.appendChild(cell('No rooms.')); tbody.appendChild(tr); }
 }
 
 async function loadUsers() {
-  const body = $('usersBody'); body.replaceChildren();
+  const tbody = $('usersBody'); tbody.replaceChildren();
   let users = [];
   try { ({ users } = await api('/admin/users')); } catch (e) { alert(e.message); return; }
-  const pending = users.filter((u) => u.hostStatus === 'pending' && !u.isAdmin).length;
+  const pending = users.filter((user) => user.hostStatus === 'pending' && !user.isAdmin).length;
   $('pendingBadge').textContent = pending ? `\u2014 ${pending} host request${pending > 1 ? 's' : ''} pending` : '';
-  for (const u of users) {
+  for (const user of users) {
     const tr = document.createElement('tr');
+    // Per-user tag set: admin / host / host pending / player. Admins host
+    // implicitly, so they always get both 'admin' and 'host' and skip the queue.
     const tags = [];
-    if (u.isAdmin) tags.push('admin');
-    // admins host implicitly; only show host state for non-admins
-    if (u.isAdmin) tags.push('host');
-    else tags.push(u.hostStatus === 'approved' ? 'host' : u.hostStatus === 'pending' ? 'host pending' : 'player');
-    tr.append(cell(u.username), cell(u.email), cell(tags.join(', ')));
+    if (user.isAdmin) tags.push('admin');
+    if (user.isAdmin) tags.push('host');
+    else tags.push(user.hostStatus === 'approved' ? 'host' : user.hostStatus === 'pending' ? 'host pending' : 'player');
+    tr.append(cell(user.username), cell(user.email), cell(tags.join(', ')));
     const acts = document.createElement('div'); acts.className = 'acts';
-    if (String(u.id) === String(myId)) {
+    if (String(user.id) === String(myId)) {
+      // Your own row: no action buttons — you can't demote or delete yourself.
       const you = document.createElement('span'); you.className = 'muted'; you.textContent = '(you)'; acts.appendChild(you);
     } else {
-      if (!u.isAdmin) { // host queue only applies to non-admins
-        if (u.hostStatus === 'pending') {
-          acts.append(btn('Approve', () => setHost(u, 'approved')), btn('Reject', () => setHost(u, 'none'), 'danger'));
-        } else if (u.hostStatus === 'approved') {
-          acts.append(btn('Revoke host', () => setHost(u, 'none'), 'danger'));
+      if (!user.isAdmin) { // host queue only applies to non-admins
+        if (user.hostStatus === 'pending') {
+          acts.append(btn('Approve', () => setHost(user, 'approved')), btn('Reject', () => setHost(user, 'none'), 'danger'));
+        } else if (user.hostStatus === 'approved') {
+          acts.append(btn('Revoke host', () => setHost(user, 'none'), 'danger'));
         }
       }
-      if (u.isAdmin) acts.append(btn('Revoke admin', () => setAdmin(u, false), 'danger'));
-      else acts.append(btn('Make admin', () => setAdmin(u, true)));
-      acts.append(btn('Delete', () => deleteUser(u), 'danger'));
+      if (user.isAdmin) acts.append(btn('Revoke admin', () => setAdmin(user, false), 'danger'));
+      else acts.append(btn('Make admin', () => setAdmin(user, true)));
+      acts.append(btn('Delete', () => deleteUser(user), 'danger'));
     }
     tr.append(cell(acts));
-    body.appendChild(tr);
+    tbody.appendChild(tr);
   }
 }
 
-async function setHost(u, status) {
-  if (status === 'none' && !confirm(`${u.hostStatus === 'pending' ? 'Reject' : 'Revoke host access for'} ${u.username}?`)) return;
-  try { await api('/admin/users/' + u.id + '/host', { method: 'POST', body: { status } }); loadUsers(); }
+async function setHost(user, status) {
+  if (status === 'none' && !confirm(`${user.hostStatus === 'pending' ? 'Reject' : 'Revoke host access for'} ${user.username}?`)) return;
+  try { await api('/admin/users/' + user.id + '/host', { method: 'POST', body: { status } }); loadUsers(); }
   catch (e) { alert(e.message); }
 }
 
-async function renameRoom(r) {
-  const name = prompt('Rename room:', r.name);
+async function renameRoom(room) {
+  const name = prompt('Rename room:', room.name);
   if (name == null || !name.trim()) return;
-  try { await api('/rooms/' + r.id, { method: 'PATCH', body: { name: name.trim() } }); loadRooms(); } catch (e) { alert(e.message); }
+  try { await api('/rooms/' + room.id, { method: 'PATCH', body: { name: name.trim() } }); loadRooms(); } catch (e) { alert(e.message); }
 }
-async function togglePolicy(r) {
-  try { await api('/rooms/' + r.id, { method: 'PATCH', body: { requireApproval: !r.requireApproval } }); loadRooms(); } catch (e) { alert(e.message); }
+async function togglePolicy(room) {
+  try { await api('/rooms/' + room.id, { method: 'PATCH', body: { requireApproval: !room.requireApproval } }); loadRooms(); } catch (e) { alert(e.message); }
 }
-async function closeRoom(r) {
-  if (!confirm(`Close "${r.name}"? Anyone at the table is sent to the lobby; it becomes unjoinable.`)) return;
-  try { await api('/rooms/' + r.id, { method: 'DELETE' }); loadRooms(); } catch (e) { alert(e.message); }
+async function closeRoom(room) {
+  if (!confirm(`Close "${room.name}"? Anyone at the table is sent to the lobby; it becomes unjoinable.`)) return;
+  try { await api('/rooms/' + room.id, { method: 'DELETE' }); loadRooms(); } catch (e) { alert(e.message); }
 }
-async function restoreRoom(r) {
-  try { await api('/admin/rooms/' + r.id + '/restore', { method: 'POST' }); loadRooms(); } catch (e) { alert(e.message); }
+async function restoreRoom(room) {
+  try { await api('/admin/rooms/' + room.id + '/restore', { method: 'POST' }); loadRooms(); } catch (e) { alert(e.message); }
 }
-async function purgeRoom(r) {
-  if (!confirm(`Permanently delete "${r.name}" and all its memberships? This cannot be undone.`)) return;
-  try { await api('/admin/rooms/' + r.id, { method: 'DELETE' }); loadRooms(); } catch (e) { alert(e.message); }
+async function purgeRoom(room) {
+  if (!confirm(`Permanently delete "${room.name}" and all its memberships? This cannot be undone.`)) return;
+  try { await api('/admin/rooms/' + room.id, { method: 'DELETE' }); loadRooms(); } catch (e) { alert(e.message); }
 }
-async function setAdmin(u, makeAdmin) {
-  if (!makeAdmin && !confirm(`Revoke admin from ${u.username}?`)) return;
-  try { await api('/admin/users/' + u.id + '/admin', { method: 'POST', body: { isAdmin: makeAdmin } }); loadUsers(); } catch (e) { alert(e.message); }
+async function setAdmin(user, makeAdmin) {
+  if (!makeAdmin && !confirm(`Revoke admin from ${user.username}?`)) return;
+  try { await api('/admin/users/' + user.id + '/admin', { method: 'POST', body: { isAdmin: makeAdmin } }); loadUsers(); } catch (e) { alert(e.message); }
 }
-async function deleteUser(u) {
-  if (!confirm(`Permanently delete ${u.username}? This purges any rooms they own and removes them from all rooms. This cannot be undone.`)) return;
-  try { await api('/admin/users/' + u.id, { method: 'DELETE' }); await loadUsers(); await loadRooms(); } catch (e) { alert(e.message); }
+async function deleteUser(user) {
+  if (!confirm(`Permanently delete ${user.username}? This purges any rooms they own and removes them from all rooms. This cannot be undone.`)) return;
+  try { await api('/admin/users/' + user.id, { method: 'DELETE' }); await loadUsers(); await loadRooms(); } catch (e) { alert(e.message); }
 }
 
 async function scanOrphans() {
-  const out = $('cleanupResult'); out.textContent = 'Scanning…';
+  const resultEl = $('cleanupResult'); resultEl.textContent = 'Scanning…';
   try {
     const { count, totalBytes } = await api('/admin/orphans');
-    if (!count) { out.textContent = 'No orphaned files found.'; return; }
-    out.replaceChildren();
-    const s = document.createElement('span');
-    s.textContent = `${count} orphaned file(s), ${(totalBytes / 1048576).toFixed(1)} MB.  `;
-    out.append(s, btn(`Move ${count} to trash`, () => purgeOrphans(count), 'danger'));
-  } catch (e) { out.textContent = e.message; }
+    if (!count) { resultEl.textContent = 'No orphaned files found.'; return; }
+    resultEl.replaceChildren();
+    const label = document.createElement('span');
+    label.textContent = `${count} orphaned file(s), ${(totalBytes / 1048576).toFixed(1)} MB.  `;
+    resultEl.append(label, btn(`Move ${count} to trash`, () => purgeOrphans(count), 'danger'));
+  } catch (e) { resultEl.textContent = e.message; }
 }
 async function purgeOrphans(count) {
   if (!confirm(`Move ${count} orphaned file(s) to saved-assets/.trash/? They stay recoverable there until you delete the folder.`)) return;
-  const out = $('cleanupResult'); out.textContent = 'Moving…';
+  const resultEl = $('cleanupResult'); resultEl.textContent = 'Moving…';
   try {
     const { moved, totalBytes } = await api('/admin/orphans/purge', { method: 'POST' });
-    out.textContent = `Moved ${moved} file(s) (${(totalBytes / 1048576).toFixed(1)} MB) to .trash.`;
-  } catch (e) { out.textContent = e.message; }
+    resultEl.textContent = `Moved ${moved} file(s) (${(totalBytes / 1048576).toFixed(1)} MB) to .trash.`;
+  } catch (e) { resultEl.textContent = e.message; }
 }
 
+// Gate the page: require a token → resolve it → require isAdmin, else show the
+// "denied" panel. On success, wire the cleanup button and load the two tables.
 (async function boot() {
   if (!token()) { $('denied').hidden = false; return; }
   let me;

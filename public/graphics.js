@@ -328,13 +328,15 @@ function resolveTexture(ref) {
     const [, rank, suit, color] = ref.split(':');
     texture = cardFront(rank, suit, color);
   } else if (ref.startsWith('text:')) {
-    const [color, rest] = splitColorText(ref.slice(5), COLORS.ink);
-    const [bg, text] = splitColorText(rest, '#fbfbf7');
-    texture = textFaceTexture(text, color, bg);
+    const [color, r1] = splitColorText(ref.slice(5), COLORS.ink);
+    const [bg, r2] = splitColorText(r1, '#fbfbf7');
+    const [accent, text] = splitColorText(r2, '#ddd'); // 4th colour optional → default border on old refs
+    texture = textFaceTexture(text, color, bg, accent);
   } else if (ref.startsWith('tback:')) {
-    const rest = ref.slice(6), sep = rest.indexOf(':');
-    const [textColor, text] = splitColorText(rest.slice(sep + 1), '#f4f1ea');
-    texture = textBackTexture(rest.slice(0, sep), text, textColor);
+    const [bg, r1] = splitColorText(ref.slice(6), '#7d2b2b');
+    const [textColor, r2] = splitColorText(r1, '#f4f1ea');
+    const [accent, text] = splitColorText(r2, 'rgba(255,255,255,.45)'); // 4th colour optional → default border on old refs
+    texture = textBackTexture(bg, text, textColor, accent);
   } else {
     texture = loadImageTexture(ref);
   }
@@ -395,15 +397,18 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
 }
 
 // A procedural card FACE showing wrapped text (for custom text decks).
-function textFaceTexture(text, color, bg) {
+function textFaceTexture(text, color, bg, accent) {
   const w = 300, h = 420;
   const { canvas, ctx } = makeCanvas(w, h);
 
   ctx.fillStyle = bg || '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = '#ddd';
+  const inset = 6, r = Math.max(0, CARD_ROUND * w - inset); // rounded frame, following the card's corners
+  ctx.strokeStyle = accent || '#ddd';
   ctx.lineWidth = 6;
-  ctx.strokeRect(6, 6, w - 12, h - 12);
+  ctx.beginPath();
+  ctx.roundRect(inset, inset, w - inset * 2, h - inset * 2, r);
+  ctx.stroke();
 
   ctx.fillStyle = color || COLORS.ink;
   drawWrapped(ctx, text, w, h, 26, '600');
@@ -411,15 +416,18 @@ function textFaceTexture(text, color, bg) {
 }
 
 // A procedural card BACK showing optional wrapped text (for custom text decks).
-function textBackTexture(color, text, textColor) {
+function textBackTexture(color, text, textColor, accent) {
   const w = 256, h = 358;
   const { canvas, ctx } = makeCanvas(w, h);
 
   ctx.fillStyle = color || '#7d2b2b';
   ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(255,255,255,.45)';
+  const inset = 8, r = Math.max(0, CARD_ROUND * w - inset); // rounded frame, following the card's corners
+  ctx.strokeStyle = accent || 'rgba(255,255,255,.45)';
   ctx.lineWidth = 6;
-  ctx.strokeRect(8, 8, w - 16, h - 16);
+  ctx.beginPath();
+  ctx.roundRect(inset, inset, w - inset * 2, h - inset * 2, r);
+  ctx.stroke();
 
   if (text) {
     ctx.fillStyle = textColor || '#f4f1ea';
@@ -432,13 +440,20 @@ function textBackTexture(color, text, textColor) {
 
 // Draw `file` onto a w×h canvas, cover-fitting by default (or 'stretch' to fill).
 // Resolves with the canvas. Used to normalize uploaded card/board art.
-function resizeToCanvas(file, w, h, fit) {
+function resizeToCanvas(file, w, h, fit, bg) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       const { canvas, ctx } = makeCanvas(w, h);
       if (fit === 'stretch') {
         ctx.drawImage(img, 0, 0, w, h); // whole image squashed to fit (boards)
+      } else if (fit === 'contain') {
+        // Fit the whole image inside, centre, and pad the leftover with bg (no crop).
+        ctx.fillStyle = bg || '#ffffff';
+        ctx.fillRect(0, 0, w, h);
+        const scale = Math.min(w / img.width, h / img.height);
+        const drawW = img.width * scale, drawH = img.height * scale;
+        ctx.drawImage(img, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
       } else {
         // Cover-fit: scale up to fill, centre, and let the overflow crop.
         const scale = Math.max(w / img.width, h / img.height);
@@ -455,8 +470,8 @@ function resizeToCanvas(file, w, h, fit) {
 
 // Resize `file` and encode it to an image Blob for HTTP upload (format/quality
 // come from CONFIG.upload).
-function imgToBlob(file, w, h, fit) {
-  return resizeToCanvas(file, w, h, fit)
+function imgToBlob(file, w, h, fit, bg) {
+  return resizeToCanvas(file, w, h, fit, bg)
     .then(canvas => new Promise(resolve => canvas.toBlob(blob => resolve(blob), CONFIG.upload.type, CONFIG.upload.quality)));
 }
 
@@ -502,8 +517,8 @@ function measureModel(url, scale = 1) {
 }
 
 // Resize one image and POST it; return the URL ref the server stored it under.
-async function uploadImage(file, w = CONFIG.upload.cardW, h = CONFIG.upload.cardH, fit, kind) {
-  const blob = await imgToBlob(file, w, h, fit);
+async function uploadImage(file, w = CONFIG.upload.cardW, h = CONFIG.upload.cardH, fit, kind, bg) {
+  const blob = await imgToBlob(file, w, h, fit, bg);
   const query = kind ? ('?kind=' + encodeURIComponent(kind)) : '';
   const response = await fetch('/upload' + query, {
     method: 'POST',
@@ -749,5 +764,94 @@ const KIND = {
   deck:  { mesh: deckMesh,  grab: 2, ldrag: 'deal', lclick: 'deal', rclick: 'shuffle' },
   board: { mesh: boardMesh },
 };
+
+// ---- Library preview thumbnails (editor) -----------------------------------
+// A tiny offscreen renderer that snapshots a mesh/model to a PNG data-URL, so the
+// library can show a picture of each asset. Card faces don't need it — they draw
+// straight to a 2D canvas (see cardPreviewURL). Results are cached by a key.
+let _thumb = null;
+function thumbRig() {
+  if (_thumb) return _thumb;
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setSize(220, 220); renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene();
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 1.25));
+  const key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(4, 6, 5); scene.add(key);
+  const cam = new THREE.PerspectiveCamera(32, 1, 0.01, 5000);
+  _thumb = { renderer, scene, cam };
+  return _thumb;
+}
+function snapshot(obj) {
+  const { renderer, scene, cam } = thumbRig();
+  const box = new THREE.Box3().setFromObject(obj);
+  if (box.isEmpty()) return null;
+  const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z) || 1;
+  obj.position.sub(center);                                    // centre it at the origin
+  scene.add(obj);
+  const d = maxDim * 2.4;
+  cam.position.set(d * 0.85, d * 0.72, d); cam.lookAt(0, 0, 0);
+  cam.near = maxDim / 100; cam.far = maxDim * 40; cam.updateProjectionMatrix();
+  renderer.render(scene, cam);
+  const url = renderer.domElement.toDataURL('image/png');
+  scene.remove(obj);
+  return url;
+}
+
+const _prevCache = new Map();
+// A card ref → preview image URL. Image refs pass straight through; procedural refs
+// (back / rank: / text: / tback:) are drawn to a canvas and returned as a data-URL.
+export function cardPreviewURL(ref) {
+  const r = ref || 'back';
+  if (r.startsWith('/') || r.startsWith('http') || r.startsWith('data:')) return r;
+  if (_prevCache.has(r)) return _prevCache.get(r);
+  const tex = resolveTexture(r);
+  const url = (tex && tex.image && tex.image.toDataURL) ? tex.image.toDataURL('image/jpeg', 0.85) : null;
+  if (url) _prevCache.set(r, url);
+  return url;
+}
+// A prop (a .glb in the library, or a built-in shape) → a rendered thumbnail data-URL.
+export async function propPreviewURL(props = {}) {
+  const spec = PROPS[props.shape] || {};
+  const modelUrl = props.model || spec.model;
+  const key = modelUrl ? 'm:' + modelUrl : 's:' + props.shape + ':' + (props.color ?? '');
+  if (_prevCache.has(key)) return _prevCache.get(key);
+  let url = null;
+  try {
+    if (modelUrl) { const gltf = await gltfLoader.loadAsync(modelUrl); url = snapshot(gltf.scene); }
+    else url = snapshot(propShapeMesh(props));
+  } catch (e) { /* leave null → the card shows a placeholder */ }
+  if (url) _prevCache.set(key, url);
+  return url;
+}
+// A board preview: an image URL passes through; a .glb is rendered; else null.
+export async function boardPreviewURL(fileUrl) {
+  if (!fileUrl) return null;
+  const key = 'b:' + fileUrl;
+  if (_prevCache.has(key)) return _prevCache.get(key);
+  let url = null;
+  if (/\.glb$/i.test(fileUrl)) { try { const gltf = await gltfLoader.loadAsync(fileUrl); url = snapshot(gltf.scene); } catch (e) { /* null */ } }
+  else url = fileUrl; // an image URL (jpg/png/webp…)
+  if (url) _prevCache.set(key, url);
+  return url;
+}
+
+// A built-in die (d4…d20) → a rendered thumbnail data-URL. Synchronous (no load).
+export function diePreviewURL(sides) {
+  const key = 'd:' + sides;
+  if (_prevCache.has(key)) return _prevCache.get(key);
+  let url = null;
+  try { url = snapshot(dieMesh({ sides })); } catch (e) { /* null → placeholder */ }
+  if (url) _prevCache.set(key, url);
+  return url;
+}
+
+// A local (not-yet-uploaded) .glb File → a rendered thumbnail data-URL, for previews.
+export async function glbFilePreviewURL(file) {
+  const url = URL.createObjectURL(file);
+  try { const gltf = await gltfLoader.loadAsync(url); return snapshot(gltf.scene); }
+  catch (e) { return null; }
+  finally { URL.revokeObjectURL(url); }
+}
 
 export { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel };

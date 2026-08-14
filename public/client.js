@@ -8,17 +8,13 @@ const byId = (id) => document.getElementById(id);
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => document.querySelectorAll(selector);
 
-function sendDeck(back, fronts, name) { // build the deck in small batches so no single message is large
-  room.send('deckBegin', { back });
-  for (let i = 0; i < fronts.length; i += 50) room.send('deckAppend', { fronts: fronts.slice(i, i + 50) });
-  room.send('deckFinish', name ? { name } : {}); // name -> also save it to the library
-}
 
-// Render saved decks/props/boards into a container as "savedRow"s. For each item,
-// labelFor(item) gives the row text and buttonsFor(item) gives [{ text, onClick }].
-// emptyNote (optional) is shown when the list is empty.
+// Render a saved-asset list (now just scenes) into a container as "savedRow"s. For
+// each item, labelFor(item) gives the row text and buttonsFor(item) gives
+// [{ text, onClick }]. emptyNote (optional) is shown when the list is empty.
 function renderSavedList(containerId, items, { labelFor, buttonsFor, emptyNote }) {
   const container = byId(containerId);
+  if (!container) return;                              // no-op when the target modal is absent
   container.innerHTML = '';
   if (!items.length && emptyNote) {
     container.innerHTML = `<div class="note">${emptyNote}</div>`;
@@ -37,25 +33,6 @@ function renderSavedList(containerId, items, { labelFor, buttonsFor, emptyNote }
       row.appendChild(button);
     }
     container.appendChild(row);
-  }
-}
-
-// Run an async task while showing a button as busy (disabled + "busyText"), then
-// always restore it. Returns true on success, false if the task threw (after
-// alerting errMsg). Callers do their own post-success cleanup on a true return.
-async function withBusyButton(button, busyText, errMsg, task) {
-  const label = button.textContent;
-  button.disabled = true;
-  button.textContent = busyText;
-  try {
-    await task();
-    return true;
-  } catch (e) {
-    alert(errMsg);
-    return false;
-  } finally {
-    button.disabled = false;
-    button.textContent = label;
   }
 }
 
@@ -172,7 +149,7 @@ const applyTransform = (mesh, s) => {
   room.onMessage('wbStroke', (s) => { if (!s || s.sid === mySession) return; pushStroke(s); }); // another player drew (skip our own echo)
   room.onMessage('wbStrokes', ({ strokes } = {}) => { wbStrokesLocal.length = 0; for (const s of (strokes || [])) wbStrokesLocal.push(s); redrawStrokes(); }); // full replay (late join)
   room.onMessage('wbClear', () => { wbStrokesLocal.length = 0; if (wbTex) wbClearCanvas(); });
-  room.onMessage('skyList', (list) => { skyCache = list || []; renderSkyList(); const e = byId('skyErr'); if (e) e.textContent = ''; if (window.onLibraryList) window.onLibraryList('sky', list || []); }); // modal + library panel
+  room.onMessage('skyList', (list) => { if (window.onLibraryList) window.onLibraryList('sky', list || []); }); // fans to the library + skybox picker
   room.onMessage('skyError', ({ message } = {}) => { const e = byId('skyErr'); if (e) e.textContent = message || 'Could not add that skybox.'; });
   room.onMessage('memberList', (list) => { renderMembers(list); updateMembersPulse(list); }); // panel data + pending-pulse
 
@@ -180,11 +157,9 @@ const applyTransform = (mesh, s) => {
   // leaving the spawn pickers + built-in shapes. (The server enforces it too.)
   room.onMessage('whoami', ({ isAdmin }) => {
     myIsAdmin = !!isAdmin;
+    window.OTT_IS_ADMIN = myIsAdmin;                   // editor-panel.js gates library management on this
+    if (window.onLibraryAdmin) window.onLibraryAdmin(); // re-render the library so admin-only buttons appear/hide
     document.body.classList.toggle('not-admin', !myIsAdmin);
-    if (!myIsAdmin) { // the modals become spawn-only pickers — relabel so they read right
-      const dt = byId('deckModalTitle'); if (dt) dt.textContent = 'Spawn a deck';
-      const ct = byId('cpModalTitle'); if (ct) ct.textContent = 'Spawn a saved prop';
-    }
   });
 
   // Forced exits: the GM kicked me, or the owner closed the room. These end the
@@ -205,8 +180,8 @@ const applyTransform = (mesh, s) => {
     const mb = byId('membersBtn'); if (mb) mb.hidden = true;
     const lb = byId('lobbyBtn'); lb.textContent = '← Admin';
     lb.onclick = () => { leaving = true; try { room.leave(); } catch (e) {} location.href = '/admin.html'; };
-    if (window.onOttRoom) window.onOttRoom(room);
   }
+  if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
   room.onMessage('notebook', text => { byId('notesText').value = text || ''; }); // your private notes, restored on reconnect
   room.onMessage('shuffled', ({ id }) => startAnim(id, 'shuffle')); // cosmetic: everyone sees the deck riffle
   room.onMessage('inspectCard', ({ front, back }) => inspectMesh(cardMesh({ front, back }), { drawn: true, type: 'card' })); // drawn card — front is ours alone
@@ -275,15 +250,9 @@ const applyTransform = (mesh, s) => {
     g.onclick = (e) => e.stopPropagation();
     document.addEventListener('click', () => g.hidden = true);
   };
-  // Game-table spawn menus + Room Controls (absent in the editor).
-  menu('objBtn', 'objGrp'); menu('deckBtn', 'deckGrp'); menu('boardBtn', 'boardGrp'); menu('roomBtn', 'roomGrp');
-  wire('objBuiltin', () => { byId('objGrp').hidden = true; byId('propModal').hidden = false; });
-  wire('objLibrary', () => { byId('objGrp').hidden = true; byId('customPropModal').hidden = false; room.send('listProps'); });
-  wire('deckQuick', () => { byId('deckGrp').hidden = true; room.send('spawn', { type: 'deck', props: {} }); });
-  wire('deckLibrary', () => { byId('deckGrp').hidden = true; byId('deckModal').hidden = false; room.send('listDecks'); });
-  wire('boardBuiltin', () => { byId('boardGrp').hidden = true; byId('boardModal').hidden = false; });
-  wire('boardLibrary', () => { byId('boardGrp').hidden = true; byId('boardLibraryModal').hidden = false; room.send('listBoards'); });
-  wire('boardLibraryCancel', () => byId('boardLibraryModal').hidden = true);
+  // Room Controls menu — the old spawn/add menus are gone; creation + spawning
+  // now live in View Library, Built-Ins, and (editor) Add to Library.
+  menu('roomBtn', 'roomGrp');
   wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); });
   wire('roomScene', () => { byId('roomGrp').hidden = true; byId('scenesModal').hidden = false; room.send('listScenes'); });
   wire('roomTable', () => { byId('roomGrp').hidden = true; byId('tableModal').hidden = false; byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); });
@@ -305,177 +274,8 @@ const applyTransform = (mesh, s) => {
   wire('wbClearBtn', () => room.send('wbClear'));
   wire('wbDone', () => room.send('wbRelease'));
   wire('roomReset', () => { byId('roomGrp').hidden = true; if (confirm('Reset the table? This clears all pieces.')) room.send('reset'); });
-  qsa('[data-spawn]').forEach(b => b.onclick = () => {
-    const type = b.dataset.spawn;
-    let props = {};
-    if (type === 'card') { // build a random standard-deck card: rank:<rank>:<suit>:<color>
-      const [suit, color] = [['♠', '#000000'], ['♥', '#bd2500'], ['♦', '#bd2500'], ['♣', '#000000']][Math.random() * 4 | 0];
-      const rank = ['A', '2', 'Q', '9', 'J', 'K'][Math.random() * 6 | 0];
-      props = { front: `rank:${rank}:${suit}:${color}`, back: 'back' };
-    }
-    byId('deckModal').hidden = true;
-    room.send('spawn', { type, props });
-  });
-  room.onMessage('deckList', decks => { renderSavedList('savedList', decks, {
-    emptyNote: 'none saved yet',
-    labelFor: d => `${d.name} · ${d.count}`,
-    buttonsFor: d => [
-      ...(window.OTT_EDITOR ? [{ text: 'Edit', onClick: () => openEditDeck(d) }] : []),
-      { text: 'Load', onClick: () => { room.send('loadDeck', { id: d.id }); byId('deckModal').hidden = true; } },
-    ],
-  }); if (window.onLibraryList) window.onLibraryList('deck', decks); });
-  wire('newDeck', () => { byId('deckModal').hidden = false; room.send('listDecks'); });
-
-  // Prop picker
-  const propShapeSel = byId('propShape');
-  for (const shape of PROP_LIST) {
-    const option = document.createElement('option');
-    option.value = shape.id;
-    option.textContent = shape.name;
-    propShapeSel.appendChild(option);
-  }
-  // Show/hide the colour vs. team pickers to match the selected shape.
-  const syncPropControls = () => {
-    const spec = PROP_LIST.find(s => s.id === propShapeSel.value) || {};
-    const propDef = PROPS[propShapeSel.value] || {};
-    const ownMaterial = !!propDef.ownMaterial && !propDef.tintMaterial; // own-material models get no colour picker (unless they tint one slot)
-    byId('propColorWrap').hidden = !!spec.team || ownMaterial;
-    byId('propTeamWrap').hidden = !spec.team;
-    byId('propStand').checked = !!propDef.stand; // default to the shape's behaviour
-  };
-  propShapeSel.onchange = syncPropControls;
-  syncPropControls();
-  wire('newProp', () => { byId('propModal').hidden = false; });
-  wire('propCustom', () => { byId('propModal').hidden = true; byId('customPropModal').hidden = false; room.send('listProps'); });
-  wire('cpCancel', () => byId('customPropModal').hidden = true);
-  const cpTint = byId('cpTintColor');
-  if (cpTint) cpTint.oninput = () => { qs('input[name="cpColorMode"][value="tint"]').checked = true; }; // picking a colour implies you want it tinted
-
-  // ---- edit / clone a saved model prop (client-side; scale re-derives the collider box) ----
-  let editingProp = null;
-  window.openEditProp = (savedProp) => {
-    editingProp = savedProp;
-    const saved = savedProp.props || {};
-    byId('editPropModel').textContent = 'model: ' + (saved.model || '').split('/').pop();
-    byId('editPropScale').value = saved.scale || 1;
-    byId('editPropStand').checked = !!saved.stand;
-    qs('input[name="editPropColorMode"][value="' + (saved.color != null ? 'tint' : 'own') + '"]').checked = true;
-    if (saved.color != null) byId('editPropTintColor').value = '#' + (saved.color >>> 0).toString(16).padStart(6, '0');
-    byId('editPropName').value = savedProp.name + ' copy';
-    byId('editPropModal').hidden = false;
-  };
-  // Re-derive a prop's props from the edit dialog. Rescaling the collider box by
-  // the scale ratio keeps physics in sync with the new visual size.
-  const buildEditedProp = () => {
-    const saved = editingProp.props || {};
-    const scale = clamp(+byId('editPropScale').value || 1, ...CONFIG.ranges.scale);
-    const ratio = scale / (saved.scale || 1);
-    const props = {
-      model: saved.model,
-      box: (saved.box || [0.5, 0.5, 0.5]).map(v => v * ratio),
-      stand: byId('editPropStand').checked,
-      scale,
-    };
-    if (qs('input[name="editPropColorMode"]:checked').value === 'tint') {
-      props.color = parseInt(byId('editPropTintColor').value.slice(1), 16);
-    }
-    return props;
-  };
-  byId('editPropCancel').onclick = () => byId('editPropModal').hidden = true;
-  byId('editPropSave').onclick = () => { room.send('saveProp', { name: editingProp.name, props: buildEditedProp() }); byId('editPropModal').hidden = true; };
-  byId('editPropCopy').onclick = () => {
-    const name = byId('editPropName').value.trim();
-    if (!name) { alert('Enter a copy name.'); return; }
-    room.send('saveProp', { name, props: buildEditedProp() });
-    byId('editPropModal').hidden = true;
-  };
-
-  // ---- edit / clone a saved deck (shallow: replace back + append cards; server applies the deltas) ----
-  let editingDeck = null;
-  window.openEditDeck = (d) => {
-    editingDeck = d;
-    byId('editDeckInfo').textContent = d.name + ' · ' + d.count + ' cards';
-    byId('editDeckBack').value = '';
-    byId('editDeckText').value = '';
-    byId('editDeckImgs').value = '';
-    byId('editDeckName').value = d.name + ' copy';
-    byId('editDeckModal').hidden = false;
-  };
-  async function commitDeckEdit(saveAs) {
-    const buttons = ['editDeckSave', 'editDeckCopy'].map(id => byId(id));
-    const name = saveAs ? byId('editDeckName').value.trim() : editingDeck.name;
-    if (saveAs && !name) { alert('Enter a copy name.'); return; }
-    buttons.forEach(b => b.disabled = true); // two buttons here, so not the withBusyButton pattern
-    try {
-      let back;
-      const backFile = byId('editDeckBack').files[0];
-      if (backFile) back = await uploadImage(backFile, CONFIG.upload.cardW, CONFIG.upload.cardH, undefined, 'decks');
-
-      const addFronts = [];
-      const faceColor = byId('editDeckFaceColor').value, bg = byId('editDeckFaceBg').value;
-      const lines = byId('editDeckText').value.split('\n').map(l => l.trim()).filter(Boolean);
-      for (const line of lines) addFronts.push('text:' + faceColor + ':' + bg + ':' + line);
-      for (const img of byId('editDeckImgs').files) addFronts.push(await uploadImage(img, CONFIG.upload.cardW, CONFIG.upload.cardH, undefined, 'decks'));
-
-      room.send('editDeck', { id: editingDeck.id, name, back, addFronts, saveAs });
-      byId('editDeckModal').hidden = true;
-    } catch (e) {
-      alert('Edit failed — an image upload may have errored.');
-    }
-    buttons.forEach(b => b.disabled = false);
-  }
-  byId('editDeckCancel').onclick = () => byId('editDeckModal').hidden = true;
-  byId('editDeckSave').onclick = () => commitDeckEdit(false);
-  byId('editDeckCopy').onclick = () => commitDeckEdit(true);
-
-  room.onMessage('propList', props => { renderSavedList('propSavedList', props, {
-    labelFor: sp => sp.name,
-    buttonsFor: sp => [
-      ...(window.OTT_EDITOR ? [{ text: 'Edit', onClick: () => openEditProp(sp) }] : []),
-      { text: 'Spawn', onClick: () => room.send('spawn', { type: 'prop', props: sp.props }) },
-    ],
-  }); if (window.onLibraryList) window.onLibraryList('prop', props); });
-  byId('propCancel').onclick = () => byId('propModal').hidden = true;
-  byId('propSpawn').onclick = () => { // built-in shape prop
-    const shape = propShapeSel.value;
-    const team = !!(PROP_LIST.find(s => s.id === shape) || {}).team;
-    const props = team ? { shape, team: +byId('propTeam').value }
-                       : { shape, color: parseInt(byId('propColor').value.slice(1), 16) };
-    props.stand = byId('propStand').checked;
-    props.scale = clamp(+byId('propScale').value || 1, ...CONFIG.ranges.scale);
-    const qty = clamp(+byId('propQty').value || 1, ...CONFIG.ranges.qty);
-    for (let i = 0; i < qty; i++) room.send('spawn', { type: 'prop', props });
-    byId('propModal').hidden = true;
-  };
-  wire('cpSpawn', async () => { // custom .glb prop
-    const modelFile = byId('cpModel').files[0];
-    if (!modelFile) { alert('Choose a .glb file first.'); return; }
-    const stand = byId('cpStand').checked;
-    const qty = clamp(+byId('cpQty').value || 1, ...CONFIG.ranges.qty);
-    const scale = clamp(+byId('cpScale').value || 1, ...CONFIG.ranges.scale);
-
-    const ok = await withBusyButton(byId('cpSpawn'), 'Uploading…', 'Model upload/load failed — make sure it is a .glb file.', async () => {
-      const color = qs('input[name="cpColorMode"]:checked').value === 'tint' ? parseInt(byId('cpTintColor').value.slice(1), 16) : null;
-      const url = await uploadModel(modelFile);
-      const box = await measureModel(url, scale);
-      const props = { model: url, box, stand, scale };
-      if (color != null) props.color = color;
-      for (let i = 0; i < qty; i++) room.send('spawn', { type: 'prop', props });
-      const saveName = byId('cpName').value.trim();
-      if (saveName) room.send('saveProp', { name: saveName, props });
-    });
-    if (!ok) return;
-
-    byId('cpModel').value = '';
-    byId('cpName').value = '';
-    byId('customPropModal').hidden = true;
-  });
-  wire('newBoard', () => {
-    byId('boardModal').hidden = false; room.send('listBoards');
-    const tw = byId('tableW'), td = byId('tableD'); // editor's board modal also carries table size
-    if (tw) tw.value = Math.round(room.state.tableX * 2); // full size = 2 x half-extent
-    if (td) td.value = Math.round(room.state.tableZ * 2);
-  });
+  room.onMessage('deckList',  decks  => { if (window.onLibraryList) window.onLibraryList('deck', decks); });
+  room.onMessage('propList',  props  => { if (window.onLibraryList) window.onLibraryList('prop', props); });
   const tableResizeBtn = byId('tableResize');
   if (tableResizeBtn) tableResizeBtn.onclick = () => {
     room.send('table', { x: (+byId('tableW').value || 20) / 2, z: (+byId('tableD').value || 14) / 2 });
@@ -498,125 +298,7 @@ const applyTransform = (mesh, s) => {
   });
   room.onMessage('sceneError', ({ message } = {}) => alert(message || 'Could not save the scene.'));
   wire('scenesCancel', () => byId('scenesModal').hidden = true); // roomScene is already wired above (opens + closes the menu)
-  { // built-in model boards
-    const container = byId('builtinBoards');
-    for (const key of Object.keys(BOARDS)) {
-      const button = document.createElement('button');
-      button.textContent = BOARDS[key].name;
-      button.onclick = () => { room.send('spawn', { type: 'board', props: { board: key } }); byId('boardModal').hidden = true; };
-      container.appendChild(button);
-    }
-  }
-  wire('boardModelSpawn', async () => {
-    const file = byId('boardModel').files[0];
-    if (!file) { alert('Choose a .glb file first.'); return; }
-
-    const ok = await withBusyButton(byId('boardModelSpawn'), 'Uploading…', 'Board model upload/load failed — make sure it is a .glb file.', async () => {
-      const url = await uploadModel(file);
-      const { scale, box } = await measureBoard(url);
-      room.send('spawn', { type: 'board', props: { model: url, modelScale: scale, box } });
-    });
-    if (!ok) return;
-
-    byId('boardModel').value = '';
-    byId('boardModal').hidden = true;
-  });
-  wire('boardSave', () => {
-    let board = null;
-    room.state.pieces.forEach(p => { if (p.type === 'board') board = JSON.parse(p.props || '{}'); });
-    if (!board) { alert('No board on the table to save.'); return; }
-    const name = prompt('Save board as:');
-    if (name && name.trim()) room.send('saveBoard', { name: name.trim(), board });
-  });
-  room.onMessage('boardList', boards => { renderSavedList('boardSavedList', boards, {
-    labelFor: b => b.name + (b.kind ? ` (${b.kind})` : ''),
-    buttonsFor: b => [
-      { text: 'Load', onClick: () => { room.send('loadBoard', { id: b.id }); byId('boardModal').hidden = true; const blm = byId('boardLibraryModal'); if (blm) blm.hidden = true; } },
-    ],
-  }); if (window.onLibraryList) window.onLibraryList('board', boards); });
-  wire('boardCancel', () => byId('boardModal').hidden = true);
-  byId('boardCreate').onclick = async () => {
-    const btn = byId('boardCreate');
-    const w = clamp(+byId('boardW').value || 8, ...CONFIG.ranges.boardW);
-    const d = clamp(+byId('boardD').value || 8, ...CONFIG.ranges.boardD);
-    const boardImgEl = byId('boardImg');                 // image upload is editor-only
-    const imgFile = boardImgEl && boardImgEl.files[0];
-    const props = { w, d };
-    if (imgFile) { // only this path uploads, so show the button busy just around it
-      const label = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Uploading…';
-      try {
-        props.tex = await uploadImage(imgFile, CONFIG.upload.board, CONFIG.upload.board, 'stretch', 'boards');
-      } catch (e) {
-        btn.disabled = false; btn.textContent = label;
-        alert('Image upload failed.');
-        return;
-      }
-      btn.disabled = false;
-      btn.textContent = label;
-    }
-    room.send('spawn', { type: 'board', props });
-    byId('boardModal').hidden = true;
-    if (boardImgEl) boardImgEl.value = '';
-  };
-  byId('deckCancel').onclick = () => byId('deckModal').hidden = true;
-  qsa('input[name=deckMode]').forEach(r => r.onchange = () => {
-    const textMode = qs('input[name=deckMode]:checked').value === 'text';
-    byId('textMode').hidden = !textMode;
-    byId('imageMode').hidden = textMode;
-  });
-  // Parse the face list: either a JSON array, or comma/newline-separated lines.
-  const parseFaces = raw => {
-    raw = raw.trim();
-    if (!raw) return [];
-    if (raw[0] === '[') {
-      try {
-        const arr = JSON.parse(raw);
-        if (Array.isArray(arr)) return arr.map(String).map(s => s.trim()).filter(Boolean);
-      } catch {}
-    }
-    return raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
-  };
-  wire('deckCreate', async () => {
-    const btn = byId('deckCreate');
-    const mode = qs('input[name=deckMode]:checked').value;
-    let back = 'back', fronts = [];
-    if (mode === 'text') {
-      const faces = parseFaces(byId('faceText').value);
-      if (!faces.length) return;
-      const faceColor = byId('faceColor').value;
-      fronts = faces.map(face => 'text:' + faceColor + ':' + byId('faceBg').value + ':' + face);
-      const backText = byId('backText').value.trim();
-      back = 'tback:' + byId('backColor').value + ':' + byId('backTextColor').value + ':' + backText;
-    } else {
-      const backFile = byId('deckBack').files[0];
-      const frontFiles = [...byId('deckFronts').files];
-      if (!frontFiles.length) return;
-      const label = btn.textContent;
-      btn.disabled = true; // uploads go over HTTP one image at a time; show running progress
-      try {
-        let done = 0;
-        if (backFile) back = await uploadImage(backFile, CONFIG.upload.cardW, CONFIG.upload.cardH, undefined, 'decks');
-        for (const file of frontFiles) {
-          fronts.push(await uploadImage(file, CONFIG.upload.cardW, CONFIG.upload.cardH, undefined, 'decks'));
-          btn.textContent = `Uploading ${++done}/${frontFiles.length}…`;
-        }
-      } catch (e) {
-        btn.disabled = false; btn.textContent = label;
-        alert('Image upload failed.');
-        return;
-      }
-      btn.disabled = false;
-      btn.textContent = label;
-    }
-    sendDeck(back, fronts, byId('deckSaveName').value.trim() || undefined);
-    byId('deckModal').hidden = true;
-    byId('deckBack').value = '';
-    byId('deckFronts').value = '';
-    byId('faceText').value = '';
-    byId('deckSaveName').value = '';
-  });
+  room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
   byId('roll').onclick = () => room.send('roll');
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
   byId('nextTurn').onclick = () => room.send('nextTurn');
@@ -811,13 +493,41 @@ renderer.domElement.addEventListener('mousedown', e => { // middle-click: snap a
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
 { const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); b.textContent = leanActive ? '🔎 Lean Out' : '🔎 Lean In'; }; } // toggle the closer-look camera
 
-// ===== Skybox (GM-applied, synced to the room; library is admin-curated) =====
+// ===== Skybox (GM-applied, synced to the room; the picker UI is in editor-panel.js) =====
 const BUILTIN_SKIES = [ // baked-in: drop files in public/sky/ and add entries here
   // equirect: { name: 'Observatory', url: '/sky/observatory.jpg' }
+  { name: 'Cloudy - Chaotic', url: '/sky/equirect/cloudy_chaotic.png' },
+  { name: 'Cloudy - Clear Afternoon', url: '/sky/equirect/cloudy_clear_afternoon.png' },
+  { name: 'Cloudy - Clear Night', url: '/sky/equirect/cloudy_clear_night.png' },
+  { name: 'Cloudy - Clear Sunrise', url: '/sky/equirect/cloudy_clear_sunrise.png' },
+  { name: 'Cloudy - Clear Sunset', url: '/sky/equirect/cloudy_clear_sunset.png' },
+  { name: 'Cloudy - Dark Blue', url: '/sky/equirect/cloudy_dark_blue.png' },
+  { name: 'Cloudy - Dawn', url: '/sky/equirect/cloudy_dawn.png' },
+  { name: 'Cloudy - Dusk', url: '/sky/equirect/cloudy_dusk.png' },
+  { name: 'Cloudy - Early Morning', url: '/sky/equirect/cloudy_early_morning.png' },
+  { name: 'Cloudy - Green', url: '/sky/equirect/cloudy_green.png' },
+  { name: 'Cloudy - Hazy', url: '/sky/equirect/cloudy_hazy.png' },
+  { name: 'Cloudy - Inverted Colors', url: '/sky/equirect/cloudy_inverted_colors.png' },
+  { name: 'Cloudy - Light Green', url: '/sky/equirect/cloudy_light_green.png' },
+  { name: 'Cloudy - Mist', url: '/sky/equirect/cloudy_mist.png' },
+  { name: 'Cloudy - Moody', url: '/sky/equirect/cloudy_moody.png' },
+  { name: 'Cloudy - Night', url: '/sky/equirect/cloudy_night.png' },
+  { name: 'Cloudy - Noon', url: '/sky/equirect/cloudy_noon.png' },
+  { name: 'Cloudy - Obscured Sun', url: '/sky/equirect/cloudy_obscured_sun.png' },
+  { name: 'Cloudy - Purple', url: '/sky/equirect/cloudy_purple.png' },
+  { name: 'Cloudy - Red At Night', url: '/sky/equirect/cloudy_red_at_night.png' },
+  { name: 'Cloudy - Red', url: '/sky/equirect/cloudy_red.png' },
+  { name: 'Cloudy - Stormy', url: '/sky/equirect/cloudy_stormy.png' },
+  { name: 'Cloudy - Sunrise', url: '/sky/equirect/cloudy_sunrise.png' },
+  { name: 'Cloudy - Sunset', url: '/sky/equirect/cloudy_sunset.png' },
+  { name: 'Cloudy - Yellow', url: '/sky/equirect/cloudy_yellow.png' },
   // cubemap:  { name: 'Space', faces: ['/sky/px.jpg','/sky/nx.jpg','/sky/py.jpg','/sky/ny.jpg','/sky/pz.jpg','/sky/nz.jpg'] }
 ];
+
+window.OTT_BUILTIN_SKIES = BUILTIN_SKIES; // the built-in library reads these (editor + table)
+
 const skyDefault = scene.background;   // the flat colour it ships with
-let skyLast = null, skyCache = [];     // last applied ref; last library list from the server
+let skyLast = null;                    // last applied skybox ref (guards against a stale async load)
 // A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
 function applySkybox(ref) {
   if (!ref) { scene.background = skyDefault; return; }
@@ -833,60 +543,6 @@ function applySkybox(ref) {
   }
 }
 function syncSkybox(ref) { ref = ref || ''; if (ref === skyLast) return; skyLast = ref; applySkybox(ref); }
-function renderSkyList() {
-  const el = byId('skyList'); if (!el || !room) return;
-  el.replaceChildren();
-  const cur = room.state.skybox || '';
-  const built = BUILTIN_SKIES.map(s => ({ name: s.name, ref: s.faces ? JSON.stringify({ t: 'cube', f: s.faces }) : (s.url || '') }));
-  const custom = skyCache.map(s => ({ name: s.name, ref: s.url || '', id: s.id })); // id → deletable library entry
-  const opts = [{ name: 'Default (none)', ref: '' }, ...built, ...custom];
-  for (const opt of opts) {
-    const row = document.createElement('div'); row.className = 'skyRow';
-    const pick = document.createElement('button'); pick.className = 'skyPick' + (opt.ref === cur ? ' on' : '');
-    pick.textContent = (opt.ref === cur ? '✓ ' : '') + opt.name + (opt.ref && opt.ref[0] === '{' ? '  ·  cube' : '');
-    pick.onclick = () => { room.send('skybox', { url: opt.ref }); byId('skyModal').hidden = true; };
-    row.appendChild(pick);
-    if (opt.id && window.OTT_EDITOR && myIsAdmin) { // remove from the library (editor + admin only)
-      const del = document.createElement('button'); del.className = 'danger skyDel'; del.textContent = '✕'; del.title = 'Delete from library';
-      del.onclick = () => { if (confirm(`Delete "${opt.name}" from the library? This cannot be undone.`)) room.send('assetDelete', { kind: 'sky', id: opt.id }); };
-      row.appendChild(del);
-    }
-    el.appendChild(row);
-  }
-}
-async function onSkyAdd() {
-  const name = byId('skyName').value.trim(), err = byId('skyErr'); err.textContent = '';
-  if (!name) { err.textContent = 'Give it a name.'; return; }
-  const sel = qs('input[name="skyType"]:checked');
-  const cube = sel && sel.value === 'cube';
-  try {
-    if (cube) {
-      const files = ['skyPX', 'skyNX', 'skyPY', 'skyNY', 'skyPZ', 'skyNZ'].map(id => byId(id).files[0]);
-      if (files.some(f => !f)) { err.textContent = 'Pick all six faces.'; return; }
-      err.textContent = 'Uploading…';
-      const faces = [];
-      for (const f of files) faces.push(await uploadImage(f, 1024, 1024, 'stretch', 'sky')); // square faces
-      room.send('saveSkybox', { name, type: 'cube', faces });
-    } else {
-      const file = byId('skyFile').files[0];
-      if (!file) { err.textContent = 'Pick a 2:1 image.'; return; }
-      err.textContent = 'Uploading…';
-      const url = await uploadImage(file, 2048, 1024, 'stretch', 'sky'); // 2:1 panorama
-      room.send('saveSkybox', { name, url });
-    }
-    byId('skyName').value = ''; err.textContent = '';
-    for (const id of ['skyFile', 'skyPX', 'skyNX', 'skyPY', 'skyNY', 'skyPZ', 'skyNZ']) { const f = byId(id); if (f) f.value = ''; }
-  } catch (e) { err.textContent = 'Upload failed.'; }
-}
-{ const b = byId('roomSky'); if (b) b.onclick = () => { byId('roomGrp').hidden = true; renderSkyList(); byId('skyModal').hidden = false; room.send('listSkyboxes'); }; } // table: GM apply-picker
-{ const b = byId('newSky'); if (b) b.onclick = () => { renderSkyList(); byId('skyModal').hidden = false; room.send('listSkyboxes'); }; } // editor: admin library curation
-{ const b = byId('skyClose'); if (b) b.onclick = () => { byId('skyModal').hidden = true; }; }
-{ const b = byId('skyAdd'); if (b) b.onclick = onSkyAdd; }
-qsa('input[name="skyType"]').forEach(r => r.onchange = () => { // swap the equirect / cubemap inputs
-  const isCube = qs('input[name="skyType"]:checked').value === 'cube';
-  const eq = byId('skyEqui'), cu = byId('skyCube');
-  if (eq) eq.hidden = isCube; if (cu) cu.hidden = !isCube;
-});
 qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place)); // drawn-card placement
 { const body = byId('inspectColorBody'), text = byId('inspectColorText');
   const commit = () => {
@@ -1317,12 +973,14 @@ function renderHand(cards) {
       div.textContent = rank + suit;
       div.style.color = color || '#111';
     } else if (card.front && card.front.startsWith('text:')) {
-      const [color, rest] = splitColorText(card.front.slice(5), COLORS.ink);
-      const [bg, text] = splitColorText(rest, '#fbfbf7');
+      const [color, r1] = splitColorText(card.front.slice(5), COLORS.ink);
+      const [bg, r2] = splitColorText(r1, '#fbfbf7');
+      const [accent, text] = splitColorText(r2, '#ddd'); // 4th colour optional (border); default on old refs
       div.classList.add('txt');
       div.textContent = text;
       div.style.color = color;
       div.style.background = bg;
+      div.style.borderColor = accent;
     } else if (card.front) {
       div.classList.add('img');
       div.style.backgroundImage = `url("${card.front}")`; // uploaded/file card art
@@ -1405,11 +1063,14 @@ function applyRole(role) {
   const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('diceBtn', 1);                                          // roll dice: Helper+
-  gate('objBtn', 1); gate('deckBtn', 1);                       // game-table spawn menus: Helper+
-  gate('boardBtn', 2); gate('roomBtn', 2);                     // game-table board + Room Controls: GM+
+  gate('roomBtn', 2);                                          // Room Controls menu: GM+
+  gate('libraryBtn', 1); gate('builtinBtn', 1);                // View Library + Built-Ins: Helper+ (both pages)
+  // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
+  const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
+  gmTabs('libraryPanel', ['boards', 'sky', 'scenes']);
+  gmTabs('builtinModal', ['boards', 'sky']);
   gate('roomCode', 2);                                         // room code display: GM+/owner/admin only
   gate('ctrlHelper', 1); gate('ctrlGM', 2);                    // How-to-Play sections revealed by role
-  gate('newProp', 1); gate('newDeck', 1); gate('newBoard', 2); // editor creation toolbar (absent on the table)
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
   if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
   applyBoardRole(); // scoreboard (helper+) and notes (gm+) edit affordances

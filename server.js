@@ -169,6 +169,16 @@ function buildCollider(type, props) {
     // A .glb model prop carries its own measured half-extents; clamp them sane.
     if (props.model && Array.isArray(props.box)) {
       const [hx, hy, hz] = props.box.map(v => clamp(+v || 0.5, 0.05, 4));
+      const c = props.collider; // optional: 'sphere' | 'cylinder' | 'cone' | 'flat' (default is a box)
+      if (c === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
+      if (c === 'cylinder' || c === 'cone') {
+        const r = Math.max(hx, hz);                                  // horizontal radius
+        return new CANNON.Cylinder(c === 'cone' ? r * 0.05 : r, r, hy * 2, 16); // Y-oriented in cannon-es; tiny top → cone
+      }
+      if (c === 'flat') {
+        const t = 0.06; // a thin footprint at the model's base, so pieces slide over it instead of bumping it
+        return { shape: new CANNON.Box(new CANNON.Vec3(hx, t, hz)), offset: new CANNON.Vec3(0, -(hy - t), 0) };
+      }
       return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
     }
     // A built-in shape scales its template collider by the universal prop scale.
@@ -632,10 +642,19 @@ class TableRoom extends Room {
       const draft = this.drafts.get(client.sessionId);
       this.drafts.delete(client.sessionId);
       if (!draft || !draft.cards.length) return;
-      const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards }); // spawn to test it live
-      // Optionally save it to the library in the same step (save-on-create, private).
-      if (msg && msg.name && await this.saveDeckById(id, msg.name, client.auth.userId)) {
-        this.sendAssetList(client, 'deck');
+      const doSpawn = !msg || msg.spawn !== false; // default: spawn onto the table (also the back-compat path)
+      if (doSpawn) {
+        const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards }); // spawn to test it live
+        // Optionally save it to the library in the same step (save-on-create, private).
+        if (msg && msg.name && await this.saveDeckById(id, msg.name, client.auth.userId)) {
+          this.sendAssetList(client, 'deck');
+        }
+      } else if (msg && msg.name) {
+        // Save-only: insert the built deck straight into the library, no table spawn.
+        try {
+          await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, ownerId: client.auth.userId, isPublic: false });
+          this.sendAssetList(client, 'deck');
+        } catch (e) { console.error('[deckFinish save-only]', e.message); }
       }
     });
 
@@ -689,6 +708,7 @@ class TableRoom extends Room {
         scale: +incoming.scale || 1,
       };
       if (incoming.color != null) props.color = incoming.color | 0;
+      if (['sphere', 'cylinder', 'cone', 'flat'].includes(incoming.collider)) props.collider = incoming.collider; // box is the default
       try {
         await db.insertProp(name, props, { ownerId: client.auth.userId }); // private by default
         this.sendAssetList(client, 'prop');
@@ -1068,7 +1088,9 @@ class TableRoom extends Room {
   spawn(type, pos, props = {}, quat = null) {
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: this.mat });
-    body.addShape(buildCollider(type, props));
+    const collider = buildCollider(type, props);
+    if (collider.shape) body.addShape(collider.shape, collider.offset); // some colliders (flat) sit off-centre
+    else body.addShape(collider);
     body.position.set(pos[0], pos[1], pos[2]);
 
     // An exact orientation (scene load) wins; otherwise dice/props tumble, boards/decks stay flat.

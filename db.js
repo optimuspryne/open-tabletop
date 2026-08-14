@@ -40,9 +40,9 @@ const idOrNull = (v) => (v == null ? null : String(v));
 export async function listDecks({ includePrivate = false } = {}) {
   try {
     const { rows } = await pool.query(
-      `SELECT id, name, jsonb_array_length(cards) AS count, is_public, owner_id FROM custom_decks
+      `SELECT id, name, jsonb_array_length(cards) AS count, cards->>0 AS first, props->>'back' AS back, is_public, owner_id FROM custom_decks
        ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count), isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
+    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count), first: r.first || null, back: r.back || 'back', isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
   } catch (e) { console.error('[db] listDecks:', e.message); return []; }
 }
 export async function getDeck(id) {
@@ -79,7 +79,7 @@ export async function listBoards({ includePrivate = false } = {}) {
     const { rows } = await pool.query(
       `SELECT id, name, file_url, props, is_public, owner_id FROM custom_boards
        ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)), isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
+    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)), preview: r.file_url || (r.props && r.props.tex) || null, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
   } catch (e) { console.error('[db] listBoards:', e.message); return []; }
 }
 // Returns a wrapper: .rec is the spawn record, plus visibility/owner for gating.

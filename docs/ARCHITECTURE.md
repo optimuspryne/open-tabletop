@@ -276,13 +276,16 @@ moves anything unreferenced and older than a day to `saved-assets/.trash/`
 (recoverable, never a hard delete).
 
 Each asset now carries an `owner_id` (the admin who created it) and an `is_public`
-flag, and the library is **admin-curated**: creation/edit/delete is admin-only,
-while listing and spawning are visibility-gated — public assets are spawnable by
-GMs/helpers, private ones only by admins (who can also spawn them into any game
-room). Admins build and test assets in a dedicated **editor room** (`EditorRoom`,
-with an admin-only `onAuth`) that reuses the whole table engine; at a game table
-the same asset handlers refuse non-admin creation and the client hides those
-controls. See "Accounts, rooms & roles" below.
+flag, and the library is **admin-curated**: creation and curation (publish/rename/
+delete) are admin-only, while listing and spawning are visibility-gated — public
+assets are spawnable by GMs/helpers, private ones only by admins (who can also
+spawn them into any game room). Admins build and test assets in a dedicated
+**editor room** (`EditorRoom`, with an admin-only `onAuth`) that reuses the whole
+table engine. The game table and the editor share the same asset UI — **View
+Library** and **Built-Ins** pickers (plus a Room Controls Skybox picker), driven
+by `editor-panel.js` over `window.onOttRoom` — while **Add to Library** (creation)
+is editor-only and the asset handlers refuse non-admin creation/curation.
+See "Accounts, rooms & roles" below.
 
 ## Seats, presence, turns
 

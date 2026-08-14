@@ -39,7 +39,7 @@ export const KINDS = {
 
 // --- Deck -------------------------------------------------------------------
 export const DECK_VISUAL = [1.56, 0.06, 2.16];   // unit stack box; y scaled by deckHeight(count)
-export const CARD_ROUND = 0.08;                  // card & deck corner radius, as a fraction of card width (0 = square)
+export const CARD_ROUND = 0.05;                  // card & deck corner radius, as a fraction of card width (0 = square)
 // Deck stack height from card count — used by BOTH the client visual and the
 // server collider, so a flipped deck has a solid body where it's drawn.
 export const deckHeight = c => Math.max(0.06, Math.min(1.2, c * 0.02));
