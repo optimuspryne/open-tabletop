@@ -182,7 +182,8 @@ are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
 ### Models: scale, orientation, colour
 
 - **Built-in model pieces** (chess/checkers/go/coin/chip/token) carry a fixed
-  `modelScale` and a **precomputed box collider** in `PROPS`, so a set keeps its
+  `modelScale` and a **precomputed collider** in `PROPS` (`{ box, type? }` — a box
+  by default, or `sphere`/`cylinder`/`cone`/`flat`), so a set keeps its
   real relative sizes and the server never has to load a model. `.glb` files can
   bake a node scale, so sizes are measured *as loaded*.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
@@ -310,7 +311,7 @@ separate tabs stay distinct.
 - **Up (client → server):** `grab`, `move`, `release`, `flip`, `dealToTable`,
   `dealDrag`, `takeCard`, `playCard`, `shuffle`, `splitDeck`, `drawInspect`,
   `inspectPlace`, `recolor`, `deckBegin`/`deckAppend`/`deckFinish`,
-  `saveDeck`/`listDecks`/`loadDeck`/`editDeck`, `saveProp`/`listProps`,
+  `saveDeck`/`listDecks`/`loadDeck`, `saveProp`/`listProps`,
   `listBoards`/`saveBoard`/`loadBoard`, `sceneSave`/`sceneLoad`/`listScenes`,
   `saveSkybox`/`listSkyboxes`/`skybox`,
   `assetPublic`/`assetRename`/`assetDelete` (admin curation),
@@ -387,6 +388,7 @@ not provably safe.
   entry (mesh + interaction). Everything downstream just works.
 - **A die size:** one vertex entry in the shared dice data.
 - **A built-in model piece:** a `PROPS` entry with `model` + `modelScale` +
-  precomputed `collider.box` (+ optional `team`/`tintMaterial`/`modelRot`/`stand`).
+  a `collider` (`{ box, type? }`, `type` = `sphere`/`cylinder`/`cone`/`flat`)
+  (+ optional `team`/`tintMaterial`/`modelRot`/`stand`).
 - **A built-in board:** a `BOARDS` entry (`model`, `modelScale`, precomputed
   `box`).

@@ -237,6 +237,16 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 #notesHead b { color: var(--accent); }
 #notesClose { cursor: pointer; opacity: .7; user-select: none; }
 #notesClose:hover { opacity: 1; }
+#whiteboard {
+  position: fixed; right: var(--inset); top: 50%; transform: translateY(-50%);
+  width: min(300px, 88vw); display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r-lg); backdrop-filter: var(--blur); color: var(--text);
+}
+#wbHead { display: flex; align-items: center; justify-content: space-between; }
+#wbHead b { color: var(--accent); }
+#wbClose { cursor: pointer; opacity: .7; user-select: none; }
+#wbClose:hover { opacity: 1; }
 #notesText {
   width: 100%;
   min-height: 160px;
@@ -288,21 +298,20 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 }
 .timerRow button { padding: 6px 10px; }
 #timerMode {
+  background: none;
+  color: var(--text);
+  border: none;
+  padding: 5px 6px;
+  font: var(--fs-sm) var(--font);
+}
+#timerMode option { background: var(--panel-solid); color: var(--text);}
+#timerDur {
+  width: 60px;
   background: var(--field);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: 5px 6px;
-  font: var(--fs-sm) var(--font);
-}
-#timerMode option { background: var(--panel-solid); color: var(--text); }
-#timerDur {
-  width: 56px;
-  background: var(--field);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 4px 6px;
   font: var(--fs-sm) var(--font);
 }
 
@@ -323,6 +332,16 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
   backdrop-filter: var(--blur);
   z-index: 6;
 }
+#dropPanel {
+  position: fixed; left: var(--inset); top: 50%; transform: translateY(-50%);
+  width: min(240px, 88vw); display: flex; flex-direction: column; gap: 8px;
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r-lg); backdrop-filter: var(--blur); color: var(--text); z-index: 6;
+}
+#dropHead { display: flex; align-items: center; justify-content: space-between; }
+#dropHead b { color: var(--accent); }
+#dropClose { cursor: pointer; opacity: .7; user-select: none; }
+#dropClose:hover { opacity: 1; }
 #showHead {
   display: flex;
   align-items: center;
@@ -344,6 +363,106 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
   cursor: pointer;
 }
 .chip.on { background: var(--accent-soft); border-color: var(--accent); }
+/* .chk — a checkbox-style toggle chip: a themed square that fills when on */
+.chip.chk::before {
+  content: ''; display: inline-block; width: 12px; height: 12px; margin-right: 7px;
+  vertical-align: -2px; border: 1px solid var(--border); border-radius: 3px; box-sizing: border-box;
+}
+.chip.chk.on::before { background: var(--accent); border-color: var(--accent); }
+
+/* Themed dropdowns — any <select> matches the app instead of the browser default */
+select {
+  background: var(--field); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--r); padding: 5px 26px 5px 10px; font: var(--fs)/1 var(--font);
+  cursor: pointer; appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%23c9a25a' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 9px center;
+}
+select:focus { outline: none; border-color: var(--accent); }
+
+/* Number stepper — a themed field flanked by − / + buttons. Any input[type=number]
+   is wrapped in .stepper by the client on load, so this is the universal number style. */
+.stepper {
+  display: inline-flex; align-items: stretch; vertical-align: middle;
+  background: var(--field); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden;
+}
+.stepper input[type="number"] {
+  border: none; background: transparent; color: var(--text); text-align: center;
+  font: var(--fs)/1 var(--font); padding: 5px 4px; -moz-appearance: textfield;
+}
+.stepper input[type="number"]::-webkit-outer-spin-button,
+.stepper input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper input[type="number"]:focus { outline: none; }
+.stepBtn {
+  border: none; background: transparent; color: var(--text); cursor: pointer;
+  padding: 0 11px; font-size: 16px; line-height: 1; user-select: none;
+}
+.stepper .stepBtn:first-child { border-right: 1px solid var(--border); }
+.stepper .stepBtn:last-child { border-left: 1px solid var(--border); }
+.stepBtn:hover { background: var(--accent-soft); color: var(--accent); }
+
+/* Stacked labeled field rows (e.g. table size): "Width  [− field +]" per row */
+.sizeRow { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.sizeRow > label { min-width: 48px; color: var(--text); }
+
+/* Library spawn cards: quantity stepper + colour swatches + multi-select */
+.cardCtrls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 4px 0; }
+.qtyStep input[type="number"] { width: 30px; }
+.swatchRow { display: flex; flex-wrap: wrap; gap: 4px; }
+.swatch { width: 16px; height: 16px; padding: 0; border: 1px solid var(--border); border-radius: 4px; cursor: pointer; box-sizing: border-box; }
+.swatch.on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.swatch.neutral { background: repeating-linear-gradient(135deg, var(--field), var(--field) 4px, var(--border) 4px, var(--border) 5px); }
+.ownTog { align-self: flex-start; }
+.spawnBar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.spawnSelBtn { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); border-radius: var(--r); padding: 5px 12px; cursor: pointer; font: var(--fs)/1 var(--font); }
+.spawnSelBtn:hover { filter: brightness(1.12); }
+.libList.selecting .libCard { cursor: pointer; }
+.libList.selecting .libActs { display: none; }        /* per-card Spawn hides while selecting */
+.libCard.sel { outline: 2px solid var(--accent); outline-offset: -1px; }
+.libSearchWrap { margin: 6px 0 8px; }
+.libSearch { width: 100%; box-sizing: border-box; background: var(--field); color: var(--text); border: 1px solid var(--border); border-radius: var(--r); padding: 6px 10px; font: var(--fs)/1 var(--font); }
+.libSearch:focus { outline: none; border-color: var(--accent); }
+.libSearch::placeholder { opacity: .55; }
+
+/* Add-modal orientation row (rotate an uploaded model 90° per click) */
+.rotRow { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.rotRow .rotLabel { color: var(--accent); font-size: var(--fs-sm, 0.85em); margin-right: 2px; }
+.rotRow button { padding: 4px 11px; }
+
+/* Public chat panel (Tools) */
+#chat {
+  position: fixed; right: var(--inset); top: 50%; transform: translateY(-50%);
+  width: min(300px, 88vw); display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r-lg); backdrop-filter: var(--blur); color: var(--text);
+}
+#chatHead { display: flex; align-items: center; justify-content: space-between; }
+#chatHead b { color: var(--accent); }
+#chatClose { cursor: pointer; opacity: .7; user-select: none; }
+#chatClose:hover { opacity: 1; }
+#chatLog { max-height: 260px; min-height: 90px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; font: var(--fs-sm)/1.35 var(--font); }
+.chatMsg { word-break: break-word; }
+.chatFrom { color: var(--accent); font-weight: 600; }
+#chatInputRow { display: flex; gap: 6px; }
+#chatInput { flex: 1; min-width: 0; background: var(--field); color: var(--text); border: 1px solid var(--border); border-radius: var(--r); padding: 6px 8px; font: var(--fs)/1 var(--font); }
+#chatInput:focus { outline: none; border-color: var(--accent); }
+#chatBtn.hasUnread::after { content: ''; display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+
+/* Minimalist accent scrollbars (app-wide) */
+* { scrollbar-width: thin; scrollbar-color: var(--accent) transparent; }   /* Firefox */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background-color: var(--accent); border-radius: 6px; border: 2px solid transparent; background-clip: padding-box; } /* padding-box floats a slim thumb */
+::-webkit-scrollbar-thumb:hover { border-width: 1px; filter: brightness(1.12); }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* Themed range sliders: black track, accent thumb (app-wide) */
+input[type="range"] { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; cursor: pointer; }
+input[type="range"]:focus { outline: none; }
+input[type="range"]::-webkit-slider-runnable-track { height: 5px; background: #0a0b0d; border-radius: 4px; }
+input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; margin-top: -5px; background: var(--accent); border-radius: 50%; border: none; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+input[type="range"]::-moz-range-track { height: 5px; background: #0a0b0d; border-radius: 4px; }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; background: var(--accent); border: none; border-radius: 50%; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
 #showHold {
   margin-top: 4px;
   padding: 10px;
@@ -356,9 +475,9 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 #membersPanel {
   position: fixed;
   left: var(--inset);
-  top: 50%;
+  top: 15%;
   transform: translateY(-50%);
-  width: min(320px, 90vw);
+  width: min(240px, 90vw);
   max-height: 70vh;
   overflow: auto;
   display: flex;
@@ -370,18 +489,29 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
   border-radius: var(--r-lg);
   backdrop-filter: var(--blur);
 }
+/* Table Size — a small left-anchored panel like Members (not a full-screen modal) */
+#tableModal {
+  position: fixed; left: var(--inset); top: 30%; transform: translateY(-50%);
+  width: min(240px, 90vw); display: flex; flex-direction: column; gap: 8px;
+  padding: 5px 12px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--r-lg); backdrop-filter: var(--blur); color: var(--text);
+}
+#tableHead { display: flex; align-items: center; justify-content: space-between; }
+#tableHead b { color: var(--accent); }
+#tableClose { cursor: pointer; opacity: .7; user-select: none; }
+#tableClose:hover { opacity: 1; }
 #membersHead { display: flex; align-items: center; justify-content: space-between; color: var(--text); }
 #membersHead b { color: var(--accent); }
 #membersClose { cursor: pointer; opacity: .7; user-select: none; }
 #membersClose:hover { opacity: 1; }
 #memberList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .memberRow {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  display: flex; align-items: left; justify-content: space-between; gap: 5px;
   background: var(--panel-solid); border: 1px solid var(--border); border-radius: var(--r-sm); padding: 6px 8px;
   color: var(--text); font-size: var(--fs-sm);
 }
-.memberActions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
-.memberActions button { padding: 3px 8px; font-size: var(--fs-sm); }
+.memberActions { display: flex; gap: 4px; flex-wrap: wrap; justify-content: left; }
+.memberActions button { padding: 3px 2px; font-size: var(--fs-sm); }
 
 /* ===== library editor panel ===== */
 /* Library is a centered overlay (see the modal group above); .libraryCard is its
@@ -399,11 +529,14 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 /* One tab (and pane) per asset type. */
 .libTabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); }
 .libTab {
-  background: none; border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: var(--panel); border: none; border-bottom: 2px solid transparent; margin-bottom: -1px;
   padding: 8px 16px; color: var(--text); opacity: .55; cursor: pointer; font: var(--fs) var(--font);
 }
 .libTab:hover { opacity: .85; }
 .libTab.on { opacity: 1; color: var(--accent); border-bottom-color: var(--accent); }
+/* Timer's mode tabs: drop the divider bar and center them in the panel */
+#timerMode { border-bottom: none; justify-content: center; }
+#timerMode .libTab { margin-bottom: 0; }
 .libPane { display: flex; flex-direction: column; gap: 8px; }
 .libNewBtn { align-self: flex-start; }
 /* Add-to-Library builder */
@@ -462,7 +595,7 @@ button.danger { border-color: var(--danger-border); color: var(--danger); } /* r
 .libActs button { padding: 3px 7px; font-size: var(--fs-sm); }
 
 /* ===== modal overlays ===== */
-#scenesModal, #tableModal, #whiteboardModal, #controlsModal,
+#controlsModal,
 #libraryPanel, #builtinModal, #addModal, #skyPickModal {
   position: fixed;
   inset: 0;
@@ -699,7 +832,6 @@ body.admin { display: block; overflow: auto; }
 #roomNotes { width: 100%; box-sizing: border-box; resize: vertical; background: var(--field); color: var(--text);
   border: 1px solid var(--border); border-radius: var(--r-sm); padding: 8px; font: var(--fs-sm) var(--font); }
 #roomNotes:read-only { opacity: .7; background: var(--panel-solid); cursor: default; }
-.sceneSaveBtn { width: 100%; font-size: var(--fs-sm); margin-bottom: 6px; }
 
 /* Room code — top-right, shown to GM+/owner/admin only (gated in client.js) */
 #roomCode {
@@ -712,7 +844,7 @@ body.admin { display: block; overflow: auto; }
 /* ===== Right rail — players panel on top, Tools menu + its panels below ===== */
 #rightRail {
   position: fixed; top: var(--inset); right: var(--inset); z-index: 6;
-  width: min(320px, 92vw);
+  width: min(285px, 92vw);
   max-height: calc(100vh - 2 * var(--inset));
   overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--gap);
@@ -740,7 +872,10 @@ body.admin { display: block; overflow: auto; }
 #toolsDock > #notes,
 #toolsDock > #scorePanel,
 #toolsDock > #timer,
-#interactDock > #showPanel {
+#toolsDock > #whiteboard,
+#toolsDock > #chat,
+#interactDock > #showPanel,
+#interactDock > #dropPanel {
   position: static; inset: auto; transform: none;
   width: 100%; box-sizing: border-box; margin: 0; max-height: none;
 }

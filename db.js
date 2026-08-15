@@ -57,11 +57,6 @@ export function insertDeck({ name, back, fronts, ownerId = null, isPublic = fals
     "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
     [name, JSON.stringify(fronts), JSON.stringify({ back }), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
-export function updateDeck(id, { name, back, fronts }) {
-  return pool.query(
-    'UPDATE custom_decks SET name = $2, cards = $3, props = $4 WHERE id = $1',
-    [id, name, JSON.stringify(fronts), JSON.stringify({ back })]);
-}
 
 // ===== Boards ================================================================
 // A board record is one of: { board } (built-in) | { model, modelScale, box }

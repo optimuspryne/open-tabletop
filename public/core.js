@@ -73,8 +73,19 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, LIGHTING.hemi));
 const sun = new THREE.DirectionalLight(0xffffff, LIGHTING.sun);
 sun.position.set(10, 18, 8);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
-Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 12, bottom: -12 });
+sun.shadow.mapSize.set(4096, 4096);
+sun.shadow.camera.near = 1;
+sun.shadow.camera.far  = 55;     // tight depth range = far more precision, so bias can stay tiny
+sun.shadow.normalBias  = 0.001;  // tiny (tight depth range gives the precision) — no peter-panning, still no .glb acne
+sun.shadow.bias        = -0.0002; // small depth bias to back it up
+
+// Size the sun's shadow frustum to a table half-extent (+ margin for shadows cast past the edge).
+const SHADOW_MARGIN = 4;
+function fitShadow(hx, hz) {
+  Object.assign(sun.shadow.camera, { left: -(hx + SHADOW_MARGIN), right: hx + SHADOW_MARGIN, top: hz + SHADOW_MARGIN, bottom: -(hz + SHADOW_MARGIN) });
+  sun.shadow.camera.updateProjectionMatrix();
+}
+fitShadow(TABLE.x, TABLE.z);     // initial frustum from the default table size
 scene.add(sun);
 
 // ===== Table ================================================================
@@ -90,6 +101,7 @@ scene.add(tableMesh);
 function resizeTable(hx, hz) {
   tableMesh.geometry.dispose();
   tableMesh.geometry = new THREE.BoxGeometry(hx * 2, 1, hz * 2);
+  fitShadow(hx, hz); // keep the shadow frustum matched to the surface
 }
 
 export { CONFIG, clamp, scene, camera, renderer, controls, resizeTable };

@@ -4,7 +4,8 @@
 // the deckList/boardList/propList messages out to here, so the modal saved-lists
 // keep working too). In the editor the admin sees private assets as well as public.
 import { cardPreviewURL, propPreviewURL, boardPreviewURL, diePreviewURL, uploadImage, uploadModel, measureBoard, measureModel, glbFilePreviewURL } from './graphics.js';
-import { DIE_SIDES, PROP_LIST, BOARDS } from '/shared/pieces.js';
+import * as THREE from 'three';
+import { DIE_SIDES, PROP_LIST, BOARDS, COLORS } from '/shared/pieces.js';
 const $ = (id) => document.getElementById(id);
 const btn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
@@ -13,6 +14,134 @@ function wireTabs(root) {
   tabs.forEach((tab) => tab.onclick = () => {
     tabs.forEach((t) => t.classList.toggle('on', t === tab));
     root.querySelectorAll('.libPane').forEach((pane) => { pane.hidden = pane.dataset.pane !== tab.dataset.tab; });
+    if (root._applySearch) root._applySearch(); // re-filter the newly shown pane
+  });
+}
+// A per-modal search box (filters the visible tab's cards by name). Injected once
+// under the tabs; re-applied on tab switch and after each render.
+function wireSearch(root) {
+  const tabs = root.querySelector('.libTabs');
+  if (!tabs || root.querySelector('.libSearch')) return;
+  const wrap = document.createElement('div'); wrap.className = 'libSearchWrap';
+  const inp = document.createElement('input'); inp.type = 'search'; inp.className = 'libSearch'; inp.placeholder = 'Search\u2026';
+  wrap.append(inp); tabs.after(wrap);
+  root._applySearch = () => {
+    const q = inp.value.trim().toLowerCase();
+    const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden);
+    if (!pane) return;
+    pane.querySelectorAll('.libCard').forEach((card) => {
+      const name = (card.querySelector('.libName')?.textContent || '').toLowerCase();
+      card.style.display = (!q || name.includes(q)) ? '' : 'none';
+    });
+  };
+  inp.oninput = root._applySearch;
+}
+
+// ---- Spawn cards: quantity + colour, and multi-select batch spawn ----------
+// Fixed swatch palette (first = neutral / no tint). Team pieces use their own
+// two set colours (COLORS.team) instead of the palette.
+const PALETTE = [
+  { name: 'Neutral', hex: null },
+  { name: 'Red', hex: 0xd14b4b }, { name: 'Orange', hex: 0xd98a3a },
+  { name: 'Yellow', hex: 0xd9c24b }, { name: 'Green', hex: 0x5fae5f },
+  { name: 'Blue', hex: 0x5b8ad6 }, { name: 'Purple', hex: 0x9a6fc0 },
+  { name: 'White', hex: 0xf4f1ea }, { name: 'Black', hex: 0x2a2a2a },
+];
+// Named alternate palettes a shape can opt into via PROP_LIST `swatches`.
+const METALS = [
+  { name: 'Gold', hex: 0xd4af37 }, { name: 'Silver', hex: 0xc0c0c0 },
+  { name: 'Copper', hex: 0xb87333 }, { name: 'Bronze', hex: 0x9c6b3f },
+];
+const PALETTES = { metals: METALS };
+// Legible die-number colour for a face colour (dark face → light numbers).
+const contrast = (hex) => { const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5 ? 0xf4f1ea : 0x141414; };
+const hexStr = (h) => '#' + (h >>> 0).toString(16).padStart(6, '0').slice(-6);
+function swatchEl(hex) {
+  const sw = document.createElement('button'); sw.type = 'button';
+  sw.className = 'swatch' + (hex == null ? ' neutral' : '');
+  if (hex != null) sw.style.background = hexStr(hex);
+  return sw;
+}
+// Compact − / + quantity field (reuses the .stepper look); .get() → 1..99.
+function qtyStepper() {
+  const wrap = document.createElement('span'); wrap.className = 'stepper qtyStep';
+  const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = '99'; inp.value = '1';
+  const clamp = (v) => Math.max(1, Math.min(99, (v | 0) || 1));
+  const step = (d) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'stepBtn'; b.textContent = d < 0 ? '\u2212' : '+'; b.tabIndex = -1; b.onclick = () => { inp.value = clamp((+inp.value || 1) + d); }; return b; };
+  wrap.append(step(-1), inp, step(1));
+  wrap.get = () => clamp(+inp.value || 1);
+  return wrap;
+}
+// One spawnable card: preview + title + quantity + optional colour + Spawn.
+// send(colourProps) fires a single spawn; the card supplies quantity + colour.
+// color: 'palette' | 'team' | 'own' | 'none'. li._spawn() is used for batch spawn.
+function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, extraActs = [] }) {
+  const li = document.createElement('li'); li.className = 'libCard';
+  const name = document.createElement('span'); name.className = 'libName'; name.textContent = title;
+  const meta = document.createElement('div'); meta.className = 'libMeta'; meta.append(name); if (badge) meta.append(badge);
+
+  const ctrls = document.createElement('div'); ctrls.className = 'cardCtrls';
+  const qty = qtyStepper(); ctrls.append(qty);
+
+  let getColor = () => null, getTeam = () => null;
+  const pickRow = (items, onPick) => {
+    const row = document.createElement('div'); row.className = 'swatchRow';
+    const sws = items.map((it, i) => {
+      const sw = swatchEl(it.hex); sw.title = it.name; if (i === 0) sw.classList.add('on');
+      sw.onclick = () => { sws.forEach((s) => s.classList.remove('on')); sw.classList.add('on'); onPick(it, i); };
+      row.append(sw); return sw;
+    });
+    return row;
+  };
+  if (color === 'team') {
+    const cols = COLORS.team[teamName] || [0x888888, 0x222222];
+    let idx = 0; getTeam = () => idx;
+    ctrls.append(pickRow(cols.map((c, i) => ({ hex: c, name: 'Set ' + (i + 1) })), (_it, i) => { idx = i; }));
+  } else if (color === 'palette' || color === 'own') {
+    const pal = PALETTES[swatches] || PALETTE;
+    let col = pal[0].hex;   // default to the first swatch (null for the Neutral-led default palette)
+    const row = pickRow(pal, (it) => { col = it.hex; });
+    if (color === 'own') {
+      row.hidden = true;
+      const tog = document.createElement('button'); tog.type = 'button'; tog.className = 'chip chk on ownTog'; tog.textContent = 'Own colours';
+      tog.onclick = () => { row.hidden = tog.classList.toggle('on'); };
+      getColor = () => (tog.classList.contains('on') ? null : col);
+      ctrls.append(tog, row);
+    } else {
+      getColor = () => col; ctrls.append(row);
+    }
+  }
+
+  li._spawn = () => {
+    const n = qty.get(); const cp = {};
+    const c = getColor(); if (c != null) { cp.color = c; if (dice) cp.textColor = contrast(c); }
+    const t = getTeam(); if (t != null) cp.team = t;
+    for (let i = 0; i < n; i++) send(cp);
+  };
+
+  const acts = document.createElement('div'); acts.className = 'libActs';
+  acts.append(btn('Spawn', () => li._spawn()), ...extraActs);
+  li.append(preview, meta, ctrls, acts);
+  return li;
+}
+// A tab's multi-select bar (Select toggle + "Spawn selected"), injected once
+// before the card list. In select mode, clicking a card highlights it.
+function spawnBar(ul) {
+  if (ul.previousElementSibling && ul.previousElementSibling.classList.contains('spawnBar')) return;
+  const bar = document.createElement('div'); bar.className = 'spawnBar';
+  const sel = document.createElement('button'); sel.type = 'button'; sel.className = 'chip selToggle'; sel.textContent = 'Select';
+  const go = document.createElement('button'); go.type = 'button'; go.className = 'spawnSelBtn'; go.textContent = 'Spawn selected'; go.hidden = true;
+  bar.append(sel, go);
+  ul.parentNode.insertBefore(bar, ul);
+  sel.onclick = () => {
+    const on = ul.classList.toggle('selecting'); sel.classList.toggle('on', on); go.hidden = !on;
+    if (!on) ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
+  };
+  go.onclick = () => ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn());
+  ul.addEventListener('click', (e) => {
+    if (!ul.classList.contains('selecting')) return;
+    if (e.target.closest('.cardCtrls') || e.target.closest('.libActs')) return; // let qty/colour clicks through
+    const card = e.target.closest('.libCard'); if (card && card._spawn) card.classList.toggle('sel');
   });
 }
 
@@ -50,31 +179,41 @@ function previewEl(kind, it) {
 function renderList(kind, list) {
   const ul = $(LIST_UL[kind]); if (!ul) return;
   ul.replaceChildren();
+  if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + colour + multi-select for spawnable assets
   if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet.'; ul.appendChild(li); return; }
   for (const it of list) {
-    const li = document.createElement('li'); li.className = 'libCard';
-    const extra = kind === 'deck' && it.count != null ? ` \u00b7 ${it.count}` : (kind === 'board' && it.kind ? ` \u00b7 ${it.kind}` : (kind === 'sky' && typeof it.url === 'string' && it.url[0] === '{' ? ' \u00b7 cube' : ''));
-    const name = document.createElement('span'); name.className = 'libName'; name.textContent = it.name + extra;
     const badge = document.createElement('span'); badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv'); badge.textContent = it.isPublic ? 'public' : 'private';
-    const meta = document.createElement('div'); meta.className = 'libMeta'; meta.append(name, badge);
-    const acts = document.createElement('div'); acts.className = 'libActs';
-    // Scenes load (replace the whole editor table); skyboxes apply to the room; other assets spawn onto it.
-    const primary = kind === 'scene'
-      ? btn('Load', () => { if (confirm(`Load "${it.name}" into the editor? This clears the current table.`)) ROOM.send('sceneLoad', { id: it.id }); })
-      : kind === 'sky'
-        ? btn('Apply', () => ROOM.send('skybox', { url: it.url }))
+    const adminActs = window.OTT_IS_ADMIN ? [ // curation is site-admin only; GMs/helpers just spawn/apply
+      btn(it.isPublic ? 'Unpublish' : 'Publish', () => ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic })),
+      btn('Rename', () => { const n = prompt('Rename:', it.name); if (n && n.trim()) ROOM.send('assetRename', { kind, id: it.id, name: n.trim() }); }),
+      btn('Delete', () => { if (confirm(`Delete "${it.name}"? This cannot be undone.`)) ROOM.send('assetDelete', { kind, id: it.id }); }, 'danger'),
+    ] : [];
+
+    if (kind === 'prop' || kind === 'deck') { // spawnable: quantity + colour + multi-select
+      const extra = kind === 'deck' && it.count != null ? ` \u00b7 ${it.count}` : '';
+      ul.appendChild(spawnCard({
+        preview: previewEl(kind, it), title: it.name + extra, badge, extraActs: adminActs,
+        color: kind === 'prop' ? 'own' : 'none',  // custom objects: default to their own material; decks never tint
+        send: kind === 'deck'
+          ? () => ROOM.send('loadDeck', { id: it.id })
+          : (cp) => ROOM.send('spawn', { type: 'prop', props: { ...it.props, ...cp } }),
+      }));
+    } else { // board / scene / sky — one action, no quantity/colour
+      const extra = kind === 'board' && it.kind ? ` \u00b7 ${it.kind}` : (kind === 'sky' && typeof it.url === 'string' && it.url[0] === '{' ? ' \u00b7 cube' : '');
+      const li = document.createElement('li'); li.className = 'libCard';
+      const name = document.createElement('span'); name.className = 'libName'; name.textContent = it.name + extra;
+      const meta = document.createElement('div'); meta.className = 'libMeta'; meta.append(name, badge);
+      const acts = document.createElement('div'); acts.className = 'libActs';
+      const primary = kind === 'scene'
+        ? btn('Load', () => { if (confirm(`Load "${it.name}" into the editor? This clears the current table.`)) ROOM.send('sceneLoad', { id: it.id }); })
+        : kind === 'sky' ? btn('Apply', () => ROOM.send('skybox', { url: it.url }))
         : btn('Spawn', () => spawnOf[kind](it));
-    acts.append(primary);
-    if (window.OTT_IS_ADMIN) { // library curation is site-admin only; GMs/helpers just spawn/apply
-      acts.append(
-        btn(it.isPublic ? 'Unpublish' : 'Publish', () => ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic })),
-        btn('Rename', () => { const n = prompt('Rename:', it.name); if (n && n.trim()) ROOM.send('assetRename', { kind, id: it.id, name: n.trim() }); }),
-        btn('Delete', () => { if (confirm(`Delete "${it.name}"? This cannot be undone.`)) ROOM.send('assetDelete', { kind, id: it.id }); }, 'danger'),
-      );
+      acts.append(primary, ...adminActs);
+      li.append(previewEl(kind, it), meta, acts);
+      ul.appendChild(li);
     }
-    li.append(previewEl(kind, it), meta, acts);
-    ul.appendChild(li);
   }
+  const lp = $('libraryPanel'); if (lp && lp._applySearch) lp._applySearch();
 }
 
 // client.js fans the three list messages here (and still renders the modal saved-lists).
@@ -99,15 +238,17 @@ const thumbImg = (src) => { const im = document.createElement('img'); im.classNa
 const fillAsync = (box, promise) => { const im = thumbImg(); box.append(im); promise.then((u) => { if (u) im.src = u; else box.classList.add('empty'); }).catch(() => box.classList.add('empty')); };
 
 function renderBuiltin() {
-  const dice = $('biDice'); dice.replaceChildren();
+  const dice = $('biDice'); dice.replaceChildren(); spawnBar(dice);
   for (const sides of DIE_SIDES) {
     const box = previewBox(); box.append(thumbImg(diePreviewURL(sides)));
-    dice.append(builtinCard(box, 'd' + sides, 'Spawn', () => ROOM.send('spawn', { type: 'die', props: { sides } })));
+    dice.append(spawnCard({ preview: box, title: 'd' + sides, color: 'palette', dice: true,
+      send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides, ...cp } }) }));
   }
 
-  const decks = $('biDecks'); decks.replaceChildren();
+  const decks = $('biDecks'); decks.replaceChildren(); spawnBar(decks);
   { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
-    decks.append(builtinCard(box, 'Standard 52-card', 'Spawn', () => ROOM.send('spawn', { type: 'deck', props: {} }))); }
+    decks.append(spawnCard({ preview: box, title: 'Standard 52-card', color: 'none',
+      send: () => ROOM.send('spawn', { type: 'deck', props: {} }) })); }
 
   const boards = $('biBoards'); boards.replaceChildren();
   for (const key of Object.keys(BOARDS)) {
@@ -115,10 +256,12 @@ function renderBuiltin() {
     boards.append(builtinCard(box, BOARDS[key].name, 'Spawn', () => ROOM.send('spawn', { type: 'board', props: { board: key } })));
   }
 
-  const objs = $('biObjects'); objs.replaceChildren();
+  const objs = $('biObjects'); objs.replaceChildren(); spawnBar(objs);
   for (const p of PROP_LIST) {
     const box = previewBox(); fillAsync(box, propPreviewURL({ shape: p.id }));
-    objs.append(builtinCard(box, p.name, 'Spawn', () => ROOM.send('spawn', { type: 'prop', props: { shape: p.id } })));
+    const teamName = p.team ? (p.id.startsWith('chess') ? 'chess' : p.id) : null; // checker/go/chess → their 2 set colours
+    objs.append(spawnCard({ preview: box, title: p.name, color: teamName ? 'team' : 'palette', teamName, swatches: p.swatches,
+      send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
   }
 
   const sky = $('biSky'); sky.replaceChildren();
@@ -127,6 +270,7 @@ function renderBuiltin() {
     const box = previewBox(); box.append(thumbImg(s.faces ? s.faces[0] : s.url));
     sky.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
   }
+  const bm = $('builtinModal'); if (bm && bm._applySearch) bm._applySearch();
 }
 
 // Room Controls → Skybox: a two-tab picker (built-in + custom), apply to the room.
@@ -203,7 +347,7 @@ function wireAddDeck() {
     $('adFrontFill').value = '#fbfbf7'; $('adFrontTextC').value = '#141414'; $('adFrontAccent').value = '#dddddd';
     clearSq('adImgBack'); clearSq('adImgFronts');
     ['adTxtBackPrev', 'adTxtFrontPrev'].forEach((id) => { $(id).style.backgroundImage = 'none'; });
-    $('adImgNoCrop').checked = false; $('adImgPad').value = '#ffffff'; $('adImgPadRow').hidden = true;
+    $('adImgNoCrop').classList.remove('on'); $('adImgPad').value = '#ffffff'; $('adImgPadRow').hidden = true;
   };
   const saveText = (spawn) => {
     const name = $('adTxtName').value.trim();
@@ -219,19 +363,19 @@ function wireAddDeck() {
 
   // image decks — click-tiles for back + fronts; the tile preview mirrors the crop mode
   const applyImgFit = () => {
-    const noCrop = $('adImgNoCrop').checked;
+    const noCrop = $('adImgNoCrop').classList.contains('on');
     ['adImgBack', 'adImgFronts'].forEach((id) => { const sq = $(id).parentElement; sq.style.backgroundSize = noCrop ? 'contain' : 'cover'; sq.style.backgroundColor = noCrop ? $('adImgPad').value : ''; });
   };
   wireUploadSq('adImgBack', false, applyImgFit);
   wireUploadSq('adImgFronts', false, applyImgFit);
-  $('adImgNoCrop').addEventListener('change', () => { $('adImgPadRow').hidden = !$('adImgNoCrop').checked; applyImgFit(); });
+  $('adImgNoCrop').onclick = () => { $('adImgNoCrop').classList.toggle('on'); $('adImgPadRow').hidden = !$('adImgNoCrop').classList.contains('on'); applyImgFit(); };
   $('adImgPad').addEventListener('input', applyImgFit);
   const saveImg = async (spawn) => {
     const name = $('adImgName').value.trim();
     if (!name) return alert('Name the deck first.');
     const frontFiles = [...$('adImgFronts').files];
     if (!frontFiles.length) return alert('Choose at least one front image.');
-    const noCrop = $('adImgNoCrop').checked;      // 'contain' fits the whole image (no crop); pad fills the leftover
+    const noCrop = $('adImgNoCrop').classList.contains('on');      // 'contain' fits the whole image (no crop); pad fills the leftover
     const fit = noCrop ? 'contain' : undefined;
     const pad = noCrop ? $('adImgPad').value : undefined;
     try {
@@ -305,23 +449,34 @@ function wireAddObject() {
   const setCollider = (which) => colliderBtns.forEach((b) => b.classList.toggle('on', b.dataset.collider === which));
   const currentCollider = () => { const on = colliderBtns.find((b) => b.classList.contains('on')); return on ? on.dataset.collider : 'box'; };
   colliderBtns.forEach((b) => b.onclick = () => setCollider(b.dataset.collider));
+  // Orientation: accumulate 90° world-axis rotations, stored as an Euler modelRot on spawn.
+  let objQuat = new THREE.Quaternion();
+  const objRot = () => { const e = new THREE.Euler().setFromQuaternion(objQuat); return [e.x, e.y, e.z]; };
+  const refreshObjPreview = () => { const f = $('adObjGlb').files[0]; if (f) glbFilePreviewURL(f, objRot()).then((u) => { $('adObjGlb').parentElement.style.backgroundImage = u ? `url("${u}")` : 'none'; }); };
+  const rotBy = (x, y, z) => { objQuat.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(x, y, z), Math.PI / 2)); refreshObjPreview(); };
+  $('adObjRotX').onclick = () => rotBy(1, 0, 0);
+  $('adObjRotY').onclick = () => rotBy(0, 1, 0);
+  $('adObjRotZ').onclick = () => rotBy(0, 0, 1);
+  $('adObjRotReset').onclick = () => { objQuat.identity(); refreshObjPreview(); };
   const clearObj = () => {
     ['adObjName'].forEach((id) => { $(id).value = ''; });
-    $('adObjScale').value = '1'; $('adObjStand').checked = false; setCollider('box');
-    clearSq('adObjGlb');
+    $('adObjScale').value = '1'; $('adObjStand').classList.remove('on'); setCollider('box');
+    objQuat.identity(); clearSq('adObjGlb');
   };
-  wireUploadSq('adObjGlb', true);
+  wireUploadSq('adObjGlb', true, () => { objQuat.identity(); }); // new file → fresh orientation
+  $('adObjStand').onclick = () => $('adObjStand').classList.toggle('on');
   const saveObj = async (spawn) => {
     const name = $('adObjName').value.trim();
     if (!name) return alert('Name the object first.');
     const f = $('adObjGlb').files[0];
     if (!f) return alert('Choose a .glb file.');
-    const scale = +$('adObjScale').value || 1, stand = $('adObjStand').checked, collider = currentCollider();
+    const scale = +$('adObjScale').value || 1, stand = $('adObjStand').classList.contains('on'), collider = currentCollider(), rot = objRot();
     try {
       const url = await uploadModel(f);
-      const box = await measureModel(url, scale);
+      const box = await measureModel(url, scale, rot);
       const props = { model: url, box, stand, scale };
       if (collider !== 'box') props.collider = collider;
+      if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
       save(props, name, spawn);
       clearObj();
       $('addModal').hidden = true;
@@ -387,6 +542,16 @@ window.onOttRoom = (room) => {
     $('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
     $('libraryClose').onclick = () => { panel.hidden = true; };
     wireTabs(panel);
+    wireSearch(panel);
+    // Room Controls → Load a Scene: open the library straight to the Scenes tab.
+    const roomScene = $('roomScene');
+    if (roomScene) roomScene.onclick = () => {
+      const rg = $('roomGrp'); if (rg) rg.hidden = true;
+      panel.hidden = false;
+      const scenesTab = panel.querySelector('.libTab[data-tab="scenes"]');
+      if (scenesTab) scenesTab.click(); // activate via wireTabs
+      refresh();
+    };
   }
   // Built-in library — bundled pieces, spawn-only (client-side data, no server fetch).
   const builtin = $('builtinModal');
@@ -394,6 +559,7 @@ window.onOttRoom = (room) => {
     $('builtinBtn').onclick = () => { builtin.hidden = !builtin.hidden; if (!builtin.hidden) renderBuiltin(); };
     $('builtinClose').onclick = () => { builtin.hidden = true; };
     wireTabs(builtin);
+    wireSearch(builtin);
   }
   // Room Controls → Skybox: two-tab apply-picker (both pages).
   const skyPick = $('skyPickModal');

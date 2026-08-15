@@ -8,33 +8,41 @@ const byId = (id) => document.getElementById(id);
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => document.querySelectorAll(selector);
 
-
-// Render a saved-asset list (now just scenes) into a container as "savedRow"s. For
-// each item, labelFor(item) gives the row text and buttonsFor(item) gives
-// [{ text, onClick }]. emptyNote (optional) is shown when the list is empty.
-function renderSavedList(containerId, items, { labelFor, buttonsFor, emptyNote }) {
-  const container = byId(containerId);
-  if (!container) return;                              // no-op when the target modal is absent
-  container.innerHTML = '';
-  if (!items.length && emptyNote) {
-    container.innerHTML = `<div class="note">${emptyNote}</div>`;
-    return;
-  }
-  for (const item of items) {
-    const row = document.createElement('div');
-    row.className = 'savedRow';
-    const label = document.createElement('span');
-    label.textContent = labelFor(item); // textContent = safe from HTML in user-supplied names
-    row.appendChild(label);
-    for (const { text, onClick } of buttonsFor(item)) {
-      const button = document.createElement('button');
-      button.textContent = text;
-      button.onclick = onClick;
-      row.appendChild(button);
-    }
-    container.appendChild(row);
-  }
+// Wrap every number input in a themed − / + stepper (universal number-field style).
+// The original input is kept in place, so existing byId() reads still work; the
+// buttons just step the value and fire input/change so any listeners react.
+function enhanceNumberInputs() {
+  document.querySelectorAll('input[type="number"]').forEach((input) => {
+    if (input.closest('.stepper')) return; // already wrapped
+    const wrap = document.createElement('span');
+    wrap.className = 'stepper';
+    input.parentNode.insertBefore(wrap, input);
+    const fire = () => { input.dispatchEvent(new Event('input', { bubbles: true })); input.dispatchEvent(new Event('change', { bubbles: true })); };
+    const btn = (label, step) => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'stepBtn'; b.textContent = label; b.tabIndex = -1;
+      b.onclick = () => { step > 0 ? input.stepUp() : input.stepDown(); fire(); }; // stepUp/Down honour min/max/step
+      return b;
+    };
+    wrap.append(btn('\u2212', -1), input, btn('+', 1));
+  });
 }
+enhanceNumberInputs();
+
+// Append one chat message to the log; auto-scroll if the reader's at the bottom,
+// and flag the Tools button as unread when the panel's closed.
+function addChatMsg(m) {
+  const log = byId('chatLog'); if (!log || !m) return;
+  const row = document.createElement('div'); row.className = 'chatMsg';
+  const who = document.createElement('span'); who.className = 'chatFrom'; who.textContent = (m.from || 'Player') + ': ';
+  row.append(who, document.createTextNode(m.text || ''));
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.appendChild(row);
+  if (atBottom) log.scrollTop = log.scrollHeight;
+  const chat = byId('chat'), chatBtn = byId('chatBtn');
+  if (chat && chat.hidden && chatBtn) chatBtn.classList.add('hasUnread');
+}
+
 
 // ===== Networking ===========================================================
 const { Client, getStateCallbacks } = Colyseus;
@@ -148,6 +156,8 @@ const applyTransform = (mesh, s) => {
   room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
   room.onMessage('wbStroke', (s) => { if (!s || s.sid === mySession) return; pushStroke(s); }); // another player drew (skip our own echo)
   room.onMessage('wbStrokes', ({ strokes } = {}) => { wbStrokesLocal.length = 0; for (const s of (strokes || [])) wbStrokesLocal.push(s); redrawStrokes(); }); // full replay (late join)
+  room.onMessage('chatMsg', (m) => addChatMsg(m));
+  room.onMessage('chatLog', ({ log } = {}) => { const el = byId('chatLog'); if (el) el.replaceChildren(); (log || []).forEach(addChatMsg); }); // late-join replay
   room.onMessage('wbClear', () => { wbStrokesLocal.length = 0; if (wbTex) wbClearCanvas(); });
   room.onMessage('skyList', (list) => { if (window.onLibraryList) window.onLibraryList('sky', list || []); }); // fans to the library + skybox picker
   room.onMessage('skyError', ({ message } = {}) => { const e = byId('skyErr'); if (e) e.textContent = message || 'Could not add that skybox.'; });
@@ -254,21 +264,31 @@ const applyTransform = (mesh, s) => {
   // now live in View Library, Built-Ins, and (editor) Add to Library.
   menu('roomBtn', 'roomGrp');
   wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); });
-  wire('roomScene', () => { byId('roomGrp').hidden = true; byId('scenesModal').hidden = false; room.send('listScenes'); });
-  wire('roomTable', () => { byId('roomGrp').hidden = true; byId('tableModal').hidden = false; byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); });
-  wire('tableCancel', () => byId('tableModal').hidden = true);
-  wire('roomWhiteboard', () => { // GM: show/hide, slide, and style the whiteboard
-    byId('roomGrp').hidden = true;
-    const wb = room.state.whiteboard;
-    byId('wbEnabled').checked = wb.enabled;
-    const styleEl = qs(`input[name="wbStyle"][value="${wb.dark ? 'dark' : 'light'}"]`); if (styleEl) styleEl.checked = true;
-    byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
-    byId('whiteboardModal').hidden = false;
-  });
-  wire('wbCancel', () => byId('whiteboardModal').hidden = true);
-  { const el = byId('wbEnabled'); if (el) el.onchange = () => room.send('wbEnable', { on: el.checked }); }
+  // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
+  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); } });
+  wire('tableClose', () => byId('tableModal').hidden = true);
+  { // GM: whiteboard config — a Tools-menu panel that flows below the menu (not a full-screen modal)
+    const wbPanel = byId('whiteboard'), wbBtn = byId('wbBtn');
+    if (wbPanel && wbBtn) {
+      wbBtn.onclick = () => {
+        wbPanel.hidden = !wbPanel.hidden;
+        if (!wbPanel.hidden) { // sync controls from current room state on open
+          const wb = room.state.whiteboard;
+          byId('wbEnabled').classList.toggle('on', wb.enabled);
+          qsa('#whiteboard [data-wbstyle]').forEach(c => c.classList.toggle('on', c.dataset.wbstyle === (wb.dark ? 'dark' : 'light')));
+          byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
+        }
+      };
+      const wbClose = byId('wbClose'); if (wbClose) wbClose.onclick = () => { wbPanel.hidden = true; };
+    }
+  }
+  { const el = byId('wbEnabled'); if (el) el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); room.send('wbEnable', { on }); }; }
   { const el = byId('wbAngle'); if (el) el.oninput = () => room.send('wbSet', { angle: (+el.value) * Math.PI / 180 }); }
-  qsa('input[name="wbStyle"]').forEach(r => r.onchange = () => room.send('wbSet', { dark: r.value === 'dark' }));
+  qsa('#whiteboard [data-wbstyle]').forEach(c => c.onclick = () => {
+    qsa('#whiteboard [data-wbstyle]').forEach(x => x.classList.remove('on'));
+    c.classList.add('on');
+    room.send('wbSet', { dark: c.dataset.wbstyle === 'dark' });
+  });
   wire('wbPen', () => { wbTool = 'pen'; wbSyncToolButtons(); });
   wire('wbEraser', () => { wbTool = 'eraser'; wbSyncToolButtons(); });
   wire('wbClearBtn', () => room.send('wbClear'));
@@ -276,28 +296,15 @@ const applyTransform = (mesh, s) => {
   wire('roomReset', () => { byId('roomGrp').hidden = true; if (confirm('Reset the table? This clears all pieces.')) room.send('reset'); });
   room.onMessage('deckList',  decks  => { if (window.onLibraryList) window.onLibraryList('deck', decks); });
   room.onMessage('propList',  props  => { if (window.onLibraryList) window.onLibraryList('prop', props); });
-  const tableResizeBtn = byId('tableResize');
-  if (tableResizeBtn) tableResizeBtn.onclick = () => {
-    room.send('table', { x: (+byId('tableW').value || 20) / 2, z: (+byId('tableD').value || 14) / 2 });
-    const tm = byId('tableModal'); if (tm) tm.hidden = true;
-  };
+  // Live table resize: each ± (or a typed change) on width/depth applies immediately.
+  { const send = () => room.send('table', { x: (+byId('tableW').value || 20) / 2, z: (+byId('tableD').value || 14) / 2 });
+    const w = byId('tableW'), d = byId('tableD');
+    if (w) w.onchange = send;
+    if (d) d.onchange = send; }
 
-  // Scene picker (GM+): load a published scene, replacing the whole table. The
-  // message handler always registers (the editor panel gets scenes via the hook);
-  // the toolbar/modal wiring is game-page only.
-  room.onMessage('sceneList', scenes => {
-    const el = byId('sceneSavedList');
-    if (el) renderSavedList('sceneSavedList', scenes, {
-      emptyNote: 'no scenes published yet',
-      labelFor: s => s.name,
-      buttonsFor: s => [
-        { text: 'Load', onClick: () => { if (confirm(`Load "${s.name}"? This clears the current table.`)) { room.send('sceneLoad', { id: s.id }); byId('scenesModal').hidden = true; } } },
-      ],
-    });
-    if (window.onLibraryList) window.onLibraryList('scene', scenes);
-  });
+  // Scene list → the Library's Scenes tab (via the hook); loading happens there.
+  room.onMessage('sceneList', scenes => { if (window.onLibraryList) window.onLibraryList('scene', scenes); });
   room.onMessage('sceneError', ({ message } = {}) => alert(message || 'Could not save the scene.'));
-  wire('scenesCancel', () => byId('scenesModal').hidden = true); // roomScene is already wired above (opens + closes the menu)
   room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
   byId('roll').onclick = () => room.send('roll');
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
@@ -320,6 +327,16 @@ const applyTransform = (mesh, s) => {
   const notes = byId('notes'), notesText = byId('notesText');
   byId('notesBtn').onclick = () => { notes.hidden = !notes.hidden; if (!notes.hidden) notesText.focus(); };
   byId('notesClose').onclick = () => { notes.hidden = true; };
+  { // Public chat panel (Tools)
+    const chat = byId('chat'), input = byId('chatInput');
+    if (chat && byId('chatBtn')) {
+      const send = () => { const t = input.value.trim(); if (t) { room.send('chat', { text: t }); input.value = ''; } };
+      byId('chatBtn').onclick = () => { chat.hidden = !chat.hidden; if (!chat.hidden) { input.focus(); byId('chatBtn').classList.remove('hasUnread'); const l = byId('chatLog'); if (l) l.scrollTop = l.scrollHeight; } };
+      byId('chatClose').onclick = () => { chat.hidden = true; };
+      const sb = byId('chatSend'); if (sb) sb.onclick = send;
+      input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
+    }
+  }
   let notesTimer = null;
   notesText.addEventListener('input', () => { // debounce so we persist without flooding the socket
     clearTimeout(notesTimer);
@@ -332,6 +349,8 @@ const applyTransform = (mesh, s) => {
   const timerPanel = byId('timer'), timerReadout = byId('timerReadout'), timerToggle = byId('timerToggle');
   const timerMode = byId('timerMode'), timerDurRow = byId('timerDurRow'), timerDur = byId('timerDur');
   const durMs = () => (+timerDur.value || 0) * 60000;
+  const modeVal = () => { const c = timerMode.querySelector('.libTab.on'); return c ? c.dataset.mode : 'up'; };
+  const setMode = (m) => timerMode.querySelectorAll('.libTab').forEach(c => c.classList.toggle('on', c.dataset.mode === m));
   byId('timerBtn').onclick = () => { timerPanel.hidden = !timerPanel.hidden; };
   byId('timerClose').onclick = () => { timerPanel.hidden = true; };
 
@@ -350,7 +369,7 @@ const applyTransform = (mesh, s) => {
   }
   timerToggle.onclick = () => room.send('timer', { action: room.state.timer.running ? 'pause' : 'start' });
   byId('timerReset').onclick = () => room.send('timer', { action: 'reset' });
-  timerMode.onchange = () => room.send('timer', { action: 'set', mode: timerMode.value, duration: durMs() });
+  timerMode.querySelectorAll('.libTab').forEach(c => c.onclick = () => { setMode(c.dataset.mode); room.send('timer', { action: 'set', mode: c.dataset.mode, duration: durMs() }); });
   timerDur.onchange = () => room.send('timer', { action: 'set', mode: 'down', duration: durMs() });
   setInterval(() => {
     if (timerPanel.hidden) return; // nothing to draw while the panel is closed
@@ -358,7 +377,7 @@ const applyTransform = (mesh, s) => {
     if (!t) return;
     timerReadout.textContent = fmtTime(timerLive(t, Date.now()));
     timerToggle.textContent = t.running ? 'Pause' : 'Start';
-    if (timerMode.value !== t.mode) timerMode.value = t.mode; // reflect another client's switch
+    if (modeVal() !== t.mode) setMode(t.mode); // reflect another client's switch
     timerDurRow.hidden = t.mode !== 'down';
     if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
   }, 100);
@@ -492,6 +511,19 @@ renderer.domElement.addEventListener('mousedown', e => { // middle-click: snap a
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
 { const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); b.textContent = leanActive ? '🔎 Lean Out' : '🔎 Lean In'; }; } // toggle the closer-look camera
+{ // Drop hand: a little menu — lay your whole hand out just in front of your marker, face up or down
+  const dropPanel = byId('dropPanel');
+  const dropAt = (faceDown) => {
+    if (!room) return;
+    const s = seatLayout[mySeat] || seatLayout[0];
+    room.send('handToTable', { faceDown, x: s.hand[0] - s.out[0] * 2, z: s.hand[2] - s.out[2] * 2 }); // just in front of the marker
+    if (dropPanel) dropPanel.hidden = true;
+  };
+  { const b = byId('dropBtn'); if (b) b.onclick = () => { if (dropPanel) dropPanel.hidden = !dropPanel.hidden; }; }
+  { const b = byId('dropDown'); if (b) b.onclick = () => dropAt(true); }
+  { const b = byId('dropUp'); if (b) b.onclick = () => dropAt(false); }
+  { const b = byId('dropClose'); if (b) b.onclick = () => { if (dropPanel) dropPanel.hidden = true; }; }
+}
 
 // ===== Skybox (GM-applied, synced to the room; the picker UI is in editor-panel.js) =====
 const BUILTIN_SKIES = [ // baked-in: drop files in public/sky/ and add entries here
@@ -531,15 +563,16 @@ let skyLast = null;                    // last applied skybox ref (guards agains
 // A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
 function applySkybox(ref) {
   if (!ref) { scene.background = skyDefault; return; }
+  const aniso = renderer.capabilities.getMaxAnisotropy();          // sharpen grazing angles (esp. the horizon)
   const set = (tex) => { if (skyLast === ref) scene.background = tex; }; // ignore a stale load if it changed
   const fail = () => { if (skyLast === ref) scene.background = skyDefault; };
   if (ref[0] === '{') { // cubemap
     let d; try { d = JSON.parse(ref); } catch { return fail(); }
     if (d && d.t === 'cube' && Array.isArray(d.f) && d.f.length === 6)
-      new THREE.CubeTextureLoader().load(d.f, (tex) => { tex.colorSpace = THREE.SRGBColorSpace; set(tex); }, undefined, fail);
+      new THREE.CubeTextureLoader().load(d.f, (tex) => { tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso; set(tex); }, undefined, fail);
     else fail();
   } else { // equirectangular
-    new THREE.TextureLoader().load(ref, (tex) => { tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace; set(tex); }, undefined, fail);
+    new THREE.TextureLoader().load(ref, (tex) => { tex.mapping = THREE.EquirectangularReflectionMapping; tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = aniso; set(tex); }, undefined, fail);
   }
 }
 function syncSkybox(ref) { ref = ref || ''; if (ref === skyLast) return; skyLast = ref; applySkybox(ref); }
@@ -1064,6 +1097,7 @@ function applyRole(role) {
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('diceBtn', 1);                                          // roll dice: Helper+
   gate('roomBtn', 2);                                          // Room Controls menu: GM+
+  gate('wbBtn', 2);                                            // Whiteboard config (Tools menu): GM+
   gate('libraryBtn', 1); gate('builtinBtn', 1);                // View Library + Built-Ins: Helper+ (both pages)
   // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
   const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
@@ -1418,6 +1452,7 @@ function buildWhiteboard() {
   wbGroup = g;
   positionWhiteboard();
   if (room) room.send('wbStrokes'); // fetch the current drawing (late-join replay)
+  if (room) room.send('chatLog');   // fetch recent chat (late-join replay)
 }
 function positionWhiteboard() {
   if (!wbGroup || !room) return;
@@ -1584,11 +1619,11 @@ function renderMembers(list) {
       acts.append(btn('Admit', () => room.send('admit', { userId: m.userId })),
                   btn('Reject', () => room.send('kick', { userId: m.userId })));
     } else if (!isSelf && m.role !== 'owner') {
-      if (m.role === 'player') acts.appendChild(btn('→ Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
-      if (m.role === 'helper') acts.appendChild(btn('→ Player', () => room.send('setRole', { userId: m.userId, role: 'player' })));
+      if (m.role === 'player') acts.appendChild(btn('Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
+      if (m.role === 'helper') acts.appendChild(btn('Player', () => room.send('setRole', { userId: m.userId, role: 'player' })));
       if (myRank >= 3) { // owner manages co-GMs
-        if (m.role !== 'gm') acts.appendChild(btn('→ GM', () => room.send('setRole', { userId: m.userId, role: 'gm' })));
-        else acts.appendChild(btn('→ Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
+        if (m.role !== 'gm') acts.appendChild(btn('GM', () => room.send('setRole', { userId: m.userId, role: 'gm' })));
+        else acts.appendChild(btn('Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
       }
       if (m.role !== 'gm' || myRank >= 3) acts.appendChild(btn('Kick', () => room.send('kick', { userId: m.userId })));
     }

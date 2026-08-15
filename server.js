@@ -160,32 +160,40 @@ function trashOrphans(orphans) {
 // Build the cannon-es collider for a piece from its shared shape descriptor.
 // The collider is always a simple primitive (box/sphere/convex-hull); the fancy
 // visual mesh is the client's job, and only needs to roughly match this.
+// Turn a collider type + half-extents into a CANNON shape. Off-centre shapes (flat)
+// return { shape, offset }. Shared by uploaded and built-in props, so every type —
+// box | sphere | cylinder | cone | flat — behaves identically for both.
+function colliderShape(type, hx, hy, hz, opts = {}) {
+  if (type === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
+  if (type === 'cylinder' || type === 'cone') {
+    const r = Math.max(hx, hz);                                                   // horizontal radius
+    const sides = Math.max(3, (opts.sides | 0) || 16);                            // 16 = round; 3/6/… = prisms & N-gon pyramids
+    const top = type === 'cone' ? r * 0.05 : (opts.top != null ? r * opts.top : r); // cone = tiny apex; top < 1 = truncated cone
+    return new CANNON.Cylinder(top, r, hy * 2, sides);                            // Y-oriented in cannon-es
+  }
+  if (type === 'flat') {
+    const t = 0.06;                                                               // thin base footprint so pieces slide over it
+    return { shape: new CANNON.Box(new CANNON.Vec3(hx, t, hz)), offset: new CANNON.Vec3(0, -(hy - t), 0) };
+  }
+  return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));                             // default: box
+}
+
 function buildCollider(type, props) {
   const shape = KINDS[type].shape;
 
   if (shape === 'die') return dieShape(props.sides || 6);
 
   if (shape === 'prop') {
-    // A .glb model prop carries its own measured half-extents; clamp them sane.
+    // Uploaded .glb: measured half-extents + an optional collider type (default box).
     if (props.model && Array.isArray(props.box)) {
       const [hx, hy, hz] = props.box.map(v => clamp(+v || 0.5, 0.05, 4));
-      const c = props.collider; // optional: 'sphere' | 'cylinder' | 'cone' | 'flat' (default is a box)
-      if (c === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
-      if (c === 'cylinder' || c === 'cone') {
-        const r = Math.max(hx, hz);                                  // horizontal radius
-        return new CANNON.Cylinder(c === 'cone' ? r * 0.05 : r, r, hy * 2, 16); // Y-oriented in cannon-es; tiny top → cone
-      }
-      if (c === 'flat') {
-        const t = 0.06; // a thin footprint at the model's base, so pieces slide over it instead of bumping it
-        return { shape: new CANNON.Box(new CANNON.Vec3(hx, t, hz)), offset: new CANNON.Vec3(0, -(hy - t), 0) };
-      }
-      return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+      return colliderShape(props.collider, hx, hy, hz);
     }
-    // A built-in shape scales its template collider by the universal prop scale.
-    const collider = (PROPS[props.shape] || PROPS.box).collider;
+    // Built-in shape: authored half-extents (scaled by the universal prop scale) + an optional type.
+    const spec = (PROPS[props.shape] || PROPS.box).collider;
     const scale = clamp(+props.scale || 1, 0.3, 3); // matches the client's mesh scale
-    if (collider.sphere) return new CANNON.Sphere(collider.sphere * scale);
-    return new CANNON.Box(new CANNON.Vec3(collider.box[0] * scale, collider.box[1] * scale, collider.box[2] * scale));
+    const [bx, by, bz] = spec.box.map(v => v * scale);
+    return colliderShape(spec.type, bx, by, bz, { sides: spec.sides, top: spec.top });
   }
 
   if (type === 'board') {
@@ -417,6 +425,7 @@ class TableRoom extends Room {
     this.hands = new Map();     // sessionId -> [{hid,front,back}]  PRIVATE: each player's hidden hand
     this.notebooks = new Map(); // sessionId -> text               PRIVATE: each player's private notes (ephemeral; dies with the room)
     this.strokes = [];          // whiteboard stroke history (server-held; sent to late-joiners, gone on dispose)
+    this.chatLog = [];          // recent public chat (server-held; last 80, sent to late-joiners, gone on dispose)
     this.shows = new Map();     // sessionId -> {to:Set,cards:[]}   PRIVATE: an active hold-to-show (who sees which of the shower's cards)
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.nextId = 1; this.nextHid = 1;
@@ -757,28 +766,6 @@ class TableRoom extends Room {
       this.applyScene(scene.payload);
     });
 
-    // Shallow-edit a saved deck: swap the back and/or append cards, then either
-    // overwrite it or save a copy under a new name.
-    this.onMessage('editDeck', async (client, msg) => {
-      if (!this.isAdmin(client)) return;
-      const deck = await db.getDeck(msg && msg.id);
-      if (!deck) return;
-
-      if (msg.back && deckRefOk(msg.back)) deck.back = msg.back;
-      if (Array.isArray(msg.addFronts)) {
-        for (const front of msg.addFronts) {
-          if (deckRefOk(front) && deck.fronts.length < 1000) deck.fronts.push(front);
-        }
-      }
-
-      const targetName = String(msg.name || deck.name || '').slice(0, 60).trim() || 'deck';
-      try {
-        if (msg.saveAs) await db.insertDeck({ name: targetName, back: deck.back, fronts: deck.fronts, ownerId: client.auth.userId }); // clone (private)
-        else await db.updateDeck(msg.id, { name: targetName, back: deck.back, fronts: deck.fronts });    // overwrite
-        this.sendAssetList(client, 'deck');
-      } catch (e) { console.error('[editDeck]', e.message); }
-    });
-
     this.onMessage('loadBoard', async (client, msg) => {
       if (this.rank(client) < RANK.gm) return; // changing the board reshapes the table: GM+
       const data = await db.getBoard(msg && msg.id);
@@ -806,7 +793,23 @@ class TableRoom extends Room {
       this.sendHand(client);
     });
 
-    // --- Table-wide actions ----------------------------------------------------
+    // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or
+    // down, spread just in front of their marker (x/z sent by the client).
+    this.onMessage('handToTable', (client, { faceDown, x, z } = {}) => {
+      const hand = this.hands.get(client.sessionId);
+      if (!hand || !hand.length) return;
+      const cx = typeof x === 'number' ? x : 0, cz = typeof z === 'number' ? z : 0;
+      let spawned = 0;
+      for (const card of hand) {
+        if (this.state.pieces.size >= SIM.maxPieces) break;                            // respect the piece cap
+        const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6]; // small spread in front of them
+        const id = this.spawnCardFlat(pos, faceDown ? { back: card.back } : { front: card.front, back: card.back });
+        if (faceDown) this.cardData.set(id, { front: card.front });                    // face-down: front stays private until flipped
+        spawned++;
+      }
+      hand.splice(0, spawned);  // remove just the cards that made it onto the table
+      this.sendHand(client);    // updates the public count + sends the now-shorter private hand
+    });
     this.onMessage('spawn', (client, msg) => {
       if (this.state.pieces.size >= SIM.maxPieces) return;
       if (msg.type === 'board') {
@@ -1015,6 +1018,18 @@ class TableRoom extends Room {
       this.broadcast('wbClear');
     });
     this.onMessage('wbStrokes', (client) => client.send('wbStrokes', { strokes: this.strokes })); // late-join replay
+
+    // Public text chat — broadcast to the room, keep a small rolling history for late joiners.
+    this.onMessage('chat', (client, { text } = {}) => {
+      const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+      if (!t) return;
+      const player = this.state.players.get(client.sessionId);
+      const msg = { from: (player && player.name) || 'Player', text: t, ts: Date.now() };
+      this.chatLog.push(msg);
+      if (this.chatLog.length > 80) this.chatLog.shift();
+      this.broadcast('chatMsg', msg);
+    });
+    this.onMessage('chatLog', (client) => client.send('chatLog', { log: this.chatLog })); // late-join replay
 
     // --- Skybox: per-room panorama, GM-applied + synced; library is admin-only ---
     this.onMessage('skybox', (client, { url } = {}) => {
@@ -1480,7 +1495,11 @@ class TableRoom extends Room {
       body.wakeUp();
 
       let vx = (target.x - body.position.x) * stiffness;
-      let vy = (target.y - body.position.y) * stiffness;
+      // A flat-collider piece hangs its footprint below the body center; drive the body so
+      // that FOOTPRINT (not the center) hovers at the drag height, so it clears pieces
+      // resting on a raised board instead of plowing through them.
+      const holdY = target.y - (body.shapeOffsets[0] ? body.shapeOffsets[0].y : 0);
+      let vy = (holdY - body.position.y) * stiffness;
       let vz = (target.z - body.position.z) * stiffness;
       const speed = Math.hypot(vx, vy, vz);
       if (speed > maxSpeed) { const scale = maxSpeed / speed; vx *= scale; vy *= scale; vz *= scale; }
@@ -1511,6 +1530,10 @@ class TableRoom extends Room {
       if (!standMode) return;
       const body = this.bodies.get(id);
       if (!body || body.sleepState === CANNON.Body.SLEEPING) return;
+      // A flat-collider piece rests on a thin footprint offset below its center, so it
+      // already lies flat on its own. Self-righting would spin it about that center and
+      // drag the offset footprint sideways (a slow drift on a board) — so skip it here.
+      if (body.shapeOffsets[0] && Math.abs(body.shapeOffsets[0].y) > 0.01) return;
 
       body.quaternion.vmult(worldUp, pieceUp); // the piece's up-axis, in world space
       pieceUp.cross(worldUp, axis);            // rotation axis that brings it back to upright

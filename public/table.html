@@ -20,13 +20,12 @@
       <button id="roomMembers">👥 Members List</button>
       <button id="roomScene">📽️ Load a Scene</button>
       <button id="roomTable">↔️ Table Size</button>
-      <button id="roomWhiteboard">🖊️ Whiteboard</button>
       <button id="roomSky">🌄 Skybox</button>
       <button id="roomReset" class="danger">🧹 Reset</button>
     </div>
   </span>
-  <button id="libraryBtn">📚 View Library</button>
-  <button id="builtinBtn">🧱 Built-Ins</button>
+  <button id="builtinBtn">🧱 Browse Built-Ins</button>
+  <button id="libraryBtn">📚 Browse Custom Library</button>
 </div>
 <div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
 <div id="inspectColorRow" hidden>
@@ -66,9 +65,28 @@
   <div id="toolsMenu">
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
     <button id="notesBtn">📝 Private Notes</button>
+    <button id="chatBtn">💬 Chat</button>
     <button id="scoreBtn">📊 Scoreboard</button>
     <button id="timerBtn">⏱️ Timer</button>
+    <button id="wbBtn">🖊️ Whiteboard</button>
     <button id="controlsBtn">❔ How to Play</button>
+  </div>
+  <div id="whiteboard" hidden>
+    <div id="wbHead"><b>Whiteboard</b><span id="wbClose">✕</span></div>
+    <div class="chipRow"><button id="wbEnabled" class="chip chk">Show the whiteboard</button></div>
+    <label>Style</label>
+    <div class="chipRow">
+      <button class="chip on" data-wbstyle="dark">Chalkboard</button>
+      <button class="chip" data-wbstyle="light">Whiteboard</button>
+    </div>
+    <label>Position around the table</label>
+    <input id="wbAngle" type="range" min="0" max="360" step="5" value="0" style="width:100%">
+    <div class="note">Rides a track behind the players.</div>
+  </div>
+  <div id="chat" hidden>
+    <div id="chatHead"><b>Chat</b><span id="chatClose">✕</span></div>
+    <div id="chatLog"></div>
+    <div id="chatInputRow"><input id="chatInput" type="text" placeholder="Message…" maxlength="400"><button id="chatSend">Send</button></div>
   </div>
   <div id="notes" hidden>
     <div id="notesHead"><b>Private notes</b><span id="notesClose">✕</span></div>
@@ -86,14 +104,14 @@
   </div>
   <div id="timer" hidden>
     <div id="timerHead"><b>Timer</b><span id="timerClose">✕</span></div>
+    <div id="timerMode" class="libTabs">
+      <button class="libTab on" data-mode="up">Stopwatch</button>
+      <button class="libTab" data-mode="down">Countdown</button>
+    </div>
     <div id="timerReadout">00:00</div>
     <div class="timerRow">
       <button id="timerToggle">Start</button>
       <button id="timerReset">Reset</button>
-      <select id="timerMode">
-        <option value="up">Stopwatch</option>
-        <option value="down">Countdown</option>
-      </select>
     </div>
     <div id="timerDurRow" class="timerRow" hidden>
       <span>from</span><input id="timerDur" type="number" min="0" max="180" value="5"> min
@@ -109,6 +127,7 @@
       <button id="mySeatBtn">↩ My Seat</button>
       <button id="roll">🔄 Roll Dice</button>
       <button id="showBtn">🃏 Show Hand</button>
+      <button id="dropBtn" title="Lay your whole hand on the table">🂠 Drop Hand</button>
     </div>
     <div id="showPanel" hidden>
       <div id="showHead"><b>Show cards</b><span id="showClose">✕</span></div>
@@ -121,49 +140,27 @@
       </div>
       <button id="showHold">Hold to show</button>
     </div>
+    <div id="dropPanel" hidden>
+      <div id="dropHead"><b>Drop hand</b><span id="dropClose">✕</span></div>
+      <div class="note">Lay your whole hand on the table, in front of you.</div>
+      <div class="chipRow">
+        <button id="dropDown" class="chip">🂠 Face down</button>
+        <button id="dropUp" class="chip">🂡 Face up</button>
+      </div>
+    </div>
   </div>
 </div>
 <div id="membersPanel" hidden>
   <div id="membersHead"><b>Members</b><span id="membersClose">✕</span></div>
   <ul id="memberList"></ul>
 </div>
-<div id="scenesModal" hidden>
-  <div class="modalCard">
-    <h3>Load a scene</h3>
-    <div class="note">A scene replaces the whole table — its size, board, and pieces. This clears the current table.</div>
-    <div class="savedWrap"><div id="sceneSavedList" class="savedList"></div></div>
-    <div class="row"><button id="scenesCancel">Cancel</button></div>
-  </div>
-</div>
 
 
 
 <div id="tableModal" hidden>
-  <div class="modalCard">
-    <h3>Table size</h3>
-    <label>Width × depth</label>
-    <div class="backRow">
-      <input id="tableW" type="number" min="8" max="40" step="1" style="width:76px"><span>×</span>
-      <input id="tableD" type="number" min="6" max="32" step="1" style="width:76px">
-    </div>
-    <div class="note">The play surface itself (not a board on it).</div>
-    <div class="row"><button id="tableCancel">Cancel</button><button id="tableResize">Resize table</button></div>
-  </div>
-</div>
-<div id="whiteboardModal" hidden>
-  <div class="modalCard">
-    <h3>Whiteboard</h3>
-    <label class="backRow"><input id="wbEnabled" type="checkbox"> Show the whiteboard</label>
-    <label>Style</label>
-    <div class="backRow">
-      <label><input type="radio" name="wbStyle" value="dark" checked> Chalkboard</label>
-      <label><input type="radio" name="wbStyle" value="light"> Whiteboard</label>
-    </div>
-    <label>Position around the table</label>
-    <input id="wbAngle" type="range" min="0" max="360" step="5" value="0" style="width:100%">
-    <div class="note">Rides a track behind the players. Drawing on it comes next.</div>
-    <div class="row"><button id="wbCancel">Close</button></div>
-  </div>
+  <div id="tableHead"><b>Table size</b><span id="tableClose">✕</span></div>
+  <div class="sizeRow"><label>Width</label><input id="tableW" type="number" min="8" max="40" step="1" style="width:48px"></div>
+  <div class="sizeRow"><label>Depth</label><input id="tableD" type="number" min="6" max="32" step="1" style="width:48px"></div>
 </div>
 
 <div id="skyPickModal" hidden>

@@ -39,7 +39,7 @@ export const KINDS = {
 
 // --- Deck -------------------------------------------------------------------
 export const DECK_VISUAL = [1.56, 0.06, 2.16];   // unit stack box; y scaled by deckHeight(count)
-export const CARD_ROUND = 0.05;                  // card & deck corner radius, as a fraction of card width (0 = square)
+export const CARD_ROUND = 0.08;                  // card & deck corner radius, as a fraction of card width (0 = square)
 // Deck stack height from card count — used by BOTH the client visual and the
 // server collider, so a flipped deck has a solid body where it's drawn.
 export const deckHeight = c => Math.max(0.06, Math.min(1.2, c * 0.02));
@@ -50,15 +50,23 @@ export const deckHeight = c => Math.max(0.06, Math.min(1.2, c * 0.02));
 // palette to use; absent = neutral, uses the picked colour).
 // render.prim: box | sphere | cone | cyl | lens. (glb-model props use `model` instead.)
 export const PROPS = {
-  box:            { mass: 0.6, collider: { box: [0.5, 0.5, 0.5] },     render: { prim: 'box', size: [1, 1, 1] } },
-  pyramid:        { mass: 0.6, collider: { box: [0.55, 0.5, 0.55] },   render: { prim: 'cone', r: 0.72, h: 1, seg: 4 } },
-  sphere:         { mass: 0.6, collider: { sphere: 0.5 },              render: { prim: 'sphere', r: 0.5 } },
+  box:             { mass: 0.6, collider: { box: [0.5, 0.5, 0.5] },                             render: { prim: 'box', size: [1, 1, 1] } },
+  pyramid:         { mass: 0.6, collider: { box: [0.55, 0.5, 0.55] },                           render: { prim: 'cone', r: 0.72, h: 1, seg: 4 } },
+  sphere:          { mass: 0.6, collider: { box: [0.5, 0.5, 0.5], type: 'sphere' },             render: { prim: 'sphere', r: 0.5 } },
+  cuboid:          { mass: 0.6, collider: { box: [0.7, 0.4, 0.5] },                             render: { prim: 'box', size: [1.4, 0.8, 1.0] } },
+  cone:            { mass: 0.6, collider: { box: [0.6, 0.5, 0.6], type: 'cone' },               render: { prim: 'cone', r: 0.6, h: 1 } },
+  cylinder:        { mass: 0.6, collider: { box: [0.45, 0.5, 0.45], type: 'cylinder' },         render: { prim: 'cyl', r: 0.45, h: 1 } },
+  frustum:         { mass: 0.6, collider: { box: [0.5, 0.5, 0.5], type: 'cylinder', top: 0.5 }, render: { prim: 'cyl', r: 0.5, rTop: 0.25, h: 1 } },
+  hex_prism:       { mass: 0.6, collider: { box: [0.5, 0.5, 0.5], type: 'cylinder', sides: 6 }, render: { prim: 'cyl', r: 0.5, h: 1, seg: 6 } },
+  tri_prism:       { mass: 0.6, collider: { box: [0.5, 0.5, 0.5], type: 'cylinder', sides: 3 }, render: { prim: 'cyl', r: 0.5, h: 1, seg: 3 } },
+  hex_pyramid:     { mass: 0.6, collider: { box: [0.6, 0.5, 0.6], type: 'cone', sides: 6 },     render: { prim: 'cone', r: 0.6, h: 1, seg: 6 } },
+  checker:         { mass: 0.6, collider: { box: [0.3, 0.05, 0.3], type: 'cylinder' },          render: { prim: 'cyl', r: 0.3, h: 0.1 }, team: 'checker', stand: 'flat'},
+  crowned_checker: { mass: 0.6, collider: { box: [0.3, 0.1,  0.3], type: 'cylinder' },          render: { prim: 'cyl', r: 0.3, h: 0.2 }, team: 'checker', stand: 'flat'},
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
-  coin:           { mass: 0.3, collider: { box: [0.36, 0.07, 0.36] }, model: '/models/pieces/misc/coin.glb', modelScale: 3.0, modelRot: [1.5708, 0, 0], ownMaterial: false }, // rotated flat; keeps its own look
+  coin:           { mass: 0.3, collider: { box: [0.21, 0.021, 0.21], type: 'cylinder' }, model: '/models/pieces/misc/coin.glb', modelScale: 0.3, ownMaterial: false }, // rotated flat; keeps its own look
   poker_chip:     { mass: 0.25, collider: { box: [0.45, 0.045, 0.45] }, model: '/models/pieces/misc/poker_chip.glb', modelScale: 0.18, tintMaterial: 'c1' }, // colour picker tints only the body; white rim kept
-  token:          { mass: 0.4, collider: { box: [0.17, 0.50, 0.17] }, model: '/models/pieces/misc/token.glb', modelScale: 0.84, stand: true },
-  checker:        { mass: 0.3, collider: { box: [0.45, 0.12, 0.45] }, model: '/models/pieces/checkers/checker.glb', modelScale: 30, team: 'checker', stand: 'flat' },
-  go:             { mass: 0.2, collider: { box: [0.15, 0.075, 0.15] }, render: { prim: 'lens', r: 0.2, sy: 0.375 }, team: 'go', stand: 'flat' }, // ~0.4 wide, fits the go board grid
+  token:          { mass: 0.4, collider: { box: [0.17, 0.50, 0.17] }, model: '/models/pieces/misc/token.glb', modelScale: 0.84, stand: true }, //Generic token to represent a player, for use in various games.
+  go:             { mass: 0.2, collider: { box: [0.15, 0.075, 0.15], type: 'flat' }, render: { prim: 'lens', r: 0.2, sy: 0.375 }, team: 'go', stand: 'flat' }, // ~0.4 wide, fits the go board grid
   // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
   // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
   // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
@@ -72,8 +80,11 @@ export const PROPS = {
 // Ordered list for the spawn UI. team:true = fixed two-colour set; else colour picker.
 export const PROP_LIST = [
   { id: 'box', name: 'Box' }, { id: 'pyramid', name: 'Pyramid' }, { id: 'sphere', name: 'Sphere' },
-  { id: 'coin', name: 'Coin' }, { id: 'poker_chip', name: 'Poker chip' }, { id: 'token', name: 'Token' },
-  { id: 'checker', name: 'Checker', team: true }, { id: 'go', name: 'Go stone', team: true },
+  { id: 'cuboid', name: 'Cuboid' }, { id: 'cone', name: 'Cone' }, { id: 'cylinder', name: 'Cylinder' },
+  { id: 'frustum', name: 'Truncated cone' }, { id: 'hex_prism', name: 'Hex prism' },
+  { id: 'tri_prism', name: 'Triangular prism' }, { id: 'hex_pyramid', name: 'Hex pyramid' },
+  { id: 'coin', name: 'Coin', swatches: 'metals' }, { id: 'poker_chip', name: 'Poker chip' }, { id: 'token', name: 'Token' },
+  { id: 'checker', name: 'Checker', team: true }, { id: 'crowned_checker', name: 'Checker - Crowned', team: true }, { id: 'go', name: 'Go stone', team: true },
   { id: 'chess-pawn', name: 'Chess · Pawn', team: true }, { id: 'chess-rook', name: 'Chess · Rook', team: true },
   { id: 'chess-knight', name: 'Chess · Knight', team: true }, { id: 'chess-bishop', name: 'Chess · Bishop', team: true },
   { id: 'chess-queen', name: 'Chess · Queen', team: true }, { id: 'chess-king', name: 'Chess · King', team: true },

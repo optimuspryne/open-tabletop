@@ -213,7 +213,7 @@ async function onCreateRoom() {
   const errEl = $('createErr'); errEl.textContent = '';
   try {
     const { room } = await api('/rooms', { method: 'POST', auth: true,
-      body: { name: $('roomName').value.trim(), requireApproval: $('approval').checked } });
+      body: { name: $('roomName').value.trim(), requireApproval: $('approval').classList.contains('on') } });
     enterRoom(room.code);
   } catch (e) { errEl.textContent = e.message; }
 }
@@ -277,6 +277,7 @@ $('qjBack2').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
 $('loginBtn').onclick = onLogin;
 $('suBtn').onclick = onSignup;
 $('createBtn').onclick = onCreateRoom;
+$('approval').onclick = () => $('approval').classList.toggle('on');
 $('joinBtn').onclick = onJoin;
 $('logoutBtn').onclick = onLogout;
 $('requestHostBtn').onclick = onRequestHost;

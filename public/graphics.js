@@ -488,8 +488,9 @@ async function uploadModel(file) {
 
 // Load a .glb and return its true world-space bounds { size, center }, with all
 // node transforms baked in.
-function measureGlb(url) {
+function measureGlb(url, rot) {
   return new Promise((resolve, reject) => gltfLoader.load(url, gltf => {
+    if (rot) { gltf.scene.rotation.set(rot[0], rot[1], rot[2]); gltf.scene.updateMatrixWorld(true); } // measure the reoriented model
     const box = new THREE.Box3().setFromObject(gltf.scene);
     resolve({ size: box.getSize(new THREE.Vector3()), center: box.getCenter(new THREE.Vector3()) });
   }, undefined, reject));
@@ -509,8 +510,8 @@ function fitModel(obj, opts) {
 }
 
 // The normalized collider half-extents [hx, hy, hz] for an uploaded model prop.
-function measureModel(url, scale = 1) {
-  return measureGlb(url).then(({ size }) => {
+function measureModel(url, scale = 1, rot) {
+  return measureGlb(url, rot).then(({ size }) => {
     const normScale = MODEL_SIZE * scale / (Math.max(size.x, size.y, size.z) || 1);
     return [size.x * normScale / 2, size.y * normScale / 2, size.z * normScale / 2];
   });
@@ -643,12 +644,13 @@ function propMesh(props = {}) {
       modelUrl,
       builtin ? { scale: (spec.modelScale || 1) * (props.scale || 1) } : { target: MODEL_SIZE * (props.scale || 1) },
       node => {
+        if (node.geometry) node.geometry.computeVertexNormals(); // smooth normals — kills the flat-shading seam on flat .glb faces
         if (!node.material) return;
         node.castShadow = true;
         node.receiveShadow = true;
         node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
       },
-      builtin && spec.modelRot ? obj => obj.rotation.set(spec.modelRot[0], spec.modelRot[1], spec.modelRot[2]) : undefined, // reorient (e.g. lay a coin flat)
+      (obj) => { const mr = builtin ? spec.modelRot : props.modelRot; if (mr) obj.rotation.set(mr[0], mr[1], mr[2]); }, // reorient: built-in template, or a per-upload modelRot
     );
   }
 
@@ -666,7 +668,7 @@ function propShapeMesh(props = {}) {
   switch (render.prim) {
     case 'sphere': return new THREE.Mesh(new THREE.SphereGeometry(render.r, 24, 16), material);
     case 'cone':   return new THREE.Mesh(new THREE.ConeGeometry(render.r, render.h, render.seg), material);
-    case 'cyl':    return new THREE.Mesh(new THREE.CylinderGeometry(render.r, render.r, render.h, 32), material);
+    case 'cyl':    return new THREE.Mesh(new THREE.CylinderGeometry(render.rTop ?? render.r, render.r, render.h, render.seg ?? 32), material);
     case 'lens': {
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(render.r, 24, 16), material);
       mesh.scale.y = render.sy; // squash the sphere into a lens
@@ -847,9 +849,9 @@ export function diePreviewURL(sides) {
 }
 
 // A local (not-yet-uploaded) .glb File → a rendered thumbnail data-URL, for previews.
-export async function glbFilePreviewURL(file) {
+export async function glbFilePreviewURL(file, rot) {
   const url = URL.createObjectURL(file);
-  try { const gltf = await gltfLoader.loadAsync(url); return snapshot(gltf.scene); }
+  try { const gltf = await gltfLoader.loadAsync(url); if (rot) gltf.scene.rotation.set(rot[0], rot[1], rot[2]); return snapshot(gltf.scene); }
   catch (e) { return null; }
   finally { URL.revokeObjectURL(url); }
 }

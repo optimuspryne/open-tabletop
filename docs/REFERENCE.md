@@ -138,7 +138,8 @@ Pure data + two functions, imported by both sides.
   `shape` is `'die'`, `'prop'`, or `{ box:[hx,hy,hz] }`. `mass:0` ⇒ static.
 - **`DECK_VISUAL`** / **`CARD_ROUND`** — deck box unit + card corner radius.
 - **`PROPS`** `{ shapeId → spec }`. A spec has `mass`, `collider`
-  (`{box}`/`{sphere}`), and **either** a built-in `render` (`prim`:
+  (`{ box:[hx,hy,hz], type? }` — `type` is `sphere`/`cylinder`/`cone`/`flat`,
+  omitted = box), and **either** a built-in `render` (`prim`:
   box/sphere/cone/cyl/lens + params) **or** a bundled `model` path with
   `modelScale` (+ optional `modelRot`, `team`, `tintMaterial`, `ownMaterial`,
   `stand`).
@@ -188,12 +189,19 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 
 ### Physics helpers (module scope)
 
-- **`buildCollider(type, props) → CANNON.Shape`** — dice → `dieShape`; props →
-  a model's precomputed box, or a per-object `props.collider` override
-  (`sphere`/`cylinder`/`cone`, or `flat`-mat — a thin base-offset footprint so
-  pieces slide over it), else `PROPS` box/sphere scaled by `props.scale`; boards
-  → built-in/uploaded box (by half-height) else procedural `w×d`. Off-centre
-  shapes (flat) return `{shape, offset}`, which `spawn` attaches accordingly.
+- **`buildCollider(type, props) → CANNON.Shape`** — dice → `dieShape`; boards →
+  built-in/uploaded box (by half-height) else procedural `w×d`; props run through
+  one shared **`colliderShape`** builder — an uploaded `.glb` passes its measured
+  box + a string `props.collider`, a built-in shape passes its authored
+  `collider.box` (× `props.scale`) + `collider.type`. Off-centre shapes (flat)
+  return `{shape, offset}`, which `spawn` attaches accordingly.
+- **`colliderShape(type, hx, hy, hz, opts?)`** — the single builder for prop
+  colliders: `box` (default) / `sphere` / `cylinder` / `cone` / `flat` (a thin
+  base-offset footprint so pieces slide over it). For cylinder/cone, `opts.sides`
+  sets the segment count (`3`/`6`/… → prisms & N-gon pyramids; default `16` = round)
+  and `opts.top` a partial top radius (truncated cone). Shared by the uploaded and
+  built-in paths, so a new built-in shape is just
+  `collider: { box:[...], type:'cylinder', sides:6 }` — no `buildCollider` change.
 - **`dieShape(sides)`** — convex hull of `dieVerts`, coplanar triangles merged,
   windings outward. d6 ⇒ box.
 - **`buildSimpleDeck()`** — a standard 52-card deck of `rank:…` refs.
@@ -271,10 +279,8 @@ table snapshot — pieces + settings — as an admin-curated library asset) and
 **`saveSkybox`/`listSkyboxes`** (equirect URL or a 6-face cubemap, admin-curated).
 
 Library handlers (all async, via `db`; keyed on a row **id**): creation —
-`deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp`,
-`editDeck` — is **admin-only** and stamps `owner_id` + private (note: the deck-edit
-UI has since been removed, so the `editDeck` handler is retained but no longer sent
-by any client); `loadDeck`/
+`deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp` — is
+**admin-only** and stamps `owner_id` + private; `loadDeck`/
 `loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
 **visibility-gated** (public for GMs/helpers, everything for admins); the admin
 curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
