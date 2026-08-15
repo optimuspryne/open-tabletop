@@ -278,6 +278,21 @@ $('loginBtn').onclick = onLogin;
 $('suBtn').onclick = onSignup;
 $('createBtn').onclick = onCreateRoom;
 $('approval').onclick = () => $('approval').classList.toggle('on');
+// Accent colour — personal, saved on this device (the <head> script applies it on load; this syncs the picker + handles changes).
+{
+  const applyAccent = (hex) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    const s = document.documentElement.style;
+    s.setProperty('--accent', hex);
+    s.setProperty('--accent-soft', `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},.25)`);
+    localStorage.setItem('ott-accent', hex);
+    document.querySelectorAll('#accentPicker .accDot').forEach((d) => d.classList.toggle('on', d.dataset.accent.toLowerCase() === hex.toLowerCase()));
+    const c = $('accentCustom'); if (c) c.value = hex;
+  };
+  document.querySelectorAll('#accentPicker .accDot').forEach((d) => d.onclick = () => applyAccent(d.dataset.accent));
+  const cust = $('accentCustom'); if (cust) cust.oninput = () => applyAccent(cust.value);
+  applyAccent(localStorage.getItem('ott-accent') || '#c9a25a');
+}
 $('joinBtn').onclick = onJoin;
 $('logoutBtn').onclick = onLogout;
 $('requestHostBtn').onclick = onRequestHost;

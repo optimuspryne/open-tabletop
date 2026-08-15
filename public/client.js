@@ -1689,6 +1689,7 @@ dropMarker.rotation.x = -Math.PI / 2;
 dropMarker.renderOrder = 3;
 dropMarker.visible = false;
 scene.add(dropMarker);
+const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused each frame to size the ring to the held piece
 
 (function animate() {
   const renderTime = performance.now() - DELAY;
@@ -1716,6 +1717,10 @@ scene.add(dropMarker);
   }
   const held = down && down.grabbed && meshes.get(down.id); // landing spot under the held piece
   if (held) {
+    _dropBox.setFromObject(held.mesh); _dropBox.getSize(_dropSize);                       // fit the ring to the piece's footprint
+    dropMarker.scale.setScalar((Math.max(_dropSize.x, _dropSize.z) / 2 + 0.12) / CONFIG.marker.outer);
+    const me = room && room.state.players.get(mySession);                                 // tint to my seat colour
+    if (me && me.color) dropMarker.material.color.set(me.color);
     dropMarker.position.set(held.mesh.position.x, boardTopY + CONFIG.marker.lift, held.mesh.position.z);
     dropMarker.visible = true;
   } else {
