@@ -33,7 +33,7 @@ async function loadRooms() {
   for (const room of rooms) {
     const tr = document.createElement('tr'); if (room.deletedAt) tr.className = 'deleted';
     tr.append(cell(room.name), cell(room.code), cell(room.ownerName || '\u2014'), cell(room.deletedAt ? 'deleted' : 'active'));
-    const acts = document.createElement('div'); acts.className = 'acts';
+    const acts = document.createElement('div'); acts.className = 'actions';
     if (!room.deletedAt) {
       acts.append(
         btn('Rename', () => renameRoom(room)),
@@ -65,7 +65,7 @@ async function loadUsers() {
     if (user.isAdmin) tags.push('host');
     else tags.push(user.hostStatus === 'approved' ? 'host' : user.hostStatus === 'pending' ? 'host pending' : 'player');
     tr.append(cell(user.username), cell(user.email), cell(tags.join(', ')));
-    const acts = document.createElement('div'); acts.className = 'acts';
+    const acts = document.createElement('div'); acts.className = 'actions';
     if (String(user.id) === String(myId)) {
       // Your own row: no action buttons — you can't demote or delete yourself.
       const you = document.createElement('span'); you.className = 'muted'; you.textContent = '(you)'; acts.appendChild(you);

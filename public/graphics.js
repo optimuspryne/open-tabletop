@@ -317,29 +317,42 @@ function loadImageTexture(url) {
   return texture;
 }
 
+// Decode a card "front" ref into a structured descriptor. The tagged-string
+// encoding (rank: / text: / tback: / back / image) is defined HERE ONLY — both
+// the 3D texture path (below) and the DOM hand-card path (client.js) decode via
+// this helper, so the format has a single source of truth.
+export function parseCardFront(ref) {
+  if (!ref || ref === 'back') return { kind: 'back' };
+  if (ref.startsWith('rank:')) {
+    const [, rank, suit, color] = ref.split(':');
+    return { kind: 'rank', rank, suit, color };
+  }
+  if (ref.startsWith('text:')) {
+    const [color, r1] = splitColorText(ref.slice(5), COLORS.ink);
+    const [bg, r2] = splitColorText(r1, '#fbfbf7');
+    const [accent, text] = splitColorText(r2, '#ddd'); // 4th colour optional (border); default on old refs
+    return { kind: 'text', color, bg, accent, text };
+  }
+  if (ref.startsWith('tback:')) {
+    const [bg, r1] = splitColorText(ref.slice(6), '#7d2b2b');
+    const [textColor, r2] = splitColorText(r1, '#f4f1ea');
+    const [accent, text] = splitColorText(r2, 'rgba(255,255,255,.45)'); // 4th colour optional; default on old refs
+    return { kind: 'tback', bg, textColor, accent, text };
+  }
+  return { kind: 'image', ref };
+}
+
 function resolveTexture(ref) {
   if (!ref) ref = 'back';
   if (_texCache.has(ref)) return _texCache.get(ref);
 
+  const c = parseCardFront(ref);
   let texture;
-  if (ref === 'back') {
-    texture = cardBack();
-  } else if (ref.startsWith('rank:')) {
-    const [, rank, suit, color] = ref.split(':');
-    texture = cardFront(rank, suit, color);
-  } else if (ref.startsWith('text:')) {
-    const [color, r1] = splitColorText(ref.slice(5), COLORS.ink);
-    const [bg, r2] = splitColorText(r1, '#fbfbf7');
-    const [accent, text] = splitColorText(r2, '#ddd'); // 4th colour optional → default border on old refs
-    texture = textFaceTexture(text, color, bg, accent);
-  } else if (ref.startsWith('tback:')) {
-    const [bg, r1] = splitColorText(ref.slice(6), '#7d2b2b');
-    const [textColor, r2] = splitColorText(r1, '#f4f1ea');
-    const [accent, text] = splitColorText(r2, 'rgba(255,255,255,.45)'); // 4th colour optional → default border on old refs
-    texture = textBackTexture(bg, text, textColor, accent);
-  } else {
-    texture = loadImageTexture(ref);
-  }
+  if (c.kind === 'back') texture = cardBack();
+  else if (c.kind === 'rank') texture = cardFront(c.rank, c.suit, c.color);
+  else if (c.kind === 'text') texture = textFaceTexture(c.text, c.color, c.bg, c.accent);
+  else if (c.kind === 'tback') texture = textBackTexture(c.bg, c.text, c.textColor, c.accent);
+  else texture = loadImageTexture(c.ref);
 
   _texCache.set(ref, texture);
   return texture;

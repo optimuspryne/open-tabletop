@@ -163,6 +163,7 @@ function trashOrphans(orphans) {
 // Turn a collider type + half-extents into a CANNON shape. Off-centre shapes (flat)
 // return { shape, offset }. Shared by uploaded and built-in props, so every type —
 // box | sphere | cylinder | cone | flat — behaves identically for both.
+const COLLIDER_TYPES = ['sphere', 'cylinder', 'cone', 'flat']; // shapes colliderShape understands (box = default); reused to validate uploads
 function colliderShape(type, hx, hy, hz, opts = {}) {
   if (type === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
   if (type === 'cylinder' || type === 'cone') {
@@ -698,7 +699,8 @@ class TableRoom extends Room {
         record = { w: board.w, d: board.d, tex: board.tex || null }; // a procedural board
       }
       try {
-        await db.insertBoard(name, record, { ownerId: client.auth.userId }); // private by default
+        if (msg.editId) await db.updateBoard(msg.editId, name, record); // edit an existing board in place
+        else await db.insertBoard(name, record, { ownerId: client.auth.userId }); // private by default
         this.sendAssetList(client, 'board');
       } catch (e) { console.error('[saveBoard]', e.message); }
     });
@@ -717,9 +719,10 @@ class TableRoom extends Room {
         scale: +incoming.scale || 1,
       };
       if (incoming.color != null) props.color = incoming.color | 0;
-      if (['sphere', 'cylinder', 'cone', 'flat'].includes(incoming.collider)) props.collider = incoming.collider; // box is the default
+      if (COLLIDER_TYPES.includes(incoming.collider)) props.collider = incoming.collider; // box is the default
       try {
-        await db.insertProp(name, props, { ownerId: client.auth.userId }); // private by default
+        if (msg.editId) await db.updateProp(msg.editId, name, props); // edit an existing prop in place
+        else await db.insertProp(name, props, { ownerId: client.auth.userId }); // private by default
         this.sendAssetList(client, 'prop');
       } catch (e) { console.error('[saveProp]', e.message); }
     });

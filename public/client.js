@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable } from './core.js';
-import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, COLORS, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
+import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, uploadImage, uploadModel } from './graphics.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
 
 // ===== Tiny DOM helpers =====================================================
 const byId = (id) => document.getElementById(id);
@@ -188,7 +188,7 @@ const applyTransform = (mesh, s) => {
 
   if (editorMode) { // workshop chrome: no member management, back to the admin console, hand the room to the panel
     const mb = byId('membersBtn'); if (mb) mb.hidden = true;
-    const lb = byId('lobbyBtn'); lb.textContent = '← Admin';
+    const lb = byId('lobbyBtn'); lb.textContent = '🔙 Admin';
     lb.onclick = () => { leaving = true; try { room.leave(); } catch (e) {} location.href = '/admin.html'; };
   }
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
@@ -1001,22 +1001,19 @@ function renderHand(cards) {
   for (const card of cards) {
     const div = document.createElement('div');
     div.className = 'handcard';
-    if (card.front && card.front.startsWith('rank:')) {
-      const [, rank, suit, color] = card.front.split(':');
-      div.textContent = rank + suit;
-      div.style.color = color || '#111';
-    } else if (card.front && card.front.startsWith('text:')) {
-      const [color, r1] = splitColorText(card.front.slice(5), COLORS.ink);
-      const [bg, r2] = splitColorText(r1, '#fbfbf7');
-      const [accent, text] = splitColorText(r2, '#ddd'); // 4th colour optional (border); default on old refs
+    const cf = parseCardFront(card.front);
+    if (cf.kind === 'rank') {
+      div.textContent = cf.rank + cf.suit;
+      div.style.color = cf.color || '#111';
+    } else if (cf.kind === 'text') {
       div.classList.add('txt');
-      div.textContent = text;
-      div.style.color = color;
-      div.style.background = bg;
-      div.style.borderColor = accent;
-    } else if (card.front) {
+      div.textContent = cf.text;
+      div.style.color = cf.color;
+      div.style.background = cf.bg;
+      div.style.borderColor = cf.accent;
+    } else if (cf.kind === 'image') {
       div.classList.add('img');
-      div.style.backgroundImage = `url("${card.front}")`; // uploaded/file card art
+      div.style.backgroundImage = `url("${cf.ref}")`; // uploaded/file card art
     }
     div.title = 'Left drag/click: face-down · Right drag/click: face-up';
     div.oncontextmenu = ev => ev.preventDefault(); // right-click is handled by the pointer events
@@ -1613,7 +1610,7 @@ function renderMembers(list) {
     tag.textContent = ` \u00b7 ${m.role}${m.status === 'pending' ? ' \u00b7 pending' : ''}`;
     info.appendChild(tag);
     li.appendChild(info);
-    const acts = document.createElement('span'); acts.className = 'memberActions';
+    const acts = document.createElement('span'); acts.className = 'actions';
     const isSelf = m.username === myName;
     if (m.status === 'pending') {
       acts.append(btn('Admit', () => room.send('admit', { userId: m.userId })),

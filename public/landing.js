@@ -133,13 +133,13 @@ function renderRoomList(rooms) {
     const meta = document.createElement('span'); meta.className = 'muted';
     meta.textContent = ` \u00b7 ${room.code} \u00b7 ${room.role}${room.status === 'pending' ? ' \u2014 awaiting approval' : ''}`;
     info.append(name, meta);
-    const actions = document.createElement('div'); actions.className = 'roomActions';
+    const actions = document.createElement('div'); actions.className = 'actions end';
     const enter = mkBtn('Enter', () => enterRoom(room.code)); enter.disabled = room.status === 'pending';
     actions.appendChild(enter);
     if (room.role === 'owner') { // owner room management
-      actions.appendChild(mkBtn('Rename', () => renameRoom(room), 'mini'));
-      actions.appendChild(mkBtn(room.requireApproval ? 'Approval: on' : 'Approval: off', () => togglePolicy(room), 'mini'));
-      actions.appendChild(mkBtn('Close', () => closeRoom(room), 'mini'));
+      actions.appendChild(mkBtn('Rename', () => renameRoom(room)));
+      actions.appendChild(mkBtn(room.requireApproval ? 'Approval ✓' : 'Approval ✗', () => togglePolicy(room)));
+      actions.appendChild(mkBtn('Close', () => closeRoom(room)));
     }
     li.append(info, actions);
     list.appendChild(li);

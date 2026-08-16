@@ -74,7 +74,7 @@ export async function listBoards({ includePrivate = false } = {}) {
     const { rows } = await pool.query(
       `SELECT id, name, file_url, props, is_public, owner_id FROM custom_boards
        ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, kind: boardKind(boardRecord(r)), preview: r.file_url || (r.props && r.props.tex) || null, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
+    return rows.map(r => { const rec = boardRecord(r); return { ...rec, id: String(r.id), name: r.name, kind: boardKind(rec), preview: r.file_url || (r.props && r.props.tex) || null, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }; });
   } catch (e) { console.error('[db] listBoards:', e.message); return []; }
 }
 // Returns a wrapper: .rec is the spawn record, plus visibility/owner for gating.
@@ -90,6 +90,13 @@ export function insertBoard(name, rec, { ownerId = null, isPublic = false } = {}
   return pool.query(
     'INSERT INTO custom_boards (name, type, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
     [name, boardType(rec), model || null, JSON.stringify(rest), ownerId, isPublic]).then(r => String(r.rows[0].id));
+}
+// Update an existing board in place (keeps id, owner, public flag).
+export function updateBoard(id, name, rec) {
+  const { model, ...rest } = rec;
+  return pool.query(
+    'UPDATE custom_boards SET name = $2, type = $3, file_url = $4, props = $5 WHERE id = $1',
+    [id, name, boardType(rec), model || null, JSON.stringify(rest)]).then(r => r.rowCount > 0);
 }
 
 // ===== Props (custom model objects) ==========================================
@@ -110,6 +117,13 @@ export function insertProp(name, props, { ownerId = null, isPublic = false } = {
   return pool.query(
     'INSERT INTO custom_objects (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
     [name, model, JSON.stringify(rest), ownerId, isPublic]).then(r => String(r.rows[0].id));
+}
+// Update an existing prop in place (keeps id, owner, public flag).
+export function updateProp(id, name, props) {
+  const { model, ...rest } = props;
+  return pool.query(
+    'UPDATE custom_objects SET name = $2, file_url = $3, props = $4 WHERE id = $1',
+    [id, name, model, JSON.stringify(rest)]).then(r => r.rowCount > 0);
 }
 
 // ===== Scenes (a saved whole-table setup) ===================================
