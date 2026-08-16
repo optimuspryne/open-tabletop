@@ -478,7 +478,7 @@ const GRAB_HEIGHT = CONFIG.grab.height; // float height when a piece is first gr
 const DRAG_MIN = CONFIG.grab.min, DRAG_MAX = CONFIG.grab.max, DRAG_STEP = CONFIG.grab.step;
 const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
 let dragHeight = GRAB_HEIGHT;
-const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -GRAB_HEIGHT), hit = new THREE.Vector3();
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(); // fixed ground plane (y=0); drag height is applied as a separate Y offset
 const prevTarget = new THREE.Vector3(), throwVel = new THREE.Vector3(); // hand speed → throw velocity
 let lastMoveSent = 0, prevThrowTime = 0, down = null;
 // "Lean in": a Tools toggle that dollies the camera toward the orbit target for a
@@ -764,8 +764,7 @@ renderer.domElement.addEventListener('pointerdown', e => {
   const type = meshes.get(id).type;
   down = { id, type, kind: KIND[type], button: e.button, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false };
   controls.enabled = false; // this gesture belongs to the piece
-  dragHeight = GRAB_HEIGHT;
-  dragPlane.constant = -GRAB_HEIGHT; // every grab starts at the base height
+  dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 
@@ -773,10 +772,9 @@ renderer.domElement.addEventListener('wheel', e => {
   if (!(down && down.grabbed)) return; // not holding a piece → let OrbitControls zoom
   e.preventDefault();
   dragHeight = clamp(dragHeight - Math.sign(e.deltaY) * DRAG_STEP, DRAG_MIN, DRAG_MAX); // scroll up = raise
-  dragPlane.constant = -dragHeight;
   ray.setFromCamera(pointer, camera);
-  ray.ray.intersectPlane(dragPlane, hit); // re-place under the cursor at the new height
-  room.send('move', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
+  ray.ray.intersectPlane(dragPlane, hit); // fixed ground plane → XZ under the cursor, stable at any height
+  room.send('move', { id: down.id, x: hit.x, y: dragHeight, z: hit.z });
 }, { passive: false });
 
 renderer.domElement.addEventListener('pointermove', e => {
@@ -808,6 +806,7 @@ renderer.domElement.addEventListener('pointermove', e => {
   setPointer(e);
   ray.setFromCamera(pointer, camera);
   ray.ray.intersectPlane(dragPlane, hit);
+  hit.y = dragHeight; // XZ from the fixed ground plane; height is the independent lift offset
 
   // First move past the click threshold decides what this drag means.
   if (!down.dragging) {
@@ -821,10 +820,10 @@ renderer.domElement.addEventListener('pointermove', e => {
       room.send('move', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
     } else if (down.button === 0 && kind.ldrag === 'deal') { // deck left-drag = deal a card and carry it
       down.pendingDeal = true;
-      dragHeight = DECK_DRAG_HEIGHT;
-      dragPlane.constant = -dragHeight; // lift above the deck so the dealt card doesn't fight its collider
+      dragHeight = DECK_DRAG_HEIGHT; // lift above the deck so the dealt card doesn't fight its collider
       ray.setFromCamera(pointer, camera);
-      ray.ray.intersectPlane(dragPlane, hit); // recompute the target at the higher plane
+      ray.ray.intersectPlane(dragPlane, hit);
+      hit.y = dragHeight;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       room.send('dealDrag', { deckId: down.id, x: hit.x, y: hit.y, z: hit.z });
     }
