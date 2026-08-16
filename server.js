@@ -326,9 +326,9 @@ class Whiteboard extends Schema {
 }
 defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', dark: 'boolean' });
 class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; }
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string' });
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string' });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -414,7 +414,9 @@ class TableRoom extends Room {
       this.state.notes = String(rs.notes || '').slice(0, 8000);
       this.state.tableX = clamp(rs.tableX, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
       this.state.tableZ = clamp(rs.tableZ, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
+      if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
+      this.savedScene = rs.scene || null; // GM's last saved table state — applied below, once physics maps exist
     }
     this.buildBounds(this.state.tableX, this.state.tableZ); // table surface + walls at the current size
     this.bodies = new Map();  // id -> CANNON.Body   (physics, not synced)
@@ -430,6 +432,7 @@ class TableRoom extends Room {
     this.shows = new Map();     // sessionId -> {to:Set,cards:[]}   PRIVATE: an active hold-to-show (who sees which of the shower's cards)
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.nextId = 1; this.nextHid = 1;
+    if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
     // --- Movement: grab → drag → release --------------------------------------
     this.onMessage('grab', (client, { id }) => {
@@ -653,18 +656,13 @@ class TableRoom extends Room {
       this.drafts.delete(client.sessionId);
       if (!draft || !draft.cards.length) return;
       const doSpawn = !msg || msg.spawn !== false; // default: spawn onto the table (also the back-compat path)
-      if (doSpawn) {
-        const id = this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards }); // spawn to test it live
-        // Optionally save it to the library in the same step (save-on-create, private).
-        if (msg && msg.name && await this.saveDeckById(id, msg.name, client.auth.userId)) {
-          this.sendAssetList(client, 'deck');
-        }
-      } else if (msg && msg.name) {
-        // Save-only: insert the built deck straight into the library, no table spawn.
+      if (doSpawn) this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards }); // spawn to test it live
+      if (msg && msg.name) {
         try {
-          await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, ownerId: client.auth.userId, isPublic: false });
+          if (msg.editId) await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards); // edit an existing deck in place
+          else await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, ownerId: client.auth.userId, isPublic: false });
           this.sendAssetList(client, 'deck');
-        } catch (e) { console.error('[deckFinish save-only]', e.message); }
+        } catch (e) { console.error('[deckFinish]', e.message); }
       }
     });
 
@@ -740,6 +738,11 @@ class TableRoom extends Room {
       try { await db.renameAsset(msg.kind, msg.id, name); this.sendAssetList(client, msg.kind); }
       catch (e) { console.error('[assetRename]', e.message); }
     });
+    this.onMessage('getDeck', async (client, msg) => { // fetch a deck's full cards/back for the editor to pre-fill
+      if (!this.isAdmin(client) || !msg) return;
+      const d = await db.getDeck(msg.id);
+      if (d) client.send('deckData', { id: msg.id, name: d.name, back: d.back, fronts: d.fronts });
+    });
     this.onMessage('assetDelete', async (client, msg) => {
       if (!this.isAdmin(client) || !msg) return;
       try { await db.deleteAsset(msg.kind, msg.id); this.sendAssetList(client, msg.kind); }
@@ -767,6 +770,17 @@ class TableRoom extends Room {
       if (!scene) return;
       if (!scene.isPublic && !this.isAdmin(client)) return; // private scenes: admins only
       this.applyScene(scene.payload);
+    });
+    this.onMessage('stateSave', (client) => { // GM checkpoints the live table so it survives an empty room
+      if (this.rank(client) < RANK.gm) return;
+      const payload = this.serializeScene();
+      if (JSON.stringify(payload).length > SCENE_MAX_BYTES) {
+        client.send('sceneError', { message: 'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.' });
+        return;
+      }
+      this.savedScene = payload;
+      this.scheduleSave();
+      client.send('stateSaved', {});
     });
 
     this.onMessage('loadBoard', async (client, msg) => {
@@ -985,6 +999,13 @@ class TableRoom extends Room {
       if (!isFinite(hx) || !isFinite(hz)) return;
       this.state.tableX = hx; this.state.tableZ = hz;
       this.buildBounds(hx, hz);
+      this.scheduleSave();
+    });
+    this.onMessage('tableColor', (client, msg = {}) => {
+      if (this.rank(client) < RANK.gm) return;
+      const c = String(msg.color || '');
+      if (!/^#[0-9a-f]{6}$/i.test(c)) return;
+      this.state.feltColor = c;
       this.scheduleSave();
     });
 
@@ -1356,10 +1377,18 @@ class TableRoom extends Room {
     if (!this.roomId) return;
     const rows = [];
     this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
-    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox })
+    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene })
       .catch(e => console.error('[saveState]', e.message));
   }
-  onDispose() { LIVE_ROOMS.delete(this); if (this._saveTimer) { clearTimeout(this._saveTimer); this.saveStateNow(); } } // flush a pending save
+  onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save
+    LIVE_ROOMS.delete(this);
+    if (this.state.pieces.size) { // only overwrite the saved state when there's actually something on the table
+      const snap = this.serializeScene();
+      if (JSON.stringify(snap).length <= SCENE_MAX_BYTES) this.savedScene = snap;
+    }
+    if (this._saveTimer) clearTimeout(this._saveTimer);
+    this.saveStateNow(); // flush — persists the snapshot + latest settings
+  }
 
   // Send a client the library list for one asset kind. Admins get everything
   // (incl. private); everyone else gets only published (public) assets.

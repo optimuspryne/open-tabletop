@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable } from './core.js';
-import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, uploadImage, uploadModel } from './graphics.js';
+import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
+import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel } from './graphics.js';
 import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
 
 // ===== Tiny DOM helpers =====================================================
@@ -235,9 +235,11 @@ const applyTransform = (mesh, s) => {
     cb(room.state).listen('notes', updateRoomNotes, false);
     cb(room.state).listen('tableX', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
     cb(room.state).listen('tableZ', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
+    cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
   } catch (e) { /* older server without these fields — feature stays inert */ }
   renderScores(); updateRoomNotes();
   if (room.state.tableX) { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); } // initial size (may be default until decode)
+  if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt colour
 
   const diceGrp = byId('diceGrp');
   const diceBtn = byId('diceBtn');
@@ -265,7 +267,7 @@ const applyTransform = (mesh, s) => {
   menu('roomBtn', 'roomGrp');
   wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); });
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
-  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); } });
+  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; } });
   wire('tableClose', () => byId('tableModal').hidden = true);
   { // GM: whiteboard config — a Tools-menu panel that flows below the menu (not a full-screen modal)
     const wbPanel = byId('whiteboard'), wbBtn = byId('wbBtn');
@@ -300,11 +302,14 @@ const applyTransform = (mesh, s) => {
   { const send = () => room.send('table', { x: (+byId('tableW').value || 20) / 2, z: (+byId('tableD').value || 14) / 2 });
     const w = byId('tableW'), d = byId('tableD');
     if (w) w.onchange = send;
-    if (d) d.onchange = send; }
+    if (d) d.onchange = send;
+    const felt = byId('tableFelt'); if (felt) felt.oninput = () => room.send('tableColor', { color: felt.value }); }
 
   // Scene list → the Library's Scenes tab (via the hook); loading happens there.
   room.onMessage('sceneList', scenes => { if (window.onLibraryList) window.onLibraryList('scene', scenes); });
   room.onMessage('sceneError', ({ message } = {}) => alert(message || 'Could not save the scene.'));
+  wire('roomSaveState', () => room.send('stateSave'));
+  room.onMessage('stateSaved', () => { const b = byId('roomSaveState'); if (!b) return; const t = b.textContent; b.textContent = '💾 Saved ✓'; setTimeout(() => { b.textContent = t; }, 1500); });
   room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
   byId('roll').onclick = () => room.send('roll');
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
@@ -1006,11 +1011,9 @@ function renderHand(cards) {
       div.textContent = cf.rank + cf.suit;
       div.style.color = cf.color || '#111';
     } else if (cf.kind === 'text') {
-      div.classList.add('txt');
-      div.textContent = cf.text;
-      div.style.color = cf.color;
-      div.style.background = cf.bg;
-      div.style.borderColor = cf.accent;
+      div.classList.add('img'); // render the same wrapped/shrunk-to-fit texture the table uses, so long text isn't clipped
+      const u = cardPreviewURL(card.front);
+      if (u) div.style.backgroundImage = `url("${u}")`;
     } else if (cf.kind === 'image') {
       div.classList.add('img');
       div.style.backgroundImage = `url("${cf.ref}")`; // uploaded/file card art

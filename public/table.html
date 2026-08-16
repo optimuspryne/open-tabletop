@@ -21,7 +21,8 @@
     <div class="grp" id="roomGrp" hidden>
       <button id="roomMembers">👥 Members List</button>
       <button id="roomScene">📽️ Load a Scene</button>
-      <button id="roomTable">↔️ Table Size</button>
+      <button id="roomSaveState">💾 Save Table State</button>
+      <button id="roomTable">🎨 Customize Table</button>
       <button id="roomSky">🌄 Skybox</button>
       <button id="roomReset" class="danger">🧹 Reset</button>
     </div>
@@ -159,9 +160,10 @@
 
 
 <div id="tableModal" class="panel" hidden>
-  <div id="tableHead" class="panel-head"><b>Table size</b><span id="tableClose" class="close-x">✕</span></div>
+  <div id="tableHead" class="panel-head"><b>Customize Table</b><span id="tableClose" class="close-x">✕</span></div>
   <div class="sizeRow"><label>Width</label><input id="tableW" type="number" min="8" max="40" step="1" style="width:48px"></div>
   <div class="sizeRow"><label>Depth</label><input id="tableD" type="number" min="6" max="32" step="1" style="width:48px"></div>
+  <div class="sizeRow"><label>Felt</label><input type="color" id="tableFelt" value="#2f6b4f"></div>
 </div>
 
 <div id="skyPickModal" hidden>

@@ -57,6 +57,12 @@ export function insertDeck({ name, back, fronts, ownerId = null, isPublic = fals
     "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
     [name, JSON.stringify(fronts), JSON.stringify({ back }), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
+// Update an existing deck in place (name + cards + back), keeping owner + public flag.
+export function updateDeck(id, name, back, fronts) {
+  return pool.query(
+    'UPDATE custom_decks SET name = $2, cards = $3, props = $4 WHERE id = $1',
+    [id, name, JSON.stringify(fronts), JSON.stringify({ back })]).then(r => r.rowCount > 0);
+}
 
 // ===== Boards ================================================================
 // A board record is one of: { board } (built-in) | { model, modelScale, box }
@@ -384,14 +390,14 @@ export function renameRoom(roomId, name) {
 // the play-surface half-extents. All survive restarts and are Reset-exempt.
 export async function getRoomState(roomId) {
   try {
-    const { rows } = await pool.query('SELECT scoreboard, notes, table_x, table_z, skybox FROM rooms WHERE id = $1', [roomId]);
-    if (!rows[0]) return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '' };
-    return { scoreboard: rows[0].scoreboard || [], notes: rows[0].notes || '', tableX: Number(rows[0].table_x) || 10, tableZ: Number(rows[0].table_z) || 7, skybox: rows[0].skybox || '' };
-  } catch (e) { console.error('[db] getRoomState:', e.message); return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '' }; }
+    const { rows } = await pool.query('SELECT scoreboard, notes, table_x, table_z, skybox, felt_color, scene FROM rooms WHERE id = $1', [roomId]);
+    if (!rows[0]) return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '', feltColor: '#2f6b4f', scene: null };
+    return { scoreboard: rows[0].scoreboard || [], notes: rows[0].notes || '', tableX: Number(rows[0].table_x) || 10, tableZ: Number(rows[0].table_z) || 7, skybox: rows[0].skybox || '', feltColor: rows[0].felt_color || '#2f6b4f', scene: rows[0].scene || null };
+  } catch (e) { console.error('[db] getRoomState:', e.message); return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '', feltColor: '#2f6b4f', scene: null }; }
 }
-export function saveRoomState(roomId, { scoreboard, notes, tableX, tableZ, skybox }) {
-  return pool.query('UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6 WHERE id = $1',
-    [roomId, JSON.stringify(scoreboard), notes, tableX, tableZ, skybox]);
+export function saveRoomState(roomId, { scoreboard, notes, tableX, tableZ, skybox, feltColor, scene }) {
+  return pool.query('UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6, felt_color = $7, scene = $8 WHERE id = $1',
+    [roomId, JSON.stringify(scoreboard), notes, tableX, tableZ, skybox, feltColor || '#2f6b4f', scene ? JSON.stringify(scene) : null]);
 }
 export function softDeleteRoom(roomId) { // owner or admin — hides it, keeps the row
   return pool.query('UPDATE rooms SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [roomId]);

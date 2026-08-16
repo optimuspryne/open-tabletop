@@ -31,7 +31,7 @@ export const COLORS = {
 // data in PROPS below), or { box:[hx,hy,hz] }. mass 0 = static/not grabbable.
 export const KINDS = {
   die:   { mass: 1,    shape: 'die' },
-  card:  { mass: 0.08, shape: { box: [0.75, 0.015, 1.05] } },
+  card:  { mass: 0.02, shape: { box: [0.75, 0.015, 1.05] } },
   prop:  { mass: 0.5,  shape: 'prop' },
   deck:  { mass: 0.5,  shape: { box: [0.78, 0.04, 1.08] } }, // thin puck; grows via updateDeckCollider
   board: { mass: 0,    shape: { box: [4.00, 0.05, 4.00] } },

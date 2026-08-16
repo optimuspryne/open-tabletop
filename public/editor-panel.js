@@ -3,7 +3,7 @@
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
 // the deckList/boardList/propList messages out to here, so the modal saved-lists
 // keep working too). In the editor the admin sees private assets as well as public.
-import { cardPreviewURL, propPreviewURL, boardPreviewURL, diePreviewURL, uploadImage, uploadModel, measureBoard, measureModel, glbFilePreviewURL } from './graphics.js';
+import { cardPreviewURL, propPreviewURL, boardPreviewURL, diePreviewURL, uploadImage, uploadModel, measureBoard, measureModel, glbFilePreviewURL, parseCardFront } from './graphics.js';
 import * as THREE from 'three';
 
 // Library edit/clone state. openEditModal() sets it; the Add form's Save reads it.
@@ -12,6 +12,7 @@ import * as THREE from 'three';
 let editCtx = null;
 const FILLERS = {}; // kind → fn(it, clone) that pre-fills the Add form (registered by wireAddObject/wireAddBoard)
 function openEditModal(kind, it, clone) {
+  if (kind === 'deck') return openDeckEdit(it, clone); // decks fetch their cards first (async), then fill
   editCtx = { kind, id: clone ? null : it.id, model: kind === 'prop' ? (it.props && it.props.model) : it.model, tex: it.tex };
   const modal = $('addModal'); if (!modal) return;
   modal.hidden = false;
@@ -19,6 +20,13 @@ function openEditModal(kind, it, clone) {
   const tb = modal.querySelector(`.libTab[data-tab="${tab}"]`);
   if (tb) tb.click(); // switch to the right tab via wireTabs
   const fill = FILLERS[kind]; if (fill) fill(it, clone);
+}
+let pendingDeck = null; // deck Edit/Clone fetches the deck's cards first, then fills the form on the deckData response
+function openDeckEdit(it, clone) {
+  const modal = $('addModal'); if (!modal) return;
+  modal.hidden = false;
+  pendingDeck = { it, clone };
+  ROOM.send('getDeck', { id: it.id });
 }
 import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS } from '/shared/pieces.js';
 const $ = (id) => document.getElementById(id);
@@ -199,9 +207,10 @@ function renderList(kind, list) {
   if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet.'; ul.appendChild(li); return; }
   for (const it of list) {
     const badge = document.createElement('span'); badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv'); badge.textContent = it.isPublic ? 'public' : 'private';
-    const editable = kind === 'prop' || kind === 'board'; // Phase 1: only objects + boards can round-trip through the Add form
+    const isEditor = !!$('addModal'); // Edit/Clone need the editor's Add modal — hidden at the table where clicking them does nothing
+    const canEdit = kind === 'prop' || kind === 'board' || kind === 'deck'; // objects, boards, and (limited) decks round-trip through the Add form
     const adminActs = window.OTT_IS_ADMIN ? [ // curation is site-admin only; GMs/helpers just spawn/apply
-      ...(editable ? [btn('Edit', () => openEditModal(kind, it, false)), btn('Clone', () => openEditModal(kind, it, true))] : []),
+      ...(isEditor && canEdit ? [btn('Edit', () => openEditModal(kind, it, false)), btn('Clone', () => openEditModal(kind, it, true))] : []),
       btn(it.isPublic ? 'Unpublish' : 'Publish', () => ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic })),
       btn('Rename', () => { const n = prompt('Rename:', it.name); if (n && n.trim()) ROOM.send('assetRename', { kind, id: it.id, name: n.trim() }); }),
       btn('Delete', () => { if (confirm(`Delete "${it.name}"? This cannot be undone.`)) ROOM.send('assetDelete', { kind, id: it.id }); }, 'danger'),
@@ -317,13 +326,14 @@ const parseFaces = (raw) => {
   raw = (raw || '').trim();
   if (!raw) return [];
   if (raw[0] === '[') { try { const arr = JSON.parse(raw); if (Array.isArray(arr)) return arr.map(String).map((s) => s.trim()).filter(Boolean); } catch {} }
-  return raw.split(/[\n,]+/).map((s) => s.trim()).filter(Boolean);
+  const sep = raw.includes('\n') ? /\n+/ : /,+/; // multi-line → one face per line (commas stay in the text); single line → comma-separated
+  return raw.split(sep).map((s) => s.trim()).filter(Boolean);
 };
 // Build a deck on the server: begin → append (batched) → finish. spawn:false = save only.
-function sendDeck(back, fronts, name, spawn) {
+function sendDeck(back, fronts, name, spawn, editId) {
   ROOM.send('deckBegin', { back });
   for (let i = 0; i < fronts.length; i += 50) ROOM.send('deckAppend', { fronts: fronts.slice(i, i + 50) });
-  ROOM.send('deckFinish', { name, spawn });
+  ROOM.send('deckFinish', { name, spawn, editId });
 }
 const showCardPrev = (el, ref) => { const u = cardPreviewURL(ref); el.style.backgroundImage = u ? `url("${u}")` : 'none'; };
 // Turn a .uploadSq (with a hidden <input type=file> inside) into a click-to-upload tile.
@@ -363,7 +373,7 @@ function wireAddDeck() {
     ['adImgName', 'adTxtName', 'adBackText', 'adFaces', 'adFacesFile'].forEach((id) => { $(id).value = ''; });
     $('adBackFill').value = '#7d2b2b'; $('adBackTextC').value = '#f4f1ea'; $('adBackAccent').value = '#dddddd';
     $('adFrontFill').value = '#fbfbf7'; $('adFrontTextC').value = '#141414'; $('adFrontAccent').value = '#dddddd';
-    clearSq('adImgBack'); clearSq('adImgFronts');
+    clearSq('adImgBack'); clearSq('adImgFronts'); editCtx = null;
     refreshText(); // re-render the text previews to their reset defaults (not blank until next keystroke)
     $('adImgNoCrop').classList.remove('on'); $('adImgPad').value = '#ffffff'; $('adImgPadRow').hidden = true;
   };
@@ -372,7 +382,7 @@ function wireAddDeck() {
     if (!name) return alert('Name the deck first.');
     const faces = parseFaces($('adFaces').value);
     if (!faces.length) return alert('Add at least one front (one per line, comma-separated, or JSON).');
-    sendDeck(backRef(), faces.map(frontRef), name, spawn);
+    sendDeck(backRef(), faces.map(frontRef), name, spawn, editCtx && editCtx.id);
     clearDeckForm();
     $('addModal').hidden = true;
   };
@@ -391,23 +401,40 @@ function wireAddDeck() {
   const saveImg = async (spawn) => {
     const name = $('adImgName').value.trim();
     if (!name) return alert('Name the deck first.');
+    const editingDeck = editCtx && editCtx.kind === 'deck';
     const frontFiles = [...$('adImgFronts').files];
-    if (!frontFiles.length) return alert('Choose at least one front image.');
+    if (!frontFiles.length && !editingDeck) return alert('Choose at least one front image.'); // a fresh deck needs fronts
     const noCrop = $('adImgNoCrop').classList.contains('on');      // 'contain' fits the whole image (no crop); pad fills the leftover
     const fit = noCrop ? 'contain' : undefined;
     const pad = noCrop ? $('adImgPad').value : undefined;
     try {
-      let back = 'back';
+      let back;
       if ($('adImgBack').files[0]) back = await uploadImage($('adImgBack').files[0], undefined, undefined, fit, 'decks', pad);
-      const fronts = [];
-      for (const f of frontFiles) fronts.push(await uploadImage(f, undefined, undefined, fit, 'decks', pad));
-      sendDeck(back, fronts, name, spawn);
+      else back = editingDeck ? editCtx.back : 'back'; // keep the existing back when editing/cloning
+      let fronts;
+      if (frontFiles.length) { fronts = []; for (const f of frontFiles) fronts.push(await uploadImage(f, undefined, undefined, fit, 'decks', pad)); }
+      else fronts = editCtx.fronts; // image-deck edit only swaps the back — keep the existing fronts
+      sendDeck(back, fronts, name, spawn, editCtx && editCtx.id);
       clearDeckForm();
       $('addModal').hidden = true;
     } catch (e) { alert('Image upload failed.'); }
   };
   $('adImgSave').onclick = () => saveImg(false);
   $('adImgSpawn').onclick = () => saveImg(true);
+  FILLERS.imgdeck = (d, clone) => { // Edit/Clone image deck: name + swappable back; fronts are kept as-is
+    $('adImgName').value = clone ? '' : d.name;
+    clearSq('adImgBack'); clearSq('adImgFronts');
+    if (d.back && d.back !== 'back') $('adImgBack').parentElement.style.backgroundImage = `url("${d.back}")`;
+  };
+  FILLERS.txtdeck = (d, clone) => { // Edit/Clone text deck: back text/colours + front colours + faces (decoded from the refs)
+    $('adTxtName').value = clone ? '' : d.name;
+    const b = parseCardFront(d.back);
+    if (b.kind === 'tback') { $('adBackFill').value = b.bg; $('adBackTextC').value = b.textColor; $('adBackAccent').value = b.accent; $('adBackText').value = b.text; }
+    const f0 = parseCardFront(d.fronts[0] || '');
+    if (f0.kind === 'text') { $('adFrontTextC').value = f0.color; $('adFrontFill').value = f0.bg; $('adFrontAccent').value = f0.accent; }
+    $('adFaces').value = d.fronts.map((r) => { const f = parseCardFront(r); return f.kind === 'text' ? f.text : r; }).join('\n');
+    refreshText();
+  };
 }
 
 // ---- Add-to-Library: board tab ---------------------------------------------
@@ -578,6 +605,14 @@ function wireAddSky() {
 // client.js hands over the live room once connected.
 window.onOttRoom = (room) => {
   ROOM = room;
+  room.onMessage('deckData', (d) => { // deck Edit/Clone: server sent the deck's cards + back — fill the matching form
+    if (!pendingDeck) return;
+    const { it, clone } = pendingDeck; pendingDeck = null;
+    const isText = ((d.fronts && d.fronts[0]) || '').startsWith('text:');
+    $('addModal').querySelector(`.libTab[data-tab="${isText ? 'txtdecks' : 'imgdecks'}"]`)?.click();
+    editCtx = { kind: 'deck', id: clone ? null : it.id, back: d.back, fronts: d.fronts };
+    (isText ? FILLERS.txtdeck : FILLERS.imgdeck)(d, clone);
+  });
   const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); room.send('listSkyboxes'); };
   // View Library (present on both the editor and the table)
   const panel = $('libraryPanel');

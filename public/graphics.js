@@ -28,8 +28,9 @@ function maxAnisotropy() {
 // The face of a standard playing card: rank + suit small in two opposite corners
 // and large in the middle. `color` is the suit colour (black or red).
 function cardFront(rank, suit, color) {
-  const w = 300, h = 420;
-  const { canvas, ctx } = makeCanvas(w, h);
+  const S = 2, w = 300, h = 420;
+  const { canvas, ctx } = makeCanvas(w * S, h * S);
+  ctx.scale(S, S); // render at 2× for crisper rank/suit text
 
   ctx.fillStyle = '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
@@ -395,7 +396,9 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
   let fontSize = 30;
   ctx.font = `${weight} ${fontSize}px system-ui,sans-serif`;
   let lines = wrapLines(ctx, text, w - pad * 2);
-  while (lines.length * fontSize * 1.25 > h - pad * 2 && fontSize > 11) {
+  // shrink until the block fits vertically AND no single line overflows horizontally (long/unbreakable words)
+  const overflows = () => lines.length * fontSize * 1.25 > h - pad * 2 || lines.some((l) => ctx.measureText(l).width > w - pad * 2);
+  while (overflows() && fontSize > 8) {
     fontSize -= 2;
     ctx.font = `${weight} ${fontSize}px system-ui,sans-serif`;
     lines = wrapLines(ctx, text, w - pad * 2);
@@ -411,8 +414,9 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
 
 // A procedural card FACE showing wrapped text (for custom text decks).
 function textFaceTexture(text, color, bg, accent) {
-  const w = 300, h = 420;
-  const { canvas, ctx } = makeCanvas(w, h);
+  const S = 2, w = 300, h = 420;
+  const { canvas, ctx } = makeCanvas(w * S, h * S);
+  ctx.scale(S, S); // render at 2× so text stays crisp when a card is near the camera (draw in logical 300×420)
 
   ctx.fillStyle = bg || '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
