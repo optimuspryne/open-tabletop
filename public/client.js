@@ -605,6 +605,7 @@ const sendAction = (action, id) => {
   else if (action === 'deal') room.send('dealToTable', { deckId: id });
   else if (action === 'flip') room.send('flip', { id });
   else if (action === 'shuffle') room.send('shuffle', { deckId: id });
+  else if (action === 'roll') room.send('rollOne', { id });
 };
 
 // ----- inspect: freeze an enlarged item in front of the camera --------------
@@ -891,6 +892,7 @@ addEventListener('keydown', e => {
   }
   const typing = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
   if (typing) return;
+  if (e.key === '`') { byId('camDebug')?.toggleAttribute('hidden'); return; } // ` toggles the camera debug readout
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (e.key === 'Backspace') e.preventDefault();
@@ -1052,18 +1054,28 @@ function renderHand(cards) {
 // at the table's edge on any size. Each client parks its camera at its own seat and
 // renders every OTHER player's hand as face-down backs at their seat.
 let mySeat = 0;
+// Seat-camera framing — the ONE place to tune the default view for every seat.
+//   lookFwd / lookH : the point a seat looks at (from table centre, in its direction).
+//   dist / rise     : how far the camera sits back / up from that point (their ratio = the angle).
+//   zoom            : <1 dollies in, >1 pulls back — scales the offset, so the ANGLE is unchanged.
+// Table sits lower in frame → raise lookH and rise together.
+const VIEW = { lookFwd: 3.1, lookH: 2, dist: 15.4, rise: 3.7, zoom: 0.65 };
 function seatLayoutFor(hx, hz) {
   const m = 0.8;                          // hand inset from the edge
   const cx = hx * 0.66, cz = hz * 0.69;   // diagonal (corner) seat positions
   const sx = hx / 10, sz = hz / 7, sy = (sx + sz) / 2; // camera scale vs the default 20x14 table
   const cam = (p, t) => ({ pos: [p[0] * sx, p[1] * sy, p[2] * sz], target: [t[0] * sx, t[1] * sy, t[2] * sz] });
+  const norm = (v) => { const l = Math.hypot(v[0], v[2]) || 1; return [v[0] / l, 0, v[2] / l]; };
+  const seatCam = (d) => { const D = VIEW.dist * VIEW.zoom, R = VIEW.rise * VIEW.zoom; // build a seat's camera from VIEW + its facing dir
+    return cam([d[0] * (VIEW.lookFwd + D), VIEW.lookH + R, d[2] * (VIEW.lookFwd + D)],
+               [d[0] * VIEW.lookFwd,       VIEW.lookH,     d[2] * VIEW.lookFwd]); };
   return [
-    { hand:[0, 0.25, hz - m],    out:[0,0,1],   cam: cam([0,13,17],    [0,0,1]) },   // front  (+z)
-    { hand:[0, 0.25, -(hz - m)], out:[0,0,-1],  cam: cam([0,13,-17],   [0,0,-1]) },  // back   (-z)
-    { hand:[hx - m, 0.25, 0],    out:[1,0,0],   cam: cam([17,13,0],    [1,0,0]) },   // right  (+x)
-    { hand:[-(hx - m), 0.25, 0], out:[-1,0,0],  cam: cam([-17,13,0],   [-1,0,0]) },  // left   (-x)
-    { hand:[cx, 0.25, cz],       out:[1,0,1],   cam: cam([14,13,11],   [0,0,0]) },   // front-right
-    { hand:[-cx, 0.25, -cz],     out:[-1,0,-1], cam: cam([-14,13,-11], [0,0,0]) },   // back-left
+    { hand:[0, 0.25, hz - m],    out:[0,0,1],   cam: seatCam([0,0,1]) },          // front  (+z)
+    { hand:[0, 0.25, -(hz - m)], out:[0,0,-1],  cam: seatCam([0,0,-1]) },         // back   (-z)
+    { hand:[hx - m, 0.25, 0],    out:[1,0,0],   cam: seatCam([1,0,0]) },          // right  (+x)
+    { hand:[-(hx - m), 0.25, 0], out:[-1,0,0],  cam: seatCam([-1,0,0]) },         // left   (-x)
+    { hand:[cx, 0.25, cz],       out:[1,0,1],   cam: seatCam(norm([1,0,1])) },    // front-right
+    { hand:[-cx, 0.25, -cz],     out:[-1,0,-1], cam: seatCam(norm([-1,0,-1])) },  // back-left
   ];
 }
 let seatLayout = seatLayoutFor(10, 7);
@@ -1731,6 +1743,11 @@ const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused ea
   if (leanT < 0.0005) leanT = 0;
   leanOffset.copy(controls.target).sub(camera.position).multiplyScalar(leanT * LEAN_AMOUNT);
   camera.position.add(leanOffset);   // apply the lean for this frame's render
+  { const c = camera.position, t = controls.target, d = byId('camDebug'); // live camera readout for tuning the default view
+    if (d && !d.hidden) d.textContent =
+      `cam  ${c.x.toFixed(2)}, ${c.y.toFixed(2)}, ${c.z.toFixed(2)}\n` +
+      `tgt  ${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}\n` +
+      `dist ${c.distanceTo(t).toFixed(2)}`; }
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 })();

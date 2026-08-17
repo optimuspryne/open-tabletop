@@ -28,7 +28,7 @@ const SIM = {
   servo: { stiffness: 25, maxSpeed: 45, angDamp: 0.6 }, // held-piece velocity servo (tracks cursor)
   damp: { flat: 0.5, solid: 0.15 },               // angular damping: cards/decks vs everything else
   flipHop: 1.6, flipArc: 0.7,                     // flip feedback nudge + kinematic arc height
-  roll: { up: 7, spread: 8, spin: 20 },           // die roll impulse
+  roll: { up: 16, spread: 8, spin: 22 },          // die roll impulse (up drives peak height ~ up^2)
   spawnY: 4,                                       // height a spawned piece drops from
   bounds: { margin: 1.5, floor: -3, ceiling: 12 },// out-of-bounds safety net
   absorb: { x: 1.1, z: 1.4 },                     // how close a dropped card must be to a deck to merge
@@ -838,16 +838,15 @@ class TableRoom extends Room {
       }
     });
 
-    this.onMessage('roll', () => {
+    const rollDie = (id) => { // fling one die: random horizontal spread + upward pop + tumble
+      const body = this.bodies.get(id); if (!body) return;
       const roll = SIM.roll;
-      this.state.pieces.forEach((piece, id) => {
-        if (piece.type !== 'die') return;
-        const body = this.bodies.get(id);
-        body.wakeUp();
-        body.velocity.set((Math.random() - 0.5) * roll.spread, roll.up, (Math.random() - 0.5) * roll.spread);
-        body.angularVelocity.set((Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin);
-      });
-    });
+      body.wakeUp();
+      body.velocity.set((Math.random() - 0.5) * roll.spread, roll.up, (Math.random() - 0.5) * roll.spread);
+      body.angularVelocity.set((Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin);
+    };
+    this.onMessage('roll', () => { this.state.pieces.forEach((piece, id) => { if (piece.type === 'die') rollDie(id); }); }); // roll every die (the Roll button)
+    this.onMessage('rollOne', (client, msg = {}) => { const p = this.state.pieces.get(msg.id); if (p && p.type === 'die') rollDie(msg.id); }); // right-click a single die
 
     // Wipe the room back to an empty table — pieces and all private state.
     this.onMessage('reset', (client) => {

@@ -777,7 +777,7 @@ function boardMesh(props = {}) {
 // lclick / rclick: click actions (message names).
 // Adding a kind = one entry here + one in the shared KINDS descriptor.
 const KIND = {
-  die:   { mesh: dieMesh,   grab: 0 },
+  die:   { mesh: dieMesh,   grab: 0, rclick: 'roll' },
   card:  { mesh: cardMesh,  grab: 0, lclick: 'takeCard', rclick: 'flip' },
   prop:  { mesh: propMesh,  grab: 0 },
   deck:  { mesh: deckMesh,  grab: 2, ldrag: 'deal', lclick: 'deal', rclick: 'shuffle' },
