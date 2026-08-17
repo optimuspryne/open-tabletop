@@ -222,9 +222,11 @@ const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash,
 export async function createUser({ username, email, passwordHash = null, loginTokenHash = null, isAdmin = false }) {
   try {
     const hostStatus = passwordHash ? 'pending' : 'none';
+    // The very first account bootstraps as admin (NOT EXISTS is evaluated in the same
+    // statement, so it's atomic) — no manual SQL flip needed on a fresh install.
     const { rows } = await pool.query(
       `INSERT INTO users (username, email, password_hash, login_token_hash, is_admin, host_status)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
+       VALUES ($1,$2,$3,$4, ($5 OR NOT EXISTS (SELECT 1 FROM users)), $6) RETURNING *`,
       [username, email, passwordHash, loginTokenHash, isAdmin, hostStatus]);
     return publicUser(rows[0]);
   } catch (e) {

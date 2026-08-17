@@ -1,0 +1,41 @@
+# Open Tabletop — app + Postgres.
+# First run:  cp .env.example .env  (set the two passwords),  then:  docker compose up -d
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: tabletop            # owner role — applies the schema (DDL)
+      POSTGRES_DB: tabletop
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}  # used by the init script below
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      # Init scripts run ONCE, on an empty data dir, in filename order:
+      - ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./docker/init-app-role.sh:/docker-entrypoint-initdb.d/02-app-role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabletop -d tabletop"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  app:
+    build: .
+    # image: YOURNAME/open-tabletop:latest   # <- swap `build: .` for this to run a published image
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy           # wait until the schema + role are in place
+    environment:
+      DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
+      ASSETS_DIR: /data/assets
+      # PORT: 2567
+    ports:
+      - "2567:2567"
+    volumes:
+      - assets:/data/assets                  # uploaded decks/boards/props/skyboxes
+
+volumes:
+  db-data:
+  assets:

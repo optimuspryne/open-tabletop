@@ -1,5 +1,5 @@
 {
-  "name": "tabletop-mp",
+  "name": "open-tabletop",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -14,8 +14,7 @@
     "convex-hull": "^1.0.3",
     "express": "^4.19.2",
     "helmet": "^7.2.0",
-    "pg": "^8.23.0",
-    "three": "^0.161.0"
+    "pg": "^8.23.0"
   },
   "allowScripts": {
     "msgpackr-extract@3.0.4": true

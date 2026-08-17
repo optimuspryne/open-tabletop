@@ -379,7 +379,10 @@ re-request). Admins host regardless and are excluded from the pending count.
 
 **Admin console.** `/admin.html` (guarded by `is_admin`) manages all rooms
 (restore / purge soft-deleted) and users (grant/revoke admin, approve/reject/
-revoke host, delete-with-cascade).
+revoke host, delete-with-cascade). The **first account to sign up bootstraps as
+admin** — the signup `INSERT` sets `is_admin` when the users table is empty
+(an atomic `NOT EXISTS` in the same statement), so a fresh install needs no
+manual SQL flip.
 
 **Hardening.** The upload endpoints (`/upload`, `/upload-model`) are now gated by
 `requireAdmin` server-side — the "admin-only" guarantee no longer rests on the UI —

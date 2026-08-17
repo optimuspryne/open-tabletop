@@ -42,15 +42,67 @@ state and private hands are still all in-memory. One-time setup:
    one, so they're dropped from the baseline.)
 4. **Point the app at it:** `cp .env.example .env`, set `DATABASE_URL` to the
    `tabletop_app` connection string. `npm start` auto-loads `.env`.
-5. **Bootstrap the first admin** (once you've signed up an account): flip the
-   flag directly — `UPDATE users SET is_admin = true WHERE lower(username) =
-   lower('you');`. Admins can then grant admin/host to others from the console.
+5. **The first account is admin automatically** — sign up in the UI and you're
+   the admin; no SQL needed. Admins grant admin/host to others from the console.
+   (To promote someone later: `UPDATE users SET is_admin = true WHERE
+   lower(username) = lower('them');`.)
 
 Config comes from `DATABASE_URL`, or `DATABASE_URL_FILE` (a path to a file holding
 it — the Docker-secrets pattern, taking priority). There's no hardcoded fallback, so
 a missing config fails loudly at startup. For a remote DB, append `?sslmode=no-verify`
 (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 turn on `ssl` server-side.
+
+## Run with Docker
+
+The repo ships a `Dockerfile` and `docker-compose.yml` that bring up the app **and**
+Postgres — including the two-role DB setup (owner + least-privilege app role), applied
+automatically on first start.
+
+```bash
+cp .env.example .env      # set DB_PASSWORD and APP_DB_PASSWORD
+docker compose up -d      # builds the image, starts Postgres, then the app
+```
+
+Open **http://localhost:2567**. On the first run, Compose applies `postgres/schema.sql`
+and creates the `tabletop_app` role via `docker/init-app-role.sh`. Two named volumes
+persist state: `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
+
+The **first account you sign up becomes admin automatically** — no SQL step needed.
+
+### Single container (bring your own Postgres)
+
+If you already run Postgres (managed or otherwise), skip Compose and run just the
+app image against it:
+
+```bash
+docker build -t open-tabletop .
+docker run -p 2567:2567 -v ott-assets:/data/assets \
+  -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop open-tabletop
+```
+
+The volume holds uploaded **files**; library **metadata** lives in Postgres. Pass
+the DB URL via `DATABASE_URL` or `DATABASE_URL_FILE` (a mounted secret).
+
+### Publishing the image (Docker Hub or GHCR)
+
+Build, tag, and push so others can run it without building from source:
+
+```bash
+docker build -t YOURNAME/open-tabletop:0.1.0 -t YOURNAME/open-tabletop:latest .
+docker login                          # Docker Hub; or `docker login ghcr.io` for GitHub's registry
+docker push YOURNAME/open-tabletop:0.1.0
+docker push YOURNAME/open-tabletop:latest
+```
+
+Consumers then swap `build: .` for `image: YOURNAME/open-tabletop:latest` on the `app`
+service (already stubbed in the compose file) and `docker compose up -d`. For an image
+that runs on both x86 and ARM (e.g. build on Apple Silicon, deploy to an x86 VPS):
+
+```bash
+docker buildx build --platform linux/amd64,linux/arm64 \
+  -t YOURNAME/open-tabletop:latest --push .
+```
 
 ## What's in the box
 
@@ -272,30 +324,18 @@ soft-deleted, with restore / purge) and every user (grant/revoke admin,
 approve/reject/revoke host, delete). A pending-host count shows on the Users
 header and on the lobby's Admin link.
 
-## Docker
+## Security & production posture
 
-```bash
-docker build -t tabletop .
-docker run -p 2567:2567 -v tabletop-assets:/data/assets \
-  -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop tabletop
-```
-
-The `-v` mounts a named volume for the uploaded image/model **files** so they
-survive restarts; the library **metadata** lives in your Postgres. Pass the
-connection via `DATABASE_URL`, or `DATABASE_URL_FILE` pointing at a mounted
-secret. Live game state and hands are in-memory by design; new rooms start empty.
-
-## Roadmap (not yet built)
-
-The accounts / rooms / roles / admin / library-curation layer described above is
-built. What's still open is mostly a **hardening pass** before any public
-exposure — glTF validation, upload caps and rate limits, external-URI stripping
-on uploaded models, and security headers (a real CSP once the CDN libraries are
-self-hosted) — plus a few niceties: account **avatar uploads** (the `setUserAvatar`
-db stub is in place), a real socket **push** for the "you're admitted" signal
-(currently a short-poll), per-user **live kick** across rooms, and **env-var admin
-bootstrapping** as an alternative to the manual SQL flip. See the security notes
-in `docs/ARCHITECTURE.md`.
+The full accounts / rooms / roles / admin / library-curation layer is built, and the
+hardening pass is complete: admin-gated + validated uploads (glTF magic + external-URI
+stripping, image magic bytes), per-IP rate limits on uploads and auth, a per-user
+cross-room **live kick**, a socket **push** for the "you're admitted" signal (with a
+slow poll fallback), account **avatar uploads**, and an enforced **Content-Security-
+Policy** — `script-src 'self'`, no `unsafe-*`, with Three and Colyseus self-hosted
+under `public/vendor/` (no CDN). The first account to sign up is admin automatically.
+Remaining optional hardening (post-parse model complexity limits, per-user storage
+caps, a shared-store rate limiter for multi-instance) is noted in
+`docs/ARCHITECTURE.md`.
 
 ## Notes
 

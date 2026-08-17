@@ -1,8 +1,0 @@
-node_modules
-saved-decks
-npm-debug.log
-*.zip
-.git
-.gitignore
-Dockerfile
-.dockerignore
