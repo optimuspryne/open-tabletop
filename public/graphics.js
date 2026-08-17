@@ -496,7 +496,7 @@ function imgToBlob(file, w, h, fit, bg) {
 async function uploadModel(file) {
   const response = await fetch('/upload-model?kind=props', {
     method: 'POST',
-    headers: { 'Content-Type': 'model/gltf-binary' },
+    headers: { 'Content-Type': 'model/gltf-binary', 'Authorization': 'Bearer ' + (localStorage.getItem('tabletop.token') || '') },
     body: file,
   });
   if (!response.ok) throw new Error('model upload failed');
@@ -540,7 +540,7 @@ async function uploadImage(file, w = CONFIG.upload.cardW, h = CONFIG.upload.card
   const query = kind ? ('?kind=' + encodeURIComponent(kind)) : '';
   const response = await fetch('/upload' + query, {
     method: 'POST',
-    headers: { 'Content-Type': CONFIG.upload.type },
+    headers: { 'Content-Type': CONFIG.upload.type, 'Authorization': 'Bearer ' + (localStorage.getItem('tabletop.token') || '') },
     body: blob,
   });
   if (!response.ok) throw new Error('upload failed');

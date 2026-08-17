@@ -82,29 +82,55 @@ async function onRequestHost() {
 }
 
 // ---- rooms + live approval ----
-// While any of your rooms is pending admission, poll /rooms every 3s and watch for
-// the transition: pending -> admitted auto-forwards you into the table; pending ->
-// gone (declined or closed) shows a notice. Polling stops once nothing is pending.
-let lastStatus = {};   // code -> status from the previous fetch (to spot pending -> admitted)
+// While any of your rooms is pending, a per-code lobby socket pushes the admit/decline
+// the instant it happens. A slow 15s poll stays as a fallback for what the socket can't
+// cover (admitted while disconnected, tab reopened, etc). Both funnel through resolve*()
+// which fires once per code, so poll and push can't double-forward.
+let lastStatus = {};   // code -> status from the previous fetch
 let pollTimer = null;
-const stopPolling = () => { if (pollTimer) { clearInterval(pollTimer); pollTimer = null; } };
+const resolved = new Set();   // codes already forwarded/declined
+let coly = null;              // lazily-created Colyseus client
+const lobbies = new Map();    // code -> lobby connection
+
+const closeLobby = (code) => { const c = lobbies.get(code); if (c) { try { c.leave(); } catch {} } lobbies.delete(code); };
+const stopPolling = () => {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  for (const code of [...lobbies.keys()]) closeLobby(code);
+};
+function resolveApproved(room) { if (resolved.has(room.code)) return; resolved.add(room.code); onApproved(room); }
+function resolveDeclined(code) { if (resolved.has(code)) return; resolved.add(code); onDeclined(); }
+
+// Hold a lobby socket for a pending room; forward/notify the moment the server pushes.
+function watchLobby(room) {
+  const code = room.code;
+  if (lobbies.has(code) || resolved.has(code)) return;
+  if (!coly) coly = new Colyseus.Client(location.origin.replace(/^http/, 'ws'));
+  coly.joinOrCreate('lobby', { code, token: token() }).then((conn) => {
+    lobbies.set(code, conn);
+    conn.onMessage('admitted', () => { closeLobby(code); resolveApproved(room); });
+    conn.onMessage('declined', () => { closeLobby(code); resolveDeclined(code); });
+    conn.onLeave(() => lobbies.delete(code));
+  }).catch(() => { /* onAuth rejected (already resolved) or offline — the poll covers it */ });
+}
 
 async function refreshRooms() {
   let rooms = [];
   try { ({ rooms } = await api('/rooms', { auth: true })); } catch { return; }
 
-  for (const code in lastStatus) { // spot pending -> admitted (approved) or pending -> gone (declined/closed)
+  for (const code in lastStatus) { // fallback: spot pending -> admitted or pending -> gone
     if (lastStatus[code] !== 'pending') continue;
     const current = rooms.find((room) => room.code === code);
-    if (current && current.status === 'admitted') { onApproved(current); return; }
-    if (!current) onDeclined();
+    if (current && current.status === 'admitted') { resolveApproved(current); return; }
+    if (!current) resolveDeclined(code);
   }
   lastStatus = Object.fromEntries(rooms.map((room) => [room.code, room.status]));
 
   renderRoomList(rooms);
 
+  for (const room of rooms) if (room.status === 'pending') watchLobby(room); // push-based admit/decline
+
   const anyPending = rooms.some((room) => room.status === 'pending');
-  if (anyPending && !pollTimer) pollTimer = setInterval(refreshRooms, 3000); // watch for approval
+  if (anyPending && !pollTimer) pollTimer = setInterval(refreshRooms, 15000); // slow fallback (was 3s)
   if (!anyPending) stopPolling();
 }
 

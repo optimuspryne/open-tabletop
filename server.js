@@ -895,6 +895,7 @@ class TableRoom extends Room {
     this.onMessage('admit', async (client, { userId } = {}) => {
       if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
       await db.admitMember(this.roomId, userId);
+      this.notifyLobby(userId, 'notifyAdmitted'); // push to them if they're waiting in the lobby
       this.broadcastMembers();
     });
     this.onMessage('kick', async (client, { userId } = {}) => {
@@ -907,6 +908,7 @@ class TableRoom extends Room {
       await db.kickMember(this.roomId, userId);
       const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
       if (live) { live.send('kicked'); setTimeout(() => { try { live.leave(4000); } catch (e) {} }, 150); } // notice, then drop (consented → no reconnection)
+      this.notifyLobby(userId, 'notifyDeclined'); // a pending joiner is waiting in the lobby, not the table
       this.broadcastMembers();
     });
     this.onMessage('setRole', async (client, { userId, role } = {}) => {
@@ -1421,6 +1423,14 @@ class TableRoom extends Room {
     const list = await db.listMembers(this.roomId);
     for (const c of this.clients) if (this.rank(c) >= RANK.gm) c.send('memberList', list);
   }
+  // Tell the matching lobby (if anyone's waiting there) that a pending user's status
+  // changed, so it can push + release them instead of them polling for it.
+  async notifyLobby(userId, method) {
+    try {
+      const lobbies = await matchMaker.query({ name: 'lobby', code: this.roomCode });
+      for (const l of lobbies) matchMaker.remoteRoomCall(l.roomId, method, [userId]);
+    } catch (e) { /* no lobby up for this code */ }
+  }
 
   // Called via the matchmaker when the owner closes the room from the lobby: tell
   // everyone why, then disconnect them all and dispose the live table. The brief
@@ -1714,11 +1724,59 @@ app.use('/assets',
   express.static(ASSETS_DIR),
 );
 
+// ---- Upload hardening: validate bytes + throttle before writing anything to disk ----
+// Per-IP upload throttle (in-memory; resets on restart, single-instance scope).
+// Token bucket: a deck uploads its back + every front back-to-back, so we allow a
+// large burst (a big deck in one go) that refills over time to cap sustained abuse.
+const _buckets = new Map(); // ip -> { tokens, last }
+function rateLimitUpload(req, res, next) {
+  const ip = req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+  const now = Date.now(), CAP = 300, REFILL_PER_MS = 3 / 1000; // burst up to 300, then ~180/min sustained
+  const b = _buckets.get(ip) || { tokens: CAP, last: now };
+  b.tokens = Math.min(CAP, b.tokens + (now - b.last) * REFILL_PER_MS);
+  b.last = now;
+  if (b.tokens < 1) { _buckets.set(ip, b); return res.status(429).json({ error: 'too many uploads — slow down' }); }
+  b.tokens -= 1; _buckets.set(ip, b);
+  next();
+}
+
+// Accept only real raster images (magic bytes), not whatever the Content-Type claims.
+function validImage(buf) {
+  if (!buf || buf.length < 12) return false;
+  const b = buf;
+  if (b[0] === 0xFF && b[1] === 0xD8) return true;                                   // JPEG
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return true;  // PNG
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return true;                   // GIF
+  if (b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45) return true;  // RIFF....WEBP
+  return false;
+}
+
+// Validate a binary glTF (.glb): magic + version + self-consistency, and reject any
+// external reference (buffer/image uri that isn't a data: URI) so a model can't pull
+// or exfiltrate over the network when a client loads it.
+function validateGlb(buf) {
+  if (!buf || buf.length < 20) return { ok: false, reason: 'not a .glb (too small)' };
+  if (buf.readUInt32LE(0) !== 0x46546C67) return { ok: false, reason: 'not a .glb (bad magic)' }; // 'glTF'
+  if (buf.readUInt32LE(4) !== 2) return { ok: false, reason: 'unsupported glTF version' };
+  if (buf.readUInt32LE(8) !== buf.length) return { ok: false, reason: 'declared length mismatch' };
+  const jsonLen = buf.readUInt32LE(12);
+  if (buf.readUInt32LE(16) !== 0x4E4F534A) return { ok: false, reason: 'first chunk is not JSON' }; // 'JSON'
+  if (20 + jsonLen > buf.length) return { ok: false, reason: 'JSON chunk overruns file' };
+  let gltf;
+  try { gltf = JSON.parse(buf.slice(20, 20 + jsonLen).toString('utf8')); }
+  catch { return { ok: false, reason: 'invalid glTF JSON' }; }
+  const uris = [...(gltf.buffers || []), ...(gltf.images || [])].map(x => x && x.uri).filter(Boolean);
+  if (uris.some(u => !/^data:/i.test(String(u)))) return { ok: false, reason: 'model contains an external reference' };
+  return { ok: true };
+}
+
 // Image upload: one image per request, sent as a raw body (this sidesteps the
 // WebSocket payload cap). Saved under a random name; responds with its URL ref.
-app.post('/upload', express.raw({ type: 'image/*', limit: '16mb' }), (req, res) => {
+app.post('/upload', rateLimitUpload, express.raw({ type: 'image/*', limit: '16mb' }), async (req, res) => {
   try {
+    if (!await requireAdmin(req, res)) return; // library uploads are admin-only
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
+    if (!validImage(req.body)) return res.status(415).json({ error: 'not a supported image' });
     const contentType = req.headers['content-type'] || '';
     const ext = (contentType.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
     res.json({ url: saveAsset(req.query.kind, req.body, ext) }); // ?kind=uploads|decks|boards|props
@@ -1728,9 +1786,12 @@ app.post('/upload', express.raw({ type: 'image/*', limit: '16mb' }), (req, res) 
 });
 
 // Model upload: a raw .glb of any content-type. Saved into the props/ category.
-app.post('/upload-model', express.raw({ type: () => true, limit: '16mb' }), (req, res) => {
+app.post('/upload-model', rateLimitUpload, express.raw({ type: () => true, limit: '16mb' }), async (req, res) => {
   try {
+    if (!await requireAdmin(req, res)) return; // library uploads are admin-only
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
+    const v = validateGlb(req.body);
+    if (!v.ok) return res.status(415).json({ error: v.reason });
     res.json({ url: saveAsset(req.query.kind || 'props', req.body, 'glb') });
   } catch (e) {
     res.status(500).json({ error: 'save failed' });
@@ -1904,6 +1965,16 @@ async function disposeLive(code) { // shut down a running table for this code, i
     for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'closeAndDispose');
   } catch (e) { /* none running */ }
 }
+// Drop a user from EVERY live table they're currently in (admin action). Reuses the
+// per-room kick's 'kicked' notice + consented leave. In-process (single-instance) scope.
+function kickUserEverywhere(userId) {
+  let n = 0;
+  for (const room of LIVE_ROOMS) {
+    const live = room.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
+    if (live) { live.send('kicked'); setTimeout(() => { try { live.leave(4000); } catch (e) {} }, 150); n++; }
+  }
+  return n;
+}
 
 app.get('/admin/rooms', async (req, res) => {
   if (!await requireAdmin(req, res)) return;
@@ -1961,21 +2032,50 @@ app.post('/admin/users/:id/admin', express.json({ limit: '1kb' }), async (req, r
   await db.setAdmin(req.params.id, makeAdmin);
   res.json({ ok: true });
 });
+app.post('/admin/users/:id/kick', async (req, res) => { // drop a user from every live table (doesn't touch their account)
+  if (!await requireAdmin(req, res)) return;
+  res.json({ ok: true, rooms: kickUserEverywhere(req.params.id) });
+});
 app.delete('/admin/users/:id', async (req, res) => {
   const me = await requireAdmin(req, res); if (!me) return;
   if (String(req.params.id) === String(me.id)) return res.status(400).json({ error: 'you cannot delete your own account' });
   const target = await db.findUserById(req.params.id);
   if (!target) return res.status(404).json({ error: 'user not found' });
-  for (const r of await db.roomsOwnedBy(req.params.id)) await disposeLive(r.code); // kick anyone in their live tables
+  for (const r of await db.roomsOwnedBy(req.params.id)) await disposeLive(r.code); // dispose the tables they own
+  kickUserEverywhere(req.params.id); // and drop them from any other live table they're in
   try { await db.purgeUser(req.params.id); }
   catch (e) { console.error('[purge user]', e.message); return res.status(500).json({ error: 'could not delete user' }); }
   res.json({ ok: true });
 });
 
 const httpServer = createServer(app);
+// A pending joiner holds a socket here (instead of polling) while awaiting approval.
+// onAuth is the INVERSE of the table's: only PENDING members may wait — admitted users
+// should join the table, non-members must request first. When a GM admits/declines,
+// the table room calls notifyAdmitted/notifyDeclined here to push + release them.
+class LobbyRoom extends Room {
+  async onAuth(client, options) {
+    const user = options && options.token ? await db.findUserByToken(hashToken(options.token)) : null;
+    if (!user) throw new ServerError(401, 'Please sign in first.');
+    const room = options && options.code ? await db.findRoomByCode(options.code) : null;
+    if (!room) throw new ServerError(404, 'That room no longer exists.');
+    const m = await db.getMembership(room.id, user.id);
+    if (!m) throw new ServerError(403, 'Request to join this room first.');
+    if (m.status === 'admitted') throw new ServerError(409, 'Already admitted — join the table.');
+    return { userId: user.id };
+  }
+  notifyAdmitted(userId) { this._resolve(userId, 'admitted'); }
+  notifyDeclined(userId) { this._resolve(userId, 'declined'); }
+  _resolve(userId, msg) {
+    const c = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
+    if (c) { c.send(msg); setTimeout(() => { try { c.leave(); } catch (e) {} }, 150); }
+  }
+}
+
 const gameServer = new Server({ transport: new WebSocketTransport({ server: httpServer, maxPayload: 4 * 1024 * 1024 }) });
 gameServer.define('table', TableRoom).filterBy(['code']); // one live table per room code
 gameServer.define('editor', EditorRoom); // single shared admin-only library workshop
+gameServer.define('lobby', LobbyRoom).filterBy(['code']); // transient per-code waiting room for pending joiners
 
 const PORT = process.env.PORT || 2567;
 gameServer.listen(PORT).then(() => console.log(`\n  Open Tabletop running →  http://localhost:${PORT}\n`));

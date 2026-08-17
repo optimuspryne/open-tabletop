@@ -79,7 +79,7 @@ async function loadUsers() {
       }
       if (user.isAdmin) acts.append(btn('Revoke admin', () => setAdmin(user, false), 'danger'));
       else acts.append(btn('Make admin', () => setAdmin(user, true)));
-      acts.append(btn('Delete', () => deleteUser(user), 'danger'));
+      acts.append(btn('Kick', () => kickUser(user)), btn('Delete', () => deleteUser(user), 'danger'));
     }
     tr.append(cell(acts));
     tbody.appendChild(tr);
@@ -114,6 +114,12 @@ async function purgeRoom(room) {
 async function setAdmin(user, makeAdmin) {
   if (!makeAdmin && !confirm(`Revoke admin from ${user.username}?`)) return;
   try { await api('/admin/users/' + user.id + '/admin', { method: 'POST', body: { isAdmin: makeAdmin } }); loadUsers(); } catch (e) { alert(e.message); }
+}
+async function kickUser(user) {
+  try {
+    const { rooms } = await api('/admin/users/' + user.id + '/kick', { method: 'POST' });
+    alert(rooms ? `Dropped ${user.username} from ${rooms} live table${rooms > 1 ? 's' : ''}.` : `${user.username} isn't in any live table.`);
+  } catch (e) { alert(e.message); }
 }
 async function deleteUser(user) {
   if (!confirm(`Permanently delete ${user.username}? This purges any rooms they own and removes them from all rooms. This cannot be undone.`)) return;

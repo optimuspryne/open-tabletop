@@ -363,7 +363,13 @@ reshape/reset/board = GM+, member management = GM+. **Admins** are a global flag
 (`is_admin`), threaded through `onAuth` as `client.auth.isAdmin`: they join any
 room as a GM and can act on private library assets anywhere. GMs manage members
 (admit / kick / promote) live from the Members panel; the server pushes
-`memberList` to GMs plus a pending-join pulse.
+`memberList` to GMs plus a pending-join pulse. Because `onAuth` turns a *pending*
+joiner away from the table, they instead hold a socket to a tiny per-code
+**`LobbyRoom`** while waiting; on admit/decline the table room calls into that lobby
+(via the matchmaker) to push `admitted`/`declined` and release them — instant, with a
+15s poll left as a fallback. A **site admin** can also kick a user out of *every*
+live table at once (`kickUserEverywhere`, at `POST /admin/users/:id/kick` and on
+user-delete); the per-room GM kick is separate and scoped to that one table.
 
 **Host approval.** Creating a room needs approved host access (`host_status =
 'approved'`, or admin). A password signup starts **pending**; a passwordless
@@ -375,12 +381,18 @@ re-request). Admins host regardless and are excluded from the pending count.
 (restore / purge soft-deleted) and users (grant/revoke admin, approve/reject/
 revoke host, delete-with-cascade).
 
-**Still to come — hardening.** The role gate plus admin-only uploads close the
-public-upload hole by construction, but a stateless hardening pass remains before
-public exposure: glTF magic-byte validation, storage caps + rate limits,
-external-URI stripping on uploaded models, security headers / CSP (once the CDN
-libraries are self-hosted), and post-parse complexity limits. Defense in depth,
-not provably safe.
+**Hardening.** The upload endpoints (`/upload`, `/upload-model`) are now gated by
+`requireAdmin` server-side — the "admin-only" guarantee no longer rests on the UI —
+and every upload is validated before it touches disk: `.glb` magic + version + a
+JSON-chunk parse that **rejects any external buffer/image URI** (only `data:` is
+allowed, so a model can't fetch or exfiltrate at load time), plus magic-byte checks
+on images. A per-IP **token bucket** (burst 300, ~180/min sustained) throttles
+uploads while still letting a whole deck's images through at once. The rate limiter
+and the cross-room kick are in-process (single-instance); both would need a shared
+store to scale out. **Still deferred:** a real CSP — `helmet` runs with
+`contentSecurityPolicy: false` pending self-hosting the CDN libraries (Three,
+Colyseus, esm.sh) — plus optional post-parse complexity and per-user storage caps.
+Defense in depth, not provably safe.
 
 ## Adding things
 

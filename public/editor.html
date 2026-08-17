@@ -32,10 +32,10 @@
 </div>
 <div id="rightRail">
 <div id="panel">
-  <span id="status">connecting…</span>
+  <span id="status" class="panel">connecting…</span>
   <div>
-    <div id="players"></div>
-    <div id="me">
+    <div id="players" class="panel"></div>
+    <div id="me" class="panel">
       <span id="myAv" class="mav editable" title="Change your avatar"></span>
       <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
       <input id="avatarInput" type="file" accept="image/*" hidden>
@@ -44,7 +44,7 @@
   <button id="nextTurn">Next turn</button>
 </div>
 <div id="toolsDock">
-  <div id="toolsMenu">
+  <div id="toolsMenu" class="panel">
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
     <button id="notesBtn">📝 Private Notes</button>
     <button id="chatBtn">💬 Chat</button>
@@ -107,10 +107,10 @@
   <button id="wbClearBtn" class="danger">Clear</button>
   <button id="wbDone">Done <kbd>Esc</kbd></button>
 </div>
-<div id="hand"></div>
+<div id="hand" class="panel"></div>
 <div id="leftRail">
   <div id="interactDock">
-    <div id="interactMenu">
+    <div id="interactMenu" class="panel">
       <div class="toolsLabel" id="interactToggle">Interactions <span class="toolsChev">▾</span></div>
       <button id="leanBtn">🔎 Lean In</button>
       <button id="mySeatBtn">↩ My Seat</button>
