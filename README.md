@@ -9,8 +9,11 @@ every client over Colyseus; clients render and send intent, never physics.
 
 ```bash
 npm install
-# Copy the .env.example file `cp .env.example .env.  Then set `DATABASE_URL` to the `tabletop_app` connection string. `npm start` auto-loads `.env`.
-# set up Postgres and DATABASE_URL first — see "Database" below
+# Set up Postgres and DATABASE_URL first — see "Database" below
+# Copy the .env.example file
+cp .env.example .env
+# Then set `DATABASE_URL` in .env to the `tabletop_app` connection string.
+# `npm start` auto-loads `.env`.
 npm start
 ```
 
