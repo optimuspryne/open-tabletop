@@ -1,19 +1,19 @@
 # Open Tabletop — app + Postgres.
 services:
   db:
-    # image: postgres:16-alpine # Uncomment to use your own Postgres instance.
-    image: optimuspryne/open-tabletop-db:latest
+    image: postgres:16-alpine 
+    # image: optimuspryne/open-tabletop-db:latest # Uncomment to use docker hum image.  Useful for Portainer etc...
     restart: unless-stopped
     environment:
       POSTGRES_USER: tabletop            # owner role — applies the schema (DDL)
       POSTGRES_DB: tabletop
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}  # used by the init script below
+      POSTGRES_PASSWORD: ${DB_PASSWORD} # Set in .env file
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}  # Set in .env file
     volumes:
       - db-data:/var/lib/postgresql/data
       # Init scripts run ONCE, on an empty data dir, in filename order:
-      # - ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro #Uncomment to use your own Postgres instance.
-      # - ./docker/init-app-role.sh:/docker-entrypoint-initdb.d/02-app-role.sh:ro #Uncomment to use your own Postgres instance.
+      ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro  # Remove these lines if using 'image: optimuspryne/open-tabletop-db:latset'.  Useful for Portainer etc...
+      ./docker/init-app-role.sh:/docker-entrypoint-initdb.d/02-app-role.sh:ro  # Remove these lines if using 'image: optimuspryne/open-tabletop-db:latset'.  Useful for Portainer etc...
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tabletop -d tabletop"]
       interval: 5s
