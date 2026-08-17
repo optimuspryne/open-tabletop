@@ -84,26 +84,6 @@ docker run -p 2567:2567 -v ott-assets:/data/assets \
 The volume holds uploaded **files**; library **metadata** lives in Postgres. Pass
 the DB URL via `DATABASE_URL` or `DATABASE_URL_FILE` (a mounted secret).
 
-### Publishing the image (Docker Hub or GHCR)
-
-Build, tag, and push so others can run it without building from source:
-
-```bash
-docker build -t YOURNAME/open-tabletop:0.1.0 -t YOURNAME/open-tabletop:latest .
-docker login                          # Docker Hub; or `docker login ghcr.io` for GitHub's registry
-docker push YOURNAME/open-tabletop:0.1.0
-docker push YOURNAME/open-tabletop:latest
-```
-
-Consumers then swap `build: .` for `image: YOURNAME/open-tabletop:latest` on the `app`
-service (already stubbed in the compose file) and `docker compose up -d`. For an image
-that runs on both x86 and ARM (e.g. build on Apple Silicon, deploy to an x86 VPS):
-
-```bash
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -t YOURNAME/open-tabletop:latest --push .
-```
-
 ## What's in the box
 
 - **Dice** d4–d20 (`↻ Dice` / the `☰ + Dice` menu). One `die` kind parameterized
