@@ -5,11 +5,13 @@ because the engine only simulates physical objects and lets people enforce the
 rules. One server runs a single cannon-es world and syncs piece transforms to
 every client over Colyseus; clients render and send intent, never physics.
 
-## Run
+## Run via NPM
 
 ```bash
-npm install
 # Set up Postgres and DATABASE_URL first — see "Database" below
+git clone "https://github.com/optimuspryne/open-tabletop.git"
+cd open-tabletop/
+npm install
 # Copy the .env.example file
 cp .env.example .env
 # Then set `DATABASE_URL` in .env to the `tabletop_app` connection string.
@@ -51,19 +53,20 @@ state and private hands are still all in-memory. One-time setup:
    (To promote someone later: `UPDATE users SET is_admin = true WHERE
    lower(username) = lower('them');`.)
 
-Config comes from `DATABASE_URL`, or `DATABASE_URL_FILE` (a path to a file holding
-it — the Docker-secrets pattern, taking priority). There's no hardcoded fallback, so
+Config comes from `DATABASE_URL`. There's no hardcoded fallback, so
 a missing config fails loudly at startup. For a remote DB, append `?sslmode=no-verify`
 (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 turn on `ssl` server-side.
 
-## Run with Docker
+## Run with Docker Compose
 
 The repo ships a `Dockerfile` and `docker-compose.yml` that bring up the app **and**
 Postgres — including the two-role DB setup (owner + least-privilege app role), applied
 automatically on first start.
 
 ```bash
+git-clone "https://github.com/optimuspryne/open-tabletop.git"
+cd open-tabletop/
 cp .env.example .env      # set DB_PASSWORD and APP_DB_PASSWORD
 docker compose up -d      # builds the image, starts Postgres, then the app
 ```
@@ -80,56 +83,122 @@ If you already run Postgres (managed or otherwise), skip Compose and run just th
 app image against it:
 
 ```bash
+git-clone "https://github.com/optimuspryne/open-tabletop.git"
+cd open-tabletop/
 docker build -t open-tabletop .
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop open-tabletop
+# For a remote DB, append `?sslmode=no-verify`
+# (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
+# turn on `ssl` server-side.
 ```
 
+### Deploying via 'Stack' in Portainer
+
+#### Web Editor ####
+
+Edit the compose file so that the db section uses **'image: optimuspryne/open-tabletop-db'**, and remove the volumes after the **'# Init scripts run ONCE...'** comment.  Example below:
+
+```yml
+# Open Tabletop — app + Postgres.
+# First run:  cp .env.example .env  (set the two passwords),  then:  docker compose up -d
+services:
+  db:
+    image: optimuspryne/open-tabletop-db:latest
+    restart: unless-stopped
+    container_name: open-tabletop-db
+    environment:
+      POSTGRES_USER: tabletop
+      POSTGRES_DB: tabletop
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    volumes:
+      - ./db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tabletop -d tabletop"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      
+  app:
+    image: optimuspryne/open-tabletop:latest
+    restart: unless-stopped
+    container_name: open-tabletop-app
+    depends_on:
+      db:
+        condition: service_healthy           # wait until the schema + role are in place
+    environment:
+      DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
+      ASSETS_DIR: /data/assets
+      # PORT: 2567
+    ports:
+      - "2567:2567"
+    volumes:
+      - ./assets:/data/assets                  # uploaded decks/boards/props/skyboxes
+```
 The volume holds uploaded **files**; library **metadata** lives in Postgres. Pass
 the DB URL via `DATABASE_URL` or `DATABASE_URL_FILE` (a mounted secret).
 
 ## What's in the box
 
-- **Dice** d4–d20 (`↻ Dice` / the `☰ + Dice` menu). One `die` kind parameterized
-  by `props.sides`; d6 is a numbered box, the rest numbered convex polyhedra
-  whose mesh (client) and collider (server) come from one vertex list. Inspect a
-  die (or prop) to recolor it — dice get **independent body and number colours**.
-- **Props** (`+ Object`): built-in shapes (box, sphere, cone, pyramid, checker,
-  go stone, coin, chip, token, chess set) and **custom `.glb` uploads**. Every
-  prop has a **Scale**; models can be **tinted** (whole, one material slot, or
-  left as-is) and **saved** for one-click re-spawn.
-- **Cards, decks & hidden hands** — face-down stacks, private hands, custom
-  decks from text or images, save/edit/clone, and **double-right-click to split**
-  a deck in two. See below.
-- **Boards** (`↷ Board`): two built-in `.glb` boards (Chess/Checkers, Go),
-  **custom `.glb` board upload**, or a plain sized flat board.
-- **Inspect** — double-click a piece to enlarge & rotate it; double-click a deck
-  to privately **draw a card into inspect**, then send it to the field or hand.
-  **Lean in** (Interactions menu) eases the camera closer for a look.
-- **Whiteboard & skybox** — a shared tilt-up **whiteboard** to sketch on (one
-  drawer at a time), and a room **skybox** (equirect or cubemap background,
-  GM-applied, curated in the editor library).
-- **Seats, presence & turns** — a seat per player, standing name/avatar markers,
-  a turn indicator, private hand bar (collapsible).
-- **Live table tools** — a shared **timer** (⏱, stopwatch or countdown), a
-  **scoreboard** + GM room notes, a private per-player **notebook** (✎,
-  ephemeral), **hold-to-show** cards to chosen players or the whole table (🃏,
-  revealed face-up in your seat fan with a public "SHOWING n" badge), floating
-  **name tags** over pieces others are holding, and an **attention ping**
-  (middle-click / **P**) that pulses a colored ring at a spot. Player-facing
-  actions live in a left **Interactions** menu, table utilities in a right
-  **Tools** menu.
-- **Accounts, rooms & roles** — sign up as a passwordless **player** (quick-join)
-  or a password **host**; create rooms with join codes and an optional
-  admit-to-join gate. Membership carries a **role** (owner → GM → helper →
-  player) that gates the table tools, managed live from an in-table Members
-  panel. See "Accounts, rooms & roles" below.
-- **Admin console & curated library** — site **admins** manage all rooms and
-  users at `/admin.html` (including a **storage cleanup** that trashes orphaned
-  asset files), and curate the shared asset library in a dedicated **editor**
-  (`/editor.html`): every deck/board/prop/scene/skybox is **public or private**,
-  admins create/edit, and GMs/helpers spawn only what's been published. See
-  "The asset library" below.
+- **Dice**
+  * d4–d20 (the `☰ 🎲 Add Dice` or `🧱 Browse Built-Ins` menus).
+  * One `die` kind parameterized by `props.sides`.
+  * D6 is a numbered box, the rest are numbered convex polyhedra whose mesh (client) and collider (server) come from one vertex list.
+  * Dice get **independent body and number colors**.
+- **Props/Objects**
+  * Built-In Objects (`🧱 Browse Built-Ins` menu):
+  * Built-in basic shapes: box, pyramid, sphere, cuboid, cone, cylinder, truncated cone, hex prism, triangle prism, hex pyramid, checker, crowned checker, go stone (flattened sphere).
+  * Built-in `.glb` files: coin, poker chip, token, chess pieces.
+  * Custom `.glb` objects (`📚 Browse Custom Library` menu). Curated in the **Editor library**(admin accounts only)
+- **Cards, decks & hidden hands** - Face-down stacks, private hands.
+  * A built-in standard 52 card deck (`🧱 Browse Built-Ins` menu).
+  * Custom decks, image based or text based (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only)
+- **Boards** (`🧱 Browse Built-Ins` menu).
+  * Two built-in `.glb` boards, Chess/Checkers and Go.
+  * Custom `.glb` or flat image boards (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only)
+- **`🖊️ Whiteboard`** A shared tilt-up **whiteboard** to sketch on.
+  * Only one drawer at a time.  Marker color matches assigned player color.
+  * Visibility, style, and location is GM controlled.
+- **`🌄Skyboxes`** - Equirect or CubeMap backgrounds.
+  * GM Controlled
+  * Built-in Skyboxes (`🧱 Browse Built-Ins` menu).
+  * Custom Skyboxes (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only).
+- **Seats, presence & turns**
+  * A seat per player, standing name/avatar markers.
+  * Automatically assigned color.
+  * Turn indicator, turn can be advanced using the 'Next Turn' button.
+- **Live Table 'Tools'** - Look for the **'Tools'** menu on the right, collapsible.
+  * **`📝 Private Notes`** A private, per-player ephemeral.
+  * **`💬 Chat`** A public room chat, ephemeral.
+  * **`📊 Scoreboard`** A shared scoreboard + GM room notes.
+  * **`⏱️ Timer`** A shared clock, stopwatch or countdown.
+  * **`🖊️ Whiteboard`** See the above section.
+  * **`❔ How to Play`** A full list of controls, changes based on player role (player, helper, GM).
+  * **`🔊 Sound`** Volume and music controls, private, per-player.  Controls sound effects and music volume levels separetely (or 'mute').  Music tracks (Provided by: [Kevin MacLeod, CC BY 4.0](https://incompetech.com/)) can be picked individually, played in alphabetical order, or shuffled. 
+- **Player 'Interactions'** - Look for the **Interactions** menu on the left, collapsible.
+  * `🔎 Lean In` zooms the camera view in slightly, to simulate 'leaning over the table'.
+  * `↩ My Seat` snaps the camera back to the players assigned seat.
+  * `🔄 Roll Dice` rolls all dice on the table.
+  * `🃏 Show Hand` press **hold-to-show** to show cards to chosen players or the whole table. Revealed face-up in your seat fan with a public "SHOWING n" badge on your player card.
+  * `🂠 Drop Hand` drop your entire hand on the table (face-up or face-down).
+  * **Name tags** appear over pieces others are holding.
+  * There is also an **attention ping** (middle-mouse-click / **P**) that pulses a colored ring at a spot.
+- **Accounts Types**
+  * 'Quick Join' Users: Enter a display name, email and a room code to quickly join.  No sign-up needed to play.  (Rooms by default still require GM approval for entry).
+  * GM Accounts:  Create an account with a password, then request 'host access' on your lobby view. An Admin needs to grant approval before you can host.  Once approved you can create rooms, spawn all public assets, promote/demote players, approve new entries, load scenes, change the skybox, save the table state and kick players from your rooms.
+  * Admin Accounts: Only another Admin can promote a GM account to 'Admin' status.  Admins have full control: they can close and purge any room.  Kick any player from all active tables.  Delete any account, scan for orphaned assets to move to the trash. Demote and promote accounts.  Most importantly only Admins can add or delete items from the `📚 Custom Library` using the `📚 Library Editor`.
+- **Room Roles**
+  * Player: Can interact with objects/cards/decks on the table.  Can use all 'Interactions' and limited use of 'Tools'.
+  * GM (Owner): Has full control of any rooms they create.
+  * GM (Promoted): Can perform all GM functions, except: closing a room
+  * Admin: Admins are default owners and GMs of any rooms.  They can close or delete any room. They can kick anyone, including GMs and Owners.
+- **Curated Custom Library** - While logged in as an Admin at the 'lobby' page, click `⚙️ Admin` --> `📚 Library Editor`.  Here you can manage all of your custom assets.  All custom assets by default are set as 'private'.  Admins must 'publish' them before GMs can spawn them.
+  * Upload custom objects as `.glb` files.  Scale, collider-shape and orientation can be set before upload.
+  * Upload custom decks.  Image decks take a single 'back image' and numerous 'face images', colors can be fully customized.  You can enter an optional 'back text', and fronts take a list of 'front texts': one per-line, comma-separated or JSON format.  A .csv or .txt file can also be uploaded.
+  * Upload custom boards.  Boards can either be `.glb` files (they will be automatically scaled), or a 2D image can be uploaded, with dimensions specified to create a custom 'image board'.
+  * Upload custom skyboxes. You can upload panoramic or cubemap skyboxes.
+  * Scenes: Setup a table the way you like and then 'save' it's state.  This scene can then be loaded onto any table.
 
 ## Files
 
