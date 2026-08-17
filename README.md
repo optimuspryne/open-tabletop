@@ -36,7 +36,7 @@ state and private hands are still all in-memory. One-time setup:
    To **upgrade an existing database**, apply the numbered migrations in order
    instead — `001_custom_assets.sql` → `002_auth.sql` → `003_asset_visibility.sql`
    → `004_host_status.sql` → `005_room_board.sql` → `006_room_table.sql` →
-   `007_scenes.sql` → `008_room_skybox.sql`. (`schema.sql` is the flattened end
+   `007_scenes.sql` → `008_room_skybox.sql` → `009_room_state.sql`. (`schema.sql` is the flattened end
    state of all of them;
    the per-migration backfills matter on a populated DB but are no-ops on an empty
    one, so they're dropped from the baseline.)
@@ -124,7 +124,7 @@ The game client is a **linear import chain**: `shared ← core ← graphics ←
 client`. `table.html` and `editor.html` load `client.js`; its `import`s pull in
 the rest (the editor also loads `editor-panel.js`). The landing and admin pages
 are standalone (`landing.js` / `admin.js`, plain `fetch` to the HTTP API).
-Nothing is bundled — Three.js comes from a CDN import map, Colyseus from unpkg.
+Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus are self-hosted under `public/vendor/`, so there are no third-party CDN fetches at runtime. That's also what makes the enforced `script-src 'self'` Content-Security-Policy possible.
 
 ## Tuning knobs (edit and reload)
 
