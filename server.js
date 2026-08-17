@@ -12,7 +12,8 @@ import path from 'path';
 import crypto from 'crypto';
 import { Server, Room, ServerError, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { Schema, MapSchema, defineTypes } from '@colyseus/schema';
+import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
+Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
 import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive } from './shared/pieces.js';
@@ -1696,20 +1697,66 @@ class EditorRoom extends TableRoom {
 // --- Boot: Colyseus + Express (both served on the same port) ----------------
 const app = express();
 
-// Security headers (clickjacking, HSTS, nosniff, referrer, hide X-Powered-By…).
-// CSP is intentionally OFF for now: the client loads Three.js/Colyseus from CDNs
-// (esm.sh, unpkg) via an inline import map, which a default CSP would block. To
-// enable CSP, self-host those libraries (or allowlist the CDNs) and test it in a
-// browser first — draft directives are below.
+// Per-IP token-bucket rate limiter (in-memory; resets on restart, single-instance).
+// A burst allowance that refills over time — tuned per use below.
+function makeRateLimiter({ cap, refillPerMs, message }) {
+  const buckets = new Map(); // ip -> { tokens, last }
+  return (req, res, next) => {
+    const ip = req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
+    const now = Date.now();
+    const b = buckets.get(ip) || { tokens: cap, last: now };
+    b.tokens = Math.min(cap, b.tokens + (now - b.last) * refillPerMs);
+    b.last = now;
+    if (b.tokens < 1) { buckets.set(ip, b); return res.status(429).json({ error: message }); }
+    b.tokens -= 1; buckets.set(ip, b);
+    next();
+  };
+}
+// Uploads: big burst (a deck's back + every front go back-to-back), ~180/min sustained.
+const rateLimitUpload = makeRateLimiter({ cap: 300, refillPerMs: 3 / 1000, message: 'too many uploads — slow down' });
+// Auth: brute-force + signup-spam guard. ~20/min per IP — scrypt already slows each
+// attempt; this is defense in depth and still leaves room for a few users behind one NAT.
+const rateLimitAuth = makeRateLimiter({ cap: 20, refillPerMs: 20 / 60000, message: 'too many attempts — please slow down' });
+
+// Security headers: helmet's defaults (HSTS, nosniff, frame-deny, referrer, hide
+// X-Powered-By…) minus its built-in CSP — we define our own below.
 app.use(helmet({ contentSecurityPolicy: false }));
-// app.use(helmet.contentSecurityPolicy({ directives: {
-//   defaultSrc: ["'self'"],
-//   scriptSrc:  ["'self'", "https://esm.sh", "https://unpkg.com", "'unsafe-inline'"], // 'unsafe-inline' = the import map
-//   styleSrc:   ["'self'", "'unsafe-inline'"],
-//   imgSrc:     ["'self'", "data:", "blob:"],       // avatars are data: URLs
-//   connectSrc: ["'self'", "https://esm.sh", "ws:", "wss:"], // Colyseus websocket + module fetches
-//   workerSrc:  ["'self'", "blob:"],
-// }}));
+
+// Content-Security-Policy — ENFORCED. Three + Colyseus are self-hosted under /vendor,
+// so scripts lock to 'self' plus the three known inline-script hashes (accent
+// bootstrap, import map, OTT_EDITOR flag). data:/blob: are allowed in connect-src for
+// Three's loaders (embedded model buffers + object URLs). No 'unsafe-eval': Colyseus
+// feature-detects eval and falls back to its non-inline decoder when it's blocked.
+// Violations still POST to /csp-report so real ones surface in the logs.
+const CSP_INLINE = [
+  "'sha256-i/yI+mRMoFQQ4YqK4dbxQlxozrQncj7xjpWdHUUvfns='", // accent-color bootstrap (all pages)
+  "'sha256-GPCT8IS0bOltxV6o5zObSqdYe/Cpv1tKzAj9rjuR+yM='", // import map (table, editor)
+  "'sha256-C+qoepFpRED4aJXCZO8fNnC4cmFGPYrKJqdMHxsEub4='", // window.OTT_EDITOR flag (editor)
+];
+app.use(helmet.contentSecurityPolicy({
+  useDefaults: false,
+  reportOnly: false, // ENFORCED
+  directives: {
+    defaultSrc: ["'self'"],
+    scriptSrc:  ["'self'", ...CSP_INLINE],
+    styleSrc:   ["'self'", "'unsafe-inline'"], // inline styles are pervasive + low-risk
+    imgSrc:     ["'self'", 'data:', 'blob:'],  // avatars = data: URLs, textures = blobs
+    connectSrc: ["'self'", 'ws:', 'wss:', 'data:', 'blob:'], // Colyseus ws + Three's data:/blob: buffer loaders
+    workerSrc:  ["'self'", 'blob:'],
+    objectSrc:  ["'none'"],
+    baseUri:    ["'self'"],
+    reportUri:  ['/csp-report'],
+  },
+}));
+// Sink for CSP violation reports during the report-only phase — logs what WOULD block.
+app.post('/csp-report', rateLimitAuth, express.json({ type: () => true, limit: '64kb' }), (req, res) => {
+  const r = req.body && req.body['csp-report'];
+  // Colyseus feature-detects eval and gracefully falls back when it's blocked — a known,
+  // harmless report that fires on every load, so drop it and log only real violations.
+  const benign = r && r['blocked-uri'] === 'eval' && String(r['source-file'] || '').includes('/vendor/colyseus.js');
+  if (!benign) console.warn('[CSP]', JSON.stringify(req.body));
+  res.sendStatus(204);
+});
 
 app.use(express.static('public'));
 app.use('/shared', express.static('shared'));
@@ -1725,20 +1772,6 @@ app.use('/assets',
 );
 
 // ---- Upload hardening: validate bytes + throttle before writing anything to disk ----
-// Per-IP upload throttle (in-memory; resets on restart, single-instance scope).
-// Token bucket: a deck uploads its back + every front back-to-back, so we allow a
-// large burst (a big deck in one go) that refills over time to cap sustained abuse.
-const _buckets = new Map(); // ip -> { tokens, last }
-function rateLimitUpload(req, res, next) {
-  const ip = req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
-  const now = Date.now(), CAP = 300, REFILL_PER_MS = 3 / 1000; // burst up to 300, then ~180/min sustained
-  const b = _buckets.get(ip) || { tokens: CAP, last: now };
-  b.tokens = Math.min(CAP, b.tokens + (now - b.last) * REFILL_PER_MS);
-  b.last = now;
-  if (b.tokens < 1) { _buckets.set(ip, b); return res.status(429).json({ error: 'too many uploads — slow down' }); }
-  b.tokens -= 1; _buckets.set(ip, b);
-  next();
-}
 
 // Accept only real raster images (magic bytes), not whatever the Content-Type claims.
 function validImage(buf) {
@@ -1806,7 +1839,7 @@ const clientUser = (u) => u && ({ id: u.id, username: u.username, email: u.email
 const validUsername = (s) => typeof s === 'string' && /^[a-zA-Z0-9_-]{3,20}$/.test(s.trim());
 const validEmail = (s) => typeof s === 'string' && s.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.trim());
 
-app.post('/auth/signup', express.json({ limit: '1kb' }), async (req, res) => {
+app.post('/auth/signup', rateLimitAuth, express.json({ limit: '1kb' }), async (req, res) => {
   const { username, email, password } = req.body || {};
   if (!validUsername(username)) return res.status(400).json({ error: 'username must be 3–20 chars (letters, numbers, _ or -)' });
   if (!validEmail(email)) return res.status(400).json({ error: 'invalid email' });
@@ -1822,7 +1855,7 @@ app.post('/auth/signup', express.json({ limit: '1kb' }), async (req, res) => {
   }
 });
 
-app.post('/auth/login', express.json({ limit: '1kb' }), async (req, res) => {
+app.post('/auth/login', rateLimitAuth, express.json({ limit: '1kb' }), async (req, res) => {
   const { login, password } = req.body || {};
   if (!login || !password) return res.status(400).json({ error: 'login and password required' });
   const u = await db.findUserByLogin(String(login).trim());
@@ -1836,7 +1869,7 @@ app.post('/auth/login', express.json({ limit: '1kb' }), async (req, res) => {
   res.json({ user: clientUser(u), token: raw });
 });
 
-app.post('/auth/token', express.json({ limit: '1kb' }), async (req, res) => {
+app.post('/auth/token', rateLimitAuth, express.json({ limit: '1kb' }), async (req, res) => {
   const u = await db.findUserByToken(hashToken(String((req.body && req.body.token) || '')));
   if (!u) return res.status(401).json({ error: 'invalid or expired token' });
   res.json({ user: clientUser(u) }); // auto-login on a return visit
@@ -2063,6 +2096,12 @@ class LobbyRoom extends Room {
     if (!m) throw new ServerError(403, 'Request to join this room first.');
     if (m.status === 'admitted') throw new ServerError(409, 'Already admitted — join the table.');
     return { userId: user.id };
+  }
+  async onLeave(client, consented) {
+    // A pending joiner who dropped (tab close / flaky net): hold their spot briefly so a
+    // reconnect keeps them waiting. Admit/decline leave consented → no hold (clean exit).
+    if (consented) return;
+    try { await this.allowReconnection(client, 20); } catch (e) { /* didn't return in time */ }
   }
   notifyAdmitted(userId) { this._resolve(userId, 'admitted'); }
   notifyDeclined(userId) { this._resolve(userId, 'declined'); }

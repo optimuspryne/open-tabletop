@@ -389,10 +389,12 @@ allowed, so a model can't fetch or exfiltrate at load time), plus magic-byte che
 on images. A per-IP **token bucket** (burst 300, ~180/min sustained) throttles
 uploads while still letting a whole deck's images through at once. The rate limiter
 and the cross-room kick are in-process (single-instance); both would need a shared
-store to scale out. **Still deferred:** a real CSP — `helmet` runs with
-`contentSecurityPolicy: false` pending self-hosting the CDN libraries (Three,
-Colyseus, esm.sh) — plus optional post-parse complexity and per-user storage caps.
-Defense in depth, not provably safe.
+store to scale out. **CSP is enforced:** Three + Colyseus are self-hosted under
+`/vendor` (no CDN fetches), so the policy locks scripts to `'self'` plus three
+inline-script hashes — no `'unsafe-inline'`/`'unsafe-eval'` (Colyseus feature-detects
+eval and falls back to its non-inline decoder). Violations POST to `/csp-report`.
+Remaining optional hardening: post-parse model complexity limits, per-user storage
+caps. Defense in depth, not provably safe.
 
 ## Adding things
 
