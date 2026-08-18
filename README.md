@@ -85,7 +85,7 @@ app image against it:
 ```bash
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.1.0
+  optimuspryne/open-tabletop:0.2.0
 # For a remote DB, append `?sslmode=no-verify`
 # (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 # turn on `ssl` server-side.
@@ -119,7 +119,7 @@ services:
       retries: 12
       
   app:
-    image: optimuspryne/open-tabletop:0.1.0
+    image: optimuspryne/open-tabletop:0.2.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:

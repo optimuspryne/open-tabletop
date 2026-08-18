@@ -35,7 +35,7 @@ The version lives in three places that must always agree: `package.json`, the gi
 4. **Build and push the images** — multi-arch, an immutable version tag plus the moving
    `latest`:
    ```bash
-   docker buildx build --platform linux/amd64,linux/arm64 \
+   docker buildx build \
      -t optimuspryne/open-tabletop:X.Y.Z \
      -t optimuspryne/open-tabletop:latest \
      --push .
