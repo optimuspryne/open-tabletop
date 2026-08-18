@@ -327,10 +327,19 @@ class Whiteboard extends Schema {
   constructor() { super(); this.enabled = false; this.angle = 0; this.owner = ''; this.dark = true; }
 }
 defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', dark: 'boolean' });
-class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); }
+// PUBLIC per-room measurement scale — a DISPLAY/snap layer over the FIXED world
+// scale; it never rescales physics or piece sizes. worldPerUnit converts a world
+// distance into display units; unitLabel is freeform ("in"/"cm"/"hex"/…). roundStep
+// is the display rounding, in display units. cellWorld/gridStyle are the grid half —
+// reserved now, dormant until snap-to-grid. GM-set, durable.
+class RoomScale extends Schema {
+  constructor() { super(); this.worldPerUnit = 1; this.unitLabel = 'u'; this.roundStep = 0.1; this.cellWorld = 0; this.gridStyle = 'off'; }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' } });
+defineTypes(RoomScale, { worldPerUnit: 'number', unitLabel: 'string', roundStep: 'number', cellWorld: 'number', gridStyle: 'string' });
+class State extends Schema {
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); }
+}
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -418,6 +427,14 @@ class TableRoom extends Room {
       this.state.tableX = clamp(rs.tableX, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
       this.state.tableZ = clamp(rs.tableZ, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
       if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
+      if (rs.scale && typeof rs.scale === 'object') { // seeded defaults survive a null column
+        const sc = this.state.scale, s = rs.scale;
+        if (Number.isFinite(+s.worldPerUnit) && +s.worldPerUnit > 0) sc.worldPerUnit = clamp(+s.worldPerUnit, 1e-3, 1e3);
+        if (typeof s.unitLabel === 'string') sc.unitLabel = s.unitLabel.slice(0, 8);
+        if (Number.isFinite(+s.roundStep) && +s.roundStep > 0) sc.roundStep = clamp(+s.roundStep, 1e-3, 1e2);
+        if (Number.isFinite(+s.cellWorld) && +s.cellWorld >= 0) sc.cellWorld = clamp(+s.cellWorld, 0, 1e3);
+        if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off') sc.gridStyle = s.gridStyle;
+      }
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
       this.savedScene = rs.scene || null; // GM's last saved table state — applied below, once physics maps exist
     }
@@ -1031,6 +1048,23 @@ class TableRoom extends Room {
       this.state.feltColor = c;
       this.scheduleSave();
     });
+    // Per-room measurement scale (GM+, durable). A display/snap layer only — it never
+    // touches physics or piece sizes. Partial: only provided, valid fields change.
+    this.onMessage('scaleSet', (client, msg = {}) => {
+      if (this.rank(client) < RANK.gm) return;
+      const sc = this.state.scale;
+      if (msg.worldPerUnit !== undefined && Number.isFinite(+msg.worldPerUnit) && +msg.worldPerUnit > 0)
+        sc.worldPerUnit = clamp(+msg.worldPerUnit, 1e-3, 1e3);
+      if (typeof msg.unitLabel === 'string')
+        sc.unitLabel = msg.unitLabel.replace(/[\x00-\x1f]/g, '').trim().slice(0, 8);
+      if (msg.roundStep !== undefined && Number.isFinite(+msg.roundStep) && +msg.roundStep > 0)
+        sc.roundStep = clamp(+msg.roundStep, 1e-3, 1e2);
+      if (msg.cellWorld !== undefined && Number.isFinite(+msg.cellWorld) && +msg.cellWorld >= 0)
+        sc.cellWorld = clamp(+msg.cellWorld, 0, 1e3);           // dormant until snap-to-grid
+      if (msg.gridStyle === 'square' || msg.gridStyle === 'hex' || msg.gridStyle === 'off')
+        sc.gridStyle = msg.gridStyle;                            // dormant until snap-to-grid
+      this.scheduleSave();
+    });
 
     // --- Whiteboard: a synced singleton on a track behind the players ----------
     this.onMessage('wbEnable', (client, { on } = {}) => {
@@ -1460,7 +1494,8 @@ class TableRoom extends Room {
     if (!this.roomId) return;
     const rows = [];
     this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
-    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene })
+    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene,
+      scale: { worldPerUnit: this.state.scale.worldPerUnit, unitLabel: this.state.scale.unitLabel, roundStep: this.state.scale.roundStep, cellWorld: this.state.scale.cellWorld, gridStyle: this.state.scale.gridStyle } })
       .catch(e => console.error('[saveState]', e.message));
   }
   onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save

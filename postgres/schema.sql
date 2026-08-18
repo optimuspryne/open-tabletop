@@ -52,6 +52,7 @@ CREATE TABLE rooms (
   skybox            text        NOT NULL DEFAULT '',    -- durable per-room skybox URL (GM-set; '' = default)
   felt_color        text        NOT NULL DEFAULT '#2f6b4f', -- durable per-room felt colour (GM-set)
   scene             jsonb,      -- GM's saved table snapshot (table size + pieces + transforms); null = none
+  scale             jsonb,      -- durable per-room measurement scale { worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle }; null = defaults
   created_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz
 );

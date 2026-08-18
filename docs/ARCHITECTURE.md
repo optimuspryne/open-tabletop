@@ -275,6 +275,61 @@ machinery:
   undone before `controls.update()`, so it never corrupts the real orbit distance
   and never touches the network.
 
+## The non-physics presentation layer
+
+Pieces go through the physics pipeline. Everything else that shows up on or around
+the table but *isn't* a physical object — the timer, the whiteboard, pings, the
+scoreboard, and (planned) measurement overlays — is presentation-layer, and it all
+shares one instinct: **sync the minimum, compute or render the rest locally.**
+
+It is tempting to fold these into a single shared base — a "non-physics thing" class.
+Resist it. *"Not a piece"* is a negation, not a behaviour: these share the property
+of not being physics bodies and almost nothing else. The timer has no geometry at
+all (it's a DOM HUD widget); the whiteboard is a tilted surface on a polar track; an
+overlay is flat on the felt in cartesian x/z. Their cardinality differs (singleton
+anchor vs. singleton object vs. a collection), and — most of all — their *sync
+mechanisms* differ. A common base would be abstract methods every subclass fully
+overrides, deleting no real duplication while coupling three systems that today
+evolve independently. That's the wrong-abstraction trade: an indirection tax paid
+for a resemblance, not a shared behaviour.
+
+What *is* reusable is the **choice of sync strategy**. There are three in the
+codebase, and a new presentation-layer feature should pick one deliberately:
+
+1. **Anchor + local compute** — for a value that changes continuously. Sync the
+   *rule*, not the ticks. The **timer** syncs an anchor
+   (`running/mode/base/since/duration`) and every client derives the live number via
+   `timerLive()`; a running clock produces zero per-second patches.
+2. **Public state + replayed buffer** — for heavy or streamed content that won't fit
+   in schema. Keep a small *public* state object in the schema, but stream the actual
+   content as messages appended to a capped server-side history and replayed onto
+   each client, with a late joiner pulling the backlog on request. The **whiteboard**
+   does this: `whiteboard` state is synced, but strokes are `wbStroke` messages over
+   a capped buffer, replayed via `wbStrokes`.
+3. **Synced collection** — for a set of *static, public* objects that fit directly in
+   state. Just put them in a `MapSchema`; Colyseus delta-syncs them and a late joiner
+   gets them in the initial state, so there's no replay machinery at all. This is the
+   simplest of the three, and it's what the planned **overlays** use.
+
+The other axis of reuse is a **registry**, but only where a presentation-layer
+concern is a genuine *family* of like things — the same condition that makes the
+piece `KIND` registry pay off (see "Kinds vs. instances"). Measurement is exactly
+that: rulers and circle/cone/line templates today, fog-of-war shapes and hidden
+zones plausibly later, all flat-on-felt public geometry that differs only in how each
+kind is drawn. So overlays get their own **`OVERLAY` registry** keyed by kind,
+parallel to `KIND`: a new annotation type is one entry (a mesh/label builder), and
+the place/move/remove/sync plumbing handles it generically — never a new subsystem.
+This is the reusable framework for "things outside the physics world," scoped to
+where the likeness is concrete instead of stretched across the whole HUD.
+
+So the rule of thumb: reuse the *decision* (which of the three strategies), and —
+within a real family — a *registry*; do not reach for a superclass spanning
+unlike systems. If a second feature ever genuinely needs the whiteboard's
+replayed-buffer machinery (fog-of-war reveal history is a candidate), extract *that
+one helper* then, on the second real need — not preemptively across a resemblance.
+The overlay subsystem and its schema/message set are spec'd in the measurement design
+note.
+
 ## Sound & music
 
 Audio is deliberately kept off the schema — no sound state is ever synced. It

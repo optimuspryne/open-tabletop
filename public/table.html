@@ -190,6 +190,14 @@
   <div class="sizeRow"><label>Width</label><input id="tableW" type="number" min="8" max="40" step="1" style="width:48px"></div>
   <div class="sizeRow"><label>Depth</label><input id="tableD" type="number" min="6" max="32" step="1" style="width:48px"></div>
   <div class="sizeRow"><label>Felt</label><input type="color" id="tableFelt" value="#2f6b4f"></div>
+
+  <div class="showLabel" style="margin-top:10px"><b>Measurement</b></div>
+  <div id="scaleNow" class="muted" style="font-size:var(--fs-sm);margin-bottom:4px"></div>
+  <div class="sizeRow"><label>Unit</label><input id="scaleUnit" type="text" maxlength="8" placeholder="in" style="width:60px"></div>
+  <div class="sizeRow"><label>Presets</label><span class="actions"><button id="scalePreIn" class="chip">inch</button><button id="scalePreCm" class="chip">cm</button><button id="scalePreMm" class="chip">mm</button></span></div>
+  <div class="sizeRow"><label>Round to</label><input id="scaleStep" type="number" min="0.001" step="0.05" style="width:60px"><span class="muted" id="scaleStepUnit" style="font-size:var(--fs-sm)"></span></div>
+  <div class="muted" style="font-size:var(--fs-sm);margin-top:8px;margin-bottom:2px">Calibrate — type the table's real width:</div>
+  <div class="sizeRow"><label></label><input id="scaleWidthVal" type="text" inputmode="decimal" placeholder="e.g. 48" style="width:64px"><span class="muted" id="scaleWidthUnit" style="font-size:var(--fs-sm)"></span><button id="scaleWidthSet" class="chip">Set</button></div>
 </div>
 
 <div id="skyPickModal" hidden>

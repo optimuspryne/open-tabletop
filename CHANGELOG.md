@@ -8,6 +8,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- **Per-room measurement scale** — a durable, GM-set display/snap layer
+  (`worldPerUnit` + freeform `unitLabel` + `roundStep`, plus reserved grid fields)
+  over the fixed world scale. Calibrate from the current table width or a unit
+  preset. Groundwork for the forthcoming measurement + templates tools; nothing is
+  drawn yet.
+
 ## [0.2.0] — 2026-08-17
 
 ### Added

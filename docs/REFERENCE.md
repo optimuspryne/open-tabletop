@@ -176,6 +176,15 @@ Pure data + two functions, imported by both sides.
   anchor (`running/mode/base/since`): counts up from `base`, or down toward 0.
   Used by the server handler *and* every client, so the number is never synced tick
   by tick.
+- **`roundToStep(value, step) → number`** — rounds `value` to the nearest multiple
+  of `step` (a *size*, so "nearest 0.5" works where a digit count can't); `step ≤ 0`
+  returns `value` unchanged. Clears binary-float dust. The primitive behind
+  measurement display and (later) grid snapping.
+- **`formatMeasure(worldDist, scale) → string`** — a world distance as a display
+  label: `worldDist ÷ scale.worldPerUnit → roundToStep(·, roundStep) → + unitLabel`
+  (e.g. `"5.5 in"`). Rounding is display-only; the caller keeps exact geometry. Pure
+  and shared, so a ruler reads identically on every screen — the `timerLive` instinct
+  applied to distance. A missing/invalid `scale` falls back to raw world units.
 
 ---
 
@@ -241,13 +250,18 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 - **`Whiteboard`** — `enabled, angle, owner, dark`; the shared tilt-up sketch
   surface's *public* state. Strokes themselves are **not** synced — they're sent
   as messages and replayed onto a texture (see the protocol below).
+- **`RoomScale`** — `worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle`; the
+  per-room measurement scale (a display/snap layer over the fixed world scale, never
+  a rescale). `cellWorld`/`gridStyle` are the grid half — reserved, dormant until
+  snap-to-grid.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
   **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
-  colour), and the resumed-game public labels **`turnPending`** (name of an absent
-  turn-holder) + **`unclaimed`** (map `userId → name` of saved hands awaiting their
-  owner — the GM's reassign UI reads it; never the cards themselves).
+  colour), **`scale`** (a `RoomScale`), and the resumed-game public labels
+  **`turnPending`** (name of an absent turn-holder) + **`unclaimed`** (map
+  `userId → name` of saved hands awaiting their owner — the GM's reassign UI reads
+  it; never the cards themselves).
 
 ### `TableRoom extends Room`
 
@@ -299,7 +313,9 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 (gm+ — checkpoint the live game via `serializeGame` into the room's `scene`; replies
 `stateSaved`). Room settings (gm+, persisted via `scheduleSave`): **`score`**
 (scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
-**`tableColor`** (felt colour), **`skybox`** (apply a background).
+**`tableColor`** (felt colour), **`scaleSet`** (measurement scale — partial update
+of `worldPerUnit`/`unitLabel`/`roundStep`/`cellWorld`/`gridStyle`), **`skybox`**
+(apply a background).
 
 Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
 **`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**
@@ -395,7 +411,8 @@ return the flag:
 
 **Per-room durable state.** A room's non-piece settings survive restarts:
 `getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, skybox, feltColor,
-scene}` (where `scene` is the GM/auto-save game snapshot) and
+scene, scale}` (where `scene` is the GM/auto-save game snapshot and `scale` the
+per-room measurement scale) and
 `saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
 
 **Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,

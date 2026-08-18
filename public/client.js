@@ -243,6 +243,9 @@ const applyTransform = (mesh, s) => {
     cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
     cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
     cb(room.state).listen('turnPending', renderPlayers, false);
+    cb(room.state).scale.listen('worldPerUnit', syncScalePanel, false);
+    cb(room.state).scale.listen('unitLabel', syncScalePanel, false);
+    cb(room.state).scale.listen('roundStep', syncScalePanel, false);
   } catch (e) { /* older server without these fields — feature stays inert */ }
   renderScores(); updateRoomNotes(); renderUnclaimed();
   if (room.state.tableX) { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); } // initial size (may be default until decode)
@@ -274,7 +277,7 @@ const applyTransform = (mesh, s) => {
   menu('roomBtn', 'roomGrp');
   wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); renderUnclaimed(); });
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
-  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; } });
+  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; syncScalePanel(); } });
   wire('tableClose', () => byId('tableModal').hidden = true);
   { // GM: whiteboard config — a Tools-menu panel that flows below the menu (not a full-screen modal)
     const wbPanel = byId('whiteboard'), wbBtn = byId('wbBtn');
@@ -311,6 +314,38 @@ const applyTransform = (mesh, s) => {
     if (w) w.onchange = send;
     if (d) d.onchange = send;
     const felt = byId('tableFelt'); if (felt) felt.oninput = () => room.send('tableColor', { color: felt.value }); }
+
+  // Measurement scale (GM-set, durable). Reads live from room.state.scale; writes
+  // via scaleSet. Drag-calibration lands with the ruler tool (Step 3).
+  function syncScalePanel() {
+    const sc = room.state.scale; if (!sc) return;
+    const u = sc.unitLabel || 'u';
+    const uEl = byId('scaleUnit'); if (uEl && document.activeElement !== uEl) uEl.value = u;
+    const sEl = byId('scaleStep'); if (sEl && document.activeElement !== sEl) sEl.value = sc.roundStep;
+    const su = byId('scaleStepUnit'); if (su) su.textContent = u;
+    const wu = byId('scaleWidthUnit'); if (wu) wu.textContent = u;
+    const wv = byId('scaleWidthVal'); // prefill with the table's CURRENT width in display units (editable)
+    if (wv && document.activeElement !== wv) { const cur = (room.state.tableX * 2) / (+sc.worldPerUnit || 1); wv.value = Number.isFinite(cur) ? String(+cur.toFixed(2)) : ''; }
+    const now = byId('scaleNow');
+    if (now) now.textContent = (sc.worldPerUnit === 1 && u === 'u')
+      ? 'Uncalibrated — 1 u = 1 table unit.'
+      : `1 ${u} = ${(+sc.worldPerUnit).toFixed(3)} table units · round to ${sc.roundStep} ${u}`;
+  }
+  {
+    const uEl = byId('scaleUnit'); if (uEl) uEl.onchange = () => room.send('scaleSet', { unitLabel: uEl.value });
+    const sEl = byId('scaleStep'); if (sEl) sEl.onchange = () => { const v = +sEl.value; if (v > 0) room.send('scaleSet', { roundStep: v }); };
+    // Presets set the label + a sensible round step — NOT worldPerUnit (calibration does that).
+    const preset = (label, step) => room.send('scaleSet', { unitLabel: label, roundStep: step });
+    const pin = byId('scalePreIn'); if (pin) pin.onclick = () => preset('in', 0.5);
+    const pcm = byId('scalePreCm'); if (pcm) pcm.onclick = () => preset('cm', 1);
+    const pmm = byId('scalePreMm'); if (pmm) pmm.onclick = () => preset('mm', 1);
+    // Calibrate from the typed real width: worldPerUnit = tableWorldWidth / N.
+    const setW = byId('scaleWidthSet'); if (setW) setW.onclick = () => {
+      const n = parseFloat(byId('scaleWidthVal').value);
+      if (n > 0) room.send('scaleSet', { worldPerUnit: (room.state.tableX * 2) / n });
+    };
+    const wv = byId('scaleWidthVal'); if (wv) wv.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); setW && setW.onclick(); } };
+  }
 
   // Scene list → the Library's Scenes tab (via the hook); loading happens there.
   room.onMessage('sceneList', scenes => { if (window.onLibraryList) window.onLibraryList('scene', scenes); });
