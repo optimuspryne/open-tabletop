@@ -8,6 +8,21 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-08-17
+
+### Added
+- **Resumable games** — a saved or auto-saved table now restores the whole
+  in-progress game, not just the visible pieces. Deck order, face-down card faces,
+  and each player's private hand all survive a reload; hands rebind to their owner's
+  account when they rejoin, and a GM can reassign a hand whose owner doesn't return
+  from the Members panel. A turn held by an absent player shows as "waiting on
+  {name}" until they return or the GM advances.
+
+### Fixed
+- Face-down cards no longer come back face-up when a scene or saved game is reloaded.
+- A card drawn to inspect at the moment of a save is folded back onto its deck
+  instead of being lost.
+
 ## [0.1.0] — 2026-08-17
 
 Initial public release.
@@ -48,5 +63,6 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.1.0

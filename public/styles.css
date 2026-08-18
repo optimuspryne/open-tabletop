@@ -846,6 +846,29 @@ input[type="range"]::-moz-range-thumb {
   font-size: var(--fs-sm);
 }
 
+/* Unclaimed hands (loaded save whose owner hasn't returned) — atop the Members panel */
+.unclaimed { display: flex; flex-direction: column; gap: 6px; }
+.unclaimed:empty { display: none; }
+.unclaimed-head {
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  opacity: .6;
+}
+.unclaimed-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+}
+.unclaimed-name { font-weight: 600; }
+.prow.turn-waiting { background: var(--accent-soft); font-style: italic; opacity: .8; }
+
 /* ===== library editor panel ===== */
 /* Library is a centered overlay (see the modal group above); .libraryCard is its
    wide card — most of the viewport, ~200px of dimmed backdrop on each side. */

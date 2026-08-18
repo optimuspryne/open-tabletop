@@ -328,9 +328,9 @@ class Whiteboard extends Schema {
 }
 defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', dark: 'boolean' });
 class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; }
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string' });
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' } });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -435,6 +435,8 @@ class TableRoom extends Room {
     this.chatLog = [];          // recent public chat (server-held; last 80, sent to late-joiners, gone on dispose)
     this.shows = new Map();     // sessionId -> {to:Set,cards:[]}   PRIVATE: an active hold-to-show (who sees which of the shower's cards)
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
+    this.pendingHands = new Map(); // userId -> {name,cards}  saved-game hands awaiting their owner's return (rebind on join)
+    this.pendingTurn = null;       // userId whose turn it was in a saved game, awaiting their return
     this.nextId = 1; this.nextHid = 1;
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
@@ -780,7 +782,7 @@ class TableRoom extends Room {
     });
     this.onMessage('stateSave', (client) => { // GM checkpoints the live table so it survives an empty room
       if (this.rank(client) < RANK.gm) return;
-      const payload = this.serializeScene();
+      const payload = this.serializeGame();
       if (JSON.stringify(payload).length > SCENE_MAX_BYTES) {
         client.send('sceneError', { message: 'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.' });
         return;
@@ -939,6 +941,17 @@ class TableRoom extends Room {
     });
 
     this.onMessage('nextTurn', () => this.advanceTurn());
+    this.onMessage('reassignHand', (client, { userId, toSessionId } = {}) => { // GM hands an unclaimed hand to a present player
+      if (this.rank(client) < RANK.gm) return;
+      const uid = userId != null ? String(userId) : null;
+      if (!uid || !this.pendingHands.has(uid)) return;
+      const target = this.clientBy(toSessionId);
+      if (!target) return; // must land on someone present
+      const held = this.pendingHands.get(uid);
+      this.hands.set(toSessionId, (this.hands.get(toSessionId) || []).concat(held.cards)); // merge onto any hand they hold
+      this.pendingHands.delete(uid); this.state.unclaimed.delete(uid);
+      this.sendHand(target);
+    });
     this.onMessage('remove', (client, { id }) => { if (this.rank(client) < RANK.helper) return; if (this.state.pieces.has(id)) this.removePiece(id); });
     this.onMessage('setName', (client, { name }) => {
       const player = this.state.players.get(client.sessionId);
@@ -1358,11 +1371,45 @@ class TableRoom extends Room {
     const pieces = [];
     this.state.pieces.forEach((piece, id) => {
       let props = JSON.parse(piece.props || '{}');
-      if (piece.type === 'deck') props = { back: props.back || 'back', cards: (this.deckCards.get(id) || []).slice() };
+      if (piece.type === 'deck') {
+        const cards = (this.deckCards.get(id) || []).slice();
+        for (const pend of this.pendingInspect.values()) if (pend.deckId === id) cards.unshift(pend.front); // fold a mid-inspect draw back onto its deck so a save never loses it
+        props = { back: props.back || 'back', cards };
+      }
       else if (piece.type === 'card') { const cd = this.cardData.get(id); if (cd && cd.front) props = { ...props, front: cd.front, faceDown: true }; }
       pieces.push({ type: piece.type, props, x: piece.x, y: piece.y, z: piece.z, q: [piece.qx, piece.qy, piece.qz, piece.qw] });
     });
     return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces };
+  }
+
+  // Full game snapshot = the portable scene PLUS the private per-player layer
+  // (hands + turn), each resolved from ephemeral sessionId to a stable account id
+  // so it can rebind on reload. Used by auto-save + the GM checkpoint; library
+  // scenes stay hands-free (they call serializeScene directly).
+  serializeGame() {
+    const scene = this.serializeScene();
+    const byUser = new Map();
+    for (const [sid, cards] of this.hands) {       // players still connected (e.g. a GM manual checkpoint)
+      if (!cards || !cards.length) continue;
+      const c = this.clientBy(sid);
+      const uid = c && c.auth && c.auth.userId;
+      if (uid == null) continue;
+      const p = this.state.players.get(sid);
+      byUser.set(String(uid), { name: (p && p.name) || '', cards: cards.slice() });
+    }
+    for (const [uid, held] of this.pendingHands)   // already-departed hands (the only ones left on dispose)
+      byUser.set(String(uid), { name: held.name || '', cards: held.cards.slice() });
+    const hands = [];
+    for (const [uid, held] of byUser) hands.push({ userId: uid, name: held.name, cards: held.cards });
+    let turn = null;
+    if (this.state.turn) {
+      const tc = this.clientBy(this.state.turn);
+      if (tc && tc.auth && tc.auth.userId != null) {
+        const tp = this.state.players.get(this.state.turn);
+        turn = { userId: String(tc.auth.userId), name: (tp && tp.name) || '' };
+      }
+    }
+    return { ...scene, hands, turn };
   }
 
   // Replace the whole table with a scene: clear, resize, then rebuild every piece
@@ -1379,8 +1426,26 @@ class TableRoom extends Room {
       if (!e || !KINDS[e.type]) continue;
       const props = e.props || {};
       if (e.type === 'board') { this.swapBoard(props); continue; }
-      const id = this.spawn(e.type, [+e.x || 0, Number.isFinite(+e.y) ? +e.y : 2, +e.z || 0], props, Array.isArray(e.q) ? e.q : null);
-      if (e.type === 'card' && props.faceDown && props.front) this.cardData.set(id, { front: props.front });
+      const fdFront = (e.type === 'card' && props.faceDown && props.front) ? props.front : null;
+      let sp = props;
+      if (fdFront) { sp = { ...props }; delete sp.front; delete sp.faceDown; } // face-down: keep the front OUT of public props, or it renders face-up
+      const id = this.spawn(e.type, [+e.x || 0, Number.isFinite(+e.y) ? +e.y : 2, +e.z || 0], sp, Array.isArray(e.q) ? e.q : null);
+      if (fdFront) this.cardData.set(id, { front: fdFront });
+    }
+    // Stage any saved private layer (hands + turn) for account-rebinding as owners return.
+    this.pendingHands.clear(); this.pendingTurn = null;
+    this.state.unclaimed.clear(); this.state.turnPending = '';
+    if (Array.isArray(scene.hands)) {
+      for (const h of scene.hands) {
+        if (!h || h.userId == null || !Array.isArray(h.cards) || !h.cards.length) continue;
+        this.pendingHands.set(String(h.userId), { name: h.name || '', cards: h.cards.slice() });
+        this.state.unclaimed.set(String(h.userId), h.name || '');
+      }
+    }
+    if (scene.turn && scene.turn.userId != null) {
+      this.pendingTurn = String(scene.turn.userId);
+      this.state.turnPending = scene.turn.name || '';
+      this.state.turn = ''; // no live session holds it yet; a rebind or GM-advance resolves it
     }
     this.scheduleSave(); // the new table size is durable
   }
@@ -1401,7 +1466,7 @@ class TableRoom extends Room {
   onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     LIVE_ROOMS.delete(this);
     if (this.state.pieces.size) { // only overwrite the saved state when there's actually something on the table
-      const snap = this.serializeScene();
+      const snap = this.serializeGame();
       if (JSON.stringify(snap).length <= SCENE_MAX_BYTES) this.savedScene = snap;
     }
     if (this._saveTimer) clearTimeout(this._saveTimer);
@@ -1509,6 +1574,17 @@ class TableRoom extends Room {
     player.role = auth.role || 'player';
     this.state.players.set(client.sessionId, player);
 
+    // Reclaim a saved hand / the turn if this account owned one in the loaded game.
+    const uid = auth.userId != null ? String(auth.userId) : null;
+    if (uid && this.pendingHands.has(uid)) {
+      this.hands.set(client.sessionId, this.pendingHands.get(uid).cards);
+      this.pendingHands.delete(uid); this.state.unclaimed.delete(uid);
+    }
+    if (uid && this.pendingTurn === uid) {
+      this.pendingTurn = null; this.state.turnPending = '';
+      this.state.turn = client.sessionId; // the turn was waiting for them
+    }
+
     if (!this.state.turn) this.state.turn = client.sessionId; // first player to arrive starts
     this.sendHand(client);
     if (this.rank(client) >= RANK.gm) this.sendMembers(client); // GMs get the member list up front (pending pulse)
@@ -1517,6 +1593,7 @@ class TableRoom extends Room {
 
   // Advance the turn to the next player by seat order (wrapping around).
   advanceTurn() {
+    this.pendingTurn = null; this.state.turnPending = ''; // advancing clears any absent-player hold
     const order = [];
     this.state.players.forEach((player, sid) => order.push([sid, player.seat]));
     order.sort((a, b) => a[1] - b[1]);
@@ -1674,6 +1751,16 @@ class TableRoom extends Room {
       }
     }
 
+    // Park a departing player's hand as unclaimed so it survives to a save and can be
+    // reclaimed on their return or reassigned by a GM (fires only after the reconnect window).
+    const _uid = client.auth && client.auth.userId != null ? String(client.auth.userId) : null;
+    const _hand = this.hands.get(client.sessionId);
+    if (_uid && _hand && _hand.length) {
+      const _p = this.state.players.get(client.sessionId);
+      const _nm = (_p && _p.name) || (client.auth && client.auth.username) || '';
+      this.pendingHands.set(_uid, { name: _nm, cards: _hand });
+      this.state.unclaimed.set(_uid, _nm);
+    }
     this.hands.delete(client.sessionId);
     this.notebooks.delete(client.sessionId);
     this.stopShow(client.sessionId); // clear any hold-to-show they had live

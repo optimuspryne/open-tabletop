@@ -1,6 +1,6 @@
 {
-  "name": "open-tabletop",
-  "version": "0.1.0",
+  "name": "tabletop-mp",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -15,8 +15,5 @@
     "express": "^4.19.2",
     "helmet": "^7.2.0",
     "pg": "^8.23.0"
-  },
-  "allowScripts": {
-    "msgpackr-extract@3.0.4": true
   }
 }

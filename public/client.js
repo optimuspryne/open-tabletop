@@ -215,7 +215,7 @@ const applyTransform = (mesh, s) => {
   // seats, turn order, and other players' fanned hand-backs (all public info)
   cb(room.state).players.onAdd((player, sid) => {
     if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); applyRole(player.role); byId('nameInput').value = player.name; updateMyPreview(player.avatar); refreshMyChip(); }
-    refreshFan(sid); refreshMarker(sid); renderPlayers();
+    refreshFan(sid); refreshMarker(sid); renderPlayers(); renderUnclaimed();
     cb(player).listen('hand', () => { refreshFan(sid); renderPlayers(); }, false);
     cb(player).listen('seat', () => { if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); refreshMyChip(); } refreshFan(sid); refreshMarker(sid); }, false);
     cb(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
@@ -225,7 +225,7 @@ const applyTransform = (mesh, s) => {
     cb(player).listen('showing', () => refreshMarker(sid), false); // redraw the seat badge on show/stop
     cb(player).listen('handBack', () => refreshFan(sid), false); // re-skin the fan backs when the deck's back changes
   });
-  cb(room.state).players.onRemove((player, sid) => { removePlayerVis(sid); renderPlayers(); });
+  cb(room.state).players.onRemove((player, sid) => { removePlayerVis(sid); renderPlayers(); renderUnclaimed(); });
   cb(room.state).listen('turn', renderPlayers, false);
 
   // Durable scoreboard + room notes (synced like the timer). Register
@@ -240,8 +240,11 @@ const applyTransform = (mesh, s) => {
     cb(room.state).listen('tableX', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
     cb(room.state).listen('tableZ', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
     cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
+    cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
+    cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
+    cb(room.state).listen('turnPending', renderPlayers, false);
   } catch (e) { /* older server without these fields — feature stays inert */ }
-  renderScores(); updateRoomNotes();
+  renderScores(); updateRoomNotes(); renderUnclaimed();
   if (room.state.tableX) { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); } // initial size (may be default until decode)
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt colour
 
@@ -269,7 +272,7 @@ const applyTransform = (mesh, s) => {
   // Room Controls menu — the old spawn/add menus are gone; creation + spawning
   // now live in View Library, Built-Ins, and (editor) Add to Library.
   menu('roomBtn', 'roomGrp');
-  wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); });
+  wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); renderUnclaimed(); });
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
   wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; } });
   wire('tableClose', () => byId('tableModal').hidden = true);
@@ -439,7 +442,7 @@ const applyTransform = (mesh, s) => {
 
   // ---- Members (GM tools): admit / kick / promote ----
   const membersPanel = byId('membersPanel');
-  wire('membersBtn', () => { membersPanel.hidden = !membersPanel.hidden; if (!membersPanel.hidden) room.send('members'); });
+  wire('membersBtn', () => { membersPanel.hidden = !membersPanel.hidden; if (!membersPanel.hidden) room.send('members'); renderUnclaimed(); });
   byId('membersClose').onclick = () => { membersPanel.hidden = true; };
 
   // ---- Show cards: pick an audience + scope, then hold the button to reveal ----
@@ -1614,6 +1617,12 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
   room.state.players.forEach((player, sid) => list.push([sid, player]));
   list.sort((a, b) => a[1].seat - b[1].seat);
   el.replaceChildren();
+  if (room.state.turnPending) { // the turn is held by someone who hasn't rejoined the saved game
+    const w = document.createElement('div');
+    w.className = 'prow turn-waiting';
+    w.textContent = '\u23F3 Waiting on ' + room.state.turnPending + ' (not present)';
+    el.appendChild(w);
+  }
   if (!list.length) {
     const placeholder = document.createElement('div');
     placeholder.className = 'prow';
@@ -1656,6 +1665,34 @@ function updateMembersPulse(list) {
   if (roomBtn) roomBtn.classList.toggle('pulse', pending);
   const roomMembers = byId('roomMembers');              // the Members item inside the Room menu
   if (roomMembers) roomMembers.classList.toggle('pulse', pending);
+}
+
+// Unclaimed hands from a loaded save whose owner hasn't returned. GM picks a
+// present player to hand each one to (server re-checks the GM rank).
+function renderUnclaimed() {
+  const box = byId('unclaimedHands'); if (!box) return;
+  box.replaceChildren();
+  const unclaimed = room.state.unclaimed;
+  if (!unclaimed || unclaimed.size === 0) return;
+  const present = [];
+  room.state.players.forEach((p, sid) => present.push([sid, p.name]));
+  present.sort((a, b) => (a[1] > b[1] ? 1 : a[1] < b[1] ? -1 : 0));
+  const head = document.createElement('div');
+  head.className = 'unclaimed-head';
+  head.textContent = 'Unclaimed hands';
+  box.appendChild(head);
+  unclaimed.forEach((name, userId) => {
+    const row = document.createElement('div'); row.className = 'unclaimed-row';
+    const label = document.createElement('span'); label.className = 'unclaimed-name';
+    label.textContent = name || 'A player';
+    row.appendChild(label);
+    const sel = document.createElement('select'); sel.className = 'unclaimed-assign';
+    const def = document.createElement('option'); def.value = ''; def.textContent = 'Give to\u2026'; sel.appendChild(def);
+    for (const [sid, pname] of present) { const o = document.createElement('option'); o.value = sid; o.textContent = pname; sel.appendChild(o); }
+    sel.onchange = () => { if (sel.value) { room.send('reassignHand', { userId, toSessionId: sel.value }); sel.value = ''; } };
+    row.appendChild(sel);
+    box.appendChild(row);
+  });
 }
 
 // The GM-only Members panel: the full membership (incl. offline/pending, from the
