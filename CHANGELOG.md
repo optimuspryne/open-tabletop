@@ -20,9 +20,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Measure tool + templates** — a Tools-menu **📏 Measure** mode with a shape picker:
   drag on the table to lay a **ruler** (distance), **circle** (radius/burst), **cone**
   (range), or **line** (lane), each labelled in the room's unit via the measurement
-  scale. These are flat, non-physics **overlays** synced to everyone; a GM (or each
-  owner) can clear them. All four kinds run through one `OVERLAY` registry and a single
-  "press A, drag to B" gesture.
+  scale. These are flat, non-physics **overlays** synced to everyone. All four kinds run
+  through one `OVERLAY` registry and a single "press A, drag to B" gesture.
+- **Overlays persist + are bounded** — placed overlays now ride the scene snapshot, so a
+  GM checkpoint, the auto-save-on-empty, and saved library scenes all restore them
+  (as table-owned, GM-managed). Per-room and per-player caps keep the map bounded.
+  Clearing is scoped: everyone gets **Clear mine**; a GM also gets **Clear all**.
 
 ## [0.2.0] — 2026-08-17
 

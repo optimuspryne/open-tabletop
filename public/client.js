@@ -359,7 +359,8 @@ const applyTransform = (mesh, s) => {
   { const mb = byId('measureBtn');
     if (mb) mb.onclick = () => { measuring ? exitMeasure() : enterMeasure(); };
     wire('measureClose', () => exitMeasure());
-    wire('measureClear', () => { if (room) room.send('overlayClear'); });
+    wire('measureClear', () => { if (room) room.send('overlayClear', { scope: 'mine' }); });    // just your own
+    wire('measureClearAll', () => { if (room) room.send('overlayClear', { scope: 'all' }); });   // GM: everyone's (server re-checks rank)
     const kinds = document.querySelectorAll('#measureKinds [data-kind]');
     const setKind = (k) => { measureKind = k; kinds.forEach(b => b.classList.toggle('on', b.dataset.kind === k)); };
     kinds.forEach(b => { b.onclick = () => setKind(b.dataset.kind); });
@@ -1245,6 +1246,7 @@ function applyRole(role) {
   gate('roomCode', 2);                                         // room code display: GM+/owner/admin only
   gate('ctrlHelper', 1); gate('ctrlGM', 2);                    // How-to-Play sections revealed by role
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
+  gate('measureClearAll', 2);                                  // "Clear all overlays" (Measure panel): GM+
   if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
   applyBoardRole(); // scoreboard (helper+) and notes (gm+) edit affordances
 }

@@ -262,8 +262,10 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   `sessionId`, for the remove/clear gate), `x, z` (origin A), `x2, z2` (drag point
   B), `w` (line width), `ang` (cone half-angle); one flat measurement/template
   annotation in the `overlays` map. Two points + two optional scalars cover all four
-  kinds. Public geometry, **ephemeral** — synced live, cleared on reset, not in the
-  scene snapshot. Rendered via the client's `OVERLAY` registry.
+  kinds. Public geometry: wiped on reset, but **persisted** in the scene snapshot
+  (`serializeScene` includes them by value, sans `owner`; `applyScene` restores them
+  as table-owned `owner:''`). Capped `OVERLAY_MAX` per room / `OVERLAY_MAX_PER_PLAYER`
+  per creator. Rendered via the client's `OVERLAY` registry.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
   **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
@@ -298,10 +300,10 @@ out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`*
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
 **`advanceTurn`**, **`serializeScene`** (portable template: table size + pieces +
-deck order + face-down fronts, no player identity), **`serializeGame`** (a scene
-*plus* account-keyed `hands` + `turn`, session→`userId` resolved), **`applyScene`**
-(rebuild pieces, then *stage* the private layer into `pendingHands`/`pendingTurn` +
-the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
+deck order + face-down fronts + overlays, no player identity), **`serializeGame`** (a
+scene *plus* account-keyed `hands` + `turn`, session→`userId` resolved),
+**`applyScene`** (rebuild pieces + overlays, then *stage* the private layer into
+`pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
 member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
 (persist the room's durable settings — scoreboard, notes, table size, skybox, felt
@@ -328,13 +330,15 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 of `worldPerUnit`/`unitLabel`/`roundStep`/`cellWorld`/`gridStyle`), **`skybox`**
 (apply a background).
 
-Overlay handlers (measurement/templates; not persisted): **`overlayAdd`**
-(`{kind, x, z, x2, z2, w?, ang?}` — any seated player places one; server validates
-the kind against `OVERLAY_KINDS`, clamps coords to `MEASURE.maxLen`, stamps
+Overlay handlers (measurement/templates; persisted in the scene snapshot):
+**`overlayAdd`** (`{kind, x, z, x2, z2, w?, ang?}` — any seated player places one;
+server validates the kind against `OVERLAY_KINDS`, enforces the `OVERLAY_MAX` /
+`OVERLAY_MAX_PER_PLAYER` caps, clamps coords to `MEASURE.maxLen`, stamps
 `owner`+`color`), **`overlayMove`** (`{id, x?, z?, x2?, z2?, w?, ang?}` — reposition,
-owner or gm+), **`overlayRemove`** (`{id}` — owner or gm+), **`overlayClear`** (a gm
-wipes all; anyone else clears only their own). No down-messages — the `overlays` map
-delta-syncs, so a late joiner gets them in the initial state.
+owner or gm+), **`overlayRemove`** (`{id}` — owner or gm+), **`overlayClear`**
+(`{scope}` — `'all'` is GM-gated and wipes the map; anything else clears only your
+own). No down-messages — the `overlays` map delta-syncs, so a late joiner gets them in
+the initial state.
 
 Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
 **`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**

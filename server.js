@@ -359,6 +359,11 @@ const TABLE_LIMIT = { minX: 4, maxX: 20, minZ: 3, maxZ: 16 };
 const SCENE_MAX_BYTES = 2_000_000;
 // Whiteboard: cap the server-held stroke history (a knob — raise/lower freely).
 const WHITEBOARD_MAX_STROKES = 2000;
+// Overlays: cap the room total and each player's share, so the map can't be spammed
+// unbounded (mirrors the whiteboard/score caps). Both are free knobs.
+const OVERLAY_MAX = 200;
+const OVERLAY_MAX_PER_PLAYER = 40;
+const OVERLAY_KINDS = new Set(['ruler', 'circle', 'cone', 'line']); // valid overlay kinds (add here + in the client OVERLAY registry)
 const TWO_PI = Math.PI * 2;
 
 // --- Physics world -----------------------------------------------------------
@@ -1075,12 +1080,16 @@ class TableRoom extends Room {
     });
 
     // --- Overlays: flat measurement/template annotations (not physics) --------
-    // Public, ephemeral (live in state, gone on dispose; snapshot persistence is
-    // Step 5). Any seated player may add/remove their own; a GM may remove any.
-    const OVERLAY_KINDS = new Set(['ruler', 'circle', 'cone', 'line']);
+    // Public geometry. They ride the scene snapshot (see serializeScene), so a saved
+    // or auto-saved table restores them. Any seated player adds/removes their own;
+    // a GM removes any. Capped per-room and per-player so the map can't be spammed.
     const clampCoord = (v) => clamp(+v || 0, -MEASURE.maxLen, MEASURE.maxLen);
     this.onMessage('overlayAdd', (client, msg = {}) => {
       if (!OVERLAY_KINDS.has(msg.kind)) return;
+      if (this.state.overlays.size >= OVERLAY_MAX) return;       // room total cap
+      let mine = 0;
+      this.state.overlays.forEach(o => { if (o.owner === client.sessionId) mine++; });
+      if (mine >= OVERLAY_MAX_PER_PLAYER) return;                // per-player cap
       const player = this.state.players.get(client.sessionId);
       const o = new Overlay();
       o.kind = msg.kind;
@@ -1107,9 +1116,9 @@ class TableRoom extends Room {
       if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
       this.state.overlays.delete(String(msg.id));
     });
-    this.onMessage('overlayClear', (client) => {               // clear your own; a GM clears all
-      const gm = this.rank(client) >= RANK.gm, del = [];
-      this.state.overlays.forEach((o, id) => { if (gm || o.owner === client.sessionId) del.push(id); });
+    this.onMessage('overlayClear', (client, msg = {}) => {     // scope 'all' (GM only) wipes every overlay; anything else clears just your own
+      const all = msg.scope === 'all' && this.rank(client) >= RANK.gm, del = [];
+      this.state.overlays.forEach((o, id) => { if (all || o.owner === client.sessionId) del.push(id); });
       for (const id of del) this.state.overlays.delete(id);
     });
 
@@ -1461,7 +1470,12 @@ class TableRoom extends Room {
       else if (piece.type === 'card') { const cd = this.cardData.get(id); if (cd && cd.front) props = { ...props, front: cd.front, faceDown: true }; }
       pieces.push({ type: piece.type, props, x: piece.x, y: piece.y, z: piece.z, q: [piece.qx, piece.qy, piece.qz, piece.qw] });
     });
-    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces };
+    // Overlays are public geometry, so they ride the scene by value (no owner — a
+    // saved session's sessionIds are meaningless on reload; restored overlays are
+    // table-owned and GM-managed). Colour is kept so they look the same on load.
+    const overlays = [];
+    this.state.overlays.forEach(o => overlays.push({ kind: o.kind, color: o.color, x: o.x, z: o.z, x2: o.x2, z2: o.z2, w: o.w, ang: o.ang }));
+    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays };
   }
 
   // Full game snapshot = the portable scene PLUS the private per-player layer
@@ -1513,6 +1527,18 @@ class TableRoom extends Room {
       if (fdFront) { sp = { ...props }; delete sp.front; delete sp.faceDown; } // face-down: keep the front OUT of public props, or it renders face-up
       const id = this.spawn(e.type, [+e.x || 0, Number.isFinite(+e.y) ? +e.y : 2, +e.z || 0], sp, Array.isArray(e.q) ? e.q : null);
       if (fdFront) this.cardData.set(id, { front: fdFront });
+    }
+    // Restore saved overlays (public geometry). clearTable() already emptied the map;
+    // rebuild each as table-owned (owner '') so it's GM-managed, not tied to a gone session.
+    const cc = (v) => clamp(+v || 0, -MEASURE.maxLen, MEASURE.maxLen);
+    for (const e of (Array.isArray(scene.overlays) ? scene.overlays : [])) {
+      if (this.state.overlays.size >= OVERLAY_MAX) break;
+      if (!e || !OVERLAY_KINDS.has(e.kind)) continue;
+      const o = new Overlay();
+      o.kind = e.kind; o.owner = ''; o.color = e.color || '#ffffff';
+      o.x = cc(e.x); o.z = cc(e.z); o.x2 = cc(e.x2); o.z2 = cc(e.z2);
+      o.w = clamp(+e.w || 0, 0, MEASURE.maxLen); o.ang = +e.ang || 0;
+      this.state.overlays.set('o' + (this.nextOverlayId++), o);
     }
     // Stage any saved private layer (hands + turn) for account-rebinding as owners return.
     this.pendingHands.clear(); this.pendingTurn = null;

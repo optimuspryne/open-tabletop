@@ -356,16 +356,24 @@ same registry builder; only the committed placement is sent (`overlayAdd`), the 
 The **Measure tool** is a modal client mode (like whiteboard draw): entering it
 disables OrbitControls and piece-grab, a kind-picker row selects which overlay the
 drag lays, and release fires `overlayAdd` with the kind's scalars. The server
-validates the kind, clamps coordinates to `MEASURE.maxLen`, stamps `owner`
-(the creator's `sessionId`, for the remove/clear permission gate) and `color` (copied
-from the creator's seat colour so it survives them leaving), and drops it in the
-`overlays` map; Colyseus delta-sync does the rest, so a late joiner gets every overlay
-in its initial state with no replay. Overlays are **ephemeral**: they're wiped on
-table reset and gone on room dispose, and — unlike the durable `scale` — they do *not*
-ride in the `serializeScene`/`serializeGame` snapshot (persisting placed templates is a
-possible later step; they're already public state, so it would just mean including the
-map). The room's `scale`, by contrast, is durable: it's written through
-`saveRoomState` and restored on room load.
+validates the kind, enforces the per-room (`OVERLAY_MAX`) and per-player
+(`OVERLAY_MAX_PER_PLAYER`) caps so the map can't be spammed, clamps coordinates to
+`MEASURE.maxLen`, stamps `owner` (the creator's `sessionId`, for the remove/clear
+permission gate) and `color` (copied from the creator's seat colour so it survives
+them leaving), and drops it in the `overlays` map; Colyseus delta-sync does the rest,
+so a late joiner gets every overlay in its initial state with no replay. Clearing is
+scoped: `overlayClear { scope }` wipes only your own by default, and `scope: 'all'`
+(GM-gated server-side) wipes the whole map.
+
+Overlays are wiped on table reset, but they **do ride the scene snapshot**: because
+they're public geometry, `serializeScene` includes the `overlays` array (by value, and
+without `owner` — a saved session's `sessionId`s are meaningless on reload), so a GM
+checkpoint, the auto-save-on-empty, and a saved library scene all carry their placed
+templates, and `applyScene` rebuilds them as **table-owned** (`owner: ''`, hence
+GM-managed) after the pieces. Note this makes the annotations durable across a room
+going empty and returning — they are no longer session-lifetime only. The room's
+`scale` is durable the same way, but through a different path: `saveRoomState`'s own
+`scale` column, restored on room load.
 
 ## Sound & music
 
