@@ -104,7 +104,8 @@ html, body {
   inset: 0;
 }
 canvas { display: block; }
-b { color: var(--accent); } /* bold text uses the gold accent everywhere; more specific rules (e.g. .helpSec b) can override */
+b { color: var(--accent); }
+a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on the dark theme (was default blue) */ /* bold text uses the gold accent everywhere; more specific rules (e.g. .helpSec b) can override */
 /* Any element carrying the `hidden` attribute stays hidden, overriding whatever
    display its own rule sets (several panels are flex, so this needs !important). */
 [hidden] { display: none !important; }
@@ -1800,3 +1801,29 @@ body.admin {
   margin: 0;
   max-height: none;
 }
+
+/* ===== sound + credits panels (fixed pop-outs, like Notes/Whiteboard) ===== */
+#audioPanel, #creditsPanel, #tracksPanel {
+  position: fixed;
+  top: var(--inset);                                          /* aligned with the room code */
+  right: calc(var(--inset) + min(285px, 92vw) + var(--gap));  /* just left of #rightRail */
+  width: min(340px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+}
+@media (max-width: 720px) {
+  /* no room beside the rail — center it over the table instead */
+  #audioPanel, #creditsPanel, #tracksPanel { top: 50%; right: var(--inset); transform: translateY(-50%); }
+}
+#creditsPanel, #tracksPanel { max-height: 78vh; overflow-y: auto; }
+#audioPanel { z-index: 7; }
+#creditsPanel, #tracksPanel { z-index: 8; } /* open on top of the Sound panel, which stays open underneath */
+#nowPlaying, #creditsBody { overflow-wrap: anywhere; }
+.volRow { display: flex; align-items: center; gap: 8px; }
+.volRow input[type=range] { flex: 1; min-width: 0; }
+.volMute { flex: 0 0 auto; background: none; border: none; padding: 0 2px; font-size: var(--fs); cursor: pointer; line-height: 1; }
+
+.trackItem { display: block; width: 100%; text-align: left; margin: 2px 0; }
+.trackItem.on { color: var(--accent); font-weight: bold; }

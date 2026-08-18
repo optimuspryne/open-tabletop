@@ -74,6 +74,30 @@
     <button id="timerBtn">⏱️ Timer</button>
     <button id="wbBtn">🖊️ Whiteboard</button>
     <button id="controlsBtn">❔ How to Play</button>
+    <button id="audioBtn">🔊 Sound</button>
+  </div>
+  <div id="audioPanel" class="panel" hidden>
+    <div id="audioHead" class="panel-head"><b>Sound</b><span id="audioClose" class="close-x">✕</span></div>
+    <div class="showLabel"><b>Effects</b></div>
+    <div class="volRow"><button id="sfxMute" class="volMute" title="Mute effects">🔊</button><input id="sfxVol" type="range" min="0" max="100" step="1"></div>
+    <div class="showLabel"><b>Music</b></div>
+    <div class="volRow"><button id="musicMute" class="volMute" title="Mute music">🔊</button><input id="musicVol" type="range" min="0" max="100" step="1"></div>
+    <div class="chipRow">
+      <button id="musicToggle" class="chip">▶ Music</button>
+      <button id="musicNext" class="chip">⏭ Next</button>
+      <button id="musicShuffle" class="chip chk">🔀 Shuffle</button>
+    </div>
+    <div id="nowPlaying" class="muted" style="font-size:var(--fs-sm);margin-top:6px"></div>
+    <div style="margin-top:6px"><a id="tracksLink" href="#" style="font-size:var(--fs-sm)">Choose track ▸</a></div>
+    <div style="margin-top:2px"><a id="creditsLink" href="#" style="font-size:var(--fs-sm)">Credits &amp; licenses ▸</a></div>
+  </div>
+  <div id="creditsPanel" class="panel" hidden>
+    <div id="creditsHead" class="panel-head"><b>Credits &amp; licenses</b><span id="creditsClose" class="close-x">✕</span></div>
+    <div id="creditsBody"></div>
+  </div>
+  <div id="tracksPanel" class="panel" hidden>
+    <div id="tracksHead" class="panel-head"><b>Choose a track</b><span id="tracksClose" class="close-x">✕</span></div>
+    <div id="tracksBody"></div>
   </div>
   <div id="whiteboard" class="panel" hidden>
     <div id="wbHead" class="panel-head"><b>Whiteboard</b><span id="wbClose" class="close-x">✕</span></div>

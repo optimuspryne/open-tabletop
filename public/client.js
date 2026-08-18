@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
 import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel } from './graphics.js';
 import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
+import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
+import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
+window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
 
 // ===== Tiny DOM helpers =====================================================
 const byId = (id) => document.getElementById(id);
@@ -193,7 +196,8 @@ const applyTransform = (mesh, s) => {
   }
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
   room.onMessage('notebook', text => { byId('notesText').value = text || ''; }); // your private notes, restored on reconnect
-  room.onMessage('shuffled', ({ id }) => startAnim(id, 'shuffle')); // cosmetic: everyone sees the deck riffle
+  room.onMessage('shuffled', ({ id }) => { startAnim(id, 'shuffle'); playSfx('shuffle'); }); // everyone sees + hears the riffle
+  room.onMessage('sfx', ({ type } = {}) => playSfx(type)); // shared cue (roll/flip/deal) broadcast by the server
   room.onMessage('inspectCard', ({ front, back }) => inspectMesh(cardMesh({ front, back }), { drawn: true, type: 'card' })); // drawn card — front is ours alone
   room.onMessage('dealt', ({ id }) => { // a card you dragged off a deck — adopt it as the dragged piece
     if (down && down.pendingDeal) {
@@ -331,6 +335,52 @@ const applyTransform = (mesh, s) => {
   // text so it survives a reconnect (see the 'notebook' message below).
   const notes = byId('notes'), notesText = byId('notesText');
   byId('notesBtn').onclick = () => { notes.hidden = !notes.hidden; if (!notes.hidden) notesText.focus(); };
+  // Audio settings (Tools menu): effects volume + mute, persisted client-side.
+  const audioPanel = byId('audioPanel'), sfxVol = byId('sfxVol'), sfxMute = byId('sfxMute');
+  if (audioPanel && byId('audioBtn')) {
+    byId('audioBtn').onclick = () => { audioPanel.hidden = !audioPanel.hidden; };
+    wire('audioClose', () => audioPanel.hidden = true);
+    if (sfxVol) { sfxVol.value = Math.round(getSfxVolume() * 100); sfxVol.oninput = () => setSfxVolume(sfxVol.value / 100); }
+    const muteBtn = (btn, get, set) => { if (!btn) return; const sync = () => btn.textContent = get() ? '\u{1F507}' : '\u{1F50A}'; sync(); btn.onclick = () => { set(!get()); sync(); }; };
+    muteBtn(byId('sfxMute'), getSfxMuted, setSfxMuted);
+    muteBtn(byId('musicMute'), getMusicMuted, setMusicMuted);
+    // background music
+    const musicVol = byId('musicVol'), musicToggle = byId('musicToggle'), nowPlaying = byId('nowPlaying');
+    if (musicVol) { musicVol.value = Math.round(getMusicVolume() * 100); musicVol.oninput = () => setMusicVolume(musicVol.value / 100); }
+    const syncMusicBtn = () => { if (musicToggle) musicToggle.textContent = isMusicPlaying() ? '\u23f8 Music' : '\u25b6 Music'; };
+    if (musicToggle) musicToggle.onclick = () => { toggleMusic(); syncMusicBtn(); };
+    wire('musicNext', () => { nextTrack(); syncMusicBtn(); });
+    const shuffleBtn = byId('musicShuffle');
+    if (shuffleBtn) { shuffleBtn.classList.toggle('on', getShuffle()); shuffleBtn.onclick = () => { const on = !getShuffle(); setShuffle(on); shuffleBtn.classList.toggle('on', on); }; }
+    onMusicTrack((t) => { if (nowPlaying) nowPlaying.textContent = t ? ('\u266a ' + t.title + ' \u2014 ' + MUSIC_CREDIT.by + ' (' + MUSIC_CREDIT.license + ')') : ''; });
+    // credits panel — attribution for baked-in assets (CC-BY music requires this)
+    const creditsPanel = byId('creditsPanel');
+    const renderCredits = () => {
+      const body = byId('creditsBody'); if (!body) return;
+      const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const A = (t, u) => u ? ('<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(t) + '</a>') : esc(t);
+      const ul = 'style="margin:4px 0 10px;padding-left:18px;font-size:var(--fs-sm)"';
+      let h = '';
+      if (MUSIC.length) { h += '<div class="showLabel"><b>Music</b></div><ul ' + ul + '>'; for (const t of MUSIC) h += '<li>' + esc(t.title) + ' \u2014 ' + A(MUSIC_CREDIT.by, MUSIC_CREDIT.url) + ', ' + A(MUSIC_CREDIT.license, MUSIC_CREDIT.licenseUrl) + '</li>'; h += '</ul>'; }
+      h += '<div class="showLabel"><b>Sound effects</b></div><ul ' + ul + '>'; for (const x of SFX_CREDITS) h += '<li>' + esc(x.title) + ' \u2014 ' + A(x.by, x.url) + ', ' + esc(x.license) + '</li>'; h += '</ul>';
+      h += '<div class="showLabel"><b>Libraries</b></div><ul ' + ul + '>'; for (const l of LIB_CREDITS) h += '<li>' + A(l.title, l.url) + ' \u2014 ' + esc(l.license) + '</li>'; h += '</ul>';
+      body.innerHTML = h;
+    };
+    wire('creditsLink', (e) => { if (e && e.preventDefault) e.preventDefault(); renderCredits(); if (creditsPanel) creditsPanel.hidden = false; });
+    wire('creditsClose', () => { if (creditsPanel) creditsPanel.hidden = true; });
+    // track picker — click a track to play it (opens over the Sound panel too)
+    const tracksPanel = byId('tracksPanel');
+    const renderTracks = () => {
+      const body = byId('tracksBody'); if (!body) return;
+      if (!MUSIC.length) { body.innerHTML = '<div class="muted">No tracks added yet.</div>'; return; }
+      const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const cur = currentTrackIndex();
+      body.innerHTML = MUSIC.map((t, i) => '<button class="trackItem" data-i="' + i + '">' + esc(t.title) + '</button>').join('');
+      body.querySelectorAll('.trackItem').forEach(btn => { btn.classList.toggle('on', +btn.dataset.i === cur); btn.onclick = () => { playTrack(+btn.dataset.i); syncMusicBtn(); renderTracks(); }; });
+    };
+    wire('tracksLink', (e) => { if (e && e.preventDefault) e.preventDefault(); renderTracks(); if (tracksPanel) tracksPanel.hidden = false; });
+    wire('tracksClose', () => { if (tracksPanel) tracksPanel.hidden = true; });
+  }
   byId('notesClose').onclick = () => { notes.hidden = true; };
   { // Public chat panel (Tools)
     const chat = byId('chat'), input = byId('chatInput');
@@ -481,6 +531,7 @@ let dragHeight = GRAB_HEIGHT;
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(); // fixed ground plane (y=0); drag height is applied as a separate Y offset
 const prevTarget = new THREE.Vector3(), throwVel = new THREE.Vector3(); // hand speed → throw velocity
 let lastMoveSent = 0, prevThrowTime = 0, down = null;
+const sfxKind = (t) => t === 'card' ? 'card' : t === 'die' ? 'die' : t === 'deck' ? 'deck' : 'object'; // pickup family
 // "Lean in": a Tools toggle that dollies the camera toward the orbit target for a
 // closer look. Applied as a per-frame visual offset (undone before controls.update)
 // so it never corrupts the real orbit distance; toggle off and it eases back.
@@ -601,7 +652,7 @@ qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place));
 
 // Map a click-action name to the server message it sends.
 const sendAction = (action, id) => {
-  if (action === 'takeCard') room.send('takeCard', { id });
+  if (action === 'takeCard') { room.send('takeCard', { id }); playSfx('card-pickup'); }
   else if (action === 'deal') room.send('dealToTable', { deckId: id });
   else if (action === 'flip') room.send('flip', { id });
   else if (action === 'shuffle') room.send('shuffle', { deckId: id });
@@ -818,6 +869,7 @@ renderer.domElement.addEventListener('pointermove', e => {
       down.grabbed = true;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       room.send('grab', { id: down.id });
+      playSfx(sfxKind(down.type) + '-pickup'); // local, per object type
       room.send('move', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
     } else if (down.button === 0 && kind.ldrag === 'deal') { // deck left-drag = deal a card and carry it
       down.pendingDeal = true;
@@ -827,6 +879,7 @@ renderer.domElement.addEventListener('pointermove', e => {
       hit.y = dragHeight;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       room.send('dealDrag', { deckId: down.id, x: hit.x, y: hit.y, z: hit.z });
+      playSfx('card-pickup'); // dealing a card off the deck; its drop follows on release
     }
   }
 
@@ -1059,7 +1112,7 @@ let mySeat = 0;
 //   dist / rise     : how far the camera sits back / up from that point (their ratio = the angle).
 //   zoom            : <1 dollies in, >1 pulls back — scales the offset, so the ANGLE is unchanged.
 // Table sits lower in frame → raise lookH and rise together.
-const VIEW = { lookFwd: 3.1, lookH: 2, dist: 15.4, rise: 3.7, zoom: 0.65 };
+const VIEW = { lookFwd: 3.1, lookH: 4, dist: 15.4, rise: 3.7, zoom: 0.85 };
 function seatLayoutFor(hx, hz) {
   const m = 0.8;                          // hand inset from the edge
   const cx = hx * 0.66, cz = hz * 0.69;   // diagonal (corner) seat positions

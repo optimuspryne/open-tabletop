@@ -30,6 +30,7 @@ const SIM = {
   damp: { flat: 0.5, solid: 0.15 },               // angular damping: cards/decks vs everything else
   flipHop: 1.6, flipArc: 0.7,                     // flip feedback nudge + kinematic arc height
   roll: { up: 16, spread: 8, spin: 22 },          // die roll impulse (up drives peak height ~ up^2)
+  impact: { minVel: 1.5 },                        // min collision speed (m/s) to fire a landing sound
   spawnY: 4,                                       // height a spawned piece drops from
   bounds: { margin: 1.5, floor: -3, ceiling: 12 },// out-of-bounds safety net
   absorb: { x: 1.1, z: 1.4 },                     // how close a dropped card must be to a deck to merge
@@ -368,6 +369,7 @@ function buildWorld() {
 }
 
 const rnd = () => [(Math.random() - 0.5) * 8, SIM.spawnY, (Math.random() - 0.5) * 6];
+const sfxImpact = (t) => t === 'card' ? 'card-drop' : t === 'die' ? 'die-drop' : t === 'deck' ? 'deck-drop' : 'object-drop';
 
 // Fisher–Yates in-place shuffle.
 const shuffle = (array) => {
@@ -422,6 +424,7 @@ class TableRoom extends Room {
     this.buildBounds(this.state.tableX, this.state.tableZ); // table surface + walls at the current size
     this.bodies = new Map();  // id -> CANNON.Body   (physics, not synced)
     this.targets = new Map(); // id -> {x,y,z}       (drag target of the owner)
+    this._released = new Map(); // id -> release time; first hard impact after fires a landing sound
     this.flips = new Map();   // id -> scripted half-flip in progress
     this.deckCards = new Map(); // id -> [frontRef]        PRIVATE: a deck's face-down cards (never synced)
     this.drafts = new Map();    // sessionId -> {back,cards} PRIVATE: a deck being built in chunks
@@ -457,6 +460,7 @@ class TableRoom extends Room {
       if (!piece || piece.owner !== client.sessionId) return;
       piece.owner = '';
       this.targets.delete(msg.id);
+      this._released.set(msg.id, Date.now()); // arm a one-shot landing cue on its next hard impact
 
       const body = this.bodies.get(msg.id);
       if (body) {
@@ -509,6 +513,7 @@ class TableRoom extends Room {
       piece.props = JSON.stringify(props);
       body.wakeUp();
       body.velocity.y = SIM.flipHop; // a small hop; the client plays the visual flip
+      this.broadcast('sfx', { type: 'card-flip' });
     });
     // Deal the top card face-down onto the table, just beside the deck.
     this.onMessage('dealToTable', (client, { deckId }) => {
@@ -523,6 +528,7 @@ class TableRoom extends Room {
       deck.count = cards.length;
       if (!cards.length) this.removePiece(deckId);
       else this.updateDeckCollider(deckId);
+      this.broadcast('sfx', { type: 'card-drop' });
     });
 
     // Deal the top card AND immediately give the dealer control to drag it out.
@@ -809,6 +815,7 @@ class TableRoom extends Room {
       const id = this.spawnCardFlat(pos, faceDown ? { back: card.back } : { front: card.front, back: card.back });
       if (faceDown) this.cardData.set(id, { front: card.front }); // front private until flipped
       this.sendHand(client);
+      this.broadcast('sfx', { type: 'card-drop' });
     });
 
     // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or
@@ -827,6 +834,7 @@ class TableRoom extends Room {
       }
       hand.splice(0, spawned);  // remove just the cards that made it onto the table
       this.sendHand(client);    // updates the public count + sends the now-shorter private hand
+      if (spawned) this.broadcast('sfx', { type: 'hand-drop' });
     });
     this.onMessage('spawn', (client, msg) => {
       if (this.state.pieces.size >= SIM.maxPieces) return;
@@ -846,8 +854,8 @@ class TableRoom extends Room {
       body.velocity.set((Math.random() - 0.5) * roll.spread, roll.up, (Math.random() - 0.5) * roll.spread);
       body.angularVelocity.set((Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin);
     };
-    this.onMessage('roll', () => { this.state.pieces.forEach((piece, id) => { if (piece.type === 'die') rollDie(id); }); }); // roll every die (the Roll button)
-    this.onMessage('rollOne', (client, msg = {}) => { const p = this.state.pieces.get(msg.id); if (p && p.type === 'die') rollDie(msg.id); }); // right-click a single die
+    this.onMessage('roll', () => { let n = 0; this.state.pieces.forEach((piece, id) => { if (piece.type === 'die') { rollDie(id); n++; } }); if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' }); }); // roll every die (the Roll button)
+    this.onMessage('rollOne', (client, msg = {}) => { const p = this.state.pieces.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
 
     // Wipe the room back to an empty table — pieces and all private state.
     this.onMessage('reset', (client) => {
@@ -1174,6 +1182,14 @@ class TableRoom extends Room {
     this.writeTransform(piece, body);
     this.state.pieces.set(id, piece);
     this.bodies.set(id, body);
+    body.addEventListener('collide', (e) => {                       // landing sound, only for pieces a player just dropped
+      const rel = this._released.get(id);
+      if (rel === undefined) return;                                 // deals/rolls/idle collisions stay silent here
+      if (Date.now() - rel > 3000) { this._released.delete(id); return; } // never really landed — disarm
+      if (Math.abs(e.contact.getImpactVelocityAlongNormal()) < SIM.impact.minVel) return; // ignore gentle grazes
+      this._released.delete(id);                                     // one cue per drop (kills multi-bounce spam)
+      this.broadcast('sfx', { type: sfxImpact(type) });
+    });
     if (type === 'deck') this.updateDeckCollider(id); // match the collider to the stack height
     return id;
   }
