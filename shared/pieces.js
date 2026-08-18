@@ -135,3 +135,37 @@ export function timerLive(t, now) {
   const elapsed = now - t.since;
   return t.mode === 'down' ? Math.max(0, t.base - elapsed) : t.base + elapsed;
 }
+
+// --- Measurement: a raw world distance → the label a ruler shows -------------
+// A DISPLAY layer over the FIXED world scale (see RoomScale). Pure, and shared by
+// both sides so a measurement reads identically on every screen — the same instinct
+// as timerLive above. Rounding is display-only; callers keep the exact geometry.
+
+// Decimal places implied by a round step (a *size*, not a digit count): 0.5 → 1,
+// 0.25 → 2, 1 → 0. Capped at 4. Steps are clamped to 0.001–100, so String() never
+// hits scientific notation.
+function decimalsForStep(step) {
+  if (!(step > 0)) return 0;
+  const s = String(step), dot = s.indexOf('.');
+  return dot < 0 ? 0 : Math.min(4, s.length - dot - 1);
+}
+
+// Round a value to the nearest multiple of step (step ≤ 0 → unchanged). A step is a
+// size, so "nearest 0.5" works where a decimal-places count can't. The toFixed pass
+// clears binary-float dust (e.g. 5.4000000000000004 → 5.4).
+export function roundToStep(value, step) {
+  if (!(step > 0) || !Number.isFinite(value)) return value;
+  return +(Math.round(value / step) * step).toFixed(decimalsForStep(step));
+}
+
+// A world distance as a display string: worldDist ÷ worldPerUnit → round to
+// roundStep → append unitLabel, e.g. "5.5 in". `scale` is a RoomScale (or any
+// {worldPerUnit, roundStep, unitLabel}); a missing/invalid scale falls back to raw
+// world units. Consistent decimals (from the step) so labels don't jitter in width.
+export function formatMeasure(worldDist, scale = {}) {
+  const per = +scale.worldPerUnit > 0 ? +scale.worldPerUnit : 1;
+  const step = +scale.roundStep > 0 ? +scale.roundStep : 0.1;
+  const label = scale.unitLabel || 'u';
+  const units = roundToStep((+worldDist || 0) / per, step);
+  return units.toFixed(decimalsForStep(step)) + ' ' + label;
+}
