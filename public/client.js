@@ -32,6 +32,104 @@ function enhanceNumberInputs() {
 }
 enhanceNumberInputs();
 
+// ===== Movable / resizable pop-out panels ====================================
+// Desktop only (a precise pointer). Drag a panel by its .panel-head to pop it out
+// of the dock into a free-floating spot; a few content-heavy ones also resize.
+// Layout is remembered per-browser in localStorage — pure-UI state, never synced
+// (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
+const PANEL_MOVABLE = ['measurePanel', 'audioPanel', 'creditsPanel', 'tracksPanel', 'whiteboard', 'chat', 'notes', 'scorePanel', 'timer', 'showPanel', 'dropPanel', 'membersPanel', 'tableModal'];
+// Every movable panel is resizable (size them to taste); chat/notes additionally
+// flex their inner scroll region (see styles.css) so resizing grows the content.
+const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
+const PANEL_LS = 'ott.panelLayout';
+let panelTopZ = 40;
+
+function readPanelLayout() { try { return JSON.parse(localStorage.getItem(PANEL_LS)) || {}; } catch (e) { return {}; } }
+function writePanelLayout(layout) { try { localStorage.setItem(PANEL_LS, JSON.stringify(layout)); } catch (e) { /* private mode / quota */ } }
+
+// Clamp a top-left so the WHOLE panel (incl. its bottom-right resize grip) stays
+// on-screen — not just the corner; otherwise a wide panel hangs off the edge.
+function clampPos(panel, left, top) {
+  const w = panel.offsetWidth || 220, h = panel.offsetHeight || 140;
+  return { left: clamp(left, 0, Math.max(0, innerWidth - w)), top: clamp(top, 0, Math.max(0, innerHeight - h)) };
+}
+// Detach a panel from the dock flow into a clamped fixed position (+ optional size).
+function floatPanel(panel, id, left, top, width, height) {
+  panel.classList.add('floating');
+  if (PANEL_RESIZABLE.has(id)) panel.classList.add('resizable');
+  if (width) panel.style.width = width + 'px';   // set size first so clampPos measures the final box
+  if (height) panel.style.height = height + 'px';
+  const pos = clampPos(panel, left, top);
+  panel.style.left = pos.left + 'px';
+  panel.style.top = pos.top + 'px';
+}
+function persistPanel(panel, id) {
+  const r = panel.getBoundingClientRect();
+  const layout = readPanelLayout();
+  // Width is always pinned (prevents the dock's width:100% from re-stretching a
+  // restored panel). Height only once the user has actually resized (an inline
+  // height exists) — so a drag-only panel keeps auto height and grows with content.
+  layout[id] = { left: r.left, top: r.top, width: r.width, height: panel.style.height ? r.height : 0 };
+  writePanelLayout(layout);
+}
+function resetPanelLayout() {
+  writePanelLayout({});
+  for (const id of PANEL_MOVABLE) {
+    const panel = byId(id); if (!panel) continue;
+    panel.classList.remove('floating', 'resizable');
+    panel.style.left = panel.style.top = panel.style.width = panel.style.height = panel.style.zIndex = '';
+  }
+}
+function initPanels() {
+  if (!matchMedia('(pointer: fine)').matches) return; // desktop / precise pointer only — keep the docked layout on touch
+  const layout = readPanelLayout();
+  for (const id of PANEL_MOVABLE) {
+    const panel = byId(id); if (!panel) continue;
+    const head = panel.querySelector(':scope > .panel-head'); if (!head) continue;
+    panel.classList.add('movable');
+    const saved = layout[id];
+    if (saved) floatPanel(panel, id, saved.left, saved.top, saved.width, saved.height);
+
+    head.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || e.target.closest('.close-x')) return;    // left-drag on the title bar, not the ✕
+      const r = panel.getBoundingClientRect();                       // measured WITH any centering transform still applied
+      // Pin the current (docked) width — else the dock's `width:100%` rule, now
+      // viewport-relative under position:fixed, stretches the panel full-screen.
+      if (!panel.classList.contains('floating')) floatPanel(panel, id, r.left, r.top, r.width); // pop out of flow on first drag (no visual jump)
+      panel.style.zIndex = ++panelTopZ;                              // bring to front
+      const ox = e.clientX - r.left, oy = e.clientY - r.top;
+      head.setPointerCapture(e.pointerId);
+      const move = (ev) => {
+        const pos = clampPos(panel, ev.clientX - ox, ev.clientY - oy);
+        panel.style.left = pos.left + 'px';
+        panel.style.top = pos.top + 'px';
+      };
+      const up = (ev) => {
+        try { head.releasePointerCapture(ev.pointerId); } catch (err) { /* already released */ }
+        head.removeEventListener('pointermove', move);
+        head.removeEventListener('pointerup', up);
+        persistPanel(panel, id);
+      };
+      head.addEventListener('pointermove', move);
+      head.addEventListener('pointerup', up);
+    });
+    // Clicking anywhere in a floating panel raises it above the others.
+    panel.addEventListener('pointerdown', () => { if (panel.classList.contains('floating')) panel.style.zIndex = ++panelTopZ; }, true);
+    // Remember size changes on the resizable ones (debounced to a frame).
+    if (PANEL_RESIZABLE.has(id) && 'ResizeObserver' in window) {
+      let raf = 0;
+      new ResizeObserver(() => {
+        if (!panel.classList.contains('floating')) return;
+        cancelAnimationFrame(raf);
+        raf = requestAnimationFrame(() => persistPanel(panel, id));
+      }).observe(panel);
+    }
+  }
+  const reset = byId('resetPanelsBtn');
+  if (reset) { reset.hidden = false; reset.onclick = resetPanelLayout; }
+}
+initPanels();
+
 // Append one chat message to the log; auto-scroll if the reader's at the bottom,
 // and flag the Tools button as unread when the panel's closed.
 function addChatMsg(m) {

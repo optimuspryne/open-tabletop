@@ -26,6 +26,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   GM checkpoint, the auto-save-on-empty, and saved library scenes all restore them
   (as table-owned, GM-managed). Per-room and per-player caps keep the map bounded.
   Clearing is scoped: everyone gets **Clear mine**; a GM also gets **Clear all**.
+- **Movable & resizable panels** — on desktop, drag any pop-out panel (Measure, Chat,
+  Notes, Timer, Scoreboard, Whiteboard, Sound, Members, …) by its title bar to place it
+  anywhere, and drag its corner to resize it to taste. Your layout is remembered
+  per-browser, and **↺ Reset panel layout** (Tools menu) re-docks everything. Touch
+  devices keep the fixed docked layout.
 
 ## [0.2.0] — 2026-08-17
 

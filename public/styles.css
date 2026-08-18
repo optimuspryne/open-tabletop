@@ -1851,3 +1851,29 @@ body.admin {
 
 .trackItem { display: block; width: 100%; text-align: left; margin: 2px 0; }
 .trackItem.on { color: var(--accent); font-weight: bold; }
+
+/* ===== Movable / resizable pop-out panels (desktop) =========================
+   .movable  — drag handle affordance on the title bar (added by JS on desktop)
+   .floating — popped out of the dock into a free, viewport-fixed position
+   .resizable— a native resize grip (every movable panel, once floated)         */
+.panel.movable > .panel-head { cursor: move; touch-action: none; user-select: none; }
+.panel.floating {
+  position: fixed !important;   /* beat the more-specific `#toolsDock > #x { position: static }` dock rule */
+  transform: none !important;   /* drop the translateY(-50%) centering — we set an explicit top */
+  margin: 0 !important;
+  z-index: 40;
+}
+.panel.resizable {
+  resize: both;
+  overflow: auto;               /* scroll (don't clip) content when a panel is shrunk; keeps the resize grip live */
+  min-width: 200px;
+  min-height: 120px;
+  max-width: 96vw;
+  max-height: 92vh;
+}
+/* Chat/Notes flex their inner scroll region so dragging the grip grows the log /
+   text itself, not just the box (other panels just resize + scroll their content). */
+.panel.resizable#chat #chatLog,
+.panel.resizable#notes #notesText { flex: 1 1 auto; max-height: none; min-height: 0; }
+.panel.resizable#notes #notesText { resize: none; } /* the panel grip governs size, not the textarea's own */
+@media (pointer: coarse) { #resetPanelsBtn { display: none; } } /* nothing to reset on touch (drag is desktop-only) */
