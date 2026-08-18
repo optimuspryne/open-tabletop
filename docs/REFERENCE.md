@@ -14,10 +14,13 @@ The codebase:
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
 | `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |
+| `public/audio.js` | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced) |
+| `public/credits.js` | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player *and* credits panel) |
 | `public/{landing,admin,editor-panel}.js` | browser | Lobby, admin console, library-editor UI (HTTP + room) |
 | `public/*.html` + `styles.css` | browser | Page shells (table/editor/index/admin) + UI styling |
 
-Client import chain (no cycles): `shared ← core ← graphics ← client`.
+Client import chain (no cycles): `shared ← core ← graphics ← client`, with
+`client` also importing `audio ← credits`.
 
 ---
 
@@ -58,8 +61,10 @@ classDiagram
         world, state, RANK
         bodies, deckCards, cardData, hands, drafts: Map
         notebooks, shows, pendingInspect: Map
+        pendingHands, pendingTurn, chatLog
         +onAuth() rank() isAdmin()
         +spawn() update() sendHand() saveDeckById() advanceTurn()
+        +serializeScene/serializeGame/applyScene
         +sendMembers/broadcastMembers/sendAssetList/closeAndDispose
         +gameplay + library + member handlers
     }
@@ -83,6 +88,15 @@ classDiagram
         +interaction (pointer/inspect/wheel/keys)
         +seats/markers + render loop
     }
+    class Audio["public/audio.js"] {
+        +playSfx() resumeAudio()
+        +SFX + music volume/mute (localStorage)
+        +toggleMusic/nextTrack/playTrack/shuffle
+    }
+    class Credits["public/credits.js"] {
+        +MUSIC[] MUSIC_CREDIT
+        +SFX_CREDITS[] LIB_CREDITS[]
+    }
     class Pages["landing.js · admin.js · editor-panel.js"] {
         +lobby / admin console / library editor UI
         +fetch to the HTTP API
@@ -94,6 +108,8 @@ classDiagram
     Core <.. Graphics
     Core <.. Client
     Graphics <.. Client
+    Credits <.. Audio
+    Audio <.. Client
     Server *-- TableRoom
     TableRoom <|-- EditorRoom
     Server ..> Auth
@@ -228,7 +244,10 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
   **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
-  `{"t":"cube","f":[…6…]}` cubemap descriptor).
+  `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
+  colour), and the resumed-game public labels **`turnPending`** (name of an absent
+  turn-holder) + **`unclaimed`** (map `userId → name` of saved hands awaiting their
+  owner — the GM's reassign UI reads it; never the cards themselves).
 
 ### `TableRoom extends Room`
 
@@ -241,20 +260,31 @@ Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** an
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
 `cardData`, `hands`, `drafts`, **`pendingInspect`** (a drawn-but-unplaced card),
 **`notebooks`** (per-player private notes), **`shows`** (an active hold-to-show:
-`{ to:Set, cards }`), and **`strokes`** (the whiteboard's stroke history, capped
-at `WHITEBOARD_MAX_STROKES`, replayed to late joiners). Module-scope **`LIVE_ROOMS`**
-(a Set of live rooms) lets the orphan-cleanup scan see in-play asset references.
+`{ to:Set, cards }`), **`strokes`** (the whiteboard's stroke history, capped
+at `WHITEBOARD_MAX_STROKES`, replayed to late joiners), **`chatLog`** (the rolling
+public-chat history, last 80, replayed to late joiners), and — for resumable games —
+**`pendingHands`** (map `userId → {name,cards}`: saved hands awaiting their owner's
+return) + **`pendingTurn`** (the `userId` whose turn a loaded game paused on).
+Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
+see in-play asset references.
 
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
 out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
-**`advanceTurn`**, **`sendMembers`/`broadcastMembers`** (push the member list to
-GMs), **`sendAssetList(client,kind)`** (a library listing, private-inclusive for
-admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`** (persist the room's
-durable settings — scoreboard, notes, table size, skybox — now / debounced via
-`db.saveRoomState`), **`closeAndDispose`** (broadcast `roomClosed`, then dispose —
-invoked by `matchMaker.remoteRoomCall`), `onJoin/onLeave`.
+**`advanceTurn`**, **`serializeScene`** (portable template: table size + pieces +
+deck order + face-down fronts, no player identity), **`serializeGame`** (a scene
+*plus* account-keyed `hands` + `turn`, session→`userId` resolved), **`applyScene`**
+(rebuild pieces, then *stage* the private layer into `pendingHands`/`pendingTurn` +
+the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
+member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
+private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
+(persist the room's durable settings — scoreboard, notes, table size, skybox, felt
+colour, and the saved game snapshot — now / debounced via `db.saveRoomState`),
+**`closeAndDispose`** (broadcast `roomClosed`, then dispose — invoked by
+`matchMaker.remoteRoomCall`), `onJoin`/`onLeave` (on join, an account reclaims its
+`pendingHands`/`pendingTurn`; on leave, after the reconnect window, a departing
+hand is parked back into `pendingHands` + `unclaimed`).
 
 Gameplay handlers (rank-gated): `grab`, `move`, `release`, `flip`, `dealToTable`,
 `dealDrag`, `takeCard`, `playCard`, `shuffle`, **`splitDeck`** (deal a deck in
@@ -264,9 +294,12 @@ two — original keeps the top half, a new ephemeral deck gets the rest),
 `roll`, `reset` (gm+ — full clear), `nextTurn`, `remove`, `setName`, `setAvatar`,
 **`notebook`**, **`handSync`** (re-send my private hand after a reconnect),
 **`timer`** (action: `start`/`pause`/`reset`/`set`), **`showStart`/`showStop`**,
-**`ping`**. Room settings (gm+, persisted via `scheduleSave`): **`score`**
-(scoreboard add/set/clear), **`roomNotes`**, **`tableSize`** (resize the felt),
-**`skybox`** (apply a background).
+**`ping`**, **`chat`** (post a public line; sanitized, appended to `chatLog`,
+broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`**
+(gm+ — checkpoint the live game via `serializeGame` into the room's `scene`; replies
+`stateSaved`). Room settings (gm+, persisted via `scheduleSave`): **`score`**
+(scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
+**`tableColor`** (felt colour), **`skybox`** (apply a background).
 
 Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
 **`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**
@@ -287,7 +320,8 @@ curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
 
 Member-management handlers (gm+, keyed on the DB room): `members` (send the list),
 `admit`, `kick` (also disconnects the live client), `setRole` (owner is
-untouchable; managing a GM is owner-only).
+untouchable; managing a GM is owner-only), **`reassignHand`** (`{userId,
+toSessionId}` — give an `unclaimed` saved-game hand to a present player).
 
 On join the room also sends each client **`whoami`** (`{ isAdmin }`), which the
 client uses to hide creation UI from non-admins.
@@ -360,7 +394,8 @@ return the flag:
   greps for `/assets/…` paths.
 
 **Per-room durable state.** A room's non-piece settings survive restarts:
-`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, skybox}` and
+`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, skybox, feltColor,
+scene}` (where `scene` is the GM/auto-save game snapshot) and
 `saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
 
 **Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,
@@ -401,7 +436,9 @@ storage and lookup, so a DB leak never exposes a live token.
 
 ## `public/core.js` — setup + tunables
 
-Exports `scene`, `camera`, `renderer`, `controls`, and the config:
+Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z)`** (rebuild
+the felt + walls at a new half-extent) and **`setTableColor(hex)`** (recolour the
+felt), and the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
@@ -464,10 +501,15 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 `window.OTT_EDITOR` is set (editor.html), handing the live room to the panel via
 `window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
-marker). Direct messages: `hand` → `renderHand`, `dealt` (adopt a dealt card),
-`inspectCard` → open draw-to-inspect, `notebook` (restore your private notes),
-`showFan` (cards someone is showing you → face-up in their fan), `ping` (spawn an
-attention marker), `memberList` → the Members panel (with the pending-join pulse),
+marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
+(→ `resizeTable`), and `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
+list and the "Waiting on {name}" turn row). Direct messages: `hand` → `renderHand`,
+`dealt` (adopt a dealt card), `inspectCard` → open draw-to-inspect, `notebook`
+(restore your private notes), `showFan` (cards someone is showing you → face-up in
+their fan), `ping` (spawn an attention marker), **`sfx`** (a shared sound cue →
+`playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
+a chat line) / **`chatLog`** (replay the backlog), **`stateSaved`** (flash the Save
+Table State button), `memberList` → the Members panel (with the pending-join pulse),
 `whoami` → sets `myIsAdmin` and toggles `body.not-admin` (hides library-creation
 UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList`
 (library listings, keyed by **id**; also fanned out to the editor panel via
@@ -506,7 +548,24 @@ face-up in the leading fan slots (`refreshFan` + the `revealed` map), height-
 staggered to avoid z-fighting. The turn panel, and **`renderHand(cards)`** for
 your own bar (left = face-down, right = face-up; also a **select mode** while the
 show panel is picking cards). **`nameTag(name,color)`** builds the pill texture
-shared by held-piece labels and pings.
+shared by held-piece labels and pings. **`renderPlayers`** also draws a **"⏳
+Waiting on {name}"** row when `turnPending` is set (a resumed turn whose owner
+hasn't returned), and **`renderUnclaimed`** builds the Members panel's **Unclaimed
+hands** list — each saved player gets a **"Give to…"** picker that sends
+`reassignHand`.
+
+### Chat, sound & music (Tools panels)
+
+- **`addChatMsg(m)`** appends a public-chat line (auto-scroll if at bottom, unread
+  dot on the Tools button); the input sends `chat` and the panel requests `chatLog`
+  on open. Sender names render via `textContent`, so a name can't inject markup.
+- The **🔊 Sound** panel wires `public/audio.js`: SFX volume/mute, music
+  volume/mute, play/pause (`toggleMusic`), `nextTrack`, shuffle (`getShuffle`/
+  `setShuffle`), a now-playing line via `onMusicTrack`, a **track picker**
+  (`playTrack` over the `MUSIC` list), and a **Credits & licenses** panel built
+  from `MUSIC_CREDIT` + `SFX_CREDITS` + `LIB_CREDITS`. `resumeAudio` is armed on the
+  first `pointerdown`; pickup cues are played locally, landing/flip/deal/shuffle
+  cues arrive as server `sfx`/`shuffled` messages.
 
 ### Render loop
 
@@ -516,6 +575,53 @@ between the bracketing snapshots), parks the drop-marker ring under a held piece
 at the current board's surface height, keeps each held-piece **name tag**
 (`heldLabels`) hovering over its mesh, and expands + fades + disposes active
 **pings**. One uniform path for held, thrown, and resting pieces.
+
+---
+
+## `public/audio.js` — sound effects + music
+
+Two independent systems, neither ever synced; all volumes/mutes/shuffle persist
+per-player in `localStorage` (`tabletop.sfxVolume`, `tabletop.sfxMuted`,
+`tabletop.musicVolume`, `tabletop.musicMuted`, `tabletop.musicShuffle`).
+
+### Sound effects (Web Audio)
+
+- **`SOUNDS`** — a map of logical cue → *list* of files under `/sounds/`. A bare
+  string is treated as a one-item list. On first use each file is fetched and
+  decoded into a per-cue pool; a 404/decode error just drops that variant.
+- **`ensureCtx()`** — lazily builds the `AudioContext` + a `master` gain
+  (SFX volume, or 0 when muted) and kicks off the tolerant preload.
+- **`resumeAudio()`** — resumes a suspended context; armed on the first
+  `pointerdown` (browsers gate audio behind a gesture).
+- **`playSfx(name, {volume?})`** — plays a **random variant** from the pool
+  fire-and-forget through `master` (optional per-shot gain); a no-op if nothing's
+  decoded yet.
+- **`getSfxVolume`/`setSfxVolume`**, **`getSfxMuted`/`setSfxMuted`** — persisted
+  master controls (`applyGain` re-applies).
+
+### Background music (HTML5 `<audio>`)
+
+A separate streaming player (long tracks, not buffers), fed by `MUSIC`.
+
+- **`toggleMusic()`** (play/pause), **`nextTrack()`** (auto-advances on `ended`;
+  shuffle avoids repeating the current track), **`playTrack(i)`**,
+  **`currentTrackIndex()`**, **`isMusicPlaying()`**.
+- **`getShuffle`/`setShuffle`**, **`getMusicVolume`/`setMusicVolume`**,
+  **`getMusicMuted`/`setMusicMuted`** — persisted.
+- **`onMusicTrack(cb)`** — a `(track, index)` callback the Sound panel uses for its
+  now-playing line.
+
+## `public/credits.js` — attribution manifest
+
+One place for all baked-in-asset credits; drives *both* the music player and the
+credits panel.
+
+- **`MUSIC`** `[{ title, file }]` — the playlist (files under `/music/`).
+- **`MUSIC_CREDIT`** `{ by, url, license, licenseUrl }` — the shared attribution
+  applied to every track (Kevin MacLeod, **CC BY 4.0** — the visible credit is a
+  licence obligation, not decoration).
+- **`SFX_CREDITS`** `[{ title, by, url, license }]`, **`LIB_CREDITS`**
+  `[{ title, url, license }]` — sound-effect and third-party-library attributions.
 
 ---
 

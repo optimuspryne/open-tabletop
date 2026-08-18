@@ -71,14 +71,23 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
   render loop. Holds the mutable session state (`room`, `down`, `inspect`,
   `meshes`, `buffers`).
+- **`public/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
+  clips pooled per logical name, played fire-and-forget) plus an HTML5 `<audio>`
+  **background-music** player. Volumes/mutes/shuffle are per-player, in
+  `localStorage`; nothing here is synced (see "Sound & music").
+- **`public/credits.js`** — the attribution manifest: the `MUSIC` playlist (which
+  drives *both* the music player and the credits panel) plus `SFX_CREDITS` and
+  `LIB_CREDITS`. The CC-BY music makes the in-app credits mandatory, not cosmetic.
 - **The pages** — `index.html` + `landing.js` (the lobby: quick-join, login, room
   list, host request), `table.html` (the game table, which loads the client
   chain), `editor.html` + `editor-panel.js` (the admin-only library editor,
   reusing the game client), `admin.html` + `admin.js` (the admin console), and
   `styles.css` (all UI styling — the design-token `:root` block, shared page
   chrome, and per-page layouts).
-- **Project dirs** — `postgres/` (SQL migrations, applied `002`→`003`→`004`),
-  `docs/` (these documents), `docker/` (the Dockerfile).
+- **Project dirs** — `postgres/` (SQL migrations, applied in order
+  `001`→…→`009`, plus `schema.sql` as the flattened baseline), `docs/` (these
+  documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
+  role on first DB start; the `Dockerfile` itself lives at the repo root).
 
 ## Public vs. secret (how hidden information works)
 
@@ -86,7 +95,10 @@ The **synced state is public** — anything in it is one devtools-peek from bein
 read. It holds: each piece's transform/type/owner/props/count; each player's
 seat, hand *count*, name, color, avatar, `showing` count (how many cards they're
 revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
-and whose turn it is.
+the room dressing (`scores`, `notes`, `tableX/Z`, `whiteboard`, `skybox`,
+`feltColor`); and whose turn it is — including, after a resumed game, the public
+`turnPending` name and the `unclaimed` (`userId → name`) map that the GM's
+reassign UI reads. Names only ever appear there, never the cards themselves.
 
 Secrets live in plain server-only maps that are **never** put in synced state:
 
@@ -98,6 +110,9 @@ Secrets live in plain server-only maps that are **never** put in synced state:
 - `notebooks` — each player's private notes (ephemeral; resent on reconnect)
 - `shows` — an active hold-to-show: who is showing which of their cards to whom
   (the card *content* goes only to that audience; the public part is the badge count)
+- `pendingHands` — hands from a loaded/departed game awaiting their owner's return,
+  keyed by account (`userId`); the public mirror is the `unclaimed` name map (and
+  `turnPending` for the waiting turn), which carry names only, never cards
 
 The invariant: **if it's synced it's public; if it's secret it's server-only.**
 A face-down card's face has never been transmitted to any client, so there is
@@ -247,10 +262,54 @@ machinery:
   (a `/assets/sky/…` URL or a cubemap descriptor) is synced and persisted per room.
 - **Scoreboard & room notes** (shared, durable) — a `scores` map (label/score
   rows) and a GM `notes` string, both synced and saved with the room.
+- **Chat** (shared, ephemeral) — public room text. A `chat` message is sanitized
+  server-side (whitespace collapsed, trimmed, 400-char cap), stamped with the
+  sender's name, appended to a rolling `chatLog` (last 80), and broadcast as
+  `chatMsg`; a late joiner pulls the backlog by requesting `chatLog`. Held only in
+  server memory, gone on dispose — the same message-not-schema pattern as the
+  whiteboard, not synced state.
+- **Felt colour** (shared, durable) — the table surface colour. GM-set, synced as
+  `feltColor`, and persisted per room (the client applies it via `setTableColor`).
 - **Lean in** (client-only) — an Interactions-menu toggle that eases the camera
   toward the orbit target for a closer look. Applied as a per-frame offset that's
   undone before `controls.update()`, so it never corrupts the real orbit distance
   and never touches the network.
+
+## Sound & music
+
+Audio is deliberately kept off the schema — no sound state is ever synced. It
+splits into two independent systems, both in `public/audio.js`:
+
+**Sound effects (Web Audio).** Each logical cue in the `SOUNDS` map names a *list*
+of files under `/sounds/`; on first use each is fetched and decoded into a pool,
+and `playSfx(name)` picks a random variant so a repeated action doesn't sound
+identical. Loading is tolerant — a 404 or decode error just drops that variant, so
+the app runs fine before any audio is added. Everything funnels through one master
+gain (the SFX volume, or 0 when muted). Browsers block audio until a gesture, so
+the first `pointerdown` calls `resumeAudio()`.
+
+The important architectural split is **who hears a cue**, and it mirrors the
+authority model:
+
+- **Pickup cues are local.** Grabbing a piece plays `…-pickup` on that client
+  alone — a private "I picked this up," never broadcast.
+- **Landing cues are server-authoritative.** On `release` the server arms
+  `_released` for that piece; the body's cannon-es `collide` event fires the cue
+  **once**, gated on the arm window (~3 s, else it "never landed" and disarms) and
+  on `SIM.impact.minVel` (gentle grazes stay silent). It then `broadcast`s an
+  `sfx` message so *everyone* hears the same landing at the true physics moment,
+  not when the dragger let go. Flips, deals, and shuffles broadcast `sfx` the same
+  way. `sfxImpact(type)` maps a piece type to its clip base (`card`→`card-drop`,
+  and so on).
+
+**Background music (HTML5 `<audio>`).** A separate streaming player, because
+tracks are long files rather than short buffers. Its playlist is the `MUSIC` array
+from `credits.js`; it auto-advances on `ended`, supports shuffle (avoiding an
+immediate repeat), a manual track picker, and its own volume/mute — all per-player
+in `localStorage`, none of it synced. Kevin MacLeod's tracks are **CC BY 4.0**,
+which requires visible attribution, so `credits.js` also feeds a **credits panel**
+(music + `SFX_CREDITS` + `LIB_CREDITS`); that panel is a licensing obligation, not
+decoration.
 
 ## Persistence: the asset library
 
@@ -266,9 +325,11 @@ string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 can't reshape or drop the schema.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
-notes, table size, and skybox — in the `rooms` row (via `getRoomState`/
+notes, table size, skybox, and felt colour — plus the GM/auto-save **game
+snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
 `saveRoomState`, debounced by the room's `scheduleSave`). So those survive a
-restart or an empty-table reset even though live pieces and hands stay in memory.
+restart or an empty-table reset; live pieces and hands stay in memory during a
+session and reach the row only through that snapshot.
 
 Because unreferenced `/assets` files pile up as the library and tables churn
 (deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)
@@ -287,6 +348,42 @@ Library** and **Built-Ins** pickers (plus a Room Controls Skybox picker), driven
 by `editor-panel.js` over `window.onOttRoom` — while **Add to Library** (creation)
 is editor-only and the asset handlers refuse non-admin creation/curation.
 See "Accounts, rooms & roles" below.
+
+## Scene vs. game snapshot (`serializeScene` / `serializeGame`)
+
+Two serializers, layered on purpose:
+
+- **`serializeScene`** produces the portable *template*: table size + every piece
+  (transform, and a deck's private card order / a face-down card's hidden front
+  ride along so they rebuild faithfully), and **no player identity**. Library
+  scenes call this directly — they must stay hands-free.
+- **`serializeGame`** wraps a scene with the live private layer: each held **hand**
+  and the **turn**. The catch is that both are keyed by ephemeral **`sessionId`**,
+  but anything that must survive a reload has to key on the stable
+  **`client.auth.userId`** — so `serializeGame` resolves session → account as it
+  writes, emitting `hands: [{ userId, name, cards }]` and `turn: { userId, name }`.
+  Already-departed players are gone from `clientBy(sid)`, so their hands are read
+  from `pendingHands` (account-keyed) instead of the live `hands` map.
+
+Two triggers write a snapshot into the room's `scene` jsonb: the GM's **`stateSave`**
+("Save Table State") and the **`onDispose`** auto-save (only when the table isn't
+empty, and only under `SCENE_MAX_BYTES`). Both go through `savedScene` →
+`saveRoomState`, alongside the room's other durable settings.
+
+`applyScene` rebuilds the pieces, then *stages* — never assigns — the private layer:
+saved hands land in `pendingHands` (account-keyed) with a public `unclaimed`
+(`userId → name`) map mirrored into synced state for the GM's reassign UI; the saved
+turn lands in `pendingTurn` with a public `turnPending` name, and `state.turn` is
+blanked because no live session holds it yet. Resolution happens on join: a returning
+account reclaims its `pendingHands` entry (and `pendingTurn`, if it was theirs);
+otherwise a GM reassigns an unclaimed hand to a present player via **`reassignHand`**,
+and `advanceTurn`/**Next Turn** clears a stale `turnPending`. `onLeave` closes the
+loop — after the reconnection window lapses, a departing player's hand is parked
+back into `pendingHands` + `unclaimed` so it survives to the next snapshot.
+
+The privacy invariant is preserved end to end: hands and faces sit in the snapshot's
+jsonb but never enter synced state; on load they're rebuilt into the server-only
+maps and each hand is delivered privately via `sendHand`, exactly as in a live game.
 
 ## Seats, presence, turns
 
@@ -315,9 +412,12 @@ separate tabs stay distinct.
   `listBoards`/`saveBoard`/`loadBoard`, `sceneSave`/`sceneLoad`/`listScenes`,
   `saveSkybox`/`listSkyboxes`/`skybox`,
   `assetPublic`/`assetRename`/`assetDelete` (admin curation),
-  `members`/`admit`/`kick`/`setRole` (GM member management),
+  `members`/`admit`/`kick`/`setRole`/`reassignHand` (GM member management),
+  `stateSave` (GM checkpoints the live game into the room's `scene`),
   `wbEnable`/`wbClaim`/`wbRelease`/`wbSet`/`wbStroke`/`wbClear`/`wbStrokes`
-  (whiteboard), `score`/`roomNotes`/`tableSize` (durable room settings),
+  (whiteboard), `chat`/`chatLog` (public chat — send, and request the backlog),
+  `score`/`roomNotes`/`table`/`tableColor` (durable room settings: scoreboard,
+  notes, table size, felt colour),
   `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
   `notebook`, `timer`, `showStart`/`showStop`, `ping`, `handSync` (re-request my
   private hand after a reconnect). (Library load/edit key on a row **`id`** — the
@@ -326,10 +426,13 @@ separate tabs stay distinct.
   notes, tableX/Z, whiteboard, skybox) plus direct messages — `hand` (your private
   cards), `dealt` (adopt a dealt card as the dragged piece), `inspectCard` (a drawn
   front for you alone), `notebook` (your private notes), `showFan` (cards someone
-  is showing *you*), `ping` (a broadcast attention marker), `shuffled` (play the
-  riffle), `wbStroke`/`wbStrokes`/`wbClear` (whiteboard replay), `whoami` (your
+  is showing *you*), `ping` (a broadcast attention marker), `sfx` (a shared sound
+  cue — landing/flip/deal), `shuffled` (play the riffle), `chatMsg`/`chatLog`
+  (a broadcast chat line / the late-join backlog),
+  `wbStroke`/`wbStrokes`/`wbClear` (whiteboard replay), `whoami` (your
   admin flag — gates the creation UI), `memberList` (the room's members, for GMs),
-  `roomClosed`/`kicked` (lifecycle notices), and the library listings
+  `roomClosed`/`kicked` (lifecycle notices), `stateSaved` (the GM's Save Table
+  State went through), and the library listings
   `deckList`/`boardList`/`propList`/`sceneList`/`skyList` (plus `skyError`/
   `sceneError` on a rejected save).
 

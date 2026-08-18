@@ -24,10 +24,13 @@ LAN → use your machine's IP) and move pieces around together.
 
 ## Database
 
-Postgres now backs three things: the saved-asset **library** (deck / board / prop
-/ scene / skybox metadata), **user accounts**, and **rooms + membership** (plus
-each room's durable settings — scoreboard, notes, table size, skybox). Live piece
-state and private hands are still all in-memory. One-time setup:
+Postgres now backs the saved-asset **library** (deck / board / prop / scene /
+skybox metadata), **user accounts**, **rooms + membership**, and each room's
+durable settings — scoreboard, notes, table size, skybox, felt colour, and a
+saved **game snapshot**. Live piece state and private hands are held in memory
+*during a session*; they're persisted only through a snapshot — the GM's **Save
+Table State**, or an auto-save when the room empties — written into the room's
+`scene` column and rebuilt from it on load (see "Saving & resuming games"). One-time setup:
 
 1. **Database + owner role** (as a superuser):
    `CREATE ROLE tabletop LOGIN PASSWORD '…';` then
@@ -166,6 +169,8 @@ the DB URL via `DATABASE_URL` or `DATABASE_URL_FILE` (a mounted secret).
   * A seat per player, standing name/avatar markers.
   * Automatically assigned color.
   * Turn indicator, turn can be advanced using the 'Next Turn' button.
+  * On a **resumed game**, a turn whose owner hasn't rejoined yet shows as
+    **"⏳ Waiting on {name}"** until they return or a GM advances the turn.
 - **Live Table 'Tools'** - Look for the **'Tools'** menu on the right, collapsible.
   * **`📝 Private Notes`** A private, per-player ephemeral.
   * **`💬 Chat`** A public room chat, ephemeral.
@@ -196,7 +201,11 @@ the DB URL via `DATABASE_URL` or `DATABASE_URL_FILE` (a mounted secret).
   * Upload custom decks.  Image decks take a single 'back image' and numerous 'face images', colors can be fully customized.  You can enter an optional 'back text', and fronts take a list of 'front texts': one per-line, comma-separated or JSON format.  A .csv or .txt file can also be uploaded.
   * Upload custom boards.  Boards can either be `.glb` files (they will be automatically scaled), or a 2D image can be uploaded, with dimensions specified to create a custom 'image board'.
   * Upload custom skyboxes. You can upload panoramic or cubemap skyboxes.
-  * Scenes: Setup a table the way you like and then 'save' it's state.  This scene can then be loaded onto any table.
+  * Scenes: set up a table the way you like, then save it as a **scene** — a
+    portable *template* (table size + pieces + deck order + face-down faces, but
+    **no players, hands, or turn**) that loads onto any table. Resuming an
+    in-progress game *with* its hands and turn is a separate, per-room mechanism —
+    see "Saving & resuming games".
 
 ## Files
 
@@ -287,6 +296,36 @@ Double-click a **deck** to draw its top card privately into an enlarged inspect
 view (the front is sent to you alone, like a hand of one; the deck count drops
 for everyone). Then place it: **F** field face-up · **D** field face-down · **H**
 hand · **R** / click-away returns it to the top of the deck.
+
+## Saving & resuming games
+
+There are two distinct kinds of "save," on purpose:
+
+- A **scene** is a portable *template* — table size + pieces + deck order +
+  face-down faces, and **nothing about players**. It's admin-curated in the editor
+  library and loads onto *any* table (see "The asset library").
+- A **game snapshot** is a scene *plus* the live private layer — each player's
+  **hand** and whose **turn** it is — saved **per room** so a game in progress can
+  be put down and picked back up. A **GM** writes one with **Save Table State**,
+  and the server also **auto-saves** as the last player leaves and the room is
+  about to dispose, so progress survives an empty room even if nobody clicked save.
+  The snapshot lives in that room's `scene` column and is rebuilt on the next load.
+
+Hands and the turn are keyed to **accounts**, not to the ephemeral session id, so
+they rebind cleanly on return:
+
+- A returning player automatically **reclaims their own hand** (and the turn, if
+  it was theirs) on rejoin — matched by account, not by seat.
+- A hand whose owner hasn't come back is held as **unclaimed**. The GM sees an
+  **Unclaimed hands** list at the top of the **Members** panel and can hand each
+  one to any present player from a **"Give to…"** picker.
+- A turn left with an absent player shows in the turn panel as **"⏳ Waiting on
+  {name}"** until that player rejoins or a GM presses **Next Turn**.
+
+The privacy invariant holds across the whole cycle: deck order, face-down faces,
+and hands are stored in the snapshot but **never enter broadcast state** — on load
+they're rebuilt into server-only memory and each hand is sent privately to its
+owner, exactly as in a live session.
 
 ## Custom decks & card art
 
@@ -401,7 +440,8 @@ stamped onto the connection at join and enforced server-side:
 - **player** — move/throw pieces, play their own hand.
 - **helper** (+) — spawn built-in props/dice and public library decks/props.
 - **GM** (+) — reshape/reset the table, spawn public boards, and manage members
-  (admit / kick / promote) from the in-table Members panel.
+  (admit / kick / promote — and **reassign an unclaimed hand** from a resumed
+  game) from the in-table Members panel.
 - **owner** — the room's creator; a GM other GMs can't manage.
 
 A site **admin** is a global flag, not a room role: admins join any room as a GM,
