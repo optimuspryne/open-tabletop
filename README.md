@@ -88,7 +88,7 @@ app image against it:
 ```bash
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.2.0
+  optimuspryne/open-tabletop:0.3.0
 # For a remote DB, append `?sslmode=no-verify`
 # (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 # turn on `ssl` server-side.
@@ -105,7 +105,7 @@ Edit the compose file so that the db section uses **'image: optimuspryne/open-ta
 # First run:  cp .env.example .env  (set the two passwords),  then:  docker compose up -d
 services:
   db:
-    image: optimuspryne/open-tabletop-db:0.1.0
+    image: optimuspryne/open-tabletop-db:0.3.0
     restart: unless-stopped
     container_name: open-tabletop-db
     environment:
@@ -122,7 +122,7 @@ services:
       retries: 12
       
   app:
-    image: optimuspryne/open-tabletop:0.2.0
+    image: optimuspryne/open-tabletop:0.3.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:

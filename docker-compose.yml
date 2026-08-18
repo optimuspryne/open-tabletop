@@ -22,7 +22,7 @@ services:
 
   app:
     build: .
-    # image: YOURNAME/open-tabletop:0.2.0  # <- swap `build: .` for this to run a published image
+    # image: YOURNAME/open-tabletop:0.3.0  # <- swap `build: .` for this to run a published image
     restart: unless-stopped
     depends_on:
       db:

@@ -8,29 +8,30 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-08-18
+
 ### Added
-- **Per-room measurement scale** — a durable, GM-set display/snap layer
-  (`worldPerUnit` + freeform `unitLabel` + `roundStep`, plus reserved grid fields)
-  over the fixed world scale. Calibrate from the current table width or a unit
-  preset. Groundwork for the forthcoming measurement + templates tools; nothing is
-  drawn yet.
-- **Measurement helpers** (`shared/pieces.js`) — `formatMeasure` and `roundToStep`,
-  the pure functions that turn a world distance into a display label; shared by both
-  sides so a measurement reads identically everywhere.
-- **Measure tool + templates** — a Tools-menu **📏 Measure** mode with a shape picker:
-  drag on the table to lay a **ruler** (distance), **circle** (radius/burst), **cone**
-  (range), or **line** (lane), each labelled in the room's unit via the measurement
-  scale. These are flat, non-physics **overlays** synced to everyone. All four kinds run
-  through one `OVERLAY` registry and a single "press A, drag to B" gesture.
-- **Overlays persist + are bounded** — placed overlays now ride the scene snapshot, so a
-  GM checkpoint, the auto-save-on-empty, and saved library scenes all restore them
-  (as table-owned, GM-managed). Per-room and per-player caps keep the map bounded.
-  Clearing is scoped: everyone gets **Clear mine**; a GM also gets **Clear all**.
+- **Measurement & templates** — a new **📏 Measure** tool (Tools menu). Set a per-room
+  unit scale — calibrate from the current table width or an inch/cm/mm preset — then drag
+  on the table to lay a **ruler** (distance), **circle** (radius/burst), **cone** (range),
+  or **line** (lane), each labelled in your unit. These flat, non-physics **overlays** sync
+  to everyone and ride the save/scene snapshot, so a GM checkpoint, the auto-save-on-empty,
+  and saved library scenes all restore them. Placement is bounded by per-room and
+  per-player caps, and clearing is scoped — everyone gets **Clear mine**; a GM also gets
+  **Clear all**.
 - **Movable & resizable panels** — on desktop, drag any pop-out panel (Measure, Chat,
   Notes, Timer, Scoreboard, Whiteboard, Sound, Members, …) by its title bar to place it
   anywhere, and drag its corner to resize it to taste. Your layout is remembered
   per-browser, and **↺ Reset panel layout** (Tools menu) re-docks everything. Touch
   devices keep the fixed docked layout.
+
+### Upgrading
+- **Existing self-hosted databases:** this release adds a `scale` column to `rooms` via a
+  migration that is **not** auto-applied. Run it once against your database before (or
+  right after) upgrading:
+  `psql -U tabletop -d tabletop -f postgres/010_room_scale.sql`
+  It's safe and idempotent (`ADD COLUMN IF NOT EXISTS`). Fresh installs get it automatically
+  from the baked schema — no action needed.
 
 ## [0.2.0] — 2026-08-17
 
@@ -87,6 +88,7 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.0
 [0.2.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.1.0
