@@ -784,6 +784,32 @@ const KIND = {
   board: { mesh: boardMesh },
 };
 
+// ---- Overlays: flat, non-physics annotations (measurement + templates) ------
+// A registry parallel to KIND: each kind builds a THREE.Group in table-space (XZ,
+// at y=0; the client lifts it just above the felt). The distance LABEL is a sprite
+// the client owns (it needs the room's scale + formatMeasure). A new overlay kind
+// is one entry here + one server-side kind string — the sync/interaction is generic.
+function overlayBar(ax, az, bx, bz, color, thick = 0.06) {
+  const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz) || 0.0001;
+  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false });
+  const g = new THREE.Group();
+  const bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, thick), mat);
+  bar.position.set((ax + bx) / 2, 0, (az + bz) / 2);
+  bar.rotation.y = Math.atan2(-dz, dx);           // align the bar's +X along A→B
+  g.add(bar);
+  for (const [px, pz] of [[ax, az], [bx, bz]]) {  // small end dots mark the two points
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(thick, thick, 0.03, 12), mat);
+    cap.position.set(px, 0, pz);
+    g.add(cap);
+  }
+  return g;
+}
+function rulerMesh(o) { return overlayBar(o.x, o.z, o.x2, o.z2, o.color); }
+
+const OVERLAY = {
+  ruler: { build: rulerMesh },
+};
+
 // ---- Library preview thumbnails (editor) -----------------------------------
 // A tiny offscreen renderer that snapshots a mesh/model to a PNG data-URL, so the
 // library can show a picture of each asset. Card faces don't need it — they draw
@@ -873,4 +899,4 @@ export async function glbFilePreviewURL(file, rot) {
   finally { URL.revokeObjectURL(url); }
 }
 
-export { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel };
+export { KIND, OVERLAY, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel };

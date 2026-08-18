@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 
@@ -336,10 +336,18 @@ class RoomScale extends Schema {
   constructor() { super(); this.worldPerUnit = 1; this.unitLabel = 'u'; this.roundStep = 0.1; this.cellWorld = 0; this.gridStyle = 'off'; }
 }
 defineTypes(RoomScale, { worldPerUnit: 'number', unitLabel: 'string', roundStep: 'number', cellWorld: 'number', gridStyle: 'string' });
-class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); }
+// PUBLIC measurement/template overlay — a flat, non-physics annotation on the felt
+// (rendered via the OVERLAY registry client-side). Every overlay is two points plus
+// optional scalars, so one shape + one interaction (drag A→B) covers ruler today and
+// circle/cone/line next. Never enters the physics world.
+class Overlay extends Schema {
+  constructor() { super(); this.kind = 'ruler'; this.color = '#ffffff'; this.owner = ''; this.x = 0; this.z = 0; this.x2 = 0; this.z2 = 0; this.w = 0; this.ang = 0; }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale });
+defineTypes(Overlay, { kind: 'string', color: 'string', owner: 'string', x: 'number', z: 'number', x2: 'number', z2: 'number', w: 'number', ang: 'number' });
+class State extends Schema {
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); this.overlays = new MapSchema(); }
+}
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale, overlays: { map: Overlay } });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -454,7 +462,7 @@ class TableRoom extends Room {
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.pendingHands = new Map(); // userId -> {name,cards}  saved-game hands awaiting their owner's return (rebind on join)
     this.pendingTurn = null;       // userId whose turn it was in a saved game, awaiting their return
-    this.nextId = 1; this.nextHid = 1;
+    this.nextId = 1; this.nextHid = 1; this.nextOverlayId = 1;
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
     // --- Movement: grab → drag → release --------------------------------------
@@ -1066,6 +1074,45 @@ class TableRoom extends Room {
       this.scheduleSave();
     });
 
+    // --- Overlays: flat measurement/template annotations (not physics) --------
+    // Public, ephemeral (live in state, gone on dispose; snapshot persistence is
+    // Step 5). Any seated player may add/remove their own; a GM may remove any.
+    const OVERLAY_KINDS = new Set(['ruler', 'circle', 'cone', 'line']);
+    const clampCoord = (v) => clamp(+v || 0, -MEASURE.maxLen, MEASURE.maxLen);
+    this.onMessage('overlayAdd', (client, msg = {}) => {
+      if (!OVERLAY_KINDS.has(msg.kind)) return;
+      const player = this.state.players.get(client.sessionId);
+      const o = new Overlay();
+      o.kind = msg.kind;
+      o.owner = client.sessionId;
+      o.color = (player && player.color) || '#ffffff';
+      o.x = clampCoord(msg.x); o.z = clampCoord(msg.z);
+      o.x2 = clampCoord(msg.x2); o.z2 = clampCoord(msg.z2);
+      o.w = clamp(+msg.w || 0, 0, MEASURE.maxLen);
+      o.ang = +msg.ang || 0;
+      this.state.overlays.set('o' + (this.nextOverlayId++), o);
+    });
+    this.onMessage('overlayMove', (client, msg = {}) => {       // reposition (owner or GM) — used from Step 4+
+      const o = this.state.overlays.get(String(msg.id));
+      if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
+      if (msg.x !== undefined) o.x = clampCoord(msg.x);
+      if (msg.z !== undefined) o.z = clampCoord(msg.z);
+      if (msg.x2 !== undefined) o.x2 = clampCoord(msg.x2);
+      if (msg.z2 !== undefined) o.z2 = clampCoord(msg.z2);
+      if (msg.w !== undefined) o.w = clamp(+msg.w || 0, 0, MEASURE.maxLen);
+      if (msg.ang !== undefined) o.ang = +msg.ang || 0;
+    });
+    this.onMessage('overlayRemove', (client, msg = {}) => {     // delete one (owner or GM)
+      const o = this.state.overlays.get(String(msg.id));
+      if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
+      this.state.overlays.delete(String(msg.id));
+    });
+    this.onMessage('overlayClear', (client) => {               // clear your own; a GM clears all
+      const gm = this.rank(client) >= RANK.gm, del = [];
+      this.state.overlays.forEach((o, id) => { if (gm || o.owner === client.sessionId) del.push(id); });
+      for (const id of del) this.state.overlays.delete(id);
+    });
+
     // --- Whiteboard: a synced singleton on a track behind the players ----------
     this.onMessage('wbEnable', (client, { on } = {}) => {
       if (this.rank(client) < RANK.gm) return;             // spawn/enable is GM+
@@ -1396,6 +1443,7 @@ class TableRoom extends Room {
     this.targets.clear();
     for (const sid of [...this.shows.keys()]) this.stopShow(sid); // end any live reveals
     for (const client of this.clients) this.sendHand(client);      // clear every player's hand
+    this.state.overlays.clear();                                   // wipe measurement/template overlays
   }
 
   // Serialize the current table into a scene payload: the table size, and every

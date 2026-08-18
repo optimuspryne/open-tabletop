@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
-import { KIND, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive } from '/shared/pieces.js';
+import { KIND, OVERLAY, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel } from './graphics.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
@@ -134,6 +134,12 @@ const applyTransform = (mesh, s) => {
     meshes.delete(id);
     buffers.delete(id);
   });
+
+  // Overlays (measurement/templates) are public synced state, so a late joiner gets
+  // them in the initial state — no replay needed. Immutable once placed in Step 3
+  // (no overlayMove wired yet), so add/remove is the whole lifecycle here.
+  cb(room.state).overlays.onAdd((o, id) => addOverlay(id, o));
+  cb(room.state).overlays.onRemove((o, id) => removeOverlay(id));
 
   // Record one timestamped snapshot per piece on every patch (~the server patch
   // rate). The render loop plays these back interpolated and slightly delayed, so
@@ -330,6 +336,7 @@ const applyTransform = (mesh, s) => {
     if (now) now.textContent = (sc.worldPerUnit === 1 && u === 'u')
       ? 'Uncalibrated — 1 u = 1 table unit.'
       : `1 ${u} = ${(+sc.worldPerUnit).toFixed(3)} table units · round to ${sc.roundStep} ${u}`;
+    relabelOverlays(); // scale drives every ruler's label
   }
   {
     const uEl = byId('scaleUnit'); if (uEl) uEl.onchange = () => room.send('scaleSet', { unitLabel: uEl.value });
@@ -345,6 +352,13 @@ const applyTransform = (mesh, s) => {
       if (n > 0) room.send('scaleSet', { worldPerUnit: (room.state.tableX * 2) / n });
     };
     const wv = byId('scaleWidthVal'); if (wv) wv.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); setW && setW.onclick(); } };
+  }
+
+  // Measure tool (Tools menu): toggle a modal mode; drag on the felt to lay a ruler.
+  { const mb = byId('measureBtn');
+    if (mb) mb.onclick = () => { measuring ? exitMeasure() : enterMeasure(); };
+    wire('measureClose', () => exitMeasure());
+    wire('measureClear', () => { if (room) room.send('overlayClear'); });
   }
 
   // Scene list → the Library's Scenes tab (via the hook); loading happens there.
@@ -828,6 +842,10 @@ function handleClick(gesture) {
   }
 }
 renderer.domElement.addEventListener('pointerdown', e => {
+  if (measuring) { // Measure mode: left-drag lays a ruler
+    if (e.button === 0) { const p = overlayPoint(e); if (p) { measureDrag = { ax: p.x, az: p.z }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); } }
+    return;
+  }
   if (wbOwning) { // drawing on the whiteboard: start a stroke
     if (e.button === 0) {
       setPointer(e);
@@ -868,6 +886,10 @@ renderer.domElement.addEventListener('wheel', e => {
 }, { passive: false });
 
 renderer.domElement.addEventListener('pointermove', e => {
+  if (measuring) { // live local preview of the ruler being dragged
+    if (measureDrag) { const p = overlayPoint(e); if (p) drawPreview(measureDrag.ax, measureDrag.az, p.x, p.z); }
+    return;
+  }
   if (wbOwning) { // extend the current stroke along the board surface
     if (wbActive && wbCur) {
       setPointer(e);
@@ -930,6 +952,15 @@ renderer.domElement.addEventListener('pointermove', e => {
   }
 });
 const endGesture = e => {
+  if (measuring) { // release: commit the ruler if the drag was long enough
+    if (measureDrag) {
+      const p = overlayPoint(e);
+      if (p) { const len = Math.hypot(p.x - measureDrag.ax, p.z - measureDrag.az); if (len >= MEASURE.minDrag) room.send('overlayAdd', { kind: 'ruler', x: measureDrag.ax, z: measureDrag.az, x2: p.x, z2: p.z }); }
+      measureDrag = null; clearPreview(); controls.enabled = true;
+      try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
+    }
+    return;
+  }
   if (wbOwning) { // finish the stroke and send it
     if (wbActive) endWbStroke();
     try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
@@ -975,6 +1006,7 @@ const heldOrHoveredId = () => (down && down.id) || pickId();
 // a piece, U toggles its upright/flat behaviour, S saves a hovered deck.
 addEventListener('keydown', e => {
   if (!room) return;
+  if (e.key === 'Escape' && measuring) { exitMeasure(); return; }
   if (e.key === 'Escape' && wbOwning) { room.send('wbRelease'); return; }
   if (e.key === 'Escape' && inspect) { releaseInspect(); return; }
   if (inspect && inspect.drawn) { // f/d/h/r place a drawn card
@@ -1430,6 +1462,81 @@ function spawnPing(sid, x, z) {
   label.renderOrder = 6;
   scene.add(label);
   pings.push({ ring, label, start: performance.now() });
+}
+
+// --- Overlays + the Measure tool ---------------------------------------------
+// Overlays (rulers now; templates from Step 4) are flat, non-physics annotations
+// synced in room.state.overlays. Geometry comes from the OVERLAY registry; the
+// distance LABEL is a client-owned sprite because it depends on the room's scale.
+const overlayObjs = new Map();   // overlayId -> { group, label }
+let measuring = false;           // Measure mode active (modal, like whiteboard draw)
+let measureDrag = null;          // { ax, az } while dragging out a ruler
+let previewGroup = null, previewLabel = null; // local drag preview (synced only on release)
+
+function myColor() { const p = room && room.state.players.get(mySession); return (p && p.color) || '#ffffff'; }
+function overlayLabelSprite(text, color, mx, mz) {
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTag(text, color), transparent: true, depthTest: false }));
+  s.scale.set(CONFIG.label.w, CONFIG.label.h, 1);
+  s.position.set(mx, boardTopY + MEASURE.labelLift, mz);
+  s.renderOrder = 6;
+  return s;
+}
+function overlayText(o) { return formatMeasure(Math.hypot(o.x2 - o.x, o.z2 - o.z), room.state.scale); }
+function disposeGroup(g) { g.traverse(n => { if (n.isMesh) { n.geometry.dispose(); n.material.dispose(); } }); }
+function addOverlay(id, o) {
+  removeOverlay(id);
+  const kind = OVERLAY[o.kind]; if (!kind) return;
+  const group = kind.build(o);
+  group.position.y = boardTopY + MEASURE.lift;
+  scene.add(group);
+  const label = o.kind === 'ruler' ? overlayLabelSprite(overlayText(o), o.color, (o.x + o.x2) / 2, (o.z + o.z2) / 2) : null;
+  if (label) scene.add(label);
+  overlayObjs.set(id, { group, label });
+}
+function removeOverlay(id) {
+  const e = overlayObjs.get(id); if (!e) return;
+  scene.remove(e.group); disposeGroup(e.group);
+  if (e.label) { scene.remove(e.label); e.label.material.map.dispose(); e.label.material.dispose(); }
+  overlayObjs.delete(id);
+}
+function relabelOverlays() { // scale changed → recompute every ruler's distance text
+  for (const [id, e] of overlayObjs) {
+    const o = room.state.overlays.get(id);
+    if (o && e.label) { e.label.material.map.dispose(); e.label.material.map = nameTag(overlayText(o), o.color); e.label.material.needsUpdate = true; }
+  }
+}
+
+function overlayPoint(e) { // pointer → world (x,z) on the felt surface (the ping plane)
+  setPointer(e); ray.setFromCamera(pointer, camera);
+  const p = new THREE.Vector3();
+  return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -boardTopY), p) ? p : null;
+}
+function clearPreview() {
+  if (previewGroup) { scene.remove(previewGroup); disposeGroup(previewGroup); previewGroup = null; }
+  if (previewLabel) { scene.remove(previewLabel); previewLabel.material.map.dispose(); previewLabel.material.dispose(); previewLabel = null; }
+}
+function drawPreview(ax, az, bx, bz) {
+  clearPreview();
+  const color = myColor();
+  previewGroup = OVERLAY.ruler.build({ kind: 'ruler', color, x: ax, z: az, x2: bx, z2: bz });
+  previewGroup.position.y = boardTopY + MEASURE.lift;
+  scene.add(previewGroup);
+  previewLabel = overlayLabelSprite(formatMeasure(Math.hypot(bx - ax, bz - az), room.state.scale), color, (ax + bx) / 2, (az + bz) / 2);
+  scene.add(previewLabel);
+}
+function enterMeasure() {
+  if (measuring) return;
+  measuring = true;
+  renderer.domElement.classList.add('measuring');
+  const b = byId('measureBtn'); if (b) b.classList.add('on');
+  const p = byId('measurePanel'); if (p) p.hidden = false;
+}
+function exitMeasure() {
+  if (!measuring) return;
+  measuring = false; measureDrag = null; clearPreview();
+  renderer.domElement.classList.remove('measuring');
+  const b = byId('measureBtn'); if (b) b.classList.remove('on');
+  const p = byId('measurePanel'); if (p) p.hidden = true;
 }
 
 // Format milliseconds as m:ss (or h:mm:ss past an hour), flooring to whole seconds.

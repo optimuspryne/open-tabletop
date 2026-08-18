@@ -14,6 +14,14 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   over the fixed world scale. Calibrate from the current table width or a unit
   preset. Groundwork for the forthcoming measurement + templates tools; nothing is
   drawn yet.
+- **Measurement helpers** (`shared/pieces.js`) — `formatMeasure` and `roundToStep`,
+  the pure functions that turn a world distance into a display label; shared by both
+  sides so a measurement reads identically everywhere.
+- **Measure tool + rulers** — a Tools-menu **📏 Measure** mode: drag on the table to
+  lay a ruler that shows the distance in the room's unit (via the measurement scale).
+  Rulers are flat, non-physics **overlays** synced to everyone; a GM (or each owner)
+  can clear them. First use of the new `OVERLAY` registry; circle/cone/line templates
+  follow.
 
 ## [0.2.0] — 2026-08-17
 

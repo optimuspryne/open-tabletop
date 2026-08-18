@@ -169,3 +169,14 @@ export function formatMeasure(worldDist, scale = {}) {
   const units = roundToStep((+worldDist || 0) / per, step);
   return units.toFixed(decimalsForStep(step)) + ' ' + label;
 }
+
+// --- Overlays (measurement + templates): flat, non-physics annotations -------
+// Shared knobs for the overlay layer (see the OVERLAY registry in graphics.js).
+// Kept here so server validation and client rendering agree on the same limits.
+export const MEASURE = {
+  lift: 0.05,             // height above the felt to draw an overlay (avoid z-fighting)
+  labelLift: 0.6,         // height of a ruler's floating distance label
+  minDrag: 0.2,           // min world length for a placement to count (shorter = ignored)
+  maxLen: 80,             // clamp on any overlay coordinate/dimension (world units)
+  coneAngle: Math.PI / 6, // default cone half-angle (used from Step 4)
+};

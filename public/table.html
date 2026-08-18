@@ -73,8 +73,14 @@
     <button id="scoreBtn">📊 Scoreboard</button>
     <button id="timerBtn">⏱️ Timer</button>
     <button id="wbBtn">🖊️ Whiteboard</button>
+    <button id="measureBtn">📏 Measure</button>
     <button id="controlsBtn">❔ How to Play</button>
     <button id="audioBtn">🔊 Sound</button>
+  </div>
+  <div id="measurePanel" class="panel" hidden>
+    <div id="measureHead" class="panel-head"><b>Measure</b><span id="measureClose" class="close-x">✕</span></div>
+    <p class="muted" style="font-size:var(--fs-sm)">Drag on the table to lay down a ruler. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
+    <div class="chipRow"><button id="measureClear" class="chip">Clear mine</button></div>
   </div>
   <div id="audioPanel" class="panel" hidden>
     <div id="audioHead" class="panel-head"><b>Sound</b><span id="audioClose" class="close-x">✕</span></div>

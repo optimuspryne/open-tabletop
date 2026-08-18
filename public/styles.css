@@ -104,6 +104,7 @@ html, body {
   inset: 0;
 }
 canvas { display: block; }
+canvas.measuring { cursor: crosshair; }  /* Measure tool active */
 b { color: var(--accent); }
 a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on the dark theme (was default blue) */ /* bold text uses the gold accent everywhere; more specific rules (e.g. .helpSec b) can override */
 /* Any element carrying the `hidden` attribute stays hidden, overriding whatever
