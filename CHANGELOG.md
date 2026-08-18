@@ -1,0 +1,52 @@
+# Changelog
+
+All notable changes to Open Tabletop are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+See [RELEASING.md](RELEASING.md) for what each version bump means and how releases are cut.
+
+## [Unreleased]
+
+## [0.1.0] — 2026-08-17
+
+Initial public release.
+
+### Added
+- **Multiplayer physics core** — server-authoritative simulation (Colyseus + cannon-es)
+  with a Three.js client; pieces are real rigid bodies you grab, drag, throw, and stack.
+- **Piece system** — boards, cards, decks, dice (d4/d6/d8/d10/d12/d20), timers, and
+  arbitrary 3D props/tokens, built on a generic "kind vs instance" model so new pieces
+  can be added.
+- **Rooms & lobby** — create or join games by code with capacity limits, on a per-room
+  configurable table (resizable size, skybox, felt color, default spawn pieces) chosen
+  at room setup and durable across restarts.
+- **Game Master role** — the first joiner is GM and can spawn/delete pieces, advance
+  turn order, and close the room, with succession to the next player if they leave.
+- **Cards, decks & hands** — front/back textures, flip, shuffle, split, deal to table,
+  deal-drag, private per-player hands, play from hand, take to hand, and dump-hand.
+- **Custom assets** — upload custom card textures and 3D models (with a per-model
+  "stands upright" self-righting toggle), created in a dedicated editor.
+- **Scenes** — admin-curated library setups (e.g. chess, checkers, poker night)
+  capturing table + board + pieces, loaded by the GM as a full replace.
+- **Durable room extras** — a per-room scoreboard, GM-only room notes, and a shared
+  whiteboard; the scoreboard and notes survive restarts and are exempt from table Reset.
+- **Accounts & admin** — user accounts with device tokens; the first account to sign up
+  becomes admin; an admin console for managing users and assets.
+- **Audio** — sound effects that fire on real physics impacts (a dropped piece thuds
+  when it actually lands), random sound-variant pools per action, per-channel volume
+  and mute, and a background music player with an in-app credits panel.
+
+### Security
+- Parameterized SQL throughout; scrypt password hashing with constant-time comparison;
+  256-bit device tokens stored as SHA-256 hashes.
+- Enforced Content-Security-Policy, rate limiting on auth and upload endpoints, and a
+  least-privilege database role for the application.
+
+### Deployment
+- Docker Compose stack (app + Postgres) with multi-arch images published to Docker Hub,
+  a Portainer-friendly configuration, and a custom Postgres image that bakes in the
+  schema and role initialization.
+
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.1.0
