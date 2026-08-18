@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
-import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE, MEASURE } from '/shared/pieces.js';
 
 // ===== Shared helpers =======================================================
 
@@ -806,8 +806,75 @@ function overlayBar(ax, az, bx, bz, color, thick = 0.06) {
 }
 function rulerMesh(o) { return overlayBar(o.x, o.z, o.x2, o.z2, o.color); }
 
+// Template materials: a faint interior FILL and a solid EDGE, both flat and
+// unlit like the ruler bar. Fill opacity + edge weight are client-feel tunables
+// (CONFIG.measure); DoubleSide so a template reads from under the table too.
+function overlayFill(color) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: CONFIG.measure.fill, depthWrite: false, side: THREE.DoubleSide }); }
+function overlayEdge(color) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }); }
+
+// A flat pie-slice in the XZ plane: apex at the origin, bisector along +X,
+// spanning ±half out to radius L. Built directly flat (every y = 0) so a single
+// rotation.y aims it — the same trick overlayBar uses to avoid tilt composition.
+function sectorGeometry(L, half, seg = 40) {
+  const pos = [], step = (2 * half) / seg;
+  for (let i = 0; i < seg; i++) {
+    const t0 = -half + step * i, t1 = -half + step * (i + 1);
+    pos.push(0, 0, 0, Math.cos(t0) * L, 0, Math.sin(t0) * L, Math.cos(t1) * L, 0, Math.sin(t1) * L);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// circle: a burst radius. Origin A, radius = |A→B|. Faint filled disc + a solid
+// ring outline. (Label — the radius — is the client's sprite, like every kind.)
+function circleTemplate(o) {
+  const r = Math.hypot(o.x2 - o.x, o.z2 - o.z) || 0.0001;
+  const g = new THREE.Group();
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 64), overlayFill(o.color));
+  disc.rotation.x = -Math.PI / 2; disc.position.set(o.x, 0, o.z);
+  g.add(disc);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(Math.max(0, r - CONFIG.measure.edge), r, 64), overlayEdge(o.color));
+  ring.rotation.x = -Math.PI / 2; ring.position.set(o.x, 0.002, o.z); // lift the rim off the disc to avoid z-fighting
+  g.add(ring);
+  return g;
+}
+
+// cone: a flat sector. Apex A, facing A→B, length = |A→B|, half-angle o.ang
+// (default MEASURE.coneAngle). rotation.y aims the +X bisector down A→B.
+function coneTemplate(o) {
+  const dx = o.x2 - o.x, dz = o.z2 - o.z, L = Math.hypot(dx, dz) || 0.0001;
+  const half = o.ang > 0 ? o.ang : MEASURE.coneAngle;
+  const sector = new THREE.Mesh(sectorGeometry(L, half), overlayFill(o.color));
+  sector.position.set(o.x, 0, o.z);
+  sector.rotation.y = Math.atan2(-dz, dx);        // +X bisector along A→B (overlayBar's convention)
+  const g = new THREE.Group();
+  g.add(sector);
+  return g;
+}
+
+// line: a width×length lane. From A toward B, length = |A→B|, width o.w
+// (default MEASURE.lineWidth). A faint band plus a solid centre line for read.
+function lineTemplate(o) {
+  const dx = o.x2 - o.x, dz = o.z2 - o.z, L = Math.hypot(dx, dz) || 0.0001;
+  const w = o.w > 0 ? o.w : MEASURE.lineWidth;
+  const band = new THREE.Mesh(new THREE.BoxGeometry(L, 0.02, w), overlayFill(o.color));
+  band.position.set((o.x + o.x2) / 2, -0.005, (o.z + o.z2) / 2); // just under the centre line (avoid z-fight)
+  band.rotation.y = Math.atan2(-dz, dx);          // long axis along A→B
+  const g = new THREE.Group();
+  g.add(band);
+  g.add(overlayBar(o.x, o.z, o.x2, o.z2, o.color, 0.04)); // the centre line
+  return g;
+}
+
+// A registry parallel to KIND (see the block above): kind → mesh builder. Adding
+// an overlay kind is one entry here + one string in the server's OVERLAY_KINDS.
 const OVERLAY = {
-  ruler: { build: rulerMesh },
+  ruler:  { build: rulerMesh },
+  circle: { build: circleTemplate },
+  cone:   { build: coneTemplate },
+  line:   { build: lineTemplate },
 };
 
 // ---- Library preview thumbnails (editor) -----------------------------------

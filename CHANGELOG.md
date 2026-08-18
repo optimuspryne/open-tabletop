@@ -17,11 +17,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Measurement helpers** (`shared/pieces.js`) — `formatMeasure` and `roundToStep`,
   the pure functions that turn a world distance into a display label; shared by both
   sides so a measurement reads identically everywhere.
-- **Measure tool + rulers** — a Tools-menu **📏 Measure** mode: drag on the table to
-  lay a ruler that shows the distance in the room's unit (via the measurement scale).
-  Rulers are flat, non-physics **overlays** synced to everyone; a GM (or each owner)
-  can clear them. First use of the new `OVERLAY` registry; circle/cone/line templates
-  follow.
+- **Measure tool + templates** — a Tools-menu **📏 Measure** mode with a shape picker:
+  drag on the table to lay a **ruler** (distance), **circle** (radius/burst), **cone**
+  (range), or **line** (lane), each labelled in the room's unit via the measurement
+  scale. These are flat, non-physics **overlays** synced to everyone; a GM (or each
+  owner) can clear them. All four kinds run through one `OVERLAY` registry and a single
+  "press A, drag to B" gesture.
 
 ## [0.2.0] — 2026-08-17
 

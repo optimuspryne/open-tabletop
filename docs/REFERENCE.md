@@ -185,6 +185,10 @@ Pure data + two functions, imported by both sides.
   (e.g. `"5.5 in"`). Rounding is display-only; the caller keeps exact geometry. Pure
   and shared, so a ruler reads identically on every screen — the `timerLive` instinct
   applied to distance. A missing/invalid `scale` falls back to raw world units.
+- **`MEASURE`** — overlay-layer constants both sides agree on: `lift`/`labelLift`
+  (draw + label heights above the felt), `minDrag` (shortest drag that counts as a
+  placement), `maxLen` (clamp on any overlay coordinate/dimension), `coneAngle`
+  (default cone half-angle), `lineWidth` (default `line` template width).
 
 ---
 
@@ -253,12 +257,19 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 - **`RoomScale`** — `worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle`; the
   per-room measurement scale (a display/snap layer over the fixed world scale, never
   a rescale). `cellWorld`/`gridStyle` are the grid half — reserved, dormant until
-  snap-to-grid.
+  snap-to-grid. Durable (persisted via `saveRoomState`).
+- **`Overlay`** — `kind` (`ruler|circle|cone|line`), `color`, `owner` (creator
+  `sessionId`, for the remove/clear gate), `x, z` (origin A), `x2, z2` (drag point
+  B), `w` (line width), `ang` (cone half-angle); one flat measurement/template
+  annotation in the `overlays` map. Two points + two optional scalars cover all four
+  kinds. Public geometry, **ephemeral** — synced live, cleared on reset, not in the
+  scene snapshot. Rendered via the client's `OVERLAY` registry.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
   **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
-  colour), **`scale`** (a `RoomScale`), and the resumed-game public labels
+  colour), **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
+  measurement/template annotations), and the resumed-game public labels
   **`turnPending`** (name of an absent turn-holder) + **`unclaimed`** (map
   `userId → name` of saved hands awaiting their owner — the GM's reassign UI reads
   it; never the cards themselves).
@@ -316,6 +327,14 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 **`tableColor`** (felt colour), **`scaleSet`** (measurement scale — partial update
 of `worldPerUnit`/`unitLabel`/`roundStep`/`cellWorld`/`gridStyle`), **`skybox`**
 (apply a background).
+
+Overlay handlers (measurement/templates; not persisted): **`overlayAdd`**
+(`{kind, x, z, x2, z2, w?, ang?}` — any seated player places one; server validates
+the kind against `OVERLAY_KINDS`, clamps coords to `MEASURE.maxLen`, stamps
+`owner`+`color`), **`overlayMove`** (`{id, x?, z?, x2?, z2?, w?, ang?}` — reposition,
+owner or gm+), **`overlayRemove`** (`{id}` — owner or gm+), **`overlayClear`** (a gm
+wipes all; anyone else clears only their own). No down-messages — the `overlays` map
+delta-syncs, so a late joiner gets them in the initial state.
 
 Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
 **`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**
@@ -507,6 +526,14 @@ felt), and the config:
   `ownMaterial`), else builds a shape and applies `props.scale`.
 - **`KIND`** `{ die, card, prop, deck, board }` — each `{ mesh, grab, ldrag,
   lclick, rclick }`; the interaction layer dispatches off this, no type switches.
+- **`OVERLAY`** `{ ruler, circle, cone, line }` — the overlay registry, parallel to
+  `KIND`: each `{ build(o) }` returns a flat `THREE.Group` in table space from an
+  `Overlay`'s two points (+ `w`/`ang`). `rulerMesh` (bar + end dots), `circleTemplate`
+  (disc + ring, radius `|A→B|`), `coneTemplate` (a flat `sectorGeometry` sector, apex
+  A, half-angle `ang`), `lineTemplate` (a width-`w` band + centre line). Fill opacity
+  and edge weight come from `CONFIG.measure`. The measure *label* is not built here —
+  it's a client sprite (needs the room scale). Adding a kind = one entry here + one
+  string in the server's `OVERLAY_KINDS`.
 
 ---
 

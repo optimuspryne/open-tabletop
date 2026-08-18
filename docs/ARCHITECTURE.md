@@ -279,7 +279,7 @@ machinery:
 
 Pieces go through the physics pipeline. Everything else that shows up on or around
 the table but *isn't* a physical object — the timer, the whiteboard, pings, the
-scoreboard, and (planned) measurement overlays — is presentation-layer, and it all
+scoreboard, and the measurement overlays — is presentation-layer, and it all
 shares one instinct: **sync the minimum, compute or render the rest locally.**
 
 It is tempting to fold these into a single shared base — a "non-physics thing" class.
@@ -309,7 +309,7 @@ codebase, and a new presentation-layer feature should pick one deliberately:
 3. **Synced collection** — for a set of *static, public* objects that fit directly in
    state. Just put them in a `MapSchema`; Colyseus delta-syncs them and a late joiner
    gets them in the initial state, so there's no replay machinery at all. This is the
-   simplest of the three, and it's what the planned **overlays** use.
+   simplest of the three, and it's what the **overlays** use.
 
 The other axis of reuse is a **registry**, but only where a presentation-layer
 concern is a genuine *family* of like things — the same condition that makes the
@@ -329,6 +329,43 @@ replayed-buffer machinery (fog-of-war reveal history is a candidate), extract *t
 one helper* then, on the second real need — not preemptively across a resemblance.
 The overlay subsystem and its schema/message set are spec'd in the measurement design
 note.
+
+### Overlays in practice: measurement and templates
+
+The overlay layer is shipped. Every overlay — whatever its kind — is stored as **two
+points plus two optional scalars**: an origin `A(x, z)`, a drag point `B(x2, z2)`, an
+optional width `w`, and an optional angle `ang`. That one shape carries all four kinds,
+which is why a single "press at A, drag to B" gesture places every one of them and why
+the server needs no per-kind branches. `ruler` draws a bar A→B and reads the distance;
+`circle` treats `|A→B|` as a radius and draws a filled disc with a ring outline;
+`cone` fans a flat sector from apex A toward B with half-angle `ang` (default
+`MEASURE.coneAngle`); `line` lays a lane of width `w` (default `MEASURE.lineWidth`)
+along A→B. The **`OVERLAY` registry** in `graphics.js` (parallel to `KIND`) maps each
+kind string to a mesh builder; adding a kind is one registry entry plus one string in
+the server's `OVERLAY_KINDS` set — nothing else in the place/move/remove/sync path
+changes.
+
+Two things stay deliberately *out* of the synced overlay. The **measure label** (the
+floating "5 in") is a client-owned sprite, not schema, because it depends on the
+room's `RoomScale` — every kind's label is just `formatMeasure(|A→B|, scale)` at the
+A–B midpoint, so a `scaleSet` re-labels every overlay locally without touching state
+(`relabelOverlays`). And the **live drag** is a purely local preview built from the
+same registry builder; only the committed placement is sent (`overlayAdd`), the same
+"sync on release, not per frame" restraint the piece-move throttle uses.
+
+The **Measure tool** is a modal client mode (like whiteboard draw): entering it
+disables OrbitControls and piece-grab, a kind-picker row selects which overlay the
+drag lays, and release fires `overlayAdd` with the kind's scalars. The server
+validates the kind, clamps coordinates to `MEASURE.maxLen`, stamps `owner`
+(the creator's `sessionId`, for the remove/clear permission gate) and `color` (copied
+from the creator's seat colour so it survives them leaving), and drops it in the
+`overlays` map; Colyseus delta-sync does the rest, so a late joiner gets every overlay
+in its initial state with no replay. Overlays are **ephemeral**: they're wiped on
+table reset and gone on room dispose, and — unlike the durable `scale` — they do *not*
+ride in the `serializeScene`/`serializeGame` snapshot (persisting placed templates is a
+possible later step; they're already public state, so it would just mean including the
+map). The room's `scale`, by contrast, is durable: it's written through
+`saveRoomState` and restored on room load.
 
 ## Sound & music
 

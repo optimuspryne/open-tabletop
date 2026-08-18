@@ -79,7 +79,13 @@
   </div>
   <div id="measurePanel" class="panel" hidden>
     <div id="measureHead" class="panel-head"><b>Measure</b><span id="measureClose" class="close-x">✕</span></div>
-    <p class="muted" style="font-size:var(--fs-sm)">Drag on the table to lay down a ruler. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
+    <div id="measureKinds" class="chipRow" style="margin-bottom:6px">
+      <button class="chip" data-kind="ruler">📏 Ruler</button>
+      <button class="chip" data-kind="circle">⭕ Circle</button>
+      <button class="chip" data-kind="cone">🔺 Cone</button>
+      <button class="chip" data-kind="line">▭ Line</button>
+    </div>
+    <p class="muted" style="font-size:var(--fs-sm)">Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
     <div class="chipRow"><button id="measureClear" class="chip">Clear mine</button></div>
   </div>
   <div id="audioPanel" class="panel" hidden>

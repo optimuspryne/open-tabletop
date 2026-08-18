@@ -178,5 +178,6 @@ export const MEASURE = {
   labelLift: 0.6,         // height of a ruler's floating distance label
   minDrag: 0.2,           // min world length for a placement to count (shorter = ignored)
   maxLen: 80,             // clamp on any overlay coordinate/dimension (world units)
-  coneAngle: Math.PI / 6, // default cone half-angle (used from Step 4)
+  coneAngle: Math.PI / 6, // default cone half-angle (the sector template's spread)
+  lineWidth: 1,           // default width of a "line" (lane) template, in world units
 };

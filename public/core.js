@@ -18,6 +18,7 @@ const CONFIG = {
   marker:  { inner: 0.34, outer: 0.5, opacity: 0.35, lift: 0.02 }, // "drop preview" ring: radii, opacity, height above the surface
   label:   { lift: 0.62, w: 1.15, h: 0.36 },    // floating name tag over a held piece: height above the piece + world size
   ping:    { dur: 1200, inner: 0.35, outer: 0.5, lift: 0.05, grow: 2.4 }, // attention ping: lifetime (ms), ring radii, height above surface, expansion factor
+  measure: { fill: 0.14, edge: 0.08 },          // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
   input:   { dblMs: 280, clickMs: 300, dragPx: 6, inspectPx: 4, handPx: 8 }, // click/drag feel: double-click window, click-defer (ms), drag thresholds (px)
   tex:     { die: 256, board: 512 },            // canvas texture resolutions (higher = sharper, more GPU memory)
   upload:  { cardW: 512, cardH: 716, board: 1024, type: 'image/png', quality: 1.0 }, // uploaded image size + encoding (PNG = lossless; quality only affects lossy types)

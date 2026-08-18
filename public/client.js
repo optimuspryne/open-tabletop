@@ -354,11 +354,16 @@ const applyTransform = (mesh, s) => {
     const wv = byId('scaleWidthVal'); if (wv) wv.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); setW && setW.onclick(); } };
   }
 
-  // Measure tool (Tools menu): toggle a modal mode; drag on the felt to lay a ruler.
+  // Measure tool (Tools menu): toggle a modal mode; drag on the felt to lay the
+  // selected overlay (ruler / circle / cone / line — picked in the kind row).
   { const mb = byId('measureBtn');
     if (mb) mb.onclick = () => { measuring ? exitMeasure() : enterMeasure(); };
     wire('measureClose', () => exitMeasure());
     wire('measureClear', () => { if (room) room.send('overlayClear'); });
+    const kinds = document.querySelectorAll('#measureKinds [data-kind]');
+    const setKind = (k) => { measureKind = k; kinds.forEach(b => b.classList.toggle('on', b.dataset.kind === k)); };
+    kinds.forEach(b => { b.onclick = () => setKind(b.dataset.kind); });
+    setKind(measureKind); // reflect the default (ruler) in the row
   }
 
   // Scene list → the Library's Scenes tab (via the hook); loading happens there.
@@ -842,7 +847,7 @@ function handleClick(gesture) {
   }
 }
 renderer.domElement.addEventListener('pointerdown', e => {
-  if (measuring) { // Measure mode: left-drag lays a ruler
+  if (measuring) { // Measure mode: left-drag lays the selected overlay (A = press)
     if (e.button === 0) { const p = overlayPoint(e); if (p) { measureDrag = { ax: p.x, az: p.z }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); } }
     return;
   }
@@ -886,7 +891,7 @@ renderer.domElement.addEventListener('wheel', e => {
 }, { passive: false });
 
 renderer.domElement.addEventListener('pointermove', e => {
-  if (measuring) { // live local preview of the ruler being dragged
+  if (measuring) { // live local preview of the overlay being dragged out
     if (measureDrag) { const p = overlayPoint(e); if (p) drawPreview(measureDrag.ax, measureDrag.az, p.x, p.z); }
     return;
   }
@@ -952,10 +957,10 @@ renderer.domElement.addEventListener('pointermove', e => {
   }
 });
 const endGesture = e => {
-  if (measuring) { // release: commit the ruler if the drag was long enough
+  if (measuring) { // release: commit the overlay if the drag was long enough
     if (measureDrag) {
       const p = overlayPoint(e);
-      if (p) { const len = Math.hypot(p.x - measureDrag.ax, p.z - measureDrag.az); if (len >= MEASURE.minDrag) room.send('overlayAdd', { kind: 'ruler', x: measureDrag.ax, z: measureDrag.az, x2: p.x, z2: p.z }); }
+      if (p) { const len = Math.hypot(p.x - measureDrag.ax, p.z - measureDrag.az); if (len >= MEASURE.minDrag) room.send('overlayAdd', overlayAddMsg(measureDrag.ax, measureDrag.az, p.x, p.z)); }
       measureDrag = null; clearPreview(); controls.enabled = true;
       try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
     }
@@ -1465,13 +1470,23 @@ function spawnPing(sid, x, z) {
 }
 
 // --- Overlays + the Measure tool ---------------------------------------------
-// Overlays (rulers now; templates from Step 4) are flat, non-physics annotations
+// Overlays (ruler + circle/cone/line templates) are flat, non-physics annotations
 // synced in room.state.overlays. Geometry comes from the OVERLAY registry; the
-// distance LABEL is a client-owned sprite because it depends on the room's scale.
+// measure LABEL is a client-owned sprite because it depends on the room's scale.
 const overlayObjs = new Map();   // overlayId -> { group, label }
 let measuring = false;           // Measure mode active (modal, like whiteboard draw)
-let measureDrag = null;          // { ax, az } while dragging out a ruler
+let measureKind = 'ruler';       // which overlay the drag lays: ruler | circle | cone | line
+let measureDrag = null;          // { ax, az } while dragging out an overlay
 let previewGroup = null, previewLabel = null; // local drag preview (synced only on release)
+
+// The overlayAdd payload for the current kind: A→B always, plus the extra scalar
+// each template needs (cone's angle, line's width) so it survives save/reload.
+function overlayAddMsg(ax, az, bx, bz) {
+  const m = { kind: measureKind, x: ax, z: az, x2: bx, z2: bz };
+  if (measureKind === 'cone') m.ang = MEASURE.coneAngle;
+  if (measureKind === 'line') m.w = MEASURE.lineWidth;
+  return m;
+}
 
 function myColor() { const p = room && room.state.players.get(mySession); return (p && p.color) || '#ffffff'; }
 function overlayLabelSprite(text, color, mx, mz) {
@@ -1489,8 +1504,10 @@ function addOverlay(id, o) {
   const group = kind.build(o);
   group.position.y = boardTopY + MEASURE.lift;
   scene.add(group);
-  const label = o.kind === 'ruler' ? overlayLabelSprite(overlayText(o), o.color, (o.x + o.x2) / 2, (o.z + o.z2) / 2) : null;
-  if (label) scene.add(label);
+  // Every kind carries the same floating measure label (ruler = distance, circle =
+  // radius, cone = range, line = length — all just |A→B|), placed at the midpoint.
+  const label = overlayLabelSprite(overlayText(o), o.color, (o.x + o.x2) / 2, (o.z + o.z2) / 2);
+  scene.add(label);
   overlayObjs.set(id, { group, label });
 }
 function removeOverlay(id) {
@@ -1499,7 +1516,7 @@ function removeOverlay(id) {
   if (e.label) { scene.remove(e.label); e.label.material.map.dispose(); e.label.material.dispose(); }
   overlayObjs.delete(id);
 }
-function relabelOverlays() { // scale changed → recompute every ruler's distance text
+function relabelOverlays() { // scale changed → recompute every overlay's measure label
   for (const [id, e] of overlayObjs) {
     const o = room.state.overlays.get(id);
     if (o && e.label) { e.label.material.map.dispose(); e.label.material.map = nameTag(overlayText(o), o.color); e.label.material.needsUpdate = true; }
@@ -1518,7 +1535,10 @@ function clearPreview() {
 function drawPreview(ax, az, bx, bz) {
   clearPreview();
   const color = myColor();
-  previewGroup = OVERLAY.ruler.build({ kind: 'ruler', color, x: ax, z: az, x2: bx, z2: bz });
+  // Build the CURRENT kind locally (defaults for cone angle / line width match
+  // what overlayAddMsg will send on release, so the preview is what you commit).
+  const o = { kind: measureKind, color, x: ax, z: az, x2: bx, z2: bz, ang: MEASURE.coneAngle, w: MEASURE.lineWidth };
+  previewGroup = (OVERLAY[measureKind] || OVERLAY.ruler).build(o);
   previewGroup.position.y = boardTopY + MEASURE.lift;
   scene.add(previewGroup);
   previewLabel = overlayLabelSprite(formatMeasure(Math.hypot(bx - ax, bz - az), room.state.scale), color, (ax + bx) / 2, (az + bz) / 2);
