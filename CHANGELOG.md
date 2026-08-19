@@ -8,6 +8,25 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-08-19
+
+### Fixed
+- Floating panels no longer stretch to the full width of the screen, and their resize
+  grip is always reachable — the docked full-width rule was leaking into the popped-out
+  state.
+- The Measure panel's contents no longer clip into its rounded corner (it was the one
+  pop-out with no padding of its own).
+
+### Changed
+- **Every pop-out panel is now resizable** (previously only Chat, Notes, and the
+  Whiteboard panel), and panels reflow their contents as you resize: button rows become
+  even grids and list/log panels grow their content instead of leaving empty space.
+  Titled pop-outs also get consistent padding by default.
+- **Customize Table** was streamlined into labelled sections, with Width × Depth on one
+  row, inch/cm/mm **plus a Custom** unit as toggle buttons, themed input fields, and
+  controls that cap and centre in a wide panel instead of stretching edge-to-edge.
+- **The Tools menu** is now a compact two-column grid instead of one tall column.
+
 ## [0.3.0] — 2026-08-18
 
 ### Added
@@ -88,7 +107,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.1
 [0.3.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.0
 [0.2.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.2.0
 [0.1.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.1.0
