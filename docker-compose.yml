@@ -22,7 +22,7 @@ services:
 
   app:
     build: .
-    # image: YOURNAME/open-tabletop:0.5.0  # <- swap `build: .` for this to run a published image
+    image: optimuspryne/open-tabletop:0.5.0
     restart: unless-stopped
     depends_on:
       db:
