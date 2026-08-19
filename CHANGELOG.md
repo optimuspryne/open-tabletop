@@ -8,6 +8,14 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- **Live measurement previews** — when someone drags out a ruler or template, everyone
+  at the table now watches it form in real time (in the dragger's seat colour), not just
+  see it appear on release.
+- **Move & delete individual overlays** — click a ruler/template you placed (or any, as
+  a GM) to select it, drag to reposition it, and press **Delete** to remove just that one
+  (**Esc** deselects). Previously overlays could only be placed or cleared en masse.
+
 ## [0.3.1] — 2026-08-19
 
 ### Fixed

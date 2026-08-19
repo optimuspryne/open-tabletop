@@ -1121,6 +1121,18 @@ class TableRoom extends Room {
       this.state.overlays.forEach((o, id) => { if (all || o.owner === client.sessionId) del.push(id); });
       for (const id of del) this.state.overlays.delete(id);
     });
+    // Live measurement preview: a transient relay (NOT synced state), so everyone
+    // sees a ruler/template as it's dragged out. A missing/invalid kind means the
+    // drag ended — clear the sender's preview. Stamps the sender's id + seat colour.
+    this.onMessage('overlayDrag', (client, msg = {}) => {
+      const player = this.state.players.get(client.sessionId);
+      const color = (player && player.color) || '#ffffff';
+      const kind = OVERLAY_KINDS.has(msg.kind) ? msg.kind : null;
+      const out = kind
+        ? { from: client.sessionId, kind, color, x: clampCoord(msg.x), z: clampCoord(msg.z), x2: clampCoord(msg.x2), z2: clampCoord(msg.z2), w: clamp(+msg.w || 0, 0, MEASURE.maxLen), ang: +msg.ang || 0 }
+        : { from: client.sessionId, kind: null };
+      this.broadcast('overlayDrag', out, { except: client });
+    });
 
     // --- Whiteboard: a synced singleton on a track behind the players ----------
     this.onMessage('wbEnable', (client, { on } = {}) => {
