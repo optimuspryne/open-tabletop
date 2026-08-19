@@ -64,7 +64,7 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   `postgres/NNN_*.sql` not yet recorded in the `schema_migrations` table, in order,
   as a privileged owner role (`MIGRATE_DATABASE_URL`) kept **separate** from the app's
   least-privilege `DATABASE_URL`. Upgrades need no manual `psql` step, and it targets
-  any Postgres (the bundled db image, stock, or managed). `AUTO_MIGRATE=false` opts out.
+  any Postgres (stock or managed — there's no custom db image). `AUTO_MIGRATE=false` opts out.
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,

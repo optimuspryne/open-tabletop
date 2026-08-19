@@ -33,7 +33,7 @@ The version lives in three places that must always agree: `package.json`, the gi
 2. **Bump the version.** Set `"version"` in `package.json` to `X.Y.Z`, then commit both
    files: `git commit -am "Release X.Y.Z"`.
 3. **Tag it.** `git tag -a vX.Y.Z -m "Open Tabletop X.Y.Z"`, then `git push && git push --tags`.
-4. **Build and push the images** — multi-arch, an immutable version tag plus the moving
+4. **Build and push the app image** — multi-arch, an immutable version tag plus the moving
    `latest`:
    ```bash
    docker buildx build \
@@ -41,10 +41,8 @@ The version lives in three places that must always agree: `package.json`, the gi
      -t optimuspryne/open-tabletop:latest \
      --push .
    ```
-   Rebuild the db image the same way **only if** the role-init script changed, or to
-   refresh its baked baseline — a plain schema change no longer *requires* it, since the
-   app auto-migrates on top of whatever the db image ships (see **Migrations**). Tag it
-   with the same `X.Y.Z`.
+   There's just the one image now — the custom Postgres image is retired (deployments use
+   stock `postgres`; the app builds and migrates its own schema, see **Migrations**).
 5. **Pin the compose file.** Update `docker-compose.yml` to reference `:X.Y.Z` (not
    `:latest`) so `git checkout vX.Y.Z && docker compose up` brings up a matching stack.
 6. **Cut the GitHub release** from the `vX.Y.Z` tag and paste that version's changelog

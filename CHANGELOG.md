@@ -8,6 +8,18 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Changed
+- **The custom `open-tabletop-db` image is retired.** Deploy against stock `postgres`
+  (or any managed Postgres) — the app builds and migrates its own schema now, so the only
+  one-time setup is creating the least-privilege `tabletop_app` role. The compose file does
+  that automatically; Portainer stacks inject it as an inline `config` (or run a short SQL
+  snippet once). Existing deployments on the old db image keep working unchanged.
+
+### Fixed
+- The compose/Portainer role setup now also sets `ALTER DEFAULT PRIVILEGES`, so tables
+  created by future migrations are automatically readable/writable by `tabletop_app`
+  (previously only tables that existed at first DB init were granted).
+
 ## [0.5.0] — 2026-08-19
 
 ### Added

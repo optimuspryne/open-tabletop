@@ -46,8 +46,7 @@ Table State**, or an auto-save when the room empties — written into the room's
      database gets the whole schema built from `001` onward, an existing one gets only
      what's new, with **no manual step on upgrade**. The app's own `DATABASE_URL` stays
      the least-privilege `tabletop_app` role; DDL runs only through this separate owner
-     URL, and only at boot. Works against the bundled db image, stock Postgres, or a
-     managed instance.
+     URL, and only at boot. Works against stock Postgres or any managed instance.
    - **Or apply it by hand** (as the owner). Fresh install: `psql -U tabletop -d
      tabletop -f postgres/schema.sql` (the flattened baseline of `001`–`010`, which also
      seeds `schema_migrations`). Upgrade: apply the numbered migrations in order
@@ -110,21 +109,37 @@ docker run -p 2567:2567 -v ott-assets:/data/assets \
 
 #### Web Editor ####
 
-Edit the compose file so that the db section uses **'image: optimuspryne/open-tabletop-db'**, and remove the volumes after the **'# Init scripts run ONCE...'** comment.  Example below:
+There's no custom database image — deploy against **stock `postgres`**. The app builds
+and migrates its own schema on boot (via `MIGRATE_DATABASE_URL`), so the only one-time
+setup is creating the least-privilege `tabletop_app` role. Since the web editor can't
+mount local files, the stack below injects that role setup as an inline `config`. Set
+`DB_PASSWORD` and `APP_DB_PASSWORD` in the stack's environment.
 
 ```yml
-# Open Tabletop — app + Postgres.
-# First run:  cp .env.example .env  (set the two passwords),  then:  docker compose up -d
+# Open Tabletop — app + stock Postgres (Portainer stack)
+configs:
+  app_role_init:                     # runs once on first DB init — creates the app role
+    content: |
+      CREATE ROLE tabletop_app LOGIN PASSWORD '${APP_DB_PASSWORD}';
+      GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO tabletop_app;
+      GRANT USAGE, SELECT               ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
+      ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES    TO tabletop_app;
+      ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
+        GRANT USAGE, SELECT               ON SEQUENCES TO tabletop_app;
+
 services:
   db:
-    image: optimuspryne/open-tabletop-db:0.3.0
+    image: postgres:16-alpine
     restart: unless-stopped
     container_name: open-tabletop-db
     environment:
-      POSTGRES_USER: tabletop
+      POSTGRES_USER: tabletop         # owner role — the app migrates the schema as this
       POSTGRES_DB: tabletop
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+    configs:
+      - source: app_role_init
+        target: /docker-entrypoint-initdb.d/02-app-role.sql
     volumes:
       - ./db-data:/var/lib/postgresql/data
     healthcheck:
@@ -132,17 +147,17 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
-      
+
   app:
     image: optimuspryne/open-tabletop:0.5.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:
       db:
-        condition: service_healthy           # wait until the schema + role are in place
+        condition: service_healthy           # wait until the role is in place
     environment:
       DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
-      # Owner (DDL) role — auto-applies pending migrations on boot (migrate.js).
+      # Owner (DDL) role — the app builds & migrates the schema on boot (migrate.js).
       MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
       ASSETS_DIR: /data/assets
       # PORT: 2567
@@ -151,8 +166,25 @@ services:
     volumes:
       - ./assets:/data/assets                  # uploaded decks/boards/props/skyboxes
 ```
-The volume holds uploaded **files**; library **metadata** lives in Postgres. Pass
-the DB URL via `DATABASE_URL` or `DATABASE_URL_FILE` (a mounted secret).
+
+On first boot the db creates `tabletop_app` from the inline config, and the app builds the
+full schema via `MIGRATE_DATABASE_URL` (adopting an existing schema if you're pointing at
+an old volume). The `assets` volume holds uploaded **files**; library **metadata** lives in
+Postgres.
+
+**Older Portainer/Compose without inline-`config` support?** Drop the `configs:` block and
+the `db.configs:` entry, bring the stack up, then create the role once by hand:
+
+```bash
+docker exec -i open-tabletop-db psql -U tabletop -d tabletop <<'SQL'
+CREATE ROLE tabletop_app LOGIN PASSWORD 'your-APP_DB_PASSWORD';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO tabletop_app;
+GRANT USAGE, SELECT               ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tabletop_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO tabletop_app;
+SQL
+docker restart open-tabletop-app
+```
 
 ## What's in the box
 
@@ -234,8 +266,7 @@ shared/pieces.js     piece specs (mass, colliders, palettes, dice verts, prop/bo
 postgres/            SQL migrations 001–010 + schema.sql (fresh-install baseline) + grants_app_role.sql
 docs/                ARCHITECTURE.md, REFERENCE.md, ASSET_CREDITS.md
 Dockerfile           app image build (node:22-alpine, npm ci --omit=dev)
-db.Dockerfile        custom Postgres image (bakes in schema.sql + role init)
-docker-compose.yml   app + Postgres stack (reads .env for the two DB passwords)
+docker-compose.yml   app + stock Postgres stack (reads .env for the two DB passwords)
 docker/              init-app-role.sh (creates the least-priv app role on first DB start)
 public/
   index.html         landing / lobby page (quick-join, login, room list, host request)
