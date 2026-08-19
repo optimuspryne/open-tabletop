@@ -1813,6 +1813,13 @@ body.admin {
   padding-bottom: 2px;
 }
 #toolsMenu button, #interactMenu button { width: 100%; }
+/* Tools menu is a 2-column button grid (shorter than one tall column). The "Tools"
+   header spans both columns, and JS marks an odd last button `.span2` to fill its
+   row — so a non-GM (no Whiteboard button) gets How-to-Play in that empty slot. */
+#toolsMenu { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
+#toolsMenu .toolsLabel { grid-column: 1 / -1; }
+#toolsMenu button { text-align: center; }
+#toolsMenu button.span2 { grid-column: 1 / -1; }
 /* the tool/interaction panels flow within their dock, right below the menu (not floating) */
 #toolsDock > #notes,
 #toolsDock > #scorePanel,

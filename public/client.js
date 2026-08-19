@@ -130,6 +130,19 @@ function initPanels() {
 }
 initPanels();
 
+// Tools menu is a 2-column grid: mark the odd last VISIBLE button `.span2` so it fills
+// its row. `!b.hidden` reflects both the GM gate (Whiteboard) and the desktop-only Reset
+// button, so a non-GM cleanly gets How-to-Play in the empty Whiteboard slot. Re-run
+// whenever those visibilities change (applyRole, and here after initPanels).
+function layoutToolsMenu() {
+  const menu = byId('toolsMenu'); if (!menu) return;
+  const btns = [...menu.querySelectorAll('button')];
+  btns.forEach(b => b.classList.remove('span2'));
+  const visible = btns.filter(b => !b.hidden);
+  if (visible.length % 2 === 1) visible[visible.length - 1].classList.add('span2');
+}
+layoutToolsMenu();
+
 // Append one chat message to the log; auto-scroll if the reader's at the bottom,
 // and flag the Tools button as unread when the panel's closed.
 function addChatMsg(m) {
@@ -1356,6 +1369,7 @@ function applyRole(role) {
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
   gate('measureClearAll', 2);                                  // "Clear all overlays" (Measure panel): GM+
   if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
+  layoutToolsMenu(); // Whiteboard just changed visibility → re-balance the 2-column Tools grid
   applyBoardRole(); // scoreboard (helper+) and notes (gm+) edit affordances
 }
 
