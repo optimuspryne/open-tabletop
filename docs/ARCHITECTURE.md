@@ -60,6 +60,11 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   library (deck / board / prop / scene / skybox *metadata*; image/model files stay
   on disk) plus users, rooms, membership, and each room's durable settings. Config
   comes from the environment only (`DATABASE_URL` / `DATABASE_URL_FILE`).
+- **`migrate.js`** — the startup schema migrator: on boot it applies any
+  `postgres/NNN_*.sql` not yet recorded in the `schema_migrations` table, in order,
+  as a privileged owner role (`MIGRATE_DATABASE_URL`) kept **separate** from the app's
+  least-privilege `DATABASE_URL`. Upgrades need no manual `psql` step, and it targets
+  any Postgres (the bundled db image, stock, or managed). `AUTO_MIGRATE=false` opts out.
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
@@ -89,8 +94,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   panels, `.field` inputs, `.chip`, `.miniLabel`, `.tile`, `.actions` — over the
   per-page layouts. Restyling a control means editing its one class, not every
   `#id` that uses it).
-- **Project dirs** — `postgres/` (SQL migrations, applied in order
-  `001`→…→`009`, plus `schema.sql` as the flattened baseline), `docs/` (these
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`010`,
+  auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
+  fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
   role on first DB start; the `Dockerfile` itself lives at the repo root).
 

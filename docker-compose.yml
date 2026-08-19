@@ -22,13 +22,17 @@ services:
 
   app:
     build: .
-    # image: YOURNAME/open-tabletop:0.4.0  # <- swap `build: .` for this to run a published image
+    # image: YOURNAME/open-tabletop:0.5.0  # <- swap `build: .` for this to run a published image
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy           # wait until the schema + role are in place
     environment:
       DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
+      # Owner (DDL) role — used ONLY at startup to auto-apply pending schema
+      # migrations (see migrate.js), never for normal traffic. Remove it, or set
+      # AUTO_MIGRATE=false, to manage migrations yourself.
+      MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
       ASSETS_DIR: /data/assets
       # PORT: 2567
     ports:

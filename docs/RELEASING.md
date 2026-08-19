@@ -11,8 +11,9 @@ environment variables, the compose file, and exposed ports.
 
 - **PATCH** (`0.1.x`) — bug fixes only. No new features, nothing a self-hoster has to
   change. They pull the new image and restart.
-- **MINOR** (`0.x.0`) — new, backward-compatible features. New migrations are allowed
-  only if they auto-apply and don't break an existing database.
+- **MINOR** (`0.x.0`) — new, backward-compatible features. New migrations are fine as
+  long as they're additive and don't break an existing database — the app applies them
+  automatically on startup (see **Migrations** below), so no manual upgrade step.
 - **MAJOR** (`x.0.0`) — a breaking change a self-hoster must act on: a renamed or removed
   environment variable, a required compose change, a migration with manual steps, or
   anything that breaks a running deployment on a blind `docker pull`.
@@ -40,12 +41,32 @@ The version lives in three places that must always agree: `package.json`, the gi
      -t optimuspryne/open-tabletop:latest \
      --push .
    ```
-   Rebuild the db image the same way **only if** the schema or init scripts changed,
-   tagging it with the same `X.Y.Z`.
+   Rebuild the db image the same way **only if** the role-init script changed, or to
+   refresh its baked baseline — a plain schema change no longer *requires* it, since the
+   app auto-migrates on top of whatever the db image ships (see **Migrations**). Tag it
+   with the same `X.Y.Z`.
 5. **Pin the compose file.** Update `docker-compose.yml` to reference `:X.Y.Z` (not
    `:latest`) so `git checkout vX.Y.Z && docker compose up` brings up a matching stack.
 6. **Cut the GitHub release** from the `vX.Y.Z` tag and paste that version's changelog
    section into the notes.
+
+## Migrations
+
+Schema changes are numbered SQL files in `postgres/` (`NNN_name.sql`). The app applies
+them itself on startup: `migrate.js` runs any file not yet recorded in the
+`schema_migrations` table, in order, as the owner role via `MIGRATE_DATABASE_URL` (never
+the app's least-privilege `DATABASE_URL`). Shipping a schema change is just:
+
+1. Add `postgres/0NN_whatever.sql` (wrap it in `BEGIN;`/`COMMIT;` like the others).
+2. *Optionally* fold it into `postgres/schema.sql` (the fresh-install baseline) and add
+   its filename to that file's `schema_migrations` seed — this keeps a brand-new install
+   from replaying it. Not required: if you skip it, a fresh install simply applies the
+   file on first boot.
+3. Add a changelog line if it's user-visible.
+
+No manual `psql -f`, and **no db-image rebuild required** — existing deployments pick it
+up on their next `docker compose pull && up`. A deployment can opt out with
+`AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
 ## Rules that keep the guarantees honest
 

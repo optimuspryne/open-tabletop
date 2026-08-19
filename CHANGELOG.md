@@ -8,6 +8,26 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-08-19
+
+### Added
+- **Automatic schema migrations** — the app now applies any pending database migrations
+  itself on startup (tracked in a `schema_migrations` table), so upgrading no longer needs
+  a manual `psql -f` step: `docker compose pull && up` catches the database up on its own.
+  Migrations run as a separate owner/DDL role via `MIGRATE_DATABASE_URL` — the running
+  server keeps its least-privilege role — and work against any Postgres (the bundled db
+  image, stock Postgres, or a managed instance). Set `AUTO_MIGRATE=false`, or leave
+  `MIGRATE_DATABASE_URL` unset, to keep managing migrations by hand.
+
+### Upgrading
+- Set **`MIGRATE_DATABASE_URL`** to an owner/DDL connection string — the compose file now
+  does this for you (`postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop`). On first
+  boot the app records your existing schema as the migration baseline (nothing is replayed)
+  and applies anything new from then on. **No manual `psql` step and no database-image
+  rebuild** — for this release or future schema changes. To keep the old manual workflow,
+  set `AUTO_MIGRATE=false` or leave `MIGRATE_DATABASE_URL` unset. Upgrade sequentially from
+  releases older than 0.4.0.
+
 ## [0.4.0] — 2026-08-19
 
 ### Added
@@ -123,7 +143,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.4.0
 [0.3.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.1
 [0.3.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.0

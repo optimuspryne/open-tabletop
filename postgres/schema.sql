@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–004, meant for a FRESH
+-- This is the flattened end state of migrations 001–010, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -136,5 +136,21 @@ CREATE TABLE custom_skyboxes (
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX custom_skyboxes_owner_idx ON custom_skyboxes (owner_id);
+
+-- ===== Migration bookkeeping ================================================
+-- This baseline IS the flattened result of migrations 001–010, so record them as
+-- already applied. The app's startup migrator (migrate.js) reads this table and
+-- runs only the numbered files NOT listed here — so a fresh install skips them all,
+-- and a later upgrade applies just the new ones. (A blank DB with no baseline has
+-- an empty table, so the migrator builds the whole schema from 001 instead.)
+CREATE TABLE schema_migrations (
+  version    text        PRIMARY KEY,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
+INSERT INTO schema_migrations (version) VALUES
+  ('001_custom_assets.sql'), ('002_auth.sql'), ('003_asset_visibility.sql'),
+  ('004_host_status.sql'),   ('005_room_board.sql'), ('006_room_table.sql'),
+  ('007_scenes.sql'),        ('008_room_skybox.sql'), ('009_room_state.sql'),
+  ('010_room_scale.sql');
 
 COMMIT;

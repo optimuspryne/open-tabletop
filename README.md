@@ -39,18 +39,25 @@ Table State**, or an auto-save when the room empties — written into the room's
    CRUD-only role (no `CREATE`/`DROP`/`TRUNCATE`/`ALTER`) that the running
    server connects as. Grant it `SELECT/INSERT/UPDATE/DELETE` on the tables and
    `USAGE` on the sequences.
-3. **Schema** (as the *owner*). For a **fresh install** (a new Docker volume, a
-   clean dev DB), apply the consolidated baseline in one shot:
-   `psql -U tabletop -d tabletop -f postgres/schema.sql`.
-   To **upgrade an existing database**, apply the numbered migrations in order
-   instead — `001_custom_assets.sql` → `002_auth.sql` → `003_asset_visibility.sql`
-   → `004_host_status.sql` → `005_room_board.sql` → `006_room_table.sql` →
-   `007_scenes.sql` → `008_room_skybox.sql` → `009_room_state.sql`. (`schema.sql` is the flattened end
-   state of all of them;
-   the per-migration backfills matter on a populated DB but are no-ops on an empty
-   one, so they're dropped from the baseline.)
+3. **Schema.** Two ways to do it:
+   - **Let the app apply it (recommended).** Point **`MIGRATE_DATABASE_URL`** at the
+     *owner* role (DDL-capable). On startup the server runs any pending
+     `postgres/NNN_*.sql` migrations, tracked in a `schema_migrations` table — a blank
+     database gets the whole schema built from `001` onward, an existing one gets only
+     what's new, with **no manual step on upgrade**. The app's own `DATABASE_URL` stays
+     the least-privilege `tabletop_app` role; DDL runs only through this separate owner
+     URL, and only at boot. Works against the bundled db image, stock Postgres, or a
+     managed instance.
+   - **Or apply it by hand** (as the owner). Fresh install: `psql -U tabletop -d
+     tabletop -f postgres/schema.sql` (the flattened baseline of `001`–`010`, which also
+     seeds `schema_migrations`). Upgrade: apply the numbered migrations in order
+     (`001_custom_assets.sql` → … → `010_room_scale.sql`). Set **`AUTO_MIGRATE=false`**
+     (or just leave `MIGRATE_DATABASE_URL` unset) to keep the app out of the schema.
+     (The per-migration backfills matter on a populated DB but are no-ops on an empty
+     one, so they're dropped from the baseline.)
 4. **Point the app at it:** `cp .env.example .env`, set `DATABASE_URL` to the
-   `tabletop_app` connection string. `npm start` auto-loads `.env`.
+   `tabletop_app` connection string (and `MIGRATE_DATABASE_URL` to the owner one for
+   auto-migration). `npm start` auto-loads `.env`.
 5. **The first account is admin automatically** — sign up in the UI and you're
    the admin; no SQL needed. Admins grant admin/host to others from the console.
    (To promote someone later: `UPDATE users SET is_admin = true WHERE
@@ -75,8 +82,10 @@ docker compose up -d      # builds the image, starts Postgres, then the app
 ```
 
 Open **http://localhost:2567**. On the first run, Compose applies `postgres/schema.sql`
-and creates the `tabletop_app` role via `docker/init-app-role.sh`. Two named volumes
-persist state: `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
+and creates the `tabletop_app` role via `docker/init-app-role.sh`. On later upgrades the
+app **auto-applies any new migrations** itself at startup (via `MIGRATE_DATABASE_URL`),
+so a `docker compose pull && up` is all it takes — no manual `psql` step. Two named
+volumes persist state: `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 The **first account you sign up becomes admin automatically** — no SQL step needed.
 
@@ -88,7 +97,10 @@ app image against it:
 ```bash
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.4.0
+  -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
+  optimuspryne/open-tabletop:0.5.0
+# MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
+# omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
 # (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 # turn on `ssl` server-side.
@@ -122,7 +134,7 @@ services:
       retries: 12
       
   app:
-    image: optimuspryne/open-tabletop:0.4.0
+    image: optimuspryne/open-tabletop:0.5.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:
@@ -130,6 +142,8 @@ services:
         condition: service_healthy           # wait until the schema + role are in place
     environment:
       DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
+      # Owner (DDL) role — auto-applies pending migrations on boot (migrate.js).
+      MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
       ASSETS_DIR: /data/assets
       # PORT: 2567
     ports:
@@ -214,9 +228,10 @@ CHANGELOG.md         release notes (Keep a Changelog)
 RELEASING.md         versioning + release process
 server.js            Colyseus rooms + authoritative cannon-es physics + HTTP (auth/rooms/admin) + Postgres
 db.js                Postgres pool + all queries (library, users, rooms, membership)
+migrate.js           startup schema migrator (applies pending migrations, tracked in schema_migrations)
 auth.js              password hashing (scrypt) + device-token hashing (no deps)
 shared/pieces.js     piece specs (mass, colliders, palettes, dice verts, prop/board registries) + timerLive
-postgres/            SQL migrations 001–009 + schema.sql (fresh-install baseline) + grants_app_role.sql
+postgres/            SQL migrations 001–010 + schema.sql (fresh-install baseline) + grants_app_role.sql
 docs/                ARCHITECTURE.md, REFERENCE.md, ASSET_CREDITS.md
 Dockerfile           app image build (node:22-alpine, npm ci --omit=dev)
 db.Dockerfile        custom Postgres image (bakes in schema.sql + role init)

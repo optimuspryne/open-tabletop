@@ -19,6 +19,7 @@ import convexHull from 'convex-hull';
 import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
+import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -2340,4 +2341,7 @@ gameServer.define('editor', EditorRoom); // single shared admin-only library wor
 gameServer.define('lobby', LobbyRoom).filterBy(['code']); // transient per-code waiting room for pending joiners
 
 const PORT = process.env.PORT || 2567;
+// Apply any pending schema migrations before serving. Fails fast (exits) rather than
+// booting on a half-migrated schema; no-ops when MIGRATE_DATABASE_URL isn't set.
+await runMigrations();
 gameServer.listen(PORT).then(() => console.log(`\n  Open Tabletop running →  http://localhost:${PORT}\n`));
