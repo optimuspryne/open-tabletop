@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-08-19
+
 ### Added
 - **Live measurement previews** — when someone drags out a ruler or template, everyone
   at the table now watches it form in real time (in the dragger's seat colour), not just
@@ -15,6 +17,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Move & delete individual overlays** — click a ruler/template you placed (or any, as
   a GM) to select it, drag to reposition it, and press **Delete** to remove just that one
   (**Esc** deselects). Previously overlays could only be placed or cleared en masse.
+
+### Changed
+- **The Library Editor now shares the game table's full interface** — the same Tools
+  (Measure, Scoreboard, Sound, Timer, Notes, Chat, Whiteboard) and movable/resizable
+  pop-out panels, plus the streamlined Customize Table, so building assets looks and
+  behaves exactly like sitting at a table (minus the player-facing How-to-Play).
 
 ## [0.3.1] — 2026-08-19
 
@@ -115,7 +123,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.4.0
 [0.3.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.1
 [0.3.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.0
 [0.2.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.2.0

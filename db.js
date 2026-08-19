@@ -302,17 +302,17 @@ export async function roomsOwnedBy(userId) {
 // memberships cascade via FK). RESTRICT FKs stay as safety rails; this clears deps
 // deliberately rather than relying on a blanket DB cascade.
 export async function purgeUser(userId) {
-  const c = await pool.connect();
+  const client = await pool.connect();
   try {
-    await c.query('BEGIN');
-    await c.query('UPDATE custom_decks   SET owner_id = NULL WHERE owner_id = $1', [userId]);
-    await c.query('UPDATE custom_boards  SET owner_id = NULL WHERE owner_id = $1', [userId]);
-    await c.query('UPDATE custom_objects SET owner_id = NULL WHERE owner_id = $1', [userId]);
-    await c.query('DELETE FROM rooms WHERE owner_id = $1', [userId]); // cascades those rooms' members
-    await c.query('DELETE FROM users WHERE id = $1', [userId]);       // cascades this user's memberships
-    await c.query('COMMIT');
-  } catch (e) { await c.query('ROLLBACK'); throw e; }
-  finally { c.release(); }
+    await client.query('BEGIN');
+    await client.query('UPDATE custom_decks   SET owner_id = NULL WHERE owner_id = $1', [userId]);
+    await client.query('UPDATE custom_boards  SET owner_id = NULL WHERE owner_id = $1', [userId]);
+    await client.query('UPDATE custom_objects SET owner_id = NULL WHERE owner_id = $1', [userId]);
+    await client.query('DELETE FROM rooms WHERE owner_id = $1', [userId]); // cascades those rooms' members
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);       // cascades this user's memberships
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK'); throw e; }
+  finally { client.release(); }
 }
 
 // ===== Rooms ================================================================

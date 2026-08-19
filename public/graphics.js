@@ -347,13 +347,13 @@ function resolveTexture(ref) {
   if (!ref) ref = 'back';
   if (_texCache.has(ref)) return _texCache.get(ref);
 
-  const c = parseCardFront(ref);
+  const parsed = parseCardFront(ref);
   let texture;
-  if (c.kind === 'back') texture = cardBack();
-  else if (c.kind === 'rank') texture = cardFront(c.rank, c.suit, c.color);
-  else if (c.kind === 'text') texture = textFaceTexture(c.text, c.color, c.bg, c.accent);
-  else if (c.kind === 'tback') texture = textBackTexture(c.bg, c.text, c.textColor, c.accent);
-  else texture = loadImageTexture(c.ref);
+  if (parsed.kind === 'back') texture = cardBack();
+  else if (parsed.kind === 'rank') texture = cardFront(parsed.rank, parsed.suit, parsed.color);
+  else if (parsed.kind === 'text') texture = textFaceTexture(parsed.text, parsed.color, parsed.bg, parsed.accent);
+  else if (parsed.kind === 'tback') texture = textBackTexture(parsed.bg, parsed.text, parsed.textColor, parsed.accent);
+  else texture = loadImageTexture(parsed.ref);
 
   _texCache.set(ref, texture);
   return texture;
@@ -492,15 +492,22 @@ function imgToBlob(file, w, h, fit, bg) {
     .then(canvas => new Promise(resolve => canvas.toBlob(blob => resolve(blob), CONFIG.upload.type, CONFIG.upload.quality)));
 }
 
-// POST a raw .glb model; return the URL ref the server stored it under.
-async function uploadModel(file) {
-  const response = await fetch('/upload-model?kind=props', {
+// POST a body to an upload endpoint with the auth token; return the stored URL ref.
+// (The raw token read here is auth plumbing that really belongs in a shared api
+// helper — parked with the cross-file util-module refactor.)
+async function postUpload(path, contentType, body) {
+  const response = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': 'model/gltf-binary', 'Authorization': 'Bearer ' + (localStorage.getItem('tabletop.token') || '') },
-    body: file,
+    headers: { 'Content-Type': contentType, 'Authorization': 'Bearer ' + (localStorage.getItem('tabletop.token') || '') },
+    body,
   });
-  if (!response.ok) throw new Error('model upload failed');
+  if (!response.ok) throw new Error('upload failed');
   return (await response.json()).url;
+}
+
+// POST a raw .glb model; return the URL ref the server stored it under.
+function uploadModel(file) {
+  return postUpload('/upload-model?kind=props', 'model/gltf-binary', file);
 }
 
 // Load a .glb and return its true world-space bounds { size, center }, with all
@@ -538,13 +545,7 @@ function measureModel(url, scale = 1, rot) {
 async function uploadImage(file, w = CONFIG.upload.cardW, h = CONFIG.upload.cardH, fit, kind, bg) {
   const blob = await imgToBlob(file, w, h, fit, bg);
   const query = kind ? ('?kind=' + encodeURIComponent(kind)) : '';
-  const response = await fetch('/upload' + query, {
-    method: 'POST',
-    headers: { 'Content-Type': CONFIG.upload.type, 'Authorization': 'Bearer ' + (localStorage.getItem('tabletop.token') || '') },
-    body: blob,
-  });
-  if (!response.ok) throw new Error('upload failed');
-  return (await response.json()).url;
+  return postUpload('/upload' + query, CONFIG.upload.type, blob);
 }
 // --- Die, card, and mask meshes ---------------------------------------------
 
@@ -966,4 +967,112 @@ export async function glbFilePreviewURL(file, rot) {
   finally { URL.revokeObjectURL(url); }
 }
 
-export { KIND, OVERLAY, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel };
+// ---- Player / UI textures (seat markers, name tags, the "YOU" chip) ---------
+// Procedural canvas textures for the table's player chrome. Kept here with the
+// other canvas texture builders; the client owns their placement in the scene.
+
+// Trace a rounded-rectangle path on ctx (caller then fill()s or stroke()s it).
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// A standing seat-marker texture: a colored card with the player's avatar (or a
+// default silhouette) clipped to a circle, their name, and a "SHOWING n" badge
+// while they're revealing cards. Redrawn once the avatar image loads.
+function makePlayerTexture(player) {
+  const width = 256, height = 320;
+  const { canvas, ctx } = makeCanvas(width, height);
+
+  const draw = (img) => {
+    ctx.clearRect(0, 0, width, height);
+    // Card-ish background with a border tinted in the player's colour.
+    ctx.fillStyle = 'rgba(20,24,29,0.9)';
+    roundRect(ctx, 6, 6, width - 12, height - 12, 16);
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = player.color;
+    roundRect(ctx, 6, 6, width - 12, height - 12, 16);
+    ctx.stroke();
+    // Avatar image (or a default silhouette) clipped to a circle.
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(width / 2, 120, 78, 0, 7);
+    ctx.closePath();
+    ctx.clip();
+    if (img) {
+      ctx.drawImage(img, width / 2 - 78, 42, 156, 156);
+    } else {
+      ctx.fillStyle = '#3a4048';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#c8ccd2';
+      ctx.beginPath(); ctx.arc(width / 2, 104, 34, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(width / 2, 210, 62, 52, 0, Math.PI, 0); ctx.fill();
+    }
+    ctx.restore();
+    ctx.strokeStyle = player.color;
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.arc(width / 2, 120, 78, 0, 7); ctx.stroke();
+    // Name.
+    ctx.fillStyle = '#e8e6e0';
+    ctx.font = 'bold 30px system-ui, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText((player.name || 'Player').slice(0, 14), width / 2, 270);
+    if (player.showing > 0) { // public "is revealing cards" badge — count only, never the content
+      ctx.fillStyle = player.color;
+      roundRect(ctx, width / 2 - 64, 12, 128, 30, 15);
+      ctx.fill();
+      ctx.fillStyle = '#14181d';
+      ctx.font = 'bold 18px system-ui, sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('SHOWING ' + player.showing, width / 2, 28);
+      ctx.textBaseline = 'alphabetic';
+    }
+    tex.needsUpdate = true;
+  };
+
+  const tex = cTex(canvas);
+  draw(null);
+  if (player.avatar) { const img = new Image(); img.onload = () => draw(img); img.src = player.avatar; }
+  return tex;
+}
+
+// A small floating name-tag texture: translucent pill, border in the player's
+// colour, their name centred. Shown over a piece while someone else holds it.
+function nameTag(name, color) {
+  const width = 256, height = 80;
+  const { canvas, ctx } = makeCanvas(width, height);
+  ctx.fillStyle = 'rgba(20,24,29,0.9)';
+  roundRect(ctx, 4, 4, width - 8, height - 8, 18);
+  ctx.fill();
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = color;
+  roundRect(ctx, 4, 4, width - 8, height - 8, 18);
+  ctx.stroke();
+  ctx.fillStyle = '#e8e6e0';
+  ctx.font = 'bold 34px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText((name || 'Player').slice(0, 14), width / 2, height / 2 + 2);
+  return cTex(canvas);
+}
+
+// A flat "YOU" chip texture, laid on the felt at your own seat.
+function makeYouChipTexture(color) {
+  const { canvas, ctx } = makeCanvas(128, 128);
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.beginPath(); ctx.arc(64, 64, 58, 0, 7);
+  ctx.fillStyle = 'rgba(20,24,29,0.5)'; ctx.fill();
+  ctx.lineWidth = 8; ctx.strokeStyle = color; ctx.stroke();
+  ctx.fillStyle = color; ctx.font = 'bold 42px system-ui, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('YOU', 64, 66);
+  return cTex(canvas);
+}
+
+export { KIND, OVERLAY, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture };

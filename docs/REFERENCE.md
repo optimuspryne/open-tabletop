@@ -506,6 +506,11 @@ felt), and the config:
   `textBackTexture`** — procedural text cards.
 - **`resolveTexture(ref)`** (cached) — resolves a card ref: `back`,
   `rank:…`, `text:…`, `tback:…`, or a `data:`/URL image.
+- **`makePlayerTexture(player)` / `nameTag(name,color)` / `makeYouChipTexture(color)`**
+  (+ the `roundRect` path helper) — the table's player chrome: the standing seat-marker
+  card (avatar + name + a "SHOWING n" badge), the floating held-piece name-tag pill, and
+  the flat "YOU" felt chip. `client.js` imports these and places the sprites/planes they
+  return; the drawing lives here with the other canvas texture builders.
 
 ### Models & uploads
 
@@ -590,13 +595,13 @@ a mesh), shared by the add, card-rebuild, and render paths.
 ### Seats, hands, turns
 
 Seat layout, standing avatar/name markers (with a public **"SHOWING n"** badge
-via `makePlayerTexture` when a player is revealing), other players' fanned hands —
+via `makePlayerTexture`, a `graphics.js` builder, when a player is revealing), other players' fanned hands —
 face-down using the player's own **`handBack`**, with any **revealed** cards drawn
 face-up in the leading fan slots (`refreshFan` + the `revealed` map), height-
 staggered to avoid z-fighting. The turn panel, and **`renderHand(cards)`** for
 your own bar (left = face-down, right = face-up; also a **select mode** while the
-show panel is picking cards). **`nameTag(name,color)`** builds the pill texture
-shared by held-piece labels and pings. **`renderPlayers`** also draws a **"⏳
+show panel is picking cards). Held-piece labels and pings share the **`nameTag`**
+pill texture (a `graphics.js` builder). **`renderPlayers`** also draws a **"⏳
 Waiting on {name}"** row when `turnPending` is set (a resumed turn whose owner
 hasn't returned), and **`renderUnclaimed`** builds the Members panel's **Unclaimed
 hands** list — each saved player gets a **"Give to…"** picker that sends

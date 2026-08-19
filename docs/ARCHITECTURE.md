@@ -81,9 +81,14 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **The pages** — `index.html` + `landing.js` (the lobby: quick-join, login, room
   list, host request), `table.html` (the game table, which loads the client
   chain), `editor.html` + `editor-panel.js` (the admin-only library editor,
-  reusing the game client), `admin.html` + `admin.js` (the admin console), and
-  `styles.css` (all UI styling — the design-token `:root` block, shared page
-  chrome, and per-page layouts).
+  reusing the game client — `editor.html` now shares the game table's full HUD
+  plus the Add-to-Library builder, so building assets looks and behaves like
+  sitting at a table), `admin.html` + `admin.js` (the admin console), and
+  `styles.css` (all UI styling: the design-token `:root` block, then a layer of
+  shared component primitives the pages compose from — `.panel`/`.popout` pop-out
+  panels, `.field` inputs, `.chip`, `.miniLabel`, `.tile`, `.actions` — over the
+  per-page layouts. Restyling a control means editing its one class, not every
+  `#id` that uses it).
 - **Project dirs** — `postgres/` (SQL migrations, applied in order
   `001`→…→`009`, plus `schema.sql` as the flattened baseline), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app

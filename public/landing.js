@@ -2,7 +2,7 @@
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.
 const TOKEN_KEY = 'tabletop.token';
-const $ = (id) => document.getElementById(id);
+const byId = (id) => document.getElementById(id);
 const token = () => localStorage.getItem(TOKEN_KEY) || '';
 const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
 const clearToken = () => localStorage.removeItem(TOKEN_KEY);
@@ -26,13 +26,13 @@ const enterRoom = (code) => { location.href = 'table.html?room=' + encodeURIComp
 // ---- views: quick | auth | home ----
 // Show exactly one of the three top-level views (quick-join / auth / home).
 function setView(view) {
-  $('quickJoinView').hidden = view !== 'quick';
-  $('authView').hidden = view !== 'auth';
-  $('homeView').hidden = view !== 'home';
-  $('accountBtn').hidden = view !== 'quick'; // the top-right "Log in" only shows on the quick-join screen
+  byId('quickJoinView').hidden = view !== 'quick';
+  byId('authView').hidden = view !== 'auth';
+  byId('homeView').hidden = view !== 'home';
+  byId('accountBtn').hidden = view !== 'quick'; // the top-right "Log in" only shows on the quick-join screen
 }
 const showQuickJoin = () => setView('quick');
-function showAuth() { setView('auth'); $('loginForm').hidden = false; $('signupForm').hidden = true; }
+function showAuth() { setView('auth'); byId('loginForm').hidden = false; byId('signupForm').hidden = true; }
 
 // The cached signed-in user — kept module-side so handlers like onRequestHost can
 // re-check fields (e.g. hasPassword) without another round-trip.
@@ -40,24 +40,24 @@ let me = null;
 async function showHome(user) {
   me = user;
   setView('home');
-  $('who').textContent = user.username;
+  byId('who').textContent = user.username;
   const validAvatar = typeof user.avatar === 'string' && /^(\/assets\/|data:image\/|https?:\/\/)/.test(user.avatar);
-  $('avatar').style.backgroundImage = validAvatar ? `url("${user.avatar}")` : 'none';
+  byId('avatar').style.backgroundImage = validAvatar ? `url("${user.avatar}")` : 'none';
 
   // Hosting: approved (or admin) → the create form; pending → a waiting note; else
   // → a "request host access" button.
   const canHost = user.canOwnRooms;
-  $('gmTools').hidden = !canHost;
-  $('hostReq').hidden = canHost;
+  byId('gmTools').hidden = !canHost;
+  byId('hostReq').hidden = canHost;
   if (!canHost) {
     const pending = user.hostStatus === 'pending';
-    $('hostNote').textContent = pending
+    byId('hostNote').textContent = pending
       ? 'Your host access is pending admin approval.'
       : 'Want to host your own games? Request access — an admin will review it.';
-    $('requestHostBtn').hidden = pending;
+    byId('requestHostBtn').hidden = pending;
   }
 
-  $('adminBtn').hidden = !user.isAdmin;
+  byId('adminBtn').hidden = !user.isAdmin;
   if (user.isAdmin) updateAdminBadge();
   await refreshRooms();
 }
@@ -65,7 +65,7 @@ async function showHome(user) {
 async function updateAdminBadge() {
   try {
     const { pending } = await api('/admin/pending-count', { auth: true });
-    $('adminBtn').textContent = pending > 0 ? `⚙️ Admin (${pending})` : '⚙️ Admin';
+    byId('adminBtn').textContent = pending > 0 ? `⚙️ Admin (${pending})` : '⚙️ Admin';
   } catch { /* leave as-is */ }
 }
 
@@ -78,7 +78,7 @@ async function onRequestHost() {
   try {
     const { user } = await api('/host/request', { method: 'POST', auth: true, body: password ? { password } : {} });
     await showHome(user);
-  } catch (e) { $('hostNote').textContent = e.message; }
+  } catch (e) { byId('hostNote').textContent = e.message; }
 }
 
 // ---- rooms + live approval ----
@@ -92,7 +92,7 @@ const resolved = new Set();   // codes already forwarded/declined
 let coly = null;              // lazily-created Colyseus client
 const lobbies = new Map();    // code -> lobby connection
 
-const closeLobby = (code) => { const c = lobbies.get(code); if (c) { try { c.leave(); } catch {} } lobbies.delete(code); };
+const closeLobby = (code) => { const conn = lobbies.get(code); if (conn) { try { conn.leave(); } catch {} } lobbies.delete(code); };
 const stopPolling = () => {
   if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   for (const code of [...lobbies.keys()]) closeLobby(code);
@@ -130,28 +130,28 @@ async function refreshRooms() {
   for (const room of rooms) if (room.status === 'pending') watchLobby(room); // push-based admit/decline
 
   const anyPending = rooms.some((room) => room.status === 'pending');
-  if (anyPending && !pollTimer) pollTimer = setInterval(refreshRooms, 15000); // slow fallback (was 3s)
+  if (anyPending && !pollTimer) pollTimer = setInterval(refreshRooms, 15000); // slow fallback
   if (!anyPending) stopPolling();
 }
 
 function onApproved(room) {
   stopPolling();
-  const errEl = $('joinErr'); errEl.className = 'note';
+  const errEl = byId('joinErr'); errEl.className = 'note';
   errEl.textContent = `\u2713 You have been approved for ${room.name} \u2014 entering\u2026`;
   setTimeout(() => enterRoom(room.code), 800);
 }
 function onDeclined() {
-  const errEl = $('joinErr'); errEl.className = 'err';
+  const errEl = byId('joinErr'); errEl.className = 'err';
   errEl.textContent = 'Your join request was declined, or the room was closed.';
 }
 
 function renderRoomList(rooms) {
-  const list = $('roomList'); list.replaceChildren();
+  const list = byId('roomList'); list.replaceChildren();
   if (!rooms.length) {
     const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No rooms yet.';
     list.appendChild(li); return;
   }
-  const mkBtn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
+  const mkBtn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
   for (const room of rooms) {
     const li = document.createElement('li'); li.className = 'roomRow';
     const info = document.createElement('div');
@@ -191,8 +191,8 @@ async function closeRoom(room) {
 // ---- handlers ----
 // Quick join: create a passwordless account, then join by code — the default path.
 async function onQuickJoin() {
-  const errEl = $('qjErr'); errEl.textContent = ''; errEl.className = 'err';
-  const username = $('qjName').value.trim(), email = $('qjEmail').value.trim(), code = $('qjCode').value.trim();
+  const errEl = byId('qjErr'); errEl.textContent = ''; errEl.className = 'err';
+  const username = byId('qjName').value.trim(), email = byId('qjEmail').value.trim(), code = byId('qjCode').value.trim();
   if (!username || !email || !code) { errEl.textContent = 'Fill in all three fields.'; return; }
   let user;
   try {
@@ -206,49 +206,49 @@ async function onQuickJoin() {
     const { room, membership } = await api('/rooms/join', { method: 'POST', auth: true, body: { code } });
     if (membership && membership.status === 'admitted') { enterRoom(room.code); return; }
     await showHome(user); // pending: land on home, which polls and auto-forwards on approval
-    const joinErrEl = $('joinErr'); joinErrEl.className = 'note'; joinErrEl.textContent = 'Request sent \u2014 waiting for a GM to admit you\u2026';
+    const joinErrEl = byId('joinErr'); joinErrEl.className = 'note'; joinErrEl.textContent = 'Request sent \u2014 waiting for a GM to admit you\u2026';
   } catch (e) {
     await showHome(user); // account exists now; let them retry from the lobby
-    const joinErrEl = $('joinErr'); joinErrEl.className = 'err'; joinErrEl.textContent = e.message;
+    const joinErrEl = byId('joinErr'); joinErrEl.className = 'err'; joinErrEl.textContent = e.message;
   }
 }
 
 async function onLogin() {
-  const errEl = $('loginErr'); errEl.textContent = '';
+  const errEl = byId('loginErr'); errEl.textContent = '';
   try {
     // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/login', { method: 'POST',
-      body: { login: $('loginId').value.trim(), password: $('loginPw').value } });
+      body: { login: byId('loginId').value.trim(), password: byId('loginPw').value } });
     setToken(t); showHome(user);
   } catch (e) { errEl.textContent = e.message; }
 }
 
 async function onSignup() {
-  const errEl = $('suErr'); errEl.textContent = '';
-  const password = $('suPw').value;
+  const errEl = byId('suErr'); errEl.textContent = '';
+  const password = byId('suPw').value;
   if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
   try {
     // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/signup', { method: 'POST',
-      body: { username: $('suUser').value.trim(), email: $('suEmail').value.trim(), password } });
+      body: { username: byId('suUser').value.trim(), email: byId('suEmail').value.trim(), password } });
     setToken(t); showHome(user);
   } catch (e) { errEl.textContent = e.message; }
 }
 
 async function onCreateRoom() {
-  const errEl = $('createErr'); errEl.textContent = '';
+  const errEl = byId('createErr'); errEl.textContent = '';
   try {
     const { room } = await api('/rooms', { method: 'POST', auth: true,
-      body: { name: $('roomName').value.trim(), requireApproval: $('approval').classList.contains('on') } });
+      body: { name: byId('roomName').value.trim(), requireApproval: byId('approval').classList.contains('on') } });
     enterRoom(room.code);
   } catch (e) { errEl.textContent = e.message; }
 }
 
 async function onJoin() {
-  const errEl = $('joinErr'); errEl.textContent = ''; errEl.className = 'err';
+  const errEl = byId('joinErr'); errEl.textContent = ''; errEl.className = 'err';
   try {
     const { room, membership } = await api('/rooms/join', { method: 'POST', auth: true,
-      body: { code: $('joinCode').value.trim() } });
+      body: { code: byId('joinCode').value.trim() } });
     if (membership && membership.status === 'admitted') {
       errEl.className = 'note'; errEl.textContent = '\u2713 Entering\u2026';
       setTimeout(() => enterRoom(room.code), 400);
@@ -260,7 +260,7 @@ async function onJoin() {
   } catch (e) { errEl.textContent = e.message; }
 }
 
-const onLogout = () => { $('adminBtn').hidden=true; stopPolling(); clearToken(); showQuickJoin(); };
+const onLogout = () => { byId('adminBtn').hidden=true; stopPolling(); clearToken(); showQuickJoin(); };
 
 // Center-crop + shrink a chosen image to a small square JPEG data-URL (kept tiny
 // so it fits the same bounded rule the server enforces).
@@ -268,13 +268,13 @@ function fileToAvatarDataURL(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const size = 96, c = document.createElement('canvas');
-      c.width = c.height = size;
-      const ctx = c.getContext('2d');
+      const size = 96, canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
       const scale = Math.max(size / img.width, size / img.height);
       const w = img.width * scale, h = img.height * scale;
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      resolve(c.toDataURL('image/jpeg', 0.7));
+      resolve(canvas.toDataURL('image/jpeg', 0.7));
     };
     img.onerror = reject;
     const fr = new FileReader();
@@ -288,22 +288,22 @@ async function onAvatarPick(event) {
   try {
     const data = await fileToAvatarDataURL(file);
     const { avatar } = await api('/me/avatar', { method: 'POST', auth: true, body: { data } });
-    $('avatar').style.backgroundImage = `url("${avatar}")`;
+    byId('avatar').style.backgroundImage = `url("${avatar}")`;
   } catch (e) { alert('Could not update your avatar.'); }
 }
 
 // ---- wire + boot ----
-$('avatar').onclick = () => $('avatarFile').click();
-$('avatarFile').onchange = onAvatarPick;
-$('accountBtn').onclick = showAuth;
-$('qjBtn').onclick = onQuickJoin;
-$('qjToLogin').onclick = (e) => { e.preventDefault(); showAuth(); };
-$('qjBack').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
-$('qjBack2').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
-$('loginBtn').onclick = onLogin;
-$('suBtn').onclick = onSignup;
-$('createBtn').onclick = onCreateRoom;
-$('approval').onclick = () => $('approval').classList.toggle('on');
+byId('avatar').onclick = () => byId('avatarFile').click();
+byId('avatarFile').onchange = onAvatarPick;
+byId('accountBtn').onclick = showAuth;
+byId('qjBtn').onclick = onQuickJoin;
+byId('qjToLogin').onclick = (e) => { e.preventDefault(); showAuth(); };
+byId('qjBack').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
+byId('qjBack2').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
+byId('loginBtn').onclick = onLogin;
+byId('suBtn').onclick = onSignup;
+byId('createBtn').onclick = onCreateRoom;
+byId('approval').onclick = () => byId('approval').classList.toggle('on');
 // Accent colour — personal, saved on this device (the <head> script applies it on load; this syncs the picker + handles changes).
 {
   const applyAccent = (hex) => {
@@ -313,21 +313,21 @@ $('approval').onclick = () => $('approval').classList.toggle('on');
     s.setProperty('--accent-soft', `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},.25)`);
     localStorage.setItem('ott-accent', hex);
     document.querySelectorAll('#accentPicker .accDot').forEach((d) => d.classList.toggle('on', d.dataset.accent.toLowerCase() === hex.toLowerCase()));
-    const c = $('accentCustom'); if (c) c.value = hex;
+    const c = byId('accentCustom'); if (c) c.value = hex;
   };
   document.querySelectorAll('#accentPicker .accDot').forEach((d) => d.onclick = () => applyAccent(d.dataset.accent));
-  const cust = $('accentCustom'); if (cust) cust.oninput = () => applyAccent(cust.value);
+  const cust = byId('accentCustom'); if (cust) cust.oninput = () => applyAccent(cust.value);
   applyAccent(localStorage.getItem('ott-accent') || '#c9a25a');
 }
-$('joinBtn').onclick = onJoin;
-$('logoutBtn').onclick = onLogout;
-$('requestHostBtn').onclick = onRequestHost;
-$('toSignup').onclick = (e) => { e.preventDefault(); $('loginForm').hidden = true; $('signupForm').hidden = false; };
-$('toLogin').onclick = (e) => { e.preventDefault(); $('signupForm').hidden = true; $('loginForm').hidden = false; };
-$('qjCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuickJoin(); });
-$('loginPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onLogin(); });
-$('suPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onSignup(); });
-$('joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onJoin(); });
+byId('joinBtn').onclick = onJoin;
+byId('logoutBtn').onclick = onLogout;
+byId('requestHostBtn').onclick = onRequestHost;
+byId('toSignup').onclick = (e) => { e.preventDefault(); byId('loginForm').hidden = true; byId('signupForm').hidden = false; };
+byId('toLogin').onclick = (e) => { e.preventDefault(); byId('signupForm').hidden = true; byId('loginForm').hidden = false; };
+byId('qjCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuickJoin(); });
+byId('loginPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onLogin(); });
+byId('suPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onSignup(); });
+byId('joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onJoin(); });
 
 // Boot: if a stored token still resolves to a user, land on home; otherwise (no
 // token, a stale one that 401s, or a 2xx that somehow lacks a user) show quick-join.

@@ -468,6 +468,10 @@ class TableRoom extends Room {
     this.pendingHands = new Map(); // userId -> {name,cards}  saved-game hands awaiting their owner's return (rebind on join)
     this.pendingTurn = null;       // userId whose turn it was in a saved game, awaiting their return
     this.nextId = 1; this.nextHid = 1; this.nextOverlayId = 1;
+    // Scoreboard row ids: a plain counter, seeded past any rows just restored above
+    // (their 's<N>' keys) so a reloaded room's next add can't collide with an old row.
+    this.nextScoreId = 1;
+    this.state.scores.forEach((_, id) => { const n = /^s(\d+)$/.exec(id); if (n) this.nextScoreId = Math.max(this.nextScoreId, +n[1] + 1); });
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
     // --- Movement: grab → drag → release --------------------------------------
@@ -1019,7 +1023,7 @@ class TableRoom extends Room {
       const s = this.state.scores;
       if (msg.action === 'add') {
         if (s.size >= 50) return; // cap the scoreboard so it can't be spammed unbounded
-        s.set(rnd(), new ScoreRow(String(msg.label || 'Player').slice(0, 40), 0));
+        s.set('s' + (this.nextScoreId++), new ScoreRow(String(msg.label || 'Player').slice(0, 40), 0));
       } else if (msg.action === 'remove') {
         s.delete(String(msg.id));
       } else if (msg.action === 'label') {
@@ -2000,11 +2004,10 @@ app.use('/assets',
 // Accept only real raster images (magic bytes), not whatever the Content-Type claims.
 function validImage(buf) {
   if (!buf || buf.length < 12) return false;
-  const b = buf;
-  if (b[0] === 0xFF && b[1] === 0xD8) return true;                                   // JPEG
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4E && b[3] === 0x47) return true;  // PNG
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return true;                   // GIF
-  if (b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57 && b[9] === 0x45) return true;  // RIFF....WEBP
+  if (buf[0] === 0xFF && buf[1] === 0xD8) return true;                                     // JPEG
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true; // PNG
+  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return true;                  // GIF
+  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[8] === 0x57 && buf[9] === 0x45) return true; // RIFF....WEBP
   return false;
 }
 
@@ -2202,11 +2205,7 @@ app.patch('/rooms/:id', express.json({ limit: '1kb' }), async (req, res) => {
 app.delete('/rooms/:id', async (req, res) => {
   const ctx = await ownedRoom(req, res); if (!ctx) return;
   await db.softDeleteRoom(ctx.room.id); // soft delete: hidden + unjoinable; code frees up
-  // Shut down the live table if one is running for this code (kick everyone out).
-  try {
-    const live = await matchMaker.query({ name: 'table', code: ctx.room.code });
-    for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'closeAndDispose');
-  } catch (e) { console.error('[close] dispose live room:', e.message); }
+  await disposeLive(ctx.room.code);     // shut down the live table if one is running (kick everyone out)
   res.json({ ok: true });
 });
 

@@ -93,7 +93,7 @@ export const PROP_LIST = [
 // large modelScale fills the table; colliders precomputed (worldSize*scale/2).
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
 export const BOARDS = {
-  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 18.7, box: [4.00, 0.22, 4.00] },
+  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 1, box: [4.00, 0.21, 4.00] },
   go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29] },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide

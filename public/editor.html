@@ -9,6 +9,7 @@
 <script src="/equalize.js" defer></script>
 </head>
 <body>
+<div id="camDebug" style="position:fixed;top:8px;right:8px;z-index:200;font:11px/1.4 monospace;color:#c9a25a;background:rgba(0,0,0,.6);padding:6px 8px;border-radius:4px;pointer-events:none;white-space:pre"></div>
 <div id="app"></div>
 <div id="ui">
   <button id="lobbyBtn">🔙 Lobby</button>
@@ -20,7 +21,7 @@
     <button id="roomBtn">☰ ⚙️ Room Controls</button>
     <div class="grp" id="roomGrp" hidden>
       <button id="roomScene">📽️ Load a Scene</button>
-      <button id="roomTable">↔️ Table Size</button>
+      <button id="roomTable">🎨 Customize Table</button>
       <button id="roomSky">🌄 Skybox</button>
       <button id="roomReset" class="danger">🧹 Reset</button>
     </div>
@@ -30,9 +31,30 @@
   <button id="addBtn">➕ Add to Library</button>
   <button id="sceneSaveBtn">🎬 Save Scene</button>
 </div>
+<div id="inspectHint" class="panel" hidden>Drag to rotate · click or Esc to close</div>
+<div id="inspectColorRow" class="panel" hidden>
+  <label id="inspectBodyLab">Colour <input type="color" id="inspectColorBody" value="#ffffff"></label>
+  <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
+</div>
+<div id="drawActions" class="panel" hidden>
+  <span class="da-note">Drag to rotate</span>
+  <button data-place="field-up">To field ↑ face-up <kbd>F</kbd></button>
+  <button data-place="field-down">To field face-down <kbd>D</kbd></button>
+  <button data-place="hand">To hand <kbd>H</kbd></button>
+  <button data-place="deck">Return to deck <kbd>R</kbd></button>
+</div>
+<div id="wbTools" class="panel" hidden>
+  <span class="da-note">Whiteboard</span>
+  <button id="wbPen" class="on">✏️ Pen</button>
+  <button id="wbEraser">🧽 Eraser</button>
+  <button id="wbClearBtn" class="danger">Clear</button>
+  <button id="wbDone">Done <kbd>Esc</kbd></button>
+</div>
+<div id="hand" class="panel"></div>
 <div id="rightRail">
-<div id="panel" class="panel">
-  <span id="status">connecting…</span>
+<div id="roomCode" class="panel" hidden></div>
+<div id="panel">
+  <span id="status" class="panel">connecting…</span>
   <div>
     <div id="players" class="panel"></div>
     <div id="me" class="panel">
@@ -46,12 +68,50 @@
 <div id="toolsDock">
   <div id="toolsMenu" class="panel">
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
-    <button id="notesBtn">📝 Private Notes</button>
+    <button id="notesBtn">📝 Notes</button>
     <button id="chatBtn">💬 Chat</button>
+    <button id="scoreBtn">📊 Score</button>
     <button id="timerBtn">⏱️ Timer</button>
-    <button id="wbBtn">🖊️ Whiteboard</button>
+    <button id="measureBtn">📏 Measure</button>
+    <button id="audioBtn">🔊 Sound</button>
+    <button id="resetPanelsBtn" hidden>↺ Reset</button>
+    <button id="wbBtn">🖊️ W-Board</button>
   </div>
-  <div id="whiteboard" class="panel" hidden>
+  <div id="measurePanel" class="panel" hidden>
+    <div id="measureHead" class="panel-head"><b>Measure</b><span id="measureClose" class="close-x">✕</span></div>
+    <div id="measureKinds" class="chipRow">
+      <button class="chip" data-kind="ruler">📏 Ruler</button>
+      <button class="chip" data-kind="circle">⭕ Circle</button>
+      <button class="chip" data-kind="cone">🔺 Cone</button>
+      <button class="chip" data-kind="line">▭ Line</button>
+    </div>
+    <p class="muted">Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
+    <div class="chipRow"><button id="measureClear" class="chip">Clear mine</button><button id="measureClearAll" class="chip" hidden>Clear all</button></div>
+  </div>
+  <div id="audioPanel" class="panel popout" hidden>
+    <div id="audioHead" class="panel-head"><b>Sound</b><span id="audioClose" class="close-x">✕</span></div>
+    <div class="showLabel"><b>Effects</b></div>
+    <div class="volRow"><button id="sfxMute" class="volMute" title="Mute effects">🔊</button><input id="sfxVol" type="range" min="0" max="100" step="1"></div>
+    <div class="showLabel"><b>Music</b></div>
+    <div class="volRow"><button id="musicMute" class="volMute" title="Mute music">🔊</button><input id="musicVol" type="range" min="0" max="100" step="1"></div>
+    <div class="chipRow">
+      <button id="musicToggle" class="chip">▶ Music</button>
+      <button id="musicNext" class="chip">⏭ Next</button>
+      <button id="musicShuffle" class="chip chk">🔀 Shuffle</button>
+    </div>
+    <div id="nowPlaying" class="muted" style="margin-top:6px"></div>
+    <div style="margin-top:6px"><a id="tracksLink" href="#" class="fs-sm">Choose track ▸</a></div>
+    <div style="margin-top:2px"><a id="creditsLink" href="#" class="fs-sm">Credits &amp; licenses ▸</a></div>
+  </div>
+  <div id="creditsPanel" class="panel popout" hidden>
+    <div id="creditsHead" class="panel-head"><b>Credits &amp; licenses</b><span id="creditsClose" class="close-x">✕</span></div>
+    <div id="creditsBody"></div>
+  </div>
+  <div id="tracksPanel" class="panel popout" hidden>
+    <div id="tracksHead" class="panel-head"><b>Choose a track</b><span id="tracksClose" class="close-x">✕</span></div>
+    <div id="tracksBody"></div>
+  </div>
+  <div id="whiteboard" class="panel popout" hidden>
     <div id="wbHead" class="panel-head"><b>Whiteboard</b><span id="wbClose" class="close-x">✕</span></div>
     <div class="chipRow"><button id="wbEnabled" class="chip chk">Show</button></div>
     <div id="wbStyle" class="showLabel"><b>Style</b></div>
@@ -62,16 +122,26 @@
     <div id="wbLocation" class="showLabel"><b>Location (Rides Track Behind Players)</b></div>
     <input id="wbAngle" type="range" min="0" max="360" step="5" value="0" style="width:100%">
   </div>
-  <div id="chat" class="panel" hidden>
+  <div id="chat" class="panel popout" hidden>
     <div id="chatHead" class="panel-head"><b>Chat</b><span id="chatClose" class="close-x">✕</span></div>
     <div id="chatLog"></div>
     <div id="chatInputRow"><input id="chatInput" type="text" placeholder="Message…" maxlength="400"><button id="chatSend">Send</button></div>
   </div>
-  <div id="notes" class="panel" hidden>
+  <div id="notes" class="panel popout" hidden>
     <div id="notesHead" class="panel-head"><b>Private notes</b><span id="notesClose" class="close-x">✕</span></div>
     <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
   </div>
-  <div id="timer" class="panel" hidden>
+  <div id="scorePanel" class="panel popout" hidden>
+    <div id="scoreHead" class="panel-head"><b>Scoreboard</b><span id="scoreClose" class="close-x">✕</span></div>
+    <table id="scoreTable"><tbody id="scoreRows"></tbody></table>
+    <div id="scoreEdit" hidden>
+      <div class="scoreAddRow"><input id="scoreAddName" type="text" placeholder="Add player / team…" maxlength="40"><button id="scoreAdd">Add</button></div>
+      <button id="scoreClear" class="danger">Clear all</button>
+    </div>
+    <div class="scoreNotesLabel">Room notes</div>
+    <textarea id="roomNotes" rows="5" placeholder="GM notes for the room — house rules, current objective…"></textarea>
+  </div>
+  <div id="timer" class="panel popout" hidden>
     <div id="timerHead" class="panel-head"><b>Timer</b><span id="timerClose" class="close-x">✕</span></div>
     <div id="timerMode" class="libTabs">
       <button class="libTab on" data-mode="up">Stopwatch</button>
@@ -88,26 +158,6 @@
   </div>
 </div>
 </div>
-<div id="inspectHint" hidden>Drag to rotate · click or Esc to close</div>
-<div id="inspectColorRow" hidden>
-  <label id="inspectBodyLab">Colour <input type="color" id="inspectColorBody" value="#ffffff"></label>
-  <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
-</div>
-<div id="drawActions" hidden>
-  <span class="da-note">Drag to rotate</span>
-  <button data-place="field-up">To field ↑ face-up <kbd>F</kbd></button>
-  <button data-place="field-down">To field face-down <kbd>D</kbd></button>
-  <button data-place="hand">To hand <kbd>H</kbd></button>
-  <button data-place="deck">Return to deck <kbd>R</kbd></button>
-</div>
-<div id="wbTools" hidden>
-  <span class="da-note">Whiteboard</span>
-  <button id="wbPen" class="on">✏️ Pen</button>
-  <button id="wbEraser">🧽 Eraser</button>
-  <button id="wbClearBtn" class="danger">Clear</button>
-  <button id="wbDone">Done <kbd>Esc</kbd></button>
-</div>
-<div id="hand" class="panel"></div>
 <div id="leftRail">
   <div id="interactDock">
     <div id="interactMenu" class="panel">
@@ -118,7 +168,7 @@
       <button id="showBtn">🃏 Show Hand</button>
       <button id="dropBtn" title="Lay your whole hand on the table">🂠 Drop Hand</button>
     </div>
-    <div id="showPanel" class="panel" hidden>
+    <div id="showPanel" class="panel popout" hidden>
       <div id="showHead" class="panel-head"><b>Show cards</b><span id="showClose" class="close-x">✕</span></div>
       <div class="showLabel">To</div>
       <div id="showAudience" class="chipRow"></div>
@@ -129,7 +179,7 @@
       </div>
       <button id="showHold">Hold to show</button>
     </div>
-    <div id="dropPanel" class="panel" hidden>
+    <div id="dropPanel" class="panel popout" hidden>
       <div id="dropHead" class="panel-head"><b>Drop hand</b><span id="dropClose" class="close-x">✕</span></div>
       <div class="note">Lay your whole hand on the table, in front of you.</div>
       <div class="chipRow">
@@ -139,9 +189,37 @@
     </div>
   </div>
 </div>
-<div id="membersPanel" class="panel" hidden>
+<div id="membersPanel" class="panel popout" hidden>
   <div id="membersHead" class="panel-head"><b>Members</b><span id="membersClose" class="close-x">✕</span></div>
+  <div id="unclaimedHands" class="unclaimed"></div>
   <ul id="memberList"></ul>
+</div>
+
+
+
+<div id="tableModal" class="panel popout" hidden>
+  <div id="tableHead" class="panel-head"><b>Customize Table</b><span id="tableClose" class="close-x">✕</span></div>
+
+  <div class="tableBody">
+  <div class="secLabel">Dimensions &amp; Color</div>
+  <div class="dimGrid">
+    <label for="tableW">Width</label><span></span><label for="tableD">Depth</label>
+    <input id="tableW" type="number" min="8" max="40" step="1"><span class="dimX">×</span><input id="tableD" type="number" min="6" max="32" step="1">
+  </div>
+  <div class="sizeRow"><label>Felt</label><input type="color" id="tableFelt" value="#2f6b4f"></div>
+
+  <div class="secLabel">Scale / Measurement Options</div>
+  <div class="sizeRow"><label>Unit</label><div id="scaleUnits" class="chipRow">
+    <button class="chip" data-unit="in" data-step="0.5">inch</button>
+    <button class="chip" data-unit="cm" data-step="1">cm</button>
+    <button class="chip" data-unit="mm" data-step="1">mm</button>
+    <button class="chip" data-unit="__custom__">Custom…</button>
+  </div></div>
+  <div class="sizeRow" id="scaleCustomRow" hidden><label></label><input id="scaleUnitCustom" class="field" type="text" maxlength="8" placeholder="unit label, e.g. hex"></div>
+  <div class="sizeRow"><label>Round to</label><input id="scaleStep" type="number" min="0.001" step="0.05"><span class="muted" id="scaleStepUnit"></span></div>
+  <div class="muted calibLabel">Calibrate — what's the table's real width?</div>
+  <div class="sizeRow"><input id="scaleWidthVal" class="field" type="text" inputmode="decimal" placeholder="e.g. 48"><span class="muted" id="scaleWidthUnit"></span><button id="scaleWidthSet" class="chip">Set</button></div>
+  </div>
 </div>
 
 <div id="skyPickModal" hidden>
@@ -157,12 +235,7 @@
   </div>
 </div>
 
-<div id="tableModal" class="panel" hidden>
-  <div id="tableHead" class="panel-head"><b>Table size</b><span id="tableClose" class="close-x">✕</span></div>
-  <div class="sizeRow"><label>Width</label><input id="tableW" type="number" min="8" max="40" step="1" style="width:48px"></div>
-  <div class="sizeRow"><label>Depth</label><input id="tableD" type="number" min="6" max="32" step="1" style="width:48px"></div>
-</div>
-
+<!-- Colyseus client (UMD global `Colyseus`) -->
 <!-- library management panel (editor only) -->
 <div id="libraryPanel" hidden>
   <div class="modalCard libraryCard">
@@ -357,8 +430,6 @@
     </div>
   </div>
 </div>
-
-<!-- Colyseus client (UMD global `Colyseus`) -->
 <script src="/vendor/colyseus.js"></script>
 <!-- Three.js via import map (kept ESM) -->
 <script type="importmap">

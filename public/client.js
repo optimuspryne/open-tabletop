@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
-import { KIND, OVERLAY, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel } from './graphics.js';
+import { KIND, OVERLAY, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture } from './graphics.js';
 import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
@@ -10,6 +10,12 @@ window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers
 const byId = (id) => document.getElementById(id);
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => document.querySelectorAll(selector);
+// Escape a string for safe interpolation into an innerHTML fragment.
+const escapeHtml = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Per-room role → numeric rank (owner > gm > helper > player); used for gating.
+const rankOf = (role) => ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
+// A <button> from label + click handler (+ optional class) — the shared DOM factory.
+const makeButton = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 
 // Wrap every number input in a themed − / + stepper (universal number-field style).
 // The original input is kept in place, so existing byId() reads still work; the
@@ -553,7 +559,7 @@ const applyTransform = (mesh, s) => {
     const creditsPanel = byId('creditsPanel');
     const renderCredits = () => {
       const body = byId('creditsBody'); if (!body) return;
-      const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const esc = escapeHtml;
       const A = (t, u) => u ? ('<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(t) + '</a>') : esc(t);
       const ul = 'style="margin:4px 0 10px;padding-left:18px;font-size:var(--fs-sm)"';
       let h = '';
@@ -569,7 +575,7 @@ const applyTransform = (mesh, s) => {
     const renderTracks = () => {
       const body = byId('tracksBody'); if (!body) return;
       if (!MUSIC.length) { body.innerHTML = '<div class="muted">No tracks added yet.</div>'; return; }
-      const esc = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+      const esc = escapeHtml;
       const cur = currentTrackIndex();
       body.innerHTML = MUSIC.map((t, i) => '<button class="trackItem" data-i="' + i + '">' + esc(t.title) + '</button>').join('');
       body.querySelectorAll('.trackItem').forEach(btn => { btn.classList.toggle('on', +btn.dataset.i === cur); btn.onclick = () => { playTrack(+btn.dataset.i); syncMusicBtn(); renderTracks(); }; });
@@ -995,7 +1001,7 @@ renderer.domElement.addEventListener('pointerdown', e => {
       setPointer(e);
       const uv = wbHitUV();
       if (uv) {
-        wbCur = { pts: [uv[0], uv[1]], color: wbTool === 'eraser' ? wbBg() : wbMyColor(), width: wbTool === 'eraser' ? 0.03 : 0.005, erase: wbTool === 'eraser' };
+        wbCur = { pts: [uv[0], uv[1]], color: wbTool === 'eraser' ? wbBg() : myColor('#e8e6e0'), width: wbTool === 'eraser' ? 0.03 : 0.005, erase: wbTool === 'eraser' };
         wbActive = true;
         renderer.domElement.setPointerCapture(e.pointerId);
       }
@@ -1410,7 +1416,7 @@ function applySeat(seat) {
 // gates every one of these actions too, so hiding a button protects no one; it
 // just keeps people from clicking things that would be ignored.
 function applyRole(role) {
-  myRank = ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
+  myRank = rankOf(role);
   const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('diceBtn', 1);                                          // roll dice: Helper+
@@ -1439,7 +1445,7 @@ function applyBoardRole() {
 
 function renderScores() {
   const tbody = byId('scoreRows'); if (!tbody || !room || !room.state || !room.state.scores) return;
-  const mk = (t, fn, cls) => { const b = document.createElement('button'); b.textContent = t; if (cls) b.className = cls; b.onclick = fn; return b; };
+  const mk = makeButton;
   const canEdit = myRank >= 1;
   tbody.replaceChildren();
   room.state.scores.forEach((row, id) => {
@@ -1510,93 +1516,9 @@ function removeFan(sid) {
 // A simple standing marker at each seat: a colored base + a billboard showing
 // the player's avatar (or a default silhouette) and their name, facing the table.
 const markers = new Map(); // sid -> THREE.Group
-function makePlayerTexture(player) {
-  const width = 256, height = 320;
-  const { canvas, ctx } = makeCanvas(width, height);
-
-  const draw = (img) => {
-    ctx.clearRect(0, 0, width, height);
-    // Card-ish background with a border tinted in the player's colour.
-    ctx.fillStyle = 'rgba(20,24,29,0.9)';
-    roundRect(ctx, 6, 6, width - 12, height - 12, 16);
-    ctx.fill();
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = player.color;
-    roundRect(ctx, 6, 6, width - 12, height - 12, 16);
-    ctx.stroke();
-    // Avatar image (or a default silhouette) clipped to a circle.
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(width / 2, 120, 78, 0, 7);
-    ctx.closePath();
-    ctx.clip();
-    if (img) {
-      ctx.drawImage(img, width / 2 - 78, 42, 156, 156);
-    } else {
-      ctx.fillStyle = '#3a4048';
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#c8ccd2';
-      ctx.beginPath(); ctx.arc(width / 2, 104, 34, 0, 7); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(width / 2, 210, 62, 52, 0, Math.PI, 0); ctx.fill();
-    }
-    ctx.restore();
-    ctx.strokeStyle = player.color;
-    ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.arc(width / 2, 120, 78, 0, 7); ctx.stroke();
-    // Name.
-    ctx.fillStyle = '#e8e6e0';
-    ctx.font = 'bold 30px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText((player.name || 'Player').slice(0, 14), width / 2, 270);
-    if (player.showing > 0) { // public "is revealing cards" badge — count only, never the content
-      ctx.fillStyle = player.color;
-      roundRect(ctx, width / 2 - 64, 12, 128, 30, 15);
-      ctx.fill();
-      ctx.fillStyle = '#14181d';
-      ctx.font = 'bold 18px system-ui, sans-serif';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('SHOWING ' + player.showing, width / 2, 28);
-      ctx.textBaseline = 'alphabetic';
-    }
-    tex.needsUpdate = true;
-  };
-
-  const tex = cTex(canvas);
-  draw(null);
-  if (player.avatar) { const img = new Image(); img.onload = () => draw(img); img.src = player.avatar; }
-  return tex;
-}
-
-// Trace a rounded-rectangle path on ctx (caller then fill()s or stroke()s it).
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-// A small floating name-tag texture: translucent pill, border in the player's
-// colour, their name centred. Shown over a piece while someone else holds it.
-function nameTag(name, color) {
-  const width = 256, height = 80;
-  const { canvas, ctx } = makeCanvas(width, height);
-  ctx.fillStyle = 'rgba(20,24,29,0.9)';
-  roundRect(ctx, 4, 4, width - 8, height - 8, 18);
-  ctx.fill();
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = color;
-  roundRect(ctx, 4, 4, width - 8, height - 8, 18);
-  ctx.stroke();
-  ctx.fillStyle = '#e8e6e0';
-  ctx.font = 'bold 34px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText((name || 'Player').slice(0, 14), width / 2, height / 2 + 2);
-  return cTex(canvas);
-}
+// makePlayerTexture / nameTag / makeYouChipTexture (the seat marker, held-piece
+// name tag, and "YOU" chip textures) live in graphics.js with the other canvas
+// texture builders; this file just places what they return in the scene.
 
 // Floating name tags over held pieces — everyone sees who's moving what. Created
 // and torn down as ownership changes; the render loop keeps each one over its
@@ -1605,9 +1527,7 @@ const heldLabels = new Map(); // pieceId -> THREE.Sprite
 function updateHeldLabel(id, owner) {
   const existing = heldLabels.get(id);
   if (existing) {
-    scene.remove(existing);
-    existing.material.map.dispose();
-    existing.material.dispose();
+    disposeSprite(existing);
     heldLabels.delete(id);
   }
   if (!owner || owner === mySession) return;
@@ -1694,7 +1614,7 @@ function selectOverlay(id) {
 function clearDragPreview(sid) {
   const e = dragPreviews.get(sid); if (!e) return;
   scene.remove(e.group); disposeGroup(e.group);
-  if (e.label) { scene.remove(e.label); e.label.material.map.dispose(); e.label.material.dispose(); }
+  if (e.label) disposeSprite(e.label);
   dragPreviews.delete(sid);
 }
 
@@ -1707,7 +1627,7 @@ function overlayAddMsg(ax, az, bx, bz) {
   return m;
 }
 
-function myColor() { const p = room && room.state.players.get(mySession); return (p && p.color) || '#ffffff'; }
+function myColor(fallback = '#ffffff') { const p = room && room.state.players.get(mySession); return (p && p.color) || fallback; }
 function overlayLabelSprite(text, color, mx, mz) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: nameTag(text, color), transparent: true, depthTest: false }));
   s.scale.set(CONFIG.label.w, CONFIG.label.h, 1);
@@ -1717,6 +1637,8 @@ function overlayLabelSprite(text, color, mx, mz) {
 }
 function overlayText(o) { return formatMeasure(Math.hypot(o.x2 - o.x, o.z2 - o.z), room.state.scale); }
 function disposeGroup(g) { g.traverse(n => { if (n.isMesh) { n.geometry.dispose(); n.material.dispose(); } }); }
+// Tear down a label/name-tag sprite: pull it from the scene and free its texture + material.
+function disposeSprite(sprite) { scene.remove(sprite); sprite.material.map.dispose(); sprite.material.dispose(); }
 function addOverlay(id, o) {
   removeOverlay(id);
   const kind = OVERLAY[o.kind]; if (!kind) return;
@@ -1733,7 +1655,7 @@ function addOverlay(id, o) {
 function removeOverlay(id) {
   const e = overlayObjs.get(id); if (!e) return;
   scene.remove(e.group); disposeGroup(e.group);
-  if (e.label) { scene.remove(e.label); e.label.material.map.dispose(); e.label.material.dispose(); }
+  if (e.label) disposeSprite(e.label);
   overlayObjs.delete(id);
 }
 function relabelOverlays() { // scale changed → recompute every overlay's measure label
@@ -1750,7 +1672,7 @@ function overlayPoint(e) { // pointer → world (x,z) on the felt surface (the p
 }
 function clearPreview() {
   if (previewGroup) { scene.remove(previewGroup); disposeGroup(previewGroup); previewGroup = null; }
-  if (previewLabel) { scene.remove(previewLabel); previewLabel.material.map.dispose(); previewLabel.material.dispose(); previewLabel = null; }
+  if (previewLabel) { disposeSprite(previewLabel); previewLabel = null; }
 }
 function drawPreview(ax, az, bx, bz) {
   clearPreview();
@@ -1830,17 +1752,6 @@ function removePlayerVis(sid) {
 // A flat "YOU" chip laid on the felt at your own seat, so you know which edge is
 // yours (your standing billboard is skipped — no need to see yourself).
 let myChip = null;
-function makeYouChipTexture(color) {
-  const { canvas, ctx } = makeCanvas(128, 128);
-  ctx.clearRect(0, 0, 128, 128);
-  ctx.beginPath(); ctx.arc(64, 64, 58, 0, 7);
-  ctx.fillStyle = 'rgba(20,24,29,0.5)'; ctx.fill();
-  ctx.lineWidth = 8; ctx.strokeStyle = color; ctx.stroke();
-  ctx.fillStyle = color; ctx.font = 'bold 42px system-ui, sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText('YOU', 64, 66);
-  return cTex(canvas);
-}
 function refreshMyChip() {
   if (myChip) { scene.remove(myChip); myChip = null; }
   if (!room || !room.state) return;
@@ -1924,7 +1835,6 @@ function syncWhiteboard(s) {
 }
 
 // --- drawing: strokes are [x0,y0,x1,y1,...] in canvas-normalized [0,1] (y top-down) ---
-function wbMyColor() { const p = room.state.players.get(mySession); return (p && p.color) || '#e8e6e0'; }
 function drawSegment(x0, y0, x1, y1, color, width) {
   ensureWbCanvas();
   const W = wbCanvas.width, H = wbCanvas.height;
@@ -2087,8 +1997,8 @@ function renderMembers(list) {
   ul.replaceChildren();
   const me = room.state.players.get(mySession);
   const myName = me ? me.name : '';
-  const myRank = ({ owner: 3, gm: 2, helper: 1, player: 0 })[me ? me.role : 'player'] ?? 0;
-  const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = fn; return b; };
+  const myRank = rankOf(me ? me.role : 'player');
+  const btn = makeButton;
   if (!list.length) { const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No members.'; ul.appendChild(li); return; }
   for (const m of list) {
     const li = document.createElement('li'); li.className = 'memberRow';
@@ -2191,7 +2101,7 @@ const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused ea
     const p = pings[i], t = (performance.now() - p.start) / CONFIG.ping.dur;
     if (t >= 1) {
       scene.remove(p.ring); p.ring.geometry.dispose(); p.ring.material.dispose();
-      scene.remove(p.label); p.label.material.map.dispose(); p.label.material.dispose();
+      disposeSprite(p.label);
       pings.splice(i, 1);
       continue;
     }

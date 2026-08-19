@@ -14,7 +14,7 @@ const FILLERS = {}; // kind → fn(it, clone) that pre-fills the Add form (regis
 function openEditModal(kind, it, clone) {
   if (kind === 'deck') return openDeckEdit(it, clone); // decks fetch their cards first (async), then fill
   editCtx = { kind, id: clone ? null : it.id, model: kind === 'prop' ? (it.props && it.props.model) : it.model, tex: it.tex };
-  const modal = $('addModal'); if (!modal) return;
+  const modal = byId('addModal'); if (!modal) return;
   modal.hidden = false;
   const tab = kind === 'prop' ? 'objects' : (it.model ? 'modelboards' : 'imgboards'); // boards split into two tabs
   const tb = modal.querySelector(`.libTab[data-tab="${tab}"]`);
@@ -23,14 +23,14 @@ function openEditModal(kind, it, clone) {
 }
 let pendingDeck = null; // deck Edit/Clone fetches the deck's cards first, then fills the form on the deckData response
 function openDeckEdit(it, clone) {
-  const modal = $('addModal'); if (!modal) return;
+  const modal = byId('addModal'); if (!modal) return;
   modal.hidden = false;
   pendingDeck = { it, clone };
   ROOM.send('getDeck', { id: it.id });
 }
 import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS } from '/shared/pieces.js';
-const $ = (id) => document.getElementById(id);
-const btn = (label, fn, cls) => { const b = document.createElement('button'); b.textContent = label; if (cls) b.className = cls; b.onclick = fn; return b; };
+const byId = (id) => document.getElementById(id);
+const btn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
 function wireTabs(root) {
   const tabs = [...root.querySelectorAll('.libTab')];
@@ -138,8 +138,8 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
 
   li._spawn = () => {
     const n = qty.get(); const cp = {};
-    const c = getColor(); if (c != null) { cp.color = c; if (dice) cp.textColor = contrast(c); }
-    const t = getTeam(); if (t != null) cp.team = t;
+    const color = getColor(); if (color != null) { cp.color = color; if (dice) cp.textColor = contrast(color); }
+    const team = getTeam(); if (team != null) cp.team = team;
     for (let i = 0; i < n; i++) send(cp);
   };
 
@@ -177,23 +177,26 @@ const spawnOf = {
   prop: (it) => ROOM.send('spawn', { type: 'prop', props: it.props }),
 };
 
+// A lazy-loaded thumbnail <img> (optional extra class), and an async filler that
+// drops one into a preview box, marking the box `.empty` if the promise yields nothing.
+const thumbImg = (src, cls) => { const im = document.createElement('img'); im.className = 'libThumb' + (cls ? ' ' + cls : ''); im.loading = 'lazy'; if (src) im.src = src; return im; };
+const fillAsync = (box, promise) => { const im = thumbImg(); box.append(im); promise.then((u) => { if (u) im.src = u; else box.classList.add('empty'); }).catch(() => box.classList.add('empty')); };
+
 // Build the preview image(s) for a card. Decks show back + first-front; skyboxes,
 // boards and props show a thumbnail (boards/props render async); scenes get a glyph.
 function previewEl(kind, it) {
   const wrap = document.createElement('div'); wrap.className = 'libPreview';
-  const img = (src, cls) => { const im = document.createElement('img'); im.className = 'libThumb' + (cls ? ' ' + cls : ''); im.loading = 'lazy'; if (src) im.src = src; return im; };
-  const asyncThumb = (promise) => { const im = img(); wrap.append(im); promise.then((u) => { if (u) im.src = u; else wrap.classList.add('empty'); }).catch(() => wrap.classList.add('empty')); };
   if (kind === 'deck') {
     wrap.classList.add('deckPreview');
-    wrap.append(img(cardPreviewURL(it.back), 'back'), img(cardPreviewURL(it.first), 'front'));
+    wrap.append(thumbImg(cardPreviewURL(it.back), 'back'), thumbImg(cardPreviewURL(it.first), 'front'));
   } else if (kind === 'sky') {
     let src = it.url;
     if (typeof src === 'string' && src[0] === '{') { try { src = JSON.parse(src).f[0]; } catch { src = null; } } // cubemap → first face
-    wrap.append(img(src));
+    wrap.append(thumbImg(src));
   } else if (kind === 'board') {
-    asyncThumb(boardPreviewURL(it.preview));
+    fillAsync(wrap, boardPreviewURL(it.preview));
   } else if (kind === 'prop') {
-    asyncThumb(propPreviewURL(it.props || {}));
+    fillAsync(wrap, propPreviewURL(it.props || {}));
   } else { // scene — no single image
     wrap.classList.add('empty'); wrap.textContent = '🎬';
   }
@@ -201,13 +204,13 @@ function previewEl(kind, it) {
 }
 
 function renderList(kind, list) {
-  const ul = $(LIST_UL[kind]); if (!ul) return;
+  const ul = byId(LIST_UL[kind]); if (!ul) return;
   ul.replaceChildren();
   if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + colour + multi-select for spawnable assets
   if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet.'; ul.appendChild(li); return; }
   for (const it of list) {
     const badge = document.createElement('span'); badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv'); badge.textContent = it.isPublic ? 'public' : 'private';
-    const isEditor = !!$('addModal'); // Edit/Clone need the editor's Add modal — hidden at the table where clicking them does nothing
+    const isEditor = !!byId('addModal'); // Edit/Clone need the editor's Add modal — hidden at the table where clicking them does nothing
     const canEdit = kind === 'prop' || kind === 'board' || kind === 'deck'; // objects, boards, and (limited) decks round-trip through the Add form
     const adminActs = window.OTT_IS_ADMIN ? [ // curation is site-admin only; GMs/helpers just spawn/apply
       ...(isEditor && canEdit ? [btn('Edit', () => openEditModal(kind, it, false)), btn('Clone', () => openEditModal(kind, it, true))] : []),
@@ -240,12 +243,12 @@ function renderList(kind, list) {
       ul.appendChild(li);
     }
   }
-  const lp = $('libraryPanel'); if (lp && lp._applySearch) lp._applySearch();
+  const lp = byId('libraryPanel'); if (lp && lp._applySearch) lp._applySearch();
 }
 
 // client.js fans the three list messages here (and still renders the modal saved-lists).
 const listCache = {};
-window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); if (kind === 'sky') { const m = $('skyPickModal'); if (m && !m.hidden) renderSkyPick(); } };
+window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); if (kind === 'sky') { const m = byId('skyPickModal'); if (m && !m.hidden) renderSkyPick(); } };
 window.onLibraryAdmin = () => { for (const k in listCache) renderList(k, listCache[k]); }; // admin status arrived → re-render
 
 // ---- built-in library (read-only: spawn the bundled pieces) ----------------
@@ -260,30 +263,29 @@ function builtinCard(previewNode, title, label, fn) {
   return li;
 }
 const previewBox = (extraClass) => { const w = document.createElement('div'); w.className = 'libPreview' + (extraClass ? ' ' + extraClass : ''); return w; };
-const thumbImg = (src) => { const im = document.createElement('img'); im.className = 'libThumb'; im.loading = 'lazy'; if (src) im.src = src; return im; };
-// Fill a preview box asynchronously (models load first), falling back to an empty slot.
-const fillAsync = (box, promise) => { const im = thumbImg(); box.append(im); promise.then((u) => { if (u) im.src = u; else box.classList.add('empty'); }).catch(() => box.classList.add('empty')); };
+// The url a built-in sky applies: a cubemap JSON blob, or its plain equirect url.
+const skyRef = (s) => s.faces ? JSON.stringify({ t: 'cube', f: s.faces }) : (s.url || '');
 
 function renderBuiltin() {
-  const dice = $('biDice'); dice.replaceChildren(); spawnBar(dice);
+  const dice = byId('biDice'); dice.replaceChildren(); spawnBar(dice);
   for (const sides of DIE_SIDES) {
     const box = previewBox(); box.append(thumbImg(diePreviewURL(sides)));
     dice.append(spawnCard({ preview: box, title: 'd' + sides, color: 'palette', dice: true,
       send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides, ...cp } }) }));
   }
 
-  const decks = $('biDecks'); decks.replaceChildren(); spawnBar(decks);
+  const decks = byId('biDecks'); decks.replaceChildren(); spawnBar(decks);
   { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
     decks.append(spawnCard({ preview: box, title: 'Standard 52-card', color: 'none',
       send: () => ROOM.send('spawn', { type: 'deck', props: {} }) })); }
 
-  const boards = $('biBoards'); boards.replaceChildren();
+  const boards = byId('biBoards'); boards.replaceChildren();
   for (const key of Object.keys(BOARDS)) {
     const box = previewBox(); fillAsync(box, boardPreviewURL(BOARDS[key].model));
     boards.append(builtinCard(box, BOARDS[key].name, 'Spawn', () => ROOM.send('spawn', { type: 'board', props: { board: key } })));
   }
 
-  const objs = $('biObjects'); objs.replaceChildren(); spawnBar(objs);
+  const objs = byId('biObjects'); objs.replaceChildren(); spawnBar(objs);
   for (const p of PROP_LIST) {
     const box = previewBox(); fillAsync(box, propPreviewURL({ shape: p.id }));
     const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colours
@@ -291,28 +293,28 @@ function renderBuiltin() {
       send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
   }
 
-  const sky = $('biSky'); sky.replaceChildren();
+  const sky = byId('biSky'); sky.replaceChildren();
   for (const s of (window.OTT_BUILTIN_SKIES || [])) {
-    const ref = s.faces ? JSON.stringify({ t: 'cube', f: s.faces }) : (s.url || '');
+    const ref = skyRef(s);
     const box = previewBox(); box.append(thumbImg(s.faces ? s.faces[0] : s.url));
     sky.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
   }
-  const bm = $('builtinModal'); if (bm && bm._applySearch) bm._applySearch();
+  const bm = byId('builtinModal'); if (bm && bm._applySearch) bm._applySearch();
 }
 
 // Room Controls → Skybox: a two-tab picker (built-in + custom), apply to the room.
 function renderSkyPick() {
-  const bi = $('skyPickBuiltin');
+  const bi = byId('skyPickBuiltin');
   if (bi) {
     bi.replaceChildren();
     bi.append(builtinCard(previewBox('empty'), 'Default (none)', 'Apply', () => ROOM.send('skybox', { url: '' })));
     for (const s of (window.OTT_BUILTIN_SKIES || [])) {
-      const ref = s.faces ? JSON.stringify({ t: 'cube', f: s.faces }) : (s.url || '');
+      const ref = skyRef(s);
       const box = previewBox(); box.append(thumbImg(s.faces ? s.faces[0] : s.url));
       bi.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
     }
   }
-  const cu = $('skyPickCustom');
+  const cu = byId('skyPickCustom');
   if (cu) {
     cu.replaceChildren();
     const list = listCache.sky || [];
@@ -338,7 +340,7 @@ function sendDeck(back, fronts, name, spawn, editId) {
 const showCardPrev = (el, ref) => { const u = cardPreviewURL(ref); el.style.backgroundImage = u ? `url("${u}")` : 'none'; };
 // Turn a .uploadSq (with a hidden <input type=file> inside) into a click-to-upload tile.
 function wireUploadSq(inputId, isGlb, onChange) {
-  const input = $(inputId), sq = input.parentElement;
+  const input = byId(inputId), sq = input.parentElement;
   sq.addEventListener('click', () => input.click());
   input.addEventListener('change', () => {
     const f = input.files[0];
@@ -349,90 +351,90 @@ function wireUploadSq(inputId, isGlb, onChange) {
     if (onChange) onChange();
   });
 }
-const clearSq = (inputId) => { const input = $(inputId), sq = input.parentElement; input.value = ''; sq.classList.remove('filled'); sq.style.backgroundImage = 'none'; sq.style.backgroundColor = ''; };
+const clearSq = (inputId) => { const input = byId(inputId), sq = input.parentElement; input.value = ''; sq.classList.remove('filled'); sq.style.backgroundImage = 'none'; sq.style.backgroundColor = ''; };
 
 function wireAddDeck() {
   // text decks — refs carry four colours: text / fill / accent(border) / content
-  const backRef = () => 'tback:' + $('adBackFill').value + ':' + $('adBackTextC').value + ':' + $('adBackAccent').value + ':' + $('adBackText').value.trim();
-  const frontRef = (face) => 'text:' + $('adFrontTextC').value + ':' + $('adFrontFill').value + ':' + $('adFrontAccent').value + ':' + face;
+  const backRef = () => 'tback:' + byId('adBackFill').value + ':' + byId('adBackTextC').value + ':' + byId('adBackAccent').value + ':' + byId('adBackText').value.trim();
+  const frontRef = (face) => 'text:' + byId('adFrontTextC').value + ':' + byId('adFrontFill').value + ':' + byId('adFrontAccent').value + ':' + face;
   const refreshText = () => {
-    showCardPrev($('adTxtBackPrev'), backRef());
-    const faces = parseFaces($('adFaces').value);
-    showCardPrev($('adTxtFrontPrev'), frontRef(faces[0] || 'Sample'));
+    showCardPrev(byId('adTxtBackPrev'), backRef());
+    const faces = parseFaces(byId('adFaces').value);
+    showCardPrev(byId('adTxtFrontPrev'), frontRef(faces[0] || 'Sample'));
   };
   ['adBackFill', 'adBackTextC', 'adBackAccent', 'adBackText', 'adFrontFill', 'adFrontTextC', 'adFrontAccent', 'adFaces']
-    .forEach((id) => $(id).addEventListener('input', refreshText));
+    .forEach((id) => byId(id).addEventListener('input', refreshText));
   refreshText();
   // load fronts from a .csv/.txt file (parseFaces already handles comma / line / JSON)
-  $('adFacesFile').addEventListener('change', () => {
-    const f = $('adFacesFile').files[0]; if (!f) return;
-    const r = new FileReader(); r.onload = () => { $('adFaces').value = String(r.result || '').trim(); refreshText(); }; r.readAsText(f);
+  byId('adFacesFile').addEventListener('change', () => {
+    const f = byId('adFacesFile').files[0]; if (!f) return;
+    const r = new FileReader(); r.onload = () => { byId('adFaces').value = String(r.result || '').trim(); refreshText(); }; r.readAsText(f);
   });
   // reset every field + preview to a clean slate after a save
   const clearDeckForm = () => {
-    ['adImgName', 'adTxtName', 'adBackText', 'adFaces', 'adFacesFile'].forEach((id) => { $(id).value = ''; });
-    $('adBackFill').value = '#7d2b2b'; $('adBackTextC').value = '#f4f1ea'; $('adBackAccent').value = '#dddddd';
-    $('adFrontFill').value = '#fbfbf7'; $('adFrontTextC').value = '#141414'; $('adFrontAccent').value = '#dddddd';
+    ['adImgName', 'adTxtName', 'adBackText', 'adFaces', 'adFacesFile'].forEach((id) => { byId(id).value = ''; });
+    byId('adBackFill').value = '#7d2b2b'; byId('adBackTextC').value = '#f4f1ea'; byId('adBackAccent').value = '#dddddd';
+    byId('adFrontFill').value = '#fbfbf7'; byId('adFrontTextC').value = '#141414'; byId('adFrontAccent').value = '#dddddd';
     clearSq('adImgBack'); clearSq('adImgFronts'); editCtx = null;
     refreshText(); // re-render the text previews to their reset defaults (not blank until next keystroke)
-    $('adImgNoCrop').classList.remove('on'); $('adImgPad').value = '#ffffff'; $('adImgPadRow').hidden = true;
+    byId('adImgNoCrop').classList.remove('on'); byId('adImgPad').value = '#ffffff'; byId('adImgPadRow').hidden = true;
   };
   const saveText = (spawn) => {
-    const name = $('adTxtName').value.trim();
+    const name = byId('adTxtName').value.trim();
     if (!name) return alert('Name the deck first.');
-    const faces = parseFaces($('adFaces').value);
+    const faces = parseFaces(byId('adFaces').value);
     if (!faces.length) return alert('Add at least one front (one per line, comma-separated, or JSON).');
     sendDeck(backRef(), faces.map(frontRef), name, spawn, editCtx && editCtx.id);
     clearDeckForm();
-    $('addModal').hidden = true;
+    byId('addModal').hidden = true;
   };
-  $('adTxtSave').onclick = () => saveText(false);
-  $('adTxtSpawn').onclick = () => saveText(true);
+  byId('adTxtSave').onclick = () => saveText(false);
+  byId('adTxtSpawn').onclick = () => saveText(true);
 
   // image decks — click-tiles for back + fronts; the tile preview mirrors the crop mode
   const applyImgFit = () => {
-    const noCrop = $('adImgNoCrop').classList.contains('on');
-    ['adImgBack', 'adImgFronts'].forEach((id) => { const sq = $(id).parentElement; sq.style.backgroundSize = noCrop ? 'contain' : 'cover'; sq.style.backgroundColor = noCrop ? $('adImgPad').value : ''; });
+    const noCrop = byId('adImgNoCrop').classList.contains('on');
+    ['adImgBack', 'adImgFronts'].forEach((id) => { const sq = byId(id).parentElement; sq.style.backgroundSize = noCrop ? 'contain' : 'cover'; sq.style.backgroundColor = noCrop ? byId('adImgPad').value : ''; });
   };
   wireUploadSq('adImgBack', false, applyImgFit);
   wireUploadSq('adImgFronts', false, applyImgFit);
-  $('adImgNoCrop').onclick = () => { $('adImgNoCrop').classList.toggle('on'); $('adImgPadRow').hidden = !$('adImgNoCrop').classList.contains('on'); applyImgFit(); };
-  $('adImgPad').addEventListener('input', applyImgFit);
+  byId('adImgNoCrop').onclick = () => { byId('adImgNoCrop').classList.toggle('on'); byId('adImgPadRow').hidden = !byId('adImgNoCrop').classList.contains('on'); applyImgFit(); };
+  byId('adImgPad').addEventListener('input', applyImgFit);
   const saveImg = async (spawn) => {
-    const name = $('adImgName').value.trim();
+    const name = byId('adImgName').value.trim();
     if (!name) return alert('Name the deck first.');
     const editingDeck = editCtx && editCtx.kind === 'deck';
-    const frontFiles = [...$('adImgFronts').files];
+    const frontFiles = [...byId('adImgFronts').files];
     if (!frontFiles.length && !editingDeck) return alert('Choose at least one front image.'); // a fresh deck needs fronts
-    const noCrop = $('adImgNoCrop').classList.contains('on');      // 'contain' fits the whole image (no crop); pad fills the leftover
+    const noCrop = byId('adImgNoCrop').classList.contains('on');      // 'contain' fits the whole image (no crop); pad fills the leftover
     const fit = noCrop ? 'contain' : undefined;
-    const pad = noCrop ? $('adImgPad').value : undefined;
+    const pad = noCrop ? byId('adImgPad').value : undefined;
     try {
       let back;
-      if ($('adImgBack').files[0]) back = await uploadImage($('adImgBack').files[0], undefined, undefined, fit, 'decks', pad);
+      if (byId('adImgBack').files[0]) back = await uploadImage(byId('adImgBack').files[0], undefined, undefined, fit, 'decks', pad);
       else back = editingDeck ? editCtx.back : 'back'; // keep the existing back when editing/cloning
       let fronts;
       if (frontFiles.length) { fronts = []; for (const f of frontFiles) fronts.push(await uploadImage(f, undefined, undefined, fit, 'decks', pad)); }
       else fronts = editCtx.fronts; // image-deck edit only swaps the back — keep the existing fronts
       sendDeck(back, fronts, name, spawn, editCtx && editCtx.id);
       clearDeckForm();
-      $('addModal').hidden = true;
+      byId('addModal').hidden = true;
     } catch (e) { alert('Image upload failed.'); }
   };
-  $('adImgSave').onclick = () => saveImg(false);
-  $('adImgSpawn').onclick = () => saveImg(true);
+  byId('adImgSave').onclick = () => saveImg(false);
+  byId('adImgSpawn').onclick = () => saveImg(true);
   FILLERS.imgdeck = (d, clone) => { // Edit/Clone image deck: name + swappable back; fronts are kept as-is
-    $('adImgName').value = clone ? '' : d.name;
+    byId('adImgName').value = clone ? '' : d.name;
     clearSq('adImgBack'); clearSq('adImgFronts');
-    if (d.back && d.back !== 'back') $('adImgBack').parentElement.style.backgroundImage = `url("${d.back}")`;
+    if (d.back && d.back !== 'back') byId('adImgBack').parentElement.style.backgroundImage = `url("${d.back}")`;
   };
   FILLERS.txtdeck = (d, clone) => { // Edit/Clone text deck: back text/colours + front colours + faces (decoded from the refs)
-    $('adTxtName').value = clone ? '' : d.name;
+    byId('adTxtName').value = clone ? '' : d.name;
     const b = parseCardFront(d.back);
-    if (b.kind === 'tback') { $('adBackFill').value = b.bg; $('adBackTextC').value = b.textColor; $('adBackAccent').value = b.accent; $('adBackText').value = b.text; }
+    if (b.kind === 'tback') { byId('adBackFill').value = b.bg; byId('adBackTextC').value = b.textColor; byId('adBackAccent').value = b.accent; byId('adBackText').value = b.text; }
     const f0 = parseCardFront(d.fronts[0] || '');
-    if (f0.kind === 'text') { $('adFrontTextC').value = f0.color; $('adFrontFill').value = f0.bg; $('adFrontAccent').value = f0.accent; }
-    $('adFaces').value = d.fronts.map((r) => { const f = parseCardFront(r); return f.kind === 'text' ? f.text : r; }).join('\n');
+    if (f0.kind === 'text') { byId('adFrontTextC').value = f0.color; byId('adFrontFill').value = f0.bg; byId('adFrontAccent').value = f0.accent; }
+    byId('adFaces').value = d.fronts.map((r) => { const f = parseCardFront(r); return f.kind === 'text' ? f.text : r; }).join('\n');
     refreshText();
   };
 }
@@ -444,57 +446,57 @@ function wireAddBoard() {
   // saveBoard inserts to the library (no spawn); Save + Spawn also swaps it onto the table.
   const save = (spec, name, spawn) => { ROOM.send('saveBoard', { name, board: spec, editId: editCtx && editCtx.id }); if (spawn) ROOM.send('spawn', { type: 'board', props: spec }); };
   const clearBoard = () => {
-    ['adBoardGlbName', 'adBoardImgName'].forEach((id) => { $(id).value = ''; });
-    $('adBoardW').value = '10'; $('adBoardD').value = '10';
+    ['adBoardGlbName', 'adBoardImgName'].forEach((id) => { byId(id).value = ''; });
+    byId('adBoardW').value = '10'; byId('adBoardD').value = '10';
     clearSq('adBoardGlb'); clearSq('adBoardImg'); editCtx = null;
   };
 
   wireUploadSq('adBoardGlb', true);   // model tile renders the local .glb
   const saveGlb = async (spawn) => {
-    const name = $('adBoardGlbName').value.trim();
+    const name = byId('adBoardGlbName').value.trim();
     if (!name) return alert('Name the board first.');
-    const f = $('adBoardGlb').files[0];
+    const f = byId('adBoardGlb').files[0];
     try {
       const url = f ? await uploadModel(f) : (editCtx && editCtx.model); // keep the existing model when editing/cloning
       if (!url) return alert('Choose a .glb file.');
       const { scale, box } = await measureBoard(url);
       save({ model: url, modelScale: scale, box }, name, spawn);
       clearBoard();
-      $('addModal').hidden = true;
+      byId('addModal').hidden = true;
     } catch (e) { alert('Board model upload/load failed — make sure it is a .glb file.'); }
   };
-  $('adBoardGlbSave').onclick = () => saveGlb(false);
-  $('adBoardGlbSpawn').onclick = () => saveGlb(true);
+  byId('adBoardGlbSave').onclick = () => saveGlb(false);
+  byId('adBoardGlbSpawn').onclick = () => saveGlb(true);
 
   // image / flat boards — send the raw w/d; the server fits them to the current table
   wireUploadSq('adBoardImg', false);
   const saveImgBoard = async (spawn) => {
-    const name = $('adBoardImgName').value.trim();
+    const name = byId('adBoardImgName').value.trim();
     if (!name) return alert('Name the board first.');
-    const w = +$('adBoardW').value || 10, d = +$('adBoardD').value || 10;
+    const w = +byId('adBoardW').value || 10, d = +byId('adBoardD').value || 10;
     try {
       const spec = { w, d };
-      const f = $('adBoardImg').files[0];
+      const f = byId('adBoardImg').files[0];
       if (f) spec.tex = await uploadImage(f, BOARD_TEX, BOARD_TEX, 'stretch', 'boards');
       else if (editCtx && editCtx.tex) spec.tex = editCtx.tex; // keep the existing image when editing/cloning
       save(spec, name, spawn);
       clearBoard();
-      $('addModal').hidden = true;
+      byId('addModal').hidden = true;
     } catch (e) { alert('Image upload failed.'); }
   };
-  $('adBoardImgSave').onclick = () => saveImgBoard(false);
-  $('adBoardImgSpawn').onclick = () => saveImgBoard(true);
+  byId('adBoardImgSave').onclick = () => saveImgBoard(false);
+  byId('adBoardImgSpawn').onclick = () => saveImgBoard(true);
   FILLERS.board = (it, clone) => { // pre-fill the Board form from an existing asset (Edit / Clone)
     if (it.model) { // uploaded .glb board
-      $('adBoardGlbName').value = clone ? '' : it.name;
+      byId('adBoardGlbName').value = clone ? '' : it.name;
       clearSq('adBoardGlb');
-      boardPreviewURL(it).then((u) => { if (u) $('adBoardGlb').parentElement.style.backgroundImage = `url("${u}")`; });
+      boardPreviewURL(it).then((u) => { if (u) byId('adBoardGlb').parentElement.style.backgroundImage = `url("${u}")`; });
     } else { // image / flat board
-      $('adBoardImgName').value = clone ? '' : it.name;
-      $('adBoardW').value = it.w != null ? it.w : 10;
-      $('adBoardD').value = it.d != null ? it.d : 10;
+      byId('adBoardImgName').value = clone ? '' : it.name;
+      byId('adBoardW').value = it.w != null ? it.w : 10;
+      byId('adBoardD').value = it.d != null ? it.d : 10;
       clearSq('adBoardImg');
-      if (it.tex) boardPreviewURL(it).then((u) => { if (u) $('adBoardImg').parentElement.style.backgroundImage = `url("${u}")`; });
+      if (it.tex) boardPreviewURL(it).then((u) => { if (u) byId('adBoardImg').parentElement.style.backgroundImage = `url("${u}")`; });
     }
   };
 }
@@ -511,24 +513,24 @@ function wireAddObject() {
   // Orientation: accumulate 90° world-axis rotations, stored as an Euler modelRot on spawn.
   let objQuat = new THREE.Quaternion();
   const objRot = () => { const e = new THREE.Euler().setFromQuaternion(objQuat); return [e.x, e.y, e.z]; };
-  const refreshObjPreview = () => { const f = $('adObjGlb').files[0]; if (f) glbFilePreviewURL(f, objRot()).then((u) => { $('adObjGlb').parentElement.style.backgroundImage = u ? `url("${u}")` : 'none'; }); };
+  const refreshObjPreview = () => { const f = byId('adObjGlb').files[0]; if (f) glbFilePreviewURL(f, objRot()).then((u) => { byId('adObjGlb').parentElement.style.backgroundImage = u ? `url("${u}")` : 'none'; }); };
   const rotBy = (x, y, z) => { objQuat.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(x, y, z), Math.PI / 2)); refreshObjPreview(); };
-  $('adObjRotX').onclick = () => rotBy(1, 0, 0);
-  $('adObjRotY').onclick = () => rotBy(0, 1, 0);
-  $('adObjRotZ').onclick = () => rotBy(0, 0, 1);
-  $('adObjRotReset').onclick = () => { objQuat.identity(); refreshObjPreview(); };
+  byId('adObjRotX').onclick = () => rotBy(1, 0, 0);
+  byId('adObjRotY').onclick = () => rotBy(0, 1, 0);
+  byId('adObjRotZ').onclick = () => rotBy(0, 0, 1);
+  byId('adObjRotReset').onclick = () => { objQuat.identity(); refreshObjPreview(); };
   const clearObj = () => {
-    ['adObjName'].forEach((id) => { $(id).value = ''; });
-    $('adObjScale').value = '1'; $('adObjStand').classList.remove('on'); setCollider('box');
+    ['adObjName'].forEach((id) => { byId(id).value = ''; });
+    byId('adObjScale').value = '1'; byId('adObjStand').classList.remove('on'); setCollider('box');
     objQuat.identity(); clearSq('adObjGlb'); editCtx = null;
   };
   wireUploadSq('adObjGlb', true, () => { objQuat.identity(); }); // new file → fresh orientation
-  $('adObjStand').onclick = () => $('adObjStand').classList.toggle('on');
+  byId('adObjStand').onclick = () => byId('adObjStand').classList.toggle('on');
   const saveObj = async (spawn) => {
-    const name = $('adObjName').value.trim();
+    const name = byId('adObjName').value.trim();
     if (!name) return alert('Name the object first.');
-    const f = $('adObjGlb').files[0];
-    const scale = +$('adObjScale').value || 1, stand = $('adObjStand').classList.contains('on'), collider = currentCollider(), rot = objRot();
+    const f = byId('adObjGlb').files[0];
+    const scale = +byId('adObjScale').value || 1, stand = byId('adObjStand').classList.contains('on'), collider = currentCollider(), rot = objRot();
     try {
       const url = f ? await uploadModel(f) : (editCtx && editCtx.model); // keep the existing model when editing/cloning
       if (!url) return alert('Choose a .glb file.');
@@ -538,21 +540,21 @@ function wireAddObject() {
       if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
       save(props, name, spawn);
       clearObj();
-      $('addModal').hidden = true;
+      byId('addModal').hidden = true;
     } catch (e) { alert('Model upload/load failed — make sure it is a .glb file.'); }
   };
-  $('adObjSave').onclick = () => saveObj(false);
-  $('adObjSpawn').onclick = () => saveObj(true);
+  byId('adObjSave').onclick = () => saveObj(false);
+  byId('adObjSpawn').onclick = () => saveObj(true);
   FILLERS.prop = (it, clone) => { // pre-fill the Object form from an existing asset (Edit / Clone)
     const p = it.props || {};
-    $('adObjName').value = clone ? '' : it.name;
-    $('adObjScale').value = p.scale != null ? p.scale : 1;
-    $('adObjStand').classList.toggle('on', !!p.stand);
+    byId('adObjName').value = clone ? '' : it.name;
+    byId('adObjScale').value = p.scale != null ? p.scale : 1;
+    byId('adObjStand').classList.toggle('on', !!p.stand);
     setCollider(p.collider || 'box');
     objQuat.identity();
     if (Array.isArray(p.modelRot)) objQuat.setFromEuler(new THREE.Euler(p.modelRot[0], p.modelRot[1], p.modelRot[2]));
     clearSq('adObjGlb');
-    propPreviewURL(it.props).then((u) => { if (u) $('adObjGlb').parentElement.style.backgroundImage = `url("${u}")`; }); // current model — upload to replace
+    propPreviewURL(it.props).then((u) => { if (u) byId('adObjGlb').parentElement.style.backgroundImage = `url("${u}")`; }); // current model — upload to replace
   };
 }
 
@@ -560,7 +562,7 @@ function wireAddObject() {
 const CUBE_IDS = ['adSkyPX', 'adSkyNX', 'adSkyPY', 'adSkyNY', 'adSkyPZ', 'adSkyNZ'];
 function wireAddSky() {
   const clearSky = () => {
-    ['adSkyEqName', 'adSkyCubeName'].forEach((id) => { $(id).value = ''; });
+    ['adSkyEqName', 'adSkyCubeName'].forEach((id) => { byId(id).value = ''; });
     ['adSkyEq', ...CUBE_IDS].forEach(clearSq);
   };
 
@@ -568,26 +570,26 @@ function wireAddSky() {
   wireUploadSq('adSkyEq', false);
   CUBE_IDS.forEach((id) => wireUploadSq(id, false));
   const saveEq = async (apply) => {
-    const name = $('adSkyEqName').value.trim();
+    const name = byId('adSkyEqName').value.trim();
     if (!name) return alert('Name the skybox first.');
-    const f = $('adSkyEq').files[0];
+    const f = byId('adSkyEq').files[0];
     if (!f) return alert('Choose a 2:1 panorama image.');
     try {
       const url = await uploadImage(f, 2048, 1024, 'stretch', 'sky');
       ROOM.send('saveSkybox', { name, url, isPublic: false });   // private by default; publish from the library
       if (apply) ROOM.send('skybox', { url });
       clearSky();
-      $('addModal').hidden = true;
+      byId('addModal').hidden = true;
     } catch (e) { alert('Upload failed.'); }
   };
-  $('adSkyEqSave').onclick = () => saveEq(false);
-  $('adSkyEqApply').onclick = () => saveEq(true);
+  byId('adSkyEqSave').onclick = () => saveEq(false);
+  byId('adSkyEqApply').onclick = () => saveEq(true);
 
   // cubemap (six square faces)
   const saveCube = async (apply) => {
-    const name = $('adSkyCubeName').value.trim();
+    const name = byId('adSkyCubeName').value.trim();
     if (!name) return alert('Name the skybox first.');
-    const files = CUBE_IDS.map((id) => $(id).files[0]);
+    const files = CUBE_IDS.map((id) => byId(id).files[0]);
     if (files.some((f) => !f)) return alert('Pick all six faces.');
     try {
       const faces = [];
@@ -595,11 +597,11 @@ function wireAddSky() {
       ROOM.send('saveSkybox', { name, type: 'cube', faces, isPublic: false });
       if (apply) ROOM.send('skybox', { url: JSON.stringify({ t: 'cube', f: faces }) });
       clearSky();
-      $('addModal').hidden = true;
+      byId('addModal').hidden = true;
     } catch (e) { alert('Upload failed.'); }
   };
-  $('adSkyCubeSave').onclick = () => saveCube(false);
-  $('adSkyCubeApply').onclick = () => saveCube(true);
+  byId('adSkyCubeSave').onclick = () => saveCube(false);
+  byId('adSkyCubeApply').onclick = () => saveCube(true);
 }
 
 // client.js hands over the live room once connected.
@@ -609,22 +611,22 @@ window.onOttRoom = (room) => {
     if (!pendingDeck) return;
     const { it, clone } = pendingDeck; pendingDeck = null;
     const isText = ((d.fronts && d.fronts[0]) || '').startsWith('text:');
-    $('addModal').querySelector(`.libTab[data-tab="${isText ? 'txtdecks' : 'imgdecks'}"]`)?.click();
+    byId('addModal').querySelector(`.libTab[data-tab="${isText ? 'txtdecks' : 'imgdecks'}"]`)?.click();
     editCtx = { kind: 'deck', id: clone ? null : it.id, back: d.back, fronts: d.fronts };
     (isText ? FILLERS.txtdeck : FILLERS.imgdeck)(d, clone);
   });
   const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); room.send('listSkyboxes'); };
   // View Library (present on both the editor and the table)
-  const panel = $('libraryPanel');
+  const panel = byId('libraryPanel');
   if (panel) {
-    $('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
-    $('libraryClose').onclick = () => { panel.hidden = true; };
+    byId('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
+    byId('libraryClose').onclick = () => { panel.hidden = true; };
     wireTabs(panel);
     wireSearch(panel);
     // Room Controls → Load a Scene: open the library straight to the Scenes tab.
-    const roomScene = $('roomScene');
+    const roomScene = byId('roomScene');
     if (roomScene) roomScene.onclick = () => {
-      const rg = $('roomGrp'); if (rg) rg.hidden = true;
+      const rg = byId('roomGrp'); if (rg) rg.hidden = true;
       panel.hidden = false;
       const scenesTab = panel.querySelector('.libTab[data-tab="scenes"]');
       if (scenesTab) scenesTab.click(); // activate via wireTabs
@@ -632,33 +634,33 @@ window.onOttRoom = (room) => {
     };
   }
   // Built-in library — bundled pieces, spawn-only (client-side data, no server fetch).
-  const builtin = $('builtinModal');
+  const builtin = byId('builtinModal');
   if (builtin) {
-    $('builtinBtn').onclick = () => { builtin.hidden = !builtin.hidden; if (!builtin.hidden) renderBuiltin(); };
-    $('builtinClose').onclick = () => { builtin.hidden = true; };
+    byId('builtinBtn').onclick = () => { builtin.hidden = !builtin.hidden; if (!builtin.hidden) renderBuiltin(); };
+    byId('builtinClose').onclick = () => { builtin.hidden = true; };
     wireTabs(builtin);
     wireSearch(builtin);
   }
   // Room Controls → Skybox: two-tab apply-picker (both pages).
-  const skyPick = $('skyPickModal');
+  const skyPick = byId('skyPickModal');
   if (skyPick) {
-    const rs = $('roomSky');
-    if (rs) rs.onclick = () => { const rg = $('roomGrp'); if (rg) rg.hidden = true; skyPick.hidden = false; renderSkyPick(); room.send('listSkyboxes'); };
-    $('skyPickClose').onclick = () => { skyPick.hidden = true; };
+    const rs = byId('roomSky');
+    if (rs) rs.onclick = () => { const rg = byId('roomGrp'); if (rg) rg.hidden = true; skyPick.hidden = false; renderSkyPick(); room.send('listSkyboxes'); };
+    byId('skyPickClose').onclick = () => { skyPick.hidden = true; };
     wireTabs(skyPick);
   }
   // Add-to-Library builder — editor only (absent on the table).
-  const addModal = $('addModal');
+  const addModal = byId('addModal');
   if (addModal) {
-    $('addBtn').onclick = () => { addModal.hidden = !addModal.hidden; if (!addModal.hidden) editCtx = null; }; // opening via "Add" = create mode
-    $('addClose').onclick = () => { addModal.hidden = true; editCtx = null; };
+    byId('addBtn').onclick = () => { addModal.hidden = !addModal.hidden; if (!addModal.hidden) editCtx = null; }; // opening via "Add" = create mode
+    byId('addClose').onclick = () => { addModal.hidden = true; editCtx = null; };
     wireTabs(addModal);
     wireAddDeck();
     wireAddBoard();
     wireAddObject();
     wireAddSky();
   }
-  const saveScene = $('sceneSaveBtn');
+  const saveScene = byId('sceneSaveBtn');
   if (saveScene) saveScene.onclick = () => { const n = prompt('Save the current table as a scene named:'); if (n && n.trim()) room.send('sceneSave', { name: n.trim() }); };
   refresh(); // prime the lists so the panel is populated on first open
 };

@@ -6,12 +6,12 @@
   function equalizeGroup(group) {
     const btns = group.querySelectorAll(':scope > button');
     if (btns.length < 2) return;
-    for (const b of btns) b.style.width = '';                       // reset to natural width
+    for (const button of btns) button.style.width = '';             // reset to natural width
     let max = 0;
-    for (const b of btns) max = Math.max(max, b.getBoundingClientRect().width);
+    for (const button of btns) max = Math.max(max, button.getBoundingClientRect().width);
     if (!max) return;                                               // hidden / not laid out yet — leave natural, don't collapse to 0
     max = Math.ceil(max);
-    for (const b of btns) b.style.width = max + 'px';               // unify to the widest
+    for (const button of btns) button.style.width = max + 'px';     // unify to the widest
   }
   let queued = false;
   function run() { queued = false; document.querySelectorAll('.actions').forEach(equalizeGroup); }

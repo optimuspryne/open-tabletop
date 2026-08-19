@@ -88,12 +88,56 @@
 #landing input[type=text], #landing input[type=email], #landing input[type=password],
 .scoreName input,
 .scoreAddRow input,
+#chatInput,
+.libSearch,
 #roomNotes {
   background: var(--field);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
 }
+
+/* ---- Pop-out panel skeleton — every edge-docked/floating panel shares this
+   fixed, vertically-stacked frame; each panel's own #id rule adds only what's
+   unique to it (edge anchor, width, gap/max-height overrides). Change the shared
+   look here, once, instead of in every panel. Docked panels override position via
+   `#toolsDock > #x` and floated ones via `.panel.floating`, both more specific. */
+.popout {
+  position: fixed;
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+}
+
+/* ---- A small uppercase accent "mini-label" (section headings inside panels).
+   Add class="miniLabel" to a new one; the element-scoped headings share it here. ---- */
+.miniLabel, .scoreNotesLabel, .libSection h4, .libPane h4 {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: .5px;
+}
+.miniLabel { opacity: .85; }
+
+/* ---- A solid inset "tile" row (member rows, unclaimed rows). Add class="tile"
+   to reuse; the existing rows share the surface here and add their own layout. ---- */
+.tile, .memberRow, .unclaimed-row {
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+  font-size: var(--fs-sm);
+  color: var(--text);
+}
+
+/* ---- The "toggled/active" highlight for non-chip buttons (accent border + text). ---- */
+.is-on, #wbTools button.on, #leanBtn.on, #skyList button.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- Small-text utility (matches --fs-sm); .muted already includes this size. ---- */
+.fs-sm { font-size: var(--fs-sm); }
 
 /* ===== base ===== */
 * { box-sizing: border-box; }
@@ -228,10 +272,6 @@ button.danger {
   padding: 10px 12px;
   z-index: 20;
 }
-#wbTools button.on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 #drawActions .da-note, #wbTools .da-note {
   color: var(--text);
   opacity: .7;
@@ -262,10 +302,6 @@ button.danger {
 }
 #toolsMenu.collapsed .toolsChev, #interactMenu.collapsed .toolsChev { transform: rotate(-90deg); }
 #toolsMenu.collapsed button, #interactMenu.collapsed button { display: none; }
-#leanBtn.on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 
 /* ===== How to Play modal ===== */
 .modalCard.helpCard {
@@ -354,28 +390,14 @@ button.danger {
 .handToggle.hide:hover { opacity: 1; }
 #hand.collapsed { padding: 4px; }
 
-/* ===== private notes (right edge, toggled) ===== */
-#notes {
-  position: fixed;
+/* ===== right-edge toggled pop-outs: private notes, whiteboard, chat ===== */
+/* (all three share the same frame; positioning skeleton comes from .popout) */
+#notes, #whiteboard, #chat {
   right: var(--inset);
   top: 50%;
   transform: translateY(-50%);
   width: min(300px, 88vw);
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  padding: 10px 12px;
-}
-#whiteboard {
-  position: fixed;
-  right: var(--inset);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(300px, 88vw);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
 }
 #notesText {
   width: 100%;
@@ -387,14 +409,10 @@ button.danger {
 
 /* ===== shared timer (bottom-right, toggled) ===== */
 #timer {
-  position: fixed;
   right: var(--inset);
   bottom: var(--inset);
   width: min(260px, 88vw);
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
 }
 #timerReadout {
   font: 600 34px ui-monospace, "SF Mono", Menlo, monospace;
@@ -428,28 +446,13 @@ button.danger {
 }
 
 /* ===== show-cards panel (left edge, toggled) ===== */
-#showPanel {
-  position: fixed;
+/* left-edge toggled pop-outs: show-cards + drop-hand (share one frame) */
+#showPanel, #dropPanel {
   left: var(--inset);
   top: 50%;
   transform: translateY(-50%);
   width: min(240px, 88vw);
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
-  z-index: 6;
-}
-#dropPanel {
-  position: fixed;
-  left: var(--inset);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(240px, 88vw);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px;
   z-index: 6;
 }
 .showLabel {
@@ -620,13 +623,9 @@ select:focus {
   outline-offset: -1px;
 }
 .libSearchWrap { margin: 6px 0 8px; }
-.libSearch {
+.libSearch {  /* surface + radius via .field group */
   width: 100%;
   box-sizing: border-box;
-  background: var(--field);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
   padding: 6px 10px;
   font: var(--fs)/1 var(--font);
 }
@@ -650,18 +649,7 @@ select:focus {
 }
 .rotRow button { padding: 4px 11px; }
 
-/* Public chat panel (Tools) */
-#chat {
-  position: fixed;
-  right: var(--inset);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(300px, 88vw);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-}
+/* Public chat panel (Tools) — its frame is the shared right-edge pop-out above */
 #chatLog {
   max-height: 260px;
   min-height: 90px;
@@ -680,13 +668,9 @@ select:focus {
   display: flex;
   gap: 6px;
 }
-#chatInput {
+#chatInput {  /* surface + radius via .field group */
   flex: 1;
   min-width: 0;
-  background: var(--field);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
   padding: 6px 8px;
   font: var(--fs)/1 var(--font);
 }
@@ -806,29 +790,22 @@ input[type="range"]::-moz-range-thumb {
 
 /* ===== members panel (GM tools) ===== */
 #membersPanel {
-  position: fixed;
   left: var(--inset);
   top: 15%;
   transform: translateY(-50%);
   width: min(240px, 90vw);
   max-height: 70vh;
   overflow: auto;
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
 }
-/* Table Size — a small left-anchored panel like Members (not a full-screen modal) */
+/* Customize Table — a small left-anchored panel like Members (not a full-screen modal) */
 #tableModal {
-  position: fixed;
   left: var(--inset);
   top: 30%;
   transform: translateY(-50%);
   width: min(240px, 90vw);
-  display: flex;
-  flex-direction: column;
   gap: 8px;
-  padding: 5px 12px;
+  padding: 5px 12px;   /* tighter than the .popout default */
 }
 #memberList {
   list-style: none;
@@ -838,17 +815,11 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   gap: 6px;
 }
-.memberRow {
+.memberRow {  /* surface via .tile group */
   display: flex;
   align-items: left;
   justify-content: space-between;
   gap: 5px;
-  background: var(--panel-solid);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 6px 8px;
-  color: var(--text);
-  font-size: var(--fs-sm);
 }
 
 /* Unclaimed hands (loaded save whose owner hasn't returned) — atop the Members panel */
@@ -860,16 +831,12 @@ input[type="range"]::-moz-range-thumb {
   letter-spacing: .5px;
   opacity: .6;
 }
-.unclaimed-row {
+.unclaimed-row {  /* surface via .tile group; accent border marks it as awaiting action */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  background: var(--panel-solid);
-  border: 1px solid var(--accent);
-  border-radius: var(--r-sm);
-  padding: 6px 8px;
-  font-size: var(--fs-sm);
+  border-color: var(--accent);
 }
 .unclaimed-name { font-weight: 600; }
 .prow.turn-waiting { background: var(--accent-soft); font-style: italic; opacity: .8; }
@@ -938,13 +905,7 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   gap: 6px;
 }
-.libPane h4 {
-  margin: 0 0 2px;
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  font-size: var(--fs-sm);
-}
+.libPane h4 { margin: 0 0 2px; }  /* shared look via .miniLabel group */
 /* Add-modal two-column pane: preview/upload tiles (left) + controls (right) */
 .addSplit {
   display: flex;
@@ -1109,14 +1070,7 @@ input[type="range"]::-moz-range-thumb {
   opacity: .6;
   margin: 0;
 }
-.libSection h4 {
-  margin: 6px 0 4px;
-  font-size: var(--fs-sm);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  color: var(--accent);
-  opacity: .85;
-}
+.libSection h4 { margin: 6px 0 4px; opacity: .85; }  /* shared look via .miniLabel group */
 .libList {
   list-style: none;
   margin: 0;
@@ -1288,10 +1242,6 @@ input[type="range"]::-moz-range-thumb {
 }
 .savedRow button { padding: 3px 10px; }
 #skyList { max-height: 220px; }
-#skyList button.on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .skyRow {
   display: flex;
   gap: 4px;
@@ -1653,17 +1603,14 @@ body.admin {
 
 /* ===== scoreboard + room notes panel ===== */
 #scorePanel {
-  position: fixed;
   right: var(--inset);
   top: 50%;
   transform: translateY(-50%);
   width: min(320px, 92vw);
   max-height: 82vh;
   overflow: auto;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 12px 14px;   /* roomier than the .popout default */
   font: var(--fs)/1.4 var(--font);
 }
 #scoreTable {
@@ -1722,14 +1669,7 @@ body.admin {
   font-size: var(--fs-sm);
   padding: 3px 8px;
 }
-.scoreNotesLabel {
-  font-size: var(--fs-sm);
-  text-transform: uppercase;
-  letter-spacing: .5px;
-  color: var(--accent);
-  opacity: .85;
-  margin-top: 4px;
-}
+.scoreNotesLabel { opacity: .85; margin-top: 4px; }  /* shared look via .miniLabel group */
 #roomNotes {
   width: 100%;
   box-sizing: border-box;
@@ -1839,14 +1779,10 @@ body.admin {
 
 /* ===== sound + credits panels (fixed pop-outs, like Notes/Whiteboard) ===== */
 #audioPanel, #creditsPanel, #tracksPanel {
-  position: fixed;
   top: var(--inset);                                          /* aligned with the room code */
   right: calc(var(--inset) + min(285px, 92vw) + var(--gap));  /* just left of #rightRail */
   width: min(340px, 90vw);
-  display: flex;
-  flex-direction: column;
   gap: 6px;
-  padding: 10px 12px;
 }
 @media (max-width: 720px) {
   /* no room beside the rail — center it over the table instead */

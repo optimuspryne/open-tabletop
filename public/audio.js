@@ -24,16 +24,20 @@ const SOUNDS = {
 };
 
 const VOL_KEY = 'tabletop.sfxVolume';
+const MUSIC_VOL_KEY = 'tabletop.musicVolume';
 const SFX_MUTE_KEY = 'tabletop.sfxMuted';
 const MUSIC_MUTE_KEY = 'tabletop.musicMuted';
 let ctx = null, master = null;
 const buffers = new Map();
 let musicEl = null, trackIdx = -1, onTrackChange = null; // background music player state
 
-function loadVolume() {
-  const v = parseFloat(localStorage.getItem(VOL_KEY));
-  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.7;
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+// A persisted 0..1 volume from localStorage, or `fallback` if unset/invalid.
+function readVol(key, fallback) {
+  const v = parseFloat(localStorage.getItem(key));
+  return Number.isFinite(v) ? clamp01(v) : fallback;
 }
+function loadVolume() { return readVol(VOL_KEY, 0.7); }
 function loadSfxMuted() { return localStorage.getItem(SFX_MUTE_KEY) === '1'; }
 function loadMusicMuted() { return localStorage.getItem(MUSIC_MUTE_KEY) === '1'; }
 function applyGain() { if (master) master.gain.value = loadSfxMuted() ? 0 : loadVolume(); }
@@ -62,27 +66,27 @@ function ensureCtx() {
 
 // Browsers block audio until a user gesture — call from the first click/keypress.
 export function resumeAudio() {
-  const c = ensureCtx();
-  if (c && c.state === 'suspended') c.resume();
+  const audioCtx = ensureCtx();
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
 }
 
 // Play a named clip. `volume` is a 0..1 per-shot scale on top of the master volume.
 export function playSfx(name, { volume = 1 } = {}) {
-  const c = ensureCtx();
-  if (!c || c.state !== 'running') return;
+  const audioCtx = ensureCtx();
+  if (!audioCtx || audioCtx.state !== 'running') return;
   const list = buffers.get(name);
   if (!list || !list.length) return;       // no variant decoded yet — no-op
   const buf = list.length === 1 ? list[0] : list[(Math.random() * list.length) | 0]; // random variant each play
-  const src = c.createBufferSource();
+  const src = audioCtx.createBufferSource();
   src.buffer = buf;
-  if (volume !== 1) { const g = c.createGain(); g.gain.value = volume; src.connect(g); g.connect(master); }
+  if (volume !== 1) { const gain = audioCtx.createGain(); gain.gain.value = volume; src.connect(gain); gain.connect(master); }
   else src.connect(master);
   src.start();
 }
 
-// Master SFX volume 0..1, persisted for next visit (Phase 2's slider will call this).
+// Master SFX volume 0..1, persisted for next visit (the Sound panel's slider calls this).
 export function setSfxVolume(v) {
-  v = Math.max(0, Math.min(1, v));
+  v = clamp01(v);
   localStorage.setItem(VOL_KEY, String(v));
   applyGain();
 }
@@ -94,11 +98,7 @@ export function getMusicMuted() { return loadMusicMuted(); }
 
 
 // ---- Background music (HTML5 <audio>: streams long tracks; playlist from credits.js) ----
-const MUSIC_VOL_KEY = 'tabletop.musicVolume';
-function loadMusicVolume() {
-  const v = parseFloat(localStorage.getItem(MUSIC_VOL_KEY));
-  return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.4;
-}
+function loadMusicVolume() { return readVol(MUSIC_VOL_KEY, 0.4); }
 function ensureMusicEl() {
   if (musicEl) return musicEl;
   musicEl = new Audio();
@@ -135,7 +135,7 @@ const SHUFFLE_KEY = 'tabletop.musicShuffle';
 export function getShuffle() { return localStorage.getItem(SHUFFLE_KEY) === '1'; }
 export function setShuffle(on) { localStorage.setItem(SHUFFLE_KEY, on ? '1' : '0'); }
 export function setMusicVolume(v) {
-  v = Math.max(0, Math.min(1, v));
+  v = clamp01(v);
   localStorage.setItem(MUSIC_VOL_KEY, String(v));
   if (musicEl) musicEl.volume = loadMusicMuted() ? 0 : v;
 }
