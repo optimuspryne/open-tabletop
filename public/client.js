@@ -424,26 +424,36 @@ const applyTransform = (mesh, s) => {
   function syncScalePanel() {
     const sc = room.state.scale; if (!sc) return;
     const u = sc.unitLabel || 'u';
-    const uEl = byId('scaleUnit'); if (uEl && document.activeElement !== uEl) uEl.value = u;
+    const custom = u !== 'u' && !['in', 'cm', 'mm'].includes(u); // a user-typed label like "hex"
+    // Light the matching toggle (or Custom…); reveal the custom field only when custom.
+    document.querySelectorAll('#scaleUnits [data-unit]').forEach(b => b.classList.toggle('on', b.dataset.unit === u || (custom && b.dataset.unit === '__custom__')));
+    const cRow = byId('scaleCustomRow'); if (cRow) cRow.hidden = !custom;
+    const cInp = byId('scaleUnitCustom'); if (cInp && document.activeElement !== cInp) cInp.value = custom ? u : '';
     const sEl = byId('scaleStep'); if (sEl && document.activeElement !== sEl) sEl.value = sc.roundStep;
     const su = byId('scaleStepUnit'); if (su) su.textContent = u;
     const wu = byId('scaleWidthUnit'); if (wu) wu.textContent = u;
     const wv = byId('scaleWidthVal'); // prefill with the table's CURRENT width in display units (editable)
     if (wv && document.activeElement !== wv) { const cur = (room.state.tableX * 2) / (+sc.worldPerUnit || 1); wv.value = Number.isFinite(cur) ? String(+cur.toFixed(2)) : ''; }
-    const now = byId('scaleNow');
-    if (now) now.textContent = (sc.worldPerUnit === 1 && u === 'u')
-      ? 'Uncalibrated — 1 u = 1 table unit.'
-      : `1 ${u} = ${(+sc.worldPerUnit).toFixed(3)} table units · round to ${sc.roundStep} ${u}`;
     relabelOverlays(); // scale drives every ruler's label
   }
   {
-    const uEl = byId('scaleUnit'); if (uEl) uEl.onchange = () => room.send('scaleSet', { unitLabel: uEl.value });
     const sEl = byId('scaleStep'); if (sEl) sEl.onchange = () => { const v = +sEl.value; if (v > 0) room.send('scaleSet', { roundStep: v }); };
-    // Presets set the label + a sensible round step — NOT worldPerUnit (calibration does that).
-    const preset = (label, step) => room.send('scaleSet', { unitLabel: label, roundStep: step });
-    const pin = byId('scalePreIn'); if (pin) pin.onclick = () => preset('in', 0.5);
-    const pcm = byId('scalePreCm'); if (pcm) pcm.onclick = () => preset('cm', 1);
-    const pmm = byId('scalePreMm'); if (pmm) pmm.onclick = () => preset('mm', 1);
+    const cRow = byId('scaleCustomRow'), cInp = byId('scaleUnitCustom');
+    // Unit toggles: inch/cm/mm set the label + a sensible round step; "Custom…" reveals
+    // a text field for a free-form label (e.g. "hex"). Mirrors the Measure kind picker.
+    document.querySelectorAll('#scaleUnits [data-unit]').forEach(b => {
+      b.onclick = () => {
+        if (b.dataset.unit === '__custom__') {
+          document.querySelectorAll('#scaleUnits [data-unit]').forEach(x => x.classList.toggle('on', x === b));
+          if (cRow) cRow.hidden = false;
+          if (cInp) { cInp.focus(); cInp.select(); }
+        } else {
+          room.send('scaleSet', { unitLabel: b.dataset.unit, roundStep: +b.dataset.step || 0.5 });
+        }
+      };
+    });
+    const sendCustom = () => { const v = (cInp.value || '').trim().slice(0, 8); if (v) room.send('scaleSet', { unitLabel: v }); };
+    if (cInp) { cInp.onchange = sendCustom; cInp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); sendCustom(); cInp.blur(); } }; }
     // Calibrate from the typed real width: worldPerUnit = tableWorldWidth / N.
     const setW = byId('scaleWidthSet'); if (setW) setW.onclick = () => {
       const n = parseFloat(byId('scaleWidthVal').value);

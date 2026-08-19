@@ -48,6 +48,10 @@
   backdrop-filter: var(--blur);
   color: var(--text);
 }
+/* Default padding for pop-out MODALS (any panel with a title bar), so a new one
+   doesn't have to set its own. HUD chrome (hand, status, player list — panels with
+   no .panel-head) is untouched, and any modal can still override with its own value. */
+.panel:has(> .panel-head) { padding: 10px 12px; }
 .panel-head {
   display: flex;
   align-items: center;
@@ -1856,6 +1860,13 @@ body.admin {
    .movable  — drag handle affordance on the title bar (added by JS on desktop)
    .floating — popped out of the dock into a free, viewport-fixed position
    .resizable— a native resize grip (every movable panel, once floated)         */
+/* Measure just needs to stack + space its rows; padding comes from the modal base. */
+#measurePanel { display: flex; flex-direction: column; gap: 6px; }
+/* Reactive kind picker: an auto-fit grid reflows the buttons evenly as the panel
+   is resized (4-across when wide, 2×2 when narrow) and each button stretches to
+   fill its cell — so they stay uniform AND responsive, no equalize pass needed. */
+#measureKinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: 6px; }
+#measureKinds .chip { width: auto; text-align: center; }
 .panel.movable > .panel-head { cursor: move; touch-action: none; user-select: none; }
 .panel.floating {
   position: fixed !important;   /* beat the more-specific `#toolsDock > #x { position: static }` dock rule */
@@ -1871,9 +1882,47 @@ body.admin {
   max-width: 96vw;
   max-height: 92vh;
 }
-/* Chat/Notes flex their inner scroll region so dragging the grip grows the log /
-   text itself, not just the box (other panels just resize + scroll their content). */
+/* ---- Reactive internals: only while floated (.resizable), so the docked layout
+   is untouched. Two levers: button rows reflow into an even grid, and each
+   list/log panel's main region flexes to fill the resized height. -------------- */
+
+/* Button/chip rows reflow into an even, auto-fitting grid that fills the width. */
+.panel.resizable .chipRow { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.panel.resizable .chipRow > button { width: auto; text-align: center; }
+
+/* List/log panels: clip the panel and let the primary region scroll + grow with it. */
+.panel.resizable#chat, .panel.resizable#notes,
+.panel.resizable#creditsPanel, .panel.resizable#tracksPanel,
+.panel.resizable#membersPanel { overflow: hidden; }
+.panel.resizable#membersPanel { display: flex; flex-direction: column; }
 .panel.resizable#chat #chatLog,
-.panel.resizable#notes #notesText { flex: 1 1 auto; max-height: none; min-height: 0; }
+.panel.resizable#notes #notesText,
+.panel.resizable#creditsPanel #creditsBody,
+.panel.resizable#tracksPanel #tracksBody,
+.panel.resizable#membersPanel #memberList { flex: 1 1 auto; min-height: 0; overflow: auto; max-height: none; }
 .panel.resizable#notes #notesText { resize: none; } /* the panel grip governs size, not the textarea's own */
+
 @media (pointer: coarse) { #resetPanelsBtn { display: none; } } /* nothing to reset on touch (drag is desktop-only) */
+
+/* ===== Customize Table — streamlined, reactive layout ======================= */
+/* The whole body column caps its width and centres in a wide modal, so a wide panel
+   gains side margins and the controls stop growing past a comfortable size — rather
+   than every field stretching edge-to-edge. (Capping/centring the flex ROWS directly
+   makes them size to content and overflow when narrow, so it's done on this wrapper.) */
+#tableModal .tableBody { width: 100%; max-width: 300px; margin: 0 auto; } /* width:100% = definite size (in a flex column, margin:auto alone would size-to-content and overflow) */
+.secLabel { color: var(--accent); font-size: var(--fs-sm); font-weight: 600; margin: 12px 0 4px; letter-spacing: .3px; text-align: center; }
+#tableModal .secLabel:first-of-type { margin-top: 2px; }
+#tableModal .calibLabel { text-align: center; }
+#tableModal .sizeRow > label { min-width: 64px; white-space: nowrap; }
+#tableModal .sizeRow > .stepper { flex: 1 1 auto; max-width: 160px; min-width: 0; }
+#tableModal .sizeRow > input[type="text"] { flex: 1 1 auto; max-width: 180px; min-width: 0; }
+#tableModal .sizeRow > #scaleUnits { flex: 1 1 auto; min-width: 0; }
+#tableModal .stepper input[type="number"] { flex: 1 1 auto; width: auto; min-width: 0; }
+/* Width × Depth share one row (label over field, × between). */
+.dimGrid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px 8px; align-items: center; }
+.dimGrid > label { font-size: var(--fs-sm); text-align: center; }
+.dimGrid .dimX { align-self: center; text-align: center; color: var(--text); opacity: .55; }
+.dimGrid .stepper { width: 100%; }
+/* inch/cm/mm/Custom in an even 2×2 grid (stays tidy at any width in the capped body). */
+#scaleUnits { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+#scaleUnits .chip { text-align: center; }
