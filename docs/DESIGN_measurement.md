@@ -133,7 +133,7 @@ loose fields:
   is **two points plus optional scalars**, which unifies both storage and
   interaction (every overlay is "click A, drag to B"):
   - `kind` — `"ruler" | "circle" | "cone" | "line"`.
-  - `color` — hex, copied from the creator's seat colour at creation (so it
+  - `color` — hex, copied from the creator's seat color at creation (so it
     survives the creator leaving; not an owner reference for rendering).
   - `owner` — creator `sessionId`, for the remove/clear permission check only.
   - `x, z` — point A (origin), in world units.
@@ -206,7 +206,7 @@ flowchart LR
     `serializeScene`/`serializeGame` and `getRoomState`/`saveRoomState`.
   - No `SIM` involvement — overlays have no physics.
 - **`public/core.js`** — a `CONFIG.measure` block for client *feel*: label sprite
-  scale, template fill opacity/outline weight, preview colour. (Client-feel tunables
+  scale, template fill opacity/outline weight, preview color. (Client-feel tunables
   live here by convention; the geometric truths live in `shared`.)
 - **`public/graphics.js`** — flat overlay builders, registered in an `OVERLAY`
   registry keyed by `kind` (mirroring the `KIND` registry so the sync layer

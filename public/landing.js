@@ -304,7 +304,7 @@ byId('loginBtn').onclick = onLogin;
 byId('suBtn').onclick = onSignup;
 byId('createBtn').onclick = onCreateRoom;
 byId('approval').onclick = () => byId('approval').classList.toggle('on');
-// Accent colour — personal, saved on this device (the <head> script applies it on load; this syncs the picker + handles changes).
+// Accent color — personal, saved on this device (the <head> script applies it on load; this syncs the picker + handles changes).
 {
   const applyAccent = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;

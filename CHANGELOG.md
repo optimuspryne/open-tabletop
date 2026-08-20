@@ -17,12 +17,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   the whole container, and **dropping a matching item back onto it returns it** (a finite
   stack grows; the bowl just takes it back). Spawn them from the **Built-In library →
   Dispensers** tab:
-  - **Poker chips** and **Coins** — pick a colour (coins get a metals palette) and a
+  - **Poker chips** and **Coins** — pick a color (coins get a metals palette) and a
     starting amount; the stack is drawn from your chip/coin model stacked to match, and
     shrinks as you deal.
-  - **Go bowl** — an unlimited bowl of stones in a team colour (black/white), from a
+  - **Go bowl** — an unlimited bowl of stones in a team color (black/white), from a
     bundled model.
-  Double-click a dispenser to **inspect and recolour** it (a colour picker for chip/coin
+  Double-click a dispenser to **inspect and recolor** it (a color picker for chip/coin
   stacks, a black/white toggle for the bowl); every item it dispenses afterward inherits
   the change.
 - **Hover count** — mousing over a deck or dispenser shows a small readout of how many are
@@ -64,7 +64,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ### Added
 - **Live measurement previews** — when someone drags out a ruler or template, everyone
-  at the table now watches it form in real time (in the dragger's seat colour), not just
+  at the table now watches it form in real time (in the dragger's seat color), not just
   see it appear on release.
 - **Move & delete individual overlays** — click a ruler/template you placed (or any, as
   a GM) to select it, drag to reposition it, and press **Delete** to remove just that one

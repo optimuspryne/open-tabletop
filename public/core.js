@@ -105,7 +105,7 @@ function resizeTable(hx, hz) {
   fitShadow(hx, hz); // keep the shadow frustum matched to the surface
 }
 
-// Recolor the felt (the GM picked a new table colour).
+// Recolor the felt (the GM picked a new table color).
 function setTableColor(color) { if (color) tableMesh.material.color.set(color); }
 
 export { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor };

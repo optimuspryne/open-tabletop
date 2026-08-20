@@ -60,9 +60,9 @@ function wireSearch(root) {
   inp.oninput = root._applySearch;
 }
 
-// ---- Spawn cards: quantity + colour, and multi-select batch spawn ----------
+// ---- Spawn cards: quantity + color, and multi-select batch spawn ----------
 // Fixed swatch palette (first = neutral / no tint). Team pieces use their own
-// two set colours (COLORS.team) instead of the palette.
+// two set colors (COLORS.team) instead of the palette.
 const PALETTE = [
   { name: 'Neutral', hex: null },
   { name: 'Red', hex: 0xd14b4b }, { name: 'Orange', hex: 0xd98a3a },
@@ -76,7 +76,7 @@ const METALS = [
   { name: 'Copper', hex: 0xb87333 }, { name: 'Bronze', hex: 0x9c6b3f },
 ];
 const PALETTES = { metals: METALS };
-// Legible die-number colour for a face colour (dark face → light numbers).
+// Legible die-number color for a face color (dark face → light numbers).
 const contrast = (hex) => { const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5 ? 0xf4f1ea : 0x141414; };
 const hexStr = (h) => '#' + (h >>> 0).toString(16).padStart(6, '0').slice(-6);
 function swatchEl(hex) {
@@ -107,8 +107,8 @@ function countStepper(def, max) {
   wrap.get = () => clamp(+inp.value || def);
   return wrap;
 }
-// One spawnable card: preview + title + quantity + optional colour + Spawn.
-// send(colourProps) fires a single spawn; the card supplies quantity + colour.
+// One spawnable card: preview + title + quantity + optional color + Spawn.
+// send(colorProps) fires a single spawn; the card supplies quantity + color.
 // color: 'palette' | 'team' | 'own' | 'none'. li._spawn() is used for batch spawn.
 function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, count, extraActs = [] }) {
   const li = document.createElement('li'); li.className = 'libCard';
@@ -130,7 +130,7 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
     return row;
   };
   if (color === 'team') {
-    if (!COLORS.team[teamName]) console.warn(`spawnCard: no colours for team "${teamName}" — check the piece's PROPS.team and COLORS.team`);
+    if (!COLORS.team[teamName]) console.warn(`spawnCard: no colors for team "${teamName}" — check the piece's PROPS.team and COLORS.team`);
     const cols = COLORS.team[teamName] || [0x888888, 0x222222];
     let idx = 0; getTeam = () => idx;
     ctrls.append(pickRow(cols.map((c, i) => ({ hex: c, name: 'Set ' + (i + 1) })), (_it, i) => { idx = i; }));
@@ -140,7 +140,7 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
     const row = pickRow(pal, (it) => { col = it.hex; });
     if (color === 'own') {
       row.hidden = true;
-      const tog = document.createElement('button'); tog.type = 'button'; tog.className = 'chip chk on ownTog'; tog.textContent = 'Own colours';
+      const tog = document.createElement('button'); tog.type = 'button'; tog.className = 'chip chk on ownTog'; tog.textContent = 'Own colors';
       tog.onclick = () => { row.hidden = tog.classList.toggle('on'); };
       getColor = () => (tog.classList.contains('on') ? null : col);
       ctrls.append(tog, row);
@@ -178,7 +178,7 @@ function spawnBar(ul) {
   go.onclick = () => ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn());
   ul.addEventListener('click', (e) => {
     if (!ul.classList.contains('selecting')) return;
-    if (e.target.closest('.cardCtrls') || e.target.closest('.actions')) return; // let qty/colour clicks through
+    if (e.target.closest('.cardCtrls') || e.target.closest('.actions')) return; // let qty/color clicks through
     const card = e.target.closest('.libCard'); if (card && card._spawn) card.classList.toggle('sel');
   });
 }
@@ -220,7 +220,7 @@ function previewEl(kind, it) {
 function renderList(kind, list) {
   const ul = byId(LIST_UL[kind]); if (!ul) return;
   ul.replaceChildren();
-  if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + colour + multi-select for spawnable assets
+  if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + color + multi-select for spawnable assets
   if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet.'; ul.appendChild(li); return; }
   for (const it of list) {
     const badge = document.createElement('span'); badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv'); badge.textContent = it.isPublic ? 'public' : 'private';
@@ -233,7 +233,7 @@ function renderList(kind, list) {
       btn('Delete', () => { if (confirm(`Delete "${it.name}"? This cannot be undone.`)) ROOM.send('assetDelete', { kind, id: it.id }); }, 'danger'),
     ] : [];
 
-    if (kind === 'prop' || kind === 'deck') { // spawnable: quantity + colour + multi-select
+    if (kind === 'prop' || kind === 'deck') { // spawnable: quantity + color + multi-select
       const extra = kind === 'deck' && it.count != null ? ` \u00b7 ${it.count}` : '';
       ul.appendChild(spawnCard({
         preview: previewEl(kind, it), title: it.name + extra, badge, extraActs: adminActs,
@@ -242,7 +242,7 @@ function renderList(kind, list) {
           ? () => ROOM.send('loadDeck', { id: it.id })
           : (cp) => ROOM.send('spawn', { type: 'prop', props: { ...it.props, ...cp } }),
       }));
-    } else { // board / scene / sky — one action, no quantity/colour
+    } else { // board / scene / sky — one action, no quantity/color
       const extra = kind === 'board' && it.kind ? ` \u00b7 ${it.kind}` : (kind === 'sky' && typeof it.url === 'string' && it.url[0] === '{' ? ' \u00b7 cube' : '');
       const li = document.createElement('li'); li.className = 'libCard';
       const name = document.createElement('span'); name.className = 'libName'; name.textContent = it.name + extra;
@@ -302,7 +302,7 @@ function renderBuiltin() {
   const objs = byId('biObjects'); objs.replaceChildren(); spawnBar(objs);
   for (const p of PROP_LIST) {
     const box = previewBox(); fillAsync(box, propPreviewURL({ shape: p.id }));
-    const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colours
+    const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colors
     objs.append(spawnCard({ preview: box, title: p.name, color: teamName ? 'team' : 'palette', teamName, swatches: p.swatches,
       send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
   }
@@ -381,7 +381,7 @@ function wireUploadSq(inputId, isGlb, onChange) {
 const clearSq = (inputId) => { const input = byId(inputId), sq = input.parentElement; input.value = ''; sq.classList.remove('filled'); sq.style.backgroundImage = 'none'; sq.style.backgroundColor = ''; };
 
 function wireAddDeck() {
-  // text decks — refs carry four colours: text / fill / accent(border) / content
+  // text decks — refs carry four colors: text / fill / accent(border) / content
   const backRef = () => 'tback:' + byId('adBackFill').value + ':' + byId('adBackTextC').value + ':' + byId('adBackAccent').value + ':' + byId('adBackText').value.trim();
   const frontRef = (face) => 'text:' + byId('adFrontTextC').value + ':' + byId('adFrontFill').value + ':' + byId('adFrontAccent').value + ':' + face;
   const refreshText = () => {
@@ -455,7 +455,7 @@ function wireAddDeck() {
     clearSq('adImgBack'); clearSq('adImgFronts');
     if (d.back && d.back !== 'back') byId('adImgBack').parentElement.style.backgroundImage = `url("${d.back}")`;
   };
-  FILLERS.txtdeck = (d, clone) => { // Edit/Clone text deck: back text/colours + front colours + faces (decoded from the refs)
+  FILLERS.txtdeck = (d, clone) => { // Edit/Clone text deck: back text/colors + front colors + faces (decoded from the refs)
     byId('adTxtName').value = clone ? '' : d.name;
     const b = parseCardFront(d.back);
     if (b.kind === 'tback') { byId('adBackFill').value = b.bg; byId('adBackTextC').value = b.textColor; byId('adBackAccent').value = b.accent; byId('adBackText').value = b.text; }

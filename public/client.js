@@ -242,7 +242,7 @@ const meshPropsOf = (piece) => {
     }
     if (piece.type === 'dispenser') {
       // Rebuild the stack body when it dispenses (count drops) so its height tracks the amount left,
-      // and when its props change (colour/team edited via inspect) so the new tint shows.
+      // and when its props change (color/team edited via inspect) so the new tint shows.
       cb(piece).listen('count', () => rebuildPiece(id, piece), false);
       cb(piece).listen('props', () => rebuildPiece(id, piece), false);
     }
@@ -270,7 +270,7 @@ const meshPropsOf = (piece) => {
   // (no overlayMove wired yet), so add/remove is the whole lifecycle here.
   cb(room.state).overlays.onAdd((o, id) => {
     addOverlay(id, o);
-    // Re-render on any geometry/colour change so a moved overlay (overlayMove) updates live.
+    // Re-render on any geometry/color change so a moved overlay (overlayMove) updates live.
     ['x', 'z', 'x2', 'z2', 'w', 'ang', 'color'].forEach(f => cb(o).listen(f, () => addOverlay(id, o), false));
   });
   cb(room.state).overlays.onRemove((o, id) => { removeOverlay(id); if (id === selOverlayId) selectOverlay(null); });
@@ -402,7 +402,7 @@ const meshPropsOf = (piece) => {
   } catch (e) { /* older server without these fields — feature stays inert */ }
   renderScores(); updateRoomNotes(); renderUnclaimed();
   if (room.state.tableX) { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); } // initial size (may be default until decode)
-  if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt colour
+  if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
 
   const diceGrp = byId('diceGrp');
   const diceBtn = byId('diceBtn');
@@ -829,7 +829,7 @@ const BUILTIN_SKIES = [ // baked-in: drop files in public/sky/ and add entries h
 
 window.OTT_BUILTIN_SKIES = BUILTIN_SKIES; // the built-in library reads these (editor + table)
 
-const skyDefault = scene.background;   // the flat colour it ships with
+const skyDefault = scene.background;   // the flat color it ships with
 let skyLast = null;                    // last applied skybox ref (guards against a stale async load)
 // A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
 function applySkybox(ref) {
@@ -947,10 +947,10 @@ function inspectMesh(mesh, opts = {}) {
       const isDie = opts.type === 'die';
       const bodyLab = byId('inspectBodyLab'), textLab = byId('inspectTextLab'), teamLab = byId('inspectTeamLab');
       if (bodyLab) bodyLab.hidden = teamMode;                       // team dispensers hide the freeform picker
-      if (textLab) textLab.hidden = !isDie;                         // dice also get a number colour
+      if (textLab) textLab.hidden = !isDie;                         // dice also get a number color
       if (teamLab) teamLab.hidden = !teamMode;
       if (colorMode && bodyLab) {
-        bodyLab.firstChild.nodeValue = isDie ? 'Body ' : 'Colour ';
+        bodyLab.firstChild.nodeValue = isDie ? 'Body ' : 'Color ';
         byId('inspectColorBody').value = hexStr(inspect.props.color ?? (isDie ? 0xf4f1ea : 0xffffff)); // die = ivory blank face
         if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414);       // die = ink numbers
       }
@@ -959,8 +959,8 @@ function inspectMesh(mesh, opts = {}) {
   }
 }
 const hexStr = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
-// Rebuild the inspected mesh with new props (live preview for die colours and
-// dispenser colour/team). Cheap for stacks — they reclone from the cached model.
+// Rebuild the inspected mesh with new props (live preview for die colors and
+// dispenser color/team). Cheap for stacks — they reclone from the cached model.
 function swapInspect(props) {
   if (!inspect || !inspect.pivot || (inspect.type !== 'die' && inspect.type !== 'dispenser')) return;
   const old = inspect.pivot.children[0];
@@ -1912,7 +1912,7 @@ function syncWhiteboard(s) {
   if (!s) return;
   if (s.enabled !== wbLast.enabled) { wbLast.enabled = s.enabled; buildWhiteboard(); }
   if (wbGroup && s.angle !== wbLast.angle) positionWhiteboard();
-  if (s.dark !== wbLast.dark) { wbLast.dark = s.dark; if (wbGroup) redrawStrokes(); } // recolour + replay
+  if (s.dark !== wbLast.dark) { wbLast.dark = s.dark; if (wbGroup) redrawStrokes(); } // recolor + replay
   if (s.owner !== wbLast.owner) { wbLast.owner = s.owner; if (s.owner === mySession) enterWbDraw(); else exitWbDraw(); }
   wbLast.angle = s.angle;
 }
@@ -2015,7 +2015,7 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
       img.className = 'pav';
       img.src = player.avatar;
       row.appendChild(img);
-    } else { // colour is a server palette value
+    } else { // color is a server palette value
       const dot = document.createElement('span');
       dot.className = 'dot';
       dot.style.background = player.color;
@@ -2034,7 +2034,7 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
   }
 }
 
-// Pulse the Members button in the accent colour while any join is pending, so a
+// Pulse the Members button in the accent color while any join is pending, so a
 // GM sees new requests without opening the panel.
 function updateMembersPulse(list) {
   const pending = list.some((m) => m.status === 'pending');
@@ -2202,7 +2202,7 @@ const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused ea
   if (held) {
     _dropBox.setFromObject(held.mesh); _dropBox.getSize(_dropSize);                       // fit the ring to the piece's footprint
     dropMarker.scale.setScalar((Math.max(_dropSize.x, _dropSize.z) / 2 + 0.12) / CONFIG.marker.outer);
-    const me = room && room.state.players.get(mySession);                                 // tint to my seat colour
+    const me = room && room.state.players.get(mySession);                                 // tint to my seat color
     if (me && me.color) dropMarker.material.color.set(me.color);
     dropMarker.position.set(held.mesh.position.x, boardTopY + CONFIG.marker.lift, held.mesh.position.z);
     dropMarker.visible = true;

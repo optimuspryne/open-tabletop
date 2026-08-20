@@ -7,7 +7,7 @@ The codebase:
 
 | File | Runtime | Role |
 |------|---------|------|
-| `shared/pieces.js` | both | Single source of truth: dimensions, masses, colours, dice verts, prop/board registries |
+| `shared/pieces.js` | both | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries |
 | `server.js` | Node | Authoritative physics + Colyseus rooms + HTTP (auth/rooms/admin) + Postgres |
 | `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
@@ -147,7 +147,7 @@ Pure data + two functions, imported by both sides.
 ### Constants
 
 - **`TABLE`** `{ x, z }` — half-extents of the play surface.
-- **`COLORS`** — every piece colour: `neutralProp`, `cardSide`, `deckEdge`,
+- **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
   `boardEdge`, `ivory`, `ink`, `felt[dark,light]`, and `team {checker, go,
   chess}` each `[color0, color1]`.
 - **`KINDS`** `{ die, card, prop, deck, board }` — physics half `{ mass, shape }`.
@@ -160,7 +160,7 @@ Pure data + two functions, imported by both sides.
   `modelScale` (+ optional `modelRot`, `team`, `tintMaterial`, `ownMaterial`,
   `stand`).
 - **`PROP_LIST`** `[{ id, name, team? }]` — ordered spawn-picker list;
-  `team:true` shows the two-colour toggle, else the colour picker.
+  `team:true` shows the two-color toggle, else the color picker.
 - **`BOARDS`** `{ key → { name, model, modelScale, box } }` — built-in model
   boards (colliders precomputed from `worldSize·scale/2`).
 - **`BOARD_SIZE`** — target footprint width uploaded `.glb` boards normalize to.
@@ -270,7 +270,7 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
   **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
-  colour), **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
+  color), **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
   measurement/template annotations), and the resumed-game public labels
   **`turnPending`** (name of an absent turn-holder) + **`unclaimed`** (map
   `userId → name` of saved hands awaiting their owner — the GM's reassign UI reads
@@ -307,7 +307,7 @@ scene *plus* account-keyed `hands` + `turn`, session→`userId` resolved),
 member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
 (persist the room's durable settings — scoreboard, notes, table size, skybox, felt
-colour, and the saved game snapshot — now / debounced via `db.saveRoomState`),
+color, and the saved game snapshot — now / debounced via `db.saveRoomState`),
 **`closeAndDispose`** (broadcast `roomClosed`, then dispose — invoked by
 `matchMaker.remoteRoomCall`), `onJoin`/`onLeave` (on join, an account reclaims its
 `pendingHands`/`pendingTurn`; on leave, after the reconnect window, a departing
@@ -326,7 +326,7 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 (gm+ — checkpoint the live game via `serializeGame` into the room's `scene`; replies
 `stateSaved`). Room settings (gm+, persisted via `scheduleSave`): **`score`**
 (scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
-**`tableColor`** (felt colour), **`scaleSet`** (measurement scale — partial update
+**`tableColor`** (felt color), **`scaleSet`** (measurement scale — partial update
 of `worldPerUnit`/`unitLabel`/`roundStep`/`cellWorld`/`gridStyle`), **`skybox`**
 (apply a background).
 
@@ -477,7 +477,7 @@ storage and lookup, so a DB leak never exposes a live token.
 ## `public/core.js` — setup + tunables
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z)`** (rebuild
-the felt + walls at a new half-extent) and **`setTableColor(hex)`** (recolour the
+the felt + walls at a new half-extent) and **`setTableColor(hex)`** (recolor the
 felt), and the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
@@ -495,7 +495,7 @@ felt), and the config:
 ### Textures → `THREE.CanvasTexture`
 
 - **`cTex(canvas, srgb?)`** — wraps every canvas texture with **max anisotropy**
-  (+ colour space) so text/numbers stay sharp. All builders route through it.
+  (+ color space) so text/numbers stay sharp. All builders route through it.
   Builders allocate their canvas via a shared **`makeCanvas(w,h)`**, and the
   filtering is centralized in **`maxAnisotropy()`**.
 - **`cardFront(rank,suite,color)`** (corner index + centre rank), **`cardBack()`**,

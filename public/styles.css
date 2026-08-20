@@ -587,7 +587,7 @@ select:focus {
   color: var(--text);
 }
 
-/* Library spawn cards: quantity stepper + colour swatches + multi-select */
+/* Library spawn cards: quantity stepper + color swatches + multi-select */
 .cardCtrls {
   display: flex;
   flex-wrap: wrap;
@@ -768,7 +768,7 @@ input[type="range"]::-moz-range-thumb {
   box-shadow: 0 0 0 1px var(--shadow-soft);
 }
 
-/* Lobby accent-colour picker (personal, per-device) */
+/* Lobby accent-color picker (personal, per-device) */
 #accentPicker {
   display: flex;
   align-items: center;

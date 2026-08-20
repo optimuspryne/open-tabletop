@@ -26,7 +26,7 @@ LAN → use your machine's IP) and move pieces around together.
 
 Postgres now backs the saved-asset **library** (deck / board / prop / scene /
 skybox metadata), **user accounts**, **rooms + membership**, and each room's
-durable settings — scoreboard, notes, table size, skybox, felt colour, and a
+durable settings — scoreboard, notes, table size, skybox, felt color, and a
 saved **game snapshot**. Live piece state and private hands are held in memory
 *during a session*; they're persisted only through a snapshot — the GM's **Save
 Table State**, or an auto-save when the room empties — written into the room's

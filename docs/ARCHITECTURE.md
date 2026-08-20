@@ -50,7 +50,7 @@ The client used to be one inline module; it is now a small **linear import
 chain** (`shared ← core ← graphics ← client`) so the codebase stays navigable:
 
 - **`shared/pieces.js`** — the single source of truth for physics dimensions,
-  masses, colours, dice vertices, and the prop/board registries. Imported by
+  masses, colors, dice vertices, and the prop/board registries. Imported by
   *both* sides so a collider and its mesh are built from the same numbers.
 - **`server.js`** — the authority: the cannon-es world, the Colyseus room, all
   message handlers, the Postgres-backed asset library (via `db.js`), and the
@@ -193,8 +193,8 @@ The kinds:
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
   `count` scales the visible stack (`deckHeight`).
 - **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
-  box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Colour comes
-  from a picker, a two-colour **team** palette, or a per-material **tint**; a
+  box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Color comes
+  from a picker, a two-color **team** palette, or a per-material **tint**; a
   `stand` flag self-rights standing pieces. Universal `props.scale`.
 - **board** — static (mass 0) but removable. A built-in model (`BOARDS`
   registry), an uploaded `.glb`, or a procedural flat box with an optional
@@ -205,7 +205,7 @@ card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
 are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
 
-### Models: scale, orientation, colour
+### Models: scale, orientation, color
 
 - **Built-in model pieces** (chess/checkers/go/coin/chip/token) carry a fixed
   `modelScale` and a **precomputed collider** in `PROPS` (`{ box, type? }` — a box
@@ -216,8 +216,8 @@ are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
   the table); the client measures the model and sends the collider box with the
   spawn.
 - **`modelRot`** reorients a mis-authored model (e.g. laying a coin flat).
-- **Tint modes** (in the loader): `team` recolours every slot; a colour-picker
-  prop recolours all; `tintMaterial:'name'` recolours **one** material slot and
+- **Tint modes** (in the loader): `team` recolors every slot; a color-picker
+  prop recolors all; `tintMaterial:'name'` recolors **one** material slot and
   de-metals the rest (e.g. a chip body but not its white rim); `ownMaterial`
   keeps the model's materials. glTF defaults materials to metallic, so tinting
   swaps in a clean matte material and de-metals kept slots.
@@ -232,9 +232,9 @@ A die is **one kind** parameterized by `props.sides`.
 - **Client** numbers every die: the d6 bakes a digit onto each box face, and the
   polyhedra lay a digit plane on each logical face (coplanar triangles grouped by
   normal, a sprite at each centroid). Both honour an optional per-die **body
-  colour** and **number colour** (`props.color` / `props.textColor`), baked into
+  color** and **number color** (`props.color` / `props.textColor`), baked into
   the face textures so the two stay independent. Double-click a die (or prop) to
-  inspect it and the overlay offers those colour pickers; committing sends
+  inspect it and the overlay offers those color pickers; committing sends
   `recolor` and the tint syncs to everyone.
 - **Server** builds a `CANNON.ConvexPolyhedron` from the *same* vertices (hull
   faces from `convex-hull`, windings flipped outward) so the die tumbles and
@@ -279,7 +279,7 @@ machinery:
   `chatMsg`; a late joiner pulls the backlog by requesting `chatLog`. Held only in
   server memory, gone on dispose — the same message-not-schema pattern as the
   whiteboard, not synced state.
-- **Felt colour** (shared, durable) — the table surface colour. GM-set, synced as
+- **Felt color** (shared, durable) — the table surface color. GM-set, synced as
   `feltColor`, and persisted per room (the client applies it via `setTableColor`).
 - **Lean in** (client-only) — an Interactions-menu toggle that eases the camera
   toward the orbit target for a closer look. Applied as a per-frame offset that's
@@ -370,7 +370,7 @@ drag lays, and release fires `overlayAdd` with the kind's scalars. The server
 validates the kind, enforces the per-room (`OVERLAY_MAX`) and per-player
 (`OVERLAY_MAX_PER_PLAYER`) caps so the map can't be spammed, clamps coordinates to
 `MEASURE.maxLen`, stamps `owner` (the creator's `sessionId`, for the remove/clear
-permission gate) and `color` (copied from the creator's seat colour so it survives
+permission gate) and `color` (copied from the creator's seat color so it survives
 them leaving), and drops it in the `overlays` map; Colyseus delta-sync does the rest,
 so a late joiner gets every overlay in its initial state with no replay. Clearing is
 scoped: `overlayClear { scope }` wipes only your own by default, and `scope: 'all'`
@@ -436,7 +436,7 @@ string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 can't reshape or drop the schema.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
-notes, table size, skybox, and felt colour — plus the GM/auto-save **game
+notes, table size, skybox, and felt color — plus the GM/auto-save **game
 snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
 `saveRoomState`, debounced by the room's `scheduleSave`). So those survive a
 restart or an empty-table reset; live pieces and hands stay in memory during a
@@ -498,8 +498,8 @@ maps and each hand is delivered privately via `sendHand`, exactly as in a live g
 
 ## Seats, presence, turns
 
-On join the server assigns the lowest free seat, a colour, and a name, and
-creates a public `Player` (seat, hand count, name, colour, avatar). The client
+On join the server assigns the lowest free seat, a color, and a name, and
+creates a public `Player` (seat, hand count, name, color, avatar). The client
 parks *your* camera at *your* seat, draws every *other* player's hand as N fanned
 face-down backs (from the public count — you see how many, never which), and
 stands a marker (avatar or silhouette + name) at each seat. `state.turn` holds a
@@ -528,7 +528,7 @@ separate tabs stay distinct.
   `wbEnable`/`wbClaim`/`wbRelease`/`wbSet`/`wbStroke`/`wbClear`/`wbStrokes`
   (whiteboard), `chat`/`chatLog` (public chat — send, and request the backlog),
   `score`/`roomNotes`/`table`/`tableColor` (durable room settings: scoreboard,
-  notes, table size, felt colour),
+  notes, table size, felt color),
   `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
   `notebook`, `timer`, `showStart`/`showStop`, `ping`, `handSync` (re-request my
   private hand after a reconnect). (Library load/edit key on a row **`id`** — the

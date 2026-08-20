@@ -26,7 +26,7 @@ function maxAnisotropy() {
 // are all drawn onto a 2D canvas rather than shipped as image files.
 
 // The face of a standard playing card: rank + suit small in two opposite corners
-// and large in the middle. `color` is the suit colour (black or red).
+// and large in the middle. `color` is the suit color (black or red).
 function cardFront(rank, suit, color) {
   const S = 2, w = 300, h = 420;
   const { canvas, ctx } = makeCanvas(w * S, h * S);
@@ -97,7 +97,7 @@ function deckEdgeTex() {
   const w = 4, h = 256;
   const { canvas, ctx } = makeCanvas(w, h);
 
-  ctx.fillStyle = '#' + COLORS.deckEdge.toString(16).padStart(6, '0'); // paper base colour
+  ctx.fillStyle = '#' + COLORS.deckEdge.toString(16).padStart(6, '0'); // paper base color
   ctx.fillRect(0, 0, w, h);
   ctx.lineWidth = 1;
   for (let y = 2; y < h; y += 4) {
@@ -331,13 +331,13 @@ export function parseCardFront(ref) {
   if (ref.startsWith('text:')) {
     const [color, r1] = splitColorText(ref.slice(5), COLORS.ink);
     const [bg, r2] = splitColorText(r1, '#fbfbf7');
-    const [accent, text] = splitColorText(r2, '#ddd'); // 4th colour optional (border); default on old refs
+    const [accent, text] = splitColorText(r2, '#ddd'); // 4th color optional (border); default on old refs
     return { kind: 'text', color, bg, accent, text };
   }
   if (ref.startsWith('tback:')) {
     const [bg, r1] = splitColorText(ref.slice(6), '#7d2b2b');
     const [textColor, r2] = splitColorText(r1, '#f4f1ea');
-    const [accent, text] = splitColorText(r2, 'rgba(255,255,255,.45)'); // 4th colour optional; default on old refs
+    const [accent, text] = splitColorText(r2, 'rgba(255,255,255,.45)'); // 4th color optional; default on old refs
     return { kind: 'tback', bg, textColor, accent, text };
   }
   return { kind: 'image', ref };
@@ -359,8 +359,8 @@ function resolveTexture(ref) {
   return texture;
 }
 
-// Split "color:rest" when the prefix is a hex colour; otherwise return the
-// default colour and the whole string unchanged.
+// Split "color:rest" when the prefix is a hex color; otherwise return the
+// default color and the whole string unchanged.
 function splitColorText(str, defaultColor) {
   const sep = str.indexOf(':');
   if (sep > 0 && /^#[0-9a-fA-F]{3,8}$/.test(str.slice(0, sep))) {
@@ -598,8 +598,8 @@ function cardMesh(props = {}) {
 }
 // --- Props: models (async .glb) and built-in shapes -------------------------
 
-// The colour a built-in prop should render in: a fixed team colour for two-sided
-// game sets (checkers/chess), otherwise the player's picked colour, else neutral.
+// The color a built-in prop should render in: a fixed team color for two-sided
+// game sets (checkers/chess), otherwise the player's picked color, else neutral.
 function propColor(props) {
   const spec = PROPS[props.shape] || PROPS.box;
   if (spec.team) return COLORS.team[spec.team][props.team ? 1 : 0];
@@ -628,7 +628,7 @@ function loadModelGroup(url, fitOpts, onMesh, beforeFit) {
 
 // Build a prop's visual mesh. A prop is either a bundled/custom .glb MODEL or a
 // simple built-in SHAPE (box/sphere/cone/…). Models load asynchronously into a
-// placeholder group and colour themselves in when ready; shapes build instantly.
+// placeholder group and color themselves in when ready; shapes build instantly.
 function propMesh(props = {}) {
   const spec = PROPS[props.shape] || {};
   const modelUrl = props.model || spec.model; // custom upload (instance) OR bundled built-in (definition)
@@ -636,17 +636,17 @@ function propMesh(props = {}) {
   if (modelUrl) {
     const builtin = !props.model && !!spec.model; // built-ins keep FIXED set proportions; custom uploads normalize
 
-    // Work out how the model gets coloured (used by paint below):
-    const teamTint = builtin && spec.team ? propColor(props) : null;                                  // a team set → recolour every slot
-    const pick = (!builtin || !spec.ownMaterial || spec.tintMaterial) ? (props.color ?? null) : null; // the player's picked colour
+    // Work out how the model gets colored (used by paint below):
+    const teamTint = builtin && spec.team ? propColor(props) : null;                                  // a team set → recolor every slot
+    const pick = (!builtin || !spec.ownMaterial || spec.tintMaterial) ? (props.color ?? null) : null; // the player's picked color
     const matte = (color, side) => new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
 
     // Decide the fate of one material slot on the loaded model.
     const paint = (material) => {
-      if (teamTint != null) return matte(teamTint, material.side); // team set: recolour everything
+      if (teamTint != null) return matte(teamTint, material.side); // team set: recolor everything
       if (builtin && spec.tintMaterial) {
-        // Only the one named slot takes the picked colour; de-metal the rest so
-        // their own baked-in colours read correctly.
+        // Only the one named slot takes the picked color; de-metal the rest so
+        // their own baked-in colors read correctly.
         if (material.name === spec.tintMaterial && pick != null) return matte(pick, material.side);
         material.metalness = 0;
         return material;
@@ -655,7 +655,7 @@ function propMesh(props = {}) {
         material.metalness = 0;
         return material;
       }
-      return pick != null ? matte(pick, material.side) : material; // full tint (colour-picker / custom upload)
+      return pick != null ? matte(pick, material.side) : material; // full tint (color-picker / custom upload)
     };
 
     return loadModelGroup(
@@ -757,7 +757,7 @@ function boardMesh(props = {}) {
         node.receiveShadow = true;
         node.castShadow = false;
         const materials = Array.isArray(node.material) ? node.material : [node.material];
-        materials.forEach(m => { if (m) m.metalness = 0; }); // de-metal so the board's own colours read
+        materials.forEach(m => { if (m) m.metalness = 0; }); // de-metal so the board's own colors read
       },
     );
   }
@@ -785,7 +785,7 @@ const isTintSlot = (name, slot) => !!slot && typeof name === 'string' && (name =
 // resolves. Stored raw/unpainted — each build clones, fits, and tints its own copy.
 const _stackProto = new Map();
 
-// colour. `props` carries { disp, color?, team?, count? }.
+// color. `props` carries { disp, color?, team?, count? }.
 function dispenserMesh(props = {}) {
   const spec = DISPENSERS[props.disp];
   if (!spec) return new THREE.Group();
@@ -1056,7 +1056,7 @@ function makePlayerTexture(player) {
 
   const draw = (img) => {
     ctx.clearRect(0, 0, width, height);
-    // Card-ish background with a border tinted in the player's colour.
+    // Card-ish background with a border tinted in the player's color.
     ctx.fillStyle = 'rgba(20,24,29,0.9)';
     roundRect(ctx, 6, 6, width - 12, height - 12, 16);
     ctx.fill();
@@ -1108,7 +1108,7 @@ function makePlayerTexture(player) {
 }
 
 // A small floating name-tag texture: translucent pill, border in the player's
-// colour, their name centred. Shown over a piece while someone else holds it.
+// color, their name centred. Shown over a piece while someone else holds it.
 function nameTag(name, color) {
   const width = 256, height = 80;
   const { canvas, ctx } = makeCanvas(width, height);

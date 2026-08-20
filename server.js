@@ -74,7 +74,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 // sync in state, and never an arbitrary URL/script). Used by setAvatar + /me/avatar.
 const isBoundedImageDataURL = (data) => typeof data === 'string' && data.startsWith('data:image') && data.length < 60000;
 // A whiteboard stroke: a flat [x0,y0,x1,y1,...] path in normalized [0,1] board UV,
-// plus a colour + width. Bounded so a bad client can't push junk or a huge payload.
+// plus a color + width. Bounded so a bad client can't push junk or a huge payload.
 const validStroke = (s) => s && Array.isArray(s.pts) && s.pts.length >= 2 && s.pts.length <= 2000
   && s.pts.every(n => typeof n === 'number' && n >= 0 && n <= 1)
   && typeof s.color === 'string' && s.color.length <= 24
@@ -545,7 +545,7 @@ class TableRoom extends Room {
 
       // Mirror of the deck absorb for dispensers: a chip/coin/stone dropped on its
       // matching stack rejoins it (finite → count++; the infinite bowl just takes it
-      // back). Match is by the exact item the stack hands out (shape + colour/team),
+      // back). Match is by the exact item the stack hands out (shape + color/team),
       // so a red chip won't merge into a blue tray.
       if (piece.type === 'prop' && body) {
         const pp = JSON.parse(piece.props || '{}');
@@ -743,7 +743,7 @@ class TableRoom extends Room {
       const props = JSON.parse(piece.props || '{}');
       if (piece.type === 'die' || piece.type === 'prop') {
         if (color != null) { const c = Number(color); if (!ok(c)) return; props.color = c; }
-        if (piece.type === 'die' && textColor != null) { const t = Number(textColor); if (!ok(t)) return; props.textColor = t; } // die number colour
+        if (piece.type === 'die' && textColor != null) { const t = Number(textColor); if (!ok(t)) return; props.textColor = t; } // die number color
       } else if (piece.type === 'dispenser') {
         const d = DISPENSERS[props.disp]; if (!d) return;
         if (d.team) { if (team == null) return; props.team = team ? 1 : 0; }        // go bowl: black/white interior
@@ -1199,7 +1199,7 @@ class TableRoom extends Room {
     });
     // Live measurement preview: a transient relay (NOT synced state), so everyone
     // sees a ruler/template as it's dragged out. A missing/invalid kind means the
-    // drag ended — clear the sender's preview. Stamps the sender's id + seat colour.
+    // drag ended — clear the sender's preview. Stamps the sender's id + seat color.
     this.onMessage('overlayDrag', (client, msg = {}) => {
       const player = this.state.players.get(client.sessionId);
       const color = (player && player.color) || '#ffffff';
@@ -1462,7 +1462,7 @@ class TableRoom extends Room {
   }
 
   // The spawn spec a dispenser hands out: an existing PROP, tinted (poker/coin) or
-  // team-coloured (go bowl) from the dispenser's own config.
+  // team-colored (go bowl) from the dispenser's own config.
   dispenserItem(piece) {
     const props = JSON.parse(piece.props || '{}');
     const d = DISPENSERS[props.disp]; if (!d) return null;
@@ -1602,7 +1602,7 @@ class TableRoom extends Room {
     });
     // Overlays are public geometry, so they ride the scene by value (no owner — a
     // saved session's sessionIds are meaningless on reload; restored overlays are
-    // table-owned and GM-managed). Colour is kept so they look the same on load.
+    // table-owned and GM-managed). Color is kept so they look the same on load.
     const overlays = [];
     this.state.overlays.forEach(o => overlays.push({ kind: o.kind, color: o.color, x: o.x, z: o.z, x2: o.x2, z2: o.z2, w: o.w, ang: o.ang }));
     return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays };
@@ -1797,7 +1797,7 @@ class TableRoom extends Room {
 
   onJoin(client) {
     const auth = client.auth || {};
-    // Give the new player the lowest free seat and a colour to match.
+    // Give the new player the lowest free seat and a color to match.
     const takenSeats = new Set();
     this.state.players.forEach(existing => takenSeats.add(existing.seat));
     let seat = 0;

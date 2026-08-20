@@ -1,5 +1,5 @@
 // =============================================================================
-// SINGLE SOURCE OF TRUTH  —  every piece dimension, mass, colour and proportion.
+// SINGLE SOURCE OF TRUTH  —  every piece dimension, mass, color and proportion.
 // Imported by BOTH the server (to build cannon-es colliders) and the client (to
 // build Three.js meshes). Keeping it all here is what stops the physics body and
 // the rendered mesh from drifting apart, and keeps magic numbers out of the code.
@@ -8,18 +8,18 @@
 // --- Table ------------------------------------------------------------------
 export const TABLE = { x: 10, z: 7 };            // half-extents of the play surface
 
-// --- Colours ----------------------------------------------------------------
+// --- Colors ----------------------------------------------------------------
 // Values are hex ints (Three.js materials) or CSS strings (canvas textures);
 // Three.Color accepts either, so the ivory/ink strings work in both places.
 export const COLORS = {
-  neutralProp: 0x9aa0a6,                          // default colour for neutral props
+  neutralProp: 0x9aa0a6,                          // default color for neutral props
   cardSide:    0xffffff,                          // card edges
   deckEdge:    0xf2efe6,                          // deck paper edge
   boardEdge:   0x2a2a2a,                          // board rim
   felt:        ['#3a3a3a', '#d9c7a0'],            // board checker squares [dark, light]
   ivory:       '#f4f1ea',                         // blank die faces
   ink:         '#141414',                         // die numbers
-  team: {                                         // fixed two-colour game sets [color0, color1]
+  team: {                                         // fixed two-color game sets [color0, color1]
     checker: [0xb03030, 0x2a2a2a],                // red / black
     go:      [0x111111, 0xf0f0f0],                // black / white
     chess:   [0xe8e0d0, 0x2a2a2a],                // ivory / black
@@ -48,7 +48,7 @@ export const deckHeight = c => Math.max(0.06, Math.min(1.2, c * 0.02));
 // --- Props ------------------------------------------------------------------
 // Each preset: mass, a coarse proxy `collider` (box or sphere), a `render`
 // descriptor the client dispatches on, and optional `team` (which COLORS.team
-// palette to use; absent = neutral, uses the picked colour).
+// palette to use; absent = neutral, uses the picked color).
 // render.prim: box | sphere | cone | cyl | lens. (glb-model props use `model` instead.)
 export const PROPS = {
   box:             { mass: 0.6, collider: { box: [0.5, 0.5, 0.5] },                             render: { prim: 'box', size: [1, 1, 1] } },
@@ -65,7 +65,7 @@ export const PROPS = {
   crowned_checker: { mass: 0.6, collider: { box: [0.3, 0.1,  0.3], type: 'cylinder' },          render: { prim: 'cyl', r: 0.3, h: 0.2 }, team: 'checker', stand: 'flat'},
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin:           { mass: 0.3, collider: { box: [0.21, 0.021, 0.21], type: 'cylinder' }, model: '/models/pieces/misc/coin.glb', modelScale: 0.3, ownMaterial: false }, // rotated flat; keeps its own look
-  poker_chip:     { mass: 0.25, collider: { box: [0.45, 0.045, 0.45] }, model: '/models/pieces/misc/poker_chip.glb', modelScale: 0.18, tintMaterial: 'c1' }, // colour picker tints only the body; white rim kept
+  poker_chip:     { mass: 0.25, collider: { box: [0.45, 0.045, 0.45] }, model: '/models/pieces/misc/poker_chip.glb', modelScale: 0.18, tintMaterial: 'c1' }, // color picker tints only the body; white rim kept
   token:          { mass: 0.4, collider: { box: [0.17, 0.50, 0.17] }, model: '/models/pieces/misc/token.glb', modelScale: 0.84, stand: true }, //Generic token to represent a player, for use in various games.
   go:             { mass: 0.2, collider: { box: [0.15, 0.075, 0.15], type: 'flat' }, render: { prim: 'lens', r: 0.2, sy: 0.375 }, team: 'go', stand: 'flat' }, // ~0.4 wide, fits the go board grid
   // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
@@ -78,7 +78,7 @@ export const PROPS = {
   'chess-queen':  { mass: 0.6, collider: { box: [0.31, 0.70, 0.27] }, model: '/models/pieces/chess/queen.glb',  modelScale: 2.124, team: 'chess', stand: true },
   'chess-king':   { mass: 0.6, collider: { box: [0.31, 0.70, 0.27] }, model: '/models/pieces/chess/king.glb',   modelScale: 2.124, team: 'chess', stand: true },
 };
-// Ordered list for the spawn UI. team:true = fixed two-colour set; else colour picker.
+// Ordered list for the spawn UI. team:true = fixed two-color set; else color picker.
 export const PROP_LIST = [
   { id: 'box', name: 'Box' }, { id: 'pyramid', name: 'Pyramid' }, { id: 'sphere', name: 'Sphere' },
   { id: 'cuboid', name: 'Cuboid' }, { id: 'cone', name: 'Cone' }, { id: 'cylinder', name: 'Cylinder' },
@@ -111,7 +111,7 @@ export const DISPENSERS = {
                 count: { def: 20, max: 100 }, mass: 0.5 },
   coinStack:  { name: 'Coins',       body: 'stack', item: 'coin', color: true, swatches: 'metals',
                 count: { def: 20, max: 100 }, mass: 0.5 },
-  // Go bowl: infinite, team-coloured (interior stones + fill = black/white; the bowl
+  // Go bowl: infinite, team-colored (interior stones + fill = black/white; the bowl
   // shell keeps its baked look). The .glb is normalised to MODEL_SIZE like an uploaded
   // model (modelScale multiplies that target); collider = the resulting half-extents.
   goBowl:     { name: 'Go bowl', body: 'model', item: 'go', team: 'go', infinite: true,
