@@ -170,6 +170,17 @@ Decoupling throw velocity (measured) from the servo (which only tracks the
 cursor) is what fixed the old rubberband/jitter: the servo tracks tightly *and*
 throws carry accurate momentum.
 
+**Snap-to-grid** (0.7.0) is a placement concern layered on top of this, not a change
+to the sim. A piece carries a `snap` flag (per-piece, like `stand`; **G** toggles it).
+When a grid is active, a snapped piece's `move`/`release` XZ runs through the shared
+`snapToCell` quantiser — the same function on client (drag preview) and server
+(authority), so they can't drift — and it's dropped **throw-free** (velocity zeroed)
+rather than flung. It's still an ordinary rigid body; it just falls onto a quantised
+point. The one part that *does* touch body state is **pinning**: once a snapped piece
+settles (its body goes to sleep, not merely slows — the old low-speed check pinned
+pieces in mid-air), the server freezes it to a `STATIC` body so a bumped neighbour
+can't slide it off its cell. A grab, or turning the flag or the grid off, unpins it.
+
 ## Pieces today
 
 Each **kind** is defined in two registries keyed by the same type id:
@@ -383,8 +394,11 @@ checkpoint, the auto-save-on-empty, and a saved library scene all carry their pl
 templates, and `applyScene` rebuilds them as **table-owned** (`owner: ''`, hence
 GM-managed) after the pieces. Note this makes the annotations durable across a room
 going empty and returning — they are no longer session-lifetime only. The room's
-`scale` is durable the same way, but through a different path: `saveRoomState`'s own
-`scale` column, restored on room load.
+`scale` — the measurement calibration **and** the grid layout (cell size, offset, snap
+anchor, line color, height) — is durable **two** ways: `saveRoomState`'s own `scale`
+column restores it on room load, and (since 0.7.0) `serializeScene` also embeds it in
+the scene snapshot, so a saved library scene reopens measured and gridded exactly as it
+was, not just the live room. `applyScene` re-applies it via `applyScale`.
 
 ## Sound & music
 
@@ -466,7 +480,8 @@ Two serializers, layered on purpose:
 
 - **`serializeScene`** produces the portable *template*: table size + every piece
   (transform, and a deck's private card order / a face-down card's hidden front
-  ride along so they rebuild faithfully), and **no player identity**. Library
+  ride along so they rebuild faithfully) + the overlays + the room **`scale`**
+  (measurement calibration and grid layout), and **no player identity**. Library
   scenes call this directly — they must stay hands-free.
 - **`serializeGame`** wraps a scene with the live private layer: each held **hand**
   and the **turn**. The catch is that both are keyed by ephemeral **`sessionId`**,
@@ -527,8 +542,10 @@ separate tabs stay distinct.
   `stateSave` (GM checkpoints the live game into the room's `scene`),
   `wbEnable`/`wbClaim`/`wbRelease`/`wbSet`/`wbStroke`/`wbClear`/`wbStrokes`
   (whiteboard), `chat`/`chatLog` (public chat — send, and request the backlog),
-  `score`/`roomNotes`/`table`/`tableColor` (durable room settings: scoreboard,
-  notes, table size, felt color),
+  `score`/`roomNotes`/`table`/`tableColor`/`scaleSet`/`calibrateGrid` (durable room
+  settings: scoreboard, notes, table size, felt color, measurement + grid),
+  `setStand`/`setSnap`/`snap` (per-piece flags: keep-upright, snap-to-grid, and step
+  facing by 45°),
   `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
   `notebook`, `timer`, `showStart`/`showStop`, `ping`, `handSync` (re-request my
   private hand after a reconnect). (Library load/edit key on a row **`id`** — the

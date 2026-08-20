@@ -179,7 +179,15 @@ Pure data + two functions, imported by both sides.
 - **`roundToStep(value, step) → number`** — rounds `value` to the nearest multiple
   of `step` (a *size*, so "nearest 0.5" works where a digit count can't); `step ≤ 0`
   returns `value` unchanged. Clears binary-float dust. The primitive behind
-  measurement display and (later) grid snapping.
+  measurement display and grid snapping.
+- **`gridActive(scale) → bool`** — `scale.gridStyle !== 'off' && cellWorld > 0`; the
+  one guard both render and snap gate on, so the grid draws and snaps together.
+- **`snapToCell(x, z, scale) → {x, z}`** — the nearest cell position on the grid, the
+  single quantiser the client preview and the server authority both call so they can't
+  drift. Square only (`hex`/`off`/zero-cell return the point unchanged). Honours
+  per-axis spacing (`cellZ`), the `gridX`/`gridZ` offset, and `snapAnchor` (`center`
+  lands in cell middles, `cross` on line intersections). Uses exact rounding, not
+  `roundToStep`'s display rounding, so a non-round cell size lands on true multiples.
 - **`formatMeasure(worldDist, scale) → string`** — a world distance as a display
   label: `worldDist ÷ scale.worldPerUnit → roundToStep(·, roundStep) → + unitLabel`
   (e.g. `"5.5 in"`). Rounding is display-only; the caller keeps exact geometry. Pure
@@ -254,10 +262,13 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 - **`Whiteboard`** — `enabled, angle, owner, dark`; the shared tilt-up sketch
   surface's *public* state. Strokes themselves are **not** synced — they're sent
   as messages and replayed onto a texture (see the protocol below).
-- **`RoomScale`** — `worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle`; the
-  per-room measurement scale (a display/snap layer over the fixed world scale, never
-  a rescale). `cellWorld`/`gridStyle` are the grid half — reserved, dormant until
-  snap-to-grid. Durable (persisted via `saveRoomState`).
+- **`RoomScale`** — the per-room measurement + grid layer over the fixed world scale
+  (a display/snap layer, never a rescale). Measurement half: `worldPerUnit, unitLabel,
+  roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square`), `cellWorld` (cell
+  width in world units), `cellZ` (cell depth; `0` = square, falls back to `cellWorld`),
+  `gridX`/`gridZ` (lattice offset), `snapAnchor` (`center|cross`), `gridColor`, `gridLift`
+  (height above the felt). Durable (persisted via `saveRoomState`, **and** carried in the
+  scene snapshot — see `serializeScene`).
 - **`Overlay`** — `kind` (`ruler|circle|cone|line`), `color`, `owner` (creator
   `sessionId`, for the remove/clear gate), `x, z` (origin A), `x2, z2` (drag point
   B), `w` (line width), `ang` (cone half-angle); one flat measurement/template
@@ -300,9 +311,10 @@ out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`*
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
 **`advanceTurn`**, **`serializeScene`** (portable template: table size + pieces +
-deck order + face-down fronts + overlays, no player identity), **`serializeGame`** (a
-scene *plus* account-keyed `hands` + `turn`, session→`userId` resolved),
-**`applyScene`** (rebuild pieces + overlays, then *stage* the private layer into
+deck order + face-down fronts + overlays + the room **`scale`** (measurement + grid),
+no player identity), **`serializeGame`** (a scene *plus* account-keyed `hands` + `turn`,
+session→`userId` resolved), **`applyScene`** (rebuild pieces + overlays, **apply the
+scene's `scale`** via `applyScale`, then *stage* the private layer into
 `pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
 member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
@@ -326,9 +338,19 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 (gm+ — checkpoint the live game via `serializeGame` into the room's `scene`; replies
 `stateSaved`). Room settings (gm+, persisted via `scheduleSave`): **`score`**
 (scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
-**`tableColor`** (felt color), **`scaleSet`** (measurement scale — partial update
-of `worldPerUnit`/`unitLabel`/`roundStep`/`cellWorld`/`gridStyle`), **`skybox`**
-(apply a background).
+**`tableColor`** (felt color), **`scaleSet`** (measurement + grid — a partial update
+of any `RoomScale` field: `worldPerUnit`/`unitLabel`/`roundStep`/`gridStyle`/
+`cellWorld`/`cellZ`/`gridX`/`gridZ`/`snapAnchor`/`gridColor`/`gridLift`, each
+clamped), **`calibrateGrid`** (fit a square grid to the board on the table — sets
+`gridStyle`, per-axis cell size from the collider ÷ cell count, and the anchor),
+**`skybox`** (apply a background).
+
+Per-piece flags (rank-gated, mirror each other): **`setStand`** (`{id}` — toggle
+keep-upright; **U**), **`setSnap`** (`{id}` — toggle snap-to-grid, snapping the piece
+to its cell immediately when a grid is active; **G**), **`snap`** (`{id}` — step a held
+piece's facing by 45°; middle-click). A snapped piece is dropped throw-free on
+`snapToCell` and, once it settles, **pinned** to a `STATIC` body so a bump can't nudge
+it off-cell; a grab, or turning the flag/grid off, unpins it.
 
 Overlay handlers (measurement/templates; persisted in the scene snapshot):
 **`overlayAdd`** (`{kind, x, z, x2, z2, w?, ang?}` — any seated player places one;
@@ -543,6 +565,12 @@ felt), and the config:
   and edge weight come from `CONFIG.measure`. The measure *label* is not built here —
   it's a client sprite (needs the room scale). Adding a kind = one entry here + one
   string in the server's `OVERLAY_KINDS`.
+- **`gridMesh(scale, tableX, tableZ) → THREE.LineSegments | null`** — the table grid: a
+  single line mesh drawn from the same lattice `snapToCell` quantises to (per-axis
+  `cellWorld`/`cellZ`, `gridX`/`gridZ` offset), tinted `scale.gridColor`, `depthWrite:false`
+  so pieces occlude it. `null` for `off`/`hex`/zero-cell, and skips a hair-fine grid
+  (>300 lines/axis). The client's **`rebuildGrid`** builds/replaces it at `gridLift` above
+  the felt and re-runs on the relevant `scale`/table-size changes.
 
 ---
 
@@ -555,7 +583,8 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 `window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
 marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
-(→ `resizeTable`), and `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
+(→ `resizeTable` + `rebuildGrid`), the `scale` grid fields (→ `rebuildGrid` /
+`syncScalePanel`), and `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
 list and the "Waiting on {name}" turn row). Direct messages: `hand` → `renderHand`,
 `dealt` (adopt a dealt card), `inspectCard` → open draw-to-inspect, `notebook`
 (restore your private notes), `showFan` (cards someone is showing you → face-up in
@@ -583,8 +612,9 @@ a mesh), shared by the add, card-rebuild, and render paths.
 - **`pointerdown/move/up` + `endGesture`** — click vs. drag; dispatch grab/deal/
   click via `KIND`; **wheel** raises/lowers a held piece; the drag plane height is
   the scroll-adjustable grab height, and a translucent ring previews the landing.
-  **Middle-click** snaps a held piece's facing, or — with nothing held — drops a
-  ping (`sendPing` → raycast to the table).
+  **Middle-click** steps a held piece's facing by 45°, or — with nothing held — drops a
+  ping (`sendPing` → raycast to the table). A grid piece being dragged tracks cell-to-cell
+  (`snapXZ` snaps the `move` target sent to the server).
 - **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
   double-click a piece to inspect (rotate-drag), double-click a deck to
   draw-to-inspect with F/D/H/R placement.
