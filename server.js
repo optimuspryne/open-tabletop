@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -216,6 +216,18 @@ function buildCollider(type, props) {
       const depth = clamp(props.d || 8, 2, 2 * TABLE.z - 2);
       return new CANNON.Box(new CANNON.Vec3(width / 2, 0.05, depth / 2));
     }
+  }
+
+  if (shape === 'dispenser') {
+    const d = DISPENSERS[props.disp];
+    if (!d) return new CANNON.Box(new CANNON.Vec3(0.4, 0.2, 0.4));
+    if (d.body === 'stack') { // a growing cylinder, height ∝ visible count (see updateStackCollider)
+      const box = PROPS[d.item].collider.box, r = box[0], discH = box[1] * 2;
+      const n = stackVisible(props.count ?? d.count.def);
+      return new CANNON.Cylinder(r, r, Math.max(discH, n * discH), 16);
+    }
+    const [hx, hy, hz] = d.collider.box; // 'model' bowl — a fixed box
+    return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
   }
 
   // A card's collider is intentionally thicker than the visible card, which is
@@ -530,6 +542,34 @@ class TableRoom extends Room {
           }
         }
       }
+
+      // Mirror of the deck absorb for dispensers: a chip/coin/stone dropped on its
+      // matching stack rejoins it (finite → count++; the infinite bowl just takes it
+      // back). Match is by the exact item the stack hands out (shape + colour/team),
+      // so a red chip won't merge into a blue tray.
+      if (piece.type === 'prop' && body) {
+        const pp = JSON.parse(piece.props || '{}');
+        for (const [dispId, disp] of this.state.pieces) {
+          if (disp.type !== 'dispenser') continue;
+          const want = this.dispenserItem(disp); if (!want || want.props.shape !== pp.shape) continue;
+          if (want.props.color != null && (pp.color | 0) !== (want.props.color | 0)) continue;
+          if (want.props.team != null && (pp.team ? 1 : 0) !== want.props.team) continue;
+          const dispBody = this.bodies.get(dispId);
+          if (!dispBody) continue;
+          // Reach scales to the stack/bowl footprint (+ a grab margin), not the deck's
+          // wider card-tuned box — so a small coin tray only takes a coin dropped onto it.
+          const d = DISPENSERS[JSON.parse(disp.props || '{}').disp];
+          const fbox = d && (d.body === 'stack' ? (PROPS[d.item].collider.box) : (d.collider && d.collider.box));
+          const reach = (fbox ? Math.max(fbox[0], fbox[2]) : 0.5) + 0.5;
+          const dx = body.position.x - dispBody.position.x, dz = body.position.z - dispBody.position.z;
+          if (dx * dx + dz * dz < reach * reach) {
+            if (d && !d.infinite) { disp.count = (disp.count | 0) + 1; this.updateStackCollider(dispId); }
+            this.removePiece(msg.id);
+            this.broadcast('sfx', { type: sfxImpact('prop') });
+            break;
+          }
+        }
+      }
     });
 
     // --- Cards: flip, deal, take ----------------------------------------------
@@ -587,6 +627,31 @@ class TableRoom extends Room {
       this.state.pieces.get(id).owner = client.sessionId;
       this.targets.set(id, { x: msg.x, y: msg.y, z: msg.z });
       client.send('dealt', { id }); // tell the client which card it now holds
+    });
+
+    // Dispensers: hand out one item on left-click / left-drag (right-drag moves the
+    // whole thing, handled by the generic grab). Uniform, public copies — no private
+    // list, unlike a deck. dispense = drop beside it; dispenseDrag = drop + carry.
+    this.onMessage('dispense', (client, { id } = {}) => {
+      const disp = this.state.pieces.get(id);
+      if (!disp || disp.type !== 'dispenser') return;
+      const item = this.dispenserItem(disp); if (!item) return;
+      const body = this.bodies.get(id);
+      this.spawn(item.type, body ? this.besideDeck(body) : rnd(), item.props);
+      this.afterDispense(disp, id);
+      this.broadcast('sfx', { type: sfxImpact('prop') });
+    });
+    this.onMessage('dispenseDrag', (client, msg = {}) => {
+      const disp = this.state.pieces.get(msg.id);
+      if (!disp || disp.type !== 'dispenser') return;
+      const item = this.dispenserItem(disp); if (!item) return;
+      const body = this.bodies.get(msg.id);
+      const newId = this.spawn(item.type, body ? [body.position.x, 2.5, body.position.z] : rnd(), item.props);
+      this.afterDispense(disp, msg.id);
+      // Hand the new item straight to the dragger's cursor (reuses the deal-adopt path).
+      this.state.pieces.get(newId).owner = client.sessionId;
+      this.targets.set(newId, { x: msg.x, y: msg.y, z: msg.z });
+      client.send('dealt', { id: newId });
     });
 
     // Take a table card into your private hand (removing it from the table).
@@ -671,13 +736,19 @@ class TableRoom extends Room {
       this.spawn('deck', [p.x + 2.2, SIM.spawnY, p.z], { back, cards: bottom });     // the bottom half, beside it
     });
     // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
-    this.onMessage('recolor', (client, { id, color, textColor } = {}) => {
+    this.onMessage('recolor', (client, { id, color, textColor, team } = {}) => {
       const piece = this.state.pieces.get(id);
-      if (!piece || (piece.type !== 'die' && piece.type !== 'prop')) return;
+      if (!piece) return;
       const ok = (c) => Number.isInteger(c) && c >= 0 && c <= 0xffffff;
       const props = JSON.parse(piece.props || '{}');
-      if (color != null) { const c = Number(color); if (!ok(c)) return; props.color = c; }
-      if (piece.type === 'die' && textColor != null) { const t = Number(textColor); if (!ok(t)) return; props.textColor = t; } // die number colour
+      if (piece.type === 'die' || piece.type === 'prop') {
+        if (color != null) { const c = Number(color); if (!ok(c)) return; props.color = c; }
+        if (piece.type === 'die' && textColor != null) { const t = Number(textColor); if (!ok(t)) return; props.textColor = t; } // die number colour
+      } else if (piece.type === 'dispenser') {
+        const d = DISPENSERS[props.disp]; if (!d) return;
+        if (d.team) { if (team == null) return; props.team = team ? 1 : 0; }        // go bowl: black/white interior
+        else { if (color == null) return; const c = Number(color); if (!ok(c)) return; props.color = c; } // poker/coin tint
+      } else return;
       piece.props = JSON.stringify(props); // synced → every client rebuilds the piece with the new tint
     });
     // Decks are built in chunks so no single message is huge (a text list can be
@@ -1265,7 +1336,7 @@ class TableRoom extends Room {
     // An exact orientation (scene load) wins; otherwise dice/props tumble, boards/decks stay flat.
     if (quat && quat.length === 4) {
       body.quaternion.set(quat[0], quat[1], quat[2], quat[3]);
-    } else if (KINDS[type].mass > 0 && type !== 'deck') {
+    } else if (KINDS[type].mass > 0 && type !== 'deck' && type !== 'dispenser') {
       body.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
     }
     // Cards get their own damping/sleep tuning so stacks settle nicely.
@@ -1295,6 +1366,10 @@ class TableRoom extends Room {
       this.deckCards.set(id, deckData.cards.slice());
       piece.count = deckData.cards.length;
       piece.props = JSON.stringify({ back: deckData.back });
+    } else if (type === 'dispenser') {
+      const d = DISPENSERS[props.disp] || {};
+      piece.count = (d.infinite || !d.count) ? 0 : clamp(+props.count || d.count.def, 1, d.count.max); // remaining items (0 = infinite)
+      piece.props = JSON.stringify(props);
     } else {
       piece.props = JSON.stringify(props);
     }
@@ -1311,6 +1386,7 @@ class TableRoom extends Room {
       this.broadcast('sfx', { type: sfxImpact(type) });
     });
     if (type === 'deck') this.updateDeckCollider(id); // match the collider to the stack height
+    if (type === 'dispenser') this.updateStackCollider(id); // stack cylinder ∝ count (no-op for a bowl)
     return id;
   }
 
@@ -1369,6 +1445,43 @@ class TableRoom extends Room {
     body.wakeUp();
   }
 
+  // --- Dispensers: hand out copies of a child piece (shared by dispense/dispenseDrag) ---
+
+  // Rebuild a stack dispenser's cylinder collider to its current count (no-op for a bowl).
+  updateStackCollider(id) {
+    const body = this.bodies.get(id), piece = this.state.pieces.get(id);
+    if (!body || !piece) return;
+    const d = DISPENSERS[JSON.parse(piece.props || '{}').disp];
+    if (!d || d.body !== 'stack') return;
+    const box = PROPS[d.item].collider.box, r = box[0], discH = box[1] * 2;
+    while (body.shapes.length) body.removeShape(body.shapes[0]);
+    body.addShape(new CANNON.Cylinder(r, r, Math.max(discH, stackVisible(piece.count) * discH), 16));
+    body.updateBoundingRadius();
+    body.updateMassProperties();
+    body.wakeUp();
+  }
+
+  // The spawn spec a dispenser hands out: an existing PROP, tinted (poker/coin) or
+  // team-coloured (go bowl) from the dispenser's own config.
+  dispenserItem(piece) {
+    const props = JSON.parse(piece.props || '{}');
+    const d = DISPENSERS[props.disp]; if (!d) return null;
+    const itemProps = { shape: d.item };
+    if (d.team) itemProps.team = props.team ? 1 : 0;          // go bowl → a team stone
+    else if (props.color != null) itemProps.color = props.color | 0; // poker/coin → tint
+    return { type: 'prop', props: itemProps };
+  }
+
+  // After a dispense: a finite dispenser shrinks and is removed when empty; an
+  // infinite one (bowl) is unchanged.
+  afterDispense(piece, id) {
+    const d = DISPENSERS[JSON.parse(piece.props || '{}').disp];
+    if (!d || d.infinite) return;
+    piece.count = Math.max(0, piece.count - 1);
+    if (piece.count <= 0) this.removePiece(id);
+    else this.updateStackCollider(id);
+  }
+
   // Write a table deck to the disk library; returns true on success. Any inline
   // image art (data-URLs) is moved to files so the saved JSON stays small.
   async saveDeckById(deckId, name, ownerId = null) {
@@ -1395,14 +1508,14 @@ class TableRoom extends Room {
   standOf(piece) {
     const props = JSON.parse(piece.props || '{}');
     if (props.stand !== undefined) return props.stand; // per-instance override (the U-key toggle)
-    if (piece.type === 'deck') return 'flat';          // decks default to flat
+    if (piece.type === 'deck' || piece.type === 'dispenser') return 'flat'; // stacks/bowls settle flat
     return (PROPS[props.shape] || {}).stand;           // else the prop shape's default
   }
   // Which mode to switch a piece INTO when the toggle turns self-right on. Uses
   // the shape's declared default, or infers "flat" when the collider is thin on Y
   // (so a coin/checker lies down) and "stand tall" otherwise.
   naturalStand(piece) {
-    if (piece.type === 'deck') return 'flat';
+    if (piece.type === 'deck' || piece.type === 'dispenser') return 'flat';
     const props = JSON.parse(piece.props || '{}'), spec = PROPS[props.shape] || {};
     if (spec.stand) return spec.stand;
     const box = spec.collider && spec.collider.box;

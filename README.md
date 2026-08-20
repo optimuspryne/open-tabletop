@@ -97,7 +97,7 @@ app image against it:
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.5.0
+  optimuspryne/open-tabletop:0.6.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -149,7 +149,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.5.0
+    image: optimuspryne/open-tabletop:0.6.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:

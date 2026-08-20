@@ -35,6 +35,7 @@
 <div id="inspectColorRow" class="panel" hidden>
   <label id="inspectBodyLab">Colour <input type="color" id="inspectColorBody" value="#ffffff"></label>
   <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
+  <label id="inspectTeamLab" hidden>Interior <button type="button" id="inspectTeamBtn">Black</button></label>
 </div>
 <div id="drawActions" class="panel" hidden>
   <span class="da-note">Drag to rotate</span>
@@ -373,12 +374,14 @@
       <button class="libTab" data-tab="decks">Decks</button>
       <button class="libTab" data-tab="boards">Boards</button>
       <button class="libTab" data-tab="objects">Objects</button>
+      <button class="libTab" data-tab="dispensers">Dispensers</button>
       <button class="libTab" data-tab="sky">Skyboxes</button>
     </div>
     <div class="libPane" data-pane="dice"><ul id="biDice" class="libList"></ul></div>
     <div class="libPane" data-pane="decks" hidden><ul id="biDecks" class="libList"></ul></div>
     <div class="libPane" data-pane="boards" hidden><ul id="biBoards" class="libList"></ul></div>
     <div class="libPane" data-pane="objects" hidden><ul id="biObjects" class="libList"></ul></div>
+    <div class="libPane" data-pane="dispensers" hidden><ul id="biDispensers" class="libList"></ul></div>
     <div class="libPane" data-pane="sky" hidden><ul id="biSky" class="libList"></ul></div>
   </div>
 </div>

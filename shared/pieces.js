@@ -30,11 +30,12 @@ export const COLORS = {
 // mass + collider `shape`: 'die' (polyhedron from props.sides), 'prop' (per-shape
 // data in PROPS below), or { box:[hx,hy,hz] }. mass 0 = static/not grabbable.
 export const KINDS = {
-  die:   { mass: 1,    shape: 'die' },
-  card:  { mass: 0.02, shape: { box: [0.75, 0.015, 1.05] } },
-  prop:  { mass: 0.5,  shape: 'prop' },
-  deck:  { mass: 0.5,  shape: { box: [0.78, 0.04, 1.08] } }, // thin puck; grows via updateDeckCollider
-  board: { mass: 0,    shape: { box: [4.00, 0.05, 4.00] } },
+  die:       { mass: 1,    shape: 'die' },
+  card:      { mass: 0.02, shape: { box: [0.75, 0.015, 1.05] } },
+  prop:      { mass: 0.5,  shape: 'prop' },
+  deck:      { mass: 0.5,  shape: { box: [0.78, 0.04, 1.08] } }, // thin puck; grows via updateDeckCollider
+  board:     { mass: 0,    shape: { box: [4.00, 0.05, 4.00] } },
+  dispenser: { mass: 0.5,  shape: 'dispenser' }, // hands out copies of a child piece; collider from DISPENSERS
 };
 
 // --- Deck -------------------------------------------------------------------
@@ -93,10 +94,35 @@ export const PROP_LIST = [
 // large modelScale fills the table; colliders precomputed (worldSize*scale/2).
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
 export const BOARDS = {
-  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 1, box: [4.00, 0.21, 4.00] },
+  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 18.7, box: [4.00, 0.22, 4.00] },
   go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29] },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
+
+// --- Dispensers -------------------------------------------------------------
+// A dispenser hands out copies of a child piece: left-click / left-drag spawns ONE
+// item (a drag carries it out, like dealing a card); right-drag (grab:2) moves it.
+// Built-in only; all config rides in the piece's props + count (no DB change). The
+// dispensed item is an existing PROP. body: 'stack' = the item's .glb cloned N high
+// (poker chips / coins); 'model' = a bundled bowl .glb (go bowl).
+export const STACK_CAP = 18; // max discs DRAWN in a stack; the real count can exceed this (visual tops out)
+export const DISPENSERS = {
+  pokerStack: { name: 'Poker Chips', body: 'stack', item: 'poker_chip', color: true,
+                count: { def: 20, max: 100 }, mass: 0.5 },
+  coinStack:  { name: 'Coins',       body: 'stack', item: 'coin', color: true, swatches: 'metals',
+                count: { def: 20, max: 100 }, mass: 0.5 },
+  // Go bowl: infinite, team-coloured (interior stones + fill = black/white; the bowl
+  // shell keeps its baked look). The .glb is normalised to MODEL_SIZE like an uploaded
+  // model (modelScale multiplies that target); collider = the resulting half-extents.
+  goBowl:     { name: 'Go bowl', body: 'model', item: 'go', team: 'go', infinite: true,
+                model: '/models/pieces/misc/gobowl.glb', modelScale: 1, tintMaterial: 'c1',
+                collider: { box: [0.8, 0.5, 0.8] }, mass: 0.5 },
+};
+export const DISPENSER_LIST = [{ id: 'pokerStack' }, { id: 'coinStack' }, { id: 'goBowl' }];
+// Per-disc height + capped visible count for a stack — used by BOTH the client mesh
+// (clone spacing) and the server collider, so the drawn stack and its body agree.
+export const stackDiscH  = (item) => (PROPS[item].collider.box[1] || 0.045) * 2;
+export const stackVisible = (count) => Math.min(Math.max(1, count | 0), STACK_CAP);
 
 // --- Dice family ------------------------------------------------------------
 // Only raw vertices live here; both sides derive shape from them (client:

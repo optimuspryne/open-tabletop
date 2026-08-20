@@ -8,6 +8,26 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-08-20
+
+### Added
+- **Dispensers — chip stacks, coin trays & Go bowls** — a new piece type that hands out
+  uniform, public copies of an item, reusing the deck's interaction grammar: **left-click
+  or left-drag deals one out** (a drag carries it, like dealing a card), **right-drag moves**
+  the whole container, and **dropping a matching item back onto it returns it** (a finite
+  stack grows; the bowl just takes it back). Spawn them from the **Built-In library →
+  Dispensers** tab:
+  - **Poker chips** and **Coins** — pick a colour (coins get a metals palette) and a
+    starting amount; the stack is drawn from your chip/coin model stacked to match, and
+    shrinks as you deal.
+  - **Go bowl** — an unlimited bowl of stones in a team colour (black/white), from a
+    bundled model.
+  Double-click a dispenser to **inspect and recolour** it (a colour picker for chip/coin
+  stacks, a black/white toggle for the bowl); every item it dispenses afterward inherits
+  the change.
+- **Hover count** — mousing over a deck or dispenser shows a small readout of how many are
+  left inside (`∞` for a Go bowl), updated live as pieces are dealt or dispensed.
+
 ### Changed
 - **The custom `open-tabletop-db` image is retired.** Deploy against stock `postgres`
   (or any managed Postgres) — the app builds and migrates its own schema now, so the only
@@ -155,7 +175,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.6.0
 [0.5.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.4.0
 [0.3.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.3.1

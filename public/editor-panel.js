@@ -28,7 +28,7 @@ function openDeckEdit(it, clone) {
   pendingDeck = { it, clone };
   ROOM.send('getDeck', { id: it.id });
 }
-import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS } from '/shared/pieces.js';
+import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS, DISPENSER_LIST, DISPENSERS } from '/shared/pieces.js';
 const byId = (id) => document.getElementById(id);
 const btn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
@@ -95,16 +95,29 @@ function qtyStepper() {
   wrap.get = () => clamp(+inp.value || 1);
   return wrap;
 }
+// A labelled stack-size field for dispensers: how many items the stack starts with
+// (distinct from qtyStepper's "how many dispensers to spawn"). .get() → 1..max.
+function countStepper(def, max) {
+  const wrap = document.createElement('span'); wrap.className = 'stepper qtyStep';
+  const cap = document.createElement('span'); cap.className = 'miniLabel stepCap'; cap.textContent = 'Amount';
+  const inp = document.createElement('input'); inp.type = 'number'; inp.min = '1'; inp.max = String(max); inp.value = String(def);
+  const clamp = (v) => Math.max(1, Math.min(max, (v | 0) || def));
+  const step = (d) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'stepBtn'; b.textContent = d < 0 ? '−' : '+'; b.tabIndex = -1; b.onclick = () => { inp.value = clamp((+inp.value || def) + d); }; return b; };
+  wrap.append(cap, step(-1), inp, step(1));
+  wrap.get = () => clamp(+inp.value || def);
+  return wrap;
+}
 // One spawnable card: preview + title + quantity + optional colour + Spawn.
 // send(colourProps) fires a single spawn; the card supplies quantity + colour.
 // color: 'palette' | 'team' | 'own' | 'none'. li._spawn() is used for batch spawn.
-function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, extraActs = [] }) {
+function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, count, extraActs = [] }) {
   const li = document.createElement('li'); li.className = 'libCard';
   const name = document.createElement('span'); name.className = 'libName'; name.textContent = title;
   const meta = document.createElement('div'); meta.className = 'libMeta'; meta.append(name); if (badge) meta.append(badge);
 
   const ctrls = document.createElement('div'); ctrls.className = 'cardCtrls';
   const qty = qtyStepper(); ctrls.append(qty);
+  const stack = count ? countStepper(count.def, count.max) : null; if (stack) ctrls.append(stack); // dispenser stack size
 
   let getColor = () => null, getTeam = () => null;
   const pickRow = (items, onPick) => {
@@ -140,6 +153,7 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
     const n = qty.get(); const cp = {};
     const color = getColor(); if (color != null) { cp.color = color; if (dice) cp.textColor = contrast(color); }
     const team = getTeam(); if (team != null) cp.team = team;
+    if (stack) cp.count = stack.get();
     for (let i = 0; i < n; i++) send(cp);
   };
 
@@ -291,6 +305,19 @@ function renderBuiltin() {
     const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colours
     objs.append(spawnCard({ preview: box, title: p.name, color: teamName ? 'team' : 'palette', teamName, swatches: p.swatches,
       send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
+  }
+
+  const disp = byId('biDispensers'); disp.replaceChildren(); spawnBar(disp);
+  for (const { id } of DISPENSER_LIST) {
+    const spec = DISPENSERS[id]; if (!spec) continue;
+    const box = previewBox();
+    fillAsync(box, spec.body === 'stack' ? propPreviewURL({ shape: spec.item }) : boardPreviewURL(spec.model));
+    disp.append(spawnCard({
+      preview: box, title: spec.name,
+      color: spec.team ? 'team' : (spec.color ? 'palette' : 'none'), teamName: spec.team, swatches: spec.swatches,
+      count: spec.infinite ? null : spec.count, // stack size for finite dispensers; a bowl is unlimited
+      send: (cp) => ROOM.send('spawn', { type: 'dispenser', props: { disp: id, ...cp } }),
+    }));
   }
 
   const sky = byId('biSky'); sky.replaceChildren();

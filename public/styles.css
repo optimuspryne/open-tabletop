@@ -52,6 +52,22 @@
    doesn't have to set its own. HUD chrome (hand, status, player list — panels with
    no .panel-head) is untouched, and any modal can still override with its own value. */
 .panel:has(> .panel-head) { padding: 10px 12px; }
+/* Hover readout over a deck/dispenser — how many are left inside. Follows the cursor. */
+#hoverCount {
+  position: fixed;
+  z-index: 40;
+  pointer-events: none;
+  transform: translate(14px, -140%);
+  padding: 2px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  backdrop-filter: var(--blur);
+  color: var(--text);
+  font: var(--fs)/1.35 var(--font);
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .35);
+}
 .panel-head {
   display: flex;
   align-items: center;
@@ -580,6 +596,8 @@ select:focus {
   margin: 4px 0;
 }
 .qtyStep input[type="number"] { width: 30px; }
+/* Optional leading caption inside a stepper (e.g. dispenser "Amount"). */
+.stepCap { display: inline-flex; align-items: center; padding: 0 6px 0 8px; border-right: 1px solid var(--border); white-space: nowrap; }
 .swatchRow {
   display: flex;
   flex-wrap: wrap;

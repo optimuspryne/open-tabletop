@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
 import { KIND, OVERLAY, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
@@ -181,6 +181,13 @@ const applyTransform = (mesh, s) => {
   mesh.position.set(s.x, s.y, s.z);
   mesh.quaternion.set(s.qx, s.qy, s.qz, s.qw);
 };
+// Mesh-build props for a piece. Dispensers stack their body to the live `count`,
+// which lives in its own schema field (not props), so fold it in for the mesh.
+const meshPropsOf = (piece) => {
+  const p = JSON.parse(piece.props || '{}');
+  if (piece.type === 'dispenser') p.count = piece.count;
+  return p;
+};
 
 (async () => {
   const client = new Client(location.origin.replace(/^http/, 'ws'));
@@ -208,7 +215,7 @@ const applyTransform = (mesh, s) => {
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
   cb(room.state).pieces.onAdd((piece, id) => {
-    const mesh = KIND[piece.type].mesh(JSON.parse(piece.props || '{}'));
+    const mesh = KIND[piece.type].mesh(meshPropsOf(piece));
     const castsShadow = PHYS[piece.type].mass > 0;
     applyTransform(mesh, piece);
     mesh.traverse(node => { // stamp the id on the group AND its children, so picking works
@@ -232,6 +239,12 @@ const applyTransform = (mesh, s) => {
     }
     if (piece.type === 'die' || piece.type === 'prop') {
       cb(piece).listen('props', () => rebuildPiece(id, piece), false); // recolor / prop tweaks
+    }
+    if (piece.type === 'dispenser') {
+      // Rebuild the stack body when it dispenses (count drops) so its height tracks the amount left,
+      // and when its props change (colour/team edited via inspect) so the new tint shows.
+      cb(piece).listen('count', () => rebuildPiece(id, piece), false);
+      cb(piece).listen('props', () => rebuildPiece(id, piece), false);
     }
     if (piece.type === 'board') {
       // Remember the board's top surface height so the drop marker sits on it.
@@ -342,8 +355,8 @@ const applyTransform = (mesh, s) => {
   room.onMessage('dealt', ({ id }) => { // a card you dragged off a deck — adopt it as the dragged piece
     if (down && down.pendingDeal) {
       down.id = id;
-      down.type = 'card';
-      down.kind = KIND.card;
+      down.type = down.adoptType || 'card'; // 'card' from a deck, 'prop' from a dispenser
+      down.kind = KIND[down.type];
       down.grabbed = true;
       down.pendingDeal = false;
       room.send('move', { id, x: hit.x, y: hit.y, z: hit.z });
@@ -835,27 +848,48 @@ function applySkybox(ref) {
 }
 function syncSkybox(ref) { ref = ref || ''; if (ref === skyLast) return; skyLast = ref; applySkybox(ref); }
 qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place)); // drawn-card placement
-{ const body = byId('inspectColorBody'), text = byId('inspectColorText');
+{ const body = byId('inspectColorBody'), text = byId('inspectColorText'), teamBtn = byId('inspectTeamBtn');
   const commit = () => {
     if (!inspect || !inspect.origId) return;
     const b = parseInt(body.value.slice(1), 16);
     if (inspect.type === 'die') {
       const t = parseInt(text.value.slice(1), 16);
       inspect.props = { ...(inspect.props || {}), color: b, textColor: t };
-      swapInspectDie(inspect.props);                                                   // preview on the inspected die
+      swapInspect(inspect.props);                                                      // preview on the inspected die
       room.send('recolor', { id: inspect.origId, color: b, textColor: t });
-    } else {
+    } else if (inspect.type === 'dispenser') {                                          // poker/coin stack tint
+      inspect.props = { ...(inspect.props || {}), color: b };
+      swapInspect(inspect.props);
+      room.send('recolor', { id: inspect.origId, color: b });
+    } else {                                                                            // custom prop
       room.send('recolor', { id: inspect.origId, color: b });
     }
   };
-  if (body) { body.oninput = () => { if (inspect && inspect.type === 'prop') tintInspect(parseInt(body.value.slice(1), 16)); }; body.onchange = commit; } // props preview live via material tint
+  if (body) { // live preview while dragging: props tint blunt; stacks reclone (cached, cheap)
+    body.oninput = () => {
+      if (!inspect) return;
+      const c = parseInt(body.value.slice(1), 16);
+      if (inspect.type === 'prop') tintInspect(c);
+      else if (inspect.type === 'dispenser') swapInspect({ ...(inspect.props || {}), color: c });
+    };
+    body.onchange = commit;
+  }
   if (text) text.onchange = commit;
+  if (teamBtn) teamBtn.onclick = () => {                                                // go bowl: black ⇄ white interior
+    if (!inspect || inspect.type !== 'dispenser') return;
+    const team = inspect.props.team ? 0 : 1;
+    inspect.props = { ...(inspect.props || {}), team };
+    teamBtn.textContent = team ? 'White' : 'Black';
+    swapInspect(inspect.props);
+    room.send('recolor', { id: inspect.origId, team });
+  };
 }
 
 // Map a click-action name to the server message it sends.
 const sendAction = (action, id) => {
   if (action === 'takeCard') { room.send('takeCard', { id }); playSfx('card-pickup'); }
   else if (action === 'deal') room.send('dealToTable', { deckId: id });
+  else if (action === 'dispense') { room.send('dispense', { id }); playSfx('object-pickup'); }
   else if (action === 'flip') room.send('flip', { id });
   else if (action === 'shuffle') room.send('shuffle', { deckId: id });
   else if (action === 'roll') room.send('rollOne', { id });
@@ -867,7 +901,7 @@ const sendAction = (action, id) => {
 // from a deck, whose front the server sends privately to us alone, then place it.
 let inspect = null;                                     // { pivot, origId, drag, drawn, placed }
 let pendingClick = null;                                // defers a single-click so a double-click can pre-empt it
-const INSPECTABLE = (type) => type === 'die' || type === 'card' || type === 'prop'; // not boards/decks
+const INSPECTABLE = (type) => type === 'die' || type === 'card' || type === 'prop' || type === 'dispenser'; // not boards/decks
 
 // Core inspect: park `mesh` enlarged in front of the camera. opts: { origId,
 // type, drawn }. A 'card' is stood upright; a 'drawn' card shows the action panel.
@@ -898,28 +932,40 @@ function inspectMesh(mesh, opts = {}) {
   controls.enabled = false;
   byId('inspectHint').hidden = !!opts.drawn; // a drawn card shows the action panel instead
   byId('drawActions').hidden = !opts.drawn;
-  const colorable = (opts.type === 'die' || opts.type === 'prop') && !opts.drawn;
+  const piece0 = opts.origId && room.state.pieces.get(opts.origId);
+  const props0 = piece0 ? JSON.parse(piece0.props || '{}') : {};
+  const spec = opts.type === 'dispenser' ? DISPENSERS[props0.disp] : null;
+  const teamMode = !!(spec && spec.team);                          // go bowl → black/white toggle
+  const colorMode = opts.type === 'die' || opts.type === 'prop' || !!(spec && spec.color); // freeform picker
+  const colorable = (colorMode || teamMode) && !opts.drawn;
   const row = byId('inspectColorRow');
   if (row) {
     row.hidden = !colorable;
     if (colorable) {
-      const piece = opts.origId && room.state.pieces.get(opts.origId);
-      inspect.props = piece ? JSON.parse(piece.props || '{}') : {};
+      inspect.props = props0;
+      if (opts.type === 'dispenser') inspect.props.count = piece0.count; // carry stack height into reclone previews
       const isDie = opts.type === 'die';
-      byId('inspectBodyLab').firstChild.nodeValue = isDie ? 'Body '  : 'Colour ';
-      byId('inspectColorBody').value = hexStr(inspect.props.color ?? (isDie ? 0xf4f1ea : 0xffffff)); // die = ivory blank face
-      byId('inspectTextLab').hidden = !isDie;                       // dice also get a number colour
-      if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414);       // die = ink numbers
+      const bodyLab = byId('inspectBodyLab'), textLab = byId('inspectTextLab'), teamLab = byId('inspectTeamLab');
+      if (bodyLab) bodyLab.hidden = teamMode;                       // team dispensers hide the freeform picker
+      if (textLab) textLab.hidden = !isDie;                         // dice also get a number colour
+      if (teamLab) teamLab.hidden = !teamMode;
+      if (colorMode && bodyLab) {
+        bodyLab.firstChild.nodeValue = isDie ? 'Body ' : 'Colour ';
+        byId('inspectColorBody').value = hexStr(inspect.props.color ?? (isDie ? 0xf4f1ea : 0xffffff)); // die = ivory blank face
+        if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414);       // die = ink numbers
+      }
+      if (teamMode) { const tb = byId('inspectTeamBtn'); if (tb) tb.textContent = inspect.props.team ? 'White' : 'Black'; }
     }
   }
 }
 const hexStr = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
-// Swap the inspected die's mesh for one built with new colours (live preview).
-function swapInspectDie(props) {
-  if (!inspect || inspect.type !== 'die' || !inspect.pivot) return;
+// Rebuild the inspected mesh with new props (live preview for die colours and
+// dispenser colour/team). Cheap for stacks — they reclone from the cached model.
+function swapInspect(props) {
+  if (!inspect || !inspect.pivot || (inspect.type !== 'die' && inspect.type !== 'dispenser')) return;
   const old = inspect.pivot.children[0];
   if (old) inspect.pivot.remove(old);
-  const mesh = KIND.die.mesh(props);
+  const mesh = KIND[inspect.type].mesh(props);
   mesh.userData.id = inspect.origId;
   inspect.pivot.add(mesh);
 }
@@ -939,9 +985,9 @@ function enterInspect(id) {
   const entry = meshes.get(id);
   if (!entry) return;
   const piece = room.state.pieces.get(id);
-  const fresh = (entry.type === 'die' || entry.type === 'prop') && piece
-    ? KIND[entry.type].mesh(JSON.parse(piece.props || '{}')) // own materials → live-recolorable, no shared-material bleed
-    : entry.mesh.clone(true);                                // clone respects hidden info (face-down card = back only)
+  const fresh = (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && piece
+    ? KIND[entry.type].mesh(meshPropsOf(piece)) // own materials → live-recolorable, no shared-material bleed
+    : entry.mesh.clone(true);                    // clone respects hidden info (face-down card = back only)
   inspectMesh(fresh, { origId: id, type: entry.type });
   entry.mesh.visible = false;
 }
@@ -1111,15 +1157,20 @@ renderer.domElement.addEventListener('pointermove', e => {
       room.send('grab', { id: down.id });
       playSfx(sfxKind(down.type) + '-pickup'); // local, per object type
       room.send('move', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
-    } else if (down.button === 0 && kind.ldrag === 'deal') { // deck left-drag = deal a card and carry it
+    } else if (down.button === 0 && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
+      // Left-drag spawns one item and carries it out: a card off a deck, or a chip/stone
+      // off a dispenser. Both reuse the server's "adopt the spawned piece" flow (see 'dealt').
+      const dealing = kind.ldrag === 'deal';
       down.pendingDeal = true;
-      dragHeight = DECK_DRAG_HEIGHT; // lift above the deck so the dealt card doesn't fight its collider
+      down.adoptType = dealing ? 'card' : 'prop'; // what the carried piece becomes on adoption
+      dragHeight = DECK_DRAG_HEIGHT; // lift above the source so the new piece doesn't fight its collider
       ray.setFromCamera(pointer, camera);
       ray.ray.intersectPlane(dragPlane, hit);
       hit.y = dragHeight;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
-      room.send('dealDrag', { deckId: down.id, x: hit.x, y: hit.y, z: hit.z });
-      playSfx('card-pickup'); // dealing a card off the deck; its drop follows on release
+      if (dealing) room.send('dealDrag', { deckId: down.id, x: hit.x, y: hit.y, z: hit.z });
+      else room.send('dispenseDrag', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
+      playSfx(dealing ? 'card-pickup' : 'object-pickup'); // the new piece's drop follows on release
     }
   }
 
@@ -1249,7 +1300,7 @@ function rebuildPiece(id, piece) {
   const entry = meshes.get(id);
   if (!entry) return;
   scene.remove(entry.mesh);
-  const mesh = KIND[piece.type].mesh(JSON.parse(piece.props || '{}'));
+  const mesh = KIND[piece.type].mesh(meshPropsOf(piece));
   const casts = PHYS[piece.type].mass > 0;
   mesh.traverse(node => { node.userData.id = id; if (node.isMesh) { node.castShadow = casts; node.receiveShadow = true; } });
   const buf = buffers.get(id), last = buf && buf[buf.length - 1];
@@ -1539,6 +1590,38 @@ function updateHeldLabel(id, owner) {
   scene.add(sprite);
   heldLabels.set(id, sprite);
 }
+
+// Hover readout: a small tooltip over the deck or dispenser under the cursor showing
+// how many are left inside (∞ for the infinite go bowl). Pure client-side, shown only
+// when idle (not mid-drag / inspect / draw / measure), and kept live by the render loop
+// so it updates as a piece is dealt or dispensed without moving the cursor.
+const hoverTip = document.createElement('div');
+hoverTip.id = 'hoverCount'; hoverTip.hidden = true;
+document.body.appendChild(hoverTip);
+let hoverId = null, lastHover = 0;
+const hoverIdle = () => !down && !inspect && !measuring && !wbOwning && !overlayMove && !handDrag && !measureDrag;
+function countLabel(piece) {
+  if (piece.type === 'deck') return `${piece.count} card${piece.count === 1 ? '' : 's'}`;
+  const d = DISPENSERS[JSON.parse(piece.props || '{}').disp];
+  if (!d) return null;
+  return d.infinite ? '∞' : String(piece.count); // bowl = unlimited
+}
+function hideHoverTip() { if (!hoverTip.hidden) hoverTip.hidden = true; hoverId = null; }
+renderer.domElement.addEventListener('pointermove', e => {
+  if (!room || !hoverIdle()) { hideHoverTip(); return; }
+  hoverTip.style.left = e.clientX + 'px'; hoverTip.style.top = e.clientY + 'px'; // follow the cursor every move
+  const now = performance.now();
+  if (now - lastHover < 40) return; // throttle the raycast/pick
+  lastHover = now;
+  setPointer(e);
+  const id = pickId();
+  const piece = id && room.state.pieces.get(id);
+  if (!piece || (piece.type !== 'deck' && piece.type !== 'dispenser')) { hideHoverTip(); return; }
+  const text = countLabel(piece); if (text == null) { hideHoverTip(); return; }
+  hoverId = id; hoverTip.textContent = text; hoverTip.hidden = false;
+});
+renderer.domElement.addEventListener('pointerleave', hideHoverTip);
+renderer.domElement.addEventListener('pointerdown', hideHoverTip); // a gesture begins → drop the readout
 
 // Attention pings: a translucent ring pulses out on the table with the pinger's
 // name. Triggered by middle-click or P (see the handlers), broadcast to everyone,
@@ -2096,6 +2179,11 @@ const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused ea
   for (const [id, sprite] of heldLabels) { // keep each name tag hovering over its piece
     const entry = meshes.get(id);
     if (entry) sprite.position.set(entry.mesh.position.x, entry.mesh.position.y + CONFIG.label.lift, entry.mesh.position.z);
+  }
+  if (hoverId != null && !hoverTip.hidden) { // keep the hover count live while it's shown (deal/dispense without moving)
+    const p = room && room.state.pieces.get(hoverId);
+    const t = p && countLabel(p);
+    if (t == null) hideHoverTip(); else hoverTip.textContent = t;
   }
   for (let i = pings.length - 1; i >= 0; i--) { // expand + fade each active ping, then dispose
     const p = pings[i], t = (performance.now() - p.start) / CONFIG.ping.dur;

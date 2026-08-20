@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
-import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE, MEASURE } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE, MEASURE, DISPENSERS, stackDiscH, stackVisible } from '/shared/pieces.js';
 
 // ===== Shared helpers =======================================================
 
@@ -771,6 +771,70 @@ function boardMesh(props = {}) {
   return new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), [edge, edge, top, edge, edge, edge]);
 }
 
+// --- Dispensers: a body that hands out copies of a child piece --------------
+// 'stack' clones the item's .glb up the Y axis (poker chips / coins), tinted and
+// count-scaled; 'model' loads a bowl .glb and tints its interior slot to the team
+// A material name matches a tint slot if it equals the slot OR is a Blender-style
+// duplicate of it ("c1.001", "c1.002") — one logical slot can split across meshes on
+// export, so tinting must catch every copy, not just the first.
+const isTintSlot = (name, slot) => !!slot && typeof name === 'string' && (name === slot || name.startsWith(slot + '.'));
+
+// Parsed stack item models, keyed by item shape. The first build loads the .glb
+// async; every rebuild after (a dispense changes count → the mesh is rebuilt) clones
+// from the cached scene SYNCHRONOUSLY, so the stack never blinks out while a reload
+// resolves. Stored raw/unpainted — each build clones, fits, and tints its own copy.
+const _stackProto = new Map();
+
+// colour. `props` carries { disp, color?, team?, count? }.
+function dispenserMesh(props = {}) {
+  const spec = DISPENSERS[props.disp];
+  if (!spec) return new THREE.Group();
+  const matte = (color, side) => new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+
+  if (spec.body === 'model') {
+    const teamTint = spec.team ? COLORS.team[spec.team][props.team ? 1 : 0] : null;
+    const paint = (m) => {
+      if (teamTint != null && isTintSlot(m.name, spec.tintMaterial)) return matte(teamTint, m.side);
+      m.metalness = 0; return m; // shell keeps its baked look
+    };
+    return loadModelGroup(spec.model, { target: MODEL_SIZE * (spec.modelScale || 1) }, node => {
+      if (!node.material) return;
+      node.castShadow = true; node.receiveShadow = true;
+      node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+    });
+  }
+
+  // 'stack' — load the item model once, paint it like a spawned item, clone up Y.
+  const item = PROPS[spec.item] || {};
+  const discH = stackDiscH(spec.item);
+  const n = stackVisible(props.count ?? spec.count.def);
+  const tint = props.color ?? null;
+  const paint = (m) => {
+    if (item.tintMaterial) { if (tint != null && isTintSlot(m.name, item.tintMaterial)) return matte(tint, m.side); m.metalness = 0; return m; }
+    if (item.ownMaterial) { m.metalness = 0; return m; }
+    return tint != null ? matte(tint, m.side) : m;
+  };
+  const group = new THREE.Group();
+  const fill = (rawScene) => {                              // build the stack from a cached raw scene
+    const proto = rawScene.clone(true);
+    fitModel(proto, { scale: item.modelScale || 1 });      // centre + scale, matching a spawned item
+    proto.traverse(node => {
+      if (!node.isMesh || !node.material) return;
+      node.castShadow = true; node.receiveShadow = true;
+      node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+    });
+    for (let i = 0; i < n; i++) {
+      const clone = proto.clone(true);                     // shares geometry/material — cheap
+      clone.position.y = (i - (n - 1) / 2) * discH;         // centred stack, discs flush
+      group.add(clone);
+    }
+  };
+  const cached = _stackProto.get(spec.item);
+  if (cached) fill(cached);                                 // rebuild path: synchronous, no blink
+  else gltfLoader.load(item.model, gltf => { _stackProto.set(spec.item, gltf.scene); fill(gltf.scene); }, undefined, () => {});
+  return group;
+}
+
 // --- KIND registry: the client-side half of each piece kind -----------------
 // mesh:            builder for its Three.js mesh.
 // grab:            which mouse button moves it (0 = left, 2 = right).
@@ -783,6 +847,7 @@ const KIND = {
   prop:  { mesh: propMesh,  grab: 0 },
   deck:  { mesh: deckMesh,  grab: 2, ldrag: 'deal', lclick: 'deal', rclick: 'shuffle' },
   board: { mesh: boardMesh },
+  dispenser: { mesh: dispenserMesh, grab: 2, ldrag: 'dispense', lclick: 'dispense' }, // right-drag moves; left dispenses one
 };
 
 // ---- Overlays: flat, non-physics annotations (measurement + templates) ------
