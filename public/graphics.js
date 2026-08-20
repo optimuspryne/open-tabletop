@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
-import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE, MEASURE, DISPENSERS, stackDiscH, stackVisible } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE, TABLE, MEASURE, DISPENSERS, stackDiscH, stackVisible, gridActive } from '/shared/pieces.js';
 
 // ===== Shared helpers =======================================================
 
@@ -849,6 +849,34 @@ const KIND = {
   board: { mesh: boardMesh },
   dispenser: { mesh: dispenserMesh, grab: 2, ldrag: 'dispense', lclick: 'dispense' }, // right-drag moves; left dispenses one
 };
+
+// ---- Table grid: a flat line grid on the felt (snap-to-grid, Phase 2) --------
+// Lines on cell multiples through the world origin (matching snapToCell, whose cell
+// CENTRES sit half a cell between them), spanning the whole table. Built flat at y=0;
+// the client lifts it just above the felt. Colour is GM-set (`scale.gridColor`) so it
+// reads on any felt. Returns null when there's no grid to draw. Square only for now.
+export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
+  if (!gridActive(scale) || scale.gridStyle !== 'square') return null;
+  const cell = +scale.cellWorld, hx = +tableX, hz = +tableZ;
+  const cz = +scale.cellZ > 0 ? +scale.cellZ : cell;          // rectangular grids: separate depth spacing
+  const ox = +scale.gridX || 0, oz = +scale.gridZ || 0;       // lattice offset (align to a printed map)
+  if (!(cell > 0) || !(hx > 0) || !(hz > 0)) return null;
+  if ((hx / cell) * 2 > 300 || (hz / cz) * 2 > 300) return null; // sanity cap: skip a hair-fine grid (perf)
+  const pts = [];
+  for (let m = Math.ceil((-hx - ox) / cell); m <= Math.floor((hx - ox) / cell); m++) { // constant-x lines, spaced by cell
+    const x = ox + m * cell; pts.push(x, 0, -hz, x, 0, hz);
+  }
+  for (let m = Math.ceil((-hz - oz) / cz); m <= Math.floor((hz - oz) / cz); m++) {       // constant-z lines, spaced by cz
+    const z = oz + m * cz; pts.push(-hx, 0, z, hx, 0, z);
+  }
+  const color = /^#[0-9a-f]{6}$/i.test(scale.gridColor || '') ? scale.gridColor : '#ffffff';
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false });
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.renderOrder = 2; // over the felt, under floating labels; pieces still occlude it (depthTest on)
+  return lines;
+}
 
 // ---- Overlays: flat, non-physics annotations (measurement + templates) ------
 // A registry parallel to KIND: each kind builds a THREE.Group in table-space (XZ,

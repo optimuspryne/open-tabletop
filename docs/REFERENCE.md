@@ -588,7 +588,7 @@ a mesh), shared by the add, card-rebuild, and render paths.
 - **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
   double-click a piece to inspect (rotate-drag), double-click a deck to
   draw-to-inspect with F/D/H/R placement.
-- **`keydown`** — Delete removes, U toggles keep-upright, S saves a hovered deck
+- **`keydown`** — Delete removes, U toggles keep-upright, G toggles snap-to-grid, S saves a hovered deck
   (each acts on **`heldOrHoveredId`** — the held piece, else whatever's hovered);
   F/D/H/R place a drawn card; **P** drops a ping at the cursor.
 

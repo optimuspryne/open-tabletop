@@ -24,6 +24,7 @@
       <button id="roomScene">📽️ Load a Scene</button>
       <button id="roomSaveState">💾 Save Table State</button>
       <button id="roomTable">🎨 Customize Table</button>
+      <button id="roomScaleGrid">📐 Scale &amp; Grid</button>
       <button id="roomSky">🌄 Skybox</button>
       <button id="roomReset" class="danger">🧹 Reset</button>
     </div>
@@ -201,16 +202,19 @@
 
 <div id="tableModal" class="panel popout" hidden>
   <div id="tableHead" class="panel-head"><b>Customize Table</b><span id="tableClose" class="close-x">✕</span></div>
-
   <div class="tableBody">
-  <div class="secLabel">Dimensions &amp; Color</div>
   <div class="dimGrid">
     <label for="tableW">Width</label><span></span><label for="tableD">Depth</label>
     <input id="tableW" type="number" min="8" max="40" step="1"><span class="dimX">×</span><input id="tableD" type="number" min="6" max="32" step="1">
   </div>
   <div class="sizeRow"><label>Felt</label><input type="color" id="tableFelt" value="#2f6b4f"></div>
+  </div>
+</div>
 
-  <div class="secLabel">Scale / Measurement Options</div>
+<div id="scaleGridPanel" class="panel popout" hidden>
+  <div id="scaleGridHead" class="panel-head"><b>Scale &amp; Grid</b><span id="scaleGridClose" class="close-x">✕</span></div>
+  <div class="tableBody">
+  <div class="secLabel">Scale / Measurement</div>
   <div class="sizeRow"><label>Unit</label><div id="scaleUnits" class="chipRow">
     <button class="chip" data-unit="in" data-step="0.5">inch</button>
     <button class="chip" data-unit="cm" data-step="1">cm</button>
@@ -219,8 +223,22 @@
   </div></div>
   <div class="sizeRow" id="scaleCustomRow" hidden><label></label><input id="scaleUnitCustom" class="field" type="text" maxlength="8" placeholder="unit label, e.g. hex"></div>
   <div class="sizeRow"><label>Round to</label><input id="scaleStep" type="number" min="0.001" step="0.05"><span class="muted" id="scaleStepUnit"></span></div>
-  <div class="muted calibLabel">Calibrate — what's the table's real width?</div>
-  <div class="sizeRow"><input id="scaleWidthVal" class="field" type="text" inputmode="decimal" placeholder="e.g. 48"><span class="muted" id="scaleWidthUnit"></span><button id="scaleWidthSet" class="chip">Set</button></div>
+  <div class="sizeRow calibRow"><label>Calibrate</label><input id="scaleWidthVal" class="field" type="text" inputmode="decimal" placeholder="e.g. 48"><span class="muted" id="scaleWidthUnit"></span><button id="scaleWidthSet" class="chip">Set</button><span class="muted calibHint">what's the table's real width?</span></div>
+
+  <div class="secLabel">Grid</div>
+  <div class="sizeRow"><label>Style</label><div id="gridStyles" class="chipRow">
+    <button class="chip" data-grid="off">Off</button>
+    <button class="chip" data-grid="square">Square</button>
+  </div></div>
+  <div class="sizeRow" id="gridSnapRow" hidden><label>Snap to</label><div id="gridAnchors" class="chipRow">
+    <button class="chip" data-anchor="center">Cell centers</button>
+    <button class="chip" data-anchor="cross">Intersections</button>
+  </div></div>
+  <div class="sizeRow" id="gridCalibRow" hidden><label>Fit to board</label><input id="gridCells" type="number" min="2" step="1" placeholder="across"><button id="gridCalib" class="chip">▦ Align</button></div>
+  <div class="sizeRow" id="gridCellRow" hidden><label>Cell size</label><input id="gridCell" type="number" min="0.01" step="0.01"><span class="dimX">×</span><input id="gridCellZ" type="number" min="0.01" step="0.01"><span class="muted" id="gridCellUnit"></span></div>
+  <div class="sizeRow" id="gridOffRow" hidden><label>Offset</label><input id="gridOffX" type="number" step="0.05"><span class="dimX">,</span><input id="gridOffZ" type="number" step="0.05"><span class="muted" id="gridOffUnit"></span></div>
+  <div class="sizeRow" id="gridColorRow" hidden><label>Line color</label><input type="color" id="gridColor" value="#ffffff"></div>
+  <div class="sizeRow" id="gridLiftRow" hidden><label>Height</label><input id="gridLift" type="range" min="0" max="3" step="0.05"></div>
   </div>
 </div>
 
@@ -254,9 +272,9 @@
       <div class="helpSec">
         <h4>-- Pieces &amp; Objects --</h4>
         <ul>
-          <li><b>Left-click-hold</b> a piece to pick it up, move, and let go of left-click to drop or throw it. Scroll to change its height; <b>Middle-click</b> while holding snaps its facing to 90°.</li>
+          <li><b>Left-click-hold</b> a piece to pick it up, move, and let go of left-click to drop or throw it. Scroll to change its height; <b>Middle-click</b> while holding rotates its facing in 45° steps.</li>
           <li><b>Double-left-click</b> a piece to inspect it up close.  From here you can change its colors, drag to rotate, or click away to close the view.</li>
-          <li>After left-clicking a piece, press <b>Delete</b> to remove it, or <b>U</b> to stand it upright / lay it flat.</li>
+          <li>After left-clicking a piece, press <b>Delete</b> to remove it, <b>U</b> to stand it upright / lay it flat, or <b>G</b> to toggle snap-to-grid (when the table has a grid).</li>
         </ul>
       </div>
       <div class="helpSec">

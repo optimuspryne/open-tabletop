@@ -8,6 +8,45 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-08-20
+
+### Added
+- **Grids & snap-to-grid** — a GM can lay a **square grid** over the table surface, and
+  pieces snap to it. The grid is set up from the new **Scale & Grid** pop-out (Room
+  Controls → **📐 Scale & Grid**):
+  - **Snap is a per-piece flag**, just like *stand-upright*: press **G** on a held piece
+    to toggle it, and every piece carries a **Snap** toggle in its spawn card (default
+    **on** for grid games — Go, checkers, chess — and **off** for everything else). A
+    snapped piece locks to its cell in X/Z and then falls to the surface, and once it
+    settles it's **pinned** so a bump can't nudge it off-grid.
+  - **Snap to cell centers or intersections** — a per-grid choice, so stones can sit on
+    the crossings of a Go board while checkers sit inside the squares.
+  - **Fit a grid to a board** — type how many cells the board is across and hit **▦ Align**;
+    the grid sizes and lines itself up to that board, including **rectangular cells** (Go's
+    slightly taller-than-wide grid) and a **grid offset** for nudging it into place.
+  - **Appearance** — the grid's **line color** and its **height** above the felt are both
+    adjustable.
+- **Image boards keep their proportions** — uploading a battlemap now **locks its aspect
+  ratio** and fills in the board's width × depth from the image's own proportions, so maps
+  no longer come in stretched. You can still resize; the ratio holds.
+
+### Changed
+- **Customize Table is now two movable pop-outs.** The old modal split into a slim
+  **Customize Table** (width, depth, felt) and a dedicated **Scale & Grid** panel (unit
+  calibration and all the grid controls). Both are draggable, so you can slide them aside
+  while lining a grid up against the board.
+- **Scenes now capture scale & grid.** Saving a scene records the room's measurement unit
+  and calibration *and* its full grid layout — cell size, offset, snap anchor, line color,
+  and height — alongside the table, pieces, and overlays, so a saved board comes back
+  measured and gridded exactly as you left it.
+- **Calibration is inline** — setting a measurement scale or fitting a grid to a board now
+  happens in the panel itself instead of a browser prompt.
+- **Middle-click nudges facing by 45°** (was 90°), for finer aiming of directional pieces.
+
+### Upgrading
+- Nothing to do — the grid and scale settings ride in the existing `scale` JSON on a room,
+  so there's no new migration. Pull `0.7.0` and restart.
+
 ## [0.6.0] — 2026-08-20
 
 ### Added
@@ -175,7 +214,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.7.0
 [0.6.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.6.0
 [0.5.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.5.0
 [0.4.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.4.0

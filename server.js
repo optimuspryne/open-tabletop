@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -70,6 +70,7 @@ for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recu
 
 // Clamp a number into [min, max].
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+const GRID_LIFT_MAX = 3; // how high (world units) the table grid can float above the felt
 // A bounded image data-URL (the only avatar shape we accept — small enough to
 // sync in state, and never an arbitrary URL/script). Used by setAvatar + /me/avatar.
 const isBoundedImageDataURL = (data) => typeof data === 'string' && data.startsWith('data:image') && data.length < 60000;
@@ -343,12 +344,13 @@ defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', 
 // PUBLIC per-room measurement scale — a DISPLAY/snap layer over the FIXED world
 // scale; it never rescales physics or piece sizes. worldPerUnit converts a world
 // distance into display units; unitLabel is freeform ("in"/"cm"/"hex"/…). roundStep
-// is the display rounding, in display units. cellWorld/gridStyle are the grid half —
-// reserved now, dormant until snap-to-grid. GM-set, durable.
+// is the display rounding, in display units. cellWorld/gridStyle/gridColor/gridLift
+// are the grid: cell size (world units), 'off'|'square'|'hex', the line colour (so it
+// reads on any felt), and the grid's height above the felt. GM-set, durable.
 class RoomScale extends Schema {
-  constructor() { super(); this.worldPerUnit = 1; this.unitLabel = 'u'; this.roundStep = 0.1; this.cellWorld = 0; this.gridStyle = 'off'; }
+  constructor() { super(); this.worldPerUnit = 1; this.unitLabel = 'u'; this.roundStep = 0.1; this.cellWorld = 0; this.cellZ = 0; this.gridX = 0; this.gridZ = 0; this.gridStyle = 'off'; this.gridColor = '#ffffff'; this.gridLift = 0.05; this.snapAnchor = 'center'; }
 }
-defineTypes(RoomScale, { worldPerUnit: 'number', unitLabel: 'string', roundStep: 'number', cellWorld: 'number', gridStyle: 'string' });
+defineTypes(RoomScale, { worldPerUnit: 'number', unitLabel: 'string', roundStep: 'number', cellWorld: 'number', cellZ: 'number', gridX: 'number', gridZ: 'number', gridStyle: 'string', gridColor: 'string', gridLift: 'number', snapAnchor: 'string' });
 // PUBLIC measurement/template overlay — a flat, non-physics annotation on the felt
 // (rendered via the OVERLAY registry client-side). Every overlay is two points plus
 // optional scalars, so one shape + one interaction (drag A→B) covers ruler today and
@@ -453,14 +455,7 @@ class TableRoom extends Room {
       this.state.tableX = clamp(rs.tableX, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
       this.state.tableZ = clamp(rs.tableZ, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
       if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
-      if (rs.scale && typeof rs.scale === 'object') { // seeded defaults survive a null column
-        const sc = this.state.scale, s = rs.scale;
-        if (Number.isFinite(+s.worldPerUnit) && +s.worldPerUnit > 0) sc.worldPerUnit = clamp(+s.worldPerUnit, 1e-3, 1e3);
-        if (typeof s.unitLabel === 'string') sc.unitLabel = s.unitLabel.slice(0, 8);
-        if (Number.isFinite(+s.roundStep) && +s.roundStep > 0) sc.roundStep = clamp(+s.roundStep, 1e-3, 1e2);
-        if (Number.isFinite(+s.cellWorld) && +s.cellWorld >= 0) sc.cellWorld = clamp(+s.cellWorld, 0, 1e3);
-        if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off') sc.gridStyle = s.gridStyle;
-      }
+      this.applyScale(rs.scale); // grid + measurement calibration (seeded defaults survive a null column)
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
       this.savedScene = rs.scene || null; // GM's last saved table state — applied below, once physics maps exist
     }
@@ -513,9 +508,14 @@ class TableRoom extends Room {
 
       const body = this.bodies.get(msg.id);
       if (body) {
-        // Turn the hand-speed the client measured into a real throw, capped so a
-        // frantic flick can't launch a piece across the room (cards cap lower).
-        if (msg.v) {
+        // A snap-to-grid piece (per-piece flag) lands on its nearest cell centre with no
+        // throw; otherwise turn the hand-speed the client measured into a real throw,
+        // capped so a frantic flick can't launch a piece across the room (cards cap lower).
+        if (gridActive(this.state.scale) && JSON.parse(piece.props || '{}').snap) {
+          const p = snapToCell(body.position.x, body.position.z, this.state.scale);
+          body.position.x = p.x; body.position.z = p.z;
+          body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
+        } else if (msg.v) {
           let [vx, vy, vz] = msg.v;
           const speed = Math.hypot(vx, vy, vz);
           const cap = piece.type === 'card' ? SIM.cards.maxThrow : SIM.throwCap;
@@ -984,6 +984,29 @@ class TableRoom extends Room {
       if (body) body.wakeUp();
     });
 
+    // Per-piece snap-to-grid flag (mirrors setStand). Toggling it ON snaps the piece to
+    // its nearest cell right away (when a grid is active); from then on every drop lands
+    // on a cell. OFF restores free placement.
+    this.onMessage('setSnap', (client, { id } = {}) => {
+      const piece = this.state.pieces.get(id);
+      if (!piece) return;
+      const props = JSON.parse(piece.props || '{}');
+      props.snap = !props.snap;
+      piece.props = JSON.stringify(props);
+      const body = this.bodies.get(id);
+      if (body) {
+        if (props.snap && gridActive(this.state.scale)) {
+          const p = snapToCell(body.position.x, body.position.z, this.state.scale);
+          body.position.x = p.x; body.position.z = p.z;
+          body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
+          this.targets.delete(id);
+        } else if (body.__pinned) {
+          this.unpinPiece(id); // snap turned off → free it right away
+        }
+        body.wakeUp();
+      }
+    });
+
     // Snap a held piece a quarter-turn onward, and level it (middle-click).
     this.onMessage('snap', (client, { id }) => {
       const piece = this.state.pieces.get(id);
@@ -991,12 +1014,12 @@ class TableRoom extends Room {
       const body = this.bodies.get(id);
       if (!body) return;
 
-      // Read the piece's current facing, then advance to the next 90° step.
+      // Read the piece's current facing, then advance to the next 45° step.
       const forward = new CANNON.Vec3(0, 0, 1), worldForward = new CANNON.Vec3();
       body.quaternion.vmult(forward, worldForward);
-      const step = Math.PI / 2;
+      const step = Math.PI / 4;
       const yaw = (Math.round(Math.atan2(worldForward.x, worldForward.z) / step) + 1) * step;
-      body.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + cardinal
+      body.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + 45° step
       body.angularVelocity.setZero();
       body.wakeUp();
     });
@@ -1149,9 +1172,58 @@ class TableRoom extends Room {
       if (msg.roundStep !== undefined && Number.isFinite(+msg.roundStep) && +msg.roundStep > 0)
         sc.roundStep = clamp(+msg.roundStep, 1e-3, 1e2);
       if (msg.cellWorld !== undefined && Number.isFinite(+msg.cellWorld) && +msg.cellWorld >= 0)
-        sc.cellWorld = clamp(+msg.cellWorld, 0, 1e3);           // dormant until snap-to-grid
+        sc.cellWorld = clamp(+msg.cellWorld, 0, 1e3);           // cell width (X spacing)
+      if (msg.cellZ !== undefined && Number.isFinite(+msg.cellZ) && +msg.cellZ >= 0)
+        sc.cellZ = clamp(+msg.cellZ, 0, 1e3);                   // cell depth (Z spacing); 0 = square (= cellWorld)
+      if (msg.gridX !== undefined && Number.isFinite(+msg.gridX)) sc.gridX = clamp(+msg.gridX, -1e3, 1e3); // lattice offset X
+      if (msg.gridZ !== undefined && Number.isFinite(+msg.gridZ)) sc.gridZ = clamp(+msg.gridZ, -1e3, 1e3); // lattice offset Z
       if (msg.gridStyle === 'square' || msg.gridStyle === 'hex' || msg.gridStyle === 'off')
-        sc.gridStyle = msg.gridStyle;                            // dormant until snap-to-grid
+        sc.gridStyle = msg.gridStyle;
+      if (typeof msg.gridColor === 'string' && /^#[0-9a-f]{6}$/i.test(msg.gridColor))
+        sc.gridColor = msg.gridColor;                            // grid line colour (reads on any felt)
+      if (msg.gridLift !== undefined && Number.isFinite(+msg.gridLift))
+        sc.gridLift = clamp(+msg.gridLift, 0, GRID_LIFT_MAX);    // grid height above the felt
+      if (msg.snapAnchor === 'center' || msg.snapAnchor === 'cross')
+        sc.snapAnchor = msg.snapAnchor;                          // snap to cell centres or line crossings
+      this.scheduleSave();
+    });
+
+    // Match the grid to a board on the table: cell size from its footprint ÷ cell count,
+    // square style, and the board's snap anchor (chess → cell centres, go → crossings).
+    // Boards spawn centred at the origin where the grid is anchored, so no offset needed;
+    // the GM can nudge the cell size afterward to account for any border in the model.
+    this.onMessage('calibrateGrid', (client, msg = {}) => {
+      if (this.rank(client) < RANK.gm) return;
+      let boardId = null;
+      this.state.pieces.forEach((p, id) => { if (!boardId && p.type === 'board') boardId = id; }); // the single table board
+      if (!boardId) return;
+      const spec = BOARDS[JSON.parse(this.state.pieces.get(boardId).props || '{}').board];
+      // Cell size = board width ÷ number of GAPS between lines. Built-in boards store the gap
+      // count + anchor directly. For a custom/image board the client sends the count the GM
+      // sees (squares for a chess-style board, or LINES for a go-style one) plus the anchor;
+      // a cross (go) board has one fewer gap than it has lines, so subtract one there.
+      let gaps, anchor;
+      if (spec && spec.grid) {
+        gaps = spec.grid.cells; anchor = spec.grid.anchor;
+      } else {
+        anchor = msg.anchor === 'cross' ? 'cross' : 'center';
+        const count = Math.round(+msg.cells);
+        gaps = anchor === 'cross' ? count - 1 : count;
+      }
+      if (!(gaps > 0)) return;
+      // Dimensions from the actual collider, per axis — so a rectangular board (e.g. go, whose
+      // cells are slightly taller than wide) gets independent width/depth spacing that a single
+      // square cell size could never match. Works for every board kind uniformly.
+      const body = this.bodies.get(boardId), shape = body && body.shapes[0];
+      const he = shape && shape.halfExtents;
+      const wx = he ? he.x * 2 : 0, wz = he ? he.z * 2 : 0;
+      if (!(wx > 0) || !(wz > 0)) return;
+      const sc = this.state.scale;
+      sc.cellWorld = clamp(wx / gaps, 1e-3, 1e3);
+      sc.cellZ = clamp(wz / gaps, 1e-3, 1e3);
+      sc.gridX = 0; sc.gridZ = 0;              // the board is centred at the origin, so no offset
+      sc.gridStyle = 'square';
+      sc.snapAnchor = anchor === 'cross' ? 'cross' : 'center';
       this.scheduleSave();
     });
 
@@ -1469,6 +1541,7 @@ class TableRoom extends Room {
     const itemProps = { shape: d.item };
     if (d.team) itemProps.team = props.team ? 1 : 0;          // go bowl → a team stone
     else if (props.color != null) itemProps.color = props.color | 0; // poker/coin → tint
+    if (PROPS[d.item] && PROPS[d.item].team) itemProps.snap = true;   // grid-game items (go stones) snap by default
     return { type: 'prop', props: itemProps };
   }
 
@@ -1588,6 +1661,32 @@ class TableRoom extends Room {
   // Serialize the current table into a scene payload: the table size, and every
   // piece with its transform. A deck's private card list rides along so it comes
   // back as a real deck; a face-down card carries its private front.
+  // The per-room scale as a plain object (grid + measurement calibration), for both the
+  // durable room row and the scene snapshot, so a saved scene restores its grid/units too.
+  scaleSnapshot() {
+    const sc = this.state.scale;
+    return { worldPerUnit: sc.worldPerUnit, unitLabel: sc.unitLabel, roundStep: sc.roundStep,
+             cellWorld: sc.cellWorld, cellZ: sc.cellZ, gridX: sc.gridX, gridZ: sc.gridZ,
+             gridStyle: sc.gridStyle, gridColor: sc.gridColor, gridLift: sc.gridLift, snapAnchor: sc.snapAnchor };
+  }
+  // Validate + apply a scale object (from the room row or a scene). Every field is optional
+  // and range-checked, so an old/partial snapshot just keeps the current defaults.
+  applyScale(s) {
+    if (!s || typeof s !== 'object') return;
+    const sc = this.state.scale;
+    if (Number.isFinite(+s.worldPerUnit) && +s.worldPerUnit > 0) sc.worldPerUnit = clamp(+s.worldPerUnit, 1e-3, 1e3);
+    if (typeof s.unitLabel === 'string') sc.unitLabel = s.unitLabel.slice(0, 8);
+    if (Number.isFinite(+s.roundStep) && +s.roundStep > 0) sc.roundStep = clamp(+s.roundStep, 1e-3, 1e2);
+    if (Number.isFinite(+s.cellWorld) && +s.cellWorld >= 0) sc.cellWorld = clamp(+s.cellWorld, 0, 1e3);
+    if (Number.isFinite(+s.cellZ) && +s.cellZ >= 0) sc.cellZ = clamp(+s.cellZ, 0, 1e3);
+    if (Number.isFinite(+s.gridX)) sc.gridX = clamp(+s.gridX, -1e3, 1e3);
+    if (Number.isFinite(+s.gridZ)) sc.gridZ = clamp(+s.gridZ, -1e3, 1e3);
+    if (/^#[0-9a-f]{6}$/i.test(s.gridColor || '')) sc.gridColor = s.gridColor;
+    if (Number.isFinite(+s.gridLift)) sc.gridLift = clamp(+s.gridLift, 0, GRID_LIFT_MAX);
+    if (s.snapAnchor === 'center' || s.snapAnchor === 'cross') sc.snapAnchor = s.snapAnchor;
+    if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off') sc.gridStyle = s.gridStyle;
+  }
+
   serializeScene() {
     const pieces = [];
     this.state.pieces.forEach((piece, id) => {
@@ -1605,7 +1704,7 @@ class TableRoom extends Room {
     // table-owned and GM-managed). Color is kept so they look the same on load.
     const overlays = [];
     this.state.overlays.forEach(o => overlays.push({ kind: o.kind, color: o.color, x: o.x, z: o.z, x2: o.x2, z2: o.z2, w: o.w, ang: o.ang }));
-    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays };
+    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays, scale: this.scaleSnapshot() };
   }
 
   // Full game snapshot = the portable scene PLUS the private per-player layer
@@ -1647,6 +1746,7 @@ class TableRoom extends Room {
     const tx = clamp(+(scene.table && scene.table.x) || TABLE.x, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
     const tz = clamp(+(scene.table && scene.table.z) || TABLE.z, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
     this.state.tableX = tx; this.state.tableZ = tz; this.buildBounds(tx, tz);
+    this.applyScale(scene.scale); // grid + measurement calibration ride the scene (no-op if absent)
     for (const e of (Array.isArray(scene.pieces) ? scene.pieces : [])) {
       if (this.state.pieces.size >= SIM.maxPieces) break;
       if (!e || !KINDS[e.type]) continue;
@@ -1699,7 +1799,7 @@ class TableRoom extends Room {
     const rows = [];
     this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
     db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene,
-      scale: { worldPerUnit: this.state.scale.worldPerUnit, unitLabel: this.state.scale.unitLabel, roundStep: this.state.scale.roundStep, cellWorld: this.state.scale.cellWorld, gridStyle: this.state.scale.gridStyle } })
+      scale: this.scaleSnapshot() })
       .catch(e => console.error('[saveState]', e.message));
   }
   onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save
@@ -1855,6 +1955,32 @@ class TableRoom extends Room {
   // The simulation heartbeat, run 60×/second. Three passes over the pieces
   // (drive held ones, self-right the rest, advance flips), then step the world
   // and publish the results. dtMs is the real time since the last tick.
+  // --- Pin-when-snapped: freeze a settled snap-to-grid piece so neighbours can't
+  // nudge it off its cell (chess/checkers). It stays collidable and grabbable; a grab
+  // unpins it (see update Pass 1). Only ever touches pieces that are DYNAMIC to begin
+  // with, so boards and other static bodies are never affected.
+  pinPiece(id) {
+    const body = this.bodies.get(id);
+    if (!body || body.__pinned || body.type !== CANNON.Body.DYNAMIC) return;
+    body.__pinned = true;
+    body.type = CANNON.Body.STATIC;
+    body.velocity.setZero(); body.angularVelocity.setZero();
+    body.updateMassProperties(); // STATIC → invMass 0: immovable but still collidable
+    body.sleep();
+  }
+  unpinPiece(id) {
+    const body = this.bodies.get(id);
+    if (!body || !body.__pinned) return;
+    body.__pinned = false;
+    body.type = CANNON.Body.DYNAMIC;
+    body.updateMassProperties();
+    body.wakeUp();
+  }
+  wantsSnap(piece) {
+    if (!gridActive(this.state.scale)) return false;
+    try { return !!JSON.parse(piece.props || '{}').snap; } catch { return false; }
+  }
+
   update(dtMs) {
     const dt = dtMs / 1000;
     const stiffness = SIM.servo.stiffness, maxSpeed = SIM.servo.maxSpeed;
@@ -1865,7 +1991,9 @@ class TableRoom extends Room {
     this.state.pieces.forEach((piece, id) => {
       if (!piece.owner) return;
       const target = this.targets.get(id), body = this.bodies.get(id);
-      if (!target || !body) return;
+      if (!body) return;
+      if (body.__pinned) this.unpinPiece(id); // grabbing a pinned piece frees it to move
+      if (!target) return;
       body.wakeUp();
 
       let vx = (target.x - body.position.x) * stiffness;
@@ -1920,6 +2048,28 @@ class TableRoom extends Room {
         body.angularVelocity.z += axis.z * tilt * right.strength;
         body.angularVelocity.scale(right.damp, body.angularVelocity);
         body.wakeUp();
+      }
+    });
+
+    // Pass 2.5 — pin snapped pieces once they settle (and unpin if their flag/grid goes
+    // away). Freezing them STATIC keeps a bumped neighbour from sliding them off a cell.
+    this.state.pieces.forEach((piece, id) => {
+      if (piece.owner) return;                    // held pieces are handled (and unpinned) in Pass 1
+      const body = this.bodies.get(id);
+      if (!body) return;
+      if (this.wantsSnap(piece)) {
+        // Settle quickly (card-like sleep timing), then pin ONLY once actually ASLEEP — i.e.
+        // it has fallen and come to rest on the surface. Pinning on mere low speed froze
+        // pieces in mid-air the instant release zeroed their velocity, before gravity could
+        // drop them onto the cell.
+        if (body.sleepTimeLimit !== SIM.cards.sleepTime) { body.sleepSpeedLimit = SIM.cards.sleepSpeed; body.sleepTimeLimit = SIM.cards.sleepTime; }
+        if (!body.__pinned && body.sleepState === CANNON.Body.SLEEPING) {
+          const p = snapToCell(body.position.x, body.position.z, this.state.scale);
+          body.position.x = p.x; body.position.z = p.z; // exact cell (a bounce may have nudged it) before freezing
+          this.pinPiece(id);
+        }
+      } else if (body.__pinned) {
+        this.unpinPiece(id);                       // snap turned off, or the grid was removed
       }
     });
 

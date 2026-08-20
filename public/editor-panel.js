@@ -110,7 +110,7 @@ function countStepper(def, max) {
 // One spawnable card: preview + title + quantity + optional color + Spawn.
 // send(colorProps) fires a single spawn; the card supplies quantity + color.
 // color: 'palette' | 'team' | 'own' | 'none'. li._spawn() is used for batch spawn.
-function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, count, extraActs = [] }) {
+function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, count, snapDefault = false, extraActs = [] }) {
   const li = document.createElement('li'); li.className = 'libCard';
   const name = document.createElement('span'); name.className = 'libName'; name.textContent = title;
   const meta = document.createElement('div'); meta.className = 'libMeta'; meta.append(name); if (badge) meta.append(badge);
@@ -149,11 +149,20 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
     }
   }
 
+  // Per-piece snap-to-grid at spawn — on by default for the grid games (go / checkers /
+  // chess), off for everything else; toggle it either way. Inert until a grid is on.
+  const snapTog = document.createElement('button'); snapTog.type = 'button';
+  snapTog.className = 'chip chk snapTog' + (snapDefault ? ' on' : '');
+  snapTog.textContent = '⊞ Snap'; snapTog.title = 'Spawn this piece with snap-to-grid on';
+  snapTog.onclick = () => snapTog.classList.toggle('on');
+  ctrls.append(snapTog);
+
   li._spawn = () => {
     const n = qty.get(); const cp = {};
     const color = getColor(); if (color != null) { cp.color = color; if (dice) cp.textColor = contrast(color); }
     const team = getTeam(); if (team != null) cp.team = team;
     if (stack) cp.count = stack.get();
+    cp.snap = snapTog.classList.contains('on');
     for (let i = 0; i < n; i++) send(cp);
   };
 
@@ -304,6 +313,7 @@ function renderBuiltin() {
     const box = previewBox(); fillAsync(box, propPreviewURL({ shape: p.id }));
     const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colors
     objs.append(spawnCard({ preview: box, title: p.name, color: teamName ? 'team' : 'palette', teamName, swatches: p.swatches,
+      snapDefault: !!(PROPS[p.id] && PROPS[p.id].team), // grid games (go/checkers/chess) default to snap-on
       send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
   }
 
@@ -495,8 +505,31 @@ function wireAddBoard() {
   byId('adBoardGlbSave').onclick = () => saveGlb(false);
   byId('adBoardGlbSpawn').onclick = () => saveGlb(true);
 
-  // image / flat boards — send the raw w/d; the server fits them to the current table
-  wireUploadSq('adBoardImg', false);
+  // image / flat boards — send the raw w/d; the server fits them to the current table.
+  // The board slab stretches the image to fill w×d, so keep w:d matched to the image's
+  // pixel aspect (imgW/imgH) or it comes out distorted and no grid can line up. On upload
+  // we read the image's proportions and set Depth from Width; the lock keeps them matched
+  // as you tune either field (uncheck to size the two axes freely).
+  let imgAspect = 1; // width / height of the loaded image (or the current w/d when editing)
+  const clampWD = (v, max) => Math.max(2, Math.min(max, Math.round(v * 100) / 100));
+  const locked = () => { const l = byId('adBoardLock'); return !l || l.checked; };
+  const wIn = byId('adBoardW'), dIn = byId('adBoardD');
+  if (wIn) wIn.oninput = () => { if (locked() && imgAspect > 0) dIn.value = clampWD((+wIn.value || 0) / imgAspect, 32); };
+  if (dIn) dIn.oninput = () => { if (locked() && imgAspect > 0) wIn.value = clampWD((+dIn.value || 0) * imgAspect, 40); };
+  const onImgPicked = () => {
+    const f = byId('adBoardImg').files[0]; if (!f) return;
+    const img = new Image();
+    img.onload = () => {
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        imgAspect = img.naturalWidth / img.naturalHeight;
+        const lk = byId('adBoardLock'); if (lk) lk.checked = true;      // fresh image → lock on
+        dIn.value = clampWD((+wIn.value || 10) / imgAspect, 32);        // derive Depth from Width + aspect
+      }
+      URL.revokeObjectURL(img.src);
+    };
+    img.src = URL.createObjectURL(f);
+  };
+  wireUploadSq('adBoardImg', false, onImgPicked);
   const saveImgBoard = async (spawn) => {
     const name = byId('adBoardImgName').value.trim();
     if (!name) return alert('Name the board first.');
@@ -522,6 +555,7 @@ function wireAddBoard() {
       byId('adBoardImgName').value = clone ? '' : it.name;
       byId('adBoardW').value = it.w != null ? it.w : 10;
       byId('adBoardD').value = it.d != null ? it.d : 10;
+      imgAspect = (it.w > 0 && it.d > 0) ? it.w / it.d : 1; // lock keeps this asset's existing proportions
       clearSq('adBoardImg');
       if (it.tex) boardPreviewURL(it).then((u) => { if (u) byId('adBoardImg').parentElement.style.backgroundImage = `url("${u}")`; });
     }

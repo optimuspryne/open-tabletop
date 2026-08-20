@@ -816,14 +816,20 @@ input[type="range"]::-moz-range-thumb {
   overflow: auto;
   gap: 8px;
 }
-/* Customize Table — a small left-anchored panel like Members (not a full-screen modal) */
-#tableModal {
-  left: var(--inset);
-  top: 30%;
-  transform: translateY(-50%);
-  width: min(240px, 90vw);
-  gap: 8px;
-  padding: 5px 12px;   /* tighter than the .popout default */
+/* Customize Table — a centered modal (see the modal group above); its body scrolls if it
+   outgrows the viewport, so the head/close stay put on short screens. */
+/* Customize Table + Scale & Grid — movable pop-out panels (position:fixed comes from
+   .popout; JS makes them draggable and remembers where you put them). Both start near
+   the top-left so they don't cover the table centre while you calibrate. */
+#tableModal, #scaleGridPanel { top: 60px; z-index: 8; max-height: 84vh; gap: 6px; }
+#tableModal { left: 16px; width: 232px; }
+#scaleGridPanel { left: 262px; width: 350px; }
+#tableModal > .tableBody, #scaleGridPanel > .tableBody {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
 }
 #memberList {
   list-style: none;
@@ -1870,15 +1876,29 @@ body.admin {
    gains side margins and the controls stop growing past a comfortable size — rather
    than every field stretching edge-to-edge. (Capping/centring the flex ROWS directly
    makes them size to content and overflow when narrow, so it's done on this wrapper.) */
-#tableModal .tableBody { width: 100%; max-width: 300px; margin: 0 auto; } /* width:100% = definite size (in a flex column, margin:auto alone would size-to-content and overflow) */
+/* Layout for the two pop-out bodies (Customize Table + Scale & Grid), scoped via .tableBody. */
 .secLabel { color: var(--accent); font-size: var(--fs-sm); font-weight: 600; margin: 12px 0 4px; letter-spacing: .3px; text-align: center; }
-#tableModal .secLabel:first-of-type { margin-top: 2px; }
-#tableModal .calibLabel { text-align: center; }
-#tableModal .sizeRow > label { min-width: 64px; white-space: nowrap; }
-#tableModal .sizeRow > .stepper { flex: 1 1 auto; max-width: 160px; min-width: 0; }
-#tableModal .sizeRow > input[type="text"] { flex: 1 1 auto; max-width: 180px; min-width: 0; }
-#tableModal .sizeRow > #scaleUnits { flex: 1 1 auto; min-width: 0; }
-#tableModal .stepper input[type="number"] { flex: 1 1 auto; width: auto; min-width: 0; }
+.tableBody .secLabel:first-of-type { margin-top: 2px; }
+.tableBody .calibLabel { text-align: center; }
+/* Rows are tighter than the old modal, and field labels are small + quiet (matching the
+   app's compact panels) instead of full-size bright text. */
+.tableBody .sizeRow { gap: 8px; margin: 6px 0; }
+.tableBody .sizeRow > label { flex: 0 0 78px; width: 78px; white-space: nowrap; font-size: var(--fs-sm); color: var(--text); opacity: .72; } /* fixed column so every control starts at the same x */
+#tableModal .sizeRow > label { flex: 0 0 auto; width: auto; min-width: 0; } /* Customize Table has nothing to align to — let "Felt" hug its swatch */
+/* Calibrate row: "Calibrate" label + a compact input + Set, with the prompt tucked under it (aligned to the control column). */
+.tableBody .calibRow { flex-wrap: wrap; }
+.tableBody .calibRow > input[type="text"] { flex: 0 1 96px; }
+.tableBody .calibHint { flex: 1 1 100%; margin-left: 86px; font-size: var(--fs-sm); }
+.tableBody .dimGrid > label { opacity: .85; }
+/* Steppers keep a legible min width so a − value + trio never collapses, even two to a row. */
+.tableBody .sizeRow > .stepper { flex: 1 1 auto; min-width: 68px; max-width: 132px; }
+.tableBody .sizeRow > input[type="text"] { flex: 1 1 auto; max-width: 180px; min-width: 0; }
+.tableBody .sizeRow > #scaleUnits { flex: 1 1 auto; min-width: 0; }
+.tableBody .stepper input[type="number"] { flex: 1 1 auto; width: auto; min-width: 44px; text-align: center; }
+.tableBody .sizeRow.calibRow > input[type="text"] { flex: 0 0 92px; max-width: 92px; } /* keep Calibrate + Set on one line; the prompt wraps below */
+.tableBody .stepBtn { padding: 0 6px; } /* trimmer than the default so two steppers fit a row */
+.tableBody .dimGrid .stepper input[type="number"] { min-width: 28px; } /* Width/Depth hold short integers — keep them snug in the slim panel */
+.tableBody .sizeRow > .muted { flex: 0 0 auto; }  /* unit suffix ("in") hugs its stepper */
 /* Width × Depth share one row (label over field, × between). */
 .dimGrid { display: grid; grid-template-columns: 1fr auto 1fr; gap: 4px 8px; align-items: center; }
 .dimGrid > label { font-size: var(--fs-sm); text-align: center; }

@@ -93,9 +93,14 @@ export const PROP_LIST = [
 // Built-in board models (public/models/boards), CC0. Modeled ~0.43 units, so a
 // large modelScale fills the table; colliders precomputed (worldSize*scale/2).
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
+// `grid` drives "calibrate grid to this board": `cells` across the playing area, and
+// whether pieces sit in cell `center`s (chess/checkers squares) or on `cross`ings (go
+// stones). Boards spawn centred at the world origin, which is where our grid is anchored,
+// so no offset is needed — only the cell size (estimated from the footprint, GM-tunable)
+// and the snap anchor.
 export const BOARDS = {
-  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 18.7, box: [4.00, 0.22, 4.00] },
-  go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29] },
+  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 1, box: [4.00, 0.22, 4.00], grid: { cells: 8,  anchor: 'center' } },
+  go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29], grid: { cells: 18, anchor: 'cross'  } },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
 
@@ -107,7 +112,7 @@ export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their lar
 // (poker chips / coins); 'model' = a bundled bowl .glb (go bowl).
 export const STACK_CAP = 18; // max discs DRAWN in a stack; the real count can exceed this (visual tops out)
 export const DISPENSERS = {
-  pokerStack: { name: 'Poker Chips', body: 'stack', item: 'poker_chip', color: true,
+  pokerStack: { name: 'Poker chips', body: 'stack', item: 'poker_chip', color: true,
                 count: { def: 20, max: 100 }, mass: 0.5 },
   coinStack:  { name: 'Coins',       body: 'stack', item: 'coin', color: true, swatches: 'metals',
                 count: { def: 20, max: 100 }, mass: 0.5 },
@@ -182,6 +187,36 @@ function decimalsForStep(step) {
 export function roundToStep(value, step) {
   if (!(step > 0) || !Number.isFinite(value)) return value;
   return +(Math.round(value / step) * step).toFixed(decimalsForStep(step));
+}
+
+// --- Grid & snap-to-grid ------------------------------------------------------
+// A table-wide grid carried on the room's scale: `cellWorld` is the cell size in
+// world units and `gridStyle` is 'off' | 'square' | 'hex'. The grid is anchored at
+// world origin (0,0) with LINES on integer multiples of the cell (so a line runs
+// through the table centre) and cell CENTRES on the half-offsets between them.
+// These are pure and shared, so the client's snap preview and the server's
+// authoritative placement always agree (the classic snap bug is quantising twice).
+
+// Is there a grid to draw / snap to? (style 'off' or a zero cell size = none.)
+export function gridActive(scale = {}) {
+  return !!scale && scale.gridStyle !== 'off' && +scale.cellWorld > 0;
+}
+
+// Snap a world XZ point to the nearest cell CENTRE, returning a new { x, z }.
+// Square only for now; 'hex' (needs an orientation — see the grid plan) and 'off'
+// return the point unchanged, so a drop can always be routed through this safely.
+// Uses exact rounding (not roundToStep's display rounding), so any cell size lands
+// on true multiples with no float truncation.
+export function snapToCell(x, z, scale = {}) {
+  const cx = +scale.cellWorld;
+  if (!(cx > 0) || scale.gridStyle !== 'square') return { x, z };
+  const cz = +scale.cellZ > 0 ? +scale.cellZ : cx; // rectangular grids (e.g. a go board) have cz ≠ cx
+  const ox = +scale.gridX || 0, oz = +scale.gridZ || 0; // lattice offset — align to a printed map's phase
+  // 'cross' snaps to the line intersections (go stones sit on crossings); the default
+  // 'center' snaps to mid-cell (chess/checkers pieces sit in the squares).
+  const cross = scale.snapAnchor === 'cross';
+  const snap = (v, cell, o) => { const h = cross ? 0 : cell / 2; return Math.round((v - o - h) / cell) * cell + h + o; };
+  return { x: snap(x, cx, ox), z: snap(z, cz, oz) };
 }
 
 // A world distance as a display string: worldDist ÷ worldPerUnit → round to

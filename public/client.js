@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
-import { KIND, OVERLAY, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS } from '/shared/pieces.js';
+import { KIND, OVERLAY, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture, gridMesh } from './graphics.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
@@ -43,7 +43,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['measurePanel', 'audioPanel', 'creditsPanel', 'tracksPanel', 'whiteboard', 'chat', 'notes', 'scorePanel', 'timer', 'showPanel', 'dropPanel', 'membersPanel', 'tableModal'];
+const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'measurePanel', 'audioPanel', 'creditsPanel', 'tracksPanel', 'whiteboard', 'chat', 'notes', 'scorePanel', 'timer', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -188,6 +188,24 @@ const meshPropsOf = (piece) => {
   if (piece.type === 'dispenser') p.count = piece.count;
   return p;
 };
+
+// The table grid (a flat LineSegments on the felt) or null when gridStyle is 'off'.
+// Rebuilt whenever the grid fields (cell size / style / colour) or the table size
+// change; reads everything from the synced room scale, so every seat draws the same.
+let gridLines = null;
+// The grid's height above the felt (GM-set, durable); falls back to the overlay lift.
+const gridY = () => { const v = room && +room.state.scale.gridLift; return Number.isFinite(v) ? v : MEASURE.lift; };
+// Whether a piece carries the per-piece snap-to-grid flag (like keep-upright).
+const pieceSnap = (id) => { const p = room && room.state.pieces.get(id); if (!p) return false; try { return !!JSON.parse(p.props || '{}').snap; } catch { return false; } };
+// The drag target to actually send: snapped to the nearest cell for a snap-flagged piece
+// on an active grid (so it tracks cell-to-cell as you drag), else the raw cursor point.
+const snapXZ = (x, z) => (down && down.snap && gridActive(room.state.scale)) ? snapToCell(x, z, room.state.scale) : { x, z };
+function rebuildGrid() {
+  if (gridLines) { scene.remove(gridLines); gridLines.geometry.dispose(); gridLines.material.dispose(); gridLines = null; }
+  if (!room) return;
+  const g = gridMesh(room.state.scale, room.state.tableX, room.state.tableZ);
+  if (g) { g.position.y = gridY(); scene.add(g); gridLines = g; }
+}
 
 (async () => {
   const client = new Client(location.origin.replace(/^http/, 'ws'));
@@ -390,8 +408,8 @@ const meshPropsOf = (piece) => {
     cb(room.state).scores.onAdd((row) => { renderScores(); cb(row).listen('score', renderScores, false); cb(row).listen('label', renderScores, false); });
     cb(room.state).scores.onRemove(() => renderScores());
     cb(room.state).listen('notes', updateRoomNotes, false);
-    cb(room.state).listen('tableX', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
-    cb(room.state).listen('tableZ', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); }, false);
+    cb(room.state).listen('tableX', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); rebuildGrid(); }, false);
+    cb(room.state).listen('tableZ', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); rebuildGrid(); }, false);
     cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
     cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
     cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
@@ -399,10 +417,20 @@ const meshPropsOf = (piece) => {
     cb(room.state).scale.listen('worldPerUnit', syncScalePanel, false);
     cb(room.state).scale.listen('unitLabel', syncScalePanel, false);
     cb(room.state).scale.listen('roundStep', syncScalePanel, false);
+    const onGrid = () => { rebuildGrid(); syncScalePanel(); }; // redraw + reflect the panel
+    cb(room.state).scale.listen('cellWorld', onGrid, false);   // grid: cell width (X)
+    cb(room.state).scale.listen('cellZ', onGrid, false);       // grid: cell depth (Z) — rectangular grids
+    cb(room.state).scale.listen('gridX', onGrid, false);       // grid: lattice offset X
+    cb(room.state).scale.listen('gridZ', onGrid, false);       // grid: lattice offset Z
+    cb(room.state).scale.listen('gridStyle', onGrid, false);   // grid: off / square / hex
+    cb(room.state).scale.listen('gridColor', onGrid, false);   // grid: line colour
+    cb(room.state).scale.listen('gridLift', () => { if (gridLines) gridLines.position.y = gridY(); syncScalePanel(); }, false); // height: just move it, no rebuild
+    cb(room.state).scale.listen('snapAnchor', syncScalePanel, false); // snap target only — no redraw
   } catch (e) { /* older server without these fields — feature stays inert */ }
   renderScores(); updateRoomNotes(); renderUnclaimed();
   if (room.state.tableX) { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); } // initial size (may be default until decode)
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
+  rebuildGrid(); // initial grid (inert until a GM sets a cell size + square style)
 
   const diceGrp = byId('diceGrp');
   const diceBtn = byId('diceBtn');
@@ -430,8 +458,10 @@ const meshPropsOf = (piece) => {
   menu('roomBtn', 'roomGrp');
   wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); renderUnclaimed(); });
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
-  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; syncScalePanel(); } });
+  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; } });
   wire('tableClose', () => byId('tableModal').hidden = true);
+  wire('roomScaleGrid', () => { byId('roomGrp').hidden = true; const sg = byId('scaleGridPanel'); sg.hidden = !sg.hidden; if (!sg.hidden) syncScalePanel(); }); // Scale & Grid pop-out
+  wire('scaleGridClose', () => byId('scaleGridPanel').hidden = true);
   { // GM: whiteboard config — a Tools-menu panel that flows below the menu (not a full-screen modal)
     const wbPanel = byId('whiteboard'), wbBtn = byId('wbBtn');
     if (wbPanel && wbBtn) {
@@ -483,6 +513,30 @@ const meshPropsOf = (piece) => {
     const wu = byId('scaleWidthUnit'); if (wu) wu.textContent = u;
     const wv = byId('scaleWidthVal'); // prefill with the table's CURRENT width in display units (editable)
     if (wv && document.activeElement !== wv) { const cur = (room.state.tableX * 2) / (+sc.worldPerUnit || 1); wv.value = Number.isFinite(cur) ? String(+cur.toFixed(2)) : ''; }
+    // Grid controls: light the active style, reveal cell/color rows when a grid is on,
+    // show the cell size in display units, and mirror the line color.
+    const gStyle = sc.gridStyle || 'off', gridOn = gStyle !== 'off';
+    document.querySelectorAll('#gridStyles [data-grid]').forEach(b => b.classList.toggle('on', b.dataset.grid === gStyle));
+    const gcr = byId('gridCellRow'); if (gcr) gcr.hidden = !gridOn;
+    const gor = byId('gridOffRow'); if (gor) gor.hidden = !gridOn;
+    const gou = byId('gridOffUnit'); if (gou) gou.textContent = u;
+    const gcalr = byId('gridCalibRow'); if (gcalr) gcalr.hidden = !gridOn;
+    const gkr = byId('gridColorRow'); if (gkr) gkr.hidden = !gridOn;
+    const glr = byId('gridLiftRow'); if (glr) glr.hidden = !gridOn;
+    const gl = byId('gridLift'); if (gl && document.activeElement !== gl) gl.value = Number.isFinite(+sc.gridLift) ? sc.gridLift : 0.05;
+    const gcu = byId('gridCellUnit'); if (gcu) gcu.textContent = u;
+    const perU = +sc.worldPerUnit || 1;
+    const gc = byId('gridCell');
+    if (gc && document.activeElement !== gc) { const wc = (+sc.cellWorld || 0) / perU; gc.value = wc > 0 ? String(+wc.toFixed(3)) : ''; }
+    const gcz = byId('gridCellZ'); // cell DEPTH (Z spacing); falls back to the width for a square grid
+    if (gcz && document.activeElement !== gcz) { const dc = ((+sc.cellZ > 0 ? +sc.cellZ : +sc.cellWorld) || 0) / perU; gcz.value = dc > 0 ? String(+dc.toFixed(3)) : ''; }
+    const gox = byId('gridOffX'); if (gox && document.activeElement !== gox) gox.value = String(+(((+sc.gridX || 0) / perU).toFixed(3)));
+    const goz = byId('gridOffZ'); if (goz && document.activeElement !== goz) goz.value = String(+(((+sc.gridZ || 0) / perU).toFixed(3)));
+    const gk = byId('gridColor');
+    if (gk && document.activeElement !== gk && /^#[0-9a-f]{6}$/i.test(sc.gridColor || '')) gk.value = sc.gridColor;
+    const gsr = byId('gridSnapRow'); if (gsr) gsr.hidden = !gridOn; // snap-anchor toggle (centers vs crossings)
+    const anchor = sc.snapAnchor === 'cross' ? 'cross' : 'center';
+    document.querySelectorAll('#gridAnchors [data-anchor]').forEach(b => b.classList.toggle('on', b.dataset.anchor === anchor));
     relabelOverlays(); // scale drives every ruler's label
   }
   {
@@ -509,6 +563,42 @@ const meshPropsOf = (piece) => {
       if (n > 0) room.send('scaleSet', { worldPerUnit: (room.state.tableX * 2) / n });
     };
     const wv = byId('scaleWidthVal'); if (wv) wv.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); setW && setW.onclick(); } };
+    // Grid: style toggle (Off/Square), cell size (display units → world), line color.
+    document.querySelectorAll('#gridStyles [data-grid]').forEach(b => {
+      b.onclick = () => {
+        const msg = { gridStyle: b.dataset.grid };
+        // Enabling a grid for the first time needs a cell size, or it renders nothing:
+        // default to one display unit per cell.
+        if (b.dataset.grid !== 'off' && !(+room.state.scale.cellWorld > 0)) msg.cellWorld = +room.state.scale.worldPerUnit || 1;
+        room.send('scaleSet', msg);
+      };
+    });
+    // Cell size — width (X) and depth (Z) independently, so a rectangular board (go) can be
+    // matched. Equal values = a square grid.
+    const gc = byId('gridCell'); if (gc) gc.onchange = () => { const v = +gc.value; if (v > 0) room.send('scaleSet', { cellWorld: v * (+room.state.scale.worldPerUnit || 1) }); };
+    const gcz = byId('gridCellZ'); if (gcz) gcz.onchange = () => { const v = +gcz.value; if (v > 0) room.send('scaleSet', { cellZ: v * (+room.state.scale.worldPerUnit || 1) }); };
+    // Offset — nudge the grid lattice to line up with a printed map's phase (X, Z).
+    const gox = byId('gridOffX'); if (gox) gox.onchange = () => room.send('scaleSet', { gridX: (+gox.value || 0) * (+room.state.scale.worldPerUnit || 1) });
+    const goz = byId('gridOffZ'); if (goz) goz.onchange = () => room.send('scaleSet', { gridZ: (+goz.value || 0) * (+room.state.scale.worldPerUnit || 1) });
+    const gk = byId('gridColor'); if (gk) gk.oninput = () => room.send('scaleSet', { gridColor: gk.value });
+    const gl = byId('gridLift'); if (gl) gl.oninput = () => room.send('scaleSet', { gridLift: +gl.value });
+    // Snap anchor: cell centres (chess/checkers) vs line crossings (go). Also tells the
+    // "Fit to board" button whether the count you enter means squares or lines.
+    document.querySelectorAll('#gridAnchors [data-anchor]').forEach(b => { b.onclick = () => room.send('scaleSet', { snapAnchor: b.dataset.anchor }); });
+    // Fit to board: size the grid to the board on the table. Built-in boards need nothing (the
+    // registry knows their geometry — one click); a custom/image board takes the count you type
+    // in the "across" field, read as squares or lines per the current Snap-to setting.
+    const calibBtn = byId('gridCalib');
+    if (calibBtn) calibBtn.onclick = () => {
+      let boardPiece = null; room.state.pieces.forEach(p => { if (!boardPiece && p.type === 'board') boardPiece = p; });
+      if (!boardPiece) { alert('Place a board on the table first, then fit the grid to it.'); return; }
+      const spec = BOARDS[JSON.parse(boardPiece.props || '{}').board];
+      const n = parseInt(byId('gridCells').value, 10);
+      const anchor = room.state.scale.snapAnchor === 'cross' ? 'cross' : 'center';
+      if (n > 0) room.send('calibrateGrid', { cells: n, anchor });
+      else if (spec && spec.grid) room.send('calibrateGrid', {}); // built-in: use its known cell count
+      else alert('Enter how many cells (or lines, for a go-style board) go across the board.');
+    };
   }
 
   // Measure tool (Tools menu): toggle a modal mode; drag on the felt to lay the
@@ -1079,7 +1169,7 @@ renderer.domElement.addEventListener('pointerdown', e => {
     down = null; return; // empty felt → let OrbitControls orbit/pan
   }
   const type = meshes.get(id).type;
-  down = { id, type, kind: KIND[type], button: e.button, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false };
+  down = { id, type, kind: KIND[type], button: e.button, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id) };
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
@@ -1091,7 +1181,7 @@ renderer.domElement.addEventListener('wheel', e => {
   dragHeight = clamp(dragHeight - Math.sign(e.deltaY) * DRAG_STEP, DRAG_MIN, DRAG_MAX); // scroll up = raise
   ray.setFromCamera(pointer, camera);
   ray.ray.intersectPlane(dragPlane, hit); // fixed ground plane → XZ under the cursor, stable at any height
-  room.send('move', { id: down.id, x: hit.x, y: dragHeight, z: hit.z });
+  { const t = snapXZ(hit.x, hit.z); room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z }); }
 }, { passive: false });
 
 renderer.domElement.addEventListener('pointermove', e => {
@@ -1156,7 +1246,7 @@ renderer.domElement.addEventListener('pointermove', e => {
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       room.send('grab', { id: down.id });
       playSfx(sfxKind(down.type) + '-pickup'); // local, per object type
-      room.send('move', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
+      { const t = snapXZ(hit.x, hit.z); room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); }
     } else if (down.button === 0 && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
       // Left-drag spawns one item and carries it out: a card off a deck, or a chip/stone
       // off a dispenser. Both reuse the server's "adopt the spawned piece" flow (see 'dealt').
@@ -1179,7 +1269,7 @@ renderer.domElement.addEventListener('pointermove', e => {
     const now = performance.now(), dt = (now - prevThrowTime) / 1000;
     if (dt > 0 && dt < 0.1) throwVel.lerp(hit.clone().sub(prevTarget).multiplyScalar(1 / dt), 0.4); // smooth the hand speed
     prevTarget.copy(hit); prevThrowTime = now;
-    if (now - lastMoveSent > 16) { room.send('move', { id: down.id, x: hit.x, y: hit.y, z: hit.z }); lastMoveSent = now; } // ~60Hz throttle
+    if (now - lastMoveSent > 16) { const t = snapXZ(hit.x, hit.z); room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); lastMoveSent = now; } // ~60Hz throttle (snapped for snap pieces)
   }
 });
 const endGesture = e => {
@@ -1242,7 +1332,8 @@ renderer.domElement.addEventListener('dblclick', e => { // double-click the boar
 const heldOrHoveredId = () => (down && down.id) || pickId();
 
 // Keyboard shortcuts (ignored while typing in an input). Delete/Backspace removes
-// a piece, U toggles its upright/flat behaviour, S saves a hovered deck.
+// a piece, U toggles its upright/flat behaviour, G toggles its snap-to-grid, S saves
+// a hovered deck.
 addEventListener('keydown', e => {
   if (!room) return;
   if (e.key === 'Escape' && measuring) { exitMeasure(); return; }
@@ -1268,6 +1359,9 @@ addEventListener('keydown', e => {
   } else if (e.key === 'u' || e.key === 'U') { // toggle keep-upright / lie-flat
     const id = heldOrHoveredId();
     if (id) room.send('setStand', { id });
+  } else if (e.key === 'g' || e.key === 'G') { // toggle snap-to-grid for this piece
+    const id = heldOrHoveredId();
+    if (id) room.send('setSnap', { id });
   } else if (e.key === 's' || e.key === 'S') { // save a hovered deck to the shared library
     const id = heldOrHoveredId();
     if (id && meshes.get(id).type === 'deck') {
