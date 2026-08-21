@@ -106,7 +106,8 @@ The **synced state is public** — anything in it is one devtools-peek from bein
 read. It holds: each piece's transform/type/owner/props/count; each player's
 seat, hand *count*, name, color, avatar, `showing` count (how many cards they're
 revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
-the room dressing (`scores`, `notes`, `tableX/Z`, `whiteboard`, `skybox`,
+the room dressing (`scores`, `notes`, `tableX/Z`, `whiteboard`, `trays` — which seats'
+personal dice trays are out, `skybox`,
 `feltColor`); and whose turn it is — including, after a resumed game, the public
 `turnPending` name and the `unclaimed` (`userId → name`) map that the GM's
 reassign UI reads. Names only ever appear there, never the cards themselves.
@@ -181,6 +182,34 @@ settles (its body goes to sleep, not merely slows — the old low-speed check pi
 pieces in mid-air), the server freezes it to a `STATIC` body so a bumped neighbour
 can't slide it off its cell. A grab, or turning the flag or the grid off, unpins it.
 
+### Multi-select
+
+Selecting a clump and moving it as one *looks* like new physics but isn't. A held piece is never
+teleported: the server sets its `owner` and, every tick, servos **each** piece that client owns
+toward its own target — it already supported one client driving many pieces to different points;
+nothing had ever handed it more than one. So a group move is just: claim the selection
+(`grabGroup` — only the **free** pieces, so two players can't co-own one), store each piece's
+offset from the anchor in the server-only `groups` map, and each frame set every target to
+`cursorPoint + offset` (`moveGroup`, one message regardless of count). The existing servo carries
+the whole formation rigidly, and `releaseGroup` frees each piece through the same `releasePiece`
+helper the single `release` uses.
+
+The **selection itself is purely local** — a Set of ids on each client, like a cursor, never in
+synced state, so it adds no schema and no one sees yours. Two gestures feed it (a Shift modifier
+and a discoverable Select tool), both painting a screen-space marquee that tests each piece's
+*projected* centre against the box — no 3D picking — and the highlight rings and marquee wear
+that player's own accent color. Ownership is the conflict guard, so the selection can safely
+auto-drop any piece someone else grabs or that gets removed, and never goes stale.
+
+The **batch ops mirror the singles**: with a selection active a keystroke fans an existing
+per-piece action across the set — **U**/**G** toggle stand / snap as a unit, **R** rolls the
+dice, **F** flips the cards, **H** takes the cards to hand, and **`[`**/**`]`** rotate the whole
+formation ±45° about its centroid (each position *and* each facing; boards skipped). Each handler
+is `<action>Group {ids}`, ungated exactly like its single form (only `removeGroup` stays helper+,
+like single delete), and a mixed selection is fine because each key touches only its kind. None
+of it is a new subsystem — it's the grab-and-throw servo and the existing per-piece actions,
+addressed to a list instead of one id.
+
 ## Pieces today
 
 Each **kind** is defined in two registries keyed by the same type id:
@@ -251,6 +280,31 @@ A die is **one kind** parameterized by `props.sides`.
   faces from `convex-hull`, windings flipped outward) so the die tumbles and
   settles on a face. Visual and physics can't diverge; adding a size is a
   one-line vertex entry.
+
+### Dice trays
+
+Rolling on the play field scatters everything, so each seat gets its own **dice tray** — a
+walled box on the same circular track as the whiteboard, parked directly *behind* that player at
+the seat's outward angle (`SEAT_ANGLES`). It is deliberately **personal, not shared**: a single
+communal tray broke down the moment two people rolled at once, so `State.trays` is a
+`MapSchema<boolean>` keyed by seat index and a player toggles only their own (`trayShow`, no rank
+gate). Yet it stays fully **public** — the tray dice are ordinary `die` pieces tagged
+`props.traySeat = N`, so they ride scene save/load and anyone can lean over and read a
+neighbour's roll; there is no hidden per-seat physics world, and thus nothing to distrust. (A
+running dice-roll *log* was considered and dropped on purpose: the physical dice in a public tray
+are the source of truth, and a ledger would pull the feel away from a real table.)
+
+Two things let it fit the engine without new machinery. First, the tray is a real **physics
+container** — floor + four walls + an invisible lid — built from the shared `trayParts()` so the
+collider and the client mesh are the same box; `buildTrays()` rebuilds every enabled seat's walls
+at its angle (bodies tagged `__traySeat`) and slides the dice along on a table resize. The one
+real subtlety is the **out-of-bounds net**: it yanks any stray body back to table centre, and a
+tray sits *past* the table edge, so a tray die is contained by *its own* tray bounds (`inTray`,
+keyed on `__traySeat`) instead of being teleported home. Second, "out of view" is a **local
+camera** move, not height or a separate scene — the Roll button hops *your* camera over your tray
+(placing it first if it isn't out), Roll-all flings only your seat's dice with the gentler
+`SIM.trayRoll` impulse, and Back tweens home; no one else's view stirs. `onLeave` puts a departing
+player's tray away so it never lingers for the next occupant.
 
 ## Live table tools
 
@@ -546,12 +600,17 @@ separate tabs stay distinct.
   settings: scoreboard, notes, table size, felt color, measurement + grid),
   `setStand`/`setSnap`/`snap` (per-piece flags: keep-upright, snap-to-grid, and step
   facing by 45°),
-  `spawn`, `roll`, `reset`, `nextTurn`, `remove`, `setName`, `setAvatar`,
+  `trayShow`/`trayScoop`/`trayClear` (your personal dice tray: toggle it out, re-rack, clear),
+  `grabGroup`/`moveGroup`/`releaseGroup` (multi-select group move via the servo) and
+  `removeGroup`/`setStandGroup`/`setSnapGroup`/`rollGroup`/`flipGroup`/`takeGroup`/`rotateGroup`
+  (batch ops mirroring the singles across a selection),
+  `spawn`, `roll` (rolls the caller's tray dice), `rollOne`, `reset`, `nextTurn`, `remove`,
+  `setName`, `setAvatar`,
   `notebook`, `timer`, `showStart`/`showStop`, `ping`, `handSync` (re-request my
   private hand after a reconnect). (Library load/edit key on a row **`id`** — the
   Postgres primary key — not a filename slug.)
 - **Down (server → client):** synced state (pieces, players, turn, timer, scores,
-  notes, tableX/Z, whiteboard, skybox) plus direct messages — `hand` (your private
+  notes, tableX/Z, whiteboard, trays, skybox) plus direct messages — `hand` (your private
   cards), `dealt` (adopt a dealt card as the dragged piece), `inspectCard` (a drawn
   front for you alone), `notebook` (your private notes), `showFan` (cards someone
   is showing *you*), `ping` (a broadcast attention marker), `sfx` (a shared sound

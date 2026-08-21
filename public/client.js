@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
-import { KIND, OVERLAY, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture, gridMesh } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell } from '/shared/pieces.js';
+import { KIND, OVERLAY, trayMesh, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture, gridMesh } from './graphics.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell, trayCenter, seatAngle } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
@@ -183,9 +183,9 @@ const applyTransform = (mesh, s) => {
 };
 // Mesh-build props for a piece. Dispensers stack their body to the live `count`,
 // which lives in its own schema field (not props), so fold it in for the mesh.
-const meshPropsOf = (piece) => {
+const meshPropsOf = (piece, id) => {
   const p = JSON.parse(piece.props || '{}');
-  if (piece.type === 'dispenser') p.count = piece.count;
+  if (piece.type === 'dispenser') { p.count = piece.count; p._seed = id; } // _seed → per-stack facing jitter
   return p;
 };
 
@@ -233,7 +233,7 @@ function rebuildGrid() {
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
   cb(room.state).pieces.onAdd((piece, id) => {
-    const mesh = KIND[piece.type].mesh(meshPropsOf(piece));
+    const mesh = KIND[piece.type].mesh(meshPropsOf(piece, id));
     const castsShadow = PHYS[piece.type].mass > 0;
     applyTransform(mesh, piece);
     mesh.traverse(node => { // stamp the id on the group AND its children, so picking works
@@ -243,7 +243,10 @@ function rebuildGrid() {
     scene.add(mesh);
     meshes.set(id, { mesh, type: piece.type });
     buffers.set(id, [snapshot(performance.now(), piece)]);
-    cb(piece).listen('owner', () => updateHeldLabel(id, piece.owner), false); // name tag while held
+    cb(piece).listen('owner', () => { // name tag while held; also drop it from my selection if someone else grabs it
+      updateHeldLabel(id, piece.owner);
+      if (piece.owner && piece.owner !== mySession && selection.has(id)) selection.delete(id);
+    }, false);
 
     if (piece.type === 'deck') {
       // The extruded prism is unit-height; scale Y to reflect how many cards remain.
@@ -279,6 +282,7 @@ function rebuildGrid() {
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
     if (inspect && inspect.origId === id) releaseInspect();
     updateHeldLabel(id, ''); // drop its name tag if any
+    selection.delete(id);    // never keep a removed piece selected
     meshes.delete(id);
     buffers.delete(id);
   });
@@ -318,6 +322,7 @@ function rebuildGrid() {
       if (buf.length > 24) buf.shift();
     });
     syncWhiteboard(state.whiteboard); // reflect enable / slide / style changes
+    syncTrays(state.trays);           // reflect personal trays appearing / being put away
     syncSkybox(state.skybox);         // reflect the room's skybox
   });
 
@@ -620,7 +625,14 @@ function rebuildGrid() {
   wire('roomSaveState', () => room.send('stateSave'));
   room.onMessage('stateSaved', () => { const b = byId('roomSaveState'); if (!b) return; const t = b.textContent; b.textContent = '💾 Saved ✓'; setTimeout(() => { b.textContent = t; }, 1500); });
   room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
-  byId('roll').onclick = () => room.send('roll');
+  { const b = byId('selectBtn'); if (b) b.onclick = () => setSelMode(!selMode); } // Select tool: felt-drag boxes a selection
+  byId('roll').onclick = () => openTray();          // Roll hops to YOUR tray (placing it if it isn't out)
+  { const b = byId('trayBack');  if (b) b.onclick = () => closeTray(); }                 // leave the view, tray stays
+  { const b = byId('trayAway');  if (b) b.onclick = () => putTrayAway(); }               // put my tray away (clears its dice)
+  qsa('#trayTools .trayDie').forEach(b => b.onclick = () => room.send('spawn', { type: 'die', props: { sides: +b.dataset.sides, tray: true } })); // add a die to MY tray
+  { const b = byId('trayRoll');     if (b) b.onclick = () => room.send('roll'); }      // fling every die in MY tray
+  { const b = byId('trayScoop');    if (b) b.onclick = () => room.send('trayScoop'); } // gather MY dice back to the middle
+  { const b = byId('trayClearBtn'); if (b) b.onclick = () => room.send('trayClear'); } // remove MY dice
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
   byId('nextTurn').onclick = () => room.send('nextTurn');
   byId('nameInput').addEventListener('change', e => {
@@ -1055,6 +1067,7 @@ function swapInspect(props) {
   if (!inspect || !inspect.pivot || (inspect.type !== 'die' && inspect.type !== 'dispenser')) return;
   const old = inspect.pivot.children[0];
   if (old) inspect.pivot.remove(old);
+  if (inspect.type === 'dispenser') props = { ...props, _seed: inspect.origId }; // keep the preview's scramble stable
   const mesh = KIND[inspect.type].mesh(props);
   mesh.userData.id = inspect.origId;
   inspect.pivot.add(mesh);
@@ -1076,7 +1089,7 @@ function enterInspect(id) {
   if (!entry) return;
   const piece = room.state.pieces.get(id);
   const fresh = (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && piece
-    ? KIND[entry.type].mesh(meshPropsOf(piece)) // own materials → live-recolorable, no shared-material bleed
+    ? KIND[entry.type].mesh(meshPropsOf(piece, id)) // own materials → live-recolorable, no shared-material bleed
     : entry.mesh.clone(true);                    // clone respects hidden info (face-down card = back only)
   inspectMesh(fresh, { origId: id, type: entry.type });
   entry.mesh.visible = false;
@@ -1154,6 +1167,16 @@ renderer.domElement.addEventListener('pointerdown', e => {
   if (!room || (e.button !== 0 && e.button !== 2)) return;
   setPointer(e);
   const id = pickId();
+  // Multi-select gesture: Shift (any time) or the Select tool. Click a piece → toggle it in/out;
+  // drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
+  if (e.button === 0 && (e.shiftKey || selMode)) {
+    selGesture = true;
+    controls.enabled = false;
+    renderer.domElement.setPointerCapture(e.pointerId);
+    if (id) { selToggle(id); }
+    else { marquee = { sx: e.clientX, sy: e.clientY, add: e.shiftKey }; showMarquee(e.clientX, e.clientY, e.clientX, e.clientY); }
+    down = null; return;
+  }
   if (!id) { // no piece under the cursor
     if (e.button === 0) {
       const oid = pickOverlay(), oo = oid && room.state.overlays.get(oid);
@@ -1165,11 +1188,16 @@ renderer.domElement.addEventListener('pointerdown', e => {
         down = null; return;
       }
       selectOverlay(null); // left-click empty felt → deselect
+      clearSelection();    // …and drop any multi-selection (design-tool convention)
     }
     down = null; return; // empty felt → let OrbitControls orbit/pan
   }
   const type = meshes.get(id).type;
-  down = { id, type, kind: KIND[type], button: e.button, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id) };
+  // A left-drag on a SELECTED piece moves the whole selection; dragging an unselected piece drops
+  // the selection first (design-tool convention). Right-drag (decks) is never a group move.
+  const group = e.button === 0 && selection.has(id);
+  if (e.button === 0 && !selection.has(id)) clearSelection();
+  down = { id, type, kind: KIND[type], button: e.button, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id), group };
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
@@ -1181,10 +1209,11 @@ renderer.domElement.addEventListener('wheel', e => {
   dragHeight = clamp(dragHeight - Math.sign(e.deltaY) * DRAG_STEP, DRAG_MIN, DRAG_MAX); // scroll up = raise
   ray.setFromCamera(pointer, camera);
   ray.ray.intersectPlane(dragPlane, hit); // fixed ground plane → XZ under the cursor, stable at any height
-  { const t = snapXZ(hit.x, hit.z); room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z }); }
+  { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: dragHeight, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z }); }
 }, { passive: false });
 
 renderer.domElement.addEventListener('pointermove', e => {
+  if (marquee) { showMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY); return; } // painting a selection box
   if (measuring) { // live local preview of the overlay being dragged out
     if (measureDrag) {
       const p = overlayPoint(e);
@@ -1244,9 +1273,10 @@ renderer.domElement.addEventListener('pointermove', e => {
     if (down.button === kind.grab) { // the button that moves this kind (2 = deck, 0 = most)
       down.grabbed = true;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
-      room.send('grab', { id: down.id });
+      if (down.group) room.send('grabGroup', { ids: [...selection], anchor: down.id }); // claim the whole selection
+      else room.send('grab', { id: down.id });
       playSfx(sfxKind(down.type) + '-pickup'); // local, per object type
-      { const t = snapXZ(hit.x, hit.z); room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); }
+      { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); }
     } else if (down.button === 0 && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
       // Left-drag spawns one item and carries it out: a card off a deck, or a chip/stone
       // off a dispenser. Both reuse the server's "adopt the spawned piece" flow (see 'dealt').
@@ -1269,10 +1299,17 @@ renderer.domElement.addEventListener('pointermove', e => {
     const now = performance.now(), dt = (now - prevThrowTime) / 1000;
     if (dt > 0 && dt < 0.1) throwVel.lerp(hit.clone().sub(prevTarget).multiplyScalar(1 / dt), 0.4); // smooth the hand speed
     prevTarget.copy(hit); prevThrowTime = now;
-    if (now - lastMoveSent > 16) { const t = snapXZ(hit.x, hit.z); room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); lastMoveSent = now; } // ~60Hz throttle (snapped for snap pieces)
+    if (now - lastMoveSent > 16) { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); lastMoveSent = now; } // ~60Hz throttle
   }
 });
 const endGesture = e => {
+  if (selGesture) { // finish a shift/select gesture: commit the marquee box, then hand control back
+    if (marquee) { finalizeMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY, marquee.add); hideMarquee(); marquee = null; }
+    selGesture = false;
+    try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
+    controls.enabled = !inspect;
+    return;
+  }
   if (measuring) { // release: commit the overlay if the drag was long enough
     if (measureDrag) {
       const p = overlayPoint(e);
@@ -1307,7 +1344,8 @@ const endGesture = e => {
   if (!down) return;
   if (down.grabbed) {
     const throwVector = down.kind.grab === 2 ? [0, 0, 0] : [throwVel.x, throwVel.y, throwVel.z]; // decks don't fly
-    room.send('release', { id: down.id, v: throwVector });
+    if (down.group) room.send('releaseGroup', { v: throwVector });
+    else room.send('release', { id: down.id, v: throwVector });
   } else if (!down.dragging) { // a click / tap
     handleClick(down);
   }
@@ -1336,6 +1374,9 @@ const heldOrHoveredId = () => (down && down.id) || pickId();
 // a hovered deck.
 addEventListener('keydown', e => {
   if (!room) return;
+  if (e.key === 'Escape' && trayView) { closeTray(); return; }
+  if (e.key === 'Escape' && selMode) { setSelMode(false); return; } // exit the Select tool first
+  if (e.key === 'Escape' && selection.size) { clearSelection(); return; } // …then clear a selection
   if (e.key === 'Escape' && measuring) { exitMeasure(); return; }
   if (e.key === 'Escape' && wbOwning) { room.send('wbRelease'); return; }
   if (e.key === 'Escape' && inspect) { releaseInspect(); return; }
@@ -1348,9 +1389,22 @@ addEventListener('keydown', e => {
   if (typing) return;
   if (e.key === '`') { byId('camDebug')?.toggleAttribute('hidden'); return; } // ` toggles the camera debug readout
 
+  // Multi-select batch ops — act on the whole selection (dice/cards ops hit only the matching kind).
+  if (selection.size) {
+    const ids = [...selection], k = e.key.toLowerCase();
+    if (k === 'u') { room.send('setStandGroup', { ids }); return; }   // stand / lie flat, as a unit
+    if (k === 'g') { room.send('setSnapGroup', { ids }); return; }    // snap-to-grid, as a unit
+    if (e.key === '[') { room.send('rotateGroup', { ids, dir: -1 }); return; } // rotate the formation −45°
+    if (e.key === ']') { room.send('rotateGroup', { ids, dir: 1 }); return; }  // rotate the formation +45°
+    if (k === 'r') { room.send('rollGroup', { ids }); return; }       // roll every die in the selection
+    if (k === 'f') { room.send('flipGroup', { ids }); return; }       // flip every card in the selection
+    if (k === 'h') { room.send('takeGroup', { ids }); return; }       // take every card into your hand
+  }
+
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (e.key === 'Backspace') e.preventDefault();
     if (selOverlayId) { room.send('overlayRemove', { id: selOverlayId }); selectOverlay(null); return; } // a selected overlay takes priority
+    if (selection.size) { room.send('removeGroup', { ids: [...selection] }); clearSelection(); return; } // delete the whole multi-selection
     const id = heldOrHoveredId();
     if (id) {
       room.send('remove', { id });
@@ -1394,7 +1448,7 @@ function rebuildPiece(id, piece) {
   const entry = meshes.get(id);
   if (!entry) return;
   scene.remove(entry.mesh);
-  const mesh = KIND[piece.type].mesh(meshPropsOf(piece));
+  const mesh = KIND[piece.type].mesh(meshPropsOf(piece, id));
   const casts = PHYS[piece.type].mass > 0;
   mesh.traverse(node => { node.userData.id = id; if (node.isMesh) { node.castShadow = casts; node.receiveShadow = true; } });
   const buf = buffers.get(id), last = buf && buf[buf.length - 1];
@@ -1546,6 +1600,7 @@ function rebuildSeats() {
   room.state.players.forEach((p, sid) => { refreshMarker(sid); refreshFan(sid); });
   refreshMyChip();
   positionWhiteboard(); // the track radius scales with the table
+  positionTrays();      // personal trays ride the same track — keep them glued to the edge on resize
 }
 const handGroups = new Map(); // sid -> THREE.Group of face-down backs
 
@@ -1942,7 +1997,8 @@ function refreshMyChip() {
   const chip = new THREE.Mesh(
     new THREE.PlaneGeometry(1.5, 1.5),
     new THREE.MeshBasicMaterial({ map: makeYouChipTexture(color), transparent: true, depthWrite: false }));
-  chip.rotation.x = -Math.PI / 2; // lie flat on the felt
+  chip.rotation.x = -Math.PI / 2;          // lie flat on the felt
+  chip.rotation.z = seatAngle(mySeat);     // spin it to face MY seat, so "YOU" reads upright from any seat (not just the front)
   chip.position.set(px, 0.03, pz);
   scene.add(chip);
   myChip = chip;
@@ -2009,6 +2065,85 @@ function syncWhiteboard(s) {
   if (s.dark !== wbLast.dark) { wbLast.dark = s.dark; if (wbGroup) redrawStrokes(); } // recolor + replay
   if (s.owner !== wbLast.owner) { wbLast.owner = s.owner; if (s.owner === mySession) enterWbDraw(); else exitWbDraw(); }
   wbLast.angle = s.angle;
+}
+
+// --- Dice tray (Phase 1: placement) — a physics-backed box on the same track as the ---
+// whiteboard. This is only the visual + placement; the walls/dice live server-side. Built
+// from the shared trayMesh so the picture matches the collider; parked at the tray's track
+// position and rotated by its angle (Three's rotation.y matches the server's trayPlace).
+// Personal trays: one mesh per enabled seat, on the track behind that seat. `state.trays`
+// (seat → true) drives which are shown; each sits at its seat angle (matching the server walls).
+const trayGroups = new Map(); // seat -> THREE.Group
+function trayGroupFor(seat) {
+  const g = trayMesh(room.state.feltColor);
+  const a = seatAngle(seat), c = trayCenter(a, room.state.tableX, room.state.tableZ);
+  g.position.set(c.x, 0, c.z); g.rotation.y = a; // Three's rotation.y matches the server's trayPlace
+  scene.add(g); return g;
+}
+function positionTrays() { // keep every tray glued to the track on table resize
+  if (!room) return;
+  for (const [seat, g] of trayGroups) {
+    const a = seatAngle(seat), c = trayCenter(a, room.state.tableX, room.state.tableZ);
+    g.position.set(c.x, 0, c.z); g.rotation.y = a;
+  }
+}
+function syncTrays(trays) {
+  if (!room) return;
+  const want = new Set();
+  if (trays) trays.forEach((on, seat) => { if (on) want.add(+seat); });
+  for (const seat of want) if (!trayGroups.has(seat)) trayGroups.set(seat, trayGroupFor(seat)); // add newly-shown
+  for (const [seat, g] of [...trayGroups]) if (!want.has(seat)) { scene.remove(g); trayGroups.delete(seat); } // drop put-away
+  const mineOut = want.has(mySeat);
+  if (mineOut && pendingTrayOpen) { pendingTrayOpen = false; openTray(); } // my tray just appeared (I pressed Roll) → hop in
+  if (!mineOut && trayView) closeTray();                                    // my tray was put away → leave the view
+}
+
+// --- Camera transport: the Roll button hops YOUR view to a top-down look at YOUR tray; Back ---
+// (or Esc) returns. Purely local — nobody else's camera or the play field moves.
+const TRAY_CAM = { height: 12, back: 5, dur: 550 };   // height over the tray, how far back toward the player, tween ms
+let trayView = false, trayCamSave = null, camTween = null, pendingTrayOpen = false;
+// The camera pose looking down into MY tray, approached from BEHIND my seat (the outward
+// direction) so the view is oriented the same way I see the table — left/right and near/far
+// match my seat for every seat, instead of a fixed world orientation (which read 180°/90° off
+// for anyone not facing +Z). The slight `back` offset gives the look vector a horizontal
+// component, so screen-up lands on the table side consistently.
+function trayCamPose() {
+  const a = seatAngle(mySeat);
+  const c = trayCenter(a, room.state.tableX, room.state.tableZ);
+  const ox = Math.sin(a), oz = Math.cos(a); // outward: from table centre toward my seat/tray
+  return { pos: new THREE.Vector3(c.x + ox * TRAY_CAM.back, TRAY_CAM.height, c.z + oz * TRAY_CAM.back),
+           target: new THREE.Vector3(c.x, 0, c.z) };
+}
+function startCamTween(pose, onDone) {
+  camTween = { fromPos: camera.position.clone(), toPos: pose.pos.clone(),
+               fromTarget: controls.target.clone(), toTarget: pose.target.clone(),
+               start: performance.now(), dur: TRAY_CAM.dur, onDone };
+  controls.enabled = false; // the tween drives the camera; hand control back when it lands
+}
+function aimTray(instant) {
+  const pose = trayCamPose();
+  if (instant) { camera.position.copy(pose.pos); controls.target.copy(pose.target); controls.update(); }
+  else startCamTween(pose, () => { controls.enabled = true; controls.target.copy(pose.target); controls.update(); });
+}
+function openTray() {
+  if (!room || !room.state.trays) return;
+  if (!room.state.trays.get(String(mySeat))) {          // my tray isn't out yet → place my own, then hop in
+    pendingTrayOpen = true; room.send('trayShow', { on: true });
+    return;
+  }
+  if (!trayView) trayCamSave = { pos: camera.position.clone(), target: controls.target.clone() };
+  trayView = true;
+  const tt = byId('trayTools'); if (tt) tt.hidden = false;
+  aimTray(false);
+}
+function putTrayAway() { if (room) room.send('trayShow', { on: false }); } // removes my tray + its dice (closeTray fires when it's gone)
+function closeTray() {
+  if (!trayView) return;
+  trayView = false;
+  const tt = byId('trayTools'); if (tt) tt.hidden = true;
+  const save = trayCamSave;
+  if (save) startCamTween({ pos: save.pos, target: save.target }, () => { controls.enabled = true; controls.target.copy(save.target); controls.update(); trayCamSave = null; });
+  else controls.enabled = true;
 }
 
 // --- drawing: strokes are [x0,y0,x1,y1,...] in canvas-normalized [0,1] (y top-down) ---
@@ -2263,6 +2398,75 @@ dropMarker.visible = false;
 scene.add(dropMarker);
 const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused each frame to size the ring to the held piece
 
+// ===== Multi-select (Phase 1): a LOCAL selection set + on-felt highlight. Two gestures feed it —
+// a Shift modifier and a Select tool — and neither touches synced state (selection is personal,
+// like a cursor). Moving/deleting the group comes in later phases.
+const selection = new Set();     // selected piece ids (mine only)
+let selMode = false;             // the Select tool is active → a felt drag boxes instead of orbiting
+let marquee = null;              // { sx, sy, add } while boxing; null otherwise
+let selGesture = false;          // a shift/select pointer gesture is in progress (so pointerup finalizes it)
+const selRings = new Map();      // id -> highlight ring mesh (pooled)
+const SEL_COLOR = '#c9a25a';     // fallback if the accent var isn't a valid hex
+// MY UI accent colour (the one chosen in the lobby, stored as the `--accent` CSS var). The
+// selection is private to me, so it's tinted with my own accent.
+const selColor = () => {
+  const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+  return /^#[0-9a-f]{6}$/i.test(v) ? v : SEL_COLOR;
+};
+
+const selectable = (id) => { const e = meshes.get(id); return !!e && PHYS[e.type].mass > 0; }; // static boards can't be selected
+function selToggle(id) { if (!selectable(id)) return; if (selection.has(id)) selection.delete(id); else selection.add(id); }
+function clearSelection() { selection.clear(); }
+function setSelMode(on) {
+  selMode = on;
+  const b = byId('selectBtn'); if (b) b.classList.toggle('on', on);
+  renderer.domElement.classList.toggle('selecting', on);
+}
+// A flat ring under a selected piece, styled like dropMarker but tinted + opaque.
+function makeSelRing() {
+  const m = new THREE.Mesh(new THREE.RingGeometry(CONFIG.marker.inner, CONFIG.marker.outer, 40),
+    new THREE.MeshBasicMaterial({ color: selColor(), transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }));
+  m.rotation.x = -Math.PI / 2; m.renderOrder = 3; scene.add(m); return m;
+}
+const _selBox = new THREE.Box3(), _selSize = new THREE.Vector3();
+function updateSelectionRings() {
+  for (const [id, ring] of selRings) if (!selection.has(id) || !meshes.get(id)) { // drop stale rings
+    scene.remove(ring); ring.geometry.dispose(); ring.material.dispose(); selRings.delete(id);
+  }
+  for (const id of selection) {
+    const entry = meshes.get(id); if (!entry) continue;
+    let ring = selRings.get(id); if (!ring) { ring = makeSelRing(); selRings.set(id, ring); } // tinted with my accent at creation
+    _selBox.setFromObject(entry.mesh); _selBox.getSize(_selSize);
+    ring.scale.setScalar((Math.max(_selSize.x, _selSize.z) / 2 + 0.15) / CONFIG.marker.outer);
+    ring.position.set(entry.mesh.position.x, boardTopY + CONFIG.marker.lift + 0.012, entry.mesh.position.z);
+  }
+}
+// Screen-space marquee: a fixed-position div the drag paints, then every piece whose projected
+// centre lands inside joins the selection (replace, or add when Shift-held).
+const _selV = new THREE.Vector3();
+function showMarquee(x0, y0, x1, y1) {
+  const el = byId('marquee'); if (!el) return;
+  const c = selColor();
+  el.style.borderColor = c; el.style.background = c + '24'; // my colour + ~14% alpha (8-digit hex)
+  el.style.left = Math.min(x0, x1) + 'px'; el.style.top = Math.min(y0, y1) + 'px';
+  el.style.width = Math.abs(x1 - x0) + 'px'; el.style.height = Math.abs(y1 - y0) + 'px';
+  el.hidden = false;
+}
+function hideMarquee() { const el = byId('marquee'); if (el) el.hidden = true; }
+function finalizeMarquee(x0, y0, x1, y1, add) {
+  if (!add) clearSelection();
+  const rect = renderer.domElement.getBoundingClientRect();
+  const minX = Math.min(x0, x1), maxX = Math.max(x0, x1), minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+  for (const [id, entry] of meshes) {
+    if (PHYS[entry.type].mass <= 0) continue;                 // skip static boards
+    _selV.copy(entry.mesh.position).project(camera);
+    if (_selV.z > 1) continue;                                // behind the camera
+    const sx = rect.left + (_selV.x * 0.5 + 0.5) * rect.width;
+    const sy = rect.top + (-_selV.y * 0.5 + 0.5) * rect.height;
+    if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) selection.add(id);
+  }
+}
+
 (function animate() {
   const renderTime = performance.now() - DELAY;
   for (const [id, { mesh }] of meshes) {
@@ -2303,12 +2507,22 @@ const _dropBox = new THREE.Box3(), _dropSize = new THREE.Vector3(); // reused ea
   } else {
     dropMarker.visible = false;
   }
-  camera.position.sub(leanOffset);   // undo last frame's lean so controls sees the true orbit position
-  controls.update();
-  leanT += ((leanActive ? 1 : 0) - leanT) * 0.18; // ease toward held / released
-  if (leanT < 0.0005) leanT = 0;
-  leanOffset.copy(controls.target).sub(camera.position).multiplyScalar(leanT * LEAN_AMOUNT);
-  camera.position.add(leanOffset);   // apply the lean for this frame's render
+  updateSelectionRings(); // keep a highlight ring under each selected piece
+  if (camTween) {                    // tray camera hop: drive pos+target directly, no orbit input
+    const raw = Math.min(1, (performance.now() - camTween.start) / camTween.dur);
+    const e = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2; // easeInOutQuad
+    camera.position.lerpVectors(camTween.fromPos, camTween.toPos, e);
+    controls.target.lerpVectors(camTween.fromTarget, camTween.toTarget, e);
+    camera.lookAt(controls.target);
+    if (raw >= 1) { const done = camTween.onDone; camTween = null; if (done) done(); }
+  } else {
+    camera.position.sub(leanOffset);   // undo last frame's lean so controls sees the true orbit position
+    controls.update();
+    leanT += ((leanActive ? 1 : 0) - leanT) * 0.18; // ease toward held / released
+    if (leanT < 0.0005) leanT = 0;
+    leanOffset.copy(controls.target).sub(camera.position).multiplyScalar(leanT * LEAN_AMOUNT);
+    camera.position.add(leanOffset);   // apply the lean for this frame's render
+  }
   { const c = camera.position, t = controls.target, d = byId('camDebug'); // live camera readout for tuning the default view
     if (d && !d.hidden) d.textContent =
       `cam  ${c.x.toFixed(2)}, ${c.y.toFixed(2)}, ${c.z.toFixed(2)}\n` +

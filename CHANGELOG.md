@@ -8,6 +8,36 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-08-21
+
+### Added
+- **Dice trays — personal rolling boxes.** Each seat gets its own walled tray on the track
+  *behind* that player, so you can roll without disturbing the board. Press **🎲 Roll Dice** to
+  hop your camera down into your tray (it appears the first time you do); add **d4–d20** from the
+  tray toolbar, throw them by hand or hit **Roll all**, **Scoop** to re-rack, **Clear**, or **Put
+  away**. The box is fully enclosed (an invisible lid) so nothing bounces out, and every tray is
+  public — anyone can glance over and read your dice, the way they would at a real table. Trays
+  and their dice ride scene save/load, and clear when a player leaves.
+- **Multi-select.** Select several pieces at once — **Shift**-click to toggle, **Shift**-drag (or
+  the new **⬚ Select** tool) to marquee-box a group; they highlight in your own accent color
+  (private to you). Then act on the whole group:
+  - **Drag** any selected piece to move the whole formation together.
+  - **Delete** removes them all; **`[`** / **`]`** rotate the formation ±45°.
+  - **U** stand/lie-flat, **G** snap-to-grid (toggled as a unit); **R** rolls every selected die,
+    **F** flips every selected card, **H** takes every selected card into your hand.
+
+### Changed
+- **Dice are sized (and their numbers scaled) from single knobs, colliders included.** `DIE_SCALE`
+  resizes every die — mesh *and* physics collider, d6 included — and `DIE_GLYPH` sets number
+  legibility, so there are no hand-entered collider boxes to keep in sync. Dice now read a touch
+  smaller and clearer by default.
+- **Dispensed stacks tumble.** Poker-chip and coin stacks now sit at slightly varied facings
+  (seeded per dispenser) instead of machine-perfect alignment, so a stack looks stacked by hand.
+
+### Upgrading
+- Nothing to do — the new state (personal trays, tray dice) rides the existing room/scene JSON,
+  so there's no migration. Pull `0.8.0` and restart.
+
 ## [0.7.0] — 2026-08-20
 
 ### Added
@@ -214,7 +244,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.8.0
 [0.7.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.7.0
 [0.6.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.6.0
 [0.5.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.5.0

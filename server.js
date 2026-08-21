@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, DIE_RADIUS, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, DIE_SIDES, seatAngle, SEAT_ANGLES } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -31,6 +31,7 @@ const SIM = {
   damp: { flat: 0.5, solid: 0.15 },               // angular damping: cards/decks vs everything else
   flipHop: 1.6, flipArc: 0.7,                     // flip feedback nudge + kinematic arc height
   roll: { up: 16, spread: 8, spin: 22 },          // die roll impulse (up drives peak height ~ up^2)
+  trayRoll: { up: 8, spread: 13, spin: 30 },      // tray-die roll: a real toss, kept in by the walls + lid
   impact: { minVel: 1.5 },                        // min collision speed (m/s) to fire a landing sound
   spawnY: 4,                                       // height a spawned piece drops from
   bounds: { margin: 1.5, floor: -3, ceiling: 12 },// out-of-bounds safety net
@@ -257,10 +258,10 @@ const averagePoint = (points) => {
 // cannon's contact solver jitter — that's what once made a resting d10 slowly
 // wander across the table on its own.
 function dieShape(sides) {
-  const cubeCollider = () => new CANNON.Box(new CANNON.Vec3(DIE_RADIUS[6], DIE_RADIUS[6], DIE_RADIUS[6]));
+  const cubeCollider = () => new CANNON.Box(new CANNON.Vec3(dieR(6), dieR(6), dieR(6)));
   if (sides === 6) return cubeCollider(); // a d6 is just a cube
 
-  const vertices = dieVerts(sides, DIE_RADIUS[sides] || 1);
+  const vertices = dieVerts(sides);
   if (!vertices) return cubeCollider(); // unknown die → fall back to a cube
 
   try {
@@ -341,6 +342,11 @@ class Whiteboard extends Schema {
   constructor() { super(); this.enabled = false; this.angle = 0; this.owner = ''; this.dark = true; }
 }
 defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', dark: 'boolean' });
+// Dice trays are PERSONAL: one physics-walled box per seat, on the track directly behind that
+// player (angle from SEAT_ANGLES). `State.trays` maps seat index → true for each tray that's
+// out; the dice inside are ordinary `die` pieces tagged `props.traySeat = N`, so they ride
+// scene save/load and the physics/net/roll all key on the owning seat. Each player toggles
+// only their own tray. (Replaced the old single shared `DiceTray` singleton.)
 // PUBLIC per-room measurement scale — a DISPLAY/snap layer over the FIXED world
 // scale; it never rescales physics or piece sizes. worldPerUnit converts a world
 // distance into display units; unitLabel is freeform ("in"/"cm"/"hex"/…). roundStep
@@ -360,9 +366,9 @@ class Overlay extends Schema {
 }
 defineTypes(Overlay, { kind: 'string', color: 'string', owner: 'string', x: 'number', z: 'number', x2: 'number', z2: 'number', w: 'number', ang: 'number' });
 class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); this.overlays = new MapSchema(); }
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.trays = new MapSchema(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); this.overlays = new MapSchema(); }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale, overlays: { map: Overlay } });
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, trays: { map: 'boolean' }, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale, overlays: { map: Overlay } });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -462,6 +468,7 @@ class TableRoom extends Room {
     this.buildBounds(this.state.tableX, this.state.tableZ); // table surface + walls at the current size
     this.bodies = new Map();  // id -> CANNON.Body   (physics, not synced)
     this.targets = new Map(); // id -> {x,y,z}       (drag target of the owner)
+    this.groups = new Map();  // sessionId -> Map(id -> {x,y,z} offset)  (a multi-select group drag)
     this._released = new Map(); // id -> release time; first hard impact after fires a landing sound
     this.flips = new Map();   // id -> scripted half-flip in progress
     this.deckCards = new Map(); // id -> [frontRef]        PRIVATE: a deck's face-down cards (never synced)
@@ -501,74 +508,114 @@ class TableRoom extends Room {
 
     this.onMessage('release', (client, msg) => {
       const piece = this.state.pieces.get(msg.id);
-      if (!piece || piece.owner !== client.sessionId) return;
-      piece.owner = '';
-      this.targets.delete(msg.id);
-      this._released.set(msg.id, Date.now()); // arm a one-shot landing cue on its next hard impact
+      if (piece && piece.owner === client.sessionId) this.releasePiece(msg.id, msg.v);
+    });
 
-      const body = this.bodies.get(msg.id);
-      if (body) {
-        // A snap-to-grid piece (per-piece flag) lands on its nearest cell centre with no
-        // throw; otherwise turn the hand-speed the client measured into a real throw,
-        // capped so a frantic flick can't launch a piece across the room (cards cap lower).
-        if (gridActive(this.state.scale) && JSON.parse(piece.props || '{}').snap) {
-          const p = snapToCell(body.position.x, body.position.z, this.state.scale);
-          body.position.x = p.x; body.position.z = p.z;
-          body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
-        } else if (msg.v) {
-          let [vx, vy, vz] = msg.v;
-          const speed = Math.hypot(vx, vy, vz);
-          const cap = piece.type === 'card' ? SIM.cards.maxThrow : SIM.throwCap;
-          const scale = speed > cap ? cap / speed : 1;
-          body.velocity.set(vx * scale, vy * scale, vz * scale);
-        }
-        body.wakeUp();
+    // --- Group move (multi-select): one client owns MANY pieces and drives each to
+    // (anchor point + its stored offset). The servo (Pass 1) already moves every owned piece
+    // toward its own target, so a group drag is: claim the free ones, remember each offset from
+    // the anchor, then feed a single point per frame. Ownership stays exclusive, so a piece
+    // someone else holds is silently left out.
+    this.onMessage('grabGroup', (client, { ids, anchor } = {}) => {
+      if (!Array.isArray(ids)) return;
+      const ab = this.bodies.get(anchor); if (!ab) return;
+      const offsets = new Map();
+      for (const id of ids) {
+        const p = this.state.pieces.get(id), body = this.bodies.get(id);
+        if (!p || !body || p.owner || this.flips.has(id) || KINDS[p.type].mass <= 0) continue; // only free, movable pieces
+        p.owner = client.sessionId;
+        offsets.set(id, { x: body.position.x - ab.position.x, y: body.position.y - ab.position.y, z: body.position.z - ab.position.z });
       }
+      this.groups.set(client.sessionId, offsets);
+    });
+    this.onMessage('moveGroup', (client, msg) => {
+      const g = this.groups.get(client.sessionId); if (!g) return;
+      for (const [id, off] of g) {
+        const p = this.state.pieces.get(id);
+        if (p && p.owner === client.sessionId) this.targets.set(id, { x: msg.x + off.x, y: msg.y + off.y, z: msg.z + off.z });
+      }
+    });
+    this.onMessage('releaseGroup', (client, msg) => {
+      const g = this.groups.get(client.sessionId); if (!g) return;
+      for (const [id] of g) { const p = this.state.pieces.get(id); if (p && p.owner === client.sessionId) this.releasePiece(id, msg && msg.v); }
+      this.groups.delete(client.sessionId);
+    });
 
-      // If a card is dropped on top of a deck, absorb it back onto the stack.
-      if (piece.type === 'card' && body) {
-        for (const [deckId, cards] of this.deckCards) {
-          const deckBody = this.bodies.get(deckId);
-          if (!deckBody) continue;
-          const onDeck = Math.abs(body.position.x - deckBody.position.x) < SIM.absorb.x
-                      && Math.abs(body.position.z - deckBody.position.z) < SIM.absorb.z;
-          if (onDeck) {
-            const front = (this.cardData.get(msg.id) || {}).front || JSON.parse(piece.props || '{}').front;
-            if (front) cards.push(front);
-            this.state.pieces.get(deckId).count = cards.length;
-            this.updateDeckCollider(deckId);
-            this.removePiece(msg.id);
-            break;
-          }
+    // --- Group batch ops (multi-select): the existing per-piece actions applied across a
+    // selection. Stand/snap toggle the group as a UNIT (if any is on, turn all off, else all on);
+    // roll/flip/take act on the relevant subset (dice / cards) and ignore the rest.
+    this.onMessage('setStandGroup', (client, { ids } = {}) => {
+      if (!Array.isArray(ids)) return;
+      const anyStanding = ids.some(id => { const p = this.state.pieces.get(id); return p && this.standOf(p); });
+      for (const id of ids) {
+        const piece = this.state.pieces.get(id); if (!piece) continue;
+        const props = JSON.parse(piece.props || '{}');
+        props.stand = anyStanding ? false : this.naturalStand(piece);
+        piece.props = JSON.stringify(props);
+        const b = this.bodies.get(id); if (b) b.wakeUp();
+      }
+    });
+    this.onMessage('setSnapGroup', (client, { ids } = {}) => {
+      if (!Array.isArray(ids)) return;
+      const anySnap = ids.some(id => { const p = this.state.pieces.get(id); try { return !!(p && JSON.parse(p.props || '{}').snap); } catch { return false; } });
+      for (const id of ids) {
+        const piece = this.state.pieces.get(id); if (!piece) continue;
+        const props = JSON.parse(piece.props || '{}');
+        props.snap = !anySnap;
+        piece.props = JSON.stringify(props);
+        const b = this.bodies.get(id);
+        if (b) {
+          if (props.snap && gridActive(this.state.scale)) { const p = snapToCell(b.position.x, b.position.z, this.state.scale); b.position.x = p.x; b.position.z = p.z; b.velocity.setZero(); b.angularVelocity.setZero(); this.targets.delete(id); }
+          else if (b.__pinned) this.unpinPiece(id);
+          b.wakeUp();
         }
       }
-
-      // Mirror of the deck absorb for dispensers: a chip/coin/stone dropped on its
-      // matching stack rejoins it (finite → count++; the infinite bowl just takes it
-      // back). Match is by the exact item the stack hands out (shape + color/team),
-      // so a red chip won't merge into a blue tray.
-      if (piece.type === 'prop' && body) {
-        const pp = JSON.parse(piece.props || '{}');
-        for (const [dispId, disp] of this.state.pieces) {
-          if (disp.type !== 'dispenser') continue;
-          const want = this.dispenserItem(disp); if (!want || want.props.shape !== pp.shape) continue;
-          if (want.props.color != null && (pp.color | 0) !== (want.props.color | 0)) continue;
-          if (want.props.team != null && (pp.team ? 1 : 0) !== want.props.team) continue;
-          const dispBody = this.bodies.get(dispId);
-          if (!dispBody) continue;
-          // Reach scales to the stack/bowl footprint (+ a grab margin), not the deck's
-          // wider card-tuned box — so a small coin tray only takes a coin dropped onto it.
-          const d = DISPENSERS[JSON.parse(disp.props || '{}').disp];
-          const fbox = d && (d.body === 'stack' ? (PROPS[d.item].collider.box) : (d.collider && d.collider.box));
-          const reach = (fbox ? Math.max(fbox[0], fbox[2]) : 0.5) + 0.5;
-          const dx = body.position.x - dispBody.position.x, dz = body.position.z - dispBody.position.z;
-          if (dx * dx + dz * dz < reach * reach) {
-            if (d && !d.infinite) { disp.count = (disp.count | 0) + 1; this.updateStackCollider(dispId); }
-            this.removePiece(msg.id);
-            this.broadcast('sfx', { type: sfxImpact('prop') });
-            break;
-          }
-        }
+    });
+    this.onMessage('rollGroup', (client, { ids } = {}) => { // R with dice selected → roll them all
+      if (!Array.isArray(ids)) return;
+      let n = 0;
+      for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && p.type === 'die' && b) { rollDie(id, b.__traySeat != null ? SIM.trayRoll : SIM.roll); n++; } }
+      if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
+    });
+    this.onMessage('flipGroup', (client, { ids } = {}) => { // F with cards selected → flip them all
+      if (!Array.isArray(ids)) return;
+      let n = 0;
+      for (const id of ids) {
+        const piece = this.state.pieces.get(id), b = this.bodies.get(id);
+        if (!piece || !b || piece.type !== 'card') continue;
+        const props = JSON.parse(piece.props || '{}');
+        if (props.front) { this.cardData.set(id, { front: props.front }); delete props.front; }        // face-up → hide
+        else if (this.cardData.has(id)) { props.front = this.cardData.get(id).front; this.cardData.delete(id); } // face-down → reveal
+        piece.props = JSON.stringify(props);
+        b.wakeUp(); b.velocity.y = SIM.flipHop; n++;
+      }
+      if (n) this.broadcast('sfx', { type: 'card-flip' });
+    });
+    this.onMessage('takeGroup', (client, { ids } = {}) => { // H with cards selected → take them all to hand
+      if (!Array.isArray(ids)) return;
+      for (const id of ids) {
+        const piece = this.state.pieces.get(id); if (!piece || piece.type !== 'card') continue;
+        const props = JSON.parse(piece.props || '{}');
+        const front = (this.cardData.get(id) || {}).front || props.front;
+        this.addToHand(client, front, props.back || 'back');
+        this.removePiece(id);
+      }
+    });
+    this.onMessage('rotateGroup', (client, { ids, dir } = {}) => { // [ / ] → rotate the whole formation ±45°
+      if (!Array.isArray(ids) || !ids.length) return;
+      const angle = (dir < 0 ? -1 : 1) * (Math.PI / 4);
+      const bodies = [];
+      for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && b && KINDS[p.type].mass > 0) bodies.push(b); } // skip static boards
+      if (!bodies.length) return;
+      let cx = 0, cz = 0; for (const b of bodies) { cx += b.position.x; cz += b.position.z; } cx /= bodies.length; cz /= bodies.length;
+      const s = Math.sin(angle), c = Math.cos(angle);
+      const dq = new CANNON.Quaternion(); dq.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
+      for (const b of bodies) {
+        const dx = b.position.x - cx, dz = b.position.z - cz;
+        b.position.x = cx + dx * c + dz * s;   // rotate each position about the centroid (same convention as trayPlace)
+        b.position.z = cz - dx * s + dz * c;
+        const nq = new CANNON.Quaternion(); dq.mult(b.quaternion, nq); b.quaternion.copy(nq); // and turn each piece's facing to match
+        b.velocity.setZero(); b.angularVelocity.setZero(); b.wakeUp();
       }
     });
 
@@ -949,21 +996,48 @@ class TableRoom extends Room {
       if (msg.type === 'board') {
         if (this.rank(client) < RANK.gm) return;   // reshaping the table is GM+
         this.swapBoard(msg.props || {}); // only one board at a time
+      } else if (msg.props && msg.props.tray) {
+        // A die into the caller's OWN tray: any player, only a die, only when their tray is out.
+        // The server owns the seat and the drop spot (client can't spoof another seat's tray).
+        const seat = this.seatOf(client);
+        if (msg.type !== 'die' || seat == null || !this.state.trays.get(String(seat))) return;
+        const sides = DIE_SIDES.includes(+msg.props.sides) ? +msg.props.sides : 6;
+        this.spawn('die', this.trayDropPos(seat), { sides, traySeat: seat });
+        this.broadcast('sfx', { type: 'die-roll' }); // a little clack as it lands in the tray
       } else {
         if (this.rank(client) < RANK.helper) return; // spawning pieces is Helper+
         this.spawn(msg.type, rnd(), msg.props || {});
       }
     });
 
-    const rollDie = (id) => { // fling one die: random horizontal spread + upward pop + tumble
+    const rollDie = (id, roll) => { // fling one die: random horizontal spread + upward pop + tumble
       const body = this.bodies.get(id); if (!body) return;
-      const roll = SIM.roll;
       body.wakeUp();
       body.velocity.set((Math.random() - 0.5) * roll.spread, roll.up, (Math.random() - 0.5) * roll.spread);
       body.angularVelocity.set((Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin);
     };
-    this.onMessage('roll', () => { let n = 0; this.state.pieces.forEach((piece, id) => { if (piece.type === 'die') { rollDie(id); n++; } }); if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' }); }); // roll every die (the Roll button)
-    this.onMessage('rollOne', (client, msg = {}) => { const p = this.state.pieces.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
+    // The Roll button hops you to YOUR tray; "Roll all" flings only your seat's dice, with a
+    // gentler impulse so they tumble inside the walls instead of leaping out.
+    this.onMessage('roll', (client) => {
+      const seat = this.seatOf(client); if (seat == null) return;
+      let n = 0;
+      this.state.pieces.forEach((piece, id) => { const b = this.bodies.get(id); if (piece.type === 'die' && b && b.__traySeat === seat) { rollDie(id, SIM.trayRoll); n++; } });
+      if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
+    });
+    this.onMessage('rollOne', (client, msg = {}) => { const p = this.state.pieces.get(msg.id); const b = this.bodies.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id, b && b.__traySeat != null ? SIM.trayRoll : SIM.roll); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
+    // Scoop: gather the caller's tray dice back to the middle (a light re-rack).
+    this.onMessage('trayScoop', (client) => {
+      const seat = this.seatOf(client); if (seat == null || !this.state.trays.get(String(seat))) return;
+      const c = this.trayCenterFor(seat), angle = seatAngle(seat);
+      let n = 0;
+      this.state.pieces.forEach((piece, id) => {
+        const b = this.bodies.get(id); if (piece.type !== 'die' || !b || b.__traySeat !== seat) return;
+        const p = trayPlace({ x: (Math.random() - 0.5) * 1.4, y: 0.6, z: (Math.random() - 0.5) * 1.0 }, c, angle);
+        b.position.set(p.x, p.y, p.z); b.velocity.setZero(); b.angularVelocity.setZero(); b.wakeUp(); n++;
+      });
+      if (n) this.broadcast('sfx', { type: 'die-roll' });
+    });
+    this.onMessage('trayClear', (client) => { const seat = this.seatOf(client); if (seat != null) this.clearTraySeat(seat); }); // remove just your tray's dice
 
     // Wipe the room back to an empty table — pieces and all private state.
     this.onMessage('reset', (client) => {
@@ -1082,6 +1156,10 @@ class TableRoom extends Room {
       this.sendHand(target);
     });
     this.onMessage('remove', (client, { id }) => { if (this.rank(client) < RANK.helper) return; if (this.state.pieces.has(id)) this.removePiece(id); });
+    this.onMessage('removeGroup', (client, { ids } = {}) => { // delete a whole multi-selection at once (helper+)
+      if (this.rank(client) < RANK.helper || !Array.isArray(ids)) return;
+      for (const id of ids) if (this.state.pieces.has(id)) this.removePiece(id);
+    });
     this.onMessage('setName', (client, { name }) => {
       const player = this.state.players.get(client.sessionId);
       if (player && typeof name === 'string') player.name = name.trim().slice(0, 20) || player.name;
@@ -1316,6 +1394,15 @@ class TableRoom extends Room {
     });
     this.onMessage('wbStrokes', (client) => client.send('wbStrokes', { strokes: this.strokes })); // late-join replay
 
+    // --- Dice trays: one PERSONAL physics box per seat, on the track behind that player -----
+    // No rank gate — a player toggles only their OWN tray. Putting it away clears its dice too.
+    this.onMessage('trayShow', (client, { on } = {}) => {
+      const seat = this.seatOf(client); if (seat == null) return;
+      if (on) this.state.trays.set(String(seat), true);
+      else { this.state.trays.delete(String(seat)); this.clearTraySeat(seat); }
+      this.buildTrays();
+    });
+
     // Public text chat — broadcast to the room, keep a small rolling history for late joiners.
     this.onMessage('chat', (client, { text } = {}) => {
       const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 400);
@@ -1420,6 +1507,7 @@ class TableRoom extends Room {
     } else {
       body.angularDamping = (type === 'deck') ? SIM.damp.flat : SIM.damp.solid;
     }
+    if (props.traySeat != null) body.__traySeat = +props.traySeat; // a tray die obeys its seat's tray bounds, not the table's
     this.world.addBody(body);
 
     const id = String(this.nextId++);
@@ -1638,6 +1726,138 @@ class TableRoom extends Room {
     wall(0,  (hz + thick), hx + overlap, thick);
     wall(-(hx + thick), 0, thick, hz + overlap); // left / right
     wall( (hx + thick), 0, thick, hz + overlap);
+    this.buildTrays(); // the personal trays ride the same track; rebuild against the new table size
+  }
+
+  // The world-space centre of seat N's tray (on the track, behind that seat).
+  trayCenterFor(seat) { return trayCenter(seatAngle(seat), this.state.tableX, this.state.tableZ); }
+
+  // Build / rebuild the physics (floor + walls + lid) for EVERY enabled seat's tray, each at
+  // its seat angle. Bodies are tagged `__traySeat` so the out-of-bounds net can send a stray
+  // die back to the right tray. Called when a tray is toggled or the table is resized; before
+  // rebuilding, tray dice are moved to their seat's new centre so they stay inside their walls.
+  buildTrays() {
+    const w = this.world, mat = w.__mat;
+    for (const b of (this._trayBounds || [])) w.removeBody(b);
+    this._trayBounds = [];
+    this.repositionTrayDice(); // walls are about to move (resize/rebuild) — carry the dice along
+    this.state.trays.forEach((on, seatKey) => {
+      if (!on) return;
+      const seat = +seatKey, angle = seatAngle(seat);
+      const center = this.trayCenterFor(seat);
+      const spin = new CANNON.Quaternion(); spin.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
+      for (const part of trayParts()) {
+        const b = new CANNON.Body({ mass: 0, material: mat });
+        b.addShape(new CANNON.Box(new CANNON.Vec3(part.hx, part.hy, part.hz)));
+        const p = trayPlace(part, center, angle);
+        b.position.set(p.x, p.y, p.z);
+        b.quaternion.copy(spin);
+        b.__traySeat = seat;
+        w.addBody(b); this._trayBounds.push(b);
+      }
+    });
+  }
+
+  // Keep each tray die glued to its seat's tray as the track radius changes (table resize):
+  // clamp it back inside that seat's current footprint. Cheap and only matters on resize.
+  repositionTrayDice() {
+    if (!this.bodies) return; // buildBounds() runs in onCreate before the bodies map exists — nothing to move yet
+    this.bodies.forEach((body, id) => {
+      if (body.__traySeat == null) return;
+      const seat = body.__traySeat, angle = seatAngle(seat), c = this.trayCenterFor(seat);
+      if (inTray(body.position.x, body.position.z, c, angle, 0.2)) return; // still inside → leave it
+      const p = trayPlace({ x: 0, y: 1, z: 0 }, c, angle);
+      body.position.set(p.x, p.y, p.z); body.velocity.setZero(); body.angularVelocity.setZero(); body.wakeUp();
+    });
+  }
+
+  // A drop point for a new die in SEAT's tray: a random spot inside its footprint, above the
+  // floor (below the wall tops) so it tumbles in.
+  trayDropPos(seat) {
+    const c = this.trayCenterFor(seat), angle = seatAngle(seat);
+    const lx = (Math.random() * 2 - 1) * (TRAY.hx - 0.7);
+    const lz = (Math.random() * 2 - 1) * (TRAY.hz - 0.7);
+    const p = trayPlace({ x: lx, y: 1.3, z: lz }, c, angle);
+    return [p.x, p.y, p.z];
+  }
+
+  // The caller's seat, or null if they're not seated (can't own a tray).
+  seatOf(client) { const p = this.state.players.get(client.sessionId); const s = p ? +p.seat : -1; return (s >= 0 && s < SEAT_ANGLES.length) ? s : null; }
+
+  // Release one piece: clear ownership, then snap it to its grid cell (snap flag) or turn the
+  // hand-speed `v` into a capped throw; finally absorb a card back onto a deck, or a chip/stone
+  // back onto its dispenser, if it was dropped there. Shared by single `release` and `releaseGroup`.
+  releasePiece(id, v) {
+    const piece = this.state.pieces.get(id);
+    if (!piece) return;
+    piece.owner = '';
+    this.targets.delete(id);
+    this._released.set(id, Date.now()); // arm a one-shot landing cue on its next hard impact
+
+    const body = this.bodies.get(id);
+    if (body) {
+      if (gridActive(this.state.scale) && JSON.parse(piece.props || '{}').snap) {
+        const p = snapToCell(body.position.x, body.position.z, this.state.scale);
+        body.position.x = p.x; body.position.z = p.z;
+        body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
+      } else if (v) {
+        let [vx, vy, vz] = v;
+        const speed = Math.hypot(vx, vy, vz);
+        const cap = piece.type === 'card' ? SIM.cards.maxThrow : SIM.throwCap;
+        const scale = speed > cap ? cap / speed : 1;
+        body.velocity.set(vx * scale, vy * scale, vz * scale);
+      }
+      body.wakeUp();
+    }
+
+    // If a card is dropped on top of a deck, absorb it back onto the stack.
+    if (piece.type === 'card' && body) {
+      for (const [deckId, cards] of this.deckCards) {
+        const deckBody = this.bodies.get(deckId);
+        if (!deckBody) continue;
+        const onDeck = Math.abs(body.position.x - deckBody.position.x) < SIM.absorb.x
+                    && Math.abs(body.position.z - deckBody.position.z) < SIM.absorb.z;
+        if (onDeck) {
+          const front = (this.cardData.get(id) || {}).front || JSON.parse(piece.props || '{}').front;
+          if (front) cards.push(front);
+          this.state.pieces.get(deckId).count = cards.length;
+          this.updateDeckCollider(deckId);
+          this.removePiece(id);
+          break;
+        }
+      }
+    }
+
+    // A chip/coin/stone dropped on its matching dispenser rejoins it (finite → count++; the
+    // infinite bowl just takes it back). Match by the exact item the stack hands out.
+    if (piece.type === 'prop' && body) {
+      const pp = JSON.parse(piece.props || '{}');
+      for (const [dispId, disp] of this.state.pieces) {
+        if (disp.type !== 'dispenser') continue;
+        const want = this.dispenserItem(disp); if (!want || want.props.shape !== pp.shape) continue;
+        if (want.props.color != null && (pp.color | 0) !== (want.props.color | 0)) continue;
+        if (want.props.team != null && (pp.team ? 1 : 0) !== want.props.team) continue;
+        const dispBody = this.bodies.get(dispId);
+        if (!dispBody) continue;
+        const d = DISPENSERS[JSON.parse(disp.props || '{}').disp];
+        const fbox = d && (d.body === 'stack' ? (PROPS[d.item].collider.box) : (d.collider && d.collider.box));
+        const reach = (fbox ? Math.max(fbox[0], fbox[2]) : 0.5) + 0.5;
+        const dx = body.position.x - dispBody.position.x, dz = body.position.z - dispBody.position.z;
+        if (dx * dx + dz * dz < reach * reach) {
+          if (d && !d.infinite) { disp.count = (disp.count | 0) + 1; this.updateStackCollider(dispId); }
+          this.removePiece(id);
+          this.broadcast('sfx', { type: sfxImpact('prop') });
+          break;
+        }
+      }
+    }
+  }
+
+  // Remove every die belonging to seat N's tray (used by Clear and by putting the tray away).
+  clearTraySeat(seat) {
+    const ids = [];
+    this.state.pieces.forEach((piece, id) => { const b = this.bodies.get(id); if (piece.type === 'die' && b && b.__traySeat === seat) ids.push(id); });
+    for (const id of ids) this.removePiece(id);
   }
 
   // Wipe every piece + its private bookkeeping (shared by Reset and scene load).
@@ -1687,6 +1907,16 @@ class TableRoom extends Room {
     if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off') sc.gridStyle = s.gridStyle;
   }
 
+  // Restore which seats' trays are out from a scene (an array of seat indices), then rebuild
+  // their walls. Absent → no trays (older scenes have none). The tray DICE ride as pieces.
+  applyTrays(seats) {
+    this.state.trays.clear();
+    for (const s of (Array.isArray(seats) ? seats : [])) {
+      const seat = +s; if (seat >= 0 && seat < SEAT_ANGLES.length) this.state.trays.set(String(seat), true);
+    }
+    this.buildTrays();
+  }
+
   serializeScene() {
     const pieces = [];
     this.state.pieces.forEach((piece, id) => {
@@ -1704,7 +1934,12 @@ class TableRoom extends Room {
     // table-owned and GM-managed). Color is kept so they look the same on load.
     const overlays = [];
     this.state.overlays.forEach(o => overlays.push({ kind: o.kind, color: o.color, x: o.x, z: o.z, x2: o.x2, z2: o.z2, w: o.w, ang: o.ang }));
-    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays, scale: this.scaleSnapshot() };
+    // Which seats have a personal tray out rides the scene (an array of seat indices); the tray
+    // DICE are ordinary pieces carrying `traySeat`, so they're already in `pieces` above.
+    const trays = [];
+    this.state.trays.forEach((on, seat) => { if (on) trays.push(+seat); });
+    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays,
+             scale: this.scaleSnapshot(), trays };
   }
 
   // Full game snapshot = the portable scene PLUS the private per-player layer
@@ -1747,6 +1982,7 @@ class TableRoom extends Room {
     const tz = clamp(+(scene.table && scene.table.z) || TABLE.z, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
     this.state.tableX = tx; this.state.tableZ = tz; this.buildBounds(tx, tz);
     this.applyScale(scene.scale); // grid + measurement calibration ride the scene (no-op if absent)
+    this.applyTrays(scene.trays); // restore which seats' trays are out BEFORE their dice spawn, so the walls exist
     for (const e of (Array.isArray(scene.pieces) ? scene.pieces : [])) {
       if (this.state.pieces.size >= SIM.maxPieces) break;
       if (!e || !KINDS[e.type]) continue;
@@ -2099,6 +2335,21 @@ class TableRoom extends Room {
     const limitX = tx + SIM.bounds.margin, limitZ = tz + SIM.bounds.margin;
     this.bodies.forEach((body) => {
       const pos = body.position;
+      if (body.__traySeat != null) {
+        // A tray die obeys ITS SEAT's tray footprint, not the table's — otherwise the net would
+        // yank it back to the table every tick. If it somehow left the tray (a hard throw over
+        // the wall, or the tray was just put away), drop it back into that tray's centre.
+        const seat = body.__traySeat, angle = seatAngle(seat), c = this.trayCenterFor(seat);
+        const stillOut = this.state.trays.get(String(seat));
+        const out = pos.y < SIM.bounds.floor || pos.y > SIM.bounds.ceiling
+                 || !stillOut || !inTray(pos.x, pos.z, c, angle, 0.5);
+        if (out && stillOut) {
+          const p = trayPlace({ x: 0, y: 1, z: 0 }, c, angle);
+          pos.set(p.x, p.y, p.z);
+          body.velocity.setZero(); body.angularVelocity.setZero(); body.wakeUp();
+        }
+        return;
+      }
       const escaped = pos.y < SIM.bounds.floor || pos.y > SIM.bounds.ceiling || Math.abs(pos.x) > limitX || Math.abs(pos.z) > limitZ;
       if (escaped) {
         pos.set(clamp(pos.x, -tx + 1, tx - 1), 3, clamp(pos.z, -tz + 1, tz - 1));
@@ -2124,6 +2375,7 @@ class TableRoom extends Room {
         this.targets.delete(id);
       }
     });
+    this.groups.delete(client.sessionId); // drop any in-progress group drag they held
     // Free the whiteboard right away if they were drawing — don't hold it locked
     // through the reconnection window (others should be able to claim it at once).
     if (this.state.whiteboard.owner === client.sessionId) this.state.whiteboard.owner = '';
@@ -2165,6 +2417,16 @@ class TableRoom extends Room {
         this.updateDeckCollider(pending.deckId);
       }
       this.pendingInspect.delete(client.sessionId);
+    }
+
+    // Put away their personal dice tray + its dice — a tray belongs to whoever's seated there,
+    // so it shouldn't linger for the next person. (Done after the reconnect window, so a brief
+    // drop doesn't clear it.) Read the seat before the player row is removed below.
+    const _seat = this.seatOf(client);
+    if (_seat != null && this.state.trays.get(String(_seat))) {
+      this.state.trays.delete(String(_seat));
+      this.clearTraySeat(_seat);
+      this.buildTrays();
     }
 
     const wasTurn = this.state.turn === client.sessionId;

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
-import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, DIE_RADIUS, BOARDS, BOARD_SIZE, TABLE, MEASURE, DISPENSERS, stackDiscH, stackVisible, gridActive } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, dieR, DIE_GLYPH, BOARDS, BOARD_SIZE, TABLE, MEASURE, DISPENSERS, stackDiscH, stackVisible, gridActive, TRAY, trayParts } from '/shared/pieces.js';
 
 // ===== Shared helpers =======================================================
 
@@ -192,7 +192,7 @@ function numberLabel(value, size, text) {
 // faces by grouping triangles that share a normal (same trick as the server's
 // collider), then drop a numbered label at each face's centre.
 function convexDie(sides, color, textColor) {
-  const points = dieVerts(sides, DIE_RADIUS[sides] || 1).map(v => new THREE.Vector3(v[0], v[1], v[2]));
+  const points = dieVerts(sides).map(v => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(points);
   const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color ?? COLORS.ivory, roughness: 0.45, flatShading: true }));
   die.castShadow = true;
@@ -237,7 +237,7 @@ function convexDie(sides, color, textColor) {
     verts.forEach(v => circumRadius = Math.max(circumRadius, v.distanceTo(centroid)));
     const inRadius = circumRadius * Math.cos(Math.PI / verts.length);
 
-    const label = numberLabel(index + 1, inRadius * 1.25, textColor);
+    const label = numberLabel(index + 1, inRadius * 1.25 * DIE_GLYPH, textColor);
     label.position.copy(centroid).addScaledVector(face.normal, 0.015); // float just above the surface
     label.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), face.normal);
     group.add(label);
@@ -248,7 +248,7 @@ function convexDie(sides, color, textColor) {
 // A d4 is read by its top vertex, not a top face — so each of the 4 vertices
 // carries a number, printed at that corner on all three faces touching it.
 function numberedD4(color, textColor) {
-  const verts = dieVerts(4, DIE_RADIUS[4]).map(v => new THREE.Vector3(v[0], v[1], v[2]));
+  const verts = dieVerts(4).map(v => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(verts);
   const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color ?? COLORS.ivory, roughness: 0.45, flatShading: true }));
   die.castShadow = true;
@@ -284,15 +284,19 @@ function numberedD4(color, textColor) {
     const circumRadius = Math.max(a.distanceTo(centroid), b.distanceTo(centroid), c.distanceTo(centroid));
 
     // One label per corner of this face, oriented so the digit points outward
-    // toward its own vertex (that's why each number appears three times).
+    // toward its own vertex (that's why each number appears three times). Unlike the
+    // face-centred dice, the d4 reads at its CORNERS, which have little room — so it
+    // takes only a damped share of DIE_GLYPH and sits pulled further in, or the digits
+    // spill over the edges.
+    const g4 = 1 + (DIE_GLYPH - 1) * 0.5; // half the global bump
     for (const corner of [a, b, c]) {
-      const label = numberLabel(vertexNumber(corner), circumRadius * 0.55, textColor);
+      const label = numberLabel(vertexNumber(corner), circumRadius * 0.52 * g4, textColor);
       up.subVectors(corner, centroid).normalize();
       right.crossVectors(up, normal).normalize();
       up.crossVectors(normal, right).normalize();
       basis.makeBasis(right, up, normal);
       label.quaternion.setFromRotationMatrix(basis);
-      label.position.copy(corner).lerp(centroid, 0.30).addScaledVector(normal, 0.015);
+      label.position.copy(corner).lerp(centroid, 0.40).addScaledVector(normal, 0.015);
       group.add(label);
     }
   }
@@ -556,7 +560,7 @@ function dieMesh(props = {}) {
   if (sides === 6) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
-      new THREE.BoxGeometry(DIE_RADIUS[6] * 2, DIE_RADIUS[6] * 2, DIE_RADIUS[6] * 2),
+      new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
       faceOrder.map(n => new THREE.MeshStandardMaterial({ map: numberFaceTexture(n, props.color, props.textColor), roughness: 0.5 })),
     );
   }
@@ -779,13 +783,24 @@ function boardMesh(props = {}) {
 // export, so tinting must catch every copy, not just the first.
 const isTintSlot = (name, slot) => !!slot && typeof name === 'string' && (name === slot || name.startsWith(slot + '.'));
 
+// A small stable number from a dispenser's id, to seed its stack's facing jitter so two
+// otherwise-identical stacks don't face the same way. Any missing id → 0 (a fixed but
+// valid scramble). Reduced to a mid-range float to keep the sin() in spin() well-behaved.
+function stackSeed(id) {
+  let h = 2166136261 >>> 0;
+  const s = id == null ? '' : String(id);
+  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return (h >>> 0) % 9973 / 9973 * 1000;
+}
+
 // Parsed stack item models, keyed by item shape. The first build loads the .glb
 // async; every rebuild after (a dispense changes count → the mesh is rebuilt) clones
 // from the cached scene SYNCHRONOUSLY, so the stack never blinks out while a reload
 // resolves. Stored raw/unpainted — each build clones, fits, and tints its own copy.
 const _stackProto = new Map();
 
-// color. `props` carries { disp, color?, team?, count? }.
+// color. `props` carries { disp, color?, team?, count?, _seed? } (_seed = the piece id,
+// stamped by meshPropsOf, seeds the stack's facing jitter; absent → a fixed scramble).
 function dispenserMesh(props = {}) {
   const spec = DISPENSERS[props.disp];
   if (!spec) return new THREE.Group();
@@ -814,6 +829,12 @@ function dispenserMesh(props = {}) {
     if (item.ownMaterial) { m.metalness = 0; return m; }
     return tint != null ? matte(tint, m.side) : m;
   };
+  // Per-disc facing jitter so a chip stack looks tumbled, not machine-aligned.
+  // Deterministic in (index, seed): a given disc keeps its angle as the stack grows or
+  // shrinks (dealing just drops the top disc — the rest don't reshuffle), and the seed
+  // (the piece id) makes two identical stacks side by side face differently.
+  const seed = stackSeed(props._seed);
+  const spin = (i) => { const x = Math.sin((i + 1) * 127.1 + seed) * 43758.5453; return (x - Math.floor(x)) * Math.PI * 2; };
   const group = new THREE.Group();
   const fill = (rawScene) => {                              // build the stack from a cached raw scene
     const proto = rawScene.clone(true);
@@ -826,6 +847,7 @@ function dispenserMesh(props = {}) {
     for (let i = 0; i < n; i++) {
       const clone = proto.clone(true);                     // shares geometry/material — cheap
       clone.position.y = (i - (n - 1) / 2) * discH;         // centred stack, discs flush
+      clone.rotation.y = spin(i);                           // tumbled facing (see spin above)
       group.add(clone);
     }
   };
@@ -876,6 +898,24 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
   const lines = new THREE.LineSegments(geo, mat);
   lines.renderOrder = 2; // over the felt, under floating labels; pieces still occlude it (depthTest on)
   return lines;
+}
+
+// ---- Dice tray: the visual box (floor + 4 walls), matching the server's physics ----
+// Built from the SAME trayParts() the collider uses, in tray-LOCAL space, so the mesh and the
+// walls line up exactly. The client parks the group at the tray's track position and rotates
+// it by the tray angle (Three's rotation.y matches the server's trayPlace transform).
+function trayMesh(feltColor) {
+  const g = new THREE.Group();
+  const felt = new THREE.MeshStandardMaterial({ color: feltColor || 0x2f6b4f, roughness: 0.85, metalness: 0 });
+  const wood = new THREE.MeshStandardMaterial({ color: 0x4a3b2a, roughness: 0.8, metalness: 0 });
+  trayParts().forEach((p, i) => {
+    if (p.noMesh) return; // the lid is a physics-only cap — never drawn, or it'd block the top-down view
+    const m = new THREE.Mesh(new THREE.BoxGeometry(p.hx * 2, p.hy * 2, p.hz * 2), i === 0 ? felt : wood);
+    m.position.set(p.x, p.y, p.z);
+    m.castShadow = i !== 0; m.receiveShadow = true;
+    g.add(m);
+  });
+  return g;
 }
 
 // ---- Overlays: flat, non-physics annotations (measurement + templates) ------
@@ -1168,4 +1208,4 @@ function makeYouChipTexture(color) {
   return cTex(canvas);
 }
 
-export { KIND, OVERLAY, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture };
+export { KIND, OVERLAY, trayMesh, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture };

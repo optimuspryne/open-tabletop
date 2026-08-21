@@ -165,6 +165,14 @@ Pure data + two functions, imported by both sides.
   boards (colliders precomputed from `worldSize·scale/2`).
 - **`BOARD_SIZE`** — target footprint width uploaded `.glb` boards normalize to.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
+- **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
+  the client mesh, and the tests: `hx`/`hz` (floor half-extents), `wall` (wall half-height),
+  `thick` (wall half-thickness), `floorThick` (floor half-height, its top at `y=0`), `lid`
+  (half-thickness of the invisible physics-only ceiling), `margin` (gap from the table edge to
+  the track the tray centre rides).
+- **`SEAT_ANGLES`** `[6]` + **`seatAngle(seat)`** — each seat's angle on the whiteboard/tray
+  track (θ = `atan2(outX, outZ)`, matching `seatLayoutFor`), so a seat's tray sits directly
+  behind that player.
 
 ### Functions
 
@@ -193,6 +201,19 @@ Pure data + two functions, imported by both sides.
   (e.g. `"5.5 in"`). Rounding is display-only; the caller keeps exact geometry. Pure
   and shared, so a ruler reads identically on every screen — the `timerLive` instinct
   applied to distance. A missing/invalid `scale` falls back to raw world units.
+- **`trayCenter(angle, tableX, tableZ) → {x, z}`** — a tray's centre on the track for a seat
+  angle and table size (radius `max(tableX,tableZ) + TRAY.margin`, the whiteboard formula), so
+  the tray hugs the edge at any size.
+- **`trayParts(T?) → [{hx,hy,hz,x,y,z, noMesh?}]`** — the floor + four walls + an invisible
+  physics-only lid, as *tray-local* box specs (centred at origin, floor top at `y=0`,
+  unrotated); the lid carries `noMesh:true` so the mesh builder skips it. Both the collider and
+  the mesh build from this list.
+- **`trayPlace(local, center, angle) → {x, y, z}`** — rotate a tray-local point by `angle`
+  about Y and offset to `center`; the one transform the physics bodies and render meshes both
+  apply so they land together.
+- **`inTray(x, z, center, angle, slack?) → bool`** — is a world point inside a tray's footprint
+  (+ slack)? The out-of-bounds net uses it to contain tray dice in the tray rather than yanking
+  them home.
 - **`MEASURE`** — overlay-layer constants both sides agree on: `lift`/`labelLift`
   (draw + label heights above the felt), `minDrag` (shortest drag that counts as a
   placement), `maxLen` (clamp on any overlay coordinate/dimension), `coneAngle`
@@ -279,7 +300,9 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   per creator. Rendered via the client's `OVERLAY` registry.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
-  **`whiteboard`**, **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
+  **`whiteboard`**, **`trays`** (a `MapSchema<boolean>` keyed by seat index `"0".."5"` —
+  presence = that seat's *personal* dice tray is out; the tray dice are ordinary `die` pieces
+  tagged `props.traySeat`, not schema here), **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
   color), **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
   measurement/template annotations), and the resumed-game public labels
@@ -296,7 +319,8 @@ Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** an
 **`isAdmin(client)`** back the gates.
 
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
-`cardData`, `hands`, `drafts`, **`pendingInspect`** (a drawn-but-unplaced card),
+`cardData`, `hands`, `drafts`, **`groups`** (a group drag: `sessionId → Map(id → offset)`,
+each selected piece's offset from the anchor), **`pendingInspect`** (a drawn-but-unplaced card),
 **`notebooks`** (per-player private notes), **`shows`** (an active hold-to-show:
 `{ to:Set, cards }`), **`strokes`** (the whiteboard's stroke history, capped
 at `WHITEBOARD_MAX_STROKES`, replayed to late joiners), **`chatLog`** (the rolling
@@ -323,14 +347,28 @@ color, and the saved game snapshot — now / debounced via `db.saveRoomState`),
 **`closeAndDispose`** (broadcast `roomClosed`, then dispose — invoked by
 `matchMaker.remoteRoomCall`), `onJoin`/`onLeave` (on join, an account reclaims its
 `pendingHands`/`pendingTurn`; on leave, after the reconnect window, a departing
-hand is parked back into `pendingHands` + `unclaimed`).
+hand is parked back into `pendingHands` + `unclaimed`, **and the leaver's tray is put away and
+its dice cleared**).
+
+Dice-tray methods (personal, one per seat): **`buildTrays()`** (rebuild every enabled seat's
+floor+walls at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on
+toggle), **`trayCenterFor(seat)`** (→ `trayCenter` at the seat angle + live table size),
+**`repositionTrayDice()`** (carry each tray's dice to the new centre on rebuild/resize),
+**`trayDropPos(seat)`** (a spawn point inside the seat's tray), **`seatOf(client)`** (the
+caller's seat index, or `null`), **`clearTraySeat(seat)`** (remove that seat's tray dice), and
+**`applyTrays(seats)`** (scene restore: set which seats' trays are out, then `buildTrays`).
+`serializeScene` adds a **`trays`** array of enabled seat indices (the dice ride as ordinary
+`traySeat`-tagged pieces); `applyScene` calls `applyTrays` before the dice respawn.
 
 Gameplay handlers (rank-gated): `grab`, `move`, `release`, `flip`, `dealToTable`,
 `dealDrag`, `takeCard`, `playCard`, `shuffle`, **`splitDeck`** (deal a deck in
 two — original keeps the top half, a new ephemeral deck gets the rest),
 **`drawInspect`/`inspectPlace`** (private draw-to-inspect), **`recolor`**
-(`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+),
-`roll`, `reset` (gm+ — full clear), `nextTurn`, `remove`, `setName`, `setAvatar`,
+(`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+;
+a `props.tray:true` die is placed in the caller's tray via `trayDropPos`, any player),
+**`roll`** (now flings only the *caller's* tray dice, gentle `SIM.trayRoll` impulse) /
+**`rollOne`** (`{id}` — right-click one die; `SIM.trayRoll` in a tray, `SIM.roll` on the
+table), `reset` (gm+ — full clear), `nextTurn`, `remove`, `setName`, `setAvatar`,
 **`notebook`**, **`handSync`** (re-send my private hand after a reconnect),
 **`timer`** (action: `start`/`pause`/`reset`/`set`), **`showStart`/`showStop`**,
 **`ping`**, **`chat`** (post a public line; sanitized, appended to `chatLog`,
@@ -344,6 +382,24 @@ of any `RoomScale` field: `worldPerUnit`/`unitLabel`/`roundStep`/`gridStyle`/
 clamped), **`calibrateGrid`** (fit a square grid to the board on the table — sets
 `gridStyle`, per-axis cell size from the collider ÷ cell count, and the anchor),
 **`skybox`** (apply a background).
+
+Dice-tray handlers (personal, keyed on the caller's seat — **no rank gate**):
+**`trayShow`** (`{on}` — toggle *your* seat's tray in `State.trays`; on off it also clears the
+tray dice; both call `buildTrays`), **`trayScoop`** (re-rack your tray's dice to its centre),
+**`trayClear`** (remove just your tray's dice). Stocking and rolling reuse `spawn`/`roll`/
+`rollOne` above.
+
+Multi-select group handlers (act on a client-supplied `ids` list, mirroring the singles;
+**not rank-gated** except `removeGroup`): move reuses the servo — **`grabGroup`**
+(`{ids, anchor}` — claim every *free* piece and store each one's offset from the anchor body in
+`groups`), **`moveGroup`** (`{x,y,z}` — set each owned piece's target to `point + offset`, one
+message/frame), **`releaseGroup`** (`{v}` — release each via the shared **`releasePiece(id,v)`**,
+factored out of single `release`). Batch ops: **`removeGroup`** (`{ids}` — delete the selection,
+helper+), **`setStandGroup`** / **`setSnapGroup`** (`{ids}` — **U** / **G**, toggled as a unit),
+**`rollGroup`** (`{ids}` — **R**, dice only), **`flipGroup`** (`{ids}` — **F**, cards only),
+**`takeGroup`** (`{ids}` — **H**, cards to the caller's hand), **`rotateGroup`** (`{ids,dir}` —
+**`[`** / **`]`**, rotate the whole formation ±45° about its centroid — each position *and* each
+body's facing; skips boards).
 
 Per-piece flags (rank-gated, mirror each other): **`setStand`** (`{id}` — toggle
 keep-upright; **U**), **`setSnap`** (`{id}` — toggle snap-to-grid, snapping the piece
@@ -571,6 +627,10 @@ felt), and the config:
   so pieces occlude it. `null` for `off`/`hex`/zero-cell, and skips a hair-fine grid
   (>300 lines/axis). The client's **`rebuildGrid`** builds/replaces it at `gridLift` above
   the felt and re-runs on the relevant `scale`/table-size changes.
+- **`trayMesh(feltColor) → THREE.Group`** — a felt-lined open box built from the shared
+  `trayParts()` in tray-local space (so the mesh matches the collider), skipping the `noMesh`
+  lid so it never blocks the top-down view. The client's **`syncTrays`** places one per enabled
+  seat at its `trayCenter`/`seatAngle`.
 
 ---
 
@@ -584,7 +644,8 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
 marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
 (→ `resizeTable` + `rebuildGrid`), the `scale` grid fields (→ `rebuildGrid` /
-`syncScalePanel`), and `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
+`syncScalePanel`), `trays` (→ `syncTrays` — one tray mesh per enabled seat), and
+`unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
 list and the "Waiting on {name}" turn row). Direct messages: `hand` → `renderHand`,
 `dealt` (adopt a dealt card), `inspectCard` → open draw-to-inspect, `notebook`
 (restore your private notes), `showFan` (cards someone is showing you → face-up in
@@ -614,13 +675,29 @@ a mesh), shared by the add, card-rebuild, and render paths.
   the scroll-adjustable grab height, and a translucent ring previews the landing.
   **Middle-click** steps a held piece's facing by 45°, or — with nothing held — drops a
   ping (`sendPing` → raycast to the table). A grid piece being dragged tracks cell-to-cell
-  (`snapXZ` snaps the `move` target sent to the server).
+  (`snapXZ` snaps the `move` target sent to the server). A left-drag on a piece that's *in*
+  the selection sends `grabGroup`/`moveGroup`/`releaseGroup` (moves the whole clump); a drag on
+  an unselected piece clears the selection first.
+- **Multi-select** (local; see below) — `selection` (Set of ids), the `selMode` Select tool,
+  the `marquee` box, `selGesture`, and the `selRings` highlight pool. Shift-click toggles a
+  piece (`selToggle`); Shift-drag or the Select tool paints a screen-space `#marquee` div and
+  `finalizeMarquee` adds every piece whose projected centre lands inside; empty-click / Esc
+  clears. `selectable(id)` excludes static (mass 0) boards. Highlight rings and the marquee are
+  tinted with **my** `--accent` via `selColor()`.
+- **Dice tray** (local camera) — **`openTray()`** (bound to the Roll button) hops your camera to
+  *your* seat's tray (placing it via `trayShow` first if it isn't out), an over-the-shoulder
+  pose from `seatAngle(mySeat)` via `trayCamPose`/`TRAY_CAM`; the **`#trayTools`** toolbar
+  (d4–d20 palette → `spawn {tray:true}`, Roll all → `roll`, Scoop → `trayScoop`, Clear →
+  `trayClear`, Put away → `trayShow {on:false}`, Back → restore camera).
 - **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
   double-click a piece to inspect (rotate-drag), double-click a deck to
   draw-to-inspect with F/D/H/R placement.
-- **`keydown`** — Delete removes, U toggles keep-upright, G toggles snap-to-grid, S saves a hovered deck
-  (each acts on **`heldOrHoveredId`** — the held piece, else whatever's hovered);
-  F/D/H/R place a drawn card; **P** drops a ping at the cursor.
+- **`keydown`** — with a **non-empty selection** the keys act on the whole group first
+  (U/G stand/snap, R roll dice, F flip cards, H take cards, `[`/`]` rotate ±45°, Delete removes
+  it) and only otherwise fall through to the single-piece behavior: Delete removes, U toggles
+  keep-upright, G toggles snap-to-grid, S saves a hovered deck (each acts on
+  **`heldOrHoveredId`** — the held piece, else whatever's hovered); F/D/H/R place a drawn card;
+  **P** drops a ping at the cursor. Esc exits the Select tool, then clears the selection.
 
 ### Seats, hands, turns
 

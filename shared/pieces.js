@@ -99,7 +99,7 @@ export const PROP_LIST = [
 // so no offset is needed — only the cell size (estimated from the footprint, GM-tunable)
 // and the snap anchor.
 export const BOARDS = {
-  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 1, box: [4.00, 0.22, 4.00], grid: { cells: 8,  anchor: 'center' } },
+  chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 1, box: [4.00, 0.15, 4.00], grid: { cells: 8,  anchor: 'center' } },
   go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29], grid: { cells: 18, anchor: 'cross'  } },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
@@ -148,15 +148,83 @@ const DIE_RAW = {
       v.push([Math.cos(a), Math.sin(a), z0]); v.push([Math.cos(a+Math.PI/5), Math.sin(a+Math.PI/5), -z0]); }
     return v; })(),
 };
-export const DIE_RADIUS = { 4: 0.84, 6: 0.6, 8: 0.8, 10: 0.8, 12: 0.76, 20: 0.76 }; // 20% smaller
+// Base per-die sizes, hand-tuned so every die reads as ROUGHLY THE SAME footprint on the
+// table. Note the units differ by geometry: d6 is a half-EDGE (the cube is 2× this across),
+// the polyhedra are a circumradius (farthest vertex) — so the numbers aren't directly
+// comparable, they're matched by eye (see the size-parity render).
+export const DIE_RADIUS = { 4: 0.82, 6: 0.46, 8: 0.72, 10: 0.72, 12: 0.7, 20: 0.7 };
+// ONE knob for overall dice size: turn this and EVERY die scales together — mesh AND
+// collider, d6 included — because both sides build their geometry from dieR() below.
+// Lower = smaller. (Colliders are always derived from size, never entered by hand.)
+export const DIE_SCALE = 0.82;
+// How large the printed numbers are, relative to their face (polyhedral dice only; the d6's
+// pipped-box numbers are separate). 1 = the original size; higher = bigger/more legible.
+export const DIE_GLYPH = 1.42;
+// The size a die is actually built at: its base radius × the global scale. The single source
+// both the client mesh and the server collider read, so they can never disagree on size.
+export const dieR = (sides) => (DIE_RADIUS[sides] || 1) * DIE_SCALE;
 export const DIE_SIDES = [4, 6, 8, 10, 12, 20];
 
 // Raw vertices scaled so the farthest sits at `radius`. null for d6/unknown.
-export function dieVerts(sides, radius = DIE_RADIUS[sides] || 1) {
+export function dieVerts(sides, radius = dieR(sides)) {
   const raw = DIE_RAW[sides]; if (!raw) return null;
   let max = 0; for (const v of raw) max = Math.max(max, Math.hypot(v[0], v[1], v[2]));
   const k = radius / max;
   return raw.map(v => [v[0]*k, v[1]*k, v[2]*k]);
+}
+
+// --- Dice tray --------------------------------------------------------------
+// A walled rolling area that rides the same circular track as the whiteboard (angle), one
+// gap past the table edge. The geometry lives here so the server (cannon-es floor+walls), the
+// client (Three.js mesh), and the tests all build the SAME box from one source — the tray can
+// never look one size and collide at another. Everything in world units.
+export const TRAY = {
+  hx: 4.5, hz: 3.3,    // floor half-extents (X across the track, Z radial) — a roomy roll area
+  wall: 1.65,          // wall half-height (base at y=0, so walls stand 2×this tall); the lid caps the wall tops, so this sets the roll headroom
+  thick: 0.0625,       // wall half-thickness (thin rails)
+  floorThick: 0.0625,    // floor half-height (its TOP sits at y=0, level with the table surface)
+  lid: 0.3,            // half-thickness of an INVISIBLE ceiling that caps the box so nothing bounces out
+  margin: 15,           // gap between the table edge and the track the tray centre rides
+};
+// Each seat's angle on the track, derived from its outward direction in seatLayoutFor()
+// (θ = atan2(outX, outZ), matching the track's (sin, cos) convention). A personal tray sits
+// on the track at its owner's seat angle — i.e. directly behind that player.
+export const SEAT_ANGLES = [0, Math.PI, Math.PI / 2, -Math.PI / 2, Math.PI / 4, -3 * Math.PI / 4];
+export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
+
+// The tray's centre on the track, for a given angle and table size. Same radius formula as the
+// whiteboard (max half-extent + a margin), so the tray hugs the table edge at any table size.
+export function trayCenter(angle, tableX, tableZ, T = TRAY) {
+  const R = Math.max(tableX, tableZ) + T.margin;
+  return { x: Math.sin(angle) * R, z: Math.cos(angle) * R };
+}
+// The five boxes that make a tray — floor + four walls — as LOCAL specs { hx, hy, hz, x, y, z }
+// (tray-local: centred at origin, floor top at y=0, unrotated). Callers translate to trayCenter
+// and rotate by `angle` about Y so a rectangular tray sits tangent to the track.
+export function trayParts(T = TRAY) {
+  const t = T.thick, wy = T.wall, top = 2 * wy, lid = T.lid;
+  return [
+    { hx: T.hx,     hy: T.floorThick, hz: T.hz,     x: 0,            y: -T.floorThick, z: 0 },            // floor
+    { hx: T.hx + t, hy: wy,           hz: t,        x: 0,            y: wy,            z: -(T.hz + t) },   // near
+    { hx: T.hx + t, hy: wy,           hz: t,        x: 0,            y: wy,            z:  (T.hz + t) },   // far
+    { hx: t,        hy: wy,           hz: T.hz + t, x: -(T.hx + t),  y: wy,            z: 0 },             // left
+    { hx: t,        hy: wy,           hz: T.hz + t, x:  (T.hx + t),  y: wy,            z: 0 },             // right
+    { hx: T.hx + t, hy: lid,          hz: T.hz + t, x: 0,            y: top + lid,     z: 0, noMesh: true }, // invisible lid (physics only) — bottom flush with the wall tops
+  ];
+}
+// Rotate a local (x,z) by `angle` about Y and offset to a centre — the transform both the
+// physics bodies and the render meshes apply so they land in the same place.
+export function trayPlace(local, center, angle) {
+  const s = Math.sin(angle), c = Math.cos(angle);
+  return { x: center.x + local.x * c + local.z * s, y: local.y, z: center.z - local.x * s + local.z * c };
+}
+// Is a world point inside the tray's footprint (+ a slack margin)? Used by the out-of-bounds
+// net to contain tray dice in the tray instead of yanking them back to the table.
+export function inTray(x, z, center, angle, slack = 0, T = TRAY) {
+  const dx = x - center.x, dz = z - center.z;
+  const s = Math.sin(angle), c = Math.cos(angle);
+  const lx = dx * c - dz * s, lz = dx * s + dz * c; // world → tray-local (inverse of trayPlace)
+  return Math.abs(lx) <= T.hx + T.thick + slack && Math.abs(lz) <= T.hz + T.thick + slack;
 }
 // The shared timer's live value in ms, computed from its synced anchor (used by
 // both the server and every client, so the number never has to be synced tick by

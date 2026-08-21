@@ -11,6 +11,7 @@
 <body>
 <div id="camDebug" style="position:fixed;top:8px;right:8px;z-index:200;font:11px/1.4 monospace;color:#c9a25a;background:rgba(0,0,0,.6);padding:6px 8px;border-radius:4px;pointer-events:none;white-space:pre"></div>
 <div id="app"></div>
+<div id="marquee" hidden></div>
 <div id="ui">
   <button id="lobbyBtn">🔙 Lobby</button>
   <span class="menu">
@@ -52,6 +53,20 @@
   <button id="wbClearBtn" class="danger">Clear</button>
   <button id="wbDone">Done <kbd>Esc</kbd></button>
 </div>
+<div id="trayTools" class="panel" hidden>
+  <span class="da-note">Add</span>
+  <button class="trayDie" data-sides="4">d4</button>
+  <button class="trayDie" data-sides="6">d6</button>
+  <button class="trayDie" data-sides="8">d8</button>
+  <button class="trayDie" data-sides="10">d10</button>
+  <button class="trayDie" data-sides="12">d12</button>
+  <button class="trayDie" data-sides="20">d20</button>
+  <button id="trayRoll">🎲 Roll all</button>
+  <button id="trayScoop">↩️ Scoop</button>
+  <button id="trayClearBtn" class="danger">Clear</button>
+  <button id="trayAway">🫳 Put away</button>
+  <button id="trayBack">← Back <kbd>Esc</kbd></button>
+</div>
 <div id="hand" class="panel"></div>
 <div id="rightRail">
 <div id="roomCode" class="panel" hidden></div>
@@ -75,6 +90,7 @@
     <button id="scoreBtn">📊 Score</button>
     <button id="timerBtn">⏱️ Timer</button>
     <button id="measureBtn">📏 Measure</button>
+    <button id="selectBtn">⬚ Select</button>
     <button id="audioBtn">🔊 Sound</button>
     <button id="resetPanelsBtn" hidden>↺ Reset</button>
     <button id="wbBtn">🖊️ W-Board</button>
@@ -167,7 +183,7 @@
       <div class="toolsLabel" id="interactToggle">Interactions <span class="toolsChev">▾</span></div>
       <button id="leanBtn">🔎 Lean In</button>
       <button id="mySeatBtn">↩ My Seat</button>
-      <button id="roll">🔄 Roll Dice</button>
+      <button id="roll" title="Hop to the dice tray to roll (a GM or helper places the tray)">🎲 Roll Dice</button>
       <button id="showBtn">🃏 Show Hand</button>
       <button id="dropBtn" title="Lay your whole hand on the table">🂠 Drop Hand</button>
     </div>

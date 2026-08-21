@@ -169,6 +169,17 @@ html, body {
 }
 canvas { display: block; }
 canvas.measuring { cursor: crosshair; }  /* Measure tool active */
+canvas.selecting { cursor: crosshair; }  /* Select tool active — felt-drag boxes a selection */
+/* Marquee box painted during a shift/select drag. JS tints it with MY UI accent inline
+   (the selection is private); these accent values are just the pre-inline fallback. */
+#marquee {
+  position: fixed;
+  z-index: 30;
+  border: 1px solid var(--accent);
+  background: var(--accent-soft);
+  pointer-events: none;
+}
+#selectBtn.on { color: var(--accent); border-color: var(--accent); }
 b { color: var(--accent); }
 a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on the dark theme (was default blue) */ /* bold text uses the gold accent everywhere; more specific rules (e.g. .helpSec b) can override */
 /* Any element carrying the `hidden` attribute stays hidden, overriding whatever
@@ -274,7 +285,7 @@ button.danger {
   background: none;
   cursor: pointer;
 }
-#drawActions, #wbTools {
+#drawActions, #wbTools, #trayTools {
   position: fixed;
   bottom: calc(var(--inset) + 84px);
   left: 50%;
@@ -288,7 +299,7 @@ button.danger {
   padding: 10px 12px;
   z-index: 20;
 }
-#drawActions .da-note, #wbTools .da-note {
+#drawActions .da-note, #wbTools .da-note, #trayTools .da-note {
   color: var(--text);
   opacity: .7;
   font: var(--fs-sm) var(--font);
