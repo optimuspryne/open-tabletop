@@ -4,6 +4,7 @@ import { KIND, OVERLAY, trayMesh, cTex, cardMesh, propColor, measureModel, measu
 import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, DICE_SETS, PALETTE, COLORS, readableInk, recolorPalette, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell, trayCenter, seatAngle } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, MODEL_CREDITS, ART_CREDITS, LIB_CREDITS } from './credits.js';
+import { attachControls } from './controls.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
 
 // ===== Tiny DOM helpers =====================================================
@@ -934,14 +935,8 @@ const pickId = () => {
   return obj && obj.userData.id;
 };
 
-renderer.domElement.addEventListener('contextmenu', e => e.preventDefault()); // right-click is ours
-renderer.domElement.addEventListener('mousedown', e => { // middle-click: snap a held piece, else ping the table
-  if (e.button === 1) {
-    e.preventDefault();
-    if (down && down.grabbed) room.send('snap', { id: down.id });
-    else { setPointer(e); sendPing(); }
-  }
-});
+// Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
+// see the INPUT intent map at the end of this file.
 { const t = byId('toolsToggle'); if (t) t.onclick = () => byId('toolsMenu').classList.toggle('collapsed'); } // collapse/expand the Tools menu
 { const t = byId('interactToggle'); if (t) t.onclick = () => byId('interactMenu').classList.toggle('collapsed'); } // collapse/expand Interactions
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
@@ -1353,14 +1348,7 @@ renderer.domElement.addEventListener('pointerdown', e => {
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 
-renderer.domElement.addEventListener('wheel', e => {
-  if (!(down && down.grabbed)) return; // not holding a piece → let OrbitControls zoom
-  e.preventDefault();
-  dragHeight = clamp(dragHeight - Math.sign(e.deltaY) * DRAG_STEP, DRAG_MIN, DRAG_MAX); // scroll up = raise
-  ray.setFromCamera(pointer, camera);
-  ray.ray.intersectPlane(dragPlane, hit); // fixed ground plane → XZ under the cursor, stable at any height
-  { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: dragHeight, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z }); }
-}, { passive: false });
+// wheel (raise/lower a held piece) → public/controls.js → INPUT.raiseAxis
 
 renderer.domElement.addEventListener('pointermove', e => {
   if (marquee) { showMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY); return; } // painting a selection box
@@ -1505,16 +1493,7 @@ const endGesture = e => {
 };
 renderer.domElement.addEventListener('pointerup', endGesture);
 renderer.domElement.addEventListener('pointercancel', endGesture);
-renderer.domElement.addEventListener('dblclick', e => { // double-click the board to own it and draw
-  if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled || wbOwning || room.state.whiteboard.owner) return;
-  const surf = wbGroup && wbGroup.getObjectByName('wbSurface'); if (!surf) return;
-  setPointer(e);
-  ray.setFromCamera(pointer, camera);
-  const bh = ray.intersectObject(surf)[0]; if (!bh) return;
-  const ph = ray.intersectObjects([...meshes.values()].map(m => m.mesh))[0];
-  if (ph && ph.distance < bh.distance) return; // a piece is in front → that's an inspect, not the board
-  room.send('wbClaim'); e.preventDefault();
-});
+// dblclick (claim the whiteboard) → public/controls.js → INPUT.doubleClick
 
 // The piece to act on for a keyboard shortcut: the held one, else whatever's hovered.
 const heldOrHoveredId = () => (down && down.id) || pickId();
@@ -2760,3 +2739,34 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
+
+// ===== Input seam ===========================================================
+// Raw canvas events → intents (see public/controls.js). These handlers own what each
+// intent MEANS; controls.js owns which device gesture raises it. As Phase 0 proceeds,
+// the pointer dispatcher and keyboard shortcuts fold in here too.
+const INPUT = {
+  hasHeld: () => !!(down && down.grabbed),
+  snapHeld: () => { if (down && down.grabbed) room.send('snap', { id: down.id }); },
+  ping: (p) => { setPointer({ clientX: p.x, clientY: p.y }); sendPing(); },
+  raiseAxis: (dir) => {
+    if (!(down && down.grabbed)) return;
+    dragHeight = clamp(dragHeight + dir * DRAG_STEP, DRAG_MIN, DRAG_MAX); // up = raise
+    ray.setFromCamera(pointer, camera);
+    ray.ray.intersectPlane(dragPlane, hit); // fixed ground plane → XZ under the cursor
+    const t = snapXZ(hit.x, hit.z);
+    if (down.group) room.send('moveGroup', { x: t.x, y: dragHeight, z: t.z });
+    else room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z });
+  },
+  // double-click the board to own it and draw; true if a claim was sent
+  doubleClick: (p) => {
+    if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled || wbOwning || room.state.whiteboard.owner) return false;
+    const surf = wbGroup && wbGroup.getObjectByName('wbSurface'); if (!surf) return false;
+    setPointer({ clientX: p.x, clientY: p.y });
+    ray.setFromCamera(pointer, camera);
+    const bh = ray.intersectObject(surf)[0]; if (!bh) return false;
+    const ph = ray.intersectObjects([...meshes.values()].map(m => m.mesh))[0];
+    if (ph && ph.distance < bh.distance) return false; // a piece is in front → inspect, not the board
+    room.send('wbClaim'); return true;
+  },
+};
+attachControls(renderer.domElement, INPUT);
