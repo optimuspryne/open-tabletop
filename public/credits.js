@@ -3,6 +3,12 @@
 // MUSIC drives BOTH the background-music player and the credits panel. Kevin MacLeod's
 // tracks are CC BY 4.0, which REQUIRES a visible credit — the credits panel is it.
 // To add a track: drop the file in public/music/ and add a { title, file } entry below.
+//
+// The credit-only arrays below (SFX / MODEL / ART / LIB) feed the same Credits panel.
+// Most bundled assets are CC0 and listed here as a courtesy; the CC BY entries
+// (bentwood box, chess/checker board, Mahjong faces) list their credit as a LICENCE
+// OBLIGATION — the panel must render them. See docs/ASSET_CREDITS.md for the full,
+// per-file record (source pages, sub-attributions, and license notes).
 export const MUSIC = [
     { title: 'Adding the Sun', file: 'Adding the Sun.mp3' },
     { title: 'Almost Bliss', file: 'Almost Bliss.mp3' },
@@ -47,10 +53,36 @@ export const MUSIC_CREDIT = {
   license: 'CC BY 4.0', licenseUrl: 'https://creativecommons.org/licenses/by/4.0/',
 };
 
-// Credit-only entries (no player involvement).
+// Credit-only entries (no player involvement). Each: { title, by, url, license, note? }.
+// `url` links the author's name in the panel; `note` carries any extra attribution
+// (a sub-credited texture, a requested site link) or a licence caveat.
+
+// Sound effects — public/sounds/ (all CC0; listed as a courtesy).
 export const SFX_CREDITS = [
-  { title: 'Casino & interface sound effects', by: 'Kenney', url: 'https://kenney.nl', license: 'CC0 (credit optional)' },
+  { title: '54 Casino Sound Effects', by: 'Kenney',      url: 'https://opengameart.org/users/kenney',      license: 'CC0' },
+  { title: 'Card Game Sounds',        by: 'HaelDB',      url: 'https://opengameart.org/users/haeldb',      license: 'CC0' },
+  { title: 'Playing Card Sounds',     by: 'BMacZero',    url: 'https://opengameart.org/users/bmaczero',    license: 'CC0' },
+  { title: 'Sound Effects Pack',      by: 'OwlishMedia', url: 'https://opengameart.org/users/owlishmedia', license: 'CC0' },
 ];
+
+// 3D models — public/models/ (CC0 unless noted; the CC BY entries are a licence obligation).
+export const MODEL_CREDITS = [
+  { title: 'Chess set',          by: 'rehcub',              url: 'https://opengameart.org/users/rehcub',            license: 'CC0' },
+  { title: 'Human token',        by: 'Clint Bellanger',     url: 'https://opengameart.org/users/clint-bellanger',   license: 'CC0' },
+  { title: 'Bowl (go bowl)',     by: 'DREAM_SEARCH_REPEAT', url: 'https://opengameart.org/users/dreamsearchrepeat', license: 'CC0' },
+  { title: 'Poker chip',         by: 'mehrasaur',           url: 'https://opengameart.org/users/mehrasaur',         license: 'CC0' },
+  { title: 'Gold coin',          by: 'plaggy',              url: 'https://opengameart.org/users/plaggy',            license: 'CC0' },
+  { title: 'Chess / checker board', by: 'pennomi',          url: 'https://opengameart.org/users/pennomi',           license: 'CC BY 3.0', note: 'Board texture by Tiziana, submitted by bart (also LGPL 2.1 / LGPL 3.0).' },
+  { title: 'Go board',           by: 'Jummit',              url: 'https://opengameart.org/users/jummit',            license: 'CC BY 4.0 / GPL 3.0', note: '© 2023 Jummit.' },
+  { title: 'Bentwood box',       by: 'bobjh',               url: 'https://opengameart.org/users/bobjh',             license: 'CC BY 4.0' },
+];
+
+// 2D art — skyboxes (public/sky/) + tile faces (public/mahjong/).
+export const ART_CREDITS = [
+  { title: 'Cloudy skyboxes', by: 'Screaming Brain Studios', url: 'https://opengameart.org/users/screaming-brain-studios', license: 'CC0' },
+  { title: 'Mahjong tileset', by: 'CodeInfernoGames',        url: 'https://codeinferno.com',                               license: 'CC BY 3.0', note: 'Author requests a link to codeinferno.com.' },
+];
+
 export const LIB_CREDITS = [
   { title: 'Three.js',  url: 'https://threejs.org',                    license: 'MIT' },
   { title: 'Colyseus',  url: 'https://colyseus.io',                    license: 'MIT' },

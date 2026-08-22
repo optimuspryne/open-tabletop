@@ -3,7 +3,7 @@ import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTable
 import { KIND, OVERLAY, trayMesh, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture, gridMesh } from './graphics.js';
 import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, DICE_SETS, PALETTE, COLORS, readableInk, recolorPalette, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell, trayCenter, seatAngle } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
-import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
+import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, MODEL_CREDITS, ART_CREDITS, LIB_CREDITS } from './credits.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
 
 // ===== Tiny DOM helpers =====================================================
@@ -741,6 +741,8 @@ function rebuildGrid() {
       let h = '';
       if (MUSIC.length) { h += '<div class="showLabel"><b>Music</b></div><ul ' + ul + '>'; for (const t of MUSIC) h += '<li>' + esc(t.title) + ' \u2014 ' + A(MUSIC_CREDIT.by, MUSIC_CREDIT.url) + ', ' + A(MUSIC_CREDIT.license, MUSIC_CREDIT.licenseUrl) + '</li>'; h += '</ul>'; }
       h += '<div class="showLabel"><b>Sound effects</b></div><ul ' + ul + '>'; for (const x of SFX_CREDITS) h += '<li>' + esc(x.title) + ' \u2014 ' + A(x.by, x.url) + ', ' + esc(x.license) + '</li>'; h += '</ul>';
+      h += '<div class="showLabel"><b>Models</b></div><ul ' + ul + '>'; for (const x of MODEL_CREDITS) h += '<li>' + esc(x.title) + ' \u2014 ' + A(x.by, x.url) + ', ' + esc(x.license) + (x.note ? ' \u2014 ' + esc(x.note) : '') + '</li>'; h += '</ul>';
+      h += '<div class="showLabel"><b>Art</b></div><ul ' + ul + '>'; for (const x of ART_CREDITS) h += '<li>' + esc(x.title) + ' \u2014 ' + A(x.by, x.url) + ', ' + esc(x.license) + (x.note ? ' \u2014 ' + esc(x.note) : '') + '</li>'; h += '</ul>';
       h += '<div class="showLabel"><b>Libraries</b></div><ul ' + ul + '>'; for (const l of LIB_CREDITS) h += '<li>' + A(l.title, l.url) + ' \u2014 ' + esc(l.license) + '</li>'; h += '</ul>';
       body.innerHTML = h;
     };
