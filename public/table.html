@@ -38,6 +38,10 @@
   <label id="inspectBodyLab">Color <input type="color" id="inspectColorBody" value="#ffffff"></label>
   <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
   <label id="inspectTeamLab" hidden>Interior <button type="button" id="inspectTeamBtn">Black</button></label>
+  <div id="dieSwatches" class="swatchRow" hidden></div>
+  <div id="propSwatches" class="swatchRow" hidden></div>
+  <button type="button" id="inspectDefaultBtn" hidden title="Remember this color for every d? you spawn (saved on this device only)">Set as my default</button>
+  <button type="button" id="inspectResetBtn" hidden title="Forget my default for this die type and set this die back to plain">Reset</button>
 </div>
 <div id="drawActions" class="panel" hidden>
   <span class="da-note">Drag to rotate</span>
@@ -61,11 +65,17 @@
   <button class="trayDie" data-sides="10">d10</button>
   <button class="trayDie" data-sides="12">d12</button>
   <button class="trayDie" data-sides="20">d20</button>
+  <span class="da-note" title="Recolor all your dice to a matching set (saved as your default)">Set</span>
+  <div id="traySetSwatches" class="swatchRow"></div>
   <button id="trayRoll">🎲 Roll all</button>
   <button id="trayScoop">↩️ Scoop</button>
   <button id="trayClearBtn" class="danger">Clear</button>
   <button id="trayAway">🫳 Put away</button>
   <button id="trayBack">← Back <kbd>Esc</kbd></button>
+</div>
+<div id="selTools" class="panel" hidden>
+  <span id="selNote" class="da-note" title="Recolor every selected die, prop, or chip stack at once">Recolor selection</span>
+  <div id="selSwatches" class="swatchRow"></div>
 </div>
 <div id="hand" class="panel"></div>
 <div id="rightRail">
@@ -235,7 +245,7 @@
     <button class="chip" data-unit="in" data-step="0.5">inch</button>
     <button class="chip" data-unit="cm" data-step="1">cm</button>
     <button class="chip" data-unit="mm" data-step="1">mm</button>
-    <button class="chip" data-unit="__custom__">Custom…</button>
+    <button class="chip" data-unit="__custom__">Other</button>
   </div></div>
   <div class="sizeRow" id="scaleCustomRow" hidden><label></label><input id="scaleUnitCustom" class="field" type="text" maxlength="8" placeholder="unit label, e.g. hex"></div>
   <div class="sizeRow"><label>Round to</label><input id="scaleStep" type="number" min="0.001" step="0.05"><span class="muted" id="scaleStepUnit"></span></div>
@@ -249,6 +259,9 @@
   <div class="sizeRow" id="gridSnapRow" hidden><label>Snap to</label><div id="gridAnchors" class="chipRow">
     <button class="chip" data-anchor="center">Cell centers</button>
     <button class="chip" data-anchor="cross">Intersections</button>
+  </div></div>
+  <div class="sizeRow" id="gridHideRow" hidden><label>Visibility</label><div class="chipRow">
+    <button class="chip" id="gridHideTog" title="Keep snapping to the grid, but don't draw the lines">Hide grid (still snaps)</button>
   </div></div>
   <div class="sizeRow" id="gridCalibRow" hidden><label>Fit to board</label><input id="gridCells" type="number" min="2" step="1" placeholder="across"><button id="gridCalib" class="chip">▦ Align</button></div>
   <div class="sizeRow" id="gridCellRow" hidden><label>Cell size</label><input id="gridCell" type="number" min="0.01" step="0.01"><span class="dimX">×</span><input id="gridCellZ" type="number" min="0.01" step="0.01"><span class="muted" id="gridCellUnit"></span></div>
@@ -407,6 +420,7 @@
       <button class="libTab on" data-tab="dice">Dice</button>
       <button class="libTab" data-tab="decks">Decks</button>
       <button class="libTab" data-tab="boards">Boards</button>
+      <button class="libTab" data-tab="games">Games</button>
       <button class="libTab" data-tab="objects">Objects</button>
       <button class="libTab" data-tab="dispensers">Dispensers</button>
       <button class="libTab" data-tab="sky">Skyboxes</button>
@@ -414,6 +428,7 @@
     <div class="libPane" data-pane="dice"><ul id="biDice" class="libList"></ul></div>
     <div class="libPane" data-pane="decks" hidden><ul id="biDecks" class="libList"></ul></div>
     <div class="libPane" data-pane="boards" hidden><ul id="biBoards" class="libList"></ul></div>
+    <div class="libPane" data-pane="games" hidden><p class="libHint">One-click game setups. Loading one clears the table and places the board and pieces (GM only).</p><ul id="biGames" class="libList"></ul></div>
     <div class="libPane" data-pane="objects" hidden><ul id="biObjects" class="libList"></ul></div>
     <div class="libPane" data-pane="dispensers" hidden><ul id="biDispensers" class="libList"></ul></div>
     <div class="libPane" data-pane="sky" hidden><ul id="biSky" class="libList"></ul></div>

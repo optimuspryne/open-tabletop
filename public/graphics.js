@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
-import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, dieVerts, dieR, DIE_GLYPH, BOARDS, BOARD_SIZE, TABLE, MEASURE, DISPENSERS, stackDiscH, stackVisible, gridActive, TRAY, trayParts } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, TILES, HEX_HH, cardGeom, dieVerts, dieR, DIE_GLYPH, BOARDS, BOARD_SIZE, DECK_MODELS, TABLE, MEASURE, DISPENSERS, stackDiscH, stackVisible, gridActive, TRAY, trayParts } from '/shared/pieces.js';
 
 // ===== Shared helpers =======================================================
 
@@ -54,6 +54,112 @@ function cardFront(rank, suit, color) {
 
   ctx.font = 'bold 140px Georgia';
   ctx.fillText(rank, w / 2, h / 2 + 56); // big centre rank
+  return cTex(canvas);
+}
+
+// A joker face: a star motif over "JOKER", in the joker's color (a deck ships one
+// warm-red and one near-black joker). Same card proportions/border as cardFront.
+function jokerFace(color) {
+  const S = 2, w = 300, h = 420;
+  const { canvas, ctx } = makeCanvas(w * S, h * S);
+  ctx.scale(S, S);
+  ctx.fillStyle = '#fbfbf7';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = '#ddd';
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, w - 6, h - 6);
+
+  ctx.fillStyle = color || '#141414';
+  ctx.textAlign = 'center';
+  // Corner index: a "J" over a small star, mirrored bottom-right like a rank index.
+  const drawIndex = () => { ctx.font = 'bold 60px Georgia'; ctx.fillText('J', 0, 0); ctx.font = '34px Georgia'; ctx.fillText('★', 0, 38); };
+  ctx.save(); ctx.translate(34, 48); drawIndex(); ctx.restore();
+  ctx.save(); ctx.translate(w - 34, h - 48); ctx.rotate(Math.PI); drawIndex(); ctx.restore();
+  // Centre: a big star over the word JOKER.
+  ctx.textBaseline = 'middle';
+  ctx.font = 'bold 120px Georgia';
+  ctx.fillText('★', w / 2, h / 2 - 46);
+  ctx.font = 'bold 52px Georgia';
+  ctx.fillText('JOKER', w / 2, h / 2 + 84);
+  return cTex(canvas);
+}
+
+// The pips (0–6) for one half of a domino, in the standard 3×3 layout, within [x0,y0,cw,ch].
+function drawPips(ctx, n, x0, y0, cw, ch, color) {
+  if (!n) return;
+  const P = { c: [0.5, 0.5], tl: [0.28, 0.28], tr: [0.72, 0.28], ml: [0.28, 0.5], mr: [0.72, 0.5], bl: [0.28, 0.72], br: [0.72, 0.72] };
+  const SETS = { 1: ['c'], 2: ['tl', 'br'], 3: ['tl', 'c', 'br'], 4: ['tl', 'tr', 'bl', 'br'], 5: ['tl', 'tr', 'c', 'bl', 'br'], 6: ['tl', 'ml', 'bl', 'tr', 'mr', 'br'] };
+  const r = Math.min(cw, ch) * 0.1;
+  ctx.fillStyle = color || '#1a1a1a';
+  for (const key of (SETS[n] || [])) {
+    const [fx, fy] = P[key];
+    ctx.beginPath(); ctx.arc(x0 + fx * cw, y0 + fy * ch, r, 0, Math.PI * 2); ctx.fill();
+  }
+}
+// A domino tile face: two pip halves (a over b) split by a divider. Drawn at the tile's 1:2
+// footprint so it maps cleanly onto the domino geometry (no stretch).
+function dominoFace(a, b) {
+  const w = 300, h = 600;
+  const { canvas, ctx } = makeCanvas(w, h);
+  ctx.fillStyle = '#f4f1ea';
+  ctx.fillRect(0, 0, w, h);                                        // full square fill; the mesh's mask rounds the corners
+  const m = w * 0.12;                                              // the dividing bar across the middle
+  ctx.strokeStyle = '#888'; ctx.lineWidth = 4;
+  ctx.beginPath(); ctx.moveTo(m, h / 2); ctx.lineTo(w - m, h / 2); ctx.stroke();
+  drawPips(ctx, a, m, m, w - 2 * m, h / 2 - 2 * m);               // top half = a
+  drawPips(ctx, b, m, h / 2 + m, w - 2 * m, h / 2 - 2 * m);       // bottom half = b
+  return cTex(canvas);
+}
+// A blank domino back: ivory tile with a subtle inset border (not the playing-card cross-hatch).
+function dominoBack() {
+  const w = 300, h = 600;
+  const { canvas, ctx } = makeCanvas(w, h);
+  ctx.fillStyle = '#efe9da';
+  ctx.fillRect(0, 0, w, h);                                        // full square fill; the mesh's mask rounds the corners
+  ctx.strokeStyle = '#c9bfa6'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.roundRect(22, 22, w - 44, h - 44, 0.06 * w); ctx.stroke();
+  return cTex(canvas);
+}
+// A word-tile FACE: a big letter with a small point value in the lower-right (blank = an empty tile).
+function letterTileFace(letter, value) {
+  const S = 300;
+  const { canvas, ctx } = makeCanvas(S, S);
+  ctx.fillStyle = '#f2e8cf';                                        // warm wood; the mesh's mask rounds the corners
+  ctx.fillRect(0, 0, S, S);
+  ctx.fillStyle = '#2c2115';                                        // ink (matches WORDY_COLORS.ink)
+  const L = String(letter || '').toUpperCase();
+  if (L) {
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '700 190px Georgia, "Times New Roman", serif';
+    ctx.fillText(L, S * 0.46, S * 0.52);
+    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.font = '600 60px Georgia, serif';
+    ctx.fillText(String(value ?? ''), S * 0.9, S * 0.88);          // point value, lower-right
+  } else {
+    ctx.strokeStyle = 'rgba(44,33,21,0.18)'; ctx.lineWidth = 6;     // blank tile: a faint frame so it still reads as a tile
+    ctx.beginPath(); ctx.roundRect(40, 40, S - 80, S - 80, 24); ctx.stroke();
+  }
+  return cTex(canvas);
+}
+// A word-tile BACK: a blank warm-wood tile (the face-down bag).
+function letterBack() {
+  const S = 300;
+  const { canvas, ctx } = makeCanvas(S, S);
+  ctx.fillStyle = '#e7dcc0';
+  ctx.fillRect(0, 0, S, S);
+  ctx.strokeStyle = '#c9bfa6'; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.roundRect(24, 24, S - 48, S - 48, 0.08 * S); ctx.stroke();
+  return cTex(canvas);
+}
+// A mahjong tile BACK: the iconic green bakelite face (the wall, face-down tiles).
+function mahjongBack() {
+  const w = 300, h = 418;
+  const { canvas, ctx } = makeCanvas(w, h);
+  const g = ctx.createLinearGradient(0, 0, w, h);
+  g.addColorStop(0, '#2f7d5b'); g.addColorStop(1, '#245f45');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 8;
+  ctx.beginPath(); ctx.roundRect(20, 20, w - 40, h - 40, 0.06 * w); ctx.stroke();
   return cTex(canvas);
 }
 
@@ -332,6 +438,12 @@ export function parseCardFront(ref) {
     const [, rank, suit, color] = ref.split(':');
     return { kind: 'rank', rank, suit, color };
   }
+  if (ref.startsWith('joker:')) return { kind: 'joker', color: ref.slice(6) || COLORS.ink };
+  if (ref.startsWith('domino:')) { const [, a, b] = ref.split(':'); return { kind: 'domino', a: +a || 0, b: +b || 0 }; }
+  if (ref === 'domback') return { kind: 'domback' };
+  if (ref.startsWith('letter:')) { const [, l, v] = ref.split(':'); return { kind: 'letter', letter: l || '', value: +v || 0 }; } // 'letter:A:1'; blank = 'letter::0'
+  if (ref === 'lback') return { kind: 'lback' };
+  if (ref === 'mjback') return { kind: 'mjback' };
   if (ref.startsWith('text:')) {
     const [color, r1] = splitColorText(ref.slice(5), COLORS.ink);
     const [bg, r2] = splitColorText(r1, '#fbfbf7');
@@ -355,6 +467,12 @@ function resolveTexture(ref) {
   let texture;
   if (parsed.kind === 'back') texture = cardBack();
   else if (parsed.kind === 'rank') texture = cardFront(parsed.rank, parsed.suit, parsed.color);
+  else if (parsed.kind === 'joker') texture = jokerFace(parsed.color);
+  else if (parsed.kind === 'domino') texture = dominoFace(parsed.a, parsed.b);
+  else if (parsed.kind === 'domback') texture = dominoBack();
+  else if (parsed.kind === 'letter') texture = letterTileFace(parsed.letter, parsed.value);
+  else if (parsed.kind === 'lback') texture = letterBack();
+  else if (parsed.kind === 'mjback') texture = mahjongBack();
   else if (parsed.kind === 'text') texture = textFaceTexture(parsed.text, parsed.color, parsed.bg, parsed.accent);
   else if (parsed.kind === 'tback') texture = textBackTexture(parsed.bg, parsed.text, parsed.textColor, parsed.accent);
   else texture = loadImageTexture(parsed.ref);
@@ -551,6 +669,47 @@ async function uploadImage(file, w = CONFIG.upload.cardW, h = CONFIG.upload.card
   const query = kind ? ('?kind=' + encodeURIComponent(kind)) : '';
   return postUpload('/upload' + query, CONFIG.upload.type, blob);
 }
+// The natural pixel size of an image file → { w, h }, or null on error. Used to size a card/tile
+// deck to its art's aspect ratio (see geomFromImage).
+function measureImage(file) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight, round: cornerRadiusFrac(img) }); };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.src = url;
+  });
+}
+
+// Read a card art's rounded-corner radius from its ALPHA, as a fraction of the art's opaque width.
+// Card PNGs bake their rounded shape as transparency (the corners are see-through); measuring that
+// radius lets the card mesh AND the deck round to the SAME corner the art uses, so their silhouettes
+// match the image and no transparent corner is ever left to render as a dark chunk. Returns 0 for a
+// square / fully-opaque image (a plain photo fills its rectangle edge-to-edge). Falls back to the
+// standard card radius if the pixels can't be read.
+function cornerRadiusFrac(img) {
+  const NW = img.naturalWidth, NH = img.naturalHeight;
+  if (!NW || !NH) return CARD_ROUND;
+  const scale = Math.min(1, 400 / Math.max(NW, NH));          // sample at reduced res — plenty for a radius
+  const w = Math.max(2, Math.round(NW * scale)), h = Math.max(2, Math.round(NH * scale));
+  const { canvas, ctx } = makeCanvas(w, h);
+  ctx.drawImage(img, 0, 0, w, h);
+  let data;
+  try { data = ctx.getImageData(0, 0, w, h).data; } catch (e) { return CARD_ROUND; }  // tainted canvas
+  const A = 128, alpha = (x, y) => data[(y * w + x) * 4 + 3];
+  let minX = w, minY = h, maxX = -1, maxY = -1;               // bounding box of the opaque pixels
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (alpha(x, y) >= A) {
+    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  if (maxX < minX || maxY < minY) return CARD_ROUND;          // no opaque pixels (shouldn't happen)
+  const bw = maxX - minX + 1;
+  if (alpha(minX, minY) >= A && alpha(maxX, minY) >= A && alpha(minX, maxY) >= A) return 0; // corners solid → square
+  // On a rounded rect, the top edge's opaque span starts `r` in from the left, and the left edge's
+  // opaque span starts `r` down from the top. Average the two estimates for robustness.
+  let rv = 0; for (let y = minY; y <= maxY; y++) if (alpha(minX, y) >= A) { rv = y - minY; break; }
+  let rh = 0; for (let x = minX; x <= maxX; x++) if (alpha(x, minY) >= A) { rh = x - minX; break; }
+  return Math.max(0, Math.min(0.5, +(((rh + rv) / 2) / bw).toFixed(4)));
+}
 // --- Die, card, and mask meshes ---------------------------------------------
 
 // The visual mesh for a die. A d6 is a textured box (a number per face); a d4
@@ -570,35 +729,85 @@ function dieMesh(props = {}) {
 
 // A rounded-rectangle alpha mask (white card shape on black), so cards render
 // with rounded corners. Cached and reused by every card. Not sRGB — it's a mask.
-let _roundMask;
-function roundMask() {
-  if (_roundMask) return _roundMask;
-  const w = 300, h = 420;
+// A rounded-rectangle alpha mask for a card/tile's faces. The canvas matches the face's aspect
+// (height/width) so the corner radius maps to a circular arc; cached per (aspect, round). A plain
+// card reuses one mask; tiles (domino/…) get their own.
+const _roundMasks = new Map();
+function roundMask(hw = TILES.card.w, hh = TILES.card.h, round = CARD_ROUND) {
+  const aspect = hh / hw;
+  const key = round.toFixed(3) + ':' + aspect.toFixed(3);
+  let tex = _roundMasks.get(key);
+  if (tex) return tex;
+  const w = 300, h = Math.max(1, Math.round(300 * aspect));
   const { canvas, ctx } = makeCanvas(w, h);
-
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
   ctx.fillStyle = '#fff';
   ctx.beginPath();
-  ctx.roundRect(0, 0, w, h, CARD_ROUND * w);
+  ctx.roundRect(0, 0, w, h, round * w);
   ctx.fill();
-
-  _roundMask = cTex(canvas, false);
-  return _roundMask;
+  tex = cTex(canvas, false);
+  _roundMasks.set(key, tex);
+  return tex;
 }
 
 // A card mesh: a thin box whose top/bottom faces carry the front/back textures
 // and whose four edges are invisible. A face-down card omits the front texture
 // so its hidden face can never even be rendered client-side.
 function cardMesh(props = {}) {
-  const side = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }); // invisible edge
-  const back = new THREE.MeshStandardMaterial({ map: resolveTexture(props.back), roughness: 0.6, alphaMap: roundMask(), alphaTest: 0.5 });
-  const geo = new THREE.BoxGeometry(...halfExtents('card').map(v => v * 2));
+  const { hw, hh, th, round, shape } = cardGeom(props);     // footprint/thickness/shape (standard card, a tile, or explicit geom)
 
-  // Box face order is [+x, -x, +y, -y, +z, -z]; front/back sit on ±y.
-  if (!props.front) return new THREE.Mesh(geo, [side, side, back, back, side, side]); // face-down
-  const front = new THREE.MeshStandardMaterial({ map: resolveTexture(props.front), roughness: 0.6, alphaMap: roundMask(), alphaTest: 0.5 });
-  return new THREE.Mesh(geo, [side, side, front, back, side, side]);
+  // A HEXAGON card/tile: a regular flat-top hex prism — the GEOMETRY is the silhouette (no alpha mask),
+  // and it matches the 6-gon collider exactly, so it's ready for hex grids. Thin → invisible edges;
+  // thick → ivory sides. The image maps across the hex's bounding box (art outside the hex is clipped).
+  if (shape === 'hex') {
+    const geo = hexGeo(hh, th * 2);                        // hh = the hexagon's circumradius (pointy-top)
+    const edge = th > 0.03
+      ? new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7 })
+      : new THREE.MeshBasicMaterial({ visible: false });
+    const faceMat = (ref) => new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 });
+    const backMat = faceMat(props.back);
+    const frontMat = props.front ? faceMat(props.front) : backMat;
+    return new THREE.Mesh(geo, [frontMat, backMat, edge]);  // groups: 0=top(front), 1=bottom(back), 2=sides
+  }
+
+  // A chunky TILE (domino) is a rounded SOLID — real rounded side walls and opaque procedural faces,
+  // so its thick silhouette reads correctly from any angle. (Threshold on thickness, not on tile-ness.)
+  if (th > 0.03) {
+    const geo = tileGeo(hw * 2, hh * 2, round * hw * 2, th * 2);
+    const edge = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7 });
+    // Caps carry the face art. An uploaded IMAGE (thick custom tile) has transparent rounded corners —
+    // alpha-cut it to the tile's rounded corner so a transparent pixel is discarded, not drawn black.
+    // Procedural faces (dominoes) are opaque and already fit the rounded cap, so they stay plain.
+    const capMask = roundMask(hw, hh, round);
+    const capMat = (ref) => {
+      const m = { map: resolveTexture(ref), roughness: 0.6 };
+      if (parseCardFront(ref || 'back').kind === 'image') { m.alphaMap = capMask; m.alphaTest = 0.5; }
+      return new THREE.MeshStandardMaterial(m);
+    };
+    const backMat = capMat(props.back);
+    if (!props.front) return new THREE.Mesh(geo, [backMat, backMat, edge]);
+    return new THREE.Mesh(geo, [capMat(props.front), backMat, edge]);
+  }
+
+  // A THIN card: a thin box whose top/bottom faces carry the front/back art and whose four edges are
+  // invisible. The faces are ALPHA-CUT to the card's rounded silhouette — by the art texture's OWN
+  // transparency (uploaded card PNGs have transparent rounded corners) AND a rounded-rect mask (for
+  // procedural faces, which are opaque). So the card matches its art exactly: no mesh-imposed frame or
+  // thickness, and a transparent corner pixel is discarded instead of rendering as a dark chunk.
+  const mask = roundMask(hw, hh, round);                    // round is measured from the art for image decks
+  const invisible = new THREE.MeshBasicMaterial({ visible: false });
+  const faceMat = (ref) => new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaMap: mask, alphaTest: 0.5, roughness: 0.6 });
+  const backMat = faceMat(props.back);
+  const frontMat = props.front ? faceMat(props.front) : backMat;   // face-down: both faces show the back
+  const geo = new THREE.BoxGeometry(hw * 2, th * 2, hh * 2);
+  // Box material order: +X, -X, +Y(top), -Y(bottom), +Z, -Z → front on top, back beneath, edges hidden.
+  const mesh = new THREE.Mesh(geo, [invisible, invisible, frontMat, backMat, invisible, invisible]);
+  // Cast a shadow that follows the alpha silhouette, not the square box — no dark sliver at the corners.
+  mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
+    depthPacking: THREE.RGBADepthPacking, map: resolveTexture(props.front || props.back), alphaMap: mask, alphaTest: 0.5,
+  });
+  return mesh;
 }
 // --- Props: models (async .glb) and built-in shapes -------------------------
 
@@ -699,25 +908,96 @@ function propShapeMesh(props = {}) {
     default: return new THREE.Mesh(new THREE.BoxGeometry(...(render.size || [1, 1, 1])), material);
   }
 }
-// A rounded-rectangle THREE.Shape (w×d, corner radius `radius`), centred on the
-// origin — used as the extruded footprint of the deck mesh.
+// A rounded-rectangle THREE.Shape (w×d, corner radius `radius`), centred on the origin — used as the
+// extruded footprint of the deck mesh (and the domino tile). Corners are TRUE CIRCULAR ARCS (absarc),
+// not quadratic Béziers: a Bézier corner sits fuller/boxier than an arc of the same radius, so it
+// wouldn't match the card art's rounded corner (baked as a circular-arc alpha via roundRect) or the
+// alpha corner masks. Using the same arc everywhere makes the side wall's corner match the card on top.
 function roundedRectShape(w, d, radius) {
   const shape = new THREE.Shape();
-  const hw = w / 2, hd = d / 2;
-  shape.moveTo(-hw + radius, -hd);
-  shape.lineTo(hw - radius, -hd);   shape.quadraticCurveTo(hw, -hd, hw, -hd + radius);
-  shape.lineTo(hw, hd - radius);    shape.quadraticCurveTo(hw, hd, hw - radius, hd);
-  shape.lineTo(-hw + radius, hd);   shape.quadraticCurveTo(-hw, hd, -hw, hd - radius);
-  shape.lineTo(-hw, -hd + radius);  shape.quadraticCurveTo(-hw, -hd, -hw + radius, -hd);
+  const hw = w / 2, hd = d / 2, r = Math.max(0, Math.min(radius, hw, hd));
+  const HALF_PI = Math.PI / 2;
+  shape.moveTo(-hw + r, -hd);
+  shape.lineTo(hw - r, -hd);   shape.absarc(hw - r, -hd + r, r, -HALF_PI, 0, false);            // bottom-right
+  shape.lineTo(hw, hd - r);    shape.absarc(hw - r, hd - r, r, 0, HALF_PI, false);              // top-right
+  shape.lineTo(-hw + r, hd);   shape.absarc(-hw + r, hd - r, r, HALF_PI, Math.PI, false);       // top-left
+  shape.lineTo(-hw, -hd + r);  shape.absarc(-hw + r, -hd + r, r, Math.PI, 3 * HALF_PI, false);  // bottom-left
   return shape;
+}
+
+// Extrude a centred THREE.Shape (drawn in XY, bounds W×D) to `depth` along +Y, centred on the origin.
+// Cap UVs are normalized so a face texture maps flat across the top/bottom bounds; material groups are
+// split by face normal → 0 = top cap (front), 1 = bottom cap (back), 2 = the side walls (edge). Shared
+// by every extruded tile so a rounded card, a domino, and a hexagon all build the same way.
+function extrudeShape(shape, W, D, depth) {
+  const uvGenerator = {
+    generateTopUV(geometry, vertices, iA, iB, iC) {
+      const uv = i => new THREE.Vector2((vertices[i * 3] + W / 2) / W, (vertices[i * 3 + 1] + D / 2) / D);
+      return [uv(iA), uv(iB), uv(iC)];
+    },
+    generateSideWallUV() { return [new THREE.Vector2(0, 0), new THREE.Vector2(1, 0), new THREE.Vector2(1, 1), new THREE.Vector2(0, 1)]; },
+  };
+  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, UVGenerator: uvGenerator });
+  geo.translate(0, 0, -depth / 2);
+  geo.rotateX(-Math.PI / 2);                          // extrude direction Z → up (Y), centred
+  const pos = geo.attributes.position;
+  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), AB = new THREE.Vector3(), AC = new THREE.Vector3(), N = new THREE.Vector3();
+  const tris = pos.count / 3;
+  geo.clearGroups();
+  let runStart = 0, runMat = -1;
+  for (let t = 0; t < tris; t++) {                    // classify each triangle: +Y top, -Y bottom, else wall
+    A.fromBufferAttribute(pos, t * 3); B.fromBufferAttribute(pos, t * 3 + 1); C.fromBufferAttribute(pos, t * 3 + 2);
+    AB.subVectors(B, A); AC.subVectors(C, A); N.crossVectors(AB, AC).normalize();
+    const mat = N.y > 0.5 ? 0 : N.y < -0.5 ? 1 : 2;
+    if (mat !== runMat) { if (runMat >= 0) geo.addGroup(runStart * 3, (t - runStart) * 3, runMat); runStart = t; runMat = mat; }
+  }
+  geo.addGroup(runStart * 3, (tris - runStart) * 3, runMat);
+  return geo;
+}
+// A rounded SOLID tile geometry (rounded vertical edges too, unlike a plain box): a rounded-rect
+// footprint W×D extruded to `depth`, centred, thickness along Y.
+function tileGeo(W, D, radius, depth) {
+  return extrudeShape(roundedRectShape(W, D, radius), W, D, depth);
+}
+// A regular POINTY-TOP hexagon THREE.Shape, circumradius `r` (vertices point at top & bottom). After
+// the extrude's rotateX its vertices land at world XZ angles ±30°/±90°/±150° — exactly where cannon's
+// default 6-gon collider puts them, so mesh and collider match with no rotation. Height = 2r, width = r·√3.
+function hexShape(r) {
+  const s = HEX_HH * r;                                // half-width = r·√3/2
+  const shape = new THREE.Shape();
+  shape.moveTo(0, r);
+  shape.lineTo(s, r / 2); shape.lineTo(s, -r / 2);
+  shape.lineTo(0, -r);
+  shape.lineTo(-s, -r / 2); shape.lineTo(-s, r / 2);
+  shape.closePath();
+  return shape;
+}
+// A regular pointy-top hexagonal prism (circumradius `r`, thickness `depth`), image on the caps.
+function hexGeo(r, depth) {
+  return extrudeShape(hexShape(r), r * 2 * HEX_HH, r * 2, depth);
 }
 
 // The deck mesh: a rounded footprint extruded upward, whose height scales with
 // the card count. Custom UVs map the card-back texture flat across the top and
 // tile the layer-line edge texture around the sides.
 function deckMesh(props = {}) {
-  const W = DECK_VISUAL[0], D = DECK_VISUAL[2];
-  const radius = Math.min(CARD_ROUND * W, W * 0.49, D * 0.49);
+  const skin = props.model && DECK_MODELS[props.model];
+  if (skin) {                                       // a modeled deck skin (bag/box/pile): the .glb replaces the card stack
+    return loadModelGroup(skin.model, { scale: skin.modelScale }, node => {
+      node.castShadow = true; node.receiveShadow = true;
+      const mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach(m => { if (m) m.metalness = 0; }); // de-metal so the wood reads under the table lights
+    });
+  }
+
+  const g = cardGeom(props);                        // a deck of tiles (dominoes) is shaped like its tiles
+  // A deck IS a stack of its cards, so its footprint and corner are the card's exactly — the paper side
+  // wall then hugs the card silhouette and its rounded corner is concentric with the card's on top,
+  // instead of bulging past it (the old fixed +0.06 margin rounded off a wider box, so the side-wall
+  // curve never matched a custom card's).
+  const hex = g.shape === 'hex';                    // a deck of hexagon cards is a hex stack
+  const W = g.hw * 2, D = g.hh * 2;
+  const radius = Math.min(g.round * W, W * 0.49, D * 0.49);
 
   const uvGenerator = {
     generateTopUV(geometry, vertices, indexA, indexB, indexC) {
@@ -729,11 +1009,16 @@ function deckMesh(props = {}) {
     },
   };
 
-  const geo = new THREE.ExtrudeGeometry(roundedRectShape(W, D, radius), { depth: 1, bevelEnabled: false, UVGenerator: uvGenerator });
+  const geo = new THREE.ExtrudeGeometry(hex ? hexShape(g.hh) : roundedRectShape(W, D, radius), { depth: 1, bevelEnabled: false, UVGenerator: uvGenerator });
   geo.translate(0, 0, -0.5);
   geo.rotateX(-Math.PI / 2); // extrude direction Z → up (Y), centred on the origin
 
-  const back = new THREE.MeshStandardMaterial({ map: resolveTexture(props.back), roughness: 0.6 });
+  // The top/bottom caps carry the back art. For a rect deck, alpha-cut to the same rounded corner as
+  // the card mesh (footprint matches, so radius/W == g.round) so a transparent corner is discarded, not
+  // rendered as a dark chunk. For a hex deck the GEOMETRY is the silhouette, so just alpha-test the art.
+  const back = hex
+    ? new THREE.MeshStandardMaterial({ map: resolveTexture(props.back), alphaTest: 0.5, roughness: 0.6 })
+    : new THREE.MeshStandardMaterial({ map: resolveTexture(props.back), alphaMap: roundMask(g.hw, g.hh, g.round), alphaTest: 0.4, roughness: 0.6 });
   const edge = new THREE.MeshStandardMaterial({ map: deckEdgeTex(), roughness: 0.85 });
   return new THREE.Mesh(geo, [back, edge]); // material group 0 = top/bottom caps, 1 = side walls
 }
@@ -747,7 +1032,65 @@ function measureBoard(url) {
   });
 }
 
-// The board mesh: a built-in/uploaded .glb model, or a plain textured slab.
+// --- Procedural boards: a top texture drawn from data ------------------------
+// The reusable procedural-board framework. A BOARDS entry with `proc: <name>` is painted by the
+// matching function here from its `paint` spec — no art file. Add a painter + a BOARDS entry and a
+// new grid / premium / battlemap board travels the same swapBoard/collider/calibrateGrid plumbing.
+function drawStar(ctx, cx, cy, outer, inner, points) {
+  ctx.beginPath();
+  for (let i = 0; i < points * 2; i++) {
+    const r = i % 2 ? inner : outer, a = (Math.PI * i) / points - Math.PI / 2;
+    ctx[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * r, cy + Math.sin(a) * r);
+  }
+  ctx.closePath(); ctx.fill();
+}
+// Wordy McWordface board: a cells×cells grid with coloured premium squares (from WORDY_PREMIUM /
+// WORDY_COLORS via the board's `paint`). The texture is divided into equal cells, so its squares line
+// up 1:1 with the snap grid (calibrateGrid derives cell = board width ÷ cells).
+function wordGridTex(paint = {}) {
+  const cells = paint.cells || 15, prem = paint.premium || [], col = paint.colors || {};
+  const px = 900, cell = px / cells;
+  const { canvas, ctx } = makeCanvas(px, px);
+  ctx.fillStyle = col.base || '#e9ddc2';
+  ctx.fillRect(0, 0, px, px);
+  const fillFor = { T: col.T, D: col.D, t: col.t, d: col.d, '*': col.star || col.D };
+  const label = { T: 'TW', D: 'DW', t: 'TL', d: 'DL' };
+  for (let r = 0; r < cells; r++) {
+    const row = prem[r] || '';
+    for (let c = 0; c < cells; c++) {
+      const ch = row[c] || '.', x = c * cell, y = r * cell;
+      if (fillFor[ch]) { ctx.fillStyle = fillFor[ch]; ctx.fillRect(x, y, cell, cell); }
+      if (ch === '*') { ctx.fillStyle = col.ink || '#2c2115'; drawStar(ctx, x + cell / 2, y + cell / 2, cell * 0.3, cell * 0.14, 5); }
+      else if (label[ch]) {
+        ctx.fillStyle = 'rgba(44,33,21,0.72)';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `700 ${Math.round(cell * 0.24)}px system-ui, sans-serif`;
+        ctx.fillText(label[ch], x + cell / 2, y + cell / 2);
+      }
+    }
+  }
+  ctx.strokeStyle = col.line || '#c3b184'; ctx.lineWidth = Math.max(1, px / 600);
+  for (let i = 0; i <= cells; i++) {
+    const p = Math.round(i * cell) + 0.5;
+    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, px); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(px, p); ctx.stroke();
+  }
+  return cTex(canvas);
+}
+const BOARD_PAINTERS = { wordgrid: wordGridTex };
+// A data-URL preview of a procedural board's top, for the library (proc boards have no .glb to snapshot).
+export function procBoardTexURL(key) {
+  const b = BOARDS[key]; if (!b || !b.proc) return null;
+  const ck = 'proc:' + key;
+  if (_prevCache.has(ck)) return _prevCache.get(ck);
+  const painter = BOARD_PAINTERS[b.proc]; if (!painter) return null;
+  const tex = painter(b.paint || {});
+  const url = (tex && tex.image && tex.image.toDataURL) ? tex.image.toDataURL('image/jpeg', 0.85) : null;
+  if (url) _prevCache.set(ck, url);
+  return url;
+}
+
+// The board mesh: a built-in/uploaded .glb model, a procedural board, or a plain textured slab.
 function boardMesh(props = {}) {
   const builtin = props.board && BOARDS[props.board]; // a built-in model board
   const modelUrl = builtin ? builtin.model : props.model; // or an uploaded .glb board
@@ -764,6 +1107,17 @@ function boardMesh(props = {}) {
         materials.forEach(m => { if (m) m.metalness = 0; }); // de-metal so the board's own colors read
       },
     );
+  }
+
+  if (builtin && builtin.proc) { // a procedural board: a slab sized by its box, top painted from data
+    const [hx, hy, hz] = builtin.box;
+    const painter = BOARD_PAINTERS[builtin.proc];
+    const map = painter ? painter(builtin.paint || {}) : boardTex();
+    const top = new THREE.MeshStandardMaterial({ map, roughness: 0.85 });
+    const edge = new THREE.MeshStandardMaterial({ color: COLORS.boardEdge });
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), [edge, edge, top, edge, edge, edge]);
+    mesh.receiveShadow = true;
+    return mesh;
   }
 
   // A plain procedural board: a textured slab.
@@ -867,7 +1221,7 @@ const KIND = {
   die:   { mesh: dieMesh,   grab: 0, rclick: 'roll' },
   card:  { mesh: cardMesh,  grab: 0, lclick: 'takeCard', rclick: 'flip' },
   prop:  { mesh: propMesh,  grab: 0 },
-  deck:  { mesh: deckMesh,  grab: 2, ldrag: 'deal', lclick: 'deal', rclick: 'shuffle' },
+  deck:  { mesh: deckMesh,  grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
   board: { mesh: boardMesh },
   dispenser: { mesh: dispenserMesh, grab: 2, ldrag: 'dispense', lclick: 'dispense' }, // right-drag moves; left dispenses one
 };
@@ -878,7 +1232,7 @@ const KIND = {
 // the client lifts it just above the felt. Colour is GM-set (`scale.gridColor`) so it
 // reads on any felt. Returns null when there's no grid to draw. Square only for now.
 export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
-  if (!gridActive(scale) || scale.gridStyle !== 'square') return null;
+  if (!gridActive(scale) || scale.gridStyle !== 'square' || scale.gridHidden) return null; // hidden: still snaps, just not drawn
   const cell = +scale.cellWorld, hx = +tableX, hz = +tableZ;
   const cz = +scale.cellZ > 0 ? +scale.cellZ : cell;          // rectangular grids: separate depth spacing
   const ox = +scale.gridX || 0, oz = +scale.gridZ || 0;       // lattice offset (align to a printed map)
@@ -1208,4 +1562,4 @@ function makeYouChipTexture(color) {
   return cTex(canvas);
 }
 
-export { KIND, OVERLAY, trayMesh, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture };
+export { KIND, OVERLAY, trayMesh, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel, measureImage, makePlayerTexture, nameTag, makeYouChipTexture };

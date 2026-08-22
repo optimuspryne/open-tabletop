@@ -8,6 +8,97 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-08-22
+
+### Added
+- **Image decks fit their art — no crop or stretch.** Building an image deck with **Fit to image**
+  on sizes the cards to the uploaded art's aspect ratio (portrait, landscape, or square), so tall or
+  wide card designs are no longer cropped to a standard rectangle or padded with bars. The shape is
+  saved with the deck and the whole stack takes it. Built on the same card-geometry system as tiles.
+- **Tiles (Dominoes) + variable card geometry.** Cards can now be *tiles* — a card with its own
+  footprint and thickness — via a shared `cardGeom` resolver that both the mesh and the physics
+  collider read (so they never disagree). First payoff: a **Dominoes** starter game — a shuffled
+  28-tile boneyard dealt 7 to each seated player's hand; play tiles from your hand onto the table
+  and build the chain by hand (humans enforce the rules, scorepad tallies). The same geometry hook
+  (`props.geom`) is what will let custom image decks match their art's aspect ratio (no crop/stretch).
+- **One-click starter games.** A new **Games** tab in the built-in library sets up a whole game
+  in a click (GM+): **Chess** and **Checkers** with every piece placed on the board, **Go** with
+  a board and two stone bowls, and a **Poker night** with a deck and colored chip stacks. Loading
+  one clears the table first. Their grids snap but stay hidden (see below).
+- **Hide-grid toggle.** A grid can now snap pieces without drawing its lines — a **Hide grid
+  (still snaps)** toggle in the Grid controls. Starter games use it by default.
+- **Stand toggle on spawn cards.** Object spawn cards (built-in **and** custom) get a **⬆ Stand**
+  toggle next to Snap: on spawns the piece in its natural pose (upright for tall pieces, flat for
+  discs), off lets it tumble free.
+- **Complete 54-card deck.** The deck now offers **Standard 54 (with Jokers)** alongside the 52,
+  with a rendered joker face (one red, one black).
+- **Custom dice colors with saved defaults.** Double-click a die to inspect it and set its
+  **body** color — from a row of preset swatches or the freeform picker — and the **numbers
+  auto-contrast** (dark or light) to stay legible. Hit **Set as my default** to remember that
+  color for that die type (saved on your device only, like your accent), so every d? you spawn
+  afterward comes up in your color; **Reset** forgets it. In your tray, the **Set** swatches
+  recolor all your dice to a matching **named set** (Ivory, Bone, Onyx, Ruby, Emerald, …) in one
+  click. A die's color is a shared property — everyone sees "your" dice — and rides scene save/load.
+- Named dice sets live in `shared/pieces.js` (`DICE_SETS`) — edit or add your own.
+- **Recolor a whole multi-selection.** With pieces selected, a **Recolor selection** bar appears
+  and shows the palette the selection has in common — the general palette for dice/general props,
+  the metals palette if you've selected only coins, or a team's two sets if you've selected only
+  that team's pieces. One click recolors them all (dice numbers auto-contrast). If the selection
+  mixes incompatible palettes (say a coin and a token), the bar greys out as unavailable. Cards
+  and boards are ignored. Completes the multi-select batch ops.
+- **Palette swatches in the recolor panel** for props and chip/coin stacks — the same colors
+  as the spawn-card palette (now shared in `shared/pieces.js` as `PALETTE`), so recoloring an
+  object is a click, not just the freeform picker. Each object offers only the colors it's meant
+  to wear: **team pieces** (checkers, chess, go stones) pick between their two set colors, **coins**
+  are limited to the metals palette, and general props keep the full palette plus the freeform
+  picker. The constraint is enforced server-side, so it holds through group recolor too.
+- **Tile games: Dominoes, Wordy McWordface, and Mahjong.** The card system now drives full tile
+  games — each a one-click **Games** starter (and spawnable on its own from the library):
+  - **Dominoes** — a shuffled double-six boneyard, 7 tiles dealt to each seated player's hand.
+  - **Wordy McWordface** (a legally-distinct word game) — a 15×15 letter board with premium
+    squares, a 100-tile letter bag, and a 7-tile rack per player. Played tiles **snap to the
+    board's cells**.
+  - **Mahjong** — the full 144-tile wall (characters, bamboo, circles, winds, dragons, flowers,
+    seasons), dealt 13 to each hand. Faces are bundled art composited onto ivory tiles.
+- **A procedural board framework.** Boards can be drawn from data instead of a `.glb`: a `BOARDS`
+  entry with a `proc` painter (see `BOARD_PAINTERS` in `public/graphics.js`) renders its top on a
+  canvas. Wordy McWordface's premium grid is the first; battlemaps and other grids are just another
+  painter + entry, and everything (swapBoard, collider, grid calibration, library preview) keys off
+  the same registry.
+- **Custom card/tile shapes.** A fit-to-image deck can pick a silhouette — **Rounded**, **Square**,
+  or **Hexagon**. Hexagons are true regular pointy-top hexes with a **matching 6-gon physics
+  collider** (ready for future hex grids); the deck stack and hand preview take the shape too.
+- **Custom card/tile thickness.** A thickness slider on fit-to-image decks, from a thin card to a
+  chunky tile — a thick tile renders as a rounded solid with real sides.
+- **Deck skins (modeled draw piles).** A deck can wear a 3D bag/box model instead of the card stack
+  while still functioning as a normal draw pile (draw/deal/shuffle/hidden order unchanged) — see
+  `DECK_MODELS` in `shared/pieces.js`. Dominoes, Wordy, and Mahjong deal from a **bentwood box**.
+- **Single-click a deck to draw to your hand.** Left-*click* a deck now takes its top card straight
+  into your hand; left-*drag* still deals to the table, right-click shuffles, double-left inspects.
+- **Tile sound effects.** Tiles clack and their wooden boxes thunk — dominoes / word tiles / mahjong
+  and their decks get their own drop and pickup cues, distinct from the paper card/deck sounds.
+
+### Changed
+- **Left-click on a deck draws to your hand** instead of dealing to the table (left-drag still
+  deals) — the quick way to pull a tile or card for yourself.
+- **A deck conforms to its cards exactly** — same footprint, same corner (a true circular arc, not
+  a boxy Bézier), and same shape (rect or hex) — so the stack hugs the card silhouette on top
+  instead of sitting inside a fixed, slightly-larger box.
+
+### Fixed
+- **Image-deck cards match their art.** Cards render thin at the uploaded image's exact dimensions
+  and rounded corners (read from the art's own transparency), with no dark corner chunk and no
+  thick cream frame.
+- **Hexagon tiles are real hexagons.** They render as regular pointy-top hexes — they previously
+  read as octagons, from a flat-top mesh whose thick side walls added apparent edges — aligned to
+  their collider.
+- **Draw-to-inspect shows the right shape.** Peeking the top of a tile deck previews the tile at its
+  real proportions, not a standard card.
+- **Saved scenes keep a tile deck's box skin** — reloading a room no longer reverts the box to a
+  stacked deck.
+- **Go's grid lines up** with its printed board, and **starter-game pieces spawn placed** — chess
+  no longer scatters across the board on setup.
+
 ## [0.8.0] — 2026-08-21
 
 ### Added
@@ -244,7 +335,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.9.0
 [0.8.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.8.0
 [0.7.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.7.0
 [0.6.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.6.0

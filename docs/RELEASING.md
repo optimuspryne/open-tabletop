@@ -27,26 +27,41 @@ The version lives in three places that must always agree: `package.json`, the gi
 
 ## Cutting a release
 
+Pushing a `vX.Y.Z` tag triggers **`.github/workflows/release.yml`**, which does the build,
+the image push, and the GitHub release for you. So the whole hand process is now just:
+
 1. **Update the changelog.** Move everything under `## [Unreleased]` in `CHANGELOG.md`
    into a new `## [X.Y.Z] — YYYY-MM-DD` section, and refresh the compare/release links
-   at the bottom.
-2. **Bump the version.** Set `"version"` in `package.json` to `X.Y.Z`, then commit both
-   files: `git commit -am "Release X.Y.Z"`.
-3. **Tag it.** `git tag -a vX.Y.Z -m "Open Tabletop X.Y.Z"`, then `git push && git push --tags`.
-4. **Build and push the app image** — multi-arch, an immutable version tag plus the moving
-   `latest`:
+   at the bottom. (The workflow uses this section verbatim as the release notes, and
+   **fails** if it can't find one — so this step is not optional.)
+2. **Bump the version.** Set `"version"` in `package.json` to `X.Y.Z`, and pin the image
+   tag in `docker-compose.yml`'s commented `image:` line (+ the two `README.md` references)
+   to `:X.Y.Z`. The workflow **fails** if `package.json` doesn't match the tag, catching a
+   forgotten bump.
+3. **Commit + tag + push.**
    ```bash
-   docker buildx build \
-     -t optimuspryne/open-tabletop:X.Y.Z \
-     -t optimuspryne/open-tabletop:latest \
-     --push .
+   git commit -am "Release X.Y.Z"
+   git tag -a vX.Y.Z -m "Open Tabletop X.Y.Z"
+   git push && git push --tags
    ```
-   There's just the one image now — the custom Postgres image is retired (deployments use
-   stock `postgres`; the app builds and migrates its own schema, see **Migrations**).
-5. **Pin the compose file.** Update `docker-compose.yml` to reference `:X.Y.Z` (not
-   `:latest`) so `git checkout vX.Y.Z && docker compose up` brings up a matching stack.
-6. **Cut the GitHub release** from the `vX.Y.Z` tag and paste that version's changelog
-   section into the notes.
+
+That's it. The workflow then builds the multi-arch image, pushes
+`optimuspryne/open-tabletop:X.Y.Z` **and** `:latest`, and creates the GitHub release from the
+tag with the changelog section as its notes. (Custom Postgres image is retired — one app image
+only; deployments run stock `postgres` and the app migrates its own schema, see **Migrations**.)
+
+### One-time CI setup
+
+The release workflow needs Docker Hub credentials, added under **repo → Settings → Secrets and
+variables → Actions**:
+
+- **`DOCKERHUB_USERNAME`** — your Docker Hub username, which is also the image namespace
+  (`optimuspryne`). Fork-friendly: the workflow pushes to `<username>/open-tabletop`.
+- **`DOCKERHUB_TOKEN`** — a Docker Hub **access token** (Account → Security) with read/write on
+  the repository. Use a token, not your password.
+
+`.github/workflows/ci.yml` runs `npm test` on every push to `main` and every PR — no secrets
+needed.
 
 ## Migrations
 
@@ -74,10 +89,3 @@ up on their next `docker compose pull && up`. A deployment can opt out with
   own compose.
 - **Every user-visible change earns a changelog line.** Pre-1.0 is not a license for
   silent breakage.
-
-## Later: automate it
-
-Once these steps feel routine, a GitHub Actions workflow triggered on `v*` tags can build
-and push both images and create the GitHub release automatically — leaving `git tag` as
-the only thing you do by hand. Worth setting up after a few hand-cut releases, when you
-know the shape of it.

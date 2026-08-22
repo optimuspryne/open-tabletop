@@ -38,6 +38,10 @@
   <label id="inspectBodyLab">Color <input type="color" id="inspectColorBody" value="#ffffff"></label>
   <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
   <label id="inspectTeamLab" hidden>Interior <button type="button" id="inspectTeamBtn">Black</button></label>
+  <div id="dieSwatches" class="swatchRow" hidden></div>
+  <div id="propSwatches" class="swatchRow" hidden></div>
+  <button type="button" id="inspectDefaultBtn" hidden title="Remember this color for every d? you spawn (saved on this device only)">Set as my default</button>
+  <button type="button" id="inspectResetBtn" hidden title="Forget my default for this die type and set this die back to plain">Reset</button>
 </div>
 <div id="drawActions" class="panel" hidden>
   <span class="da-note">Drag to rotate</span>
@@ -234,7 +238,7 @@
     <button class="chip" data-unit="in" data-step="0.5">inch</button>
     <button class="chip" data-unit="cm" data-step="1">cm</button>
     <button class="chip" data-unit="mm" data-step="1">mm</button>
-    <button class="chip" data-unit="__custom__">Custom…</button>
+    <button class="chip" data-unit="__custom__">Other</button>
   </div></div>
   <div class="sizeRow" id="scaleCustomRow" hidden><label></label><input id="scaleUnitCustom" class="field" type="text" maxlength="8" placeholder="unit label, e.g. hex"></div>
   <div class="sizeRow"><label>Round to</label><input id="scaleStep" type="number" min="0.001" step="0.05"><span class="muted" id="scaleStepUnit"></span></div>
@@ -346,7 +350,9 @@
           <label>--- Enter a Name ---</label>
           <input id="adImgName" type="text" placeholder="Name this deck">
           <label>--- Fit Whole Image? ---</label>
-          <button id="adImgNoCrop" class="chip chk">No Crop</button>
+          <button id="adImgNoCrop" class="chip chk" title="Size the cards to the art's shape — no cropping, stretching, or padding">Fit to image</button>
+          <div class="addColorRow" id="adImgThickRow" hidden title="How thick each card/tile is — from a thin card to a chunky tile"><span>Thickness</span><input id="adImgThick" type="range" min="1" max="8" step="0.5" value="1"><span id="adImgThickVal">1×</span></div>
+          <div class="addColorRow" id="adImgShapeRow" hidden title="The card/tile silhouette"><span>Shape</span><span id="adImgShape" class="segRow"><button type="button" class="chip seg on" data-shape="rounded">Rounded</button><button type="button" class="chip seg" data-shape="square">Square</button><button type="button" class="chip seg" data-shape="hex">Hexagon</button></span></div>
           <div class="addColorRow" id="adImgPadRow" hidden><span>Padding Color</span><input id="adImgPad" type="color" value="#ffffff"></div>
           <div class="row"><button id="adImgSave">Save</button><button id="adImgSpawn" class="primary">Save + Spawn</button></div>
         </div>

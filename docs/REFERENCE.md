@@ -161,9 +161,22 @@ Pure data + two functions, imported by both sides.
   `stand`).
 - **`PROP_LIST`** `[{ id, name, team? }]` — ordered spawn-picker list;
   `team:true` shows the two-color toggle, else the color picker.
-- **`BOARDS`** `{ key → { name, model, modelScale, box } }` — built-in model
-  boards (colliders precomputed from `worldSize·scale/2`).
+- **`BOARDS`** `{ key → … }` — built-in boards, either a **model** board
+  (`{ name, model, modelScale, box, grid? }`, collider precomputed from
+  `worldSize·scale/2`) or a **procedural** board (`{ name, proc, box, grid, paint }`)
+  whose top a `BOARD_PAINTERS` painter draws from data (no `.glb`).
 - **`BOARD_SIZE`** — target footprint width uploaded `.glb` boards normalize to.
+- **`TILES`** `{ key → { w, h, t, round } }` — named tile geometries (half-extents,
+  thickness, corner radius): the standard `card`, plus `domino`, `letter`, `mahjong`.
+  A card resolves to one of these (or an explicit `props.geom`) via `cardGeom`.
+- **`HEX_HH`** — √3/2; a regular pointy-top hexagon's half-width ÷ half-height (circumradius).
+- **`WORDY_PREMIUM`** / **`WORDY_COLORS`** — the 15×15 word-board premium layout (one char per
+  cell) + its palette, read by the `wordgrid` painter (`BOARDS.wordy`).
+- **`LETTER_DIST`** `{ letter → [count, value] }` — the 100-tile word-game bag (blank = `''`).
+- **`MAHJONG`** `{ base, suits, honors, bonus }` — the 144-tile wall's face lists (faces are
+  bundled images under `base`).
+- **`DECK_MODELS`** `{ key → { name, model, modelScale, box } }` — 3D deck *skins* (a bag/box
+  `.glb` a deck wears instead of the card stack); a deck opts in via `props.model`.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
 - **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
   the client mesh, and the tests: `hx`/`hz` (floor half-extents), `wall` (wall half-height),
@@ -178,6 +191,18 @@ Pure data + two functions, imported by both sides.
 
 - **`deckHeight(count) → number`** — clamps deck thickness; used by client visual
   *and* server collider so a flipped deck is solid.
+- **`cardGeom(props) → { hw, hh, th, round, shape }`** — the single card/tile geometry
+  resolver both the client mesh and the server collider read (so they can't drift).
+  Resolves, in order: an explicit `props.geom` (`{w,h,t?,round?,shape?}`, custom image
+  decks) → a named `props.tile` (a `TILES` entry) → the standard card. `shape` is
+  `'rect'` or `'hex'` (a regular pointy-top hexagon; half-extents pinned via `HEX_HH` so
+  the mesh and the 6-gon collider stay regular and aligned).
+- **`geomFromImage(pw, ph, round?) → geom`** — size a fit-to-image card to its art's pixel
+  aspect (longer side = the card's length), keeping card thickness and the corner radius
+  measured from the art's alpha.
+- **`sanitizeGeom(g) → geom | null`** — clamp/validate an uploaded `geom` (bounds on
+  `w,h,t,round`, carries `shape`); `null` if unusable. Applied server-side before a deck's
+  geometry is trusted.
 - **`dieVerts(sides, radius?) → number[][] | null`** — polyhedron vertices scaled
   to `radius`; `null` for d6. One input for mesh (client) and collider (server).
 - **`timerLive(t, now) → ms`** — the shared timer's current value from its synced
@@ -262,7 +287,13 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   `collider: { box:[...], type:'cylinder', sides:6 }` — no `buildCollider` change.
 - **`dieShape(sides)`** — convex hull of `dieVerts`, coplanar triangles merged,
   windings outward. d6 ⇒ box.
-- **`buildSimpleDeck()`** — a standard 52-card deck of `rank:…` refs.
+- **`buildSimpleDeck()`** — a standard 52-card deck of `rank:…` refs (`jokers` ⇒ 54).
+- **`buildDominoSet()` / `buildScrabbleBag()` / `buildMahjongWall()`** — the tile sets, each a
+  shuffled "deck" (28 / 100 / 144) carrying a `tile` kind, a back, and (for tiles) `snap` /
+  `deckModel`. Spawned via `props.set` (`'domino'`/`'letter'`/`'mahjong'`) or a `STARTERS` entry.
+- **`geoOf(o)`** — the public geometry/behavior a card/tile inherits from its deck (`tile`, `geom`,
+  `snap`), threaded through deck → hand → played tile so a face-down tile keeps its true shape while
+  its face stays private. **`dropSfx(type, props)`** picks the tile vs. card/deck drop cue.
 - **`buildWorld()`**, **`rnd()`**, **`shuffle()`**.
 - Small shared helpers keep the handlers flat: **`clamp`**, **`addWall`** /
   **`cubeCollider`** (world + collider building), **`spawnCardFlat`** /
@@ -361,9 +392,12 @@ caller's seat index, or `null`), **`clearTraySeat(seat)`** (remove that seat's t
 `traySeat`-tagged pieces); `applyScene` calls `applyTrays` before the dice respawn.
 
 Gameplay handlers (rank-gated): `grab`, `move`, `release`, `flip`, `dealToTable`,
-`dealDrag`, `takeCard`, `playCard`, `shuffle`, **`splitDeck`** (deal a deck in
+`dealDrag`, **`drawToHand`** (left-click a deck → its top card to your hand),
+`takeCard`, `playCard`, `shuffle`, **`splitDeck`** (deal a deck in
 two — original keeps the top half, a new ephemeral deck gets the rest),
-**`drawInspect`/`inspectPlace`** (private draw-to-inspect), **`recolor`**
+**`drawInspect`/`inspectPlace`** (private draw-to-inspect; the `inspectCard` message carries the
+deck's `geo` so the preview shows the tile's real proportions), **`loadStarter`** →
+**`setupStarter(game)`** (one-click Games: board + pieces/bowls/deck + deal), **`recolor`**
 (`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+;
 a `props.tray:true` die is placed in the caller's tray via `trayDropPos`, any player),
 **`roll`** (now flings only the *caller's* tray dice, gentle `SIM.trayRoll` impulse) /
@@ -578,12 +612,17 @@ felt), and the config:
   filtering is centralized in **`maxAnisotropy()`**.
 - **`cardFront(rank,suite,color)`** (corner index + centre rank), **`cardBack()`**,
   **`boardTex()`** (procedural checkerboard).
+- **`jokerFace(color)`**, **`dominoFace(a,b)` / `dominoBack()` / `drawPips`**,
+  **`letterTileFace(letter,value)` / `letterBack()`**, **`mahjongBack()`** — the procedural
+  tile/joker faces. **`wordGridTex(paint)`** paints a procedural board (registered in
+  **`BOARD_PAINTERS`**; **`procBoardTexURL(key)`** makes its library preview).
 - **`drawNumber` / `digitTexture` / `numberFaceTexture` / `numberLabel`** — die
   numbering (resolution `CONFIG.tex.die`).
 - **`splitColorText` / `wrapLines` / `drawWrapped` / `textFaceTexture` /
   `textBackTexture`** — procedural text cards.
-- **`resolveTexture(ref)`** (cached) — resolves a card ref: `back`,
-  `rank:…`, `text:…`, `tback:…`, or a `data:`/URL image.
+- **`resolveTexture(ref)`** (cached) — resolves a card/tile ref: `back`, `rank:…`,
+  `text:…`, `tback:…`, `joker:…`, `domino:a:b` / `domback`, `letter:L:v` / `lback`,
+  `mjback`, or a `data:`/URL image (mahjong faces + custom art).
 - **`makePlayerTexture(player)` / `nameTag(name,color)` / `makeYouChipTexture(color)`**
   (+ the `roundRect` path helper) — the table's player chrome: the standing seat-marker
   card (avatar + name + a "SHOWING n" badge), the floating held-piece name-tag pill, and
@@ -605,8 +644,14 @@ felt), and the config:
 ### Mesh builders + `KIND`
 
 - **`dieMesh` / `convexDie` / `numberedD4`** — numbered dice.
-- **`cardMesh`** (rounded, thin, alpha-masked corners), **`deckMesh`**
-  (rounded extruded prism), **`boardMesh`** (procedural box **or** a loaded model).
+- **`cardMesh`** — a card *or tile*, from `cardGeom(props)`: a thin card (a box with
+  alpha-cut faces, so the art's own rounded/transparent corners define the silhouette), a
+  **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with
+  real sides, e.g. dominoes). **`deckMesh`** — the matching stack (rounded/hex extrude), **or
+  a `DECK_MODELS` skin** (a `.glb` bag/box) when `props.model` is set. **`boardMesh`** — a
+  loaded model, a **procedural** painter (`BOARDS[·].proc`), or a plain textured box. Shared
+  extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**
+  (true circular-arc corners; the hex matches its 6-gon collider).
 - **`propColor` / `propMat` / `propShapeMesh`** — built-in shape props.
 - **`propMesh(p)`** — the dispatcher: loads a `.glb` (built-in fixed scale, or
   custom normalize) with the tint logic (team / full / `tintMaterial` one-slot /
@@ -748,7 +793,11 @@ per-player in `localStorage` (`tabletop.sfxVolume`, `tabletop.sfxMuted`,
 
 - **`SOUNDS`** — a map of logical cue → *list* of files under `/sounds/`. A bare
   string is treated as a one-item list. On first use each file is fetched and
-  decoded into a per-cue pool; a 404/decode error just drops that variant.
+  decoded into a per-cue pool; a 404/decode error just drops that variant. Cues
+  include the card/die/deck/object drop+pickup families plus **`tile-*`** and
+  **`tiledeck-*`** — tiles (domino/word/mahjong) and their wooden decks get their
+  own cues; the server's `dropSfx(type, props)` and the client's pickup path pick
+  the tile variant when a piece carries a `tile` kind.
 - **`ensureCtx()`** — lazily builds the `AudioContext` + a `master` gain
   (SFX volume, or 0 when muted) and kicks off the tolerant preload.
 - **`resumeAudio()`** — resumes a suspended context; armed on the first

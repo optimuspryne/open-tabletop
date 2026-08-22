@@ -285,7 +285,9 @@ button.danger {
   background: none;
   cursor: pointer;
 }
-#drawActions, #wbTools, #trayTools {
+/* Recolor-selection bar greys out when the selection mixes incompatible palettes. */
+#selTools.disabled { opacity: 0.5; }
+#drawActions, #wbTools, #trayTools, #selTools {
   position: fixed;
   bottom: calc(var(--inset) + 84px);
   left: 50%;
@@ -389,6 +391,25 @@ button.danger {
 .handcard.img {
   background-size: cover;
   background-position: center;
+}
+/* A tile (domino) hand slot: 1:2 and a touch narrower, so the tile fills it (same height as a card). */
+.handcard.tile {
+  width: calc(var(--card-w) * 0.705);
+  aspect-ratio: 1 / 2;
+}
+/* A square word-tile hand slot: 1:1, a compact chunky tile (card-width across). */
+.handcard.tileSq {
+  width: var(--card-w);
+  aspect-ratio: 1 / 1;
+  align-self: center;
+}
+/* Custom-image card shapes in the hand: match the tabletop silhouette. */
+.handcard.shape-square { border-radius: 0; }
+.handcard.shape-hex {
+  aspect-ratio: 0.8660 / 1;                 /* pointy-top regular hexagon (√3 : 2), points top/bottom */
+  border-radius: 0;
+  align-self: center;
+  clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
 }
 .handcard.txt {
   font: 600 calc(var(--card-w)*0.15)/1.1 var(--font);
@@ -505,6 +526,9 @@ button.danger {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
+/* .segRow — a compact segmented control (radio chips), e.g. the card Shape picker */
+.segRow { display: inline-flex; gap: 4px; }
+.segRow .chip.seg { padding: 4px 8px; }
 /* .chk — a checkbox-style toggle chip: a themed square that fills when on */
 .chip.chk::before {
   content: '';
@@ -1904,7 +1928,9 @@ body.admin {
 /* Steppers keep a legible min width so a − value + trio never collapses, even two to a row. */
 .tableBody .sizeRow > .stepper { flex: 1 1 auto; min-width: 68px; max-width: 132px; }
 .tableBody .sizeRow > input[type="text"] { flex: 1 1 auto; max-width: 180px; min-width: 0; }
-.tableBody .sizeRow > #scaleUnits { flex: 1 1 auto; min-width: 0; }
+.tableBody .sizeRow > #scaleUnits,
+.tableBody .sizeRow > #gridStyles,
+.tableBody .sizeRow > #gridAnchors { flex: 1 1 auto; min-width: 0; }
 .tableBody .stepper input[type="number"] { flex: 1 1 auto; width: auto; min-width: 44px; text-align: center; }
 .tableBody .sizeRow.calibRow > input[type="text"] { flex: 0 0 92px; max-width: 92px; } /* keep Calibrate + Set on one line; the prompt wraps below */
 .tableBody .stepBtn { padding: 0 6px; } /* trimmer than the default so two steppers fit a row */
@@ -1915,6 +1941,8 @@ body.admin {
 .dimGrid > label { font-size: var(--fs-sm); text-align: center; }
 .dimGrid .dimX { align-self: center; text-align: center; color: var(--text); opacity: .55; }
 .dimGrid .stepper { width: 100%; }
-/* inch/cm/mm/Custom in an even 2×2 grid (stays tidy at any width in the capped body). */
-#scaleUnits { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
-#scaleUnits .chip { text-align: center; }
+/* Grid style / snap-anchor chips and the measurement units: one horizontal row whose chips
+   share the width equally and shrink to fit (instead of stacking on a narrow panel). */
+#scaleUnits, #gridStyles, #gridAnchors { display: flex; flex-wrap: nowrap; gap: 6px; }
+#scaleUnits .chip, #gridStyles .chip, #gridAnchors .chip { flex: 1 1 0; min-width: 0; text-align: center; }
+#scaleUnits .chip { padding: 4px 4px; font-size: 11px; } /* the unit buttons a touch smaller — four across */

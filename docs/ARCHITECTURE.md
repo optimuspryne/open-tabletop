@@ -225,19 +225,24 @@ The kinds:
 
 - **die** — parameterized by `props.sides` ∈ {4,6,8,10,12,20}. Numbered
   (below).
-- **card** — thin box; faces are texture *references* (`front`, `back`).
-  Face-down keeps `front` server-side (`cardData`) and shows only the public
-  `back`, so uploaded card art is hidden exactly like ranks are. An **invisible
-  thicker collider** (`SIM.cards.colliderThick`) keeps stacks stable while the
-  mesh stays thin.
+- **card** — a thin box *or a tile*. Faces are texture *references* (`front`,
+  `back`); face-down keeps `front` server-side (`cardData`) and shows only the public
+  `back`, so uploaded art is hidden exactly like ranks are. Its footprint, thickness,
+  corner, and **shape** come from `cardGeom(props)` — a plain card, a named tile
+  (`props.tile`: domino/word/mahjong), or an explicit `props.geom` (custom image decks:
+  fit-to-art aspect, chosen thickness, and a rounded/square/**hexagon** silhouette). See
+  *Tiles* below.
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
-  `count` scales the visible stack (`deckHeight`).
+  `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
+  and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box) in place of the stack
+  while still working as an ordinary draw pile.
 - **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
   box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Color comes
   from a picker, a two-color **team** palette, or a per-material **tint**; a
   `stand` flag self-rights standing pieces. Universal `props.scale`.
 - **board** — static (mass 0) but removable. A built-in model (`BOARDS`
-  registry), an uploaded `.glb`, or a procedural flat box with an optional
+  registry), an uploaded `.glb`, a **procedural** board drawn from data (a
+  `BOARD_PAINTERS` painter, e.g. the word grid), or a plain flat box with an optional
   image. One board at a time; it's sat on the table by its half-height.
 
 Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
@@ -261,6 +266,29 @@ are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
   de-metals the rest (e.g. a chip body but not its white rim); `ownMaterial`
   keeps the model's materials. glTF defaults materials to metallic, so tinting
   swaps in a clean matte material and de-metals kept slots.
+
+### Tiles: one geometry, both sides
+
+Dominoes, word tiles, mahjong tiles, and custom-shaped image cards are all the **card**
+kind with a different geometry — proof that the hard part (hidden information) was already
+solved. A single resolver, `cardGeom(props) → {hw, hh, th, round, shape}`, is read by
+**both** the client mesh (`cardMesh`) and the server collider (`buildCollider`), so a tile's
+look and its physics footprint can never drift — the same guarantee `dieVerts` gives dice. It
+resolves, in order: an explicit `props.geom` → a named `props.tile` (the `TILES` registry) →
+the standard card.
+
+Because a tile's *shape* is public but its *face* is private, the deck threads only the public
+geometry — `tile` / `geom` / `snap`, via `geoOf` — through deck → hand → played tile, so a
+face-down tile still shows its true silhouette while its face stays hidden (the privacy
+invariant, unchanged). A hexagon card carries this all the way into physics: the mesh is a
+regular pointy-top hex prism and the collider a matching 6-gon (cannon's default hexagon
+already points the same way), so it's ready to drop onto a future hex grid.
+
+The board and deck sides generalize the same way. A `proc` board paints its top from data
+(`BOARD_PAINTERS`), so a premium word grid — or a later battlemap — is a painter plus a
+`BOARDS` entry riding the existing swapBoard / collider / grid-calibration paths. And a deck
+can swap its *visual* for a `.glb` skin (`DECK_MODELS`) with no change to draw / deal /
+shuffle / hidden order. Building the tile games meant adding data and faces, not a new engine.
 
 ## The dice family
 
@@ -478,8 +506,10 @@ authority model:
   on `SIM.impact.minVel` (gentle grazes stay silent). It then `broadcast`s an
   `sfx` message so *everyone* hears the same landing at the true physics moment,
   not when the dragger let go. Flips, deals, and shuffles broadcast `sfx` the same
-  way. `sfxImpact(type)` maps a piece type to its clip base (`card`→`card-drop`,
-  and so on).
+  way. `dropSfx(type, props)` maps a piece to its clip base (`card`→`card-drop`,
+  and so on) and picks the **tile** variant — `tile-drop` / `tiledeck-drop` (and the
+  local `tile-pickup` / `tiledeck-pickup`) — when a piece carries a `tile` kind, so a
+  domino clacks and its wooden box thunks instead of sounding like paper.
 
 **Background music (HTML5 `<audio>`).** A separate streaming player, because
 tracks are long files rather than short buffers. Its playlist is the `MUSIC` array
@@ -533,10 +563,11 @@ See "Accounts, rooms & roles" below.
 Two serializers, layered on purpose:
 
 - **`serializeScene`** produces the portable *template*: table size + every piece
-  (transform, and a deck's private card order / a face-down card's hidden front
-  ride along so they rebuild faithfully) + the overlays + the room **`scale`**
-  (measurement calibration and grid layout), and **no player identity**. Library
-  scenes call this directly — they must stay hands-free.
+  (transform, and a deck's private card order / tile geometry / box **skin** / a
+  face-down card's hidden front ride along so they rebuild faithfully) + the overlays +
+  the room **`scale`** (measurement calibration and grid layout), and **no player
+  identity**. Library scenes call this directly — they must stay hands-free. A deck's
+  skin is written under the same `deckModel` name the spawn path reads, so it round-trips.
 - **`serializeGame`** wraps a scene with the live private layer: each held **hand**
   and the **turn**. The catch is that both are keyed by ephemeral **`sessionId`**,
   but anything that must survive a reload has to key on the stable

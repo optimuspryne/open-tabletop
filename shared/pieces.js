@@ -41,6 +41,70 @@ export const KINDS = {
 // --- Deck -------------------------------------------------------------------
 export const DECK_VISUAL = [1.56, 0.06, 2.16];   // unit stack box; y scaled by deckHeight(count)
 export const CARD_ROUND = 0.08;                  // card & deck corner radius, as a fraction of card width (0 = square)
+
+// --- Card / tile geometry ---------------------------------------------------
+// A "tile" is a card with a different footprint + thickness (domino, scrabble, mahjong, …). The
+// standard card is just the default entry. Values are WORLD HALF-EXTENTS: w (half-width), h
+// (half-height/length), t (half-thickness); `round` is the corner radius as a fraction of width.
+export const TILES = {
+  card:   { w: KINDS.card.shape.box[0], h: KINDS.card.shape.box[2], t: KINDS.card.shape.box[1], round: CARD_ROUND }, // the standard playing card
+  domino: { w: 0.5, h: 1.0, t: 0.09, round: 0.08 }, // a chunky 2:1 tile (1.0 × 2.0 full, pips on top)
+  letter: { w: 0.3, h: 0.3, t: 0.06, round: 0.16 }, // a chunky square word-tile (0.6 × 0.6, fits a Wordy board cell)
+  mahjong: { w: 0.34, h: 0.473, t: 0.14, round: 0.06 }, // a chunky mahjong tile (~0.68 × 0.95, image face at the art's 0.72 aspect)
+};
+// The single source of a card/tile's geometry — read by BOTH the client mesh (cardMesh) and the
+// server collider, so rendered size and physics footprint can never drift (same guarantee dieR()
+// gives dice). Resolves in priority order:
+//   1. props.geom = { w, h, t?, round? } — an EXPLICIT geometry (custom uploads, custom-aspect image
+//      decks: the card is sized to the art, no crop/stretch). Half-extents.
+//   2. props.tile — a named kind in TILES (a built-in tile's fixed footprint).
+//   3. the standard card.
+// Returns { hw, hh, th, round } in world half-extents. `geom`/`tile` are PUBLIC props, so a
+// face-down tile still shows its true shape while its face stays private.
+export function cardGeom(props = {}) {
+  const std = TILES.card;
+  const g = props.geom;
+  if (g && +g.w > 0 && +g.h > 0) {
+    const shape = g.shape === 'hex' ? 'hex' : 'rect';
+    const th = +g.t > 0 ? +g.t : std.t, round = g.round >= 0 ? +g.round : std.round;
+    // A regular POINTY-TOP hexagon: circumradius R = the half-height (points at top & bottom); pin the
+    // half-width to R·√3/2 so the mesh and the 6-gon collider (cannon's default hexagon also points
+    // along ±Z) are always regular and aligned — no collider rotation needed.
+    if (shape === 'hex') { const R = +g.h; return { hw: +(R * HEX_HH).toFixed(4), hh: R, th, round, shape }; }
+    return { hw: +g.w, hh: +g.h, th, round, shape: 'rect' };
+  }
+  const spec = (props.tile && TILES[props.tile]) || std;
+  return { hw: spec.w, hh: spec.h, th: spec.t, round: spec.round, shape: 'rect' };
+}
+// Half-width of a regular pointy-top hexagon as a fraction of its half-height (circumradius): √3/2.
+export const HEX_HH = Math.sqrt(3) / 2;
+
+// A card geometry that matches an image's pixel aspect, so uploaded card art is neither cropped
+// nor stretched. The image's LONGER side maps to the standard card's longer half-extent, so a
+// standard-proportioned image yields the standard card and any other aspect is preserved. Stays a
+// thin card (standard thickness). `round` is the corner radius (fraction of width) MEASURED from the
+// art's own alpha — so the card mesh and the deck round to the SAME corner the art uses, matching the
+// provided image exactly (0 = a square-cornered / fully-opaque image). Omitted → the standard card
+// radius. Half-extents.
+export function geomFromImage(pw, ph, round) {
+  const std = TILES.card, L = std.h;                        // longer half-extent = the card's length
+  const a = (+pw > 0 && +ph > 0) ? +pw / +ph : std.w / std.h; // width : height
+  const [w, h] = a >= 1 ? [L, L / a] : [L * a, L];         // landscape → width=L; portrait → height=L
+  const r = (round >= 0 && +round <= 0.5) ? +round : std.round; // from the art's alpha; else standard
+  return { w: +w.toFixed(4), h: +h.toFixed(4), t: std.t, round: +r.toFixed(4) };
+}
+// Bound a client-supplied card geometry to sane table sizes, or null if unusable. Trusted before a
+// geom is stored on a deck/card.
+export function sanitizeGeom(g) {
+  if (!g || typeof g !== 'object') return null;
+  const clampNum = (v, lo, hi) => { v = +v; return Number.isFinite(v) && v >= lo && v <= hi ? v : null; };
+  const w = clampNum(g.w, 0.1, 3), h = clampNum(g.h, 0.1, 3);
+  if (w == null || h == null) return null;
+  const t = clampNum(g.t, 0.005, 0.4) ?? TILES.card.t;
+  const round = clampNum(g.round, 0, 0.5) ?? TILES.card.round;
+  const shape = g.shape === 'hex' ? 'hex' : 'rect';
+  return { w, h, t, round, shape };
+}
 // Deck stack height from card count — used by BOTH the client visual and the
 // server collider, so a flipped deck has a solid body where it's drawn.
 export const deckHeight = c => Math.max(0.06, Math.min(1.2, c * 0.02));
@@ -90,6 +154,16 @@ export const PROP_LIST = [
   { id: 'chess-knight', name: 'Chess · Knight', team: true }, { id: 'chess-bishop', name: 'Chess · Bishop', team: true },
   { id: 'chess-queen', name: 'Chess · Queen', team: true }, { id: 'chess-king', name: 'Chess · King', team: true },
 ];
+// The orientation a built-in shape "stands" in — `true` (upright, e.g. chess) or `'flat'` (lies
+// down, e.g. checker/coin). Mirrors the server's naturalStand for props, so the spawn card can
+// offer a Stand toggle that spawns a piece in its natural orientation. A shape with no explicit
+// `stand` is flat when it's short (a disc/cube) and upright when it's tall.
+export const standMode = (shape) => {
+  const spec = PROPS[shape] || {};
+  if (spec.stand) return spec.stand;
+  const box = spec.collider && spec.collider.box;
+  return (box && box[1] <= box[0] && box[1] <= box[2]) ? 'flat' : true;
+};
 // Built-in board models (public/models/boards), CC0. Modeled ~0.43 units, so a
 // large modelScale fills the table; colliders precomputed (worldSize*scale/2).
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
@@ -98,11 +172,82 @@ export const PROP_LIST = [
 // stones). Boards spawn centred at the world origin, which is where our grid is anchored,
 // so no offset is needed — only the cell size (estimated from the footprint, GM-tunable)
 // and the snap anchor.
+// The 15×15 premium-square layout for Wordy McWordface (one char per cell, row-major, top row first):
+//   T = triple word · D = double word · t = triple letter · d = double letter · * = centre (double word) · . = plain
+// The classic symmetric layout — a game mechanic, drawn in our own colours (see WORDY_COLORS). Defined
+// above BOARDS because the wordy board entry references it.
+export const WORDY_PREMIUM = [
+  'T..d...T...d..T',
+  '.D...t...t...D.',
+  '..D...d.d...D..',
+  'd..D...d...D..d',
+  '....D.....D....',
+  '.t...t...t...t.',
+  '..d...d.d...d..',
+  'T..d...*...d..T',
+  '..d...d.d...d..',
+  '.t...t...t...t.',
+  '....D.....D....',
+  'd..D...d...D..d',
+  '..D...d.d...D..',
+  '.D...t...t...D.',
+  'T..d...T...d..T',
+];
+// Our own premium-square palette (legally distinct), plus the board base + grid line + tile ink.
+export const WORDY_COLORS = {
+  base: '#e9ddc2', line: '#c3b184', ink: '#2c2115',
+  T: '#c65d4b', D: '#e6a2a0', t: '#3f74b8', d: '#a9c8e6', star: '#e6a2a0',
+};
+
+// A board is a built-in .glb model (`model`), an uploaded .glb, a plain slab, or a PROCEDURAL board
+// (`proc`) whose top is drawn from data by a client painter (see BOARD_PAINTERS in graphics.js). A
+// proc board needs no art file: it carries its world `box`, a `grid` for calibration, and a `paint`
+// spec the painter reads. This is the reusable procedural-board framework — add a painter + an entry
+// here and any new grid/premium/battlemap board travels the same swapBoard/calibrateGrid plumbing.
 export const BOARDS = {
   chess: { name: 'Chess / Checkers', model: '/models/boards/checker_chess_board.glb', modelScale: 1, box: [4.00, 0.15, 4.00], grid: { cells: 8,  anchor: 'center' } },
-  go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29], grid: { cells: 18, anchor: 'cross'  } },
+  go:    { name: 'Go',               model: '/models/boards/go_board.glb',           modelScale: 18.9, box: [4.01, 0.14, 4.29], grid: { cells: 18, anchor: 'cross', cellX: 0.42, cellZ: 0.45 } },
+  wordy: { name: 'Wordy McWordface', proc: 'wordgrid', box: [5.5, 0.1, 5.5],
+           // 15 cells across an 11-unit board → cell = 11/15. `anchor:'cross'` puts a cell CENTRE at
+           // every k·cell (k=-7..7), i.e. the odd (15×15) grid's centre cell sits on the origin, so a
+           // played tile snaps into a painted square. cells=15 → calibrateGrid derives cell = width/15.
+           grid: { cells: 15, anchor: 'cross' },
+           paint: { cells: 15, premium: WORDY_PREMIUM, colors: WORDY_COLORS } },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
+
+// Optional 3D "skins" a deck can wear INSTEAD of the extruded card stack — a bag / box / pile model
+// that still functions as a draw pile (draw / deal / shuffle / hidden order all unchanged). An entry
+// carries the model URL, a fixed modelScale, and the resulting collider half-extents (`box`). The skin
+// is STATIC — it doesn't grow or shrink with the card count (a box looks full whether it holds 5 or 50).
+// A set builder opts a deck in via `deckModel: '<key>'`; add an entry here to offer another skin.
+export const DECK_MODELS = {
+  bentwood: { name: 'Bentwood box', model: '/models/decks/bentwood_box.glb', modelScale: 1.6049, box: [0.88, 0.544, 1.30] },
+};
+
+// --- Word tiles (Wordy McWordface — a legally-distinct Scrabble) -------------
+// Standard English 100-tile letter distribution: LETTER → [count, point value]. '' is the blank
+// (2 tiles, 0 points). Public-domain game data — edit freely to change the bag.
+export const LETTER_DIST = {
+  A: [9, 1], B: [2, 3], C: [2, 3], D: [4, 2], E: [12, 1], F: [2, 4], G: [3, 2], H: [2, 4],
+  I: [9, 1], J: [1, 8], K: [1, 5], L: [4, 1], M: [2, 3], N: [6, 1], O: [8, 1], P: [2, 3],
+  Q: [1, 10], R: [6, 1], S: [4, 1], T: [6, 1], U: [4, 1], V: [2, 4], W: [2, 4], X: [1, 8],
+  Y: [2, 4], Z: [1, 10], '': [2, 0],
+};
+
+// --- Mahjong -----------------------------------------------------------------
+// The standard 144-tile wall, built from bundled CC0 face art (public/mahjong/faces/*.png, composited
+// onto ivory tiles). Each face id → its image URL; buildMahjongWall() (server) stamps the counts:
+//   3 suits × ranks 1-9 × 4  +  4 winds × 4  +  3 dragons × 4  +  4 flowers  +  4 seasons  = 144.
+// The white dragon (dragW) is a generated blue-frame blank (its art wasn't in the set). Edit the lists
+// to change the wall.
+export const MAHJONG = {
+  base: '/mahjong/faces/',
+  suits: ['char', 'bam', 'cir'],                                  // each rank 1..9, ×4
+  honors: ['windE', 'windS', 'windW', 'windN', 'dragR', 'dragG', 'dragW'], // ×4
+  bonus: ['flowChrys', 'flowLotus', 'flowOrchid', 'flowPeony',    // ×1 (flowers + seasons)
+          'seasSpring', 'seasSummer', 'seasFall', 'seasWinter'],
+};
 
 // --- Dispensers -------------------------------------------------------------
 // A dispenser hands out copies of a child piece: left-click / left-drag spawns ONE
@@ -124,6 +269,61 @@ export const DISPENSERS = {
                 collider: { box: [0.8, 0.5, 0.8] }, mass: 0.5 },
 };
 export const DISPENSER_LIST = [{ id: 'pokerStack' }, { id: 'coinStack' }, { id: 'goBowl' }];
+
+// One-click starter games. The server's setupStarter() clears the table, then builds one of
+// these: a `board` + placed `pieces()`, and/or a `deck` and `bowls`/`stacks` of dispensers.
+// `pieces()` returns { shape, team, col, row } placements on a `cells`×`cells` grid whose (0,0)
+// is a corner square; the server maps col/row → world using the board's real cell size. All data
+// references existing shapes/boards/dispensers — no new assets. Add or edit games freely.
+const _chessBack = ['chess-rook', 'chess-knight', 'chess-bishop', 'chess-queen', 'chess-king', 'chess-bishop', 'chess-knight', 'chess-rook'];
+export const STARTERS = {
+  chess: {
+    name: 'Chess', board: 'chess', cells: 8,
+    pieces: () => {
+      const out = [];
+      for (let c = 0; c < 8; c++) { out.push({ shape: _chessBack[c], team: 0, col: c, row: 0 }); out.push({ shape: 'chess-pawn', team: 0, col: c, row: 1 }); }
+      for (let c = 0; c < 8; c++) { out.push({ shape: 'chess-pawn', team: 1, col: c, row: 6 }); out.push({ shape: _chessBack[c], team: 1, col: c, row: 7 }); }
+      return out;
+    },
+  },
+  checkers: {
+    name: 'Checkers', board: 'chess', cells: 8,
+    pieces: () => {
+      const out = [];
+      for (let row = 0; row < 3; row++) for (let c = 0; c < 8; c++) if ((row + c) % 2 === 1) out.push({ shape: 'checker', team: 0, col: c, row });
+      for (let row = 5; row < 8; row++) for (let c = 0; c < 8; c++) if ((row + c) % 2 === 1) out.push({ shape: 'checker', team: 1, col: c, row });
+      return out;
+    },
+  },
+  go: {
+    name: 'Go', board: 'go',
+    bowls: [{ disp: 'goBowl', x: -6, z: 0, team: 0 }, { disp: 'goBowl', x: 6, z: 0, team: 1 }],   // one black bowl, one white; stones dispensed from them
+  },
+  dominoes: {
+    name: 'Dominoes', deck: { set: 'domino', deal: 7 }, // boneyard = 28 shuffled tiles; deal 7 to each seated player
+  },
+  wordy: {
+    name: 'Wordy McWordface', board: 'wordy',           // 15×15 procedural board; snap-to-cell on
+    deck: { set: 'letter', deal: 7 }, deckZ: 6.6,        // the 100-tile bag sits just past the board's near edge; deal a 7-tile rack
+  },
+  mahjong: {
+    name: 'Mahjong', deck: { set: 'mahjong', deal: 13 }, // the 144-tile wall; deal a 13-tile starting hand to each seated player
+  },
+  poker: {
+    name: 'Poker night', deck: true,
+    stacks: [
+      { disp: 'pokerStack', x: -3.2, z: -2.4, color: 0xd14b4b },   // red
+      { disp: 'pokerStack', x: 0,    z: -3.0, color: 0x5b8ad6 },   // blue
+      { disp: 'pokerStack', x: 3.2,  z: -2.4, color: 0x2a2a2a },   // black
+    ],
+  },
+};
+export const STARTER_LIST = [
+  { id: 'chess', name: 'Chess' }, { id: 'checkers', name: 'Checkers' },
+  { id: 'go', name: 'Go' }, { id: 'dominoes', name: 'Dominoes' },
+  { id: 'wordy', name: 'Wordy McWordface' }, { id: 'mahjong', name: 'Mahjong' },
+  { id: 'poker', name: 'Poker night' },
+];
 // Per-disc height + capped visible count for a stack — used by BOTH the client mesh
 // (clone spacing) and the server collider, so the drawn stack and its body agree.
 export const stackDiscH  = (item) => (PROPS[item].collider.box[1] || 0.045) * 2;
@@ -164,6 +364,117 @@ export const DIE_GLYPH = 1.42;
 // both the client mesh and the server collider read, so they can never disagree on size.
 export const dieR = (sides) => (DIE_RADIUS[sides] || 1) * DIE_SCALE;
 export const DIE_SIDES = [4, 6, 8, 10, 12, 20];
+
+// Clamp a value to a valid 24-bit color int, else null. Used to sanitize a color that
+// arrives from a client (a die's body/number color) before it's trusted into piece props.
+export const clampColor = (c) => { c = Number(c); return Number.isInteger(c) && c >= 0 && c <= 0xffffff ? c : null; };
+// Sanitize the props for a spawned die: a valid `sides` (defaulting to d6), plus optional
+// body/number colors clamped to real colors. This is what lets a client spawn a die already
+// in the player's saved default color without being able to inject arbitrary props.
+export function dieSpawnProps(raw = {}) {
+  const p = { sides: DIE_SIDES.includes(+raw.sides) ? +raw.sides : 6 };
+  const b = clampColor(raw.color); if (b != null) p.color = b;
+  const t = clampColor(raw.textColor); if (t != null) p.textColor = t;
+  return p;
+}
+
+// Validate + apply a recolor to a piece's props, by type — the single source both the `recolor`
+// message and the `recolorGroup` batch trust. Returns a NEW props object, or null if the change
+// doesn't fit this piece (wrong type, missing/out-of-range color, a team bowl without a team flag).
+// `dispDef` is the piece's DISPENSERS entry (dispensers only); pass null otherwise.
+export function colorProps(type, props, { color, textColor, team } = {}, dispDef = null) {
+  const out = { ...props };
+  if (type === 'die') {                                                               // dice are unconstrained (any color)
+    if (color != null) { const c = clampColor(color); if (c == null) return null; out.color = c; }
+    if (textColor != null) { const t = clampColor(textColor); if (t == null) return null; out.textColor = t; } // die number color
+    return out;
+  }
+  // Props & dispensers share one rule: the object's allowed palette (recolorPalette) decides
+  // whether a swatch sets a fixed team set, must come from a limited palette, or is freeform.
+  const opt = recolorPalette(type, props, dispDef);
+  if (!opt) return null;                                                              // cards, boards, unknown dispensers
+  if (opt.team) { if (team == null) return null; out.team = team ? 1 : 0; }           // team piece: switch set, not a color
+  else {
+    if (color == null) return null;
+    const c = clampColor(color); if (c == null) return null;
+    if (!opt.free && !opt.swatches.some(s => s.hex === c)) return null;               // limited palette (coins): color must be in it
+    out.color = c;
+  }
+  return out;
+}
+
+// Named dice sets — shipped body-color presets. Applying a set makes it a player's default
+// across every die type at once; the swatch row in the die inspector uses the same list to
+// quick-color a single die. A set is just a name + body color — the number color is derived
+// automatically for legibility (see readableInk), so there's only one value to tune per set.
+// Add, remove, or recolor entries freely; the UI reads this list at load.
+export const DICE_SETS = [
+  { name: 'Ivory',    color: 0xf4f1ea },   // the plain default
+  { name: 'Bone',     color: 0xe8e0cc },
+  { name: 'Slate',    color: 0x556070 },
+  { name: 'Onyx',     color: 0x1c1c1e },
+  { name: 'Ruby',     color: 0x9b1c2e },
+  { name: 'Amber',    color: 0xc7761f },
+  { name: 'Gold',     color: 0xc79a3a },
+  { name: 'Emerald',  color: 0x1f7a4d },
+  { name: 'Sapphire', color: 0x1f4e8c },
+  { name: 'Amethyst', color: 0x5b3a8c },
+  { name: 'Rose',     color: 0xc85c8e },
+];
+
+// The general color palette shared by the library spawn cards and the recolor/inspect swatches
+// (props, dispensers, and multi-select). First entry is Neutral (no tint) — the UI maps it to
+// COLORS.neutralProp when a real color is needed. Team pieces use COLORS.team instead.
+export const PALETTE = [
+  { name: 'Neutral', hex: null },
+  { name: 'Red', hex: 0xd14b4b }, { name: 'Orange', hex: 0xd98a3a },
+  { name: 'Yellow', hex: 0xd9c24b }, { name: 'Green', hex: 0x5fae5f },
+  { name: 'Blue', hex: 0x5b8ad6 }, { name: 'Purple', hex: 0x9a6fc0 },
+  { name: 'White', hex: 0xf4f1ea }, { name: 'Black', hex: 0x2a2a2a },
+];
+// Named alternate palettes a shape opts into via PROP_LIST / DISPENSERS `swatches` (e.g. coins
+// → metals). These REPLACE the general palette for that object — no Neutral, no freeform picker.
+export const METALS = [
+  { name: 'Gold', hex: 0xd4af37 }, { name: 'Silver', hex: 0xc0c0c0 },
+  { name: 'Copper', hex: 0xb87333 }, { name: 'Bronze', hex: 0x9c6b3f },
+];
+export const PALETTES = { metals: METALS };
+
+// What colors an object is ALLOWED in the recolor UI — the same rule the spawn cards use, so an
+// object can't be tinted off its intended set. Returns a descriptor, or null for a non-colorable
+// piece (cards/boards/decks). `dispDef` is the DISPENSERS entry for a dispenser, else null.
+//   { team:true,  free:false, swatches:[{name,hex}×2] } — fixed two-color set (checker/chess/go, go bowl)
+//   { team:false, free:false, swatches:[{name,hex}]   } — a limited palette (coins → metals)
+//   { team:false, free:true,  swatches: PALETTE        } — general palette + freeform picker
+// `team:true` means a swatch sets the piece's team index (0/1), not a freeform color.
+const _teamSwatches = (name) => (COLORS.team[name] || []).map((hex, i) => ({ name: 'Set ' + (i + 1), hex }));
+export function recolorPalette(type, props = {}, dispDef = null) {
+  if (type === 'prop') {
+    const spec = PROPS[props.shape] || {};
+    if (spec.team) return { team: true, free: false, swatches: _teamSwatches(spec.team) };
+    const entry = PROP_LIST.find(e => e.id === props.shape);
+    const alt = entry && entry.swatches ? PALETTES[entry.swatches] : null;
+    return alt ? { team: false, free: false, swatches: alt } : { team: false, free: true, swatches: PALETTE };
+  }
+  if (type === 'dispenser') {
+    if (!dispDef) return null;
+    if (dispDef.team) return { team: true, free: false, swatches: _teamSwatches(dispDef.team) };
+    const alt = dispDef.swatches ? PALETTES[dispDef.swatches] : null;
+    return alt ? { team: false, free: false, swatches: alt } : { team: false, free: true, swatches: PALETTE };
+  }
+  return null;
+}
+
+// The two number inks a die can wear: near-black for light bodies, off-white for dark ones.
+export const DIE_INK = 0x141414, DIE_INK_LIGHT = 0xf4f1ea;
+const _srgbLin = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+const _relLum = (color) => 0.2126 * _srgbLin((color >> 16) & 255) + 0.7152 * _srgbLin((color >> 8) & 255) + 0.0722 * _srgbLin(color & 255);
+const _contrast = (a, b) => { const la = _relLum(a), lb = _relLum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
+// Pick the number ink (dark or light) that reads best on a given body color — whichever
+// yields the higher WCAG contrast ratio. Keeps auto-colored dice legible on any body.
+export function readableInk(color) {
+  return _contrast(color, DIE_INK) >= _contrast(color, DIE_INK_LIGHT) ? DIE_INK : DIE_INK_LIGHT;
+}
 
 // Raw vertices scaled so the farthest sits at `radius`. null for d6/unknown.
 export function dieVerts(sides, radius = dieR(sides)) {

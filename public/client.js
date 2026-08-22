@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
 import { KIND, OVERLAY, trayMesh, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture, gridMesh } from './graphics.js';
-import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell, trayCenter, seatAngle } from '/shared/pieces.js';
+import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, DICE_SETS, PALETTE, COLORS, readableInk, recolorPalette, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell, trayCenter, seatAngle } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, LIB_CREDITS } from './credits.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
@@ -181,6 +181,48 @@ const applyTransform = (mesh, s) => {
   mesh.position.set(s.x, s.y, s.z);
   mesh.quaternion.set(s.qx, s.qy, s.qz, s.qw);
 };
+// My saved default color per die type — a LOCAL, per-device preference (like the lobby
+// accent), never synced. Shape in localStorage['ott-dice']: { "20": {color, textColor}, ... }
+// as ints. An absent type just means "no default" → the die spawns plain ivory/ink.
+function loadDiceDefaults() { try { return JSON.parse(localStorage.getItem('ott-dice') || '{}') || {}; } catch { return {}; } }
+function saveDiceDefault(sides, color, textColor) {
+  const all = loadDiceDefaults(); const d = {};
+  if (Number.isInteger(color)) d.color = color;
+  if (Number.isInteger(textColor)) d.textColor = textColor;
+  all[String(sides)] = d;
+  try { localStorage.setItem('ott-dice', JSON.stringify(all)); } catch {}
+}
+// Spawn props for a die of this type, with my saved default color folded in (if any).
+function myDieProps(sides) {
+  const p = { sides };
+  const d = loadDiceDefaults()[String(sides)];
+  if (d) { if (Number.isInteger(d.color)) p.color = d.color; if (Number.isInteger(d.textColor)) p.textColor = d.textColor; }
+  return p;
+}
+// Forget my saved default for one die type (back to plain ivory/ink on the next spawn).
+function clearDiceDefault(sides) {
+  const all = loadDiceDefaults(); delete all[String(sides)];
+  try { localStorage.setItem('ott-dice', JSON.stringify(all)); } catch {}
+}
+// The ids of the dice currently in MY tray (so a dice-set pick can recolor them live).
+function myTrayDieIds() {
+  const ids = [];
+  if (!room) return ids;
+  room.state.pieces.forEach((piece, id) => {
+    if (piece.type !== 'die') return;
+    try { if (JSON.parse(piece.props || '{}').traySeat === mySeat) ids.push(id); } catch {}
+  });
+  return ids;
+}
+// Apply a dice set as my default across EVERY die type, and live-recolor the dice already in
+// my tray. Numbers are auto-contrasted from the body color. Local-only for the defaults; the
+// tray recolor goes through the normal (synced) recolor message so everyone sees it.
+function applyDiceSet(color) {
+  const textColor = readableInk(color);
+  for (const s of DIE_SIDES) saveDiceDefault(s, color, textColor);
+  for (const id of myTrayDieIds()) room.send('recolor', { id, color, textColor });
+}
+
 // Mesh-build props for a piece. Dispensers stack their body to the live `count`,
 // which lives in its own schema field (not props), so fold it in for the mesh.
 const meshPropsOf = (piece, id) => {
@@ -197,6 +239,8 @@ let gridLines = null;
 const gridY = () => { const v = room && +room.state.scale.gridLift; return Number.isFinite(v) ? v : MEASURE.lift; };
 // Whether a piece carries the per-piece snap-to-grid flag (like keep-upright).
 const pieceSnap = (id) => { const p = room && room.state.pieces.get(id); if (!p) return false; try { return !!JSON.parse(p.props || '{}').snap; } catch { return false; } };
+// Is this piece a TILE (a card/deck carrying a `tile` kind)? Drives tile-vs-card pickup sounds.
+const pieceIsTile = (id) => { const p = room && room.state.pieces.get(id); if (!p) return false; try { return !!JSON.parse(p.props || '{}').tile; } catch { return false; } };
 // The drag target to actually send: snapped to the nearest cell for a snap-flagged piece
 // on an active grid (so it tracks cell-to-cell as you drag), else the raw cursor point.
 const snapXZ = (x, z) => (down && down.snap && gridActive(room.state.scale)) ? snapToCell(x, z, room.state.scale) : { x, z };
@@ -249,10 +293,14 @@ function rebuildGrid() {
     }, false);
 
     if (piece.type === 'deck') {
-      // The extruded prism is unit-height; scale Y to reflect how many cards remain.
-      const setDeckHeight = (count) => { mesh.scale.y = deckHeight(count); };
-      setDeckHeight(piece.count);
-      cb(piece).listen('count', setDeckHeight);
+      // The extruded prism is unit-height; scale Y to reflect how many cards remain. A modeled deck
+      // skin (bag/box) is a fixed shape, so leave it alone — it looks the same whatever the count.
+      const modeled = !!(() => { try { return JSON.parse(piece.props || '{}').model; } catch { return false; } })();
+      if (!modeled) {
+        const setDeckHeight = (count) => { mesh.scale.y = deckHeight(count); };
+        setDeckHeight(piece.count);
+        cb(piece).listen('count', setDeckHeight);
+      }
     }
     if (piece.type === 'card') {
       // Rebuild the card mesh when its props change (front revealed/hidden on flip).
@@ -374,7 +422,7 @@ function rebuildGrid() {
   room.onMessage('notebook', text => { byId('notesText').value = text || ''; }); // your private notes, restored on reconnect
   room.onMessage('shuffled', ({ id }) => { startAnim(id, 'shuffle'); playSfx('shuffle'); }); // everyone sees + hears the riffle
   room.onMessage('sfx', ({ type } = {}) => playSfx(type)); // shared cue (roll/flip/deal) broadcast by the server
-  room.onMessage('inspectCard', ({ front, back }) => inspectMesh(cardMesh({ front, back }), { drawn: true, type: 'card' })); // drawn card — front is ours alone
+  room.onMessage('inspectCard', ({ front, back, tile, geom }) => inspectMesh(cardMesh({ front, back, tile, geom }), { drawn: true, type: 'card' })); // drawn card — front is ours alone; tile/geom → correct proportions
   room.onMessage('dealt', ({ id }) => { // a card you dragged off a deck — adopt it as the dragged piece
     if (down && down.pendingDeal) {
       down.id = id;
@@ -428,6 +476,7 @@ function rebuildGrid() {
     cb(room.state).scale.listen('gridX', onGrid, false);       // grid: lattice offset X
     cb(room.state).scale.listen('gridZ', onGrid, false);       // grid: lattice offset Z
     cb(room.state).scale.listen('gridStyle', onGrid, false);   // grid: off / square / hex
+    cb(room.state).scale.listen('gridHidden', onGrid, false);  // grid: shown / hidden (still snaps)
     cb(room.state).scale.listen('gridColor', onGrid, false);   // grid: line colour
     cb(room.state).scale.listen('gridLift', () => { if (gridLines) gridLines.position.y = gridY(); syncScalePanel(); }, false); // height: just move it, no rebuild
     cb(room.state).scale.listen('snapAnchor', syncScalePanel, false); // snap target only — no redraw
@@ -445,7 +494,7 @@ function rebuildGrid() {
   for (const sides of DIE_SIDES) {
     const button = document.createElement('button');
     button.textContent = '+ d' + sides;
-    button.onclick = () => room.send('spawn', { type: 'die', props: { sides } });
+    button.onclick = () => room.send('spawn', { type: 'die', props: myDieProps(sides) }); // my saved color rides along
     diceGrp.appendChild(button);
   }
 
@@ -540,6 +589,8 @@ function rebuildGrid() {
     const gk = byId('gridColor');
     if (gk && document.activeElement !== gk && /^#[0-9a-f]{6}$/i.test(sc.gridColor || '')) gk.value = sc.gridColor;
     const gsr = byId('gridSnapRow'); if (gsr) gsr.hidden = !gridOn; // snap-anchor toggle (centers vs crossings)
+    const ghr = byId('gridHideRow'); if (ghr) ghr.hidden = !gridOn; // hide-grid toggle (snaps, not drawn)
+    const ght = byId('gridHideTog'); if (ght) ght.classList.toggle('on', !!sc.gridHidden);
     const anchor = sc.snapAnchor === 'cross' ? 'cross' : 'center';
     document.querySelectorAll('#gridAnchors [data-anchor]').forEach(b => b.classList.toggle('on', b.dataset.anchor === anchor));
     relabelOverlays(); // scale drives every ruler's label
@@ -590,6 +641,7 @@ function rebuildGrid() {
     // Snap anchor: cell centres (chess/checkers) vs line crossings (go). Also tells the
     // "Fit to board" button whether the count you enter means squares or lines.
     document.querySelectorAll('#gridAnchors [data-anchor]').forEach(b => { b.onclick = () => room.send('scaleSet', { snapAnchor: b.dataset.anchor }); });
+    { const b = byId('gridHideTog'); if (b) b.onclick = () => room.send('scaleSet', { gridHidden: !room.state.scale.gridHidden }); } // hide the lines, keep snapping
     // Fit to board: size the grid to the board on the table. Built-in boards need nothing (the
     // registry knows their geometry — one click); a custom/image board takes the count you type
     // in the "across" field, read as squares or lines per the current Snap-to setting.
@@ -626,10 +678,19 @@ function rebuildGrid() {
   room.onMessage('stateSaved', () => { const b = byId('roomSaveState'); if (!b) return; const t = b.textContent; b.textContent = '💾 Saved ✓'; setTimeout(() => { b.textContent = t; }, 1500); });
   room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
   { const b = byId('selectBtn'); if (b) b.onclick = () => setSelMode(!selMode); } // Select tool: felt-drag boxes a selection
+  // (the #selSwatches row is built per-selection by refreshSelTools — it depends on what's selected)
   byId('roll').onclick = () => openTray();          // Roll hops to YOUR tray (placing it if it isn't out)
   { const b = byId('trayBack');  if (b) b.onclick = () => closeTray(); }                 // leave the view, tray stays
   { const b = byId('trayAway');  if (b) b.onclick = () => putTrayAway(); }               // put my tray away (clears its dice)
-  qsa('#trayTools .trayDie').forEach(b => b.onclick = () => room.send('spawn', { type: 'die', props: { sides: +b.dataset.sides, tray: true } })); // add a die to MY tray
+  qsa('#trayTools .trayDie').forEach(b => b.onclick = () => room.send('spawn', { type: 'die', props: { ...myDieProps(+b.dataset.sides), tray: true } })); // add a die to MY tray (in my saved color)
+  { const setRow = byId('traySetSwatches');                                             // named dice sets: one click = a matching set for all my dice
+    if (setRow) for (const s of DICE_SETS) {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'swatch'; chip.title = s.name + ' — set all my dice';
+      chip.style.background = '#' + ((s.color >>> 0) & 0xffffff).toString(16).padStart(6, '0');
+      chip.onclick = () => applyDiceSet(s.color);                                        // saves defaults for every type + recolors my tray dice
+      setRow.appendChild(chip);
+    } }
   { const b = byId('trayRoll');     if (b) b.onclick = () => room.send('roll'); }      // fling every die in MY tray
   { const b = byId('trayScoop');    if (b) b.onclick = () => room.send('trayScoop'); } // gather MY dice back to the middle
   { const b = byId('trayClearBtn'); if (b) b.onclick = () => room.send('trayClear'); } // remove MY dice
@@ -967,6 +1028,15 @@ qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place));
       room.send('recolor', { id: inspect.origId, color: b });
     }
   };
+  const toHex = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0'); // local (hexStr is defined lower — TDZ)
+  // Paint the inspected die: body = color, numbers auto-contrasted for legibility. Reused by
+  // the freeform body picker and the preset swatches; commits through the normal recolor path.
+  const paintDie = (color) => {
+    if (!inspect || inspect.type !== 'die') return;
+    body.value = toHex(color);
+    if (text) text.value = toHex(readableInk(color));
+    commit();
+  };
   if (body) { // live preview while dragging: props tint blunt; stacks reclone (cached, cheap)
     body.oninput = () => {
       if (!inspect) return;
@@ -974,9 +1044,12 @@ qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place));
       if (inspect.type === 'prop') tintInspect(c);
       else if (inspect.type === 'dispenser') swapInspect({ ...(inspect.props || {}), color: c });
     };
-    body.onchange = commit;
+    body.onchange = () => {
+      if (inspect && inspect.type === 'die' && text) text.value = toHex(readableInk(parseInt(body.value.slice(1), 16))); // auto-contrast numbers to the new body
+      commit();
+    };
   }
-  if (text) text.onchange = commit;
+  if (text) text.onchange = commit;                                                    // an explicit number override still wins
   if (teamBtn) teamBtn.onclick = () => {                                                // go bowl: black ⇄ white interior
     if (!inspect || inspect.type !== 'dispenser') return;
     const team = inspect.props.team ? 0 : 1;
@@ -985,11 +1058,76 @@ qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place));
     swapInspect(inspect.props);
     room.send('recolor', { id: inspect.origId, team });
   };
+  const swatchRow = byId('dieSwatches');                                                // preset body colors (the named dice sets)
+  if (swatchRow) for (const s of DICE_SETS) {
+    const chip = document.createElement('button');
+    chip.type = 'button'; chip.className = 'swatch'; chip.title = s.name;
+    chip.style.background = toHex(s.color);
+    chip.onclick = () => paintDie(s.color);
+    swatchRow.appendChild(chip);
+  }
+  const defBtn = byId('inspectDefaultBtn');                                             // remember this die's color as my default for its type
+  if (defBtn) defBtn.onclick = () => {
+    if (!inspect || inspect.type !== 'die' || !inspect.props) return;
+    const sides = +inspect.props.sides;
+    if (!DIE_SIDES.includes(sides)) return;
+    const b = parseInt(byId('inspectColorBody').value.slice(1), 16);                    // read what's on screen now
+    const t = parseInt(byId('inspectColorText').value.slice(1), 16);
+    saveDiceDefault(sides, b, t);                                                       // local only — never synced
+    defBtn.textContent = `Saved · d${sides}`; defBtn.disabled = true;                   // brief confirmation
+    setTimeout(() => { if (byId('inspectDefaultBtn') === defBtn) { defBtn.textContent = 'Set as my default'; defBtn.disabled = false; } }, 1300);
+  };
+  const resetBtn = byId('inspectResetBtn');                                             // forget this type's default + plain this die
+  if (resetBtn) resetBtn.onclick = () => {
+    if (!inspect || inspect.type !== 'die' || !inspect.props) return;
+    const sides = +inspect.props.sides;
+    if (DIE_SIDES.includes(sides)) clearDiceDefault(sides);
+    paintDie(0xf4f1ea);                                                                 // back to plain ivory (ink auto)
+    resetBtn.textContent = 'Reset ✓';
+    setTimeout(() => { if (byId('inspectResetBtn') === resetBtn) resetBtn.textContent = 'Reset'; }, 1200);
+  };
+}
+
+// --- Prop / dispenser recolor swatches (built per-object from the piece's allowed palette) ---
+// Recolor the inspected prop/dispenser to a freeform/palette color (preview + send).
+function recolorInspectedColor(hex) {
+  if (!inspect || (inspect.type !== 'prop' && inspect.type !== 'dispenser')) return;
+  const color = hex == null ? COLORS.neutralProp : hex;
+  inspect.props = { ...(inspect.props || {}), color };
+  if (inspect.type === 'dispenser') swapInspect(inspect.props); else tintInspect(color);
+  const body = byId('inspectColorBody'); if (body) body.value = hexStr(color);          // keep the freeform picker in sync
+  room.send('recolor', { id: inspect.origId, color });
+}
+// Recolor the inspected TEAM piece by switching its set (0/1) — colors are fixed, so this
+// picks a side, not a hue. Preview uses the set's color; the server stores props.team.
+function recolorInspectedTeam(i, hex) {
+  if (!inspect) return;
+  inspect.props = { ...(inspect.props || {}), team: i ? 1 : 0 };
+  if (inspect.type === 'dispenser') swapInspect(inspect.props); else tintInspect(hex);
+  room.send('recolor', { id: inspect.origId, team: i ? 1 : 0 });
+}
+// Rebuild the #propSwatches row for the inspected object from its allowed palette (recolorPalette):
+// a team piece gets its two set colors, a limited-palette piece (coins) gets that palette, a
+// general prop gets the full palette. Returns the descriptor so the caller can hide the freeform
+// picker when the object is constrained.
+function rebuildPropSwatches(opt) {
+  const row = byId('propSwatches'); if (row) {
+    row.innerHTML = '';
+    if (opt) opt.swatches.forEach((s, i) => {
+      const chip = document.createElement('button');
+      chip.type = 'button'; chip.className = 'swatch' + (s.hex == null ? ' neutral' : ''); chip.title = s.name;
+      if (s.hex != null) chip.style.background = hexStr(s.hex);
+      chip.onclick = opt.team ? () => recolorInspectedTeam(i, s.hex) : () => recolorInspectedColor(s.hex);
+      row.appendChild(chip);
+    });
+  }
+  return opt;
 }
 
 // Map a click-action name to the server message it sends.
 const sendAction = (action, id) => {
-  if (action === 'takeCard') { room.send('takeCard', { id }); playSfx('card-pickup'); }
+  if (action === 'takeCard') { room.send('takeCard', { id }); playSfx(pieceIsTile(id) ? 'tile-pickup' : 'card-pickup'); }
+  else if (action === 'drawToHand') { room.send('drawToHand', { deckId: id }); playSfx(pieceIsTile(id) ? 'tile-pickup' : 'card-pickup'); }
   else if (action === 'deal') room.send('dealToTable', { deckId: id });
   else if (action === 'dispense') { room.send('dispense', { id }); playSfx('object-pickup'); }
   else if (action === 'flip') room.send('flip', { id });
@@ -1047,15 +1185,25 @@ function inspectMesh(mesh, opts = {}) {
       inspect.props = props0;
       if (opts.type === 'dispenser') inspect.props.count = piece0.count; // carry stack height into reclone previews
       const isDie = opts.type === 'die';
+      // A prop/dispenser's ALLOWED palette (team set / limited palette / general) — mirrors the
+      // spawn cards, so an object can't be tinted off its intended colors. null for a die.
+      const opt = (colorMode && !isDie) ? recolorPalette(opts.type, props0, spec) : null;
+      rebuildPropSwatches(opt);
+      const constrained = !!(opt && !opt.free);                      // team piece or limited palette → no freeform
       const bodyLab = byId('inspectBodyLab'), textLab = byId('inspectTextLab'), teamLab = byId('inspectTeamLab');
-      if (bodyLab) bodyLab.hidden = teamMode;                       // team dispensers hide the freeform picker
-      if (textLab) textLab.hidden = !isDie;                         // dice also get a number color
+      if (bodyLab) bodyLab.hidden = teamMode || constrained;         // hide the freeform picker when the object is constrained
+      if (textLab) textLab.hidden = !isDie;                          // dice also get a number color
       if (teamLab) teamLab.hidden = !teamMode;
       if (colorMode && bodyLab) {
         bodyLab.firstChild.nodeValue = isDie ? 'Body ' : 'Color ';
         byId('inspectColorBody').value = hexStr(inspect.props.color ?? (isDie ? 0xf4f1ea : 0xffffff)); // die = ivory blank face
         if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414);       // die = ink numbers
       }
+      const defBtn = byId('inspectDefaultBtn');                       // dice only: "make this my default d?"
+      if (defBtn) { defBtn.hidden = !isDie; defBtn.disabled = false; defBtn.textContent = 'Set as my default'; }
+      const swRow = byId('dieSwatches'); if (swRow) swRow.hidden = !isDie;             // dice sets (dice only)
+      const propRow = byId('propSwatches'); if (propRow) propRow.hidden = !(opt && opt.swatches.length); // per-object palette
+      const resetBtn = byId('inspectResetBtn'); if (resetBtn) { resetBtn.hidden = !isDie; resetBtn.textContent = 'Reset'; }
       if (teamMode) { const tb = byId('inspectTeamBtn'); if (tb) tb.textContent = inspect.props.team ? 'White' : 'Black'; }
     }
   }
@@ -1275,7 +1423,7 @@ renderer.domElement.addEventListener('pointermove', e => {
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       if (down.group) room.send('grabGroup', { ids: [...selection], anchor: down.id }); // claim the whole selection
       else room.send('grab', { id: down.id });
-      playSfx(sfxKind(down.type) + '-pickup'); // local, per object type
+      playSfx(pieceIsTile(down.id) ? (down.type === 'deck' ? 'tiledeck-pickup' : 'tile-pickup') : (sfxKind(down.type) + '-pickup')); // local, per object type (tiles/tile-boxes get their own)
       { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); }
     } else if (down.button === 0 && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
       // Left-drag spawns one item and carries it out: a card off a deck, or a chip/stone
@@ -1290,7 +1438,7 @@ renderer.domElement.addEventListener('pointermove', e => {
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       if (dealing) room.send('dealDrag', { deckId: down.id, x: hit.x, y: hit.y, z: hit.z });
       else room.send('dispenseDrag', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
-      playSfx(dealing ? 'card-pickup' : 'object-pickup'); // the new piece's drop follows on release
+      playSfx(dealing ? (pieceIsTile(down.id) ? 'tile-pickup' : 'card-pickup') : 'object-pickup'); // the new piece's drop follows on release
     }
   }
 
@@ -1523,12 +1671,16 @@ function renderHand(cards) {
     if (cf.kind === 'rank') {
       div.textContent = cf.rank + cf.suit;
       div.style.color = cf.color || '#111';
-    } else if (cf.kind === 'text') {
-      div.classList.add('img'); // render the same wrapped/shrunk-to-fit texture the table uses, so long text isn't clipped
+    } else if (cf.kind === 'text' || cf.kind === 'joker' || cf.kind === 'domino' || cf.kind === 'letter') {
+      div.classList.add('img'); // render the same texture the table uses (wrapped text / joker / domino / letter face)
+      if (cf.kind === 'domino') div.classList.add('tile'); // a domino slot is 1:2, so the tile fills it without clipping
+      if (cf.kind === 'letter') div.classList.add('tileSq'); // a letter tile is square
       const u = cardPreviewURL(card.front);
       if (u) div.style.backgroundImage = `url("${u}")`;
     } else if (cf.kind === 'image') {
       div.classList.add('img');
+      if (card.geom && card.geom.shape === 'hex') div.classList.add('shape-hex'); // match the tabletop silhouette
+      else if (card.geom && card.geom.round === 0) div.classList.add('shape-square');
       div.style.backgroundImage = `url("${cf.ref}")`; // uploaded/file card art
     }
     div.title = 'Left drag/click: face-down · Right drag/click: face-up';
@@ -2417,6 +2569,74 @@ const selColor = () => {
 const selectable = (id) => { const e = meshes.get(id); return !!e && PHYS[e.type].mass > 0; }; // static boards can't be selected
 function selToggle(id) { if (!selectable(id)) return; if (selection.has(id)) selection.delete(id); else selection.add(id); }
 function clearSelection() { selection.clear(); }
+// The color options for ONE selected piece: dice + general props are freeform (the general
+// palette); coins are metals; team pieces pick a set. Returns { sig, team, swatches } — `sig`
+// is a canonical string so a whole selection can be checked for agreement — or null if the
+// piece isn't recolorable (cards). Dice fold in with general props (any color, 'free').
+function selColorDesc(piece) {
+  if (piece.type === 'die') return { sig: 'free', team: false, swatches: PALETTE };
+  if (piece.type !== 'prop' && piece.type !== 'dispenser') return null;   // cards, etc.
+  let props; try { props = JSON.parse(piece.props || '{}'); } catch { props = {}; }
+  const dispDef = piece.type === 'dispenser' ? DISPENSERS[props.disp] : null;
+  const opt = recolorPalette(piece.type, props, dispDef);
+  if (!opt) return null;
+  const key = opt.swatches.map(s => s.hex).join(',');
+  const sig = opt.team ? 'team:' + key : (opt.free ? 'free' : 'pal:' + key);
+  return { sig, team: opt.team, swatches: opt.swatches };
+}
+// The palette shared by the WHOLE selection, for the recolor bar:
+//   null            → nothing recolorable is selected (all cards) → hide the bar
+//   { mixed:true }  → recolorable pieces disagree (e.g. a coin + a token) → show the bar disabled
+//   { sig,team,swatches } → they all share one palette → show those swatches
+function selectionPalette() {
+  let common = null;
+  for (const id of selection) {
+    const piece = room.state.pieces.get(id); if (!piece) continue;
+    const desc = selColorDesc(piece); if (!desc) continue;               // ignore non-colorable (they'd be skipped anyway)
+    if (!common) common = desc;
+    else if (desc.sig !== common.sig) return { mixed: true };
+  }
+  return common;
+}
+// Recolor the whole selection to a freeform/palette color (Neutral → the neutral tint). Dice
+// numbers auto-contrast; the server applies the color only where it fits.
+function recolorSelColor(hex) {
+  if (!selection.size || !room) return;
+  const color = hex == null ? COLORS.neutralProp : hex;
+  room.send('recolorGroup', { ids: [...selection], color, textColor: readableInk(color) });
+}
+// Recolor a team-only selection by switching every piece to set 0/1.
+function recolorSelTeam(i) {
+  if (!selection.size || !room) return;
+  room.send('recolorGroup', { ids: [...selection], team: i ? 1 : 0 });
+}
+// Rebuild the recolor bar to match the current selection: the shared palette's swatches when the
+// selection agrees, a disabled "mixed" state when it doesn't, hidden when nothing's recolorable.
+let selBarSig = null;                                                     // last-rendered state, to avoid rebuilding every frame
+function refreshSelTools() {
+  const bar = byId('selTools'); if (!bar) return;
+  const desc = selection.size ? selectionPalette() : null;
+  const sig = !selection.size ? '' : !desc ? 'none' : desc.mixed ? 'mixed' : desc.sig;
+  bar.hidden = !selection.size || sig === 'none';                        // no selection, or nothing colorable → hide
+  if (bar.hidden) { selBarSig = null; return; }
+  if (sig === selBarSig) return;                                         // unchanged → keep the DOM
+  selBarSig = sig;
+  const row = byId('selSwatches'), note = byId('selNote'); if (row) row.innerHTML = '';
+  if (sig === 'mixed') {
+    bar.classList.add('disabled');
+    if (note) note.textContent = 'Mixed selection — recolor unavailable';
+    return;
+  }
+  bar.classList.remove('disabled');
+  if (note) note.textContent = 'Recolor selection';
+  if (row) desc.swatches.forEach((s, i) => {
+    const chip = document.createElement('button');
+    chip.type = 'button'; chip.className = 'swatch' + (s.hex == null ? ' neutral' : ''); chip.title = s.name;
+    if (s.hex != null) chip.style.background = '#' + ((s.hex >>> 0) & 0xffffff).toString(16).padStart(6, '0');
+    chip.onclick = desc.team ? () => recolorSelTeam(i) : () => recolorSelColor(s.hex);
+    row.appendChild(chip);
+  });
+}
 function setSelMode(on) {
   selMode = on;
   const b = byId('selectBtn'); if (b) b.classList.toggle('on', on);
@@ -2440,6 +2660,7 @@ function updateSelectionRings() {
     ring.scale.setScalar((Math.max(_selSize.x, _selSize.z) / 2 + 0.15) / CONFIG.marker.outer);
     ring.position.set(entry.mesh.position.x, boardTopY + CONFIG.marker.lift + 0.012, entry.mesh.position.z);
   }
+  refreshSelTools(); // the recolor bar: shown/hidden + its swatches match what's selected
 }
 // Screen-space marquee: a fixed-position div the drag paints, then every piece whose projected
 // centre lands inside joins the selection (replace, or add when Shift-held).

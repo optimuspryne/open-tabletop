@@ -3,7 +3,7 @@
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
 // the deckList/boardList/propList messages out to here, so the modal saved-lists
 // keep working too). In the editor the admin sees private assets as well as public.
-import { cardPreviewURL, propPreviewURL, boardPreviewURL, diePreviewURL, uploadImage, uploadModel, measureBoard, measureModel, glbFilePreviewURL, parseCardFront } from './graphics.js';
+import { cardPreviewURL, propPreviewURL, boardPreviewURL, procBoardTexURL, diePreviewURL, uploadImage, uploadModel, measureImage, measureBoard, measureModel, glbFilePreviewURL, parseCardFront } from './graphics.js';
 import * as THREE from 'three';
 
 // Library edit/clone state. openEditModal() sets it; the Add form's Save reads it.
@@ -28,7 +28,29 @@ function openDeckEdit(it, clone) {
   pendingDeck = { it, clone };
   ROOM.send('getDeck', { id: it.id });
 }
-import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS, DISPENSER_LIST, DISPENSERS } from '/shared/pieces.js';
+import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS, DISPENSER_LIST, DISPENSERS, PALETTE, PALETTES, STARTER_LIST, standMode, geomFromImage, TILES, HEX_HH } from '/shared/pieces.js';
+
+// Card/tile thickness for an image deck, as a multiple of a standard card, read from the editor's
+// slider → a world HALF-thickness for geom.t. 1× = a thin card; higher = a chunky tile.
+const cardThickHalf = () => +(TILES.card.t * (+byId('adImgThick').value || 1)).toFixed(4);
+const setThickSlider = (tHalf) => {
+  const m = tHalf ? Math.max(1, Math.min(8, Math.round((tHalf / TILES.card.t) * 2) / 2)) : 1;
+  byId('adImgThick').value = m; byId('adImgThickVal').textContent = m + '×';
+};
+
+// The image-deck card SHAPE picker (segmented chips): 'rounded' | 'square' | 'hex'.
+const imgShape = () => byId('adImgShape').querySelector('.seg.on')?.dataset.shape || 'rounded';
+const setImgShape = (s) => byId('adImgShape').querySelectorAll('.seg').forEach(b => b.classList.toggle('on', b.dataset.shape === (s || 'rounded')));
+// Fold the picked shape into a fitted geom: square = no corner radius; hexagon = a regular POINTY-TOP
+// hex (circumradius R stored as `h`, half-width pinned to R·√3/2); rounded = keep the measured radius.
+const applyShapeToGeom = (geom) => {
+  const s = imgShape();
+  if (s === 'square') return { ...geom, shape: 'rect', round: 0 };
+  if (s === 'hex') { const R = geom.w; return { ...geom, shape: 'hex', round: 0, w: +(R * HEX_HH).toFixed(4), h: R }; }
+  return { ...geom, shape: 'rect' };
+};
+// Which chip to show when re-opening a saved image deck.
+const shapeOfGeom = (geom) => geom && geom.shape === 'hex' ? 'hex' : (geom && geom.round === 0 ? 'square' : 'rounded');
 const byId = (id) => document.getElementById(id);
 const btn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
@@ -61,21 +83,8 @@ function wireSearch(root) {
 }
 
 // ---- Spawn cards: quantity + color, and multi-select batch spawn ----------
-// Fixed swatch palette (first = neutral / no tint). Team pieces use their own
-// two set colors (COLORS.team) instead of the palette.
-const PALETTE = [
-  { name: 'Neutral', hex: null },
-  { name: 'Red', hex: 0xd14b4b }, { name: 'Orange', hex: 0xd98a3a },
-  { name: 'Yellow', hex: 0xd9c24b }, { name: 'Green', hex: 0x5fae5f },
-  { name: 'Blue', hex: 0x5b8ad6 }, { name: 'Purple', hex: 0x9a6fc0 },
-  { name: 'White', hex: 0xf4f1ea }, { name: 'Black', hex: 0x2a2a2a },
-];
-// Named alternate palettes a shape can opt into via PROP_LIST `swatches`.
-const METALS = [
-  { name: 'Gold', hex: 0xd4af37 }, { name: 'Silver', hex: 0xc0c0c0 },
-  { name: 'Copper', hex: 0xb87333 }, { name: 'Bronze', hex: 0x9c6b3f },
-];
-const PALETTES = { metals: METALS };
+// PALETTE and the alternate palettes (PALETTES, e.g. metals) now live in shared/pieces.js so the
+// recolor/inspect swatches use the same colors and constraints. Team pieces use COLORS.team.
 // Legible die-number color for a face color (dark face → light numbers).
 const contrast = (hex) => { const r = (hex >> 16) & 255, g = (hex >> 8) & 255, b = hex & 255; return (0.299 * r + 0.587 * g + 0.114 * b) / 255 < 0.5 ? 0xf4f1ea : 0x141414; };
 const hexStr = (h) => '#' + (h >>> 0).toString(16).padStart(6, '0').slice(-6);
@@ -110,7 +119,7 @@ function countStepper(def, max) {
 // One spawnable card: preview + title + quantity + optional color + Spawn.
 // send(colorProps) fires a single spawn; the card supplies quantity + color.
 // color: 'palette' | 'team' | 'own' | 'none'. li._spawn() is used for batch spawn.
-function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, count, snapDefault = false, extraActs = [] }) {
+function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice = false, swatches, count, snapDefault = false, stand = null, standOn = false, extraActs = [] }) {
   const li = document.createElement('li'); li.className = 'libCard';
   const name = document.createElement('span'); name.className = 'libName'; name.textContent = title;
   const meta = document.createElement('div'); meta.className = 'libMeta'; meta.append(name); if (badge) meta.append(badge);
@@ -157,12 +166,25 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
   snapTog.onclick = () => snapTog.classList.toggle('on');
   ctrls.append(snapTog);
 
+  // Stand toggle: spawn the piece in its natural orientation (upright for tall pieces, flat for
+  // discs) instead of letting it tumble. `stand` is that natural mode ('flat' | true); null hides
+  // the toggle (dice/decks). On by default for shapes that stand naturally (chess/checkers/…).
+  const standTog = stand ? document.createElement('button') : null;
+  if (standTog) {
+    standTog.type = 'button';
+    standTog.className = 'chip chk standTog' + (standOn ? ' on' : '');
+    standTog.textContent = '⬆ Stand'; standTog.title = 'Spawn upright / flat (its natural pose); off = free to tumble';
+    standTog.onclick = () => standTog.classList.toggle('on');
+    ctrls.append(standTog);
+  }
+
   li._spawn = () => {
     const n = qty.get(); const cp = {};
     const color = getColor(); if (color != null) { cp.color = color; if (dice) cp.textColor = contrast(color); }
     const team = getTeam(); if (team != null) cp.team = team;
     if (stack) cp.count = stack.get();
     cp.snap = snapTog.classList.contains('on');
+    if (standTog) cp.stand = standTog.classList.contains('on') ? stand : false; // natural pose, or free to tumble
     for (let i = 0; i < n; i++) send(cp);
   };
 
@@ -247,6 +269,7 @@ function renderList(kind, list) {
       ul.appendChild(spawnCard({
         preview: previewEl(kind, it), title: it.name + extra, badge, extraActs: adminActs,
         color: kind === 'prop' ? 'own' : 'none',  // custom objects: default to their own material; decks never tint
+        stand: kind === 'prop' ? true : null, standOn: false, // custom models: a Stand-upright toggle, off by default (free to tumble)
         send: kind === 'deck'
           ? () => ROOM.send('loadDeck', { id: it.id })
           : (cp) => ROOM.send('spawn', { type: 'prop', props: { ...it.props, ...cp } }),
@@ -301,11 +324,40 @@ function renderBuiltin() {
   { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
     decks.append(spawnCard({ preview: box, title: 'Standard 52-card', color: 'none',
       send: () => ROOM.send('spawn', { type: 'deck', props: {} }) })); }
+  { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('joker:#bd2500')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
+    decks.append(spawnCard({ preview: box, title: 'Standard 54 (with Jokers)', color: 'none',
+      send: () => ROOM.send('spawn', { type: 'deck', props: { jokers: true } }) })); }
+  { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
+    decks.append(spawnCard({ preview: box, title: 'Dominoes (double-six)', color: 'none',
+      send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'domino' } }) })); } // a boneyard on its own — no table-clear/deal
+  { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('letter:Q:10')), thumbImg(cardPreviewURL('letter:E:1')));
+    decks.append(spawnCard({ preview: box, title: 'Word tiles (letter bag)', color: 'none',
+      send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'letter' } }) })); } // the 100-tile bag on its own
+  { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')), thumbImg(cardPreviewURL('/mahjong/faces/cir5.png')));
+    decks.append(spawnCard({ preview: box, title: 'Mahjong wall (144)', color: 'none',
+      send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'mahjong' } }) })); } // the full wall on its own
 
   const boards = byId('biBoards'); boards.replaceChildren();
   for (const key of Object.keys(BOARDS)) {
-    const box = previewBox(); fillAsync(box, boardPreviewURL(BOARDS[key].model));
+    const box = previewBox();
+    fillAsync(box, BOARDS[key].proc ? Promise.resolve(procBoardTexURL(key)) : boardPreviewURL(BOARDS[key].model)); // proc boards paint their own preview
     boards.append(builtinCard(box, BOARDS[key].name, 'Spawn', () => ROOM.send('spawn', { type: 'board', props: { board: key } })));
+  }
+
+  // One-click starter games (table only; GM+). Loading one clears the table, so confirm first.
+  const games = byId('biGames'); if (games) { games.replaceChildren();
+    const gamePreview = { chess: BOARDS.chess.model, checkers: BOARDS.chess.model, go: BOARDS.go.model };
+    for (const g of STARTER_LIST) {
+      const box = previewBox();
+      if (gamePreview[g.id]) fillAsync(box, boardPreviewURL(gamePreview[g.id]));
+      else if (g.id === 'dominoes') box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
+      else if (g.id === 'wordy') box.append(thumbImg(cardPreviewURL('letter:W:4')), thumbImg(cardPreviewURL('letter:A:1')));
+      else if (g.id === 'mahjong') box.append(thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')), thumbImg(cardPreviewURL('/mahjong/faces/bam1.png')));
+      else box.append(thumbImg(cardPreviewURL('rank:A:\u2660:#000')), thumbImg(cardPreviewURL('joker:#bd2500'))); // poker
+      games.append(builtinCard(box, g.name, 'Set up', () => {
+        if (confirm(`Set up ${g.name}? This clears the current table.`)) ROOM.send('loadStarter', { game: g.id });
+      }));
+    }
   }
 
   const objs = byId('biObjects'); objs.replaceChildren(); spawnBar(objs);
@@ -314,6 +366,7 @@ function renderBuiltin() {
     const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colors
     objs.append(spawnCard({ preview: box, title: p.name, color: teamName ? 'team' : 'palette', teamName, swatches: p.swatches,
       snapDefault: !!(PROPS[p.id] && PROPS[p.id].team), // grid games (go/checkers/chess) default to snap-on
+      stand: standMode(p.id), standOn: !!(PROPS[p.id] && PROPS[p.id].stand), // Stand toggle, on for shapes that stand naturally
       send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
   }
 
@@ -369,8 +422,8 @@ const parseFaces = (raw) => {
   return raw.split(sep).map((s) => s.trim()).filter(Boolean);
 };
 // Build a deck on the server: begin → append (batched) → finish. spawn:false = save only.
-function sendDeck(back, fronts, name, spawn, editId) {
-  ROOM.send('deckBegin', { back });
+function sendDeck(back, fronts, name, spawn, editId, geom) {
+  ROOM.send('deckBegin', { back, geom });   // geom (optional): the card shape for a fit-to-image deck
   for (let i = 0; i < fronts.length; i += 50) ROOM.send('deckAppend', { fronts: fronts.slice(i, i + 50) });
   ROOM.send('deckFinish', { name, spawn, editId });
 }
@@ -415,6 +468,8 @@ function wireAddDeck() {
     clearSq('adImgBack'); clearSq('adImgFronts'); editCtx = null;
     refreshText(); // re-render the text previews to their reset defaults (not blank until next keystroke)
     byId('adImgNoCrop').classList.remove('on'); byId('adImgPad').value = '#ffffff'; byId('adImgPadRow').hidden = true;
+    setThickSlider(0); byId('adImgThickRow').hidden = true; // back to 1× (thin card), row hidden until Fit is on
+    setImgShape('rounded'); byId('adImgShapeRow').hidden = true;
   };
   const saveText = (spawn) => {
     const name = byId('adTxtName').value.trim();
@@ -428,32 +483,47 @@ function wireAddDeck() {
   byId('adTxtSave').onclick = () => saveText(false);
   byId('adTxtSpawn').onclick = () => saveText(true);
 
-  // image decks — click-tiles for back + fronts; the tile preview mirrors the crop mode
+  // image decks — click-tiles for back + fronts. "Fit to image" sizes the CARD to the art's aspect
+  // (no crop, no stretch, no padding); off = crop the art to a standard card. The preview mirrors it.
   const applyImgFit = () => {
-    const noCrop = byId('adImgNoCrop').classList.contains('on');
-    ['adImgBack', 'adImgFronts'].forEach((id) => { const sq = byId(id).parentElement; sq.style.backgroundSize = noCrop ? 'contain' : 'cover'; sq.style.backgroundColor = noCrop ? byId('adImgPad').value : ''; });
+    const fit = byId('adImgNoCrop').classList.contains('on');
+    ['adImgBack', 'adImgFronts'].forEach((id) => { const sq = byId(id).parentElement; sq.style.backgroundSize = fit ? 'contain' : 'cover'; sq.style.backgroundColor = ''; });
+    byId('adImgThickRow').hidden = !fit; // thickness + shape ride on the fit-to-image geometry
+    byId('adImgShapeRow').hidden = !fit;
   };
   wireUploadSq('adImgBack', false, applyImgFit);
   wireUploadSq('adImgFronts', false, applyImgFit);
-  byId('adImgNoCrop').onclick = () => { byId('adImgNoCrop').classList.toggle('on'); byId('adImgPadRow').hidden = !byId('adImgNoCrop').classList.contains('on'); applyImgFit(); };
-  byId('adImgPad').addEventListener('input', applyImgFit);
+  byId('adImgNoCrop').onclick = () => { byId('adImgNoCrop').classList.toggle('on'); applyImgFit(); };
+  byId('adImgThick').oninput = () => { byId('adImgThickVal').textContent = (+byId('adImgThick').value || 1) + '×'; };
+  byId('adImgShape').querySelectorAll('.seg').forEach(b => b.onclick = () => setImgShape(b.dataset.shape));
   const saveImg = async (spawn) => {
     const name = byId('adImgName').value.trim();
     if (!name) return alert('Name the deck first.');
     const editingDeck = editCtx && editCtx.kind === 'deck';
     const frontFiles = [...byId('adImgFronts').files];
     if (!frontFiles.length && !editingDeck) return alert('Choose at least one front image.'); // a fresh deck needs fronts
-    const noCrop = byId('adImgNoCrop').classList.contains('on');      // 'contain' fits the whole image (no crop); pad fills the leftover
-    const fit = noCrop ? 'contain' : undefined;
-    const pad = noCrop ? byId('adImgPad').value : undefined;
+    const fitToImage = byId('adImgNoCrop').classList.contains('on'); // size the card to the art (no crop/stretch)
     try {
+      // Fit-to-image: measure the first front, size the deck's cards to that aspect, and upload every
+      // image at that aspect (so the art fills the card exactly). Off: crop the art to a standard card.
+      let geom = editingDeck ? editCtx.geom : undefined; // keep the deck's shape when editing without new fronts
+      let uw, uh, fit;
+      if (fitToImage && frontFiles.length) {
+        const dim = await measureImage(frontFiles[0]);
+        if (dim && dim.w && dim.h) {
+          geom = geomFromImage(dim.w, dim.h, dim.round);   // round measured from the art's alpha
+          const MAX = 1200, s = Math.min(1, MAX / Math.max(dim.w, dim.h)); // cap the texture size, keep aspect
+          uw = Math.max(1, Math.round(dim.w * s)); uh = Math.max(1, Math.round(dim.h * s)); fit = 'cover';
+        }
+      }
+      if (geom && fitToImage) geom = applyShapeToGeom({ ...geom, t: cardThickHalf() }); // apply the chosen thickness + shape
       let back;
-      if (byId('adImgBack').files[0]) back = await uploadImage(byId('adImgBack').files[0], undefined, undefined, fit, 'decks', pad);
+      if (byId('adImgBack').files[0]) back = await uploadImage(byId('adImgBack').files[0], uw, uh, fit, 'decks');
       else back = editingDeck ? editCtx.back : 'back'; // keep the existing back when editing/cloning
       let fronts;
-      if (frontFiles.length) { fronts = []; for (const f of frontFiles) fronts.push(await uploadImage(f, undefined, undefined, fit, 'decks', pad)); }
+      if (frontFiles.length) { fronts = []; for (const f of frontFiles) fronts.push(await uploadImage(f, uw, uh, fit, 'decks')); }
       else fronts = editCtx.fronts; // image-deck edit only swaps the back — keep the existing fronts
-      sendDeck(back, fronts, name, spawn, editCtx && editCtx.id);
+      sendDeck(back, fronts, name, spawn, editCtx && editCtx.id, geom);
       clearDeckForm();
       byId('addModal').hidden = true;
     } catch (e) { alert('Image upload failed.'); }
@@ -673,7 +743,12 @@ window.onOttRoom = (room) => {
     const { it, clone } = pendingDeck; pendingDeck = null;
     const isText = ((d.fronts && d.fronts[0]) || '').startsWith('text:');
     byId('addModal').querySelector(`.libTab[data-tab="${isText ? 'txtdecks' : 'imgdecks'}"]`)?.click();
-    editCtx = { kind: 'deck', id: clone ? null : it.id, back: d.back, fronts: d.fronts };
+    editCtx = { kind: 'deck', id: clone ? null : it.id, back: d.back, fronts: d.fronts, geom: d.geom || undefined };
+    if (d.geom && !isText) { // fit-to-image deck: restore its thickness + shape
+      byId('adImgNoCrop').classList.add('on');
+      setThickSlider(d.geom.t); byId('adImgThickRow').hidden = false;
+      setImgShape(shapeOfGeom(d.geom)); byId('adImgShapeRow').hidden = false;
+    }
     (isText ? FILLERS.txtdeck : FILLERS.imgdeck)(d, clone);
   });
   const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); room.send('listSkyboxes'); };

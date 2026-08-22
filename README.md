@@ -5,6 +5,33 @@ because the engine only simulates physical objects and lets people enforce the
 rules. One server runs a single cannon-es world and syncs piece transforms to
 every client over Colyseus; clients render and send intent, never physics.
 
+## Quick start (Docker)
+
+The fastest way to get a table up for your group. Docker Compose brings up the app **and** its
+database together — the schema, the least-privilege DB role, and all future migrations are handled
+for you.
+
+```bash
+git clone https://github.com/optimuspryne/open-tabletop.git
+cd open-tabletop
+cp .env.example .env        # then edit .env: set DB_PASSWORD and APP_DB_PASSWORD
+docker compose up -d
+```
+
+Open **http://localhost:2567** (or your machine's LAN IP from another device). The **first account
+you sign up becomes the admin** — no SQL, no extra steps. Two named volumes keep your data:
+`db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
+
+> **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
+> `image: optimuspryne/open-tabletop:0.9.0` to pull the published image instead. Upgrading later is
+> `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
+>
+> **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
+> [Security & production posture](#security--production-posture).
+
+Prefer to run it directly with Node, bring your own Postgres, or deploy through Portainer? Those
+paths are below.
+
 ## Run via NPM
 
 ```bash
@@ -97,7 +124,7 @@ app image against it:
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.8.0
+  optimuspryne/open-tabletop:0.9.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -149,7 +176,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.8.0
+    image: optimuspryne/open-tabletop:0.9.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:
@@ -199,10 +226,15 @@ docker restart open-tabletop-app
   * Built-in `.glb` files: coin, poker chip, token, chess pieces.
   * Custom `.glb` objects (`📚 Browse Custom Library` menu). Curated in the **Editor library**(admin accounts only)
 - **Cards, decks & hidden hands** - Face-down stacks, private hands.
-  * A built-in standard 52 card deck (`🧱 Browse Built-Ins` menu).
-  * Custom decks, image based or text based (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only)
+  * Built-in **standard 52-** and **54-card (with jokers)** decks (`🧱 Browse Built-Ins` menu).
+  * Custom decks, image based or text based (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only).
+  * Image decks can **fit their art** (no crop/stretch) and choose a **shape** (rounded, square, or hexagon) and **thickness**.
+  * **Left-click** a deck to draw its top card to your hand, **left-drag** to deal to the table, **right-click** to shuffle, **double-click** to peek (draw-to-inspect).
+- **Tile games** — the same card system also drives *tiles* (a card with its own footprint, thickness, and shape). One-click **Games** (`🧱 Browse Built-Ins` → Games):
+  * **Dominoes** (a double-six boneyard, dealt 7 to a hand), **Wordy McWordface** (a legally-distinct word game on a 15×15 premium board — played tiles snap to cells), and **Mahjong** (the full 144-tile wall, dealt 13 to a hand).
+  * Their draw piles wear a **bentwood box** — a deck can take a 3D model *skin* while still working as a normal draw pile.
 - **Boards** (`🧱 Browse Built-Ins` menu).
-  * Two built-in `.glb` boards, Chess/Checkers and Go.
+  * Two built-in `.glb` boards (Chess/Checkers and Go), plus **procedural boards** drawn from data (the Wordy McWordface premium grid).
   * Custom `.glb` or flat image boards (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only)
 - **`🖊️ Whiteboard`** A shared tilt-up **whiteboard** to sketch on.
   * Only one drawer at a time.  Marker color matches assigned player color.
@@ -376,10 +408,18 @@ owner, exactly as in a live session.
 ## Custom decks & card art
 
 Card faces are texture *references*: `rank:A:♠:#000` (procedural), `text:…`
-(procedural text card), `tback:…` (colored back), or a `data:`/URL image. The
+(procedural text card), `tback:…` (colored back), a `data:`/URL image, or a
+procedural tile face (`domino:a:b`, `letter:A:1`, or a bundled mahjong image). The
 **+ Deck** dialog builds a deck from text (one per line / comma / JSON) or
 uploaded images, with a **"Save this deck as…"** field to persist it on creation.
 There's also a "Spawn Built-in Deck" for a standard 52.
+
+An image deck can turn on **Fit to image** to size its cards to the uploaded art's
+aspect (no crop/stretch), and then set the card **thickness** and **shape**
+(rounded / square / hexagon). All of this is a single `props.geom` on the deck —
+the same variable-geometry system tiles use — read by both the mesh and the
+collider (see [ARCHITECTURE.md](docs/ARCHITECTURE.md)). A deck can also carry a
+`deckModel` skin (a bag/box `.glb`) via the `DECK_MODELS` registry.
 
 ## The asset library (admin-curated)
 
@@ -453,11 +493,15 @@ app runs fine before you add any audio.
 | card-flip     | a card is flipped                                            | everyone     |
 | card-pickup   | grab a card, deal-drag off a deck, or take one to hand       | you          |
 | card-drop     | a dealt/played card lands, or one you dropped hits the table | everyone     |
+| tile-pickup   | grab/draw a tile (domino, word tile, mahjong)               | you          |
+| tile-drop     | a tile lands (dealt, played, or dropped)                    | everyone     |
 | shuffle       | a deck is shuffled                                           | everyone     |
 | die-pickup    | you grab a die                                               | you          |
 | die-drop      | a die you dropped hits the table                            | everyone     |
 | deck-pickup   | you grab a deck                                              | you          |
 | deck-drop     | a deck you dropped hits the table                           | everyone     |
+| tiledeck-pickup | you grab a tile deck (its wooden box)                     | you          |
+| tiledeck-drop | a tile deck (box) you dropped hits the table                | everyone     |
 | object-pickup | you grab a prop or board                                     | you          |
 | object-drop   | a prop or board you dropped hits the table                  | everyone     |
 | hand-drop     | you dump your whole hand to the table                       | everyone     |

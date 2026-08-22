@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, DIE_SIDES, seatAngle, SEAT_ANGLES } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, dieSpawnProps, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -234,7 +234,14 @@ function buildCollider(type, props) {
 
   // A card's collider is intentionally thicker than the visible card, which is
   // what keeps a stack of them stable instead of jittering apart.
-  if (type === 'card') return new CANNON.Box(new CANNON.Vec3(shape.box[0], SIM.cards.colliderThick, shape.box[2]));
+  if (type === 'card') {
+    const g = cardGeom(props), hy = Math.max(g.th, SIM.cards.colliderThick);         // thickness at least the card collider
+    // A hexagon card gets a matching 6-gon prism (Y-oriented cylinder = flat hex), so it collides —
+    // and will snap to a future hex grid — as the shape it looks like. Others keep the box footprint.
+    return g.shape === 'hex'
+      ? new CANNON.Cylinder(g.hh, g.hh, hy * 2, 6)         // radius = circumradius (pointy-top); cannon's 6-gon aligns with the mesh
+      : new CANNON.Box(new CANNON.Vec3(g.hw, hy, g.hh));
+  }
 
   return new CANNON.Box(new CANNON.Vec3(...shape.box));
 }
@@ -354,9 +361,9 @@ defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', 
 // are the grid: cell size (world units), 'off'|'square'|'hex', the line colour (so it
 // reads on any felt), and the grid's height above the felt. GM-set, durable.
 class RoomScale extends Schema {
-  constructor() { super(); this.worldPerUnit = 1; this.unitLabel = 'u'; this.roundStep = 0.1; this.cellWorld = 0; this.cellZ = 0; this.gridX = 0; this.gridZ = 0; this.gridStyle = 'off'; this.gridColor = '#ffffff'; this.gridLift = 0.05; this.snapAnchor = 'center'; }
+  constructor() { super(); this.worldPerUnit = 1; this.unitLabel = 'u'; this.roundStep = 0.1; this.cellWorld = 0; this.cellZ = 0; this.gridX = 0; this.gridZ = 0; this.gridStyle = 'off'; this.gridColor = '#ffffff'; this.gridLift = 0.05; this.snapAnchor = 'center'; this.gridHidden = false; }
 }
-defineTypes(RoomScale, { worldPerUnit: 'number', unitLabel: 'string', roundStep: 'number', cellWorld: 'number', cellZ: 'number', gridX: 'number', gridZ: 'number', gridStyle: 'string', gridColor: 'string', gridLift: 'number', snapAnchor: 'string' });
+defineTypes(RoomScale, { worldPerUnit: 'number', unitLabel: 'string', roundStep: 'number', cellWorld: 'number', cellZ: 'number', gridX: 'number', gridZ: 'number', gridStyle: 'string', gridColor: 'string', gridLift: 'number', snapAnchor: 'string', gridHidden: 'boolean' });
 // PUBLIC measurement/template overlay — a flat, non-physics annotation on the felt
 // (rendered via the OVERLAY registry client-side). Every overlay is two points plus
 // optional scalars, so one shape + one interaction (drag A→B) covers ruler today and
@@ -412,7 +419,12 @@ function buildWorld() {
 }
 
 const rnd = () => [(Math.random() - 0.5) * 8, SIM.spawnY, (Math.random() - 0.5) * 6];
-const sfxImpact = (t) => t === 'card' ? 'card-drop' : t === 'die' ? 'die-drop' : t === 'deck' ? 'deck-drop' : 'object-drop';
+// The landing/drop cue for a piece. A TILE (a card/deck carrying a `tile` kind — domino/letter/mahjong)
+// clacks like a tile / thunks like its wooden box, instead of the paper card/deck sounds.
+const isTilePiece = (p) => !!(p && p.tile);
+const dropSfx = (t, p) => t === 'card' ? (isTilePiece(p) ? 'tile-drop' : 'card-drop')
+  : t === 'deck' ? (isTilePiece(p) ? 'tiledeck-drop' : 'deck-drop')
+  : t === 'die' ? 'die-drop' : 'object-drop';
 
 // Fisher–Yates in-place shuffle.
 const shuffle = (array) => {
@@ -428,7 +440,7 @@ const shuffle = (array) => {
 // A standard, shuffled 52-card deck as a list of face "refs" (see deckRefOk).
 // A ref like "rank:A:♠:#000000" tells the client how to draw that face itself,
 // so we never ship 52 images — just 52 short strings.
-function buildSimpleDeck() {
+function buildSimpleDeck(jokers = false) {
   const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
   const suits = [
     { symbols: ['♠', '♣'], color: '#000000' }, // black
@@ -439,8 +451,45 @@ function buildSimpleDeck() {
     for (const symbol of symbols)
       for (const rank of ranks)
         cards.push(`rank:${rank}:${symbol}:${color}`);
+  if (jokers) cards.push('joker:#bd2500', 'joker:#1a1a1a'); // one red, one black — a complete 54-card deck
   return { back: 'back', cards: shuffle(cards) };
 }
+
+// A shuffled double-six domino set as a "deck" of 28 tiles. `tile: 'domino'` rides to every card
+// so each spawned/held domino gets its 2:1 tile geometry (see cardGeom), face-down or face-up.
+function buildDominoSet() {
+  const cards = [];
+  for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) cards.push(`domino:${a}:${b}`);
+  return { back: 'domback', cards: shuffle(cards), tile: 'domino', deckModel: 'bentwood' };
+}
+
+// A shuffled 100-tile letter bag for Wordy McWordface, built from LETTER_DIST (edit the bag there).
+// `tile:'letter'` gives each tile its chunky square geometry; `snap:true` rides to every drawn/played
+// tile (see geoOf) so it snaps into a board cell (see spawnCardFlat / releasePiece).
+function buildScrabbleBag() {
+  const cards = [];
+  for (const [L, [count, value]] of Object.entries(LETTER_DIST))
+    for (let i = 0; i < count; i++) cards.push(`letter:${L}:${value}`); // blank letter '' → 'letter::0'
+  return { back: 'lback', cards: shuffle(cards), tile: 'letter', snap: true, deckModel: 'bentwood' };
+}
+
+// The standard 144-tile Mahjong wall as a shuffled "deck", from the MAHJONG face lists. `tile:'mahjong'`
+// gives each tile its chunky geometry; the face refs are bundled image URLs (composited ivory tiles).
+function buildMahjongWall() {
+  const cards = [];
+  const push = (id, n) => { for (let i = 0; i < n; i++) cards.push(MAHJONG.base + id + '.png'); };
+  for (const suit of MAHJONG.suits) for (let r = 1; r <= 9; r++) push(suit + r, 4); // 3 suits × 1-9 × 4 = 108
+  for (const h of MAHJONG.honors) push(h, 4);                                        // winds + dragons × 4 = 28
+  for (const b of MAHJONG.bonus) push(b, 1);                                         // flowers + seasons × 1 = 8
+  return { back: 'mjback', cards: shuffle(cards), tile: 'mahjong', deckModel: 'bentwood' };
+}
+
+// The PUBLIC geometry/behavior a card/tile inherits from its deck: a named tile kind (`tile`), an
+// explicit `geom` (custom-aspect image decks), and a `snap` flag (word tiles snap to the grid). Plain
+// playing cards carry none, so this returns {} and nothing extra is stored — normal cards are
+// untouched. Threaded wherever a card is dealt, drawn, held, or played, so a face-down tile still
+// shows its true shape (and snap behavior) while its face is private.
+const geoOf = (o) => { const g = {}; if (o && o.tile) g.tile = o.tile; if (o && o.geom) g.geom = o.geom; if (o && o.snap) g.snap = true; return g; };
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
@@ -597,7 +646,7 @@ class TableRoom extends Room {
         const piece = this.state.pieces.get(id); if (!piece || piece.type !== 'card') continue;
         const props = JSON.parse(piece.props || '{}');
         const front = (this.cardData.get(id) || {}).front || props.front;
-        this.addToHand(client, front, props.back || 'back');
+        this.addToHand(client, front, props.back || 'back', geoOf(props));
         this.removePiece(id);
       }
     });
@@ -644,15 +693,30 @@ class TableRoom extends Room {
       const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
       if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
 
-      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
       const front = cards.pop();
-      const id = this.spawnCardFlat(this.besideDeck(this.bodies.get(deckId)), { back }); // only the back is public
+      const id = this.spawnCardFlat(this.besideDeck(this.bodies.get(deckId)), { back, ...geoOf(dp) }); // only the back is public
       this.cardData.set(id, { front }); // front stays private until taken or flipped
 
       deck.count = cards.length;
       if (!cards.length) this.removePiece(deckId);
       else this.updateDeckCollider(deckId);
-      this.broadcast('sfx', { type: 'card-drop' });
+      this.broadcast('sfx', { type: dropSfx('card', dp) }); // a tile deck clacks a tile, not paper
+    });
+
+    // Single left-click on a deck: draw the top card straight into your OWN hand (a quick
+    // pick-up, distinct from left-DRAG which deals to the table). The front stays private —
+    // it's added to the clicker's hand, never spawned on the table.
+    this.onMessage('drawToHand', (client, { deckId }) => {
+      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
+      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
+      const front = cards.pop();
+      this.addToHand(client, front, back, geoOf(dp)); // sends the updated hand to the drawer only
+      deck.count = cards.length;
+      if (!cards.length) this.removePiece(deckId);
+      else this.updateDeckCollider(deckId);
+      this.broadcast('sfx', { type: dropSfx('card', dp) }); // a tile deck clacks a tile, not paper
     });
 
     // Deal the top card AND immediately give the dealer control to drag it out.
@@ -660,10 +724,10 @@ class TableRoom extends Room {
       const deck = this.state.pieces.get(msg.deckId), cards = this.deckCards.get(msg.deckId);
       if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
 
-      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
       const front = cards.pop();
       const deckBody = this.bodies.get(msg.deckId);
-      const id = this.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], { back });
+      const id = this.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], { back, ...geoOf(dp) });
       this.cardData.set(id, { front });
 
       deck.count = cards.length;
@@ -686,7 +750,7 @@ class TableRoom extends Room {
       const body = this.bodies.get(id);
       this.spawn(item.type, body ? this.besideDeck(body) : rnd(), item.props);
       this.afterDispense(disp, id);
-      this.broadcast('sfx', { type: sfxImpact('prop') });
+      this.broadcast('sfx', { type: 'object-drop' });
     });
     this.onMessage('dispenseDrag', (client, msg = {}) => {
       const disp = this.state.pieces.get(msg.id);
@@ -708,7 +772,7 @@ class TableRoom extends Room {
       const props = JSON.parse(piece.props || '{}');
       const front = (this.cardData.get(id) || {}).front || props.front;
       const back = props.back || 'back';
-      this.addToHand(client, front, back);
+      this.addToHand(client, front, back, geoOf(props));
       this.removePiece(id);
     });
 
@@ -720,13 +784,13 @@ class TableRoom extends Room {
       const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
       if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
 
-      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
       const front = cards.pop();
       deck.count = cards.length;
       this.updateDeckCollider(deckId);
 
-      this.pendingInspect.set(client.sessionId, { deckId, front, back });
-      client.send('inspectCard', { front, back }); // PRIVATE: only the drawer sees the front
+      this.pendingInspect.set(client.sessionId, { deckId, front, back, geo: geoOf(dp) });
+      client.send('inspectCard', { front, back, ...geoOf(dp) }); // PRIVATE: only the drawer sees the front; geo → correct tile proportions
     });
     // Place a drawn-to-inspect card: back on the deck, into your hand, or onto
     // the field face-up (public front) / face-down (front stays private).
@@ -734,7 +798,7 @@ class TableRoom extends Room {
       const pending = this.pendingInspect.get(client.sessionId);
       if (!pending) return;
       this.pendingInspect.delete(client.sessionId);
-      const { deckId, front, back } = pending;
+      const { deckId, front, back, geo = {} } = pending;
 
       if (where === 'deck') { // return it to the top of the deck it came from
         const cards = this.deckCards.get(deckId);
@@ -748,12 +812,12 @@ class TableRoom extends Room {
       }
 
       if (where === 'hand') {
-        this.addToHand(client, front, back);
+        this.addToHand(client, front, back, geo);
       } else { // 'field-up' (front public) or 'field-down' (front stays private)
         const faceDown = where === 'field-down';
         const deckBody = this.bodies.get(deckId);
         const pos = deckBody ? this.besideDeck(deckBody) : rnd();
-        const id = this.spawnCardFlat(pos, faceDown ? { back } : { front, back });
+        const id = this.spawnCardFlat(pos, faceDown ? { back, ...geo } : { front, back, ...geo });
         if (faceDown) this.cardData.set(id, { front });
       }
 
@@ -775,35 +839,31 @@ class TableRoom extends Room {
       const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
       if (!deck || deck.type !== 'deck' || !cards || cards.length < 2) return;      // need 2+ cards to split
       if (this.state.pieces.size >= SIM.maxPieces) return;
-      const back = JSON.parse(deck.props || '{}').back || 'back';
+      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
       const bottom = cards.splice(Math.floor(cards.length / 2));                    // original keeps the top half
       deck.count = cards.length;
       this.updateDeckCollider(deckId);
       const p = this.bodies.get(deckId)?.position || { x: 0, z: 0 };
-      this.spawn('deck', [p.x + 2.2, SIM.spawnY, p.z], { back, cards: bottom });     // the bottom half, beside it
+      this.spawn('deck', [p.x + 2.2, SIM.spawnY, p.z], { back, cards: bottom, ...geoOf(dp) }); // the bottom half keeps the tile/geom
     });
     // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
     this.onMessage('recolor', (client, { id, color, textColor, team } = {}) => {
-      const piece = this.state.pieces.get(id);
-      if (!piece) return;
-      const ok = (c) => Number.isInteger(c) && c >= 0 && c <= 0xffffff;
-      const props = JSON.parse(piece.props || '{}');
-      if (piece.type === 'die' || piece.type === 'prop') {
-        if (color != null) { const c = Number(color); if (!ok(c)) return; props.color = c; }
-        if (piece.type === 'die' && textColor != null) { const t = Number(textColor); if (!ok(t)) return; props.textColor = t; } // die number color
-      } else if (piece.type === 'dispenser') {
-        const d = DISPENSERS[props.disp]; if (!d) return;
-        if (d.team) { if (team == null) return; props.team = team ? 1 : 0; }        // go bowl: black/white interior
-        else { if (color == null) return; const c = Number(color); if (!ok(c)) return; props.color = c; } // poker/coin tint
-      } else return;
-      piece.props = JSON.stringify(props); // synced → every client rebuilds the piece with the new tint
+      this.recolorPiece(id, { color, textColor, team });
+    });
+    // Recolor a whole multi-selection at once. One color/textColor is applied to every id it
+    // fits: dice + props take `color` (dice also `textColor`), poker/coin dispensers take
+    // `color`; anything it doesn't fit (cards, boards, team bowls) is silently skipped.
+    this.onMessage('recolorGroup', (client, { ids, color, textColor, team } = {}) => {
+      if (!Array.isArray(ids)) return;
+      for (const id of ids) this.recolorPiece(id, { color, textColor, team }); // color XOR team; each piece takes what fits
     });
     // Decks are built in chunks so no single message is huge (a text list can be
     // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
     this.onMessage('deckBegin', (client, msg) => {
       if (!this.isAdmin(client)) return; // building library decks is admin-only
       const back = (msg && deckRefOk(msg.back)) ? msg.back : 'back';
-      this.drafts.set(client.sessionId, { back, cards: [] });
+      const geom = sanitizeGeom(msg && msg.geom);      // optional custom card shape (fit-to-image decks)
+      this.drafts.set(client.sessionId, { back, cards: [], geom });
     });
     this.onMessage('deckAppend', (client, msg) => {
       const draft = this.drafts.get(client.sessionId);
@@ -817,12 +877,13 @@ class TableRoom extends Room {
       const draft = this.drafts.get(client.sessionId);
       this.drafts.delete(client.sessionId);
       if (!draft || !draft.cards.length) return;
+      const geo = draft.geom ? { geom: draft.geom } : {};
       const doSpawn = !msg || msg.spawn !== false; // default: spawn onto the table (also the back-compat path)
-      if (doSpawn) this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards }); // spawn to test it live
+      if (doSpawn) this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards, ...geo }); // spawn to test it live
       if (msg && msg.name) {
         try {
-          if (msg.editId) await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards); // edit an existing deck in place
-          else await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, ownerId: client.auth.userId, isPublic: false });
+          if (msg.editId) await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom); // edit an existing deck in place
+          else await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, geom: draft.geom, ownerId: client.auth.userId, isPublic: false });
           this.sendAssetList(client, 'deck');
         } catch (e) { console.error('[deckFinish]', e.message); }
       }
@@ -841,7 +902,7 @@ class TableRoom extends Room {
       const deck = await db.getDeck(msg && msg.id);
       if (!deck) return;
       if (!deck.isPublic && !this.isAdmin(client)) return; // private assets: admins only
-      this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts });
+      this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts, ...(deck.geom ? { geom: deck.geom } : {}) });
     });
 
     this.onMessage('saveBoard', async (client, msg) => {
@@ -903,7 +964,7 @@ class TableRoom extends Room {
     this.onMessage('getDeck', async (client, msg) => { // fetch a deck's full cards/back for the editor to pre-fill
       if (!this.isAdmin(client) || !msg) return;
       const d = await db.getDeck(msg.id);
-      if (d) client.send('deckData', { id: msg.id, name: d.name, back: d.back, fronts: d.fronts });
+      if (d) client.send('deckData', { id: msg.id, name: d.name, back: d.back, fronts: d.fronts, geom: d.geom });
     });
     this.onMessage('assetDelete', async (client, msg) => {
       if (!this.isAdmin(client) || !msg) return;
@@ -967,10 +1028,10 @@ class TableRoom extends Room {
       const pos = (typeof x === 'number' && typeof z === 'number')
         ? [x, 3, z]                                        // where the client dropped it
         : [(Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 3]; // or scattered
-      const id = this.spawnCardFlat(pos, faceDown ? { back: card.back } : { front: card.front, back: card.back });
+      const id = this.spawnCardFlat(pos, faceDown ? { back: card.back, ...geoOf(card) } : { front: card.front, back: card.back, ...geoOf(card) });
       if (faceDown) this.cardData.set(id, { front: card.front }); // front private until flipped
       this.sendHand(client);
-      this.broadcast('sfx', { type: 'card-drop' });
+      this.broadcast('sfx', { type: dropSfx('card', card) }); // played tile clacks
     });
 
     // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or
@@ -983,7 +1044,7 @@ class TableRoom extends Room {
       for (const card of hand) {
         if (this.state.pieces.size >= SIM.maxPieces) break;                            // respect the piece cap
         const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6]; // small spread in front of them
-        const id = this.spawnCardFlat(pos, faceDown ? { back: card.back } : { front: card.front, back: card.back });
+        const id = this.spawnCardFlat(pos, faceDown ? { back: card.back, ...geoOf(card) } : { front: card.front, back: card.back, ...geoOf(card) });
         if (faceDown) this.cardData.set(id, { front: card.front });                    // face-down: front stays private until flipped
         spawned++;
       }
@@ -1001,12 +1062,12 @@ class TableRoom extends Room {
         // The server owns the seat and the drop spot (client can't spoof another seat's tray).
         const seat = this.seatOf(client);
         if (msg.type !== 'die' || seat == null || !this.state.trays.get(String(seat))) return;
-        const sides = DIE_SIDES.includes(+msg.props.sides) ? +msg.props.sides : 6;
-        this.spawn('die', this.trayDropPos(seat), { sides, traySeat: seat });
+        this.spawn('die', this.trayDropPos(seat), { ...dieSpawnProps(msg.props), traySeat: seat });
         this.broadcast('sfx', { type: 'die-roll' }); // a little clack as it lands in the tray
       } else {
         if (this.rank(client) < RANK.helper) return; // spawning pieces is Helper+
-        this.spawn(msg.type, rnd(), msg.props || {});
+        const props = msg.type === 'die' ? dieSpawnProps(msg.props) : (msg.props || {}); // validate a table die's color too
+        this.spawn(msg.type, rnd(), props);
       }
     });
 
@@ -1045,6 +1106,12 @@ class TableRoom extends Room {
       this.clearTable();
       const t = this.state.timer; // stop and zero the shared timer too
       t.running = false; t.since = 0; t.base = t.mode === 'down' ? t.duration : 0;
+    });
+
+    // Load a one-click starter game — clears the table and sets up the chosen game (GM+).
+    this.onMessage('loadStarter', (client, { game } = {}) => {
+      if (this.rank(client) < RANK.gm) return;   // replacing the whole table is GM+ (like scene load / reset)
+      if (STARTERS[game]) this.setupStarter(game);
     });
 
     // Toggle a piece's keep-upright/flat behaviour (the U key).
@@ -1257,6 +1324,7 @@ class TableRoom extends Room {
       if (msg.gridZ !== undefined && Number.isFinite(+msg.gridZ)) sc.gridZ = clamp(+msg.gridZ, -1e3, 1e3); // lattice offset Z
       if (msg.gridStyle === 'square' || msg.gridStyle === 'hex' || msg.gridStyle === 'off')
         sc.gridStyle = msg.gridStyle;
+      if (typeof msg.gridHidden === 'boolean') sc.gridHidden = msg.gridHidden; // grid still snaps, just isn't drawn
       if (typeof msg.gridColor === 'string' && /^#[0-9a-f]{6}$/i.test(msg.gridColor))
         sc.gridColor = msg.gridColor;                            // grid line colour (reads on any felt)
       if (msg.gridLift !== undefined && Number.isFinite(+msg.gridLift))
@@ -1272,37 +1340,7 @@ class TableRoom extends Room {
     // the GM can nudge the cell size afterward to account for any border in the model.
     this.onMessage('calibrateGrid', (client, msg = {}) => {
       if (this.rank(client) < RANK.gm) return;
-      let boardId = null;
-      this.state.pieces.forEach((p, id) => { if (!boardId && p.type === 'board') boardId = id; }); // the single table board
-      if (!boardId) return;
-      const spec = BOARDS[JSON.parse(this.state.pieces.get(boardId).props || '{}').board];
-      // Cell size = board width ÷ number of GAPS between lines. Built-in boards store the gap
-      // count + anchor directly. For a custom/image board the client sends the count the GM
-      // sees (squares for a chess-style board, or LINES for a go-style one) plus the anchor;
-      // a cross (go) board has one fewer gap than it has lines, so subtract one there.
-      let gaps, anchor;
-      if (spec && spec.grid) {
-        gaps = spec.grid.cells; anchor = spec.grid.anchor;
-      } else {
-        anchor = msg.anchor === 'cross' ? 'cross' : 'center';
-        const count = Math.round(+msg.cells);
-        gaps = anchor === 'cross' ? count - 1 : count;
-      }
-      if (!(gaps > 0)) return;
-      // Dimensions from the actual collider, per axis — so a rectangular board (e.g. go, whose
-      // cells are slightly taller than wide) gets independent width/depth spacing that a single
-      // square cell size could never match. Works for every board kind uniformly.
-      const body = this.bodies.get(boardId), shape = body && body.shapes[0];
-      const he = shape && shape.halfExtents;
-      const wx = he ? he.x * 2 : 0, wz = he ? he.z * 2 : 0;
-      if (!(wx > 0) || !(wz > 0)) return;
-      const sc = this.state.scale;
-      sc.cellWorld = clamp(wx / gaps, 1e-3, 1e3);
-      sc.cellZ = clamp(wz / gaps, 1e-3, 1e3);
-      sc.gridX = 0; sc.gridZ = 0;              // the board is centred at the origin, so no offset
-      sc.gridStyle = 'square';
-      sc.snapAnchor = anchor === 'cross' ? 'cross' : 'center';
-      this.scheduleSave();
+      this.calibrateGrid(msg);
     });
 
     // --- Overlays: flat measurement/template annotations (not physics) --------
@@ -1520,12 +1558,20 @@ class TableRoom extends Room {
     if (type === 'deck') {
       // A deck's cards + order are PRIVATE (deckCards); only the shared back is
       // published, which is all a client needs to render the face-down stack.
-      const deckData = (props.cards && props.cards.length)
-        ? { back: props.back || 'back', cards: props.cards }
-        : buildSimpleDeck();
+      const deckData = props.set === 'domino'
+        ? buildDominoSet()                                              // a domino boneyard, spawned on its own (no starter/table-clear)
+        : props.set === 'letter'
+          ? buildScrabbleBag()                                          // a Wordy McWordface letter bag on its own
+          : props.set === 'mahjong'
+            ? buildMahjongWall()                                        // a 144-tile mahjong wall on its own
+            : (props.cards && props.cards.length)
+            ? { back: props.back || 'back', cards: props.cards, ...geoOf(props), deckModel: props.deckModel } // pre-built cards (e.g. a starter) can carry a skin
+            : buildSimpleDeck(!!props.jokers);
       this.deckCards.set(id, deckData.cards.slice());
       piece.count = deckData.cards.length;
-      piece.props = JSON.stringify({ back: deckData.back });
+      const deckProps = { back: deckData.back, ...geoOf(deckData) }; // deck-level tile/geom rides to its cards
+      if (deckData.deckModel && DECK_MODELS[deckData.deckModel]) deckProps.model = deckData.deckModel; // an optional 3D box/bag skin (server-set only)
+      piece.props = JSON.stringify(deckProps);
     } else if (type === 'dispenser') {
       const d = DISPENSERS[props.disp] || {};
       piece.count = (d.infinite || !d.count) ? 0 : clamp(+props.count || d.count.def, 1, d.count.max); // remaining items (0 = infinite)
@@ -1543,7 +1589,7 @@ class TableRoom extends Room {
       if (Date.now() - rel > 3000) { this._released.delete(id); return; } // never really landed — disarm
       if (Math.abs(e.contact.getImpactVelocityAlongNormal()) < SIM.impact.minVel) return; // ignore gentle grazes
       this._released.delete(id);                                     // one cue per drop (kills multi-bounce spam)
-      this.broadcast('sfx', { type: sfxImpact(type) });
+      this.broadcast('sfx', { type: dropSfx(type, props) });         // props carries `tile` for tile pieces/decks
     });
     if (type === 'deck') this.updateDeckCollider(id); // match the collider to the stack height
     if (type === 'dispenser') this.updateStackCollider(id); // stack cylinder ∝ count (no-op for a bowl)
@@ -1555,6 +1601,10 @@ class TableRoom extends Room {
   // Spawn a card lying flat at pos (no random tumble); returns its id. Callers
   // set the private front (cardData) and/or owner afterward as needed.
   spawnCardFlat(pos, publicProps) {
+    if (publicProps && publicProps.snap && gridActive(this.state.scale)) { // a word tile played onto the board snaps into its cell
+      const p = snapToCell(pos[0], pos[2], this.state.scale);
+      pos = [p.x, pos[1], p.z];
+    }
     const id = this.spawn('card', pos, publicProps);
     const body = this.bodies.get(id);
     body.quaternion.set(0, 0, 0, 1);
@@ -1572,9 +1622,9 @@ class TableRoom extends Room {
   }
 
   // Add a card to a player's private hand and push the update to them alone.
-  addToHand(client, front, back) {
+  addToHand(client, front, back, geo = {}) {
     const hand = this.hands.get(client.sessionId) || [];
-    hand.push({ hid: 'h' + (this.nextHid++), front, back });
+    hand.push({ hid: 'h' + (this.nextHid++), front, back, ...geo }); // geo = {tile}/{geom} for tile cards; nothing for plain cards
     this.hands.set(client.sessionId, hand);
     this.sendHand(client);
   }
@@ -1593,13 +1643,112 @@ class TableRoom extends Room {
     return this.spawn('board', [0, box ? box[1] : 0.05, 0], props);
   }
 
+  // Set the room's square grid from the current board's real size: cell = board width ÷ gaps.
+  // Built-in boards store the gap count + anchor; a custom board takes them from `msg`. Returns
+  // { cellX, cellZ, gaps, anchor } (or null) so a starter setup can place pieces on the squares.
+  calibrateGrid(msg = {}) {
+    let boardId = null;
+    this.state.pieces.forEach((p, id) => { if (!boardId && p.type === 'board') boardId = id; }); // the single table board
+    if (!boardId) return null;
+    const spec = BOARDS[JSON.parse(this.state.pieces.get(boardId).props || '{}').board];
+    let gaps, anchor;
+    if (spec && spec.grid) { gaps = spec.grid.cells; anchor = spec.grid.anchor; }
+    else { anchor = msg.anchor === 'cross' ? 'cross' : 'center'; const count = Math.round(+msg.cells); gaps = anchor === 'cross' ? count - 1 : count; }
+    if (!(gaps > 0)) return null;
+    const sc = this.state.scale;
+    // A board can pin its exact printed-line spacing (cellX/cellZ) — needed when a wide border
+    // means the lines don't fill the collider (go). Otherwise derive cell = board width ÷ gaps.
+    if (spec && spec.grid && spec.grid.cellX > 0) {
+      sc.cellWorld = clamp(spec.grid.cellX, 1e-3, 1e3);
+      sc.cellZ = clamp(spec.grid.cellZ > 0 ? spec.grid.cellZ : spec.grid.cellX, 1e-3, 1e3);
+    } else {
+      const body = this.bodies.get(boardId), shape = body && body.shapes[0];
+      const he = shape && shape.halfExtents;
+      const wx = he ? he.x * 2 : 0, wz = he ? he.z * 2 : 0;
+      if (!(wx > 0) || !(wz > 0)) return null;
+      sc.cellWorld = clamp(wx / gaps, 1e-3, 1e3);
+      sc.cellZ = clamp(wz / gaps, 1e-3, 1e3);
+    }
+    sc.gridX = 0; sc.gridZ = 0;              // the board is centred at the origin, so no offset
+    sc.gridStyle = 'square';
+    sc.snapAnchor = anchor === 'cross' ? 'cross' : 'center';
+    this.scheduleSave();
+    return { cellX: sc.cellWorld, cellZ: sc.cellZ, gaps, anchor: sc.snapAnchor };
+  }
+
+  // Deal `n` cards from a deck to each SEATED player's private hand (starter setups deal a
+  // starting rack, e.g. dominoes). The deck's tile/geom rides along so held tiles keep their
+  // shape. Trims the deck and removes it if it empties.
+  dealFromDeckToSeats(deckId, n) {
+    const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
+    if (!deck || !cards) return;
+    const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back', geo = geoOf(dp);
+    for (const client of this.clients) {
+      if (this.seatOf(client) == null) continue;                        // seated players only
+      for (let i = 0; i < n && cards.length; i++) this.addToHand(client, cards.pop(), back, geo);
+    }
+    deck.count = cards.length;
+    if (!cards.length) this.removePiece(deckId); else this.updateDeckCollider(deckId);
+  }
+
+  // Load a ready-to-play starter game: clear the table, then set up the board + pieces (or the
+  // deck + chips) so a host has a complete game in one click. Replaces the whole table (GM+).
+  setupStarter(game) {
+    const def = STARTERS[game]; if (!def) return false;
+    this.clearTable();
+    let gridded = false;
+    if (def.board) {
+      this.swapBoard({ board: def.board });
+      // Turn on the board's grid: chess/checkers derive cell = width ÷ cells; go pins its exact
+      // printed-line spacing (BOARDS.go.grid.cellX/cellZ) so its bordered lines line up.
+      const grid = this.calibrateGrid();
+      if (grid) {
+        gridded = true;
+        this.state.scale.gridHidden = true;                     // starter games snap to the grid but don't draw it
+        if (def.pieces) {
+          const cells = def.cells || 8, half = (cells - 1) / 2;
+          const boardTop = (BOARDS[def.board].box[1] || 0.15) * 2; // board sits at y=box[1], half-height box[1]
+          for (const p of def.pieces()) {
+            if (this.state.pieces.size >= SIM.maxPieces) break;
+            const x = (p.col - half) * grid.cellX, z = (p.row - half) * grid.cellZ;
+            const box = ((PROPS[p.shape] || {}).collider || {}).box;
+            const restY = boardTop + (box ? box[1] : 0.2) + 0.03;  // sit it ON the board, no drop-tumble
+            // Identity quaternion → spawn UPRIGHT (no random tumble), so tall pieces don't fall
+            // across neighbouring squares and knock the set over as they settle.
+            this.spawn('prop', [x, restY, z], { shape: p.shape, team: p.team, snap: true }, [0, 0, 0, 1]);
+          }
+        }
+      }
+    }
+    if (!gridded) { this.state.scale.gridStyle = 'off'; this.scheduleSave(); } // board-less games (poker/dominoes): no stale grid
+    for (const b of (def.bowls || [])) this.spawn('dispenser', [b.x, SIM.spawnY, b.z], { disp: b.disp, team: b.team });
+    if (def.deck) {
+      const d = def.deck === true ? {} : def.deck;                       // {set?, deal?, jokers?}
+      const built = d.set === 'domino' ? buildDominoSet() : d.set === 'letter' ? buildScrabbleBag() : d.set === 'mahjong' ? buildMahjongWall() : buildSimpleDeck(!!d.jokers);
+      const deckId = this.spawn('deck', [0, SIM.spawnY, def.deckZ ?? 0], { back: built.back, cards: built.cards, ...geoOf(built), deckModel: built.deckModel }); // carry the box/bag skin, if any
+      if (d.deal > 0) this.dealFromDeckToSeats(deckId, d.deal);          // deal a starting rack to each seated player
+    }
+    for (const s of (def.stacks || [])) this.spawn('dispenser', [s.x, SIM.spawnY, s.z], { disp: s.disp, color: s.color });
+    return true;
+  }
+
   // Rebuild a deck's collider box so its height matches its current card count.
   updateDeckCollider(deckId) {
     const body = this.bodies.get(deckId), piece = this.state.pieces.get(deckId);
     if (!body || !piece) return;
     while (body.shapes.length) body.removeShape(body.shapes[0]);
-    const box = KINDS.deck.shape.box;
-    body.addShape(new CANNON.Box(new CANNON.Vec3(box[0], deckHeight(piece.count) / 2, box[2])));
+    const props = JSON.parse(piece.props || '{}');
+    const skin = props.model && DECK_MODELS[props.model];
+    if (skin) {                                            // a modeled deck (box/bag): a fixed box, not a growing stack
+      const [bx, by, bz] = skin.box;
+      body.addShape(new CANNON.Box(new CANNON.Vec3(bx, by, bz)));
+    } else {
+      const g = cardGeom(props);                           // a deck of tiles is shaped like its tiles
+      const hy = deckHeight(piece.count) / 2;              // footprint = the card exactly (matches deckMesh)
+      body.addShape(g.shape === 'hex'
+        ? new CANNON.Cylinder(g.hh, g.hh, hy * 2, 6)       // a hex deck is a hex stack (radius = circumradius)
+        : new CANNON.Box(new CANNON.Vec3(g.hw, hy, g.hh)));
+    }
     body.updateBoundingRadius();
     body.updateMassProperties();
     body.wakeUp();
@@ -1693,6 +1842,21 @@ class TableRoom extends Room {
     this.deckCards.delete(id);
     this.cardData.delete(id);
     this.state.pieces.delete(id);
+  }
+
+  // Apply a color to one piece, validating by type (shared by the single `recolor` message and
+  // the `recolorGroup` batch). Returns true if it changed. A die takes body + number color; a
+  // prop takes body; a poker/coin dispenser takes its tint; a team bowl takes a team flag.
+  // Anything else — cards, boards — is left untouched. Writing props re-syncs it to every client.
+  recolorPiece(id, opts = {}) {
+    const piece = this.state.pieces.get(id);
+    if (!piece) return false;
+    const props = JSON.parse(piece.props || '{}');
+    const dispDef = piece.type === 'dispenser' ? DISPENSERS[props.disp] : null;
+    const next = colorProps(piece.type, props, opts, dispDef);
+    if (!next) return false;
+    piece.props = JSON.stringify(next); // synced → every client rebuilds the piece with the new tint
+    return true;
   }
 
   // Send a player their private hand, and publish only its COUNT to everyone
@@ -1796,8 +1960,8 @@ class TableRoom extends Room {
 
     const body = this.bodies.get(id);
     if (body) {
-      if (gridActive(this.state.scale) && JSON.parse(piece.props || '{}').snap) {
-        const p = snapToCell(body.position.x, body.position.z, this.state.scale);
+      if (piece.type !== 'deck' && gridActive(this.state.scale) && JSON.parse(piece.props || '{}').snap) {
+        const p = snapToCell(body.position.x, body.position.z, this.state.scale); // the bag carries snap for its tiles, but shouldn't itself jump to a cell
         body.position.x = p.x; body.position.z = p.z;
         body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
       } else if (v) {
@@ -1846,7 +2010,7 @@ class TableRoom extends Room {
         if (dx * dx + dz * dz < reach * reach) {
           if (d && !d.infinite) { disp.count = (disp.count | 0) + 1; this.updateStackCollider(dispId); }
           this.removePiece(id);
-          this.broadcast('sfx', { type: sfxImpact('prop') });
+          this.broadcast('sfx', { type: 'object-drop' });
           break;
         }
       }
@@ -1887,7 +2051,7 @@ class TableRoom extends Room {
     const sc = this.state.scale;
     return { worldPerUnit: sc.worldPerUnit, unitLabel: sc.unitLabel, roundStep: sc.roundStep,
              cellWorld: sc.cellWorld, cellZ: sc.cellZ, gridX: sc.gridX, gridZ: sc.gridZ,
-             gridStyle: sc.gridStyle, gridColor: sc.gridColor, gridLift: sc.gridLift, snapAnchor: sc.snapAnchor };
+             gridStyle: sc.gridStyle, gridColor: sc.gridColor, gridLift: sc.gridLift, snapAnchor: sc.snapAnchor, gridHidden: sc.gridHidden };
   }
   // Validate + apply a scale object (from the room row or a scene). Every field is optional
   // and range-checked, so an old/partial snapshot just keeps the current defaults.
@@ -1905,6 +2069,7 @@ class TableRoom extends Room {
     if (Number.isFinite(+s.gridLift)) sc.gridLift = clamp(+s.gridLift, 0, GRID_LIFT_MAX);
     if (s.snapAnchor === 'center' || s.snapAnchor === 'cross') sc.snapAnchor = s.snapAnchor;
     if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off') sc.gridStyle = s.gridStyle;
+    if (typeof s.gridHidden === 'boolean') sc.gridHidden = s.gridHidden;
   }
 
   // Restore which seats' trays are out from a scene (an array of seat indices), then rebuild
@@ -1924,7 +2089,8 @@ class TableRoom extends Room {
       if (piece.type === 'deck') {
         const cards = (this.deckCards.get(id) || []).slice();
         for (const pend of this.pendingInspect.values()) if (pend.deckId === id) cards.unshift(pend.front); // fold a mid-inspect draw back onto its deck so a save never loses it
-        props = { back: props.back || 'back', cards };
+        // Serialize the box/bag skin as `deckModel` (the spawn-input name) so it round-trips on restore.
+        props = { back: props.back || 'back', cards, ...geoOf(props), ...(props.model ? { deckModel: props.model } : {}) };
       }
       else if (piece.type === 'card') { const cd = this.cardData.get(id); if (cd && cd.front) props = { ...props, front: cd.front, faceDown: true }; }
       pieces.push({ type: piece.type, props, x: piece.x, y: piece.y, z: piece.z, q: [piece.qx, piece.qy, piece.qz, piece.qw] });

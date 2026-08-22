@@ -1,0 +1,68 @@
+name: Release
+
+# Cut a release by pushing a version tag:  git tag -a v0.8.0 -m "…" && git push --tags
+# This workflow then: verifies the tag matches package.json, builds + pushes the multi-arch
+# image (:X.Y.Z and :latest), and creates the GitHub Release with that version's CHANGELOG
+# section as the notes. So the whole manual process becomes "bump, commit, tag, push".
+#
+# One-time setup (repo → Settings → Secrets and variables → Actions):
+#   DOCKERHUB_USERNAME  — your Docker Hub username (also the image namespace, e.g. optimuspryne)
+#   DOCKERHUB_TOKEN     — a Docker Hub access token with read/write on the repository
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write        # needed to create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version + extract changelog notes
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"                       # v0.8.0 -> 0.8.0
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+          # Guard: the tag must match package.json, so a forgotten version bump fails loudly.
+          PKG="$(node -p "require('./package.json').version")"
+          if [ "$PKG" != "$VERSION" ]; then
+            echo "::error::package.json version ($PKG) does not match tag ($VERSION)"; exit 1
+          fi
+
+          # Pull this version's section out of the changelog (everything under its heading,
+          # up to the next "## [" heading) to use as the release notes.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { flag = 1; next }
+            flag && /^## \[/ { exit }
+            flag { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::error::No CHANGELOG section found for $VERSION — update CHANGELOG.md before tagging"; exit 1
+          fi
+          echo "----- release notes -----"; cat RELEASE_NOTES.md
+
+      - uses: docker/setup-qemu-action@v3        # emulation so we can build arm64 too
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build + push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/open-tabletop:${{ env.VERSION }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/open-tabletop:latest
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" --title "Open Tabletop $VERSION" --notes-file RELEASE_NOTES.md

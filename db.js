@@ -49,19 +49,19 @@ export async function getDeck(id) {
   try {
     const { rows } = await pool.query('SELECT name, cards, props, is_public, owner_id FROM custom_decks WHERE id = $1', [id]);
     if (!rows[0]) return null;
-    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back', isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
+    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back', geom: (rows[0].props || {}).geom || null, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
   } catch (e) { console.error('[db] getDeck:', e.message); return null; }
 }
-export function insertDeck({ name, back, fronts, ownerId = null, isPublic = false }) {
+export function insertDeck({ name, back, fronts, geom = null, ownerId = null, isPublic = false }) {
   return pool.query(
     "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
-    [name, JSON.stringify(fronts), JSON.stringify({ back }), ownerId, isPublic]).then(r => String(r.rows[0].id));
+    [name, JSON.stringify(fronts), JSON.stringify(geom ? { back, geom } : { back }), ownerId, isPublic]).then(r => String(r.rows[0].id));
 }
-// Update an existing deck in place (name + cards + back), keeping owner + public flag.
-export function updateDeck(id, name, back, fronts) {
+// Update an existing deck in place (name + cards + back + optional card geometry), keeping owner + public flag.
+export function updateDeck(id, name, back, fronts, geom = null) {
   return pool.query(
     'UPDATE custom_decks SET name = $2, cards = $3, props = $4 WHERE id = $1',
-    [id, name, JSON.stringify(fronts), JSON.stringify({ back })]).then(r => r.rowCount > 0);
+    [id, name, JSON.stringify(fronts), JSON.stringify(geom ? { back, geom } : { back })]).then(r => r.rowCount > 0);
 }
 
 // ===== Boards ================================================================
