@@ -1285,7 +1285,7 @@ function handleClick(gesture) {
     pendingClick = { id, button, t: performance.now(), timer: setTimeout(() => { pendingClick = null; sendAction(single, id); }, CONFIG.input.clickMs) };
   }
 }
-renderer.domElement.addEventListener('pointerdown', e => {
+const onPointerDown = (e) => {
   if (measuring) { // Measure mode: left-drag lays the selected overlay (A = press)
     if (e.button === 0) { const p = overlayPoint(e); if (p) { measureDrag = { ax: p.x, az: p.z }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); } }
     return;
@@ -1346,11 +1346,11 @@ renderer.domElement.addEventListener('pointerdown', e => {
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
-});
+};
 
 // wheel (raise/lower a held piece) → public/controls.js → INPUT.raiseAxis
 
-renderer.domElement.addEventListener('pointermove', e => {
+const onPointerMove = (e) => {
   if (marquee) { showMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY); return; } // painting a selection box
   if (measuring) { // live local preview of the overlay being dragged out
     if (measureDrag) {
@@ -1439,7 +1439,7 @@ renderer.domElement.addEventListener('pointermove', e => {
     prevTarget.copy(hit); prevThrowTime = now;
     if (now - lastMoveSent > 16) { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); lastMoveSent = now; } // ~60Hz throttle
   }
-});
+};
 const endGesture = e => {
   if (selGesture) { // finish a shift/select gesture: commit the marquee box, then hand control back
     if (marquee) { finalizeMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY, marquee.add); hideMarquee(); marquee = null; }
@@ -1491,8 +1491,7 @@ const endGesture = e => {
   try { renderer.domElement.releasePointerCapture(e.pointerId); } catch {}
   down = null;
 };
-renderer.domElement.addEventListener('pointerup', endGesture);
-renderer.domElement.addEventListener('pointercancel', endGesture);
+// pointerdown / pointermove / pointerup / pointercancel → public/controls.js → INPUT.press / move / release
 // dblclick (claim the whiteboard) → public/controls.js → INPUT.doubleClick
 
 // The piece to act on for a keyboard shortcut: the held one, else whatever's hovered.
@@ -2745,6 +2744,9 @@ addEventListener('resize', () => {
 // intent MEANS; controls.js owns which device gesture raises it. As Phase 0 proceeds,
 // the pointer dispatcher and keyboard shortcuts fold in here too.
 const INPUT = {
+  press: onPointerDown,   // pointerdown → the dispatcher (grab/deal, marquee, overlay, modal starts)
+  move: onPointerMove,    // pointermove → drag routing for every mode
+  release: endGesture,    // pointerup / pointercancel → commit/settle the gesture
   hasHeld: () => !!(down && down.grabbed),
   snapHeld: () => { if (down && down.grabbed) room.send('snap', { id: down.id }); },
   ping: (p) => { setPointer({ clientX: p.x, clientY: p.y }); sendPing(); },

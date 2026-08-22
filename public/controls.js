@@ -19,6 +19,17 @@
 
 const pt = (e) => ({ x: e.clientX, y: e.clientY });
 
+// A device-agnostic "logical pointer": exactly the fields client.js's dispatcher reads.
+// `button`/`shiftKey` pass through raw on mouse; a touch profile will synthesize them
+// (e.g. long-press → button 2, the Select tool → shiftKey). No event METHODS are exposed
+// because the dispatcher bodies don't call any.
+const logical = (e) => ({
+  clientX: e.clientX, clientY: e.clientY, // helpers (setPointer / overlayPoint) read these
+  button: e.button,                        // 0 = primary, 2 = secondary
+  shiftKey: e.shiftKey,                    // the multi-select accelerator
+  pointerId: e.pointerId,                  // for pointer capture on the canvas
+});
+
 // The reference profile: mouse + wheel. Reproduces the pre-seam bindings exactly.
 // (Touch and gamepad become sibling profiles that raise the same intents.)
 export function attachControls(dom, intents) {
@@ -41,7 +52,13 @@ export function attachControls(dom, intents) {
     if (intents.doubleClick(pt(e))) e.preventDefault();
   });
 
-  // Phase 0.2+ relocates the pointerdown / pointermove / pointerup / pointercancel
-  // dispatcher and keydown here too, raising press/move/release + command/rotate.
-  // Until then those listeners remain in client.js.
+  // Pointer lifecycle → press / move / release. client.js keeps all its modal routing;
+  // it just receives a logical pointer instead of the raw event. (0.3 replaces the
+  // button reads inside those handlers with semantic primaryTap / secondaryPress / inspect.)
+  dom.addEventListener('pointerdown',   (e) => intents.press(logical(e)));
+  dom.addEventListener('pointermove',   (e) => intents.move(logical(e)));
+  dom.addEventListener('pointerup',     (e) => intents.release(logical(e)));
+  dom.addEventListener('pointercancel', (e) => intents.release(logical(e)));
+
+  // Phase 0.4 relocates keydown here too, raising `command` intents.
 }
