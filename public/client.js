@@ -1501,7 +1501,7 @@ const heldOrHoveredId = () => (down && down.id) || pickId();
 // Keyboard shortcuts (ignored while typing in an input). Delete/Backspace removes
 // a piece, U toggles its upright/flat behaviour, G toggles its snap-to-grid, S saves
 // a hovered deck.
-addEventListener('keydown', e => {
+const onKeyDown = (e) => {
   if (!room) return;
   if (e.key === 'Escape' && trayView) { closeTray(); return; }
   if (e.key === 'Escape' && selMode) { setSelMode(false); return; } // exit the Select tool first
@@ -1554,7 +1554,7 @@ addEventListener('keydown', e => {
   } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) { // ping the table at the cursor
     sendPing();
   }
-});
+};
 
 // Rebuild a card's mesh when it's revealed/hidden (props gain/lose the front),
 // keeping its last known transform so it doesn't jump.
@@ -2748,6 +2748,7 @@ const INPUT = {
   press: onPointerDown,   // pointerdown → the dispatcher (grab/deal, marquee, overlay, modal starts)
   move: onPointerMove,    // pointermove → drag routing for every mode
   release: endGesture,    // pointerup / pointercancel → commit/settle the gesture
+  command: onKeyDown,     // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
   hasHeld: () => !!(down && down.grabbed),
   snapHeld: () => { if (down && down.grabbed) room.send('snap', { id: down.id }); },
   ping: (p) => { setPointer({ clientX: p.x, clientY: p.y }); sendPing(); },
