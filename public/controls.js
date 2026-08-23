@@ -43,6 +43,7 @@ const logicalKey = (e) => ({
 // The reference profile: mouse + wheel. Reproduces the pre-seam bindings exactly.
 // (Touch and gamepad become sibling profiles that raise the same intents.)
 export function attachControls(dom, intents) {
+  dom.style.touchAction = 'none'; // the input layer owns touch here — no browser scroll/zoom/double-tap hijack
   dom.addEventListener('contextmenu', (e) => e.preventDefault()); // right-click is ours
 
   dom.addEventListener('mousedown', (e) => {          // middle button: snap held / ping

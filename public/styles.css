@@ -161,6 +161,7 @@ html, body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none; /* no mobile pull-to-refresh / bounce interfering with touch gestures */
   background: var(--bg);
 }
 #app {
