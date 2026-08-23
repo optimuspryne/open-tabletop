@@ -190,6 +190,28 @@ canvas.selecting { cursor: crosshair; }  /* Select tool active — felt-drag box
   min-height: 40px;          /* comfortable finger target */
 }
 #pieceMenu button.danger { color: var(--danger); }
+
+/* Touch height control: raise/lower the held piece (the wheel's touch analog). One on each
+   edge so either hand can reach it while the other holds the piece. */
+.heightControl {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 900;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.heightLeft { left: 14px; }
+.heightRight { right: 14px; }
+.heightControl[hidden] { display: none; }
+.heightControl button {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  font-size: 20px;
+  border-radius: 50%;
+}
 /* Marquee box painted during a shift/select drag. JS tints it with MY UI accent inline
    (the selection is private); these accent values are just the pre-inline fallback. */
 #marquee {

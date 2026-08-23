@@ -31,6 +31,7 @@ const logical = (e) => ({
   secondary: e.button === 2,               // right-click / (touch) long-press
   additive: e.shiftKey,                    // multi-select add/toggle ((touch) the Select tool)
   pointerId: e.pointerId,                  // for pointer capture on the canvas
+  touch: e.pointerType === 'touch',        // so client.js can show touch-only affordances (height control)
 });
 
 // A device-agnostic key command: exactly the fields client.js's command router reads.

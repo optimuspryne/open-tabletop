@@ -909,9 +909,11 @@ const GRAB_HEIGHT = CONFIG.grab.height; // float height when a piece is first gr
 const DRAG_MIN = CONFIG.grab.min, DRAG_MAX = CONFIG.grab.max, DRAG_STEP = CONFIG.grab.step;
 const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
 let dragHeight = GRAB_HEIGHT;
+let heightShown = false; // touch: is the raise/lower control visible? (synced to the held state each frame)
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(); // fixed ground plane (y=0); drag height is applied as a separate Y offset
 const prevTarget = new THREE.Vector3(), throwVel = new THREE.Vector3(); // hand speed → throw velocity
 let lastMoveSent = 0, prevThrowTime = 0, down = null;
+let armedMove = null; // touch: a piece id whose next drag repositions it (the deck/dispenser "Move" menu item) instead of dealing
 const sfxKind = (t) => t === 'card' ? 'card' : t === 'die' ? 'die' : t === 'deck' ? 'deck' : 'object'; // pickup family
 // "Lean in": a Tools toggle that dollies the camera toward the orbit target for a
 // closer look. Applied as a per-frame visual offset (undone before controls.update)
@@ -1286,6 +1288,7 @@ function handleClick(gesture) {
   }
 }
 const onPointerDown = (e) => {
+  const wasArmed = armedMove; armedMove = null; // Move is one-shot: this press consumes it (if on that piece) or cancels it
   if (measuring) { // Measure mode: left-drag lays the selected overlay (A = press)
     if (e.primary) { const p = overlayPoint(e); if (p) { measureDrag = { ax: p.x, az: p.z }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); } }
     return;
@@ -1342,7 +1345,7 @@ const onPointerDown = (e) => {
   // the selection first (design-tool convention). Right-drag (decks) is never a group move.
   const group = e.primary && selection.has(id);
   if (e.primary && !selection.has(id)) clearSelection();
-  down = { id, type, kind: KIND[type], primary: e.primary, secondary: e.secondary, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id), group };
+  down = { id, type, kind: KIND[type], touch: e.touch, forceMove: wasArmed === id, primary: e.primary, secondary: e.secondary, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id), group };
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
@@ -1408,7 +1411,7 @@ const onPointerMove = (e) => {
     if (Math.hypot(e.clientX - down.sx, e.clientY - down.sy) < CONFIG.input.dragPx) return; // still a click
     down.dragging = true;
     const kind = down.kind;
-    const movesThis = kind.grab === 2 ? down.secondary : down.primary; // did the press use this kind's move button?
+    const movesThis = down.forceMove || (kind.grab === 2 ? down.secondary : down.primary); // this kind's move button — or an armed touch "Move"
     if (movesThis) { // the button that moves this kind (2 = deck, 0 = most)
       down.grabbed = true;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
@@ -2730,6 +2733,7 @@ function finalizeMarquee(x0, y0, x1, y1, add) {
       `cam  ${c.x.toFixed(2)}, ${c.y.toFixed(2)}, ${c.z.toFixed(2)}\n` +
       `tgt  ${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}\n` +
       `dist ${c.distanceTo(t).toFixed(2)}`; }
+  { const want = !!(down && down.grabbed && down.touch); if (want !== heightShown) { document.querySelectorAll('.heightControl').forEach(el => el.hidden = !want); heightShown = want; } } // touch height controls (both edges) follow the held state
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 })();
@@ -2755,6 +2759,7 @@ function pieceMenuItems(id, type) {
     items.push(['Save…', () => { const name = prompt('Save this deck as:'); if (name && name.trim()) room.send('saveDeck', { deckId: id, name: name.trim() }); }]);
   }
   if (type === 'dispenser') { items.push(['Dispense', () => sendAction('dispense', id)]); }
+  if (KIND[type] && KIND[type].grab === 2) items.push(['Move (then drag)', () => { armedMove = id; }]); // deck/dispenser: reposition instead of deal
   if (INSPECTABLE(type)) { items.push(['Inspect', () => enterInspect(id)]); }
   items.push(['Stand / lay flat', () => room.send('setStand', { id })]);
   items.push(['Snap to grid', () => room.send('setSnap', { id })]);
@@ -2822,3 +2827,21 @@ const INPUT = {
   },
 };
 attachControls(renderer.domElement, INPUT);
+
+// Touch height control: hold ▲ / ▼ to raise / lower the held piece — the touch analog of the wheel,
+// reusing the same INPUT.raiseAxis. Shown only during a touch grab (see the render loop).
+{
+  const holdRepeat = (btn, step) => {
+    if (!btn) return;
+    let iv = null;
+    const tick = () => INPUT.raiseAxis(step);
+    const start = (e) => { e.preventDefault(); tick(); iv = setInterval(tick, 120); };
+    const stop = () => { if (iv) { clearInterval(iv); iv = null; } };
+    btn.addEventListener('pointerdown', start);
+    btn.addEventListener('pointerup', stop);
+    btn.addEventListener('pointerleave', stop);
+    btn.addEventListener('pointercancel', stop);
+  };
+  document.querySelectorAll('.heightUp').forEach((b) => holdRepeat(b, 1));
+  document.querySelectorAll('.heightDown').forEach((b) => holdRepeat(b, -1));
+}
