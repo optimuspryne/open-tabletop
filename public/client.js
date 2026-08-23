@@ -1264,34 +1264,34 @@ function placeDrawn(where) {
 // Handle a click (no drag). A left-click on an inspectable piece or a deck waits
 // briefly for a possible double-click (inspect / draw); everything else fires now.
 function handleClick(gesture) {
-  const { id, button, type } = gesture;
-  const wantsDouble = (button === 0 && (INSPECTABLE(type) || type === 'deck')) || (button === 2 && type === 'deck');
+  const { id, type } = gesture;
+  const wantsDouble = (gesture.primary && (INSPECTABLE(type) || type === 'deck')) || (gesture.secondary && type === 'deck');
 
   if (!wantsDouble) {
-    sendAction(button === 0 ? gesture.kind.lclick : gesture.kind.rclick, id); // right-click / non-inspectable
+    sendAction(gesture.primary ? gesture.kind.lclick : gesture.kind.rclick, id); // secondary / non-inspectable
     return;
   }
 
-  const isSecondClick = pendingClick && pendingClick.id === id && pendingClick.button === button && performance.now() - pendingClick.t < CONFIG.input.dblMs;
+  const isSecondClick = pendingClick && pendingClick.id === id && pendingClick.secondary === gesture.secondary && performance.now() - pendingClick.t < CONFIG.input.dblMs;
   if (isSecondClick) {
     clearTimeout(pendingClick.timer);
     pendingClick = null;
-    if (button === 2) room.send('splitDeck', { deckId: id });        // double-right-click a deck = split it
-    else if (type === 'deck') room.send('drawInspect', { deckId: id }); // double-left a deck = draw to inspect
-    else enterInspect(id);                                            // double-left a piece = inspect it
+    if (gesture.secondary) room.send('splitDeck', { deckId: id });     // double secondary on a deck = split it
+    else if (type === 'deck') room.send('drawInspect', { deckId: id }); // double primary on a deck = draw to inspect
+    else enterInspect(id);                                             // double primary on a piece = inspect it
   } else {
     if (pendingClick) clearTimeout(pendingClick.timer);
-    const single = button === 0 ? gesture.kind.lclick : gesture.kind.rclick; // deferred single (shuffle for right-click on a deck)
-    pendingClick = { id, button, t: performance.now(), timer: setTimeout(() => { pendingClick = null; sendAction(single, id); }, CONFIG.input.clickMs) };
+    const single = gesture.primary ? gesture.kind.lclick : gesture.kind.rclick; // deferred single (shuffle for secondary on a deck)
+    pendingClick = { id, secondary: gesture.secondary, t: performance.now(), timer: setTimeout(() => { pendingClick = null; sendAction(single, id); }, CONFIG.input.clickMs) };
   }
 }
 const onPointerDown = (e) => {
   if (measuring) { // Measure mode: left-drag lays the selected overlay (A = press)
-    if (e.button === 0) { const p = overlayPoint(e); if (p) { measureDrag = { ax: p.x, az: p.z }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); } }
+    if (e.primary) { const p = overlayPoint(e); if (p) { measureDrag = { ax: p.x, az: p.z }; controls.enabled = false; renderer.domElement.setPointerCapture(e.pointerId); } }
     return;
   }
   if (wbOwning) { // drawing on the whiteboard: start a stroke
-    if (e.button === 0) {
+    if (e.primary) {
       setPointer(e);
       const uv = wbHitUV();
       if (uv) {
@@ -1303,27 +1303,27 @@ const onPointerDown = (e) => {
     return;
   }
   if (inspect) { // in inspect mode, a left-drag spins the item (trackball)
-    if (e.button === 0) {
+    if (e.primary) {
       inspect.drag = { sx: e.clientX, sy: e.clientY, px: e.clientX, py: e.clientY, moved: false };
       renderer.domElement.setPointerCapture(e.pointerId);
     }
     return;
   }
-  if (!room || (e.button !== 0 && e.button !== 2)) return;
+  if (!room || (!e.primary && !e.secondary)) return;
   setPointer(e);
   const id = pickId();
-  // Multi-select gesture: Shift (any time) or the Select tool. Click a piece → toggle it in/out;
-  // drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
-  if (e.button === 0 && (e.shiftKey || selMode)) {
+  // Multi-select gesture: the additive modifier (Shift) or the Select tool. Click a piece → toggle
+  // it in/out; drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
+  if (e.primary && (e.additive || selMode)) {
     selGesture = true;
     controls.enabled = false;
     renderer.domElement.setPointerCapture(e.pointerId);
     if (id) { selToggle(id); }
-    else { marquee = { sx: e.clientX, sy: e.clientY, add: e.shiftKey }; showMarquee(e.clientX, e.clientY, e.clientX, e.clientY); }
+    else { marquee = { sx: e.clientX, sy: e.clientY, add: e.additive }; showMarquee(e.clientX, e.clientY, e.clientX, e.clientY); }
     down = null; return;
   }
   if (!id) { // no piece under the cursor
-    if (e.button === 0) {
+    if (e.primary) {
       const oid = pickOverlay(), oo = oid && room.state.overlays.get(oid);
       if (oid && canEditOverlay(oo)) { // left-click an overlay you own (or GM) → select + drag to move
         selectOverlay(oid);
@@ -1340,9 +1340,9 @@ const onPointerDown = (e) => {
   const type = meshes.get(id).type;
   // A left-drag on a SELECTED piece moves the whole selection; dragging an unselected piece drops
   // the selection first (design-tool convention). Right-drag (decks) is never a group move.
-  const group = e.button === 0 && selection.has(id);
-  if (e.button === 0 && !selection.has(id)) clearSelection();
-  down = { id, type, kind: KIND[type], button: e.button, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id), group };
+  const group = e.primary && selection.has(id);
+  if (e.primary && !selection.has(id)) clearSelection();
+  down = { id, type, kind: KIND[type], primary: e.primary, secondary: e.secondary, sx: e.clientX, sy: e.clientY, dragging: false, grabbed: false, snap: pieceSnap(id), group };
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
@@ -1408,14 +1408,15 @@ const onPointerMove = (e) => {
     if (Math.hypot(e.clientX - down.sx, e.clientY - down.sy) < CONFIG.input.dragPx) return; // still a click
     down.dragging = true;
     const kind = down.kind;
-    if (down.button === kind.grab) { // the button that moves this kind (2 = deck, 0 = most)
+    const movesThis = kind.grab === 2 ? down.secondary : down.primary; // did the press use this kind's move button?
+    if (movesThis) { // the button that moves this kind (2 = deck, 0 = most)
       down.grabbed = true;
       heldTarget.copy(hit); prevTarget.copy(hit); prevThrowTime = performance.now(); throwVel.set(0, 0, 0);
       if (down.group) room.send('grabGroup', { ids: [...selection], anchor: down.id }); // claim the whole selection
       else room.send('grab', { id: down.id });
       playSfx(pieceIsTile(down.id) ? (down.type === 'deck' ? 'tiledeck-pickup' : 'tile-pickup') : (sfxKind(down.type) + '-pickup')); // local, per object type (tiles/tile-boxes get their own)
       { const t = snapXZ(hit.x, hit.z); if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z }); else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z }); }
-    } else if (down.button === 0 && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
+    } else if (down.primary && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
       // Left-drag spawns one item and carries it out: a card off a deck, or a chip/stone
       // off a dispenser. Both reuse the server's "adopt the spawned piece" flow (see 'dealt').
       const dealing = kind.ldrag === 'deal';

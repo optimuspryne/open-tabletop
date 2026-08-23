@@ -25,8 +25,9 @@ const pt = (e) => ({ x: e.clientX, y: e.clientY });
 // because the dispatcher bodies don't call any.
 const logical = (e) => ({
   clientX: e.clientX, clientY: e.clientY, // helpers (setPointer / overlayPoint) read these
-  button: e.button,                        // 0 = primary, 2 = secondary
-  shiftKey: e.shiftKey,                    // the multi-select accelerator
+  primary: e.button === 0,                 // left-click / tap
+  secondary: e.button === 2,               // right-click / (touch) long-press
+  additive: e.shiftKey,                    // multi-select add/toggle ((touch) the Select tool)
   pointerId: e.pointerId,                  // for pointer capture on the canvas
 });
 
