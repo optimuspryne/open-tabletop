@@ -26,33 +26,38 @@
   <button class="heightDown" title="Lower">▼</button>
 </div>
 <div id="ui">
-  <button id="lobbyBtn">🔙 Lobby</button>
+  <button id="lobbyBtn">🔙<span class="lbl"> Lobby</span></button>
   <span class="menu">
-    <button id="diceBtn">☰ 🎲 Add Dice</button>
+    <button id="diceBtn">☰ 🎲<span class="lbl"> Add Dice</span></button>
     <div class="grp" id="diceGrp" hidden></div>
   </span>
   <span class="menu">
-    <button id="roomBtn">☰ ⚙️ Room Controls</button>
+    <button id="roomBtn">☰ ⚙️<span class="lbl"> Room Controls</span></button>
     <div class="grp" id="roomGrp" hidden>
-      <button id="roomMembers">👥 Members List</button>
-      <button id="roomScene">📽️ Load a Scene</button>
-      <button id="roomSaveState">💾 Save Table State</button>
-      <button id="roomTable">🎨 Customize Table</button>
-      <button id="roomScaleGrid">📐 Scale &amp; Grid</button>
-      <button id="roomSky">🌄 Skybox</button>
-      <button id="roomReset" class="danger">🧹 Reset</button>
+      <button id="roomMembers">👥<span class="lbl"> Members List</span></button>
+      <button id="roomScene">📽️<span class="lbl"> Load a Scene</span></button>
+      <button id="roomSaveState">💾<span class="lbl"> Save Table State</span></button>
+      <button id="roomTable">🎨<span class="lbl"> Customize Table</span></button>
+      <button id="roomScaleGrid">📐<span class="lbl"> Scale &amp; Grid</span></button>
+      <button id="roomSky">🌄<span class="lbl"> Skybox</span></button>
+      <button id="roomReset" class="danger">🧹<span class="lbl"> Reset</span></button>
     </div>
   </span>
-  <button id="builtinBtn">🧱 Browse Built-Ins</button>
-  <button id="libraryBtn">📚 Browse Custom Library</button>
+  <button id="builtinBtn">🧱<span class="lbl"> Browse Built-Ins</span></button>
+  <button id="libraryBtn">📚<span class="lbl"> Browse Custom Library</span></button>
 </div>
 <div id="inspectHint" class="panel" hidden>Drag to rotate · click or Esc to close</div>
 <div id="inspectColorRow" class="panel" hidden>
   <label id="inspectBodyLab">Color <input type="color" id="inspectColorBody" value="#ffffff"></label>
   <label id="inspectTextLab" hidden>Text <input type="color" id="inspectColorText" value="#2b2b2b"></label>
   <label id="inspectTeamLab" hidden>Interior <button type="button" id="inspectTeamBtn">Black</button></label>
-  <div id="dieSwatches" class="swatchRow" hidden></div>
-  <div id="propSwatches" class="swatchRow" hidden></div>
+  <div class="pop-group" data-close>
+    <button type="button" class="pop-trigger">Presets ▾</button>
+    <div class="pop-menu" hidden>
+      <div id="dieSwatches" class="swatchRow" hidden></div>
+      <div id="propSwatches" class="swatchRow" hidden></div>
+    </div>
+  </div>
   <button type="button" id="inspectDefaultBtn" hidden title="Remember this color for every d? you spawn (saved on this device only)">Set as my default</button>
   <button type="button" id="inspectResetBtn" hidden title="Forget my default for this die type and set this die back to plain">Reset</button>
 </div>
@@ -71,30 +76,54 @@
   <button id="wbDone">Done <kbd>Esc</kbd></button>
 </div>
 <div id="trayTools" class="panel" hidden>
-  <span class="da-note">Add</span>
-  <button class="trayDie" data-sides="4">d4</button>
-  <button class="trayDie" data-sides="6">d6</button>
-  <button class="trayDie" data-sides="8">d8</button>
-  <button class="trayDie" data-sides="10">d10</button>
-  <button class="trayDie" data-sides="12">d12</button>
-  <button class="trayDie" data-sides="20">d20</button>
-  <span class="da-note" title="Recolor all your dice to a matching set (saved as your default)">Set</span>
-  <div id="traySetSwatches" class="swatchRow"></div>
+  <div class="pop-group">
+    <button class="pop-trigger">Add ▾</button>
+    <div class="pop-menu" hidden>
+      <button class="trayDie" data-sides="4">d4</button>
+      <button class="trayDie" data-sides="6">d6</button>
+      <button class="trayDie" data-sides="8">d8</button>
+      <button class="trayDie" data-sides="10">d10</button>
+      <button class="trayDie" data-sides="12">d12</button>
+      <button class="trayDie" data-sides="20">d20</button>
+    </div>
+  </div>
+  <div class="pop-group" data-close>
+    <button class="pop-trigger" title="Recolor all your dice to a matching set (saved as your default)">Colors ▾</button>
+    <div class="pop-menu" hidden>
+      <div id="traySetSwatches" class="swatchRow"></div>
+    </div>
+  </div>
   <button id="trayRoll">🎲 Roll all</button>
   <button id="trayScoop">↩️ Scoop</button>
   <button id="trayClearBtn" class="danger">Clear</button>
   <button id="trayAway">🫳 Put away</button>
   <button id="trayBack">← Back <kbd>Esc</kbd></button>
 </div>
+<div id="selBars">
 <div id="selTools" class="panel" hidden>
   <span id="selNote" class="da-note" title="Recolor every selected die, prop, or chip stack at once">Recolor selection</span>
   <div id="selSwatches" class="swatchRow"></div>
 </div>
+<div id="selActions" class="panel" hidden>
+  <button id="selStand" title="Stand / lay flat">Stand</button>
+  <button id="selSnap" title="Snap to grid">Snap</button>
+  <button id="selFlip" title="Flip cards">Flip</button>
+  <button id="selRoll" title="Roll dice">Roll</button>
+  <button id="selTake" title="Take cards to hand">Take</button>
+  <button id="selDelete" class="danger" title="Delete selection">Delete</button>
+  <button id="selClear" title="Clear selection">Clear</button>
+</div>
+</div>
 <div id="hand" class="panel"></div>
 <div id="rightRail">
+<div id="railHead">
+  <button id="railToggle" title="Collapse panel">▶</button>
+  <span id="turnMini"></span>
+  <button id="nextTurn">Next turn</button>
+</div>
+<div id="railBody">
 <div id="roomCode" class="panel" hidden></div>
 <div id="panel">
-  <span id="status" class="panel">connecting…</span>
   <div>
     <div id="players" class="panel"></div>
     <div id="me" class="panel">
@@ -103,10 +132,10 @@
       <input id="avatarInput" type="file" accept="image/*" hidden>
     </div>
   </div>
-  <button id="nextTurn">Next turn</button>
+</div>
 </div>
 <div id="toolsDock">
-  <div id="toolsMenu" class="panel">
+  <div id="toolsMenu" class="panel" hidden>
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
     <button id="notesBtn">📝 Notes</button>
     <button id="chatBtn">💬 Chat</button>
@@ -200,9 +229,13 @@
   </div>
 </div>
 </div>
+<div id="hamBar">
+  <button id="interactHam" title="Interactions">🖐️<span class="lbl">Interactions</span></button>
+  <button id="toolsHam" title="Tools">🔧<span class="lbl">Tools</span></button>
+</div>
 <div id="leftRail">
   <div id="interactDock">
-    <div id="interactMenu" class="panel">
+    <div id="interactMenu" class="panel" hidden>
       <div class="toolsLabel" id="interactToggle">Interactions <span class="toolsChev">▾</span></div>
       <button id="leanBtn">🔎 Lean In</button>
       <button id="mySeatBtn">↩ My Seat</button>

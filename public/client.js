@@ -167,7 +167,6 @@ function addChatMsg(m) {
 
 // ===== Networking ===========================================================
 const { Client, getStateCallbacks } = Colyseus;
-const statusEl = byId('status');
 const meshes = new Map();  // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
 let room, mySession;
@@ -270,7 +269,6 @@ function rebuildGrid() {
     sessionStorage.setItem(key, room.reconnectionToken);
   }
   mySession = room.sessionId;
-  statusEl.innerHTML = 'connected · <b>you</b>';
   if (!editorMode) { // room code, top-right — applyRole reveals it to GM+ only
     const rc = byId('roomCode');
     if (rc) { rc.textContent = 'Room Code: ' + code; rc.title = 'Click to copy'; rc.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(code); }; }
@@ -697,6 +695,14 @@ function rebuildGrid() {
   { const b = byId('trayClearBtn'); if (b) b.onclick = () => room.send('trayClear'); } // remove MY dice
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
   byId('nextTurn').onclick = () => room.send('nextTurn');
+  { // Right rail: collapse to a compact pinned head (toggle + turn + Next turn). Starts collapsed on mobile/narrow.
+    const rail = byId('rightRail'), tog = byId('railToggle');
+    if (rail && tog) {
+      const apply = (c) => { rail.classList.toggle('collapsed', c); tog.textContent = c ? '◀' : '▶'; tog.title = c ? 'Show panel' : 'Collapse panel'; };
+      tog.onclick = () => apply(!rail.classList.contains('collapsed'));
+      if (matchMedia('(pointer: coarse), (max-width: 720px)').matches) apply(true);
+    }
+  }
   byId('nameInput').addEventListener('change', e => {
     const name = e.target.value.trim();
     if (name) room.send('setName', { name });
@@ -939,8 +945,12 @@ const pickId = () => {
 
 // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
 // see the INPUT intent map at the end of this file.
-{ const t = byId('toolsToggle'); if (t) t.onclick = () => byId('toolsMenu').classList.toggle('collapsed'); } // collapse/expand the Tools menu
-{ const t = byId('interactToggle'); if (t) t.onclick = () => byId('interactMenu').classList.toggle('collapsed'); } // collapse/expand Interactions
+// Bottom-left hamburgers toggle the Tools / Interactions menus (mutually exclusive; both start hidden).
+{
+  const tools = byId('toolsMenu'), inter = byId('interactMenu');
+  byId('toolsHam')?.addEventListener('click', () => { const open = tools && tools.hidden; if (inter) inter.hidden = true; if (tools) tools.hidden = !open; });
+  byId('interactHam')?.addEventListener('click', () => { const open = inter && inter.hidden; if (tools) tools.hidden = true; if (inter) inter.hidden = !open; });
+}
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
 { const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); b.textContent = leanActive ? '🔎 Lean Out' : '🔎 Lean In'; }; } // toggle the closer-look camera
@@ -1322,7 +1332,7 @@ const onPointerDown = (e) => {
     controls.enabled = false;
     renderer.domElement.setPointerCapture(e.pointerId);
     if (id) { selToggle(id); }
-    else { marquee = { sx: e.clientX, sy: e.clientY, add: e.additive }; showMarquee(e.clientX, e.clientY, e.clientX, e.clientY); }
+    else { marquee = { sx: e.clientX, sy: e.clientY, add: e.additive || selMode }; showMarquee(e.clientX, e.clientY, e.clientX, e.clientY); } // Select tool (touch) adds by default; Shift adds on desktop
     down = null; return;
   }
   if (!id) { // no piece under the cursor
@@ -2353,6 +2363,12 @@ function exitWbDraw() {
 }
 
 function renderPlayers() { // built with DOM + textContent so a player's name can never inject HTML
+  { const tm = byId('turnMini'); if (tm) { // compact turn indicator for the collapsed rail
+    let t = '';
+    if (room.state.turnPending) t = '\u23F3 ' + room.state.turnPending;
+    else if (room.state.turn) { const p = room.state.players.get(room.state.turn); t = room.state.turn === mySession ? 'Your turn' : (p && p.name ? p.name + "'s turn" : 'In play'); }
+    tm.textContent = t;
+  } }
   const el = byId('players');
   if (!el) return;
   const list = [];
@@ -2598,6 +2614,7 @@ function recolorSelTeam(i) {
 // selection agrees, a disabled "mixed" state when it doesn't, hidden when nothing's recolorable.
 let selBarSig = null;                                                     // last-rendered state, to avoid rebuilding every frame
 function refreshSelTools() {
+  const abar = byId('selActions'); if (abar) abar.hidden = !selection.size; // batch-op bar shows for any selection (also in the editor, which has no recolor bar)
   const bar = byId('selTools'); if (!bar) return;
   const desc = selection.size ? selectionPalette() : null;
   const sig = !selection.size ? '' : !desc ? 'none' : desc.mixed ? 'mixed' : desc.sig;
@@ -2835,6 +2852,48 @@ const INPUT = {
 };
 attachControls(renderer.domElement, INPUT);
 
+// Universal icon buttons: any button labeled "EMOJI text" collapses to just the emoji on small
+// screens — its text is wrapped in <span class="lbl"> (hidden by CSS). Skips buttons that are
+// already structured (a child element) or have no leading emoji to fall back to (e.g. "+ d4").
+function autoIconLabels(root = document) {
+  root.querySelectorAll('button').forEach((btn) => {
+    if (btn.childElementCount) return;                            // already wrapped / structured
+    const m = btn.textContent.match(/^(.*?)(\p{L}.*)$/u);          // split at the first letter
+    if (!m || !/\p{Extended_Pictographic}/u.test(m[1])) return;    // needs a leading emoji
+    btn.textContent = '';
+    btn.appendChild(document.createTextNode(m[1]));
+    const span = document.createElement('span');
+    span.className = 'lbl';
+    span.textContent = m[2];
+    btn.appendChild(span);
+  });
+}
+autoIconLabels();
+
+// Reusable pop-out groups: a `.pop-group` = a `.pop-trigger` button + a `.pop-menu`. Tapping the
+// trigger toggles its menu (closing any other open one); a click anywhere else closes them. Groups
+// marked `data-close` also close when you pick something inside (e.g. a color swatch); groups without
+// it stay open so you can pick several (e.g. adding multiple dice).
+function wirePopGroups(root = document) {
+  root.querySelectorAll('.pop-group').forEach((group) => {
+    const trigger = group.querySelector(':scope > .pop-trigger');
+    const menu = group.querySelector(':scope > .pop-menu');
+    if (!trigger || !menu) return;
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = menu.hidden;
+      document.querySelectorAll('.pop-menu').forEach((m) => { m.hidden = true; });
+      menu.hidden = !open;
+    });
+    menu.addEventListener('click', (e) => {
+      e.stopPropagation();                                   // clicks inside don't reach the document-level closer
+      if (group.hasAttribute('data-close') && e.target.closest('button, .swatch')) menu.hidden = true;
+    });
+  });
+  document.addEventListener('click', () => document.querySelectorAll('.pop-menu').forEach((m) => { m.hidden = true; }));
+}
+wirePopGroups();
+
 // Touch height control: hold ▲ / ▼ to raise / lower the held piece — the touch analog of the wheel.
 // Also the selection rotation buttons: hold ⟲ / ⟳ to spin the selection continuously (server
 // rotateGroup with an angle delta), the continuous complement to the [ / ] 45° steps.
@@ -2848,6 +2907,7 @@ attachControls(renderer.domElement, INPUT);
     btn.addEventListener('pointerup', stop);
     btn.addEventListener('pointerleave', stop);
     btn.addEventListener('pointercancel', stop);
+    btn.addEventListener('contextmenu', (e) => e.preventDefault()); // a sustained hold shouldn't pop the browser menu
   };
   document.querySelectorAll('.heightUp').forEach((b) => holdRepeat(b, () => INPUT.raiseAxis(1), 120));
   document.querySelectorAll('.heightDown').forEach((b) => holdRepeat(b, () => INPUT.raiseAxis(-1), 120));
@@ -2855,4 +2915,18 @@ attachControls(renderer.domElement, INPUT);
   const rotate = (sign) => () => { const ids = selection.size ? [...selection] : (down && down.grabbed ? [down.id] : []); if (ids.length) room.send('rotateGroup', { ids, angle: sign * rotStep }); };
   document.querySelectorAll('.rotLeft').forEach((b) => holdRepeat(b, rotate(-1), 60));
   document.querySelectorAll('.rotRight').forEach((b) => holdRepeat(b, rotate(1), 60));
+}
+
+// Selection batch-op bar: touch-accessible equivalents of the U/G/R/F/H/Delete group keys.
+// (Rotation lives in the edge clusters; recolor stays in #selTools.)
+{
+  const send = (msg) => () => { if (room && selection.size) room.send(msg, { ids: [...selection] }); };
+  const on = (id, fn) => { const el = byId(id); if (el) el.onclick = fn; };
+  on('selStand', send('setStandGroup'));
+  on('selSnap', send('setSnapGroup'));
+  on('selFlip', send('flipGroup'));
+  on('selRoll', send('rollGroup'));
+  on('selTake', send('takeGroup'));
+  on('selDelete', () => { if (room && selection.size) { room.send('removeGroup', { ids: [...selection] }); clearSelection(); } });
+  on('selClear', () => clearSelection());
 }
