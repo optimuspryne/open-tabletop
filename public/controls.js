@@ -40,6 +40,9 @@ const logicalKey = (e) => ({
   preventDefault: () => e.preventDefault(),
 });
 
+const LONG_PRESS_MS = 500;   // touch: hold a finger still this long → a secondary press (context menu)
+const LONG_PRESS_SLOP = 6;   // px of finger drift before the hold becomes a drag; matches the grab threshold (CONFIG.input.dragPx) so any move that grabs also cancels the hold
+
 // The reference profile: mouse + wheel. Reproduces the pre-seam bindings exactly.
 // (Touch and gamepad become sibling profiles that raise the same intents.)
 export function attachControls(dom, intents) {
@@ -64,12 +67,25 @@ export function attachControls(dom, intents) {
   });
 
   // Pointer lifecycle → press / move / release. client.js keeps all its modal routing;
-  // it just receives a logical pointer instead of the raw event. (0.3 replaces the
-  // button reads inside those handlers with semantic primaryTap / secondaryPress / inspect.)
-  dom.addEventListener('pointerdown',   (e) => intents.press(logical(e)));
-  dom.addEventListener('pointermove',   (e) => intents.move(logical(e)));
-  dom.addEventListener('pointerup',     (e) => intents.release(logical(e)));
-  dom.addEventListener('pointercancel', (e) => intents.release(logical(e)));
+  // it just receives a logical pointer instead of the raw event. On touch, a finger held
+  // still (no drag) escalates to secondaryPress → the context menu; mouse keeps right-click,
+  // so a mouse hold never springs a menu.
+  let lpTimer = null, lpX = 0, lpY = 0;
+  const cancelLong = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+  dom.addEventListener('pointerdown', (e) => {
+    intents.press(logical(e));
+    if (e.pointerType === 'touch') {
+      lpX = e.clientX; lpY = e.clientY; cancelLong();
+      lpTimer = setTimeout(() => { lpTimer = null; intents.secondaryPress({ x: lpX, y: lpY }); }, LONG_PRESS_MS);
+    }
+  });
+  dom.addEventListener('pointermove', (e) => {
+    if (lpTimer && Math.hypot(e.clientX - lpX, e.clientY - lpY) >= LONG_PRESS_SLOP) cancelLong();
+    intents.move(logical(e));
+  });
+  const onUp = (e) => { cancelLong(); intents.release(logical(e)); };
+  dom.addEventListener('pointerup', onUp);
+  dom.addEventListener('pointercancel', onUp);
 
   // keydown → command (keyboard profile). client.js's handler is the command router;
   // touch / gamepad profiles will raise the same commands from menu items / buttons.

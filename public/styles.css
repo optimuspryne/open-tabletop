@@ -171,6 +171,25 @@ html, body {
 canvas { display: block; }
 canvas.measuring { cursor: crosshair; }  /* Measure tool active */
 canvas.selecting { cursor: crosshair; }  /* Select tool active — felt-drag boxes a selection */
+
+/* Touch context menu: a floating column of a piece's verbs, opened by long-press. */
+#pieceMenu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 172px;
+  max-width: 240px;
+  padding: 6px;
+}
+#pieceMenu[hidden] { display: none; }
+#pieceMenu button {
+  width: 100%;
+  text-align: left;
+  min-height: 40px;          /* comfortable finger target */
+}
+#pieceMenu button.danger { color: var(--danger); }
 /* Marquee box painted during a shift/select drag. JS tints it with MY UI accent inline
    (the selection is private); these accent values are just the pre-inline fallback. */
 #marquee {

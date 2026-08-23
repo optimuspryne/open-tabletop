@@ -2740,6 +2740,47 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight);
 });
 
+// ===== Touch context menu (long-press a piece) ==============================
+// A small floating menu of a piece's verbs; each item runs the same action a key or click
+// would. Long-press raises secondaryPress (see public/controls.js): on a piece we open this,
+// on empty felt we ping. Verbs are filtered by kind.
+function pieceMenuItems(id, type) {
+  const items = [];
+  if (type === 'card') { items.push(['Flip', () => room.send('flip', { id })]); items.push(['Take to hand', () => sendAction('takeCard', id)]); }
+  if (type === 'die') { items.push(['Roll', () => room.send('rollOne', { id })]); }
+  if (type === 'deck') {
+    items.push(['Draw to hand', () => sendAction('drawToHand', id)]);
+    items.push(['Shuffle', () => room.send('shuffle', { deckId: id })]);
+    items.push(['Split', () => room.send('splitDeck', { deckId: id })]);
+    items.push(['Save…', () => { const name = prompt('Save this deck as:'); if (name && name.trim()) room.send('saveDeck', { deckId: id, name: name.trim() }); }]);
+  }
+  if (type === 'dispenser') { items.push(['Dispense', () => sendAction('dispense', id)]); }
+  if (INSPECTABLE(type)) { items.push(['Inspect', () => enterInspect(id)]); }
+  items.push(['Stand / lay flat', () => room.send('setStand', { id })]);
+  items.push(['Snap to grid', () => room.send('setSnap', { id })]);
+  items.push(['Delete', () => room.send('remove', { id }), 'danger']);
+  return items;
+}
+let pieceMenuAway = null; // outside-tap dismiss handler installed while the menu is open
+function closePieceMenu() {
+  const menu = byId('pieceMenu'); if (menu) menu.hidden = true;
+  if (pieceMenuAway) { document.removeEventListener('pointerdown', pieceMenuAway, true); pieceMenuAway = null; }
+}
+function openPieceMenu(id, p) {
+  const menu = byId('pieceMenu'); if (!menu) return;
+  const entry = meshes.get(id); if (!entry) return;
+  menu.replaceChildren();
+  for (const [label, fn, cls] of pieceMenuItems(id, entry.type)) {
+    menu.appendChild(makeButton(label, () => { closePieceMenu(); fn(); }, cls));
+  }
+  menu.hidden = false; // show first so it can be measured
+  const w = menu.offsetWidth || 180, h = menu.offsetHeight || 0;
+  menu.style.left = Math.max(8, Math.min(p.x, innerWidth - w - 8)) + 'px';
+  menu.style.top = Math.max(8, Math.min(p.y, innerHeight - h - 8)) + 'px';
+  pieceMenuAway = (ev) => { if (!menu.contains(ev.target)) closePieceMenu(); };
+  setTimeout(() => document.addEventListener('pointerdown', pieceMenuAway, true), 0); // dismiss on the next outside tap
+}
+
 // ===== Input seam ===========================================================
 // Raw canvas events → intents (see public/controls.js). These handlers own what each
 // intent MEANS; controls.js owns which device gesture raises it. As Phase 0 proceeds,
@@ -2749,6 +2790,13 @@ const INPUT = {
   move: onPointerMove,    // pointermove → drag routing for every mode
   release: endGesture,    // pointerup / pointercancel → commit/settle the gesture
   command: onKeyDown,     // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
+  secondaryPress: (p) => { // touch long-press → context menu on a piece, or ping on empty felt
+    if (!room || measuring || wbOwning || inspect || selMode) return; // a modal tool owns the gesture
+    const id = down && down.id;      // the piece the press landed on (null on empty felt)
+    if (down) down.dragging = true;  // consume the gesture: no grab on further move, no tap on release
+    if (id) openPieceMenu(id, p);
+    else { setPointer({ clientX: p.x, clientY: p.y }); sendPing(); } // long-press empty felt → ping
+  },
   hasHeld: () => !!(down && down.grabbed),
   snapHeld: () => { if (down && down.grabbed) room.send('snap', { id: down.id }); },
   ping: (p) => { setPointer({ clientX: p.x, clientY: p.y }); sendPing(); },
