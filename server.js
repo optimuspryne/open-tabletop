@@ -650,15 +650,15 @@ class TableRoom extends Room {
         this.removePiece(id);
       }
     });
-    this.onMessage('rotateGroup', (client, { ids, dir } = {}) => { // [ / ] → rotate the whole formation ±45°
+    this.onMessage('rotateGroup', (client, { ids, dir, angle } = {}) => { // [ / ] step ±45° (dir), or a continuous drag/dial (angle, radians)
       if (!Array.isArray(ids) || !ids.length) return;
-      const angle = (dir < 0 ? -1 : 1) * (Math.PI / 4);
+      const rot = (typeof angle === 'number' && isFinite(angle)) ? Math.max(-Math.PI, Math.min(Math.PI, angle)) : (dir < 0 ? -1 : 1) * (Math.PI / 4);
       const bodies = [];
       for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && b && KINDS[p.type].mass > 0) bodies.push(b); } // skip static boards
       if (!bodies.length) return;
       let cx = 0, cz = 0; for (const b of bodies) { cx += b.position.x; cz += b.position.z; } cx /= bodies.length; cz /= bodies.length;
-      const s = Math.sin(angle), c = Math.cos(angle);
-      const dq = new CANNON.Quaternion(); dq.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
+      const s = Math.sin(rot), c = Math.cos(rot);
+      const dq = new CANNON.Quaternion(); dq.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), rot);
       for (const b of bodies) {
         const dx = b.position.x - cx, dz = b.position.z - cz;
         b.position.x = cx + dx * c + dz * s;   // rotate each position about the centroid (same convention as trayPlace)

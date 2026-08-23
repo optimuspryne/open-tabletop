@@ -909,7 +909,7 @@ const GRAB_HEIGHT = CONFIG.grab.height; // float height when a piece is first gr
 const DRAG_MIN = CONFIG.grab.min, DRAG_MAX = CONFIG.grab.max, DRAG_STEP = CONFIG.grab.step;
 const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
 let dragHeight = GRAB_HEIGHT;
-let heightShown = false; // touch: is the raise/lower control visible? (synced to the held state each frame)
+let holdSig = -1; // visibility signature for the clustered height/rotate controls (synced each frame)
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3(); // fixed ground plane (y=0); drag height is applied as a separate Y offset
 const prevTarget = new THREE.Vector3(), throwVel = new THREE.Vector3(); // hand speed → throw velocity
 let lastMoveSent = 0, prevThrowTime = 0, down = null;
@@ -2733,7 +2733,14 @@ function finalizeMarquee(x0, y0, x1, y1, add) {
       `cam  ${c.x.toFixed(2)}, ${c.y.toFixed(2)}, ${c.z.toFixed(2)}\n` +
       `tgt  ${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}\n` +
       `dist ${c.distanceTo(t).toFixed(2)}`; }
-  { const want = !!(down && down.grabbed && down.touch); if (want !== heightShown) { document.querySelectorAll('.heightControl').forEach(el => el.hidden = !want); heightShown = want; } } // touch height controls (both edges) follow the held state
+  { // clustered height + rotate controls (both edges): rotate while holding a piece or with a selection; height while holding
+    const holding = !!(down && down.grabbed && down.touch), hasSel = selection.size > 0, sig = (holding ? 1 : 0) | (hasSel ? 2 : 0);
+    if (sig !== holdSig) { holdSig = sig; const show = holding || hasSel;
+      document.querySelectorAll('.holdControls').forEach(el => el.hidden = !show);
+      document.querySelectorAll('.rotLeft, .rotRight').forEach(b => b.hidden = !show);
+      document.querySelectorAll('.heightUp, .heightDown').forEach(b => b.hidden = !holding);
+    }
+  }
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 })();
@@ -2828,20 +2835,24 @@ const INPUT = {
 };
 attachControls(renderer.domElement, INPUT);
 
-// Touch height control: hold ▲ / ▼ to raise / lower the held piece — the touch analog of the wheel,
-// reusing the same INPUT.raiseAxis. Shown only during a touch grab (see the render loop).
+// Touch height control: hold ▲ / ▼ to raise / lower the held piece — the touch analog of the wheel.
+// Also the selection rotation buttons: hold ⟲ / ⟳ to spin the selection continuously (server
+// rotateGroup with an angle delta), the continuous complement to the [ / ] 45° steps.
 {
-  const holdRepeat = (btn, step) => {
+  const holdRepeat = (btn, fn, ms = 100) => {
     if (!btn) return;
     let iv = null;
-    const tick = () => INPUT.raiseAxis(step);
-    const start = (e) => { e.preventDefault(); tick(); iv = setInterval(tick, 120); };
+    const start = (e) => { e.preventDefault(); fn(); iv = setInterval(fn, ms); };
     const stop = () => { if (iv) { clearInterval(iv); iv = null; } };
     btn.addEventListener('pointerdown', start);
     btn.addEventListener('pointerup', stop);
     btn.addEventListener('pointerleave', stop);
     btn.addEventListener('pointercancel', stop);
   };
-  document.querySelectorAll('.heightUp').forEach((b) => holdRepeat(b, 1));
-  document.querySelectorAll('.heightDown').forEach((b) => holdRepeat(b, -1));
+  document.querySelectorAll('.heightUp').forEach((b) => holdRepeat(b, () => INPUT.raiseAxis(1), 120));
+  document.querySelectorAll('.heightDown').forEach((b) => holdRepeat(b, () => INPUT.raiseAxis(-1), 120));
+  const rotStep = Math.PI / 24; // ~7.5° per tick
+  const rotate = (sign) => () => { const ids = selection.size ? [...selection] : (down && down.grabbed ? [down.id] : []); if (ids.length) room.send('rotateGroup', { ids, angle: sign * rotStep }); };
+  document.querySelectorAll('.rotLeft').forEach((b) => holdRepeat(b, rotate(-1), 60));
+  document.querySelectorAll('.rotRight').forEach((b) => holdRepeat(b, rotate(1), 60));
 }
