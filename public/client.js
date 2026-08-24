@@ -52,7 +52,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'measurePanel', 'audioPanel', 'creditsPanel', 'tracksPanel', 'whiteboard', 'chat', 'notes', 'scorePanel', 'timer', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'measurePanel', 'tracksPanel', 'whiteboard', 'chat', 'notes', 'scorePanel', 'timer', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -720,10 +720,11 @@ function rebuildGrid() {
   const notes = byId('notes'), notesText = byId('notesText');
   byId('notesBtn').onclick = () => { notes.hidden = !notes.hidden; if (!notes.hidden) notesText.focus(); };
   // Audio settings (Tools menu): effects volume + mute, persisted client-side.
-  const audioPanel = byId('audioPanel'), sfxVol = byId('sfxVol'), sfxMute = byId('sfxMute');
-  if (audioPanel && byId('audioBtn')) {
-    byId('audioBtn').onclick = () => { audioPanel.hidden = !audioPanel.hidden; };
-    wire('audioClose', () => audioPanel.hidden = true);
+  const sfxVol = byId('sfxVol'), sfxMute = byId('sfxMute');
+  {
+    const musicModal = byId('musicModal');
+    wire('audioBtn', () => { if (musicModal) musicModal.classList.remove('collapsed'); }); // Tools "Music" expands the modal
+    wire('musicHam', () => { if (musicModal) musicModal.classList.toggle('collapsed'); }); // hamburger toggles collapse
     if (sfxVol) { sfxVol.value = Math.round(getSfxVolume() * 100); sfxVol.oninput = () => setSfxVolume(sfxVol.value / 100); }
     const muteBtn = (btn, get, set, on, off) => { if (!btn) return; const sync = () => setIcon(btn, get() ? off : on); sync(); btn.onclick = () => { set(!get()); sync(); }; };
     muteBtn(byId('sfxMute'), getSfxMuted, setSfxMuted, 'ear', 'ear-off');
@@ -738,7 +739,6 @@ function rebuildGrid() {
     if (shuffleBtn) { shuffleBtn.classList.toggle('on', getShuffle()); shuffleBtn.onclick = () => { const on = !getShuffle(); setShuffle(on); shuffleBtn.classList.toggle('on', on); }; }
     onMusicTrack((t) => { if (nowPlaying) nowPlaying.textContent = t ? ('\u266a ' + t.title + ' \u2014 ' + MUSIC_CREDIT.by + ' (' + MUSIC_CREDIT.license + ')') : ''; });
     // credits panel — attribution for baked-in assets (CC-BY music requires this)
-    const creditsPanel = byId('creditsPanel');
     const renderCredits = () => {
       const body = byId('creditsBody'); if (!body) return;
       const esc = escapeHtml;
@@ -752,8 +752,32 @@ function rebuildGrid() {
       h += '<div class="showLabel"><b>Libraries</b></div><ul ' + ul + '>'; for (const l of LIB_CREDITS) h += '<li>' + A(l.title, l.url) + ' \u2014 ' + esc(l.license) + '</li>'; h += '</ul>';
       body.innerHTML = h;
     };
-    wire('creditsLink', (e) => { if (e && e.preventDefault) e.preventDefault(); renderCredits(); if (creditsPanel) creditsPanel.hidden = false; });
-    wire('creditsClose', () => { if (creditsPanel) creditsPanel.hidden = true; });
+    // Settings modal (reuses renderCredits above for the Credits section)
+    const settingsModal = byId('settingsModal');
+    wire('settingsBtn', () => { if (settingsModal) { settingsModal.hidden = false; renderCredits(); } });
+    wire('settingsClose', () => { if (settingsModal) settingsModal.hidden = true; });
+    settingsModal?.querySelectorAll('.libTab').forEach((t) => t.onclick = () => {
+      settingsModal.querySelectorAll('.libTab').forEach((x) => x.classList.toggle('on', x === t));
+      settingsModal.querySelectorAll('.libPane').forEach((p) => { p.hidden = p.dataset.pane !== t.dataset.tab; });
+    });
+    // Full / Compact UI toggle (persisted)
+    const uiModeToggle = byId('uiModeToggle');
+    const syncUiMode = () => { const full = document.body.classList.contains('ui-full'); if (uiModeToggle) { uiModeToggle.textContent = 'Full labels: ' + (full ? 'on' : 'off'); uiModeToggle.classList.toggle('on', full); } };
+    syncUiMode();
+    wire('uiModeToggle', () => { const full = document.body.classList.toggle('ui-full'); localStorage.setItem('ott-ui-full', full ? '1' : '0'); syncUiMode(); });
+    // Accent color (personal, saved on this device)
+    const applyAccent = (hex) => {
+      if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+      const st = document.documentElement.style;
+      st.setProperty('--accent', hex);
+      st.setProperty('--accent-soft', 'rgba(' + parseInt(hex.slice(1, 3), 16) + ',' + parseInt(hex.slice(3, 5), 16) + ',' + parseInt(hex.slice(5, 7), 16) + ',.25)');
+      localStorage.setItem('ott-accent', hex);
+      document.querySelectorAll('#accentPicker .accDot').forEach((d) => d.classList.toggle('on', d.dataset.accent.toLowerCase() === hex.toLowerCase()));
+      const c = byId('accentCustom'); if (c) c.value = hex;
+    };
+    document.querySelectorAll('#accentPicker .accDot').forEach((d) => d.onclick = () => applyAccent(d.dataset.accent));
+    const accCust = byId('accentCustom'); if (accCust) accCust.oninput = () => applyAccent(accCust.value);
+    applyAccent(localStorage.getItem('ott-accent') || '#c9a25a');
     // track picker — click a track to play it (opens over the Sound panel too)
     const tracksPanel = byId('tracksPanel');
     const renderTracks = () => {
@@ -948,8 +972,9 @@ const pickId = () => {
 // Bottom-left hamburgers toggle the Tools / Interactions menus (mutually exclusive; both start hidden).
 {
   const tools = byId('toolsMenu'), inter = byId('interactMenu');
-  byId('toolsHam')?.addEventListener('click', () => { const open = tools && tools.hidden; if (inter) inter.hidden = true; if (tools) tools.hidden = !open; });
-  byId('interactHam')?.addEventListener('click', () => { const open = inter && inter.hidden; if (tools) tools.hidden = true; if (inter) inter.hidden = !open; });
+  const placeAboveHam = (menu) => { if (!menu || menu.hidden) return; const bar = byId('hamBar'); if (bar) menu.style.bottom = (innerHeight - bar.getBoundingClientRect().top + 8) + 'px'; }; // open above the vertical hamburger stack
+  byId('toolsHam')?.addEventListener('click', () => { const open = tools && tools.hidden; if (inter) inter.hidden = true; if (tools) { tools.hidden = !open; placeAboveHam(tools); } });
+  byId('interactHam')?.addEventListener('click', () => { const open = inter && inter.hidden; if (tools) tools.hidden = true; if (inter) { inter.hidden = !open; placeAboveHam(inter); } });
 }
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }

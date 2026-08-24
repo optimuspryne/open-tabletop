@@ -1,3 +1,7 @@
+// Apply the saved compact/full interface preference on every page.
+// (External file so it isn't blocked by the inline-script CSP; runs before the module scripts.)
+try { document.body.classList.toggle('ui-full', localStorage.getItem('ott-ui-full') !== '0'); } catch (e) {}
+
 // Equalize button widths within every `.actions` group to the group's widest
 // button, so grouped actions render as a tidy, aligned set (CSS min-width gives
 // a floor; this matches the rest up to the widest). Runs on load, on resize

@@ -28,10 +28,9 @@
 </div>
 <div id="ui">
   <button id="lobbyBtn" data-icon="home-move"><span class="lbl">Lobby</span></button>
+  <button id="settingsBtn" data-icon="settings"><span class="lbl">Settings</span></button>
   <span class="menu">
-  </span>
-  <span class="menu">
-    <button id="roomBtn" data-icon="settings"><span class="lbl">GM Controls</span></button>
+    <button id="roomBtn" data-icon="user-cog"><span class="lbl">GM Controls</span></button>
     <div class="grp" id="roomGrp" hidden>
       <button id="roomMembers" data-icon="users"><span class="lbl">Members</span></button>
       <button id="roomScene" data-icon="movie"><span class="lbl">Scenes</span></button>
@@ -143,7 +142,7 @@
     <button id="scoreBtn" data-icon="scoreboard"><span class="lbl">Score</span></button>
     <button id="timerBtn" data-icon="clock"><span class="lbl">Timer</span></button>
     <button id="measureBtn" data-icon="ruler-2"><span class="lbl">Measure</span></button>
-    <button id="audioBtn" data-icon="volume"><span class="lbl">Sound</span></button>
+    <button id="audioBtn" data-icon="music"><span class="lbl">Music</span></button>
     <button id="resetPanelsBtn" data-icon="restore" hidden><span class="lbl">Reset</span></button>
     <button id="wbBtn" data-icon="chalkboard"><span class="lbl">Whiteboard</span></button>
     <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
@@ -159,24 +158,52 @@
     <p class="muted">Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
     <div class="chipRow"><button id="measureClear" class="chip" data-icon="eraser"><span class="lbl">Clear mine</span></button><button id="measureClearAll" class="chip" data-icon="trash" hidden><span class="lbl">Clear all</span></button></div>
   </div>
-  <div id="audioPanel" class="panel popout" hidden>
-    <div id="audioHead" class="panel-head"><b>Sound</b><span id="audioClose" class="close-x">✕</span></div>
-    <div class="showLabel"><b>Effects</b></div>
-    <div class="volRow"><button id="sfxMute" class="volMute" title="Mute effects">🔊</button><input id="sfxVol" type="range" min="0" max="100" step="1"></div>
-    <div class="showLabel"><b>Music</b></div>
-    <div class="volRow"><button id="musicMute" class="volMute" title="Mute music">🔊</button><input id="musicVol" type="range" min="0" max="100" step="1"></div>
-    <div class="chipRow">
-      <button id="musicToggle" class="chip" data-icon="player-play"><span class="lbl">Music</span></button>
-      <button id="musicNext" class="chip icon-only" data-icon="player-track-next"><span class="lbl">Next</span></button>
-      <button id="musicShuffle" class="chip chk icon-only" data-icon="arrows-shuffle"><span class="lbl">Shuffle</span></button>
+  <div id="musicModal" class="panel collapsed">
+    <button id="musicHam" data-icon="music"><span class="lbl">Music</span></button>
+    <div id="musicBody">
+      <div class="chipRow">
+        <button id="musicToggle" class="chip" data-icon="player-play"><span class="lbl">Play</span></button>
+        <button id="musicNext" class="chip icon-only" data-icon="player-track-next"><span class="lbl">Next</span></button>
+        <button id="musicShuffle" class="chip chk icon-only" data-icon="arrows-shuffle"><span class="lbl">Shuffle</span></button>
+      </div>
+      <div id="nowPlaying" class="muted" style="margin-top:6px"></div>
+      <button id="tracksLink" class="chip" data-icon="movie" style="margin-top:6px"><span class="lbl">Pick Track</span></button>
     </div>
-    <div id="nowPlaying" class="muted" style="margin-top:6px"></div>
-    <div style="margin-top:6px"><a id="tracksLink" href="#" class="fs-sm">Pick Track ▸</a></div>
-    <div style="margin-top:2px"><a id="creditsLink" href="#" class="fs-sm">Credits &amp; Licenses ▸</a></div>
   </div>
-  <div id="creditsPanel" class="panel popout" hidden>
-    <div id="creditsHead" class="panel-head"><b>Credits &amp; Licenses</b><span id="creditsClose" class="close-x">✕</span></div>
-    <div id="creditsBody"></div>
+  <div id="settingsModal" hidden>
+    <div class="modalCard libraryCard">
+      <div class="libSticky">
+        <div class="panel-head"><b>Settings</b><span id="settingsClose" class="close-x">✕</span></div>
+        <div class="libTabs">
+          <button class="libTab on" data-tab="ui">UI</button>
+          <button class="libTab" data-tab="sounds">Sounds</button>
+        </div>
+      </div>
+      <div class="libPane" data-pane="ui">
+        <div class="showLabel"><b>Interface</b></div>
+        <div class="chipRow"><button id="uiModeToggle" class="chip">Full labels: off</button></div>
+        <div class="showLabel"><b>Accent color</b></div>
+        <div id="accentPicker" title="Accent color — saved on this device, only you see it">
+          <input type="color" id="accentCustom" value="#c9a25a" title="Custom accent">
+          <span class="accDot" data-accent="#c9a25a" style="background:#c9a25a"></span>
+          <span class="accDot" data-accent="#d14b4b" style="background:#d14b4b"></span>
+          <span class="accDot" data-accent="#d98a3a" style="background:#d98a3a"></span>
+          <span class="accDot" data-accent="#5fae5f" style="background:#5fae5f"></span>
+          <span class="accDot" data-accent="#4bb0a8" style="background:#4bb0a8"></span>
+          <span class="accDot" data-accent="#5b8ad6" style="background:#5b8ad6"></span>
+          <span class="accDot" data-accent="#9a6fc0" style="background:#9a6fc0"></span>
+          <span class="accDot" data-accent="#d07ba8" style="background:#d07ba8"></span>
+        </div>
+      </div>
+      <div class="libPane" data-pane="sounds" hidden>
+        <div class="showLabel"><b>Effects</b></div>
+        <div class="volRow"><button id="sfxMute" class="volMute" title="Mute effects">🔊</button><input id="sfxVol" type="range" min="0" max="100" step="1"></div>
+        <div class="showLabel"><b>Music</b></div>
+        <div class="volRow"><button id="musicMute" class="volMute" title="Mute music">🔊</button><input id="musicVol" type="range" min="0" max="100" step="1"></div>
+        <div class="showLabel"><b>Credits &amp; Licenses</b></div>
+        <div id="creditsBody"></div>
+      </div>
+    </div>
   </div>
   <div id="tracksPanel" class="panel popout" hidden>
     <div id="tracksHead" class="panel-head"><b>Pick a Track</b><span id="tracksClose" class="close-x">✕</span></div>

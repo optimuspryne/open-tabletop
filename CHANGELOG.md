@@ -25,14 +25,42 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Felt & grid-line color presets.** The felt and grid-line colors now offer quick preset swatches
   (greens/blues/reds/greys for felt; white/grey/black plus accents for lines) beside the freeform
   picker.
+- **Interface sizing.** Two scale knobs — one for chrome (icons, controls, spacing) and one for text
+  — drive the size of the whole UI, so it's larger and easier to tap, with the two tunable
+  independently. Labels can be shown alongside icons via a full-interface mode.
+- **Settings.** A new **Settings** button (top nav) opens a full library-style modal with tabs — **UI**
+  (a Full/Compact label toggle and an accent-color picker, both saved on your device) and **Sounds**
+  (volume + mute, plus a Credits & Licenses table).
+- **Music player.** The Tools "Sound" item is now **Music**, opening a slim player docked top-right
+  (play/pause, next, shuffle, pick track) that collapses to a single button.
+- **Compact / full labels everywhere, and remembered.** A **Full labels** toggle now sits in the
+  lobby next to Log out (alongside the in-room Settings toggle), and your choice is saved on the
+  device and applied on every page — lobby, table, editor, and admin.
 
 ### Changed
 - **The whole UI moved from emoji to a consistent icon set.** Buttons across the table, editor,
   lobby, and admin pages now use [Tabler](https://tabler.io/icons) SVG icons with a themed hover
   hint, replacing the emoji labels — clearer and far more compact on phones and tablets. The icons
   are MIT-licensed; see `docs/ASSET_CREDITS.md`.
+- **Consistent icon rules.** The icon set now follows shared rules: trash buttons are red and
+  text-free everywhere; play / pause / reset / set / visibility-toggle buttons drop their text
+  automatically; visibility toggles (show hand, whiteboard) use eye / eye-off; the timer uses the
+  player play/pause icons; and measure "clear mine / clear all" use eraser / trash.
+- **Member management.** A GM can be demoted to Helper *or* straight to Player (with the correct
+  down-arrow icons), and member buttons always show their labels — role icons alone were ambiguous.
+- **Lobby.** The room-code field and Join button now share one row; each room's approval state reads
+  **Gated / Open** in full mode; and the room "Close" button is a standard red trash button.
+- **Removed the redundant top-nav "+Dice" button** to reclaim toolbar space — dice are added from the
+  Dice Box tray. The Dice Box keeps its label; the individual d4–d20 add buttons stay text-free.
+- **Right rail widened ~25%** so its contents aren't cramped at the larger UI scale.
+- **Bottom-left tool bar is now a vertical stack** (Interactions / Tools above Multi-Select), with its
+  menus opening upward, and the turn indicator resized to match the toolbar buttons.
+- **GM Controls** uses a distinct `user-cog` icon (the plain gear now belongs to Settings).
 
 ### Fixed
+- **The compact / full labels preference sticks now.** It used to revert to full after leaving and
+  returning, and only ever applied inside a room. It now persists per device and is restored on every
+  page load (the load-time apply moved to `equalize.js`, since an inline script was blocked by CSP).
 - **Dragging a card from your hand works on mobile.** The touch drag is now bound to the finger that
   started it (a second finger no longer fakes a drag), and a leftover-preview bug that could stick a
   card image on screen until refresh is gone.

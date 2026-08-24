@@ -325,6 +325,12 @@ applyIcons(); initTip();
 }
 byId('joinBtn').onclick = onJoin;
 byId('logoutBtn').onclick = onLogout;
+{ // Full / Compact interface toggle — persists to localStorage; applied on every page at load
+  const uiToggle = byId('uiModeToggle');
+  const syncUi = () => { if (uiToggle) uiToggle.classList.toggle('on', document.body.classList.contains('ui-full')); };
+  syncUi();
+  if (uiToggle) uiToggle.onclick = () => { const full = document.body.classList.toggle('ui-full'); localStorage.setItem('ott-ui-full', full ? '1' : '0'); syncUi(); };
+}
 byId('requestHostBtn').onclick = onRequestHost;
 byId('toSignup').onclick = (e) => { e.preventDefault(); byId('loginForm').hidden = true; byId('signupForm').hidden = false; };
 byId('toLogin').onclick = (e) => { e.preventDefault(); byId('signupForm').hidden = true; byId('loginForm').hidden = false; };

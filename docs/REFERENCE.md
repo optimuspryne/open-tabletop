@@ -848,7 +848,8 @@ unwraps errors; the device token lives in `localStorage`.
   prompts for a password if the account is passwordless). Owners get
   rename/approval/close controls; a pending joiner **polls** `/rooms` and
   auto-forwards on admission. Admins see an **Admin** link with a pending-host
-  count badge (`updateAdminBadge`).
+  count badge (`updateAdminBadge`). A **Full labels** toggle by Log out
+  flips `body.ui-full` and saves `ott-ui-full` (mirrors the in-room Settings › UI toggle).
 - **`public/admin.js`** (admin.html) — the admin console. Guards on `/auth/token`
   → `isAdmin`, then renders the rooms table (rename / approval / close / restore /
   purge) and the users table (grant/revoke admin, **approve/reject/revoke host**,
@@ -860,3 +861,7 @@ unwraps errors; the device token lives in `localStorage`.
   Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
   Rename · Delete**, sending `loadDeck`/`loadBoard`/`spawn` and the
   `assetPublic`/`assetRename`/`assetDelete` curation messages.
+- **`public/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
+  `.actions` group, and applies the saved interface preference on load: reads
+  `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an
+  external file because CSP hash-gates inline scripts (see ARCHITECTURE › CSP).

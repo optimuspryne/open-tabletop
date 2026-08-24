@@ -716,7 +716,11 @@ and the cross-room kick are in-process (single-instance); both would need a shar
 store to scale out. **CSP is enforced:** Three + Colyseus are self-hosted under
 `/vendor` (no CDN fetches), so the policy locks scripts to `'self'` plus three
 inline-script hashes — no `'unsafe-inline'`/`'unsafe-eval'` (Colyseus feature-detects
-eval and falls back to its non-inline decoder). Violations POST to `/csp-report`.
+eval and falls back to its non-inline decoder). Violations POST to `/csp-report`. This
+also shapes the client: a *new* inline `<script>` would fail the hash allowlist, so the compact/full
+labels preference is applied from **`equalize.js`** — a small external file loaded `defer` on every
+page — which reads `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts
+run (an inline version was silently blocked).
 Remaining optional hardening: post-parse model complexity limits, per-user storage
 caps. Defense in depth, not provably safe.
 
