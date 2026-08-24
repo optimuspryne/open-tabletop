@@ -8,6 +8,44 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- **Play cards from your hand in 3D.** Dragging a card out of your hand now shows the *real* card
+  hovering over the table (replacing the old flat 2D ghost), so you can see exactly where it will
+  land. It floats just above the felt so it clears boards and tiles (e.g. the Wordy grid) instead
+  of sinking into them, and your hand hides while you drag so it never blocks the view. Release over
+  the table to play it there.
+- **Choose a card's face as you play it.** On touch, a **one-finger** drag or tap plays face-down
+  and a **two-finger** drag or tap plays face-up (the hovering preview flips live as your second
+  finger lands); on desktop, left plays face-down and right plays face-up.
+- **Inspect a hand card.** Double-click a card (desktop) or tap its **eye** button (any device) to
+  blow it up to a big, flippable view — handy when the cards are small and hard to read. From there
+  you can send it to the table face-up / face-down or keep it in hand.
+- **Scrollable hand.** A large hand keeps the cards full-size and scrolls, with **‹ ›** chevrons on
+  each side (swipe works too on touch); it caps its width to stay clear of the on-screen controls.
+- **Felt & grid-line color presets.** The felt and grid-line colors now offer quick preset swatches
+  (greens/blues/reds/greys for felt; white/grey/black plus accents for lines) beside the freeform
+  picker.
+
+### Changed
+- **The whole UI moved from emoji to a consistent icon set.** Buttons across the table, editor,
+  lobby, and admin pages now use [Tabler](https://tabler.io/icons) SVG icons with a themed hover
+  hint, replacing the emoji labels — clearer and far more compact on phones and tablets. The icons
+  are MIT-licensed; see `docs/ASSET_CREDITS.md`.
+
+### Fixed
+- **Dragging a card from your hand works on mobile.** The touch drag is now bound to the finger that
+  started it (a second finger no longer fakes a drag), and a leftover-preview bug that could stick a
+  card image on screen until refresh is gone.
+- **Double-tapping the UI no longer zooms the page** on iOS / iPad (pinch-zoom still works).
+- **The hand no longer slides under the bottom-corner controls** before it becomes scrollable.
+
+### Internal
+- **Icon build tooling.** `npm run build:icons` regenerates the inline SVG sprite in every page from
+  a single icon list (`scripts/build-icons.mjs`) — adding an icon is a one-line edit, no hand-editing
+  four HTML files.
+- **Shared icon module.** `public/icons.js` holds the icon helpers (`applyIcons` / `setIcon` / hover
+  hint) once; `client.js` and the lobby/admin scripts import it instead of keeping their own copies.
+
 ## [0.9.0] — 2026-08-22
 
 ### Added
