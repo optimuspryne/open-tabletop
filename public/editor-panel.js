@@ -52,29 +52,44 @@ const applyShapeToGeom = (geom) => {
 // Which chip to show when re-opening a saved image deck.
 const shapeOfGeom = (geom) => geom && geom.shape === 'hex' ? 'hex' : (geom && geom.round === 0 ? 'square' : 'rounded');
 const byId = (id) => document.getElementById(id);
-const btn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+const ICON_FOR = { 'Spawn': 'square-rounded-plus', 'Apply': 'checks', 'Set up': 'go-game', 'Edit': 'edit', 'Clone': 'copy', 'Rename': 'cursor-text', 'Delete': 'trash', 'Publish': 'flag-check', 'Unpublish': 'flag-cancel' };
+const btn = (label, fn, cls) => { const button = document.createElement('button'); const ic = ICON_FOR[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
 function wireTabs(root) {
   const tabs = [...root.querySelectorAll('.libTab')];
   tabs.forEach((tab) => tab.onclick = () => {
     tabs.forEach((t) => t.classList.toggle('on', t === tab));
     root.querySelectorAll('.libPane').forEach((pane) => { pane.hidden = pane.dataset.pane !== tab.dataset.tab; });
+    root.querySelectorAll('.libList.selecting').forEach((ul) => { ul.classList.remove('selecting'); ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel')); });
+    if (root._resetSelect) root._resetSelect();
     if (root._applySearch) root._applySearch(); // re-filter the newly shown pane
   });
 }
-// A per-modal search box (filters the visible tab's cards by name). Injected once
-// under the tabs; re-applied on tab switch and after each render.
-function wireSearch(root) {
+// A per-modal controls row (multi-select buttons + divider + search), pinned in the sticky header.
+// Everything acts on the currently visible tab's list, found fresh each time via activeUl().
+function wireControls(root) {
   const tabs = root.querySelector('.libTabs');
-  if (!tabs || root.querySelector('.libSearch')) return;
+  if (!tabs || root.querySelector('.libControls')) return;
+  const row = document.createElement('div'); row.className = 'libControls';
+  const sel = document.createElement('button'); sel.type = 'button'; sel.className = 'chip selToggle'; sel.dataset.icon = 'new-section'; sel.innerHTML = '<span class="lbl">Select</span>';
+  const go = document.createElement('button'); go.type = 'button'; go.className = 'spawnSelBtn'; go.dataset.icon = 'category-plus'; go.innerHTML = '<span class="lbl">Spawn selected</span>'; go.hidden = true;
+  const divider = document.createElement('div'); divider.className = 'libDivider';
   const wrap = document.createElement('div'); wrap.className = 'libSearchWrap';
   const inp = document.createElement('input'); inp.type = 'search'; inp.className = 'libSearch'; inp.placeholder = 'Search\u2026';
-  wrap.append(inp); tabs.after(wrap);
+  wrap.append(inp);
+  row.append(sel, go, divider, wrap); tabs.after(row);
+  const activeUl = () => { const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden); return pane ? pane.querySelector('.libList') : null; };
+  sel.onclick = () => {
+    const ul = activeUl(); if (!ul) return;
+    const on = ul.classList.toggle('selecting'); sel.classList.toggle('on', on); go.hidden = !on;
+    if (!on) ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
+  };
+  go.onclick = () => { const ul = activeUl(); if (ul) ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn()); };
+  root._resetSelect = () => { sel.classList.remove('on'); go.hidden = true; };
   root._applySearch = () => {
     const q = inp.value.trim().toLowerCase();
-    const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden);
-    if (!pane) return;
-    pane.querySelectorAll('.libCard').forEach((card) => {
+    const ul = activeUl(); if (!ul) return;
+    ul.querySelectorAll('.libCard').forEach((card) => {
       const name = (card.querySelector('.libName')?.textContent || '').toLowerCase();
       card.style.display = (!q || name.includes(q)) ? '' : 'none';
     });
@@ -162,7 +177,7 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
   // chess), off for everything else; toggle it either way. Inert until a grid is on.
   const snapTog = document.createElement('button'); snapTog.type = 'button';
   snapTog.className = 'chip chk snapTog' + (snapDefault ? ' on' : '');
-  snapTog.textContent = '⊞ Snap'; snapTog.title = 'Spawn this piece with snap-to-grid on';
+  snapTog.dataset.icon = 'grid-3x3'; snapTog.innerHTML = '<span class="lbl">Snap</span>'; snapTog.title = 'Spawn this piece with snap-to-grid on';
   snapTog.onclick = () => snapTog.classList.toggle('on');
   ctrls.append(snapTog);
 
@@ -173,7 +188,7 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
   if (standTog) {
     standTog.type = 'button';
     standTog.className = 'chip chk standTog' + (standOn ? ' on' : '');
-    standTog.textContent = '⬆ Stand'; standTog.title = 'Spawn upright / flat (its natural pose); off = free to tumble';
+    standTog.dataset.icon = 'arrow-big-up-line'; standTog.innerHTML = '<span class="lbl">Stand</span>'; standTog.title = 'Spawn upright / flat (its natural pose); off = free to tumble';
     standTog.onclick = () => standTog.classList.toggle('on');
     ctrls.append(standTog);
   }
@@ -196,17 +211,7 @@ function spawnCard({ preview, title, badge, send, color = 'none', teamName, dice
 // A tab's multi-select bar (Select toggle + "Spawn selected"), injected once
 // before the card list. In select mode, clicking a card highlights it.
 function spawnBar(ul) {
-  if (ul.previousElementSibling && ul.previousElementSibling.classList.contains('spawnBar')) return;
-  const bar = document.createElement('div'); bar.className = 'spawnBar';
-  const sel = document.createElement('button'); sel.type = 'button'; sel.className = 'chip selToggle'; sel.textContent = 'Select';
-  const go = document.createElement('button'); go.type = 'button'; go.className = 'spawnSelBtn'; go.textContent = 'Spawn selected'; go.hidden = true;
-  bar.append(sel, go);
-  ul.parentNode.insertBefore(bar, ul);
-  sel.onclick = () => {
-    const on = ul.classList.toggle('selecting'); sel.classList.toggle('on', on); go.hidden = !on;
-    if (!on) ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
-  };
-  go.onclick = () => ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn());
+  if (ul._selWired) return; ul._selWired = true; // the Select/Spawn buttons live in the sticky controls row now
   ul.addEventListener('click', (e) => {
     if (!ul.classList.contains('selecting')) return;
     if (e.target.closest('.cardCtrls') || e.target.closest('.actions')) return; // let qty/color clicks through
@@ -758,7 +763,7 @@ window.onOttRoom = (room) => {
     byId('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
     byId('libraryClose').onclick = () => { panel.hidden = true; };
     wireTabs(panel);
-    wireSearch(panel);
+    wireControls(panel);
     // Room Controls → Load a Scene: open the library straight to the Scenes tab.
     const roomScene = byId('roomScene');
     if (roomScene) roomScene.onclick = () => {
@@ -775,7 +780,7 @@ window.onOttRoom = (room) => {
     byId('builtinBtn').onclick = () => { builtin.hidden = !builtin.hidden; if (!builtin.hidden) renderBuiltin(); };
     byId('builtinClose').onclick = () => { builtin.hidden = true; };
     wireTabs(builtin);
-    wireSearch(builtin);
+    wireControls(builtin);
   }
   // Room Controls → Skybox: two-tab apply-picker (both pages).
   const skyPick = byId('skyPickModal');

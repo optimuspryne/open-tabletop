@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor } from './core.js';
 import { KIND, OVERLAY, trayMesh, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, parseCardFront, cardPreviewURL, uploadImage, uploadModel, makePlayerTexture, nameTag, makeYouChipTexture, gridMesh } from './graphics.js';
+import { applyIcons, setIcon, initTip } from './icons.js';
 import { KINDS as PHYS, PROPS, PROP_LIST, BOARDS, DIE_SIDES, DICE_SETS, PALETTE, COLORS, readableInk, recolorPalette, deckHeight, timerLive, MEASURE, formatMeasure, DISPENSERS, gridActive, snapToCell, trayCenter, seatAngle } from '/shared/pieces.js';
 import { playSfx, resumeAudio, setSfxVolume, getSfxVolume, setSfxMuted, getSfxMuted, setMusicMuted, getMusicMuted, toggleMusic, nextTrack, playTrack, currentTrackIndex, getShuffle, setShuffle, setMusicVolume, getMusicVolume, isMusicPlaying, onMusicTrack } from './audio.js';
 import { MUSIC, MUSIC_CREDIT, SFX_CREDITS, MODEL_CREDITS, ART_CREDITS, LIB_CREDITS } from './credits.js';
@@ -16,7 +17,14 @@ const escapeHtml = (x) => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<'
 // Per-room role → numeric rank (owner > gm > helper > player); used for gating.
 const rankOf = (role) => ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
 // A <button> from label + click handler (+ optional class) — the shared DOM factory.
-const makeButton = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+const MEMBER_ICON = { 'Helper': 'user-up', 'Player': 'user-down', 'GM': 'user-cog', 'Kick': 'user-minus' };
+// Preset colors for the felt + grid-line swatch popovers (the custom picker sits beside them).
+const FELT_COLORS = ['#2f6b4f', '#1e5c3f', '#2f4f6b', '#1e3a5c', '#6b2f3a', '#5c1e2a', '#3a3a3a', '#1a1a1a'];
+const GRID_COLORS = ['#ffffff', '#888888', '#000000', '#e05555', '#55aaff', '#55cc77', '#e0c055'];
+const buildColorSwatches = (container, colors, apply) => { if (!container || container.childElementCount) return; colors.forEach((hex) => { const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'swatch'; chip.style.background = hex; chip.title = hex; chip.onclick = () => apply(hex); container.appendChild(chip); }); };
+// Relabel a button without clobbering an injected icon: update its .lbl + aria-label, or textContent if it has no icon.
+const setBtnLabel = (btn, text) => { if (!btn) return; const l = btn.querySelector('.lbl'); if (l) { l.textContent = text; btn.setAttribute('aria-label', text); } else btn.textContent = text; };
+const makeButton = (label, fn, cls) => { const button = document.createElement('button'); const ic = MEMBER_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 
 // Wrap every number input in a themed − / + stepper (universal number-field style).
 // The original input is kept in place, so existing byId() reads still work; the
@@ -414,7 +422,7 @@ function rebuildGrid() {
 
   if (editorMode) { // workshop chrome: no member management, back to the admin console, hand the room to the panel
     const mb = byId('membersBtn'); if (mb) mb.hidden = true;
-    const lb = byId('lobbyBtn'); lb.textContent = '🔙 Admin';
+    const lb = byId('lobbyBtn'); lb.querySelectorAll('.ico').forEach((i) => i.remove()); lb.dataset.icon = 'arrow-back-up user-shield'; { const l = lb.querySelector('.lbl'); if (l) l.textContent = 'Admin'; } lb.removeAttribute('aria-label'); applyIcons(lb.parentNode);
     lb.onclick = () => { leaving = true; try { room.leave(); } catch (e) {} location.href = '/admin.html'; };
   }
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
@@ -492,10 +500,12 @@ function rebuildGrid() {
   document.addEventListener('click', () => diceGrp.hidden = true); // clicking anywhere else closes it
   for (const sides of DIE_SIDES) {
     const button = document.createElement('button');
-    button.textContent = '+ d' + sides;
+    button.dataset.icon = 'plus number-' + sides + '-small';
+    button.innerHTML = '<span class="lbl">d' + sides + '</span>';
     button.onclick = () => room.send('spawn', { type: 'die', props: myDieProps(sides) }); // my saved color rides along
     diceGrp.appendChild(button);
   }
+  applyIcons(diceGrp);
 
   // The game table and the editor have different toolbars but share this file, so
   // every page-specific control is wired defensively (no-op if it isn't on the page).
@@ -522,7 +532,7 @@ function rebuildGrid() {
         wbPanel.hidden = !wbPanel.hidden;
         if (!wbPanel.hidden) { // sync controls from current room state on open
           const wb = room.state.whiteboard;
-          byId('wbEnabled').classList.toggle('on', wb.enabled);
+          byId('wbEnabled').classList.toggle('on', wb.enabled); setIcon(byId('wbEnabled'), wb.enabled ? 'chalkboard' : 'chalkboard-off');
           qsa('#whiteboard [data-wbstyle]').forEach(c => c.classList.toggle('on', c.dataset.wbstyle === (wb.dark ? 'dark' : 'light')));
           byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
         }
@@ -530,7 +540,7 @@ function rebuildGrid() {
       const wbClose = byId('wbClose'); if (wbClose) wbClose.onclick = () => { wbPanel.hidden = true; };
     }
   }
-  { const el = byId('wbEnabled'); if (el) el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); room.send('wbEnable', { on }); }; }
+  { const el = byId('wbEnabled'); if (el) el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); setIcon(el, on ? 'chalkboard' : 'chalkboard-off'); room.send('wbEnable', { on }); }; }
   { const el = byId('wbAngle'); if (el) el.oninput = () => room.send('wbSet', { angle: (+el.value) * Math.PI / 180 }); }
   qsa('#whiteboard [data-wbstyle]').forEach(c => c.onclick = () => {
     qsa('#whiteboard [data-wbstyle]').forEach(x => x.classList.remove('on'));
@@ -549,7 +559,8 @@ function rebuildGrid() {
     const w = byId('tableW'), d = byId('tableD');
     if (w) w.onchange = send;
     if (d) d.onchange = send;
-    const felt = byId('tableFelt'); if (felt) felt.oninput = () => room.send('tableColor', { color: felt.value }); }
+    const felt = byId('tableFelt'); if (felt) felt.oninput = () => room.send('tableColor', { color: felt.value });
+    buildColorSwatches(byId('feltSwatches'), FELT_COLORS, (hex) => { const f = byId('tableFelt'); if (f) f.value = hex; room.send('tableColor', { color: hex }); }); }
 
   // Measurement scale (GM-set, durable). Reads live from room.state.scale; writes
   // via scaleSet. Drag-calibration lands with the ruler tool (Step 3).
@@ -589,7 +600,7 @@ function rebuildGrid() {
     if (gk && document.activeElement !== gk && /^#[0-9a-f]{6}$/i.test(sc.gridColor || '')) gk.value = sc.gridColor;
     const gsr = byId('gridSnapRow'); if (gsr) gsr.hidden = !gridOn; // snap-anchor toggle (centers vs crossings)
     const ghr = byId('gridHideRow'); if (ghr) ghr.hidden = !gridOn; // hide-grid toggle (snaps, not drawn)
-    const ght = byId('gridHideTog'); if (ght) ght.classList.toggle('on', !!sc.gridHidden);
+    const ght = byId('gridHideTog'); if (ght) { ght.classList.toggle('on', !!sc.gridHidden); setIcon(ght, sc.gridHidden ? 'eye-off' : 'eye'); }
     const anchor = sc.snapAnchor === 'cross' ? 'cross' : 'center';
     document.querySelectorAll('#gridAnchors [data-anchor]').forEach(b => b.classList.toggle('on', b.dataset.anchor === anchor));
     relabelOverlays(); // scale drives every ruler's label
@@ -636,6 +647,7 @@ function rebuildGrid() {
     const gox = byId('gridOffX'); if (gox) gox.onchange = () => room.send('scaleSet', { gridX: (+gox.value || 0) * (+room.state.scale.worldPerUnit || 1) });
     const goz = byId('gridOffZ'); if (goz) goz.onchange = () => room.send('scaleSet', { gridZ: (+goz.value || 0) * (+room.state.scale.worldPerUnit || 1) });
     const gk = byId('gridColor'); if (gk) gk.oninput = () => room.send('scaleSet', { gridColor: gk.value });
+    buildColorSwatches(byId('gridColorSwatches'), GRID_COLORS, (hex) => { const g = byId('gridColor'); if (g) g.value = hex; room.send('scaleSet', { gridColor: hex }); });
     const gl = byId('gridLift'); if (gl) gl.oninput = () => room.send('scaleSet', { gridLift: +gl.value });
     // Snap anchor: cell centres (chess/checkers) vs line crossings (go). Also tells the
     // "Fit to board" button whether the count you enter means squares or lines.
@@ -676,7 +688,7 @@ function rebuildGrid() {
   wire('roomSaveState', () => room.send('stateSave'));
   room.onMessage('stateSaved', () => { const b = byId('roomSaveState'); if (!b) return; const t = b.textContent; b.textContent = '💾 Saved ✓'; setTimeout(() => { b.textContent = t; }, 1500); });
   room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
-  { const b = byId('selectBtn'); if (b) b.onclick = () => setSelMode(!selMode); } // Select tool: felt-drag boxes a selection
+  document.querySelectorAll('.selectTool').forEach((b) => b.onclick = () => setSelMode(!selMode)); // Select tool: felt-drag boxes a selection
   // (the #selSwatches row is built per-selection by refreshSelTools — it depends on what's selected)
   byId('roll').onclick = () => openTray();          // Roll hops to YOUR tray (placing it if it isn't out)
   { const b = byId('trayBack');  if (b) b.onclick = () => closeTray(); }                 // leave the view, tray stays
@@ -698,9 +710,9 @@ function rebuildGrid() {
   { // Right rail: collapse to a compact pinned head (toggle + turn + Next turn). Starts collapsed on mobile/narrow.
     const rail = byId('rightRail'), tog = byId('railToggle');
     if (rail && tog) {
-      const apply = (c) => { rail.classList.toggle('collapsed', c); tog.textContent = c ? '◀' : '▶'; tog.title = c ? 'Show panel' : 'Collapse panel'; };
+      const apply = (c) => { rail.classList.toggle('collapsed', c); setIcon(tog, c ? 'square-chevron-left' : 'square-chevron-right'); tog.setAttribute('aria-label', c ? 'Show panel' : 'Collapse panel'); };
       tog.onclick = () => apply(!rail.classList.contains('collapsed'));
-      if (matchMedia('(pointer: coarse), (max-width: 720px)').matches) apply(true);
+      apply(matchMedia('(pointer: coarse), (max-width: 720px)').matches); // set initial state + icon
     }
   }
   byId('nameInput').addEventListener('change', e => {
@@ -726,13 +738,13 @@ function rebuildGrid() {
     byId('audioBtn').onclick = () => { audioPanel.hidden = !audioPanel.hidden; };
     wire('audioClose', () => audioPanel.hidden = true);
     if (sfxVol) { sfxVol.value = Math.round(getSfxVolume() * 100); sfxVol.oninput = () => setSfxVolume(sfxVol.value / 100); }
-    const muteBtn = (btn, get, set) => { if (!btn) return; const sync = () => btn.textContent = get() ? '\u{1F507}' : '\u{1F50A}'; sync(); btn.onclick = () => { set(!get()); sync(); }; };
-    muteBtn(byId('sfxMute'), getSfxMuted, setSfxMuted);
-    muteBtn(byId('musicMute'), getMusicMuted, setMusicMuted);
+    const muteBtn = (btn, get, set, on, off) => { if (!btn) return; const sync = () => setIcon(btn, get() ? off : on); sync(); btn.onclick = () => { set(!get()); sync(); }; };
+    muteBtn(byId('sfxMute'), getSfxMuted, setSfxMuted, 'ear', 'ear-off');
+    muteBtn(byId('musicMute'), getMusicMuted, setMusicMuted, 'music', 'music-off');
     // background music
     const musicVol = byId('musicVol'), musicToggle = byId('musicToggle'), nowPlaying = byId('nowPlaying');
     if (musicVol) { musicVol.value = Math.round(getMusicVolume() * 100); musicVol.oninput = () => setMusicVolume(musicVol.value / 100); }
-    const syncMusicBtn = () => { if (musicToggle) musicToggle.textContent = isMusicPlaying() ? '\u23f8 Music' : '\u25b6 Music'; };
+    const syncMusicBtn = () => { if (musicToggle) setIcon(musicToggle, isMusicPlaying() ? 'player-pause' : 'player-play'); };
     if (musicToggle) musicToggle.onclick = () => { toggleMusic(); syncMusicBtn(); };
     wire('musicNext', () => { nextTrack(); syncMusicBtn(); });
     const shuffleBtn = byId('musicShuffle');
@@ -818,7 +830,7 @@ function rebuildGrid() {
     const t = room.state.timer;
     if (!t) return;
     timerReadout.textContent = fmtTime(timerLive(t, Date.now()));
-    timerToggle.textContent = t.running ? 'Pause' : 'Start';
+    setIcon(timerToggle, t.running ? 'clock-pause' : 'clock-play');
     if (modeVal() !== t.mode) setMode(t.mode); // reflect another client's switch
     timerDurRow.hidden = t.mode !== 'down';
     if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
@@ -836,7 +848,7 @@ function rebuildGrid() {
   function buildAudienceChips() { // rebuilt each open, so it tracks who's in the room
     showAudience.replaceChildren();
     const everyone = document.createElement('button');
-    everyone.className = 'chip'; everyone.dataset.sid = 'all'; everyone.textContent = 'Everyone';
+    everyone.className = 'chip'; everyone.dataset.sid = 'all'; everyone.dataset.icon = 'friends'; everyone.innerHTML = '<span class="lbl">Everyone</span>';
     everyone.onclick = () => {
       everyone.classList.toggle('on');
       if (everyone.classList.contains('on')) showAudience.querySelectorAll('.chip').forEach(c => { if (c !== everyone) c.classList.remove('on'); });
@@ -853,6 +865,7 @@ function rebuildGrid() {
       chip.onclick = () => { everyone.classList.remove('on'); chip.classList.toggle('on'); };
       showAudience.appendChild(chip);
     }
+    applyIcons(showAudience);
   }
   const currentAudience = () => {
     const everyone = showAudience.querySelector('[data-sid="all"]');
@@ -881,10 +894,10 @@ function rebuildGrid() {
     const hids = scopeSel.classList.contains('on') ? [...selected] : 'all';
     if (Array.isArray(hids) && !hids.length) return; // "selected" scope with nothing picked
     showHold.setPointerCapture(e.pointerId);
-    showLive = true;
+    showLive = true; setIcon(showHold, 'eye-check');
     room.send('showStart', { to, hids });
   });
-  const endShow = () => { if (showLive) { showLive = false; room.send('showStop'); } };
+  const endShow = () => { if (showLive) { showLive = false; room.send('showStop'); setIcon(showHold, 'eye-cancel'); } };
   showHold.addEventListener('pointerup', endShow);
   showHold.addEventListener('pointercancel', endShow);
   showHold.addEventListener('lostpointercapture', endShow);
@@ -953,7 +966,7 @@ const pickId = () => {
 }
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
-{ const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); b.textContent = leanActive ? '🔎 Lean Out' : '🔎 Lean In'; }; } // toggle the closer-look camera
+{ const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); const t = leanActive ? 'Lean Out' : 'Lean In'; const l = b.querySelector('.lbl'); if (l) l.textContent = t; b.setAttribute('aria-label', t); }; } // toggle the closer-look camera (keep the icon; relabel only)
 { // Drop hand: a little menu — lay your whole hand out just in front of your marker, face up or down
   const dropPanel = byId('dropPanel');
   const dropAt = (faceDown) => {
@@ -1083,8 +1096,8 @@ qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place));
     const b = parseInt(byId('inspectColorBody').value.slice(1), 16);                    // read what's on screen now
     const t = parseInt(byId('inspectColorText').value.slice(1), 16);
     saveDiceDefault(sides, b, t);                                                       // local only — never synced
-    defBtn.textContent = `Saved · d${sides}`; defBtn.disabled = true;                   // brief confirmation
-    setTimeout(() => { if (byId('inspectDefaultBtn') === defBtn) { defBtn.textContent = 'Set as my default'; defBtn.disabled = false; } }, 1300);
+    setBtnLabel(defBtn, `Saved · d${sides}`); defBtn.disabled = true;                   // brief confirmation
+    setTimeout(() => { if (byId('inspectDefaultBtn') === defBtn) { setBtnLabel(defBtn, 'Set as my default'); defBtn.disabled = false; } }, 1300);
   };
   const resetBtn = byId('inspectResetBtn');                                             // forget this type's default + plain this die
   if (resetBtn) resetBtn.onclick = () => {
@@ -1092,8 +1105,8 @@ qsa('[data-place]').forEach(b => b.onclick = () => placeDrawn(b.dataset.place));
     const sides = +inspect.props.sides;
     if (DIE_SIDES.includes(sides)) clearDiceDefault(sides);
     paintDie(0xf4f1ea);                                                                 // back to plain ivory (ink auto)
-    resetBtn.textContent = 'Reset ✓';
-    setTimeout(() => { if (byId('inspectResetBtn') === resetBtn) resetBtn.textContent = 'Reset'; }, 1200);
+    setBtnLabel(resetBtn, 'Reset ✓');
+    setTimeout(() => { if (byId('inspectResetBtn') === resetBtn) setBtnLabel(resetBtn, 'Reset'); }, 1200);
   };
 }
 
@@ -1177,10 +1190,11 @@ function inspectMesh(mesh, opts = {}) {
   camera.add(pivot);
   pivot.position.set(0, -CONFIG.inspect.drop, -CONFIG.inspect.dist);
 
-  inspect = { pivot, origId: opts.origId || null, type: opts.type, props: null, drag: null, drawn: !!opts.drawn, placed: false };
+  inspect = { pivot, origId: opts.origId || null, type: opts.type, props: null, drag: null, drawn: !!opts.drawn, placed: false, hid: opts.hid || null };
   controls.enabled = false;
   byId('inspectHint').hidden = !!opts.drawn; // a drawn card shows the action panel instead
   byId('drawActions').hidden = !opts.drawn;
+  { const db = byId('drawActions') && byId('drawActions').querySelector('[data-place="deck"]'); if (db) db.hidden = !!opts.hid; } // a hand card has no deck to return to
   const piece0 = opts.origId && room.state.pieces.get(opts.origId);
   const props0 = piece0 ? JSON.parse(piece0.props || '{}') : {};
   const spec = opts.type === 'dispenser' ? DISPENSERS[props0.disp] : null;
@@ -1209,10 +1223,10 @@ function inspectMesh(mesh, opts = {}) {
         if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414);       // die = ink numbers
       }
       const defBtn = byId('inspectDefaultBtn');                       // dice only: "make this my default d?"
-      if (defBtn) { defBtn.hidden = !isDie; defBtn.disabled = false; defBtn.textContent = 'Set as my default'; }
+      if (defBtn) { defBtn.hidden = !isDie; defBtn.disabled = false; setBtnLabel(defBtn, 'Set as my default'); }
       const swRow = byId('dieSwatches'); if (swRow) swRow.hidden = !isDie;             // dice sets (dice only)
       const propRow = byId('propSwatches'); if (propRow) propRow.hidden = !(opt && opt.swatches.length); // per-object palette
-      const resetBtn = byId('inspectResetBtn'); if (resetBtn) { resetBtn.hidden = !isDie; resetBtn.textContent = 'Reset'; }
+      const resetBtn = byId('inspectResetBtn'); if (resetBtn) { resetBtn.hidden = !isDie; setBtnLabel(resetBtn, 'Reset'); }
       if (teamMode) { const tb = byId('inspectTeamBtn'); if (tb) tb.textContent = inspect.props.team ? 'White' : 'Black'; }
     }
   }
@@ -1254,7 +1268,8 @@ function enterInspect(id) {
 
 function releaseInspect() {
   if (!inspect) return;
-  if (inspect.drawn && !inspect.placed) room.send('inspectPlace', { where: 'deck' }); // closed without choosing → back to deck
+  const wasHand = inspect.hid;
+  if (inspect.drawn && !inspect.placed && !inspect.hid) room.send('inspectPlace', { where: 'deck' }); // a real drawn card closed without choosing → back to deck
   camera.remove(inspect.pivot); // shares geometry/materials — never dispose
   const entry = inspect.origId && meshes.get(inspect.origId);
   if (entry) entry.mesh.visible = true;
@@ -1263,11 +1278,20 @@ function releaseInspect() {
   byId('inspectHint').hidden = true;
   byId('drawActions').hidden = true;
   const row = byId('inspectColorRow'); if (row) row.hidden = true;
+  if (wasHand) renderHand(myHand); // restore the hand we hid for the inspect
 }
 
 // Resolve a drawn card to its destination: field-up | field-down | hand | deck.
 function placeDrawn(where) {
-  if (!inspect || !inspect.drawn) return;
+  if (!inspect) return;
+  if (inspect.hid) { // hand-card inspect: play with the chosen face, or keep it in hand
+    if (where === 'field-up') room.send('playCard', { hid: inspect.hid, faceDown: false });
+    else if (where === 'field-down') room.send('playCard', { hid: inspect.hid, faceDown: true });
+    inspect.placed = true; // 'hand' just closes; 'deck' is hidden for hand cards
+    releaseInspect();
+    return;
+  }
+  if (!inspect.drawn) return;
   room.send('inspectPlace', { where });
   inspect.placed = true;
   releaseInspect();
@@ -1602,6 +1626,14 @@ function rebuildPiece(id, piece) {
 
 // hidden hand: a private bottom bar only this client ever sees
 let handDrag = null; // dragging a card out of the hand onto the table
+const dropPreview = (m) => { if (!m) return; scene.remove(m); m.geometry && m.geometry.dispose(); (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x && x.dispose()); };
+let handClickTimer = null; // a pending single-click play, cancelled if a double-click (inspect) follows
+const HAND_HOVER = 0.6; // the drag preview floats this high above the felt so it clears boards/tiles (e.g. Wordy)
+function inspectHandCard(card) { inspectMesh(cardMesh({ front: card.front, back: card.back, geom: card.geom, tile: card.tile }), { drawn: true, type: 'card', hid: card.hid }); byId('hand').style.display = 'none'; } // hide the hand behind the inspect view
+const touchIds = new Set(); // active touch pointers → a hand drag reads this: 1 finger = face-down, 2 = face-up
+addEventListener('pointerdown', (e) => { if (e.pointerType !== 'touch') return; touchIds.add(e.pointerId); if (handDrag && handDrag.touch) handDrag.faceDown = touchIds.size < 2; }, true); // a 2nd finger (even a still tap) → face-up
+addEventListener('pointerup', (e) => touchIds.delete(e.pointerId), true);
+addEventListener('pointercancel', (e) => touchIds.delete(e.pointerId), true);
 
 // Show-cards feature state. revealed: cards another player is showing us, drawn
 // face-up in their fan. selectMode/selected: while the Show panel is picking
@@ -1615,49 +1647,66 @@ try { handCollapsed = localStorage.getItem('ott.handHidden') === '1'; } catch {}
 function setHandCollapsed(v) { handCollapsed = v; try { localStorage.setItem('ott.handHidden', v ? '1' : '0'); } catch {} renderHand(myHand); }
 addEventListener('pointermove', e => {
   if (!handDrag) return;
+  if (e.pointerId !== handDrag.pointerId) return; // only the finger that armed the drag drives it
   if (!handDrag.dragging) {
     if (Math.hypot(e.clientX - handDrag.sx, e.clientY - handDrag.sy) < CONFIG.input.handPx) return;
     handDrag.dragging = true;
+    byId('hand').classList.add('hand-dragging'); // hide the hand while dragging so it doesn't obscure the table
     document.body.style.userSelect = document.body.style.webkitUserSelect = 'none'; // stop the text-selection sweep
     const selection = window.getSelection && window.getSelection();
     if (selection) selection.removeAllRanges();
-    // A ghost copy of the card that follows the cursor.
-    const ghost = handDrag.el.cloneNode(true);
-    Object.assign(ghost.style, { position: 'fixed', pointerEvents: 'none', opacity: '0.85', zIndex: '50', margin: '0', transform: 'translate(-50%,-50%)' });
-    document.body.appendChild(ghost);
-    handDrag.ghost = ghost;
+    // A real (local, unsynced) card mesh that rides the table under the pointer — same look as a played card.
+    const d = handDrag;
+    const mesh = cardMesh({ front: d.front, back: d.back, geom: d.geom, tile: d.tile });
+    mesh.renderOrder = 6;
+    scene.add(mesh);
+    handDrag.mesh = mesh;
   }
-  handDrag.ghost.style.left = e.clientX + 'px';
-  handDrag.ghost.style.top = e.clientY + 'px';
+  if (handDrag.touch) handDrag.faceDown = touchIds.size < 2; // live-flip the face as fingers change during the drag
+  if (handDrag.mesh) handDrag.mesh.rotation.x = handDrag.faceDown ? Math.PI : 0; // face-down shows the back
+  setPointer(e);
+  ray.setFromCamera(pointer, camera);
+  if (ray.ray.intersectPlane(dragPlane, hit)) handDrag.mesh.position.set(hit.x, HAND_HOVER, hit.z); // hover above the felt so the card clears boards/tiles
 });
 addEventListener('pointerup', e => {
   if (!handDrag) return;
+  if (e.pointerId !== handDrag.pointerId) return; // only the arming finger ends the drag/tap
   const drag = handDrag;
   handDrag = null;
   document.body.style.userSelect = document.body.style.webkitUserSelect = ''; // re-enable selection
-  if (drag.ghost) drag.ghost.remove();
-  if (!drag.dragging) { room.send('playCard', { hid: drag.hid, faceDown: drag.faceDown }); return; } // a click = quick play
-  if (document.elementFromPoint(e.clientX, e.clientY) !== renderer.domElement) return; // dropped on UI → cancel
+  dropPreview(drag.mesh); // discard the local preview
+  if (!drag.dragging) { const d = drag; clearTimeout(handClickTimer); handClickTimer = setTimeout(() => room.send('playCard', { hid: d.hid, faceDown: d.faceDown }), 240); return; } // click = quick play (delayed so a double-click inspects instead)
+  if (document.elementFromPoint(e.clientX, e.clientY) !== renderer.domElement) { byId('hand').classList.remove('hand-dragging'); return; } // dropped on UI → cancel, reveal the hand
   setPointer(e);
   ray.setFromCamera(pointer, camera);
   ray.ray.intersectPlane(dragPlane, hit); // where on the table
   room.send('playCard', { hid: drag.hid, faceDown: drag.faceDown, x: hit.x, z: hit.z });
+});
+addEventListener('pointercancel', (e) => { // a cancelled drag must still discard its preview
+  if (!handDrag || e.pointerId !== handDrag.pointerId) return;
+  dropPreview(handDrag.mesh);
+  handDrag = null;
+  byId('hand').classList.remove('hand-dragging');
+  document.body.style.userSelect = document.body.style.webkitUserSelect = '';
 });
 
 function renderHand(cards) {
   const el = byId('hand');
   el.innerHTML = '';
   el.classList.remove('collapsed');
+  el.classList.remove('hand-dragging'); // a fresh render (after a play/cancel) reveals the hand
   if (handCollapsed && cards.length && !selectMode) { // hidden: show only a peek tab (never while picking cards to show)
     el.classList.add('collapsed');
     const tab = document.createElement('button');
     tab.className = 'handToggle';
-    tab.textContent = `🃏 Show hand (${cards.length})`;
+    tab.dataset.icon = 'cards square-chevron-up';
+    tab.setAttribute('aria-label', `Show hand (${cards.length})`);
     tab.onclick = () => setHandCollapsed(false);
-    el.appendChild(tab);
+    el.appendChild(tab); applyIcons(el);
     el.style.display = 'flex';
     return;
   }
+  const scroll = document.createElement('div'); scroll.className = 'handScroll'; // horizontally scrollable card strip
   for (const card of cards) {
     const div = document.createElement('div');
     div.className = 'handcard';
@@ -1681,6 +1730,7 @@ function renderHand(cards) {
     div.oncontextmenu = ev => ev.preventDefault(); // right-click is handled by the pointer events
     if (selectMode && selected.has(card.hid)) div.classList.add('sel');
     div.addEventListener('pointerdown', ev => {
+      if (handDrag) return; // a drag is already in progress (e.g. a second finger) — don't re-arm
       if (selectMode) { // picking cards to show — toggle instead of playing
         if (ev.button !== 0) return;
         ev.preventDefault();
@@ -1690,16 +1740,28 @@ function renderHand(cards) {
       }
       if (ev.button === 0 || ev.button === 2) {
         ev.preventDefault();
-        handDrag = { hid: card.hid, faceDown: ev.button === 0, sx: ev.clientX, sy: ev.clientY, dragging: false, ghost: null, el: div };
+        handDrag = { hid: card.hid, faceDown: ev.button !== 2, touch: ev.pointerType === 'touch', pointerId: ev.pointerId, front: card.front, back: card.back, geom: card.geom, tile: card.tile, sx: ev.clientX, sy: ev.clientY, dragging: false, mesh: null }; // mouse: left=down, right=up. touch: 1 finger=down, 2=up (set live from touchIds)
       }
     });
-    el.appendChild(div);
+    div.ondblclick = () => { clearTimeout(handClickTimer); inspectHandCard(card); }; // desktop: double-click to inspect
+    const eye = document.createElement('button'); eye.className = 'cardEye'; eye.setAttribute('aria-label', 'Inspect card');
+    setIcon(eye, 'eye');
+    eye.addEventListener('pointerdown', (ev) => ev.stopPropagation()); // tapping the eye must not arm a drag
+    eye.onclick = (ev) => { ev.stopPropagation(); inspectHandCard(card); };
+    div.appendChild(eye);
+    scroll.appendChild(div);
   }
+  const mkChev = (dir, icon, label) => { const b = document.createElement('button'); b.className = 'handScrollBtn'; b.setAttribute('aria-label', label); setIcon(b, icon); b.onclick = () => scroll.scrollBy({ left: dir * scroll.clientWidth * 0.7, behavior: 'smooth' }); return b; };
+  const leftChev = mkChev(-1, 'square-chevron-left', 'Scroll left');
+  const rightChev = mkChev(1, 'square-chevron-right', 'Scroll right');
+  el.append(leftChev, scroll, rightChev);
+  const syncChevrons = () => { const sc = scroll.scrollWidth > scroll.clientWidth + 2; leftChev.hidden = rightChev.hidden = !sc; if (sc) { leftChev.disabled = scroll.scrollLeft <= 0; rightChev.disabled = scroll.scrollLeft >= scroll.scrollWidth - scroll.clientWidth - 2; } };
+  scroll.addEventListener('scroll', syncChevrons); requestAnimationFrame(syncChevrons);
   if (cards.length && !selectMode) { // a small handle to hide the hand from your view
     const hide = document.createElement('button');
     hide.className = 'handToggle hide';
-    hide.textContent = '▾';
-    hide.title = 'Hide your hand';
+    setIcon(hide, 'square-chevron-down');
+    hide.setAttribute('aria-label', 'Hide your hand');
     hide.onclick = () => setHandCollapsed(true);
     el.appendChild(hide);
   }
@@ -2489,6 +2551,7 @@ function renderMembers(list) {
     li.appendChild(acts);
     ul.appendChild(li);
   }
+  applyIcons(ul);
 }
 
 // ===== render loop — buffered snapshot interpolation ========================
@@ -2615,7 +2678,7 @@ function recolorSelTeam(i) {
 let selBarSig = null;                                                     // last-rendered state, to avoid rebuilding every frame
 function refreshSelTools() {
   const abar = byId('selActions'); if (abar) abar.hidden = !selection.size; // batch-op bar shows for any selection (also in the editor, which has no recolor bar)
-  const bar = byId('selTools'); if (!bar) return;
+  const bar = byId('selRecolor'); if (!bar) return;
   const desc = selection.size ? selectionPalette() : null;
   const sig = !selection.size ? '' : !desc ? 'none' : desc.mixed ? 'mixed' : desc.sig;
   bar.hidden = !selection.size || sig === 'none';                        // no selection, or nothing colorable → hide
@@ -2640,7 +2703,7 @@ function refreshSelTools() {
 }
 function setSelMode(on) {
   selMode = on;
-  const b = byId('selectBtn'); if (b) b.classList.toggle('on', on);
+  document.querySelectorAll('.selectTool').forEach((b) => b.classList.toggle('on', on));
   renderer.domElement.classList.toggle('selecting', on);
 }
 // A flat ring under a selected piece, styled like dropMarker but tinted + opaque.
@@ -2893,6 +2956,18 @@ function wirePopGroups(root = document) {
   document.addEventListener('click', () => document.querySelectorAll('.pop-menu').forEach((m) => { m.hidden = true; }));
 }
 wirePopGroups();
+
+// applyIcons / setIcon / initTip are imported from icons.js (see top).
+applyIcons();
+document.querySelectorAll('.close-x').forEach((el) => setIcon(el, 'x')); // every modal's ✕ → an icon, universally
+document.querySelectorAll('label[data-icon]').forEach((el) => setIcon(el, el.dataset.icon)); // icon-only dimension labels (Width/Depth)
+// Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
+['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => {
+  const el = byId(id);
+  if (el) new MutationObserver(() => applyIcons(el)).observe(el, { childList: true, subtree: true });
+});
+
+initTip(); // themed hover-hint (icons.js)
 
 // Touch height control: hold ▲ / ▼ to raise / lower the held piece — the touch analog of the wheel.
 // Also the selection rotation buttons: hold ⟲ / ⟳ to spin the selection continuously (server

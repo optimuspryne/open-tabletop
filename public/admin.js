@@ -1,3 +1,6 @@
+import { applyIcons, initTip } from './icons.js';
+applyIcons(); initTip();
+
 // admin.js — site-wide room & user management. Admin-gated: the page only renders
 // if /auth/token resolves to a user with isAdmin. Every action hits an admin-only
 // endpoint, so the gate here is courtesy — the server enforces it.

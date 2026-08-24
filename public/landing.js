@@ -1,3 +1,4 @@
+import { applyIcons, setIcon, initTip } from './icons.js';
 // landing.js — quick-join (default) + login/account + lobby. Talks to the /auth
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.
@@ -65,7 +66,7 @@ async function showHome(user) {
 async function updateAdminBadge() {
   try {
     const { pending } = await api('/admin/pending-count', { auth: true });
-    byId('adminBtn').textContent = pending > 0 ? `⚙️ Admin (${pending})` : '⚙️ Admin';
+    { const a = byId('adminBtn'); const t = pending > 0 ? `Admin (${pending})` : 'Admin'; const l = a.querySelector('.lbl'); if (l) l.textContent = t; a.setAttribute('aria-label', t); }
   } catch { /* leave as-is */ }
 }
 
@@ -151,7 +152,8 @@ function renderRoomList(rooms) {
     const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No rooms yet.';
     list.appendChild(li); return;
   }
-  const mkBtn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+  const ROOM_ICON = { 'Enter': 'door-enter', 'Rename': 'cursor-text', 'Close': 'door-off' };
+  const mkBtn = (label, fn, cls) => { const button = document.createElement('button'); const ic = ROOM_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
   for (const room of rooms) {
     const li = document.createElement('li'); li.className = 'roomRow';
     const info = document.createElement('div');
@@ -164,12 +166,13 @@ function renderRoomList(rooms) {
     actions.appendChild(enter);
     if (room.role === 'owner') { // owner room management
       actions.appendChild(mkBtn('Rename', () => renameRoom(room)));
-      actions.appendChild(mkBtn(room.requireApproval ? 'Approval ✓' : 'Approval ✗', () => togglePolicy(room)));
+      { const appr = document.createElement('button'); appr.dataset.icon = room.requireApproval ? 'shield-check' : 'shield-x'; appr.setAttribute('aria-label', room.requireApproval ? 'Approval required' : 'Open to all'); appr.onclick = () => togglePolicy(room); actions.appendChild(appr); }
       actions.appendChild(mkBtn('Close', () => closeRoom(room)));
     }
     li.append(info, actions);
     list.appendChild(li);
   }
+  applyIcons(list);
 }
 
 async function renameRoom(room) {
@@ -303,7 +306,8 @@ byId('qjBack2').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
 byId('loginBtn').onclick = onLogin;
 byId('suBtn').onclick = onSignup;
 byId('createBtn').onclick = onCreateRoom;
-byId('approval').onclick = () => byId('approval').classList.toggle('on');
+byId('approval').onclick = () => { const on = byId('approval').classList.toggle('on'); setIcon(byId('approval'), on ? 'shield-check' : 'shield-x'); };
+applyIcons(); initTip();
 // Accent color — personal, saved on this device (the <head> script applies it on load; this syncs the picker + handles changes).
 {
   const applyAccent = (hex) => {

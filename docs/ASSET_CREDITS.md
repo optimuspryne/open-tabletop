@@ -1,7 +1,8 @@
 # Asset Credits
 
-Bundled assets — 3D models, sound effects, skyboxes, and tile art — come from the
-creators below. Licenses vary: most are **CC0** (public domain), a few are **CC BY**.
+Bundled assets — 3D models, sound effects, skyboxes, tile art, and UI icons — come from
+the creators below. Licenses vary: most art is **CC0** (public domain), a few are **CC BY**,
+and the UI icons are **MIT**.
 Attribution is given here in full as a courtesy for the CC0 assets and as a **licence
 obligation** for the CC BY ones. The CC BY entries are also surfaced in the in-app
 **Credits** panel (see `public/credits.js`), which is where the visible-credit
@@ -86,3 +87,14 @@ All CC0 (public domain).
   — https://opengameart.org/content/mahjong-tileset
 - **License:** CC BY 3.0. Author requests a link to https://codeinferno.com
 
+---
+
+## UI icons — inline sprite in `public/table.html`, `editor.html`, `index.html`, `admin.html`
+
+### Tabler Icons
+- **Author:** Paweł Kuna and contributors — https://github.com/tabler/tabler-icons
+- **Source:** https://tabler.io/icons (outline style)
+- **Usage:** ~122 outline SVGs embedded as `<symbol>` elements in the inline icon sprite,
+  regenerated from a single list by `scripts/build-icons.mjs` (`npm run build:icons`).
+- **License:** MIT — Copyright (c) 2020-2026 Paweł Kuna. Full text in
+  [`docs/licenses/tabler-icons-LICENSE`](licenses/tabler-icons-LICENSE).

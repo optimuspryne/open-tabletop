@@ -34,6 +34,7 @@
 
   /* fluid structure — scale with the viewport (floor, preferred, ceiling) */
   --inset: clamp(10px, 1.4vw, 20px);     /* panel distance from screen edges */
+  --hand-side: 300px;                    /* room reserved each side for the bottom-corner controls (labeled hamburgers) */
   --gap: clamp(6px, 0.7vw, 10px);        /* gaps between controls */
   --fs: clamp(12px, 0.95vw, 15px);       /* base UI text */
   --fs-sm: clamp(11px, 0.85vw, 13px);    /* small text */
@@ -77,6 +78,9 @@
   cursor: pointer;
   opacity: .7;
   user-select: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .close-x:hover { opacity: 1; }
 /* Universal action-button row — uniform compact buttons that wrap cleanly */
@@ -162,6 +166,7 @@ html, body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none; /* no mobile pull-to-refresh / bounce interfering with touch gestures */
+  touch-action: manipulation; /* keep pan + pinch-zoom, but kill iOS double-tap-to-zoom on the UI (canvas + handcards keep their stricter touch-action:none) */
   background: var(--bg);
 }
 #app {
@@ -219,7 +224,7 @@ canvas.selecting { cursor: crosshair; }  /* Select tool active — felt-drag box
 #selBars {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--inset) + 84px);
+  bottom: var(--inset);
   transform: translateX(-50%);
   z-index: 6;
   display: flex;
@@ -247,7 +252,7 @@ canvas.selecting { cursor: crosshair; }  /* Select tool active — felt-drag box
   background: var(--accent-soft);
   pointer-events: none;
 }
-#selectBtn.on { color: var(--accent); border-color: var(--accent); }
+.selectTool.on { color: var(--accent); border-color: var(--accent); }
 b { color: var(--accent); }
 a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on the dark theme (was default blue) */ /* bold text uses the gold accent everywhere; more specific rules (e.g. .helpSec b) can override */
 /* Any element carrying the `hidden` attribute stays hidden, overriding whatever
@@ -269,10 +274,12 @@ a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on
 .grp {
   display: inline-block;
   gap: 4px;
+  min-width: 128px;
 }
 .grp button {
-  padding: 10% 5%;
+  padding: 10px 12px;
   width: 100%;
+  box-sizing: border-box;
 }
 .menu {
   position: relative;
@@ -442,8 +449,19 @@ button.danger {
   display: none;
   gap: 6px;
   padding: 8px;
+  max-width: min(1200px, calc(100vw - 2 * var(--hand-side)));
+  align-items: flex-start;
 }
+#hand.hand-dragging { visibility: hidden; } /* hidden while a card is being dragged out */
+.handScroll { display: flex; gap: 6px; overflow-x: auto; min-width: 0; padding-bottom: 2px; scrollbar-width: none; }
+.handScroll::-webkit-scrollbar { display: none; }
+.handScrollBtn { flex-shrink: 0; align-self: center; padding: 4px; opacity: .7; }
+.handScrollBtn:hover { opacity: 1; }
+.handScrollBtn:disabled { opacity: .25; }
 .handcard {
+  touch-action: none;
+  position: relative;
+  flex-shrink: 0;
   width: var(--card-w);
   aspect-ratio: 44/62;
   background: var(--card);
@@ -503,8 +521,13 @@ button.danger {
   align-self: flex-start;
   padding: 2px 7px;
   opacity: .6;
+  flex-shrink: 0;
 }
 .handToggle.hide:hover { opacity: 1; }
+.handToggle.face { align-self: flex-start; padding: 2px 7px; opacity: .8; }
+.handToggle.face.on { opacity: 1; color: var(--accent); }
+.cardEye { position: absolute; top: 3px; right: 3px; padding: 2px; opacity: .55; background: rgba(0,0,0,.35); border-radius: 5px; color: #fff; z-index: 2; }
+.cardEye:hover { opacity: 1; }
 #hand.collapsed { padding: 4px; }
 
 /* ===== right-edge toggled pop-outs: private notes, whiteboard, chat ===== */
@@ -744,7 +767,9 @@ select:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
-.libSearchWrap { margin: 6px 0 8px; }
+.libControls { display: flex; align-items: center; gap: 8px; margin: 2px 0; }
+.libDivider { flex: 0 0 2px; align-self: stretch; background: var(--border); border-radius: 1px; margin: 2px 6px; }
+.libSearchWrap { flex: 1 1 auto; max-width: 340px; margin: 0; min-width: 0; }
 .libSearch {  /* surface + radius via .field group */
   width: 100%;
   box-sizing: border-box;
@@ -983,6 +1008,18 @@ input[type="range"]::-moz-range-thumb {
   text-align: left;
 }
 /* Sit just below the create modals it opens (z 10), above the editor chrome. */
+.libraryCard:has(.libSticky) { padding: 0; }                        /* padding moves onto the sticky + panes (below) so the sticky is a normal full-width flex item with no negative-margin flow deficit */
+.libraryCard:has(.libSticky) .libPane { padding: 0 22px 20px; }
+.libraryCard .libSticky {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--panel-solid);
+  padding: 18px 22px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 #libraryPanel { z-index: 9; }
 /* One tab (and pane) per asset type. */
 .libTabs {
@@ -1845,7 +1882,7 @@ body.admin {
 #turnMini { min-width: 0; font: var(--fs-sm)/1.3 var(--font); color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 3px 9px; backdrop-filter: var(--blur); }
 #turnMini:empty { display: none; } /* no glassy chip when there's no turn to show */
 #railBody { display: flex; flex-direction: column; gap: var(--gap); }
-#rightRail.collapsed { width: auto; }
+#rightRail.collapsed { width: min(216px, 80vw); } /* same width as expanded — toggling hides the body, not the width */
 #rightRail.collapsed #railBody { display: none; }
 
 #rightRail #panel {
@@ -1897,6 +1934,7 @@ body.admin {
   display: flex;
   gap: var(--gap);
 }
+.selectTool.edgeRight { position: fixed; right: var(--inset); bottom: var(--inset); z-index: 8; } /* mirrored Select on the right */
 #toolsToggle, #interactToggle { display: none; } /* the hamburgers are the triggers now */
 @media (max-width: 720px), (pointer: coarse) { .lbl { display: none; } } /* emoji-only on mobile: any button's .lbl text collapses to its emoji */
 
@@ -2038,6 +2076,44 @@ body.admin {
   #accentPicker { flex-wrap: wrap; }
   #landing { margin: 16px auto; }
 }
+/* Tabler SVG icons via an inline <symbol> sprite, referenced by <use>. Stroke inherits currentColor,
+   so an icon takes the button's text colour — .danger red, hover accent, disabled, etc. — for free. */
+.icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+.ico {
+  width: 1.2em; height: 1.2em;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+button:has(.ico) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.ico-ampersand { width: 0.7em; height: 0.7em; opacity: .7; } /* a small connector between two icons (Scale & Grid) */
+.ico-plus { width: 0.8em; height: 0.8em; }              /* the dice "add" mark: small next to the big number */
+[class*="ico-number-"] { width: 1.4em; height: 1.4em; } /* dice number reads large */
+#roll .ico, #selRoll .ico, #trayRoll .ico { transform: rotate(45deg); } /* tilt "roll" dice so they look like they're rolling */
+button:has(.ico) .lbl { display: none; } /* icon-only: the label lives in the hover hint + aria-label */
+label:has(.ico) { display: inline-flex; align-items: center; justify-content: center; }
+.trayDie:has(.ico), #diceGrp button:has(.ico) { gap: 2px; }  /* plus+number reads as "+4" */
+
+/* Snappy themed hover-hint for icon buttons (see the #tip logic in client.js). */
+#tip {
+  position: fixed;
+  z-index: 1000;
+  padding: 4px 9px;
+  font: var(--fs-sm) var(--font);
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  backdrop-filter: var(--blur);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  pointer-events: none;
+  white-space: nowrap;
+}
+#tip[hidden] { display: none; }
+
 /* Reusable pop-out groups: a trigger button + a popover menu (dice palette, color swatches, …), so a
    dense toolbar stays short and reveals a grid on demand. Opens upward (bars sit low); a pick inside a
    data-close group closes it. */
@@ -2123,3 +2199,7 @@ body.admin {
 #scaleUnits, #gridStyles, #gridAnchors { display: flex; flex-wrap: nowrap; gap: 6px; }
 #scaleUnits .chip, #gridStyles .chip, #gridAnchors .chip { flex: 1 1 0; min-width: 0; text-align: center; }
 #scaleUnits .chip { padding: 4px 4px; font-size: 11px; } /* the unit buttons a touch smaller — four across */
+
+/* Hand width vs. the bottom-corner controls: reserve less when the hamburgers are icon-only. */
+@media (pointer: coarse) { :root { --hand-side: 160px; } }
+@media (max-width: 720px) { #hand { max-width: 94vw; } }
