@@ -152,7 +152,7 @@ function renderRoomList(rooms) {
     const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No rooms yet.';
     list.appendChild(li); return;
   }
-  const ROOM_ICON = { 'Enter': 'door-enter', 'Rename': 'cursor-text', 'Close': 'door-off' };
+  const ROOM_ICON = { 'Enter': 'door-enter', 'Rename': 'cursor-text', 'Close': 'trash' };
   const mkBtn = (label, fn, cls) => { const button = document.createElement('button'); const ic = ROOM_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
   for (const room of rooms) {
     const li = document.createElement('li'); li.className = 'roomRow';
@@ -166,7 +166,7 @@ function renderRoomList(rooms) {
     actions.appendChild(enter);
     if (room.role === 'owner') { // owner room management
       actions.appendChild(mkBtn('Rename', () => renameRoom(room)));
-      { const appr = document.createElement('button'); appr.dataset.icon = room.requireApproval ? 'shield-check' : 'shield-x'; appr.setAttribute('aria-label', room.requireApproval ? 'Approval required' : 'Open to all'); appr.onclick = () => togglePolicy(room); actions.appendChild(appr); }
+      { const appr = document.createElement('button'); const gated = room.requireApproval; appr.dataset.icon = gated ? 'shield-check' : 'shield-x'; appr.innerHTML = '<span class="lbl">' + (gated ? 'Gated' : 'Open') + '</span>'; appr.setAttribute('aria-label', gated ? 'Gated \u2014 approval required' : 'Open \u2014 anyone can join'); appr.onclick = () => togglePolicy(room); actions.appendChild(appr); }
       actions.appendChild(mkBtn('Close', () => closeRoom(room)));
     }
     li.append(info, actions);

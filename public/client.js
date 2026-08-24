@@ -24,7 +24,7 @@ const GRID_COLORS = ['#ffffff', '#888888', '#000000', '#e05555', '#55aaff', '#55
 const buildColorSwatches = (container, colors, apply) => { if (!container || container.childElementCount) return; colors.forEach((hex) => { const chip = document.createElement('button'); chip.type = 'button'; chip.className = 'swatch'; chip.style.background = hex; chip.title = hex; chip.onclick = () => apply(hex); container.appendChild(chip); }); };
 // Relabel a button without clobbering an injected icon: update its .lbl + aria-label, or textContent if it has no icon.
 const setBtnLabel = (btn, text) => { if (!btn) return; const l = btn.querySelector('.lbl'); if (l) { l.textContent = text; btn.setAttribute('aria-label', text); } else btn.textContent = text; };
-const makeButton = (label, fn, cls) => { const button = document.createElement('button'); const ic = MEMBER_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+const makeButton = (label, fn, cls, icon) => { const button = document.createElement('button'); const ic = icon || MEMBER_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 
 // Wrap every number input in a themed − / + stepper (universal number-field style).
 // The original input is kept in place, so existing byId() reads still work; the
@@ -493,19 +493,6 @@ function rebuildGrid() {
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
   rebuildGrid(); // initial grid (inert until a GM sets a cell size + square style)
 
-  const diceGrp = byId('diceGrp');
-  const diceBtn = byId('diceBtn');
-  diceBtn.onclick = (e) => { e.stopPropagation(); diceGrp.hidden = !diceGrp.hidden; };
-  diceGrp.onclick = (e) => e.stopPropagation();                   // clicks inside don't close the menu
-  document.addEventListener('click', () => diceGrp.hidden = true); // clicking anywhere else closes it
-  for (const sides of DIE_SIDES) {
-    const button = document.createElement('button');
-    button.dataset.icon = 'plus number-' + sides + '-small';
-    button.innerHTML = '<span class="lbl">d' + sides + '</span>';
-    button.onclick = () => room.send('spawn', { type: 'die', props: myDieProps(sides) }); // my saved color rides along
-    diceGrp.appendChild(button);
-  }
-  applyIcons(diceGrp);
 
   // The game table and the editor have different toolbars but share this file, so
   // every page-specific control is wired defensively (no-op if it isn't on the page).
@@ -532,7 +519,7 @@ function rebuildGrid() {
         wbPanel.hidden = !wbPanel.hidden;
         if (!wbPanel.hidden) { // sync controls from current room state on open
           const wb = room.state.whiteboard;
-          byId('wbEnabled').classList.toggle('on', wb.enabled); setIcon(byId('wbEnabled'), wb.enabled ? 'chalkboard' : 'chalkboard-off');
+          byId('wbEnabled').classList.toggle('on', wb.enabled); setIcon(byId('wbEnabled'), wb.enabled ? 'eye' : 'eye-off');
           qsa('#whiteboard [data-wbstyle]').forEach(c => c.classList.toggle('on', c.dataset.wbstyle === (wb.dark ? 'dark' : 'light')));
           byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
         }
@@ -540,7 +527,7 @@ function rebuildGrid() {
       const wbClose = byId('wbClose'); if (wbClose) wbClose.onclick = () => { wbPanel.hidden = true; };
     }
   }
-  { const el = byId('wbEnabled'); if (el) el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); setIcon(el, on ? 'chalkboard' : 'chalkboard-off'); room.send('wbEnable', { on }); }; }
+  { const el = byId('wbEnabled'); if (el) el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); setIcon(el, on ? 'eye' : 'eye-off'); room.send('wbEnable', { on }); }; }
   { const el = byId('wbAngle'); if (el) el.oninput = () => room.send('wbSet', { angle: (+el.value) * Math.PI / 180 }); }
   qsa('#whiteboard [data-wbstyle]').forEach(c => c.onclick = () => {
     qsa('#whiteboard [data-wbstyle]').forEach(x => x.classList.remove('on'));
@@ -830,7 +817,7 @@ function rebuildGrid() {
     const t = room.state.timer;
     if (!t) return;
     timerReadout.textContent = fmtTime(timerLive(t, Date.now()));
-    setIcon(timerToggle, t.running ? 'clock-pause' : 'clock-play');
+    setIcon(timerToggle, t.running ? 'player-pause' : 'player-play');
     if (modeVal() !== t.mode) setMode(t.mode); // reflect another client's switch
     timerDurRow.hidden = t.mode !== 'down';
     if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
@@ -894,10 +881,10 @@ function rebuildGrid() {
     const hids = scopeSel.classList.contains('on') ? [...selected] : 'all';
     if (Array.isArray(hids) && !hids.length) return; // "selected" scope with nothing picked
     showHold.setPointerCapture(e.pointerId);
-    showLive = true; setIcon(showHold, 'eye-check');
+    showLive = true; setIcon(showHold, 'eye');
     room.send('showStart', { to, hids });
   });
-  const endShow = () => { if (showLive) { showLive = false; room.send('showStop'); setIcon(showHold, 'eye-cancel'); } };
+  const endShow = () => { if (showLive) { showLive = false; room.send('showStop'); setIcon(showHold, 'eye-off'); } };
   showHold.addEventListener('pointerup', endShow);
   showHold.addEventListener('pointercancel', endShow);
   showHold.addEventListener('lostpointercapture', endShow);
@@ -1827,7 +1814,6 @@ function applyRole(role) {
   myRank = rankOf(role);
   const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
-  gate('diceBtn', 1);                                          // roll dice: Helper+
   gate('roomBtn', 2);                                          // Room Controls menu: GM+
   gate('wbBtn', 2);                                            // Whiteboard config (Tools menu): GM+
   gate('libraryBtn', 1); gate('builtinBtn', 1);                // View Library + Built-Ins: Helper+ (both pages)
@@ -2544,7 +2530,10 @@ function renderMembers(list) {
       if (m.role === 'helper') acts.appendChild(btn('Player', () => room.send('setRole', { userId: m.userId, role: 'player' })));
       if (myRank >= 3) { // owner manages co-GMs
         if (m.role !== 'gm') acts.appendChild(btn('GM', () => room.send('setRole', { userId: m.userId, role: 'gm' })));
-        else acts.appendChild(btn('Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })));
+        else {
+          acts.appendChild(btn('Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' }), null, 'user-down')); // demote GM -> Helper (down)
+          acts.appendChild(btn('Player', () => room.send('setRole', { userId: m.userId, role: 'player' })));                     // demote GM -> Player
+        }
       }
       if (m.role !== 'gm' || myRank >= 3) acts.appendChild(btn('Kick', () => room.send('kick', { userId: m.userId })));
     }

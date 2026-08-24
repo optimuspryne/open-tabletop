@@ -32,13 +32,24 @@
   --font: system-ui, sans-serif;       /* all UI text */
   --font-card: Georgia;                /* rank on hand cards */
 
-  /* fluid structure — scale with the viewport (floor, preferred, ceiling) */
-  --inset: clamp(10px, 1.4vw, 20px);     /* panel distance from screen edges */
-  --hand-side: 300px;                    /* room reserved each side for the bottom-corner controls (labeled hamburgers) */
-  --gap: clamp(6px, 0.7vw, 10px);        /* gaps between controls */
-  --fs: clamp(12px, 0.95vw, 15px);       /* base UI text */
-  --fs-sm: clamp(11px, 0.85vw, 13px);    /* small text */
-  --card-w: clamp(112px, 10.6vw, 138px); /* hand-card width (+50% baseline; ratio locked below) */
+  /* Two UI-scale knobs — chrome (icons, controls, spacing) and text, independent. Desktop defaults; coarse below. */
+  --ui-elements-scale: 1.25;
+  --ui-text-scale: 0.75;
+
+  /* fluid bases (floor, preferred, ceiling) — the knobs scale these into the tokens below */
+  --fs-base: clamp(12px, 0.95vw, 15px);       /* base UI text */
+  --fs-sm-base: clamp(11px, 0.85vw, 13px);    /* small text */
+
+  /* text follows --ui-text-scale */
+  --fs: calc(var(--fs-base) * var(--ui-text-scale));
+  --fs-sm: calc(var(--fs-sm-base) * var(--ui-text-scale));
+
+  /* chrome follows --ui-elements-scale (icons decoupled from the font so they track this, not text) */
+  --ico-size: calc(var(--fs-base) * 1.2 * var(--ui-elements-scale));      /* icon size (was 1.2em on the button font) */
+  --inset: calc(clamp(10px, 1.4vw, 20px) * var(--ui-elements-scale));     /* panel distance from screen edges */
+  --hand-side: calc(300px * var(--ui-elements-scale));                    /* room reserved each side for the bottom-corner controls */
+  --gap: calc(clamp(6px, 0.7vw, 10px) * var(--ui-elements-scale));        /* gaps between controls */
+  --card-w: calc(clamp(112px, 10.6vw, 138px) * var(--ui-elements-scale)); /* hand-card width (+50% baseline; ratio locked below) */
 }
 
 /* ---- Shared panel primitives (docked panels + modal heads/closes) ---- */
@@ -211,10 +222,10 @@ canvas.selecting { cursor: crosshair; }  /* Select tool active — felt-drag box
 .holdRight { right: 14px; }
 .holdControls[hidden] { display: none; }
 .holdControls button {
-  width: 52px;
-  height: 52px;
+  width: calc(52px * var(--ui-elements-scale));
+  height: calc(52px * var(--ui-elements-scale));
   padding: 0;
-  font-size: 20px;
+  font-size: calc(20px * var(--ui-elements-scale));
   border-radius: 50%;
 }
 .holdControls button[hidden] { display: none; }
@@ -304,7 +315,7 @@ button {
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 9px 14px;
+  padding: calc(9px * var(--ui-elements-scale)) calc(14px * var(--ui-elements-scale));
   font-size: var(--fs);
   cursor: pointer;
   backdrop-filter: var(--blur);
@@ -1868,7 +1879,7 @@ body.admin {
   top: var(--inset);
   right: var(--inset);
   z-index: 6;
-  width: min(216px, 80vw);
+  width: min(270px, 80vw);
   max-height: calc(100vh - 2 * var(--inset));
   overflow-y: auto;
   display: flex;
@@ -1882,7 +1893,7 @@ body.admin {
 #turnMini { min-width: 0; font: var(--fs-sm)/1.3 var(--font); color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 3px 9px; backdrop-filter: var(--blur); }
 #turnMini:empty { display: none; } /* no glassy chip when there's no turn to show */
 #railBody { display: flex; flex-direction: column; gap: var(--gap); }
-#rightRail.collapsed { width: min(216px, 80vw); } /* same width as expanded — toggling hides the body, not the width */
+#rightRail.collapsed { width: min(270px, 80vw); } /* same width as expanded — toggling hides the body, not the width */
 #rightRail.collapsed #railBody { display: none; }
 
 #rightRail #panel {
@@ -1936,13 +1947,13 @@ body.admin {
 }
 .selectTool.edgeRight { position: fixed; right: var(--inset); bottom: var(--inset); z-index: 8; } /* mirrored Select on the right */
 #toolsToggle, #interactToggle { display: none; } /* the hamburgers are the triggers now */
-@media (max-width: 720px), (pointer: coarse) { .lbl { display: none; } } /* emoji-only on mobile: any button's .lbl text collapses to its emoji */
+@media (max-width: 720px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
 
 /* ===== Phone layout: consistent, reactive UI ============================== */
 @media (max-width: 720px), (pointer: coarse) {
   .grp { max-height: 70vh; overflow-y: auto; }                                 /* dropdowns can't run off-screen */
   #diceGrp { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; } /* dice fit a compact grid, not a tall column */
-  #hand { --card-w: clamp(72px, 20vw, 100px); }                                /* smaller hand cards on phones */
+  #hand { --card-w: calc(clamp(72px, 20vw, 100px) * var(--ui-elements-scale)); }         /* smaller hand cards on phones */
   .panel.popout, #measurePanel {                                               /* every pop-out opens as one centered modal, not scattered */
     position: fixed !important;
     top: 50% !important; left: 50% !important; right: auto !important; bottom: auto !important;
@@ -2080,7 +2091,7 @@ body.admin {
    so an icon takes the button's text colour — .danger red, hover accent, disabled, etc. — for free. */
 .icon-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
 .ico {
-  width: 1.2em; height: 1.2em;
+  width: var(--ico-size); height: var(--ico-size);
   flex: 0 0 auto;
   fill: none;
   stroke: currentColor;
@@ -2089,11 +2100,24 @@ body.admin {
   stroke-linejoin: round;
 }
 button:has(.ico) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.ico-ampersand { width: 0.7em; height: 0.7em; opacity: .7; } /* a small connector between two icons (Scale & Grid) */
-.ico-plus { width: 0.8em; height: 0.8em; }              /* the dice "add" mark: small next to the big number */
-[class*="ico-number-"] { width: 1.4em; height: 1.4em; } /* dice number reads large */
+.ico-ampersand { width: calc(var(--ico-size) * 0.7 / 1.2); height: calc(var(--ico-size) * 0.7 / 1.2); opacity: .7; } /* a small connector between two icons (Scale & Grid) */
+.ico-plus { width: calc(var(--ico-size) * 0.8 / 1.2); height: calc(var(--ico-size) * 0.8 / 1.2); }              /* the dice "add" mark: small next to the big number */
+[class*="ico-number-"] { width: calc(var(--ico-size) * 1.4 / 1.2); height: calc(var(--ico-size) * 1.4 / 1.2); } /* dice number reads large */
 #roll .ico, #selRoll .ico, #trayRoll .ico { transform: rotate(45deg); } /* tilt "roll" dice so they look like they're rolling */
-button:has(.ico) .lbl { display: none; } /* icon-only: the label lives in the hover hint + aria-label */
+body:not(.ui-full) button:has(.ico) .lbl { display: none; } /* icon-only: the label lives in the hover hint + aria-label */
+
+/* UI roles that never show text (even in full mode) — keyed off the icon, plus an .icon-only opt-in. */
+.icon-only .lbl,
+button:has(.ico-trash) .lbl,
+button:has(.ico-player-play) .lbl,
+button:has(.ico-player-pause) .lbl,
+button:has(.ico-restore) .lbl,
+button:has(.ico-check) .lbl,
+button:has(.ico-checks) .lbl,
+button:has(.ico-eye) .lbl,
+button:has(.ico-eye-off) .lbl { display: none; }
+button:has(.ico-trash) { color: var(--danger); } /* every trash button is red */
+.memberRow .actions .lbl { display: inline !important; } /* member role buttons always show text (icons alone are ambiguous) */
 label:has(.ico) { display: inline-flex; align-items: center; justify-content: center; }
 .trayDie:has(.ico), #diceGrp button:has(.ico) { gap: 2px; }  /* plus+number reads as "+4" */
 
@@ -2201,5 +2225,5 @@ label:has(.ico) { display: inline-flex; align-items: center; justify-content: ce
 #scaleUnits .chip { padding: 4px 4px; font-size: 11px; } /* the unit buttons a touch smaller — four across */
 
 /* Hand width vs. the bottom-corner controls: reserve less when the hamburgers are icon-only. */
-@media (pointer: coarse) { :root { --hand-side: 160px; } }
+@media (pointer: coarse) { :root { --hand-side: calc(160px * var(--ui-elements-scale)); } } /* scales inherit from :root (same on desktop + coarse) */
 @media (max-width: 720px) { #hand { max-width: 94vw; } }

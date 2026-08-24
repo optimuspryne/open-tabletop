@@ -30,7 +30,7 @@ const ICONS = [
   // Library card buttons
   'new-section', 'category-plus', 'square-rounded-plus', 'go-game', 'checks',
   // Modal internals (chat/score/timer/measure/sound/whiteboard)
-  'send-2', 'user-plus', 'clock', 'hourglass-low', 'clock-play', 'clock-pause', 'refresh', 'wiper', 'wiper-wash',
+  'send-2', 'user-plus', 'clock', 'hourglass-low', 'clock-play', 'clock-pause', 'refresh', 'wiper', 'wiper-wash', 'eraser',
   'ear-off', 'ear', 'music-off', 'music', 'player-play', 'player-pause', 'player-track-next', 'arrows-shuffle', 'chalkboard-off', 'writing-sign', 'writing',
   // Customize Table / Scale & Grid / Members
   'arrow-autofit-width', 'arrow-autofit-height', 'dots', 'check', 'cancel', 'square', 'hexagon', 'eye', 'eye-off', 'box-align-top-left',
