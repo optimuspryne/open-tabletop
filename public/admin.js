@@ -23,7 +23,7 @@ async function api(path, { method = 'GET', body } = {}) {
 
 // Small DOM factories: a <button> from label + click handler (+ optional class),
 // and a <td> wrapping either a string or an existing node.
-const btn = (label, fn, cls) => { const button = document.createElement('button'); button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+const btn = (label, fn, cls) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 const cell = (content) => { const td = document.createElement('td'); if (typeof content === 'string') td.textContent = content; else td.appendChild(content); return td; };
 
 // The signed-in admin's own id — used to mark their "(you)" row and to withhold
@@ -159,6 +159,8 @@ async function purgeOrphans(count) {
   if (!me.isAdmin) { byId('denied').hidden = false; return; }
   myId = me.id;
   byId('admin').hidden = false;
+  byId('lobbyBtn').onclick = () => { location.href = '/'; };
+  byId('editorBtn').onclick = () => { location.href = '/editor.html'; };
   byId('scanOrphans').onclick = scanOrphans;
   await loadRooms();
   await loadUsers();

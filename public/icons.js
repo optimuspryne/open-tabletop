@@ -20,13 +20,14 @@ export function applyIcons(root = document) {
   });
 }
 
-// Replace an element's content with a single icon (for dynamic/state-changing icons). Idempotent.
+// Swap an element's state icon in place, preserving its .lbl (or any other content).
+// Icons sit before the label, matching applyIcons. Idempotent via a cached name.
 export function setIcon(el, name) {
   if (!el || el._icon === name) return; el._icon = name;
-  el.textContent = '';
+  el.querySelectorAll(':scope > .ico').forEach((s) => s.remove()); // drop the old icon(s); leave the label intact
   const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'ico ico-' + name); svg.setAttribute('aria-hidden', 'true');
   const use = document.createElementNS(NS, 'use'); use.setAttribute('href', '#i-' + name);
-  svg.appendChild(use); el.appendChild(svg);
+  svg.appendChild(use); el.prepend(svg);
 }
 
 // Snappy themed hover-hint for icon-only buttons (desktop mouse only) — reads the button's aria-label.

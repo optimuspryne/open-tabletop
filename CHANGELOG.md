@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 See [RELEASING.md](RELEASING.md) for what each version bump means and how releases are cut.
 
 ## [Unreleased]
+
+
 ### Accessibility
 - Lobby forms now use real <form> semantics (Enter-to-submit, labelled
   fields), status messages announce via aria-live, and toggle buttons
   expose aria-pressed. Link-style controls and the avatar are now
   keyboard-operable.
-- 
+- Admin console: real (non-nested) top-bar buttons, column headers
+  scoped for screen readers, an aria-live status line for storage
+  cleanup, and a page heading for structure.
 ### Added
 - **Play cards from your hand in 3D.** Dragging a card out of your hand now shows the *real* card
   hovering over the table (replacing the old flat 2D ghost), so you can see exactly where it will
