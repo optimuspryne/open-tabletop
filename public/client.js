@@ -52,7 +52,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'measurePanel', 'tracksPanel', 'whiteboard', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'tracksPanel', 'whiteboard', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -660,9 +660,7 @@ function rebuildGrid() {
 
   // Measure tool (Tools menu): toggle a modal mode; drag on the felt to lay the
   // selected overlay (ruler / circle / cone / line — picked in the kind row).
-  { const mb = byId('measureBtn');
-    if (mb) mb.onclick = () => { measuring ? exitMeasure() : enterMeasure(); };
-    wire('measureClose', () => exitMeasure());
+  { // Measure open/close is handled by the top-right cluster (onOpen=enterMeasure, onClose=exitMeasure).
     wire('measureClear', () => { if (room) room.send('overlayClear', { scope: 'mine' }); });    // just your own
     wire('measureClearAll', () => { if (room) room.send('overlayClear', { scope: 'all' }); });   // GM: everyone's (server re-checks rank)
     const kinds = document.querySelectorAll('#measureKinds [data-kind]');
@@ -965,12 +963,11 @@ const pickId = () => {
 
 // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
 // see the INPUT intent map at the end of this file.
-// Bottom-left hamburgers toggle the Tools / Interactions menus (mutually exclusive; both start hidden).
+// Bottom-left: the Tools ham toggles the (shrinking) Tools menu; Interactions is now a corner cluster (wireCluster below).
 {
-  const tools = byId('toolsMenu'), inter = byId('interactMenu');
+  const tools = byId('toolsMenu');
   const placeAboveHam = (menu) => { if (!menu || menu.hidden) return; const bar = byId('hamBar'); if (bar) menu.style.bottom = (innerHeight - bar.getBoundingClientRect().top + 8) + 'px'; }; // open above the vertical hamburger stack
-  byId('toolsHam')?.addEventListener('click', () => { const open = tools && tools.hidden; if (inter) inter.hidden = true; if (tools) { tools.hidden = !open; placeAboveHam(tools); } });
-  byId('interactHam')?.addEventListener('click', () => { const open = inter && inter.hidden; if (tools) tools.hidden = true; if (inter) { inter.hidden = !open; placeAboveHam(inter); } });
+  byId('toolsHam')?.addEventListener('click', () => { if (tools) { tools.hidden = !tools.hidden; placeAboveHam(tools); } });
 }
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
@@ -1551,7 +1548,7 @@ const onKeyDown = (e) => {
   if (e.key === 'Escape' && trayView) { closeTray(); return; }
   if (e.key === 'Escape' && selMode) { setSelMode(false); return; } // exit the Select tool first
   if (e.key === 'Escape' && selection.size) { clearSelection(); return; } // …then clear a selection
-  if (e.key === 'Escape' && measuring) { exitMeasure(); return; }
+  if (e.key === 'Escape' && measuring) { const r = byId('regionTR'); if (r && r._close) r._close(); else exitMeasure(); return; }
   if (e.key === 'Escape' && wbOwning) { room.send('wbRelease'); return; }
   if (e.key === 'Escape' && inspect) { releaseInspect(); return; }
   if (e.key === 'Escape' && selOverlayId) { selectOverlay(null); return; }
@@ -2138,7 +2135,6 @@ function enterMeasure() {
   selectOverlay(null); // measuring and editing are separate modes
   renderer.domElement.classList.add('measuring');
   const b = byId('measureBtn'); if (b) b.classList.add('on');
-  const p = byId('measurePanel'); if (p) p.hidden = false;
 }
 function exitMeasure() {
   if (!measuring) return;
@@ -2146,7 +2142,6 @@ function exitMeasure() {
   if (room) room.send('overlayDrag', {}); // clear any in-progress preview others may see
   renderer.domElement.classList.remove('measuring');
   const b = byId('measureBtn'); if (b) b.classList.remove('on');
-  const p = byId('measurePanel'); if (p) p.hidden = true;
 }
 
 // Format milliseconds as m:ss (or h:mm:ss past an hour), flooring to whole seconds.
@@ -3018,7 +3013,6 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
   });
 }
 ['showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
-wireDialog(byId('measurePanel'), { esc: false }); // Esc is measure's own (exitMeasure closes the panel)
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
@@ -3028,28 +3022,35 @@ wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') })
 // time; clicking the active ham collapses it. Desktop: the region is an overlay anchored
 // under the first ham (position set here); mobile (≤720px): CSS reshapes it into a bottom
 // sheet. Esc, or the region's own ✕, closes it and returns focus to the opener.
-function wireCluster(region, hams) {
+function wireCluster(region, hams, opts = {}) {
   if (!region || !hams.length) return;
   const anchor = hams[0].btn;
   const sheet = () => matchMedia('(max-width: 720px)').matches;
   const place = () => {
     if (sheet()) { region.style.left = region.style.top = ''; return; } // bottom sheet: let CSS own it
     const r = anchor.getBoundingClientRect();
-    region.style.left = Math.round(Math.max(8, Math.min(r.left, innerWidth - region.offsetWidth - 8))) + 'px';
-    region.style.top = Math.round(r.bottom + 8) + 'px';
+    const clampX = (x) => Math.round(Math.max(8, Math.min(x, innerWidth - region.offsetWidth - 8)));
+    const clampY = (y) => Math.round(Math.max(8, Math.min(y, innerHeight - region.offsetHeight - 8)));
+    if (opts.open === 'right') { region.style.left = clampX(r.right + 8) + 'px'; region.style.top = clampY(r.bottom - region.offsetHeight) + 'px'; }        // beside the ham, bottom-aligned
+    else if (opts.open === 'above') { region.style.left = clampX(r.left) + 'px'; region.style.top = clampY(r.top - region.offsetHeight - 8) + 'px'; }        // above the ham
+    else { region.style.left = clampX(r.left) + 'px'; region.style.top = Math.round(r.bottom + 8) + 'px'; }                                                    // below (default)
   };
-  const close = () => { region.hidden = true; hams.forEach((h) => h.btn.classList.remove('on')); };
+  let current = null;
+  const deactivate = () => { const c = current; current = null; if (c && c.onClose) c.onClose(); }; // null first — onClose may re-enter
+  const close = () => { deactivate(); region.hidden = true; hams.forEach((h) => h.btn.classList.remove('on')); };
   const open = (h) => {
+    if (current && current !== h) deactivate(); // switching panes: close the outgoing one
     hams.forEach((x) => x.btn.classList.remove('on'));
     region.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === h.pane));
-    h.btn.classList.add('on'); region.hidden = false; place();
+    h.btn.classList.add('on'); region.hidden = false; place(); current = h;
     const f = region.querySelector('.pane.on textarea, .pane.on input:not([type=hidden])')
            || region.querySelector('.pane.on button:not(.regionClose), .pane.on [tabindex]');
     if (f) f.focus();
     if (h.onOpen) h.onOpen(); // per-pane hook (e.g. chat: clear unread + scroll to bottom)
   };
+  region._close = close; // let external code collapse the region (e.g. measure's global-Esc handler)
   hams.forEach((h) => h.btn.addEventListener('click', () => {
-    (h.btn.classList.contains('on') && !region.hidden) ? close() : open(h);
+    (current === h) ? close() : open(h);
   }));
   region.querySelectorAll('.regionClose').forEach((b) => b.addEventListener('click', () => { close(); anchor.focus(); }));
   region.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); anchor.focus(); } });
@@ -3062,13 +3063,18 @@ function wireCluster(region, hams) {
     { btn: nb, pane: 'notes' },
   ]);
 }
-// Top-right cluster (UI_Redesign phase 2b): Score + Music + Timer (Measure joins next).
-{ const r = byId('regionTR'), sb = byId('scoreBtn'), ab = byId('audioBtn'), tb = byId('timerBtn');
+// Top-right cluster (UI_Redesign phase 2b): Score + Music + Measure + Timer.
+{ const r = byId('regionTR'), sb = byId('scoreBtn'), ab = byId('audioBtn'), mb = byId('measureBtn'), tb = byId('timerBtn');
   if (r && sb && tb) wireCluster(r, [
     { btn: sb, pane: 'score', onOpen: () => { renderScores(); updateRoomNotes(); } },
     { btn: ab, pane: 'music' },
+    { btn: mb, pane: 'measure', onOpen: enterMeasure, onClose: exitMeasure },
     { btn: tb, pane: 'timer' },
   ]);
+}
+// Bottom-left corner cluster (UI_Redesign phase 2c): Interactions → My Seat / Lean In / Show / Drop.
+{ const r = byId('regionBL'), ib = byId('interactHam');
+  if (r && ib) wireCluster(r, [{ btn: ib, pane: 'interactions' }], { open: 'right' });
 }
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => {

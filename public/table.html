@@ -140,21 +140,9 @@
 <div id="toolsDock">
   <div id="toolsMenu" class="panel" hidden>
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
-    <button id="measureBtn" data-icon="ruler-2"><span class="lbl">Measure</span></button>
     <button id="resetPanelsBtn" data-icon="restore" hidden><span class="lbl">Reset</span></button>
     <button id="wbBtn" data-icon="chalkboard"><span class="lbl">Whiteboard</span></button>
     <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
-  </div>
-  <div id="measurePanel" class="panel" hidden>
-    <div id="measureHead" class="panel-head"><b>Measure</b><button type="button" id="measureClose" class="close-x" aria-label="Close">✕</button></div>
-    <div id="measureKinds" class="chipRow">
-      <button class="chip" data-kind="ruler" data-icon="ruler-measure"><span class="lbl">Ruler</span></button>
-      <button class="chip" data-kind="circle" data-icon="circle"><span class="lbl">Circle</span></button>
-      <button class="chip" data-kind="cone" data-icon="cone"><span class="lbl">Cone</span></button>
-      <button class="chip" data-kind="line" data-icon="line"><span class="lbl">Line</span></button>
-    </div>
-    <p class="muted">Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
-    <div class="chipRow"><button id="measureClear" class="chip" data-icon="eraser"><span class="lbl">Clear mine</span></button><button id="measureClearAll" class="chip" data-icon="trash" hidden><span class="lbl">Clear all</span></button></div>
   </div>
   <div id="settingsModal" hidden>
     <div class="modalCard libraryCard">
@@ -221,6 +209,7 @@
   <div id="clusterTR" class="cluster-tr">
     <button id="scoreBtn" data-icon="scoreboard"><span class="lbl">Score</span></button>
     <button id="audioBtn" data-icon="music"><span class="lbl">Music</span></button>
+    <button id="measureBtn" data-icon="ruler-2"><span class="lbl">Measure</span></button>
     <button id="timerBtn" data-icon="clock"><span class="lbl">Timer</span></button>
   </div>
   <div id="regionTR" class="region" hidden>
@@ -246,6 +235,17 @@
         <button id="tracksLink" class="chip" data-icon="movie"><span class="lbl">Pick Track</span></button>
       </div>
     </div>
+    <div class="pane" data-pane="measure">
+      <div class="regionHead"><b>Measure</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+      <div id="measureKinds" class="chipRow">
+        <button class="chip" data-kind="ruler" data-icon="ruler-measure"><span class="lbl">Ruler</span></button>
+        <button class="chip" data-kind="circle" data-icon="circle"><span class="lbl">Circle</span></button>
+        <button class="chip" data-kind="cone" data-icon="cone"><span class="lbl">Cone</span></button>
+        <button class="chip" data-kind="line" data-icon="line"><span class="lbl">Line</span></button>
+      </div>
+      <p class="muted">Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
+      <div class="chipRow"><button id="measureClear" class="chip" data-icon="eraser"><span class="lbl">Clear mine</span></button><button id="measureClearAll" class="chip" data-icon="trash" hidden><span class="lbl">Clear all</span></button></div>
+    </div>
     <div class="pane" data-pane="timer">
       <div class="regionHead"><b>Timer</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
       <div id="timerMode" class="libTabs">
@@ -265,20 +265,22 @@
 </div>
 </div>
 <div id="hamBar">
-  <button class="selectTool" data-icon="select-all"><span class="lbl">Multi-Select</span></button>
   <button id="interactHam" data-icon="hand-move"><span class="lbl">Interactions</span></button>
+  <button class="selectTool" data-icon="select-all"><span class="lbl">Multi-Select</span></button>
+  <button id="roll" data-icon="dice-5"><span class="lbl">Dice Box</span></button>
   <button id="toolsHam" data-icon="tools"><span class="lbl">Tools</span></button>
 </div>
 <button class="selectTool edgeRight" data-icon="select-all"><span class="lbl">Multi-Select</span></button>
 <div id="leftRail">
   <div id="interactDock">
-    <div id="interactMenu" class="panel" hidden>
-      <div class="toolsLabel" id="interactToggle">Interactions <span class="toolsChev">▾</span></div>
-      <button id="leanBtn" data-icon="zoom-in"><span class="lbl">Lean In</span></button>
-      <button id="mySeatBtn" data-icon="armchair"><span class="lbl">My Seat</span></button>
-      <button id="roll" data-icon="dice-5"><span class="lbl">Dice Box</span></button>
-      <button id="showBtn" data-icon="cards"><span class="lbl">Show Cards</span></button>
-      <button id="dropBtn" data-icon="arrow-bar-down"><span class="lbl">Drop Hand</span></button>
+    <div id="regionBL" class="region" hidden>
+      <div class="pane on" data-pane="interactions">
+        <div class="regionHead"><b>Interactions</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+        <button id="mySeatBtn" data-icon="armchair"><span class="lbl">My Seat</span></button>
+        <button id="leanBtn" data-icon="zoom-in"><span class="lbl">Lean In</span></button>
+        <button id="showBtn" data-icon="cards"><span class="lbl">Show Cards</span></button>
+        <button id="dropBtn" data-icon="arrow-bar-down"><span class="lbl">Drop Hand</span></button>
+      </div>
     </div>
     <div id="showPanel" class="panel popout" hidden>
       <div id="showHead" class="panel-head"><b>Show Cards</b><button type="button" id="showClose" class="close-x" aria-label="Close">✕</button></div>

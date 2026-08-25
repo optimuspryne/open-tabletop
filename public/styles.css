@@ -177,6 +177,9 @@
 .region #scoreTable { width: 100%; }
 .region #roomNotes { width: 100%; resize: vertical; min-height: 90px; }
 @media (max-width: 720px) { .cluster-tr { right: var(--inset); } }
+/* corner Interactions region: stacked full-width buttons */
+.region .pane[data-pane="interactions"] { gap: 6px; }
+.region .pane[data-pane="interactions"] button { width: 100%; justify-content: flex-start; }
 @media (max-width: 720px) {   /* mobile: the region becomes a full-width bottom sheet */
   .region { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-height: 74vh; border-radius: 16px 16px 0 0; }
 }
