@@ -763,7 +763,7 @@ function rebuildGrid() {
     });
     // Full / Compact UI toggle (persisted)
     const uiModeToggle = byId('uiModeToggle');
-    const syncUiMode = () => { const full = document.body.classList.contains('ui-full'); if (uiModeToggle) { uiModeToggle.textContent = 'Full labels: ' + (full ? 'on' : 'off'); uiModeToggle.classList.toggle('on', full); } };
+    const syncUiMode = () => { const full = document.body.classList.contains('ui-full'); if (uiModeToggle) { const mode = full ? 'Default UI' : 'Compact UI'; setIcon(uiModeToggle, full ? 'arrows-minimize' : 'arrows-maximize'); uiModeToggle.classList.toggle('on', full); uiModeToggle.setAttribute('aria-pressed', full ? 'true' : 'false'); uiModeToggle.setAttribute('aria-label', mode); const l = uiModeToggle.querySelector('.lbl'); if (l) l.textContent = mode; } };
     syncUiMode();
     wire('uiModeToggle', () => { const full = document.body.classList.toggle('ui-full'); localStorage.setItem('ott-ui-full', full ? '1' : '0'); syncUiMode(); });
     // Accent color (personal, saved on this device)

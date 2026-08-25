@@ -10,7 +10,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 const REF = 'main';
-const PAGES = ['public/table.html', 'public/editor.html', 'public/index.html', 'public/admin.html'];
+const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html'];
 
 // The full set of icons used across the app, grouped loosely by where they first appeared.
 const ICONS = [
@@ -41,6 +41,8 @@ const ICONS = [
   'user-shield', 'login', 'logout', 'shield-check', 'shield-x', 'door-enter', 'cursor-text', 'door-off', 'edit', 'arrow-back-up',
   // Library admin curation
   'copy', 'flag-check', 'flag-cancel',
+  // UI-mode toggle (Default / Compact)
+  'arrows-maximize', 'arrows-minimize',
 ];
 
 async function fetchSymbol(name) {

@@ -352,7 +352,7 @@ applyIcons(); initTip();
 byId('logoutBtn').onclick = onLogout;
 { // Full / Compact interface toggle — persists to localStorage; applied on every page at load
   const uiToggle = byId('uiModeToggle');
-  const syncUi = () => setToggle(uiToggle, document.body.classList.contains('ui-full')); // class + aria-pressed (no icon swap)
+  const syncUi = () => { const full = document.body.classList.contains('ui-full'); const mode = full ? 'Default UI' : 'Compact UI'; setToggle(uiToggle, full, 'arrows-minimize', 'arrows-maximize'); if (uiToggle) { const l = uiToggle.querySelector('.lbl'); if (l) l.textContent = mode; uiToggle.setAttribute('aria-label', mode); } }; // class + aria-pressed + mode label/name + action icon (minimize=go compact / maximize=go full)
   syncUi();
   if (uiToggle) uiToggle.onclick = () => { const full = document.body.classList.toggle('ui-full'); localStorage.setItem('ott-ui-full', full ? '1' : '0'); syncUi(); };
 }
