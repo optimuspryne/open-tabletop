@@ -5,7 +5,7 @@ const NS = 'http://www.w3.org/2000/svg';
 // Inject a Tabler icon (or several, space-separated in data-icon) into every button[data-icon],
 // and copy its .lbl text into an aria-label so icon-only buttons stay screen-reader legible.
 export function applyIcons(root = document) {
-  root.querySelectorAll('button[data-icon]').forEach((btn) => {
+  root.querySelectorAll('button[data-icon], a.btn[data-icon]').forEach((btn) => {
     if (btn.querySelector('.ico')) return;
     btn.dataset.icon.trim().split(/\s+/).reverse().forEach((name) => {
       const svg = document.createElementNS(NS, 'svg');

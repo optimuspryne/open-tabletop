@@ -315,7 +315,7 @@ a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on
   backdrop-filter: var(--blur);
   z-index: 5;
 }
-button {
+button, .btn {
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
@@ -323,13 +323,14 @@ button {
   padding: calc(9px * var(--ui-elements-scale)) calc(14px * var(--ui-elements-scale));
   font-size: var(--fs);
   cursor: pointer;
+  text-decoration: none;                 /* .btn is used on <a> — keep it looking like a button */
   backdrop-filter: var(--blur);
   transition: border-color .15s, transform .05s;
   user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; /* a long-press shouldn't select the label or pop a callout */
 }
-button:hover { border-color: var(--accent); }
-button:active { transform: translateY(1px); }
-button.danger {
+button:hover, .btn:hover { border-color: var(--accent); }
+button:active, .btn:active { transform: translateY(1px); }
+button.danger, .btn.danger {
   border-color: var(--danger-border);
   color: var(--danger);
 } /* reusable danger button */
@@ -1621,7 +1622,7 @@ body.not-admin .admin-wrap, body.not-admin .admin-only { display: none !importan
   font: 600 18px var(--font);
   color: var(--text);
 }
-#topbar a {
+#topbar a:not(.btn) {
   color: var(--accent);
   text-decoration: none;
   font-size: var(--fs-sm);
@@ -2136,12 +2137,12 @@ body.admin {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-button:has(.ico) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+:is(button, .btn):has(.ico) { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .ico-ampersand { width: calc(var(--ico-size) * 0.7 / 1.2); height: calc(var(--ico-size) * 0.7 / 1.2); opacity: .7; } /* a small connector between two icons (Scale & Grid) */
 .ico-plus { width: calc(var(--ico-size) * 0.8 / 1.2); height: calc(var(--ico-size) * 0.8 / 1.2); }              /* the dice "add" mark: small next to the big number */
 [class*="ico-number-"] { width: calc(var(--ico-size) * 1.4 / 1.2); height: calc(var(--ico-size) * 1.4 / 1.2); } /* dice number reads large */
 #roll .ico, #selRoll .ico, #trayRoll .ico { transform: rotate(45deg); } /* tilt "roll" dice so they look like they're rolling */
-body:not(.ui-full) button:has(.ico) .lbl { display: none; } /* icon-only: the label lives in the hover hint + aria-label */
+body:not(.ui-full) :is(button, .btn):has(.ico) .lbl { display: none; } /* icon-only: the label lives in the hover hint + aria-label */
 
 /* UI roles that never show text (even in full mode) — keyed off the icon, plus an .icon-only opt-in. */
 .icon-only .lbl,
