@@ -2980,6 +2980,17 @@ document.querySelectorAll('label[data-icon]').forEach((el) => setIcon(el, el.dat
 // esc:false leaves Escape to the table's own handler (whiteboard release / exit-measure).
 let lastFocusOutsideDialog = null;
 document.addEventListener('focusin', (e) => { if (!e.target.closest || !e.target.closest('[role="dialog"]')) lastFocusOutsideDialog = e.target; });
+// Esc fallback: if focus drifts out of an open dialog (e.g. a panel re-renders its body and
+// drops focus), Escape still closes the most-recently-opened esc-enabled dialog. When focus IS
+// inside a dialog, its own keydown handler runs instead — this guard avoids double-firing.
+const openEscDialogs = []; // stack of { panel, close } for esc-enabled dialogs currently open
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape' || !openEscDialogs.length) return;
+  if (document.activeElement && document.activeElement.closest && document.activeElement.closest('[role="dialog"]')) return;
+  const top = openEscDialogs[openEscDialogs.length - 1];
+  const x = top.close || top.panel.querySelector('.close-x');
+  if (x) { e.preventDefault(); e.stopPropagation(); x.click(); }
+}, true); // capture: take Escape before the table's own handler when a dialog is open
 function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
   if (!panel) return;
   panel.setAttribute('role', 'dialog');
@@ -2991,12 +3002,15 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     .filter((n) => !n.disabled && n.tabIndex !== -1 && n.type !== 'hidden' && n.getClientRects().length);
   let returnTo = null;
   new MutationObserver(() => {
+    const at = openEscDialogs.findIndex((d) => d.panel === panel);
     if (panel.hidden) { // closed → restore focus only if the panel had it
       const r = returnTo; returnTo = null;
       if (r && r.focus && document.contains(r) && (document.activeElement === document.body || panel.contains(document.activeElement))) r.focus();
+      if (at >= 0) openEscDialogs.splice(at, 1);
     } else { // opened → remember opener, then move focus in unless the panel self-focused
       returnTo = (lastFocusOutsideDialog && document.contains(lastFocusOutsideDialog)) ? lastFocusOutsideDialog : document.activeElement;
       if (!panel.contains(document.activeElement)) { const f = focusables(); (f[0] || panel).focus(); }
+      if (esc) { if (at >= 0) openEscDialogs.splice(at, 1); openEscDialogs.push({ panel, close }); } // move to top
     }
   }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
   panel.addEventListener('keydown', (e) => {
@@ -3008,10 +3022,11 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     }
   });
 }
-['chat','notes','timer','scorePanel','showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel'].forEach((id) => wireDialog(byId(id)));
-['whiteboard','measurePanel'].forEach((id) => wireDialog(byId(id), { esc: false })); // Esc is theirs (wb release / exit measure)
+['chat','notes','timer','scorePanel','showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
+wireDialog(byId('measurePanel'), { esc: false }); // Esc is measure's own (exitMeasure closes the panel)
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
+['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => {
   const el = byId(id);
