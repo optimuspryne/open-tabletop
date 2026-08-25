@@ -1670,6 +1670,10 @@ body.landing {
   margin-top: 16px;
 }
 #landing .row.between { justify-content: space-between; }
+#landing form { margin: 0; }                                   /* forms are layout-neutral wrappers here */
+#landing .hgroup { display: flex; align-items: center; gap: 10px; } /* inline button cluster (e.g. Full labels + Log out) */
+#landing .uppercase { text-transform: uppercase; }             /* room-code fields: display as entered, uppercased */
+#landing .grow { flex: 1; }                                    /* an input that shares a .row with a button */
 #landing button.primary {
   background: var(--accent-soft);
   border-color: var(--accent);

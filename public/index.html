@@ -29,60 +29,62 @@
   <!-- ===== quick join (default when signed out) ===== -->
   <section id="quickJoinView" hidden>
     <h1>Join a game</h1>
-    <p class="tag">No account needed.  Pick a name, enter your email and provide a room code.</p>
-    <label>Display name</label>
-    <input id="qjName" type="text" autocomplete="nickname">
-    <label>Email</label>
-    <input id="qjEmail" type="email" autocomplete="email">
-    <label>Room code</label>
-    <input id="qjCode" type="text" style="text-transform:uppercase">
-    <div class="err" id="qjErr"></div>
-    <div class="row"><button id="qjBtn" class="primary">Join game</button><button id="accountBtn" hidden data-icon="login"><span class="lbl">Log in</span></button></div>
-    <p class="hint">Want to host your own games? <a id="qjToLogin">Login or create an account...</a></p>
+    <p class="tag">No account needed. Pick a name, enter your email and provide a room code.</p>
+    <form id="quickJoinForm" novalidate>
+      <label for="qjName">Display name</label>
+      <input id="qjName" type="text" autocomplete="nickname">
+      <label for="qjEmail">Email</label>
+      <input id="qjEmail" type="email" autocomplete="email">
+      <label for="qjCode">Room code</label>
+      <input id="qjCode" class="uppercase" type="text" autocapitalize="characters" autocomplete="off">
+      <div class="err" id="qjErr" role="status" aria-live="polite" aria-atomic="true"></div>
+      <div class="row"><button id="qjBtn" class="primary" type="submit">Join game</button><button id="accountBtn" type="button" hidden data-icon="login"><span class="lbl">Log in</span></button></div>
+    </form>
+    <p class="hint">Want to host your own games? <a id="qjToLogin" role="button" tabindex="0">Login or create an account...</a></p>
   </section>
 
   <!-- ===== login / account ===== -->
   <section id="authView" hidden>
-    <div id="loginForm">
+    <form id="loginForm" novalidate>
       <h1>Log in</h1>
       <p class="tag">For hosts and returning members.</p>
-      <label>Username or email</label>
+      <label for="loginId">Username or email</label>
       <input id="loginId" type="text" autocomplete="username">
-      <label>Password</label>
+      <label for="loginPw">Password</label>
       <input id="loginPw" type="password" autocomplete="current-password">
-      <div class="err" id="loginErr"></div>
+      <div class="err" id="loginErr" role="status" aria-live="polite" aria-atomic="true"></div>
       <div class="row between">
-        <a id="toSignup">Create an account</a>
-        <button id="loginBtn" class="primary" data-icon="login"><span class="lbl">Log in</span></button>
+        <a id="toSignup" role="button" tabindex="0">Create an account</a>
+        <button id="loginBtn" class="primary" type="submit" data-icon="login"><span class="lbl">Log in</span></button>
       </div>
-      <p class="hint"><a id="qjBack">← Back to quick join</a></p>
-    </div>
+      <p class="hint"><a class="toQuick" role="button" tabindex="0">← Back to quick join</a></p>
+    </form>
 
-    <div id="signupForm" hidden>
+    <form id="signupForm" novalidate hidden>
       <h1>Create an account</h1>
       <p class="tag">A password lets you create and host your own rooms.</p>
-      <label>Display name</label>
+      <label for="suUser">Display name</label>
       <input id="suUser" type="text" autocomplete="username">
-      <label>Email</label>
+      <label for="suEmail">Email</label>
       <input id="suEmail" type="email" autocomplete="email">
-      <label>Password</label>
+      <label for="suPw">Password</label>
       <input id="suPw" type="password" autocomplete="new-password">
-      <div class="err" id="suErr"></div>
+      <div class="err" id="suErr" role="status" aria-live="polite" aria-atomic="true"></div>
       <div class="row between">
-        <a id="toLogin">Have an account? Log in</a>
-        <button id="suBtn" class="primary" data-icon="user-plus"><span class="lbl">Sign up</span></button>
+        <a id="toLogin" role="button" tabindex="0">Have an account? Log in</a>
+        <button id="suBtn" class="primary" type="submit" data-icon="user-plus"><span class="lbl">Sign up</span></button>
       </div>
-      <p class="hint"><a id="qjBack2">← Back to quick join</a></p>
-    </div>
+      <p class="hint"><a class="toQuick" role="button" tabindex="0">← Back to quick join</a></p>
+    </form>
   </section>
 
   <!-- ===== home (signed in) ===== -->
   <section id="homeView" hidden>
     <div class="row between">
-      <div class="who"><span class="avatar editable" id="avatar" title="Change your avatar"></span><input id="avatarFile" type="file" accept="image/*" hidden> <span>Signed in as <b id="who"></b></span></div>
-      <div style="display:flex; gap:10px; align-items:center">
-        <button id="uiModeToggle" data-icon="cursor-text" title="Toggle compact / full interface"><span class="lbl">Full labels</span></button>
-        <button id="logoutBtn" data-icon="logout"><span class="lbl">Log out</span></button>
+      <div class="who"><span class="avatar editable" id="avatar" role="button" tabindex="0" title="Change your avatar"></span><input id="avatarFile" type="file" accept="image/*" hidden> <span>Signed in as <b id="who"></b></span></div>
+      <div class="hgroup">
+        <button id="uiModeToggle" type="button" data-icon="cursor-text" title="Toggle compact / full interface"><span class="lbl">Full labels</span></button>
+        <button id="logoutBtn" type="button" data-icon="logout"><span class="lbl">Log out</span></button>
       </div>
     </div>
 
@@ -90,11 +92,13 @@
 
     <div id="gmTools" hidden>
       <h2>Create a room</h2>
-      <label>Room name</label>
-      <input id="roomName" type="text" placeholder="Friday Night D&D">
-      <div class="check"><button id="approval" class="chip chk on" data-icon="shield-check"><span class="lbl">Require GM Approval To Join</span></button></div>
-      <div class="err" id="createErr"></div>
-      <div class="row"><button id="createBtn" class="primary">Create &amp; Enter</button></div>
+      <form id="createRoomForm" novalidate>
+        <label for="roomName">Room name</label>
+        <input id="roomName" type="text" placeholder="Friday Night D&D">
+        <div class="check"><button id="approval" type="button" class="chip chk on" data-icon="shield-check" aria-pressed="true"><span class="lbl">Require GM approval to join</span></button></div>
+        <div class="err" id="createErr" role="status" aria-live="polite" aria-atomic="true"></div>
+        <div class="row"><button id="createBtn" class="primary" type="submit">Create &amp; Enter</button></div>
+      </form>
       <hr class="divider">
     </div>
     <div id="hostReq" hidden>
@@ -103,14 +107,16 @@
       <hr class="divider">
     </div>
 
-    <h2>Join A Room</h2>
-    <label>Room Code</label>
-    <div class="row"><input id="joinCode" type="text" placeholder="e.g. 3F9A21C0" style="text-transform:uppercase;flex:1"><button id="joinBtn">Join</button></div>
-    <div class="err" id="joinErr"></div>
+    <h2>Join a room</h2>
+    <form id="joinRoomForm" novalidate>
+      <label for="joinCode">Room code</label>
+      <div class="row"><input id="joinCode" class="uppercase grow" type="text" placeholder="e.g. 3F9A21C0" autocapitalize="characters" autocomplete="off"><button id="joinBtn" type="submit">Join</button></div>
+      <div class="err" id="joinErr" role="status" aria-live="polite" aria-atomic="true"></div>
+    </form>
 
     <hr class="divider">
 
-    <h2>Available Rooms</h2>
+    <h2>Available rooms</h2>
     <ul id="roomList"></ul>
   </section>
 </main>

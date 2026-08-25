@@ -24,6 +24,31 @@ async function api(path, { method = 'GET', body, auth = false } = {}) {
 
 const enterRoom = (code) => { location.href = 'table.html?room=' + encodeURIComponent(code); };
 
+// ---- small shared UI helpers ----
+// One status surface: set the message and whether it reads as an error or a note,
+// without clobbering other classes. Empty msg clears it (min-height keeps the layout).
+function setStatus(el, msg, kind = 'err') {
+  if (!el) return;
+  el.textContent = msg || '';
+  el.classList.toggle('err', kind === 'err');
+  el.classList.toggle('note', kind === 'note');
+}
+// One place to flip a toggle button: the .on class, its aria-pressed state, and
+// (optionally) its icon. Used by the GM-approval and Full-labels toggles.
+function setToggle(btn, on, iconOn, iconOff) {
+  if (!btn) return;
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+  if (iconOn) setIcon(btn, on ? iconOn : (iconOff || iconOn));
+}
+// Bind a link-style control (an <a role="button">) so it fires on click AND on
+// Enter/Space — keeps keyboard users on par with the mouse.
+function onActivate(el, fn) {
+  if (!el) return;
+  el.addEventListener('click', (e) => { e.preventDefault(); fn(e); });
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
+
 // ---- views: quick | auth | home ----
 // Show exactly one of the three top-level views (quick-join / auth / home).
 function setView(view) {
@@ -137,13 +162,11 @@ async function refreshRooms() {
 
 function onApproved(room) {
   stopPolling();
-  const errEl = byId('joinErr'); errEl.className = 'note';
-  errEl.textContent = `\u2713 You have been approved for ${room.name} \u2014 entering\u2026`;
+  setStatus(byId('joinErr'), `\u2713 You have been approved for ${room.name} \u2014 entering\u2026`, 'note');
   setTimeout(() => enterRoom(room.code), 800);
 }
 function onDeclined() {
-  const errEl = byId('joinErr'); errEl.className = 'err';
-  errEl.textContent = 'Your join request was declined, or the room was closed.';
+  setStatus(byId('joinErr'), 'Your join request was declined, or the room was closed.', 'err');
 }
 
 function renderRoomList(rooms) {
@@ -153,7 +176,7 @@ function renderRoomList(rooms) {
     list.appendChild(li); return;
   }
   const ROOM_ICON = { 'Enter': 'door-enter', 'Rename': 'cursor-text', 'Close': 'trash' };
-  const mkBtn = (label, fn, cls) => { const button = document.createElement('button'); const ic = ROOM_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+  const mkBtn = (label, fn, cls) => { const button = document.createElement('button'); button.type = 'button'; const ic = ROOM_ICON[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
   for (const room of rooms) {
     const li = document.createElement('li'); li.className = 'roomRow';
     const info = document.createElement('div');
@@ -166,7 +189,7 @@ function renderRoomList(rooms) {
     actions.appendChild(enter);
     if (room.role === 'owner') { // owner room management
       actions.appendChild(mkBtn('Rename', () => renameRoom(room)));
-      { const appr = document.createElement('button'); const gated = room.requireApproval; appr.dataset.icon = gated ? 'shield-check' : 'shield-x'; appr.innerHTML = '<span class="lbl">' + (gated ? 'Gated' : 'Open') + '</span>'; appr.setAttribute('aria-label', gated ? 'Gated \u2014 approval required' : 'Open \u2014 anyone can join'); appr.onclick = () => togglePolicy(room); actions.appendChild(appr); }
+      { const appr = document.createElement('button'); appr.type = 'button'; const gated = room.requireApproval; appr.dataset.icon = gated ? 'shield-check' : 'shield-x'; appr.innerHTML = '<span class="lbl">' + (gated ? 'Gated' : 'Open') + '</span>'; appr.setAttribute('aria-pressed', gated ? 'true' : 'false'); appr.setAttribute('aria-label', gated ? 'Gated \u2014 approval required' : 'Open \u2014 anyone can join'); appr.onclick = () => togglePolicy(room); actions.appendChild(appr); }
       actions.appendChild(mkBtn('Close', () => closeRoom(room)));
     }
     li.append(info, actions);
@@ -194,73 +217,72 @@ async function closeRoom(room) {
 // ---- handlers ----
 // Quick join: create a passwordless account, then join by code — the default path.
 async function onQuickJoin() {
-  const errEl = byId('qjErr'); errEl.textContent = ''; errEl.className = 'err';
-  const username = byId('qjName').value.trim(), email = byId('qjEmail').value.trim(), code = byId('qjCode').value.trim();
-  if (!username || !email || !code) { errEl.textContent = 'Fill in all three fields.'; return; }
+  const errEl = byId('qjErr'); setStatus(errEl, '');
+  const username = byId('qjName').value.trim(), email = byId('qjEmail').value.trim(), code = byId('qjCode').value.trim().toUpperCase();
+  if (!username || !email || !code) { setStatus(errEl, 'Fill in all three fields.'); return; }
   let user;
   try {
     const signup = await api('/auth/signup', { method: 'POST', body: { username, email } }); // passwordless
     user = signup.user; setToken(signup.token);
   } catch (e) {
-    errEl.textContent = /taken/i.test(e.message || '') ? `${e.message} Pick another, or log in (top right).` : e.message;
+    setStatus(errEl, /taken/i.test(e.message || '') ? `${e.message} Pick another, or log in (top right).` : e.message);
     return;
   }
   try { // now signed in — join the room
     const { room, membership } = await api('/rooms/join', { method: 'POST', auth: true, body: { code } });
     if (membership && membership.status === 'admitted') { enterRoom(room.code); return; }
     await showHome(user); // pending: land on home, which polls and auto-forwards on approval
-    const joinErrEl = byId('joinErr'); joinErrEl.className = 'note'; joinErrEl.textContent = 'Request sent \u2014 waiting for a GM to admit you\u2026';
+    setStatus(byId('joinErr'), 'Request sent \u2014 waiting for a GM to admit you\u2026', 'note');
   } catch (e) {
     await showHome(user); // account exists now; let them retry from the lobby
-    const joinErrEl = byId('joinErr'); joinErrEl.className = 'err'; joinErrEl.textContent = e.message;
+    setStatus(byId('joinErr'), e.message, 'err');
   }
 }
 
 async function onLogin() {
-  const errEl = byId('loginErr'); errEl.textContent = '';
+  const errEl = byId('loginErr'); setStatus(errEl, '');
   try {
     // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/login', { method: 'POST',
       body: { login: byId('loginId').value.trim(), password: byId('loginPw').value } });
     setToken(t); showHome(user);
-  } catch (e) { errEl.textContent = e.message; }
+  } catch (e) { setStatus(errEl, e.message); }
 }
 
 async function onSignup() {
-  const errEl = byId('suErr'); errEl.textContent = '';
+  const errEl = byId('suErr'); setStatus(errEl, '');
   const password = byId('suPw').value;
-  if (password.length < 8) { errEl.textContent = 'Password must be at least 8 characters.'; return; }
+  if (password.length < 8) { setStatus(errEl, 'Password must be at least 8 characters.'); return; }
   try {
     // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/signup', { method: 'POST',
       body: { username: byId('suUser').value.trim(), email: byId('suEmail').value.trim(), password } });
     setToken(t); showHome(user);
-  } catch (e) { errEl.textContent = e.message; }
+  } catch (e) { setStatus(errEl, e.message); }
 }
 
 async function onCreateRoom() {
-  const errEl = byId('createErr'); errEl.textContent = '';
+  const errEl = byId('createErr'); setStatus(errEl, '');
   try {
     const { room } = await api('/rooms', { method: 'POST', auth: true,
       body: { name: byId('roomName').value.trim(), requireApproval: byId('approval').classList.contains('on') } });
     enterRoom(room.code);
-  } catch (e) { errEl.textContent = e.message; }
+  } catch (e) { setStatus(errEl, e.message); }
 }
 
 async function onJoin() {
-  const errEl = byId('joinErr'); errEl.textContent = ''; errEl.className = 'err';
+  const errEl = byId('joinErr'); setStatus(errEl, '');
   try {
     const { room, membership } = await api('/rooms/join', { method: 'POST', auth: true,
-      body: { code: byId('joinCode').value.trim() } });
+      body: { code: byId('joinCode').value.trim().toUpperCase() } });
     if (membership && membership.status === 'admitted') {
-      errEl.className = 'note'; errEl.textContent = '\u2713 Entering\u2026';
+      setStatus(errEl, '\u2713 Entering\u2026', 'note');
       setTimeout(() => enterRoom(room.code), 400);
     } else {
-      errEl.className = 'note';
-      errEl.textContent = 'Request sent \u2014 waiting for a GM. You\u2019ll be forwarded once approved.';
+      setStatus(errEl, 'Request sent \u2014 waiting for a GM. You\u2019ll be forwarded once approved.', 'note');
       refreshRooms();
     }
-  } catch (e) { errEl.textContent = e.message; }
+  } catch (e) { setStatus(errEl, e.message); }
 }
 
 const onLogout = () => { byId('adminBtn').hidden=true; stopPolling(); clearToken(); showQuickJoin(); };
@@ -296,17 +318,21 @@ async function onAvatarPick(event) {
 }
 
 // ---- wire + boot ----
-byId('avatar').onclick = () => byId('avatarFile').click();
+// Forms: submit fires on the primary button AND on Enter in any field, so the four
+// per-field keydown handlers are gone. Each view's fields live in one <form>.
+const wireForm = (id, fn) => { const f = byId(id); if (f) f.addEventListener('submit', (e) => { e.preventDefault(); fn(); }); };
+wireForm('quickJoinForm', onQuickJoin);
+wireForm('loginForm', onLogin);
+wireForm('signupForm', onSignup);
+wireForm('createRoomForm', onCreateRoom);
+wireForm('joinRoomForm', onJoin);
+
+onActivate(byId('avatar'), () => byId('avatarFile').click());
 byId('avatarFile').onchange = onAvatarPick;
 byId('accountBtn').onclick = showAuth;
-byId('qjBtn').onclick = onQuickJoin;
-byId('qjToLogin').onclick = (e) => { e.preventDefault(); showAuth(); };
-byId('qjBack').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
-byId('qjBack2').onclick = (e) => { e.preventDefault(); showQuickJoin(); };
-byId('loginBtn').onclick = onLogin;
-byId('suBtn').onclick = onSignup;
-byId('createBtn').onclick = onCreateRoom;
-byId('approval').onclick = () => { const on = byId('approval').classList.toggle('on'); setIcon(byId('approval'), on ? 'shield-check' : 'shield-x'); };
+onActivate(byId('qjToLogin'), showAuth);
+document.querySelectorAll('.toQuick').forEach((a) => onActivate(a, showQuickJoin)); // both "← Back to quick join" links, once
+byId('approval').onclick = () => setToggle(byId('approval'), !byId('approval').classList.contains('on'), 'shield-check', 'shield-x');
 applyIcons(); initTip();
 // Accent color — personal, saved on this device (the <head> script applies it on load; this syncs the picker + handles changes).
 {
@@ -323,21 +349,16 @@ applyIcons(); initTip();
   const cust = byId('accentCustom'); if (cust) cust.oninput = () => applyAccent(cust.value);
   applyAccent(localStorage.getItem('ott-accent') || '#c9a25a');
 }
-byId('joinBtn').onclick = onJoin;
 byId('logoutBtn').onclick = onLogout;
 { // Full / Compact interface toggle — persists to localStorage; applied on every page at load
   const uiToggle = byId('uiModeToggle');
-  const syncUi = () => { if (uiToggle) uiToggle.classList.toggle('on', document.body.classList.contains('ui-full')); };
+  const syncUi = () => setToggle(uiToggle, document.body.classList.contains('ui-full')); // class + aria-pressed (no icon swap)
   syncUi();
   if (uiToggle) uiToggle.onclick = () => { const full = document.body.classList.toggle('ui-full'); localStorage.setItem('ott-ui-full', full ? '1' : '0'); syncUi(); };
 }
 byId('requestHostBtn').onclick = onRequestHost;
-byId('toSignup').onclick = (e) => { e.preventDefault(); byId('loginForm').hidden = true; byId('signupForm').hidden = false; };
-byId('toLogin').onclick = (e) => { e.preventDefault(); byId('signupForm').hidden = true; byId('loginForm').hidden = false; };
-byId('qjCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onQuickJoin(); });
-byId('loginPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onLogin(); });
-byId('suPw').addEventListener('keydown', (e) => { if (e.key === 'Enter') onSignup(); });
-byId('joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') onJoin(); });
+onActivate(byId('toSignup'), () => { byId('loginForm').hidden = true; byId('signupForm').hidden = false; });
+onActivate(byId('toLogin'), () => { byId('signupForm').hidden = true; byId('loginForm').hidden = false; });
 
 // Boot: if a stored token still resolves to a user, land on home; otherwise (no
 // token, a stale one that 401s, or a 2xx that somehow lacks a user) show quick-join.
