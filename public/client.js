@@ -52,7 +52,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'measurePanel', 'tracksPanel', 'whiteboard', 'chat', 'notes', 'scorePanel', 'timer', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'measurePanel', 'tracksPanel', 'whiteboard', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -168,8 +168,9 @@ function addChatMsg(m) {
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.appendChild(row);
   if (atBottom) log.scrollTop = log.scrollHeight;
-  const chat = byId('chat'), chatBtn = byId('chatBtn');
-  if (chat && chat.hidden && chatBtn) chatBtn.classList.add('hasUnread');
+  const chatBtn = byId('chatBtn'), reg = byId('regionTL');
+  const chatShowing = reg && !reg.hidden && reg.querySelector('.pane[data-pane="chat"].on');
+  if (!chatShowing && chatBtn) chatBtn.classList.add('hasUnread');
 }
 
 
@@ -718,14 +719,12 @@ function rebuildGrid() {
 
   // Private notes: a personal scratchpad. Never synced — the server just holds the
   // text so it survives a reconnect (see the 'notebook' message below).
-  const notes = byId('notes'), notesText = byId('notesText');
-  byId('notesBtn').onclick = () => { notes.hidden = !notes.hidden; if (!notes.hidden) notesText.focus(); };
+  const notesText = byId('notesText'); // Notes now opens via the shared-region cluster (see wireCluster below)
   // Audio settings (Tools menu): effects volume + mute, persisted client-side.
   const sfxVol = byId('sfxVol'), sfxMute = byId('sfxMute');
   {
-    const musicModal = byId('musicModal');
-    wire('audioBtn', () => { if (musicModal) musicModal.classList.remove('collapsed'); }); // Tools "Music" expands the modal
-    wire('musicHam', () => { if (musicModal) musicModal.classList.toggle('collapsed'); }); // hamburger toggles collapse
+    // Music open/close is handled by the top-right cluster (audioBtn → music pane; wireCluster below).
+    // The audio keeps playing when the pane is closed — only the controls hide.
     if (sfxVol) { sfxVol.value = Math.round(getSfxVolume() * 100); sfxVol.oninput = () => setSfxVolume(sfxVol.value / 100); }
     const muteBtn = (btn, get, set, on, off) => { if (!btn) return; const sync = () => setIcon(btn, get() ? off : on); sync(); btn.onclick = () => { set(!get()); sync(); }; };
     muteBtn(byId('sfxMute'), getSfxMuted, setSfxMuted, 'ear', 'ear-off');
@@ -792,14 +791,11 @@ function rebuildGrid() {
     wire('tracksLink', (e) => { if (e && e.preventDefault) e.preventDefault(); renderTracks(); if (tracksPanel) tracksPanel.hidden = false; });
     wire('tracksClose', () => { if (tracksPanel) tracksPanel.hidden = true; });
   }
-  byId('notesClose').onclick = () => { notes.hidden = true; };
   { // Public chat panel (Tools)
-    const chat = byId('chat'), input = byId('chatInput');
-    if (chat && byId('chatBtn')) {
+    const input = byId('chatInput');
+    if (input && byId('chatSend')) {
       const send = () => { const t = input.value.trim(); if (t) { room.send('chat', { text: t }); input.value = ''; } };
-      byId('chatBtn').onclick = () => { chat.hidden = !chat.hidden; if (!chat.hidden) { input.focus(); byId('chatBtn').classList.remove('hasUnread'); const l = byId('chatLog'); if (l) l.scrollTop = l.scrollHeight; } };
-      byId('chatClose').onclick = () => { chat.hidden = true; };
-      const sb = byId('chatSend'); if (sb) sb.onclick = send;
+      byId('chatSend').onclick = send;
       input.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
     }
   }
@@ -812,19 +808,15 @@ function rebuildGrid() {
   // Shared timer: controls just send commands; the readout is computed locally
   // from the synced anchor (state.timer), so it ticks smoothly with no per-second
   // patches. The interval also mirrors another client's changes into the controls.
-  const timerPanel = byId('timer'), timerReadout = byId('timerReadout'), timerToggle = byId('timerToggle');
+  const timerReadout = byId('timerReadout'), timerToggle = byId('timerToggle');
   const timerMode = byId('timerMode'), timerDurRow = byId('timerDurRow'), timerDur = byId('timerDur');
   const durMs = () => (+timerDur.value || 0) * 60000;
   const modeVal = () => { const c = timerMode.querySelector('.libTab.on'); return c ? c.dataset.mode : 'up'; };
   const setMode = (m) => timerMode.querySelectorAll('.libTab').forEach(c => c.classList.toggle('on', c.dataset.mode === m));
-  byId('timerBtn').onclick = () => { timerPanel.hidden = !timerPanel.hidden; };
-  byId('timerClose').onclick = () => { timerPanel.hidden = true; };
+  // Timer open/close is handled by the top-right cluster (wireCluster below); its live value also shows in the button (see the tick loop).
 
-  // Scoreboard + room notes panel (game table only — not present in the editor)
-  const scorePanel = byId('scorePanel');
-  if (scorePanel) {
-    byId('scoreBtn').onclick = () => { scorePanel.hidden = !scorePanel.hidden; if (!scorePanel.hidden) { renderScores(); updateRoomNotes(); } };
-    byId('scoreClose').onclick = () => { scorePanel.hidden = true; };
+  // Scoreboard + room notes content (now in the top-right region; opened via wireCluster)
+  if (byId('scoreRows')) {
     byId('scoreAdd').onclick = () => { const n = byId('scoreAddName'); room.send('score', { action: 'add', label: n.value.trim() || 'Player' }); n.value = ''; };
     byId('scoreAddName').onkeydown = (e) => { if (e.key === 'Enter') byId('scoreAdd').click(); };
     byId('scoreClear').onclick = () => { if (confirm('Clear the whole scoreboard?')) room.send('score', { action: 'clear' }); };
@@ -838,9 +830,12 @@ function rebuildGrid() {
   timerMode.querySelectorAll('.libTab').forEach(c => c.onclick = () => { setMode(c.dataset.mode); room.send('timer', { action: 'set', mode: c.dataset.mode, duration: durMs() }); });
   timerDur.onchange = () => room.send('timer', { action: 'set', mode: 'down', duration: durMs() });
   setInterval(() => {
-    if (timerPanel.hidden) return; // nothing to draw while the panel is closed
     const t = room.state.timer;
-    if (!t) return;
+    const btnLbl = byId('timerBtn') && byId('timerBtn').querySelector('.lbl');
+    if (btnLbl) btnLbl.textContent = (t && t.running) ? fmtTime(timerLive(t, Date.now())) : 'Timer'; // live value in the button
+    const r = byId('regionTR');
+    const paneOpen = r && !r.hidden && r.querySelector('.pane[data-pane="timer"].on');
+    if (!paneOpen || !t) return; // nothing more to draw unless the timer pane is showing
     timerReadout.textContent = fmtTime(timerLive(t, Date.now()));
     setIcon(timerToggle, t.running ? 'player-pause' : 'player-play');
     if (modeVal() !== t.mode) setMode(t.mode); // reflect another client's switch
@@ -3022,11 +3017,59 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     }
   });
 }
-['chat','notes','timer','scorePanel','showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
+['showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
 wireDialog(byId('measurePanel'), { esc: false }); // Esc is measure's own (exitMeasure closes the panel)
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
+
+// ---- shared-region cluster primitive (UI_Redesign phase 1) -----------------------------
+// N hamburger buttons share ONE region. Accordion within the cluster: one pane open at a
+// time; clicking the active ham collapses it. Desktop: the region is an overlay anchored
+// under the first ham (position set here); mobile (≤720px): CSS reshapes it into a bottom
+// sheet. Esc, or the region's own ✕, closes it and returns focus to the opener.
+function wireCluster(region, hams) {
+  if (!region || !hams.length) return;
+  const anchor = hams[0].btn;
+  const sheet = () => matchMedia('(max-width: 720px)').matches;
+  const place = () => {
+    if (sheet()) { region.style.left = region.style.top = ''; return; } // bottom sheet: let CSS own it
+    const r = anchor.getBoundingClientRect();
+    region.style.left = Math.round(Math.max(8, Math.min(r.left, innerWidth - region.offsetWidth - 8))) + 'px';
+    region.style.top = Math.round(r.bottom + 8) + 'px';
+  };
+  const close = () => { region.hidden = true; hams.forEach((h) => h.btn.classList.remove('on')); };
+  const open = (h) => {
+    hams.forEach((x) => x.btn.classList.remove('on'));
+    region.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === h.pane));
+    h.btn.classList.add('on'); region.hidden = false; place();
+    const f = region.querySelector('.pane.on textarea, .pane.on input:not([type=hidden])')
+           || region.querySelector('.pane.on button:not(.regionClose), .pane.on [tabindex]');
+    if (f) f.focus();
+    if (h.onOpen) h.onOpen(); // per-pane hook (e.g. chat: clear unread + scroll to bottom)
+  };
+  hams.forEach((h) => h.btn.addEventListener('click', () => {
+    (h.btn.classList.contains('on') && !region.hidden) ? close() : open(h);
+  }));
+  region.querySelectorAll('.regionClose').forEach((b) => b.addEventListener('click', () => { close(); anchor.focus(); }));
+  region.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); anchor.focus(); } });
+  addEventListener('resize', () => { if (!region.hidden) place(); });
+}
+// Top-left cluster (UI_Redesign phase 2): Chat + Notes share one region (accordion).
+{ const r = byId('regionTL'), cb = byId('chatBtn'), nb = byId('notesBtn');
+  if (r && cb && nb) wireCluster(r, [
+    { btn: cb, pane: 'chat', onOpen: () => { cb.classList.remove('hasUnread'); const l = byId('chatLog'); if (l) l.scrollTop = l.scrollHeight; } },
+    { btn: nb, pane: 'notes' },
+  ]);
+}
+// Top-right cluster (UI_Redesign phase 2b): Score + Music + Timer (Measure joins next).
+{ const r = byId('regionTR'), sb = byId('scoreBtn'), ab = byId('audioBtn'), tb = byId('timerBtn');
+  if (r && sb && tb) wireCluster(r, [
+    { btn: sb, pane: 'score', onOpen: () => { renderScores(); updateRoomNotes(); } },
+    { btn: ab, pane: 'music' },
+    { btn: tb, pane: 'timer' },
+  ]);
+}
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => {
   const el = byId(id);

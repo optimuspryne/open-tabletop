@@ -145,6 +145,42 @@
   padding: 10px 12px;
 }
 
+/* ===== Shared-region clusters (UI_Redesign phase 1) =====
+   A button group ("cluster") opens ONE anchored region; one pane shows at a time.
+   Desktop: an overlay anchored under the cluster (position set in JS). Mobile: a
+   full-width bottom sheet. Independent across clusters; accordion within a cluster. */
+.region {
+  position: fixed;
+  z-index: 9;
+  width: 300px;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 12px 34px var(--shadow-soft);
+  overflow: hidden;
+}
+.region[hidden] { display: none !important; }
+.region .pane { display: none; flex: 1; min-height: 0; flex-direction: column; overflow: auto; padding: 12px; }
+.region .pane.on { display: flex; }
+.regionHead { display: flex; align-items: center; margin-bottom: 8px; }
+.regionHead b { color: var(--accent); font-size: var(--fs-sm); text-transform: uppercase; letter-spacing: .05em; }
+.regionHead .regionClose { margin-left: auto; }
+.region #notesText { flex: 1; min-height: 200px; resize: none; }
+.region .pane[data-pane="chat"] #chatLog { flex: 1; max-height: none; min-height: 120px; }
+.region #chatInputRow { flex: none; }
+/* top-right cluster sits left of the right rail (min 270px); on mobile the rail collapses (phase 6) */
+.cluster-tr { position: fixed; top: var(--inset); right: calc(var(--inset) + 284px); z-index: 7; display: flex; gap: var(--gap); }
+.region #scoreTable { width: 100%; }
+.region #roomNotes { width: 100%; resize: vertical; min-height: 90px; }
+@media (max-width: 720px) { .cluster-tr { right: var(--inset); } }
+@media (max-width: 720px) {   /* mobile: the region becomes a full-width bottom sheet */
+  .region { left: 0 !important; right: 0; top: auto !important; bottom: 0; width: auto; max-height: 74vh; border-radius: 16px 16px 0 0; }
+}
+
 /* ---- A small uppercase accent "mini-label" (section headings inside panels).
    Add class="miniLabel" to a new one; the element-scoped headings share it here. ---- */
 .miniLabel, .scoreNotesLabel, .libSection h4, .libPane h4 {

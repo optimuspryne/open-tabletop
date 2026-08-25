@@ -28,6 +28,8 @@
 <div id="ui">
   <button id="lobbyBtn" data-icon="home-move"><span class="lbl">Lobby</span></button>
   <button id="settingsBtn" data-icon="settings"><span class="lbl">Settings</span></button>
+  <button id="chatBtn" data-icon="message-dots"><span class="lbl">Chat</span></button>
+  <button id="notesBtn" data-icon="notes"><span class="lbl">Notes</span></button>
   <span class="menu">
     <button id="roomBtn" data-icon="user-cog"><span class="lbl">GM Controls</span></button>
     <div class="grp" id="roomGrp" hidden>
@@ -138,12 +140,7 @@
 <div id="toolsDock">
   <div id="toolsMenu" class="panel" hidden>
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
-    <button id="notesBtn" data-icon="notes"><span class="lbl">Notes</span></button>
-    <button id="chatBtn" data-icon="message-dots"><span class="lbl">Chat</span></button>
-    <button id="scoreBtn" data-icon="scoreboard"><span class="lbl">Score</span></button>
-    <button id="timerBtn" data-icon="clock"><span class="lbl">Timer</span></button>
     <button id="measureBtn" data-icon="ruler-2"><span class="lbl">Measure</span></button>
-    <button id="audioBtn" data-icon="music"><span class="lbl">Music</span></button>
     <button id="resetPanelsBtn" data-icon="restore" hidden><span class="lbl">Reset</span></button>
     <button id="wbBtn" data-icon="chalkboard"><span class="lbl">Whiteboard</span></button>
     <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
@@ -158,18 +155,6 @@
     </div>
     <p class="muted">Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane. Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.</p>
     <div class="chipRow"><button id="measureClear" class="chip" data-icon="eraser"><span class="lbl">Clear mine</span></button><button id="measureClearAll" class="chip" data-icon="trash" hidden><span class="lbl">Clear all</span></button></div>
-  </div>
-  <div id="musicModal" class="panel collapsed">
-    <button id="musicHam" data-icon="music"><span class="lbl">Music</span></button>
-    <div id="musicBody">
-      <div class="chipRow">
-        <button id="musicToggle" class="chip" data-icon="player-play"><span class="lbl">Play</span></button>
-        <button id="musicNext" class="chip icon-only" data-icon="player-track-next"><span class="lbl">Next</span></button>
-        <button id="musicShuffle" class="chip chk icon-only" data-icon="arrows-shuffle"><span class="lbl">Shuffle</span></button>
-      </div>
-      <div id="nowPlaying" class="muted"></div>
-      <button id="tracksLink" class="chip" data-icon="movie"><span class="lbl">Pick Track</span></button>
-    </div>
   </div>
   <div id="settingsModal" hidden>
     <div class="modalCard libraryCard">
@@ -222,37 +207,58 @@
     <div id="wbLocation" class="showLabel"><b>Location</b></div>
     <input id="wbAngle" type="range" min="0" max="360" step="5" value="0">
   </div>
-  <div id="chat" class="panel popout" hidden>
-    <div id="chatHead" class="panel-head"><b>Chat</b><button type="button" id="chatClose" class="close-x" aria-label="Close">✕</button></div>
-    <div id="chatLog"></div>
-    <div id="chatInputRow"><input id="chatInput" type="text" placeholder="Message…" maxlength="400"><button id="chatSend" class="icon-only" data-icon="send-2"><span class="lbl">Send</span></button></div>
-  </div>
-  <div id="notes" class="panel popout" hidden>
-    <div id="notesHead" class="panel-head"><b>Private Notes</b><button type="button" id="notesClose" class="close-x" aria-label="Close">✕</button></div>
-    <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
-  </div>
-  <div id="scorePanel" class="panel popout" hidden>
-    <div id="scoreHead" class="panel-head"><b>Scoreboard</b><button type="button" id="scoreClose" class="close-x" aria-label="Close">✕</button></div>
-    <table id="scoreTable"><tbody id="scoreRows"></tbody></table>
-    <div id="scoreEdit" hidden>
-      <div class="scoreAddRow"><input id="scoreAddName" type="text" placeholder="Add player / team…" maxlength="40"><button id="scoreAdd" data-icon="user-plus"><span class="lbl">Add</span></button></div>
-      <button id="scoreClear" class="danger" data-icon="trash"><span class="lbl">Clear all</span></button>
+  <div id="regionTL" class="region" hidden>
+    <div class="pane" data-pane="chat">
+      <div class="regionHead"><b>Chat</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+      <div id="chatLog"></div>
+      <div id="chatInputRow"><input id="chatInput" type="text" placeholder="Message…" maxlength="400"><button id="chatSend" class="icon-only" data-icon="send-2"><span class="lbl">Send</span></button></div>
     </div>
-    <div class="scoreNotesLabel">Room notes</div>
-    <textarea id="roomNotes" rows="5" placeholder="GM notes for the room — house rules, current objective…"></textarea>
-  </div>
-  <div id="timer" class="panel popout" hidden>
-    <div id="timerHead" class="panel-head"><b>Timer</b><button type="button" id="timerClose" class="close-x" aria-label="Close">✕</button></div>
-    <div id="timerMode" class="libTabs">
-      <button class="libTab on" data-mode="up" data-icon="stopwatch"><span class="lbl">Stopwatch</span></button>
-      <button class="libTab" data-mode="down" data-icon="hourglass-low"><span class="lbl">Countdown</span></button>
+    <div class="pane" data-pane="notes">
+      <div class="regionHead"><b>Private Notes</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+      <textarea id="notesText" placeholder="Only you can see these. Cleared when you leave the room."></textarea>
     </div>
-    <div id="timerReadout">00:00</div>
-    <div class="timerRow">
-      <button id="timerToggle" data-icon="player-play"><span class="lbl">Start</span></button>
-      <button id="timerReset" data-icon="restore"><span class="lbl">Reset</span></button>
-      <div id="timerDurRow" class="timerRow" hidden>
-        <input id="timerDur" type="number" min="0" max="180" value="5">
+  </div>
+  <div id="clusterTR" class="cluster-tr">
+    <button id="scoreBtn" data-icon="scoreboard"><span class="lbl">Score</span></button>
+    <button id="audioBtn" data-icon="music"><span class="lbl">Music</span></button>
+    <button id="timerBtn" data-icon="clock"><span class="lbl">Timer</span></button>
+  </div>
+  <div id="regionTR" class="region" hidden>
+    <div class="pane" data-pane="score">
+      <div class="regionHead"><b>Scoreboard</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+      <table id="scoreTable"><tbody id="scoreRows"></tbody></table>
+      <div id="scoreEdit" hidden>
+        <div class="scoreAddRow"><input id="scoreAddName" type="text" placeholder="Add player / team…" maxlength="40"><button id="scoreAdd" data-icon="user-plus"><span class="lbl">Add</span></button></div>
+        <button id="scoreClear" class="danger" data-icon="trash"><span class="lbl">Clear all</span></button>
+      </div>
+      <div class="scoreNotesLabel">Room notes</div>
+      <textarea id="roomNotes" rows="5" placeholder="GM notes for the room — house rules, current objective…"></textarea>
+    </div>
+    <div class="pane" data-pane="music">
+      <div class="regionHead"><b>Music</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+      <div id="musicBody">
+        <div class="chipRow">
+          <button id="musicToggle" class="chip" data-icon="player-play"><span class="lbl">Play</span></button>
+          <button id="musicNext" class="chip icon-only" data-icon="player-track-next"><span class="lbl">Next</span></button>
+          <button id="musicShuffle" class="chip chk icon-only" data-icon="arrows-shuffle"><span class="lbl">Shuffle</span></button>
+        </div>
+        <div id="nowPlaying" class="muted"></div>
+        <button id="tracksLink" class="chip" data-icon="movie"><span class="lbl">Pick Track</span></button>
+      </div>
+    </div>
+    <div class="pane" data-pane="timer">
+      <div class="regionHead"><b>Timer</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
+      <div id="timerMode" class="libTabs">
+        <button class="libTab on" data-mode="up" data-icon="stopwatch"><span class="lbl">Stopwatch</span></button>
+        <button class="libTab" data-mode="down" data-icon="hourglass-low"><span class="lbl">Countdown</span></button>
+      </div>
+      <div id="timerReadout">00:00</div>
+      <div class="timerRow">
+        <button id="timerToggle" data-icon="player-play"><span class="lbl">Start</span></button>
+        <button id="timerReset" data-icon="restore"><span class="lbl">Reset</span></button>
+        <div id="timerDurRow" class="timerRow" hidden>
+          <input id="timerDur" type="number" min="0" max="180" value="5">
+        </div>
       </div>
     </div>
   </div>
