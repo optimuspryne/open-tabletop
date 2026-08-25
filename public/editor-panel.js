@@ -1,4 +1,4 @@
-// editor-panel.js — the admin library-management panel (editor.html only). It rides
+// editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
 // on the table engine's room connection, handed over by client.js via
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
 // the deckList/boardList/propList messages out to here, so the modal saved-lists

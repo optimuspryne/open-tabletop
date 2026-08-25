@@ -160,7 +160,7 @@ async function purgeOrphans(count) {
   myId = me.id;
   byId('admin').hidden = false;
   byId('lobbyBtn').onclick = () => { location.href = '/'; };
-  byId('editorBtn').onclick = () => { location.href = '/editor.html'; };
+  byId('editorBtn').onclick = () => { location.href = '/table.html?workshop=1'; };
   byId('scanOrphans').onclick = scanOrphans;
   await loadRooms();
   await loadUsers();

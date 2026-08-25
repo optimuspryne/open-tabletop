@@ -262,7 +262,8 @@ function rebuildGrid() {
 (async () => {
   const client = new Client(location.origin.replace(/^http/, 'ws'));
   const params = new URLSearchParams(location.search);
-  const editorMode = !!window.OTT_EDITOR;                          // set by editor.html
+  if (params.get('workshop') === '1') window.OTT_EDITOR = true;    // admins reach the library workshop via table.html?workshop=1
+  const editorMode = !!window.OTT_EDITOR;                          // workshop mode: admin-only room + workshop chrome
   const code = (params.get('room') || 'LOBBY').toUpperCase();      // which table (handed over by the lobby)
   const authToken = localStorage.getItem('tabletop.token') || '';  // who you are (for the onAuth gate)
   const key = 'tt_token:' + code; // per-room reconnection token: survives refresh, distinct per table
