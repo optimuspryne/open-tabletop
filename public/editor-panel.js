@@ -15,18 +15,20 @@ function openEditModal(kind, it, clone) {
   if (kind === 'deck') return openDeckEdit(it, clone); // decks fetch their cards first (async), then fill
   editCtx = { kind, id: clone ? null : it.id, model: kind === 'prop' ? (it.props && it.props.model) : it.model, tex: it.tex };
   const modal = byId('addModal'); if (!modal) return;
-  modal.hidden = false;
+  openAddModal();
   const tab = kind === 'prop' ? 'objects' : (it.model ? 'modelboards' : 'imgboards'); // boards split into two tabs
   const tb = modal.querySelector(`.libTab[data-tab="${tab}"]`);
   if (tb) tb.click(); // switch to the right tab via wireTabs
   const fill = FILLERS[kind]; if (fill) fill(it, clone);
+  focusAddModal();
 }
 let pendingDeck = null; // deck Edit/Clone fetches the deck's cards first, then fills the form on the deckData response
 function openDeckEdit(it, clone) {
   const modal = byId('addModal'); if (!modal) return;
-  modal.hidden = false;
+  openAddModal();
   pendingDeck = { it, clone };
   ROOM.send('getDeck', { id: it.id });
+  focusAddModal();
 }
 import { DIE_SIDES, PROP_LIST, BOARDS, COLORS, PROPS, DISPENSER_LIST, DISPENSERS, PALETTE, PALETTES, STARTER_LIST, standMode, geomFromImage, TILES, HEX_HH } from '/shared/pieces.js';
 
@@ -54,15 +56,40 @@ const shapeOfGeom = (geom) => geom && geom.shape === 'hex' ? 'hex' : (geom && ge
 const byId = (id) => document.getElementById(id);
 const ICON_FOR = { 'Spawn': 'square-rounded-plus', 'Apply': 'checks', 'Set up': 'go-game', 'Edit': 'edit', 'Clone': 'copy', 'Rename': 'cursor-text', 'Delete': 'trash', 'Publish': 'flag-check', 'Unpublish': 'flag-cancel' };
 const btn = (label, fn, cls) => { const button = document.createElement('button'); button.type = 'button'; const ic = ICON_FOR[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+// ---- Add-to-Library modal: dialog open/close with focus management ----
+let addReturn = null; // the control to restore focus to when the dialog closes
+const focusablesIn = (el) => [...el.querySelectorAll('a[href], button, input, textarea, select, [tabindex]')]
+  .filter((n) => !n.disabled && n.tabIndex !== -1 && n.type !== 'hidden' && n.getClientRects().length);
+function openAddModal() { const m = byId('addModal'); if (!m) return null; if (m.hidden) addReturn = document.activeElement; m.hidden = false; return m; }
+function focusAddModal() { const m = byId('addModal'); if (!m || m.hidden) return; (m.querySelector('.libTab.on') || focusablesIn(m)[0] || m).focus(); }
+function closeAddModal() { const m = byId('addModal'); if (!m || m.hidden) return; m.hidden = true; editCtx = null; const r = addReturn; addReturn = null; if (r && r.focus) r.focus(); }
+function trapTab(e, m) { const f = focusablesIn(m); if (!f.length) return; const first = f[0], last = f[f.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); } }
+
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
+// When the tabs carry role="tab" (the Add modal), also maintain aria-selected + roving tabindex and
+// arrow-key navigation; the other tabbed modals keep the plain class/hidden behavior unchanged.
 function wireTabs(root) {
   const tabs = [...root.querySelectorAll('.libTab')];
-  tabs.forEach((tab) => tab.onclick = () => {
-    tabs.forEach((t) => t.classList.toggle('on', t === tab));
+  const aria = !!(tabs[0] && tabs[0].getAttribute('role') === 'tab');
+  const select = (tab) => {
+    tabs.forEach((t) => { const on = t === tab; t.classList.toggle('on', on); if (aria) { t.setAttribute('aria-selected', on ? 'true' : 'false'); t.tabIndex = on ? 0 : -1; } });
     root.querySelectorAll('.libPane').forEach((pane) => { pane.hidden = pane.dataset.pane !== tab.dataset.tab; });
     root.querySelectorAll('.libList.selecting').forEach((ul) => { ul.classList.remove('selecting'); ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel')); });
     if (root._resetSelect) root._resetSelect();
     if (root._applySearch) root._applySearch(); // re-filter the newly shown pane
+  };
+  tabs.forEach((tab, i) => {
+    tab.onclick = () => select(tab);
+    if (aria) tab.onkeydown = (e) => {
+      let j = -1;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % tabs.length;
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') j = (i - 1 + tabs.length) % tabs.length;
+      else if (e.key === 'Home') j = 0;
+      else if (e.key === 'End') j = tabs.length - 1;
+      if (j >= 0) { e.preventDefault(); select(tabs[j]); tabs[j].focus(); }
+    };
   });
 }
 // A per-modal controls row (multi-select buttons + divider + search), pinned in the sticky header.
@@ -483,7 +510,7 @@ function wireAddDeck() {
     if (!faces.length) return alert('Add at least one front (one per line, comma-separated, or JSON).');
     sendDeck(backRef(), faces.map(frontRef), name, spawn, editCtx && editCtx.id);
     clearDeckForm();
-    byId('addModal').hidden = true;
+    closeAddModal();
   };
   byId('adTxtSave').onclick = () => saveText(false);
   byId('adTxtSpawn').onclick = () => saveText(true);
@@ -530,7 +557,7 @@ function wireAddDeck() {
       else fronts = editCtx.fronts; // image-deck edit only swaps the back — keep the existing fronts
       sendDeck(back, fronts, name, spawn, editCtx && editCtx.id, geom);
       clearDeckForm();
-      byId('addModal').hidden = true;
+      closeAddModal();
     } catch (e) { alert('Image upload failed.'); }
   };
   byId('adImgSave').onclick = () => saveImg(false);
@@ -574,7 +601,7 @@ function wireAddBoard() {
       const { scale, box } = await measureBoard(url);
       save({ model: url, modelScale: scale, box }, name, spawn);
       clearBoard();
-      byId('addModal').hidden = true;
+      closeAddModal();
     } catch (e) { alert('Board model upload/load failed — make sure it is a .glb file.'); }
   };
   byId('adBoardGlbSave').onclick = () => saveGlb(false);
@@ -616,7 +643,7 @@ function wireAddBoard() {
       else if (editCtx && editCtx.tex) spec.tex = editCtx.tex; // keep the existing image when editing/cloning
       save(spec, name, spawn);
       clearBoard();
-      byId('addModal').hidden = true;
+      closeAddModal();
     } catch (e) { alert('Image upload failed.'); }
   };
   byId('adBoardImgSave').onclick = () => saveImgBoard(false);
@@ -676,7 +703,7 @@ function wireAddObject() {
       if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
       save(props, name, spawn);
       clearObj();
-      byId('addModal').hidden = true;
+      closeAddModal();
     } catch (e) { alert('Model upload/load failed — make sure it is a .glb file.'); }
   };
   byId('adObjSave').onclick = () => saveObj(false);
@@ -715,7 +742,7 @@ function wireAddSky() {
       ROOM.send('saveSkybox', { name, url, isPublic: false });   // private by default; publish from the library
       if (apply) ROOM.send('skybox', { url });
       clearSky();
-      byId('addModal').hidden = true;
+      closeAddModal();
     } catch (e) { alert('Upload failed.'); }
   };
   byId('adSkyEqSave').onclick = () => saveEq(false);
@@ -733,7 +760,7 @@ function wireAddSky() {
       ROOM.send('saveSkybox', { name, type: 'cube', faces, isPublic: false });
       if (apply) ROOM.send('skybox', { url: JSON.stringify({ t: 'cube', f: faces }) });
       clearSky();
-      byId('addModal').hidden = true;
+      closeAddModal();
     } catch (e) { alert('Upload failed.'); }
   };
   byId('adSkyCubeSave').onclick = () => saveCube(false);
@@ -793,8 +820,13 @@ window.onOttRoom = (room) => {
   // Add-to-Library builder — editor only (absent on the table).
   const addModal = byId('addModal');
   if (addModal) {
-    byId('addBtn').onclick = () => { addModal.hidden = !addModal.hidden; if (!addModal.hidden) editCtx = null; }; // opening via "Add" = create mode
-    byId('addClose').onclick = () => { addModal.hidden = true; editCtx = null; };
+    // "Add" = create mode; toggles the dialog and moves focus in/out for keyboard users
+    byId('addBtn').onclick = () => { if (addModal.hidden) { editCtx = null; openAddModal(); focusAddModal(); } else { closeAddModal(); } };
+    byId('addClose').onclick = () => closeAddModal();
+    addModal.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeAddModal(); } // don't also trigger table Esc verbs
+      else if (e.key === 'Tab') trapTab(e, addModal);                                       // keep focus inside the dialog
+    });
     wireTabs(addModal);
     wireAddDeck();
     wireAddBoard();

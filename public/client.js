@@ -1565,7 +1565,6 @@ const onKeyDown = (e) => {
   }
   const typing = document.activeElement && (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
   if (typing) return;
-  if (e.key === '`') { byId('camDebug')?.toggleAttribute('hidden'); return; } // ` toggles the camera debug readout
 
   // Multi-select batch ops — act on the whole selection (dice/cards ops hit only the matching kind).
   if (selection.size) {
@@ -2822,11 +2821,6 @@ function finalizeMarquee(x0, y0, x1, y1, add) {
     leanOffset.copy(controls.target).sub(camera.position).multiplyScalar(leanT * LEAN_AMOUNT);
     camera.position.add(leanOffset);   // apply the lean for this frame's render
   }
-  { const c = camera.position, t = controls.target, d = byId('camDebug'); // live camera readout for tuning the default view
-    if (d && !d.hidden) d.textContent =
-      `cam  ${c.x.toFixed(2)}, ${c.y.toFixed(2)}, ${c.z.toFixed(2)}\n` +
-      `tgt  ${t.x.toFixed(2)}, ${t.y.toFixed(2)}, ${t.z.toFixed(2)}\n` +
-      `dist ${c.distanceTo(t).toFixed(2)}`; }
   { // clustered height + rotate controls (both edges): rotate while holding a piece or with a selection; height while holding
     const holding = !!(down && down.grabbed && down.touch), hasSel = selection.size > 0, sig = (holding ? 1 : 0) | (hasSel ? 2 : 0);
     if (sig !== holdSig) { holdSig = sig; const show = holding || hasSel;

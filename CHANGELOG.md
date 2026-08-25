@@ -20,6 +20,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Add-to-Library editor modal: inputs now have associated labels /
   aria-labels, buttons are consistently typed, and the collider-shape
   controls are screen-reader legible.
+- Add-to-Library editor modal is now a keyboard-operable dialog: focus
+  moves in on open and returns on close, Escape closes it, Tab stays
+  within it, and the type tabs are a proper ARIA tablist with arrow-key
+  navigation.
 ### Added
 - **Play cards from your hand in 3D.** Dragging a card out of your hand now shows the *real* card
   hovering over the table (replacing the old flat 2D ghost), so you can see exactly where it will

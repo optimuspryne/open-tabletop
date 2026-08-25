@@ -92,6 +92,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  background: none;          /* it's a <button> now — strip the default button chrome */
+  border: 0;
+  padding: 0;
+  color: inherit;
+  backdrop-filter: none;
 }
 .close-x:hover { opacity: 1; }
 /* Universal action-button row — uniform compact buttons that wrap cleanly */
