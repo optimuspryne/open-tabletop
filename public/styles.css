@@ -1355,6 +1355,13 @@ input[type="range"]::-moz-range-thumb {
   margin: 10px 0 4px;
   color: var(--accent);
 }
+/* Add-to-Library modal: the "--- x ---" flourish is decorative, so it lives in CSS
+   rather than the label text (keeps the label's wording clean). Plus control widths
+   and the note margin that used to be inline styles. */
+#addModal .addCol > label::before { content: "--- "; }
+#addModal .addCol > label::after  { content: " ---"; }
+#addModal input[type="number"] { width: 80px; }
+#addModal .addRow .note { margin: 0; }
 .modalCard .modeRow {
   display: flex;
   gap: 16px;
@@ -1592,14 +1599,6 @@ body.not-admin .admin-wrap, body.not-admin .admin-only { display: none !importan
   opacity: .55;
   font-size: var(--fs-sm);
 }
-/* visually hidden but available to screen readers (e.g. a page <h1> that has no visible chrome) */
-.sr-only {
-  position: absolute;
-  width: 1px; height: 1px;
-  margin: -1px; padding: 0; border: 0;
-  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
-  white-space: nowrap;
-}
 
 /* top bar — shared by the landing and admin pages */
 #topbar {
@@ -1787,7 +1786,6 @@ body.admin {
   font-weight: 600;
 }
 #admin tr.deleted td { opacity: .5; }
-#cleanupResult { margin-top: 8px; }                            /* status line under the Scan button (was an inline style) */
 #denied {
   text-align: center;
   margin: 22vh auto;

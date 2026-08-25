@@ -387,12 +387,12 @@
   <div class="modalCard libraryCard">
     <div id="addHead" class="panel-head"><b>Add to Library</b><span id="addClose" class="close-x">✕</span></div>
     <div class="libTabs">
-      <button class="libTab on" data-tab="imgdecks">Image Decks</button>
-      <button class="libTab" data-tab="txtdecks">Text Decks</button>
-      <button class="libTab" data-tab="modelboards">Model Boards</button>
-      <button class="libTab" data-tab="imgboards">Image Boards</button>
-      <button class="libTab" data-tab="objects">Objects</button>
-      <button class="libTab" data-tab="sky">Skyboxes</button>
+      <button type="button" class="libTab on" data-tab="imgdecks">Image Decks</button>
+      <button type="button" class="libTab" data-tab="txtdecks">Text Decks</button>
+      <button type="button" class="libTab" data-tab="modelboards">Model Boards</button>
+      <button type="button" class="libTab" data-tab="imgboards">Image Boards</button>
+      <button type="button" class="libTab" data-tab="objects">Objects</button>
+      <button type="button" class="libTab" data-tab="sky">Skyboxes</button>
     </div>
     <div class="libPane" data-pane="imgdecks">
       <h4>Image Decks</h4>
@@ -402,14 +402,14 @@
           <div class="uploadSq sqCard"><input id="adImgFronts" type="file" accept="image/*" multiple hidden><span class="sqLabel">Front Images (many)</span></div>
         </div>
         <div class="addCol">
-          <label>--- Enter a Name ---</label>
+          <label for="adImgName">Enter a Name</label>
           <input id="adImgName" type="text" placeholder="Name this deck">
-          <label>--- Fit Whole Image? ---</label>
-          <button id="adImgNoCrop" class="chip chk" title="Size the cards to the art's shape — no cropping, stretching, or padding">Fit to image</button>
-          <div class="addColorRow" id="adImgThickRow" hidden title="How thick each card/tile is — from a thin card to a chunky tile"><span>Thickness</span><input id="adImgThick" type="range" min="1" max="8" step="0.5" value="1"><span id="adImgThickVal">1×</span></div>
+          <label>Fit Whole Image?</label>
+          <button id="adImgNoCrop" type="button" class="chip chk" title="Size the cards to the art's shape — no cropping, stretching, or padding">Fit to image</button>
+          <div class="addColorRow" id="adImgThickRow" hidden title="How thick each card/tile is — from a thin card to a chunky tile"><span>Thickness</span><input id="adImgThick" type="range" min="1" max="8" step="0.5" value="1" aria-label="Card thickness"><span id="adImgThickVal">1×</span></div>
           <div class="addColorRow" id="adImgShapeRow" hidden title="The card/tile silhouette"><span>Shape</span><span id="adImgShape" class="segRow"><button type="button" class="chip seg on" data-shape="rounded">Rounded</button><button type="button" class="chip seg" data-shape="square">Square</button><button type="button" class="chip seg" data-shape="hex">Hexagon</button></span></div>
-          <div class="addColorRow" id="adImgPadRow" hidden><span>Padding Color</span><input id="adImgPad" type="color" value="#ffffff"></div>
-          <div class="row"><button id="adImgSave">Save</button><button id="adImgSpawn" class="primary">Save + Spawn</button></div>
+          <div class="addColorRow" id="adImgPadRow" hidden><span>Padding Color</span><input id="adImgPad" type="color" value="#ffffff" aria-label="Padding color"></div>
+          <div class="row"><button id="adImgSave" type="button">Save</button><button id="adImgSpawn" type="button" class="primary">Save + Spawn</button></div>
         </div>
       </div>
     </div>
@@ -421,18 +421,18 @@
           <div class="cardPrev" id="adTxtFrontPrev"></div>
         </div>
         <div class="addCol">
-          <label>--- Enter a Name ---</label>
+          <label for="adTxtName">Enter a Name</label>
           <input id="adTxtName" type="text" placeholder="Name this deck">
-          <label>--- Back Text (Optional) ---</label>
+          <label for="adBackText">Back Text (Optional)</label>
           <input id="adBackText" type="text" placeholder="Text on the card back">
-          <label>--- Back Colors ---</label>
-          <div class="addColorRow"><span>Fill</span><input id="adBackFill" type="color" value="#7d2b2b"><span>Text</span><input id="adBackTextC" type="color" value="#f4f1ea"><span>Accent</span><input id="adBackAccent" type="color" value="#dddddd"></div>
-          <label>--- Front Text(s) ---</label>
+          <label>Back Colors</label>
+          <div class="addColorRow"><span>Fill</span><input id="adBackFill" type="color" value="#7d2b2b" aria-label="Back fill color"><span>Text</span><input id="adBackTextC" type="color" value="#f4f1ea" aria-label="Back text color"><span>Accent</span><input id="adBackAccent" type="color" value="#dddddd" aria-label="Back accent color"></div>
+          <label for="adFaces">Front Text(s)</label>
           <textarea id="adFaces" rows="4" placeholder="One per line, comma-separated, or JSON"></textarea>
-          <div class="addRow"><span class="note" style="margin:0">…or .csv / .txt file</span><input id="adFacesFile" type="file" accept=".csv,.txt,text/csv,text/plain"></div>
-          <label>--- Fronts Colors ---</label>
-          <div class="addColorRow"><span>Fill</span><input id="adFrontFill" type="color" value="#fbfbf7"><span>Text</span><input id="adFrontTextC" type="color" value="#141414"><span>Accent</span><input id="adFrontAccent" type="color" value="#dddddd"></div>
-          <div class="row"><button id="adTxtSave">Save</button><button id="adTxtSpawn" class="primary">Save + Spawn</button></div>
+          <div class="addRow"><span class="note">…or .csv / .txt file</span><input id="adFacesFile" type="file" accept=".csv,.txt,text/csv,text/plain" aria-label="Front text file (.csv or .txt)"></div>
+          <label>Fronts Colors</label>
+          <div class="addColorRow"><span>Fill</span><input id="adFrontFill" type="color" value="#fbfbf7" aria-label="Front fill color"><span>Text</span><input id="adFrontTextC" type="color" value="#141414" aria-label="Front text color"><span>Accent</span><input id="adFrontAccent" type="color" value="#dddddd" aria-label="Front accent color"></div>
+          <div class="row"><button id="adTxtSave" type="button">Save</button><button id="adTxtSpawn" type="button" class="primary">Save + Spawn</button></div>
         </div>
       </div>
     </div>
@@ -443,9 +443,9 @@
           <div class="uploadSq sqBoard"><input id="adBoardGlb" type="file" accept=".glb,model/gltf-binary" hidden><span class="sqLabel">Board model (.glb)</span></div>
         </div>
         <div class="addCol">
-          <label>--- Enter a Name ---</label>
+          <label for="adBoardGlbName">Enter a Name</label>
           <input id="adBoardGlbName" type="text" placeholder="Name this board">
-          <div class="row"><button id="adBoardGlbSave">Save</button><button id="adBoardGlbSpawn" class="primary">Save + Spawn</button></div>
+          <div class="row"><button id="adBoardGlbSave" type="button">Save</button><button id="adBoardGlbSpawn" type="button" class="primary">Save + Spawn</button></div>
         </div>
       </div>
     </div>
@@ -456,13 +456,13 @@
           <div class="uploadSq sqBoard"><input id="adBoardImg" type="file" accept="image/*" hidden><span class="sqLabel">Board image (optional)</span></div>
         </div>
         <div class="addCol">
-          <label>--- Enter a Name ---</label>
+          <label for="adBoardImgName">Enter a Name</label>
           <input id="adBoardImgName" type="text" placeholder="Name this board">
-          <label>--- Size ---</label>
-          <div class="sizeRow"><label>Width:</label><input id="adBoardW" type="number" value="10" min="2" max="40" step="0.5" style="width:80px"></div>
-          <div class="sizeRow"><label>Depth:</label><input id="adBoardD" type="number" value="10" min="2" max="32" step="0.5" style="width:80px"></div>
-          <div class="sizeRow"><label>Lock ratio:</label><input id="adBoardLock" type="checkbox" checked title="Keep Width×Depth matched to the image's proportions so it isn't stretched"></div>
-          <div class="row"><button id="adBoardImgSave">Save</button><button id="adBoardImgSpawn" class="primary">Save + Spawn</button></div>
+          <label>Size</label>
+          <div class="sizeRow"><label for="adBoardW">Width:</label><input id="adBoardW" type="number" value="10" min="2" max="40" step="0.5"></div>
+          <div class="sizeRow"><label for="adBoardD">Depth:</label><input id="adBoardD" type="number" value="10" min="2" max="32" step="0.5"></div>
+          <div class="sizeRow"><label for="adBoardLock">Lock ratio:</label><input id="adBoardLock" type="checkbox" checked title="Keep Width×Depth matched to the image's proportions so it isn't stretched"></div>
+          <div class="row"><button id="adBoardImgSave" type="button">Save</button><button id="adBoardImgSpawn" type="button" class="primary">Save + Spawn</button></div>
         </div>
       </div>
     </div>
@@ -475,28 +475,28 @@
         </div>
         <div class="addCol">
           <h4>Options</h4>
-          <label>--- Enter a Name ---</label>
+          <label for="adObjName">Enter a Name</label>
           <input id="adObjName" type="text" placeholder="Name this object">
-          <label>--- Scale &amp; Collider Shape ---</label>
+          <label>Scale &amp; Collider Shape</label>
           <div class="addRow">
-            <input id="adObjScale" type="number" value="1" min="0.3" max="3" step="0.1" style="width:70px">
+            <input id="adObjScale" type="number" value="1" min="0.3" max="3" step="0.1" aria-label="Object scale">
             <div id="adObjColliders" class="colliderRow">
-              <button class="colliderBtn on" data-collider="box" title="Box"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg></button>
-              <button class="colliderBtn" data-collider="sphere" title="Sphere"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="8.5" ry="3.2"/></svg></button>
-              <button class="colliderBtn" data-collider="cylinder" title="Cylinder"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13M19 5.5v13"/><path d="M5 18.5a7 2.5 0 0 0 14 0"/></svg></button>
-              <button class="colliderBtn" data-collider="cone" title="Cone"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3L5 18.5M12 3l7 15.5"/><path d="M5 18.5a7 2.5 0 0 0 14 0"/></svg></button>
-              <button class="colliderBtn" data-collider="flat" title="Flat / mat"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 9l8 3.5-8 3.5-8-3.5z"/><path d="M4 12.5v1.5l8 3.5 8-3.5v-1.5"/></svg></button>
+              <button type="button" class="colliderBtn on" data-collider="box" title="Box" aria-label="Box collider"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M4 7.5l8 4.5 8-4.5M12 12v9"/></svg></button>
+              <button type="button" class="colliderBtn" data-collider="sphere" title="Sphere" aria-label="Sphere collider"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="8.5"/><ellipse cx="12" cy="12" rx="8.5" ry="3.2"/></svg></button>
+              <button type="button" class="colliderBtn" data-collider="cylinder" title="Cylinder" aria-label="Cylinder collider"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="12" cy="5.5" rx="7" ry="2.5"/><path d="M5 5.5v13M19 5.5v13"/><path d="M5 18.5a7 2.5 0 0 0 14 0"/></svg></button>
+              <button type="button" class="colliderBtn" data-collider="cone" title="Cone" aria-label="Cone collider"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 3L5 18.5M12 3l7 15.5"/><path d="M5 18.5a7 2.5 0 0 0 14 0"/></svg></button>
+              <button type="button" class="colliderBtn" data-collider="flat" title="Flat / mat" aria-label="Flat / mat collider"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M12 9l8 3.5-8 3.5-8-3.5z"/><path d="M4 12.5v1.5l8 3.5 8-3.5v-1.5"/></svg></button>
             </div>
           </div>
           <div class="rotRow">
             <span class="rotLabel">Orientation</span>
-            <button id="adObjStand" class="chip chk">Stands Up</button>
-            <button id="adObjRotX" title="Rotate 90° about X">X</button>
-            <button id="adObjRotY" title="Rotate 90° about Y">Y</button>
-            <button id="adObjRotZ" title="Rotate 90° about Z">Z</button>
-            <button id="adObjRotReset" title="Reset orientation">Reset</button>
+            <button id="adObjStand" type="button" class="chip chk">Stands Up</button>
+            <button id="adObjRotX" type="button" title="Rotate 90° about X">X</button>
+            <button id="adObjRotY" type="button" title="Rotate 90° about Y">Y</button>
+            <button id="adObjRotZ" type="button" title="Rotate 90° about Z">Z</button>
+            <button id="adObjRotReset" type="button" title="Reset orientation">Reset</button>
           </div>
-          <div class="row"><button id="adObjSave">Save</button><button id="adObjSpawn" class="primary">Save + Spawn</button></div>
+          <div class="row"><button id="adObjSave" type="button">Save</button><button id="adObjSpawn" type="button" class="primary">Save + Spawn</button></div>
         </div>
       </div>
     </div>
@@ -505,9 +505,9 @@
         <div class="addCol">
           <h4>Equirectangular (360° panorama)</h4>
           <div class="uploadSq sqWide"><input id="adSkyEq" type="file" accept="image/*" hidden><span class="sqLabel">Panorama image (2:1)</span></div>
-          <label>--- Enter a Name ---</label>
+          <label for="adSkyEqName">Enter a Name</label>
           <input id="adSkyEqName" type="text" placeholder="Name this skybox">
-          <div class="row"><button id="adSkyEqSave">Save</button><button id="adSkyEqApply" class="primary">Save + Apply</button></div>
+          <div class="row"><button id="adSkyEqSave" type="button">Save</button><button id="adSkyEqApply" type="button" class="primary">Save + Apply</button></div>
         </div>
         <div class="addCol">
           <h4>Cubemap (6 faces)</h4>
@@ -520,10 +520,10 @@
             <div class="uploadSq" style="grid-area:bottom"><input id="adSkyNY" type="file" accept="image/*" hidden><span class="sqLabel">Bottom −Y</span></div>
           </div>
           <div>
-            <label>--- Enter a Name ---</label>
+            <label for="adSkyCubeName">Enter a Name</label>
             <input id="adSkyCubeName" type="text" placeholder="Name this skybox">
           </div>
-          <div class="row"><button id="adSkyCubeSave">Save</button><button id="adSkyCubeApply" class="primary">Save + Apply</button></div>
+          <div class="row"><button id="adSkyCubeSave" type="button">Save</button><button id="adSkyCubeApply" type="button" class="primary">Save + Apply</button></div>
         </div>
       </div>
     </div>

@@ -17,6 +17,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Admin console: real (non-nested) top-bar buttons, column headers
   scoped for screen readers, an aria-live status line for storage
   cleanup, and a page heading for structure.
+- Add-to-Library editor modal: inputs now have associated labels /
+  aria-labels, buttons are consistently typed, and the collider-shape
+  controls are screen-reader legible.
 ### Added
 - **Play cards from your hand in 3D.** Dragging a card out of your hand now shows the *real* card
   hovering over the table (replacing the old flat 2D ghost), so you can see exactly where it will

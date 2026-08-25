@@ -20,11 +20,15 @@ export function applyIcons(root = document) {
   });
 }
 
-// Swap an element's state icon in place, preserving its .lbl (or any other content).
+// Swap an element's state icon in place. Clears the old icon and any literal fallback
+// text/glyph (a ✕, a 🔊, …) but preserves a text label (.lbl) if the button has one.
 // Icons sit before the label, matching applyIcons. Idempotent via a cached name.
 export function setIcon(el, name) {
   if (!el || el._icon === name) return; el._icon = name;
-  el.querySelectorAll(':scope > .ico').forEach((s) => s.remove()); // drop the old icon(s); leave the label intact
+  [...el.childNodes].forEach((n) => {
+    if (n.nodeType === 1 && n.classList.contains('lbl')) return; // keep the label element
+    el.removeChild(n);                                           // drop old icon, glyphs, stray text
+  });
   const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'ico ico-' + name); svg.setAttribute('aria-hidden', 'true');
   const use = document.createElementNS(NS, 'use'); use.setAttribute('href', '#i-' + name);
   svg.appendChild(use); el.prepend(svg);

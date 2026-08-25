@@ -53,7 +53,7 @@ const applyShapeToGeom = (geom) => {
 const shapeOfGeom = (geom) => geom && geom.shape === 'hex' ? 'hex' : (geom && geom.round === 0 ? 'square' : 'rounded');
 const byId = (id) => document.getElementById(id);
 const ICON_FOR = { 'Spawn': 'square-rounded-plus', 'Apply': 'checks', 'Set up': 'go-game', 'Edit': 'edit', 'Clone': 'copy', 'Rename': 'cursor-text', 'Delete': 'trash', 'Publish': 'flag-check', 'Unpublish': 'flag-cancel' };
-const btn = (label, fn, cls) => { const button = document.createElement('button'); const ic = ICON_FOR[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
+const btn = (label, fn, cls) => { const button = document.createElement('button'); button.type = 'button'; const ic = ICON_FOR[label]; if (ic) { button.dataset.icon = ic; button.innerHTML = '<span class="lbl">' + label + '</span>'; } else button.textContent = label; if (cls) button.className = cls; button.onclick = fn; return button; };
 // Reveal one tabbed pane at a time, scoped to a modal (so multiple tabbed modals don't collide).
 function wireTabs(root) {
   const tabs = [...root.querySelectorAll('.libTab')];
