@@ -2042,6 +2042,8 @@ body.admin {
 #audioPanel { z-index: 7; }
 #creditsPanel, #tracksPanel { z-index: 8; } /* open on top of the Sound panel, which stays open underneath */
 #nowPlaying, #creditsBody { overflow-wrap: anywhere; }
+#nowPlaying, #tracksLink { margin-top: 6px; }   /* were inline styles */
+#wbAngle { width: 100%; }                        /* whiteboard angle slider — was an inline style */
 .volRow { display: flex; align-items: center; gap: 8px; }
 .volRow input[type=range] { flex: 1; min-width: 0; }
 

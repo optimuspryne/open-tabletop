@@ -2969,6 +2969,48 @@ wirePopGroups();
 applyIcons();
 document.querySelectorAll('.close-x').forEach((el) => setIcon(el, 'x')); // every modal's ✕ → an icon, universally
 document.querySelectorAll('label[data-icon]').forEach((el) => setIcon(el, el.dataset.icon)); // icon-only dimension labels (Width/Depth)
+
+// ---- shared dialog focus management ----------------------------------------------------
+// Layers keyboard/focus behavior onto panels that already toggle via [hidden], WITHOUT
+// touching their bespoke open/close handlers. On open: remember what had focus and move it
+// into the panel (unless the panel already self-focuses a control, e.g. chat/notes). On
+// close: return focus to whatever opened the panel. True modals also get aria-modal + a Tab
+// focus-trap; non-modal popouts don't trap (you can still work at the table while they're open).
+// esc:false leaves Escape to the table's own handler (whiteboard release / exit-measure).
+let lastFocusOutsideDialog = null;
+document.addEventListener('focusin', (e) => { if (!e.target.closest || !e.target.closest('[role="dialog"]')) lastFocusOutsideDialog = e.target; });
+function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
+  if (!panel) return;
+  panel.setAttribute('role', 'dialog');
+  if (modal) panel.setAttribute('aria-modal', 'true');
+  if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
+  const title = panel.querySelector('.panel-head b, h3');
+  if (title && !panel.hasAttribute('aria-label')) panel.setAttribute('aria-label', title.textContent.trim());
+  const focusables = () => [...panel.querySelectorAll('a[href], button, input, textarea, select, [tabindex]')]
+    .filter((n) => !n.disabled && n.tabIndex !== -1 && n.type !== 'hidden' && n.getClientRects().length);
+  let returnTo = null;
+  new MutationObserver(() => {
+    if (panel.hidden) { // closed → restore focus only if the panel had it
+      const r = returnTo; returnTo = null;
+      if (r && r.focus && document.contains(r) && (document.activeElement === document.body || panel.contains(document.activeElement))) r.focus();
+    } else { // opened → remember opener, then move focus in unless the panel self-focused
+      returnTo = (lastFocusOutsideDialog && document.contains(lastFocusOutsideDialog)) ? lastFocusOutsideDialog : document.activeElement;
+      if (!panel.contains(document.activeElement)) { const f = focusables(); (f[0] || panel).focus(); }
+    }
+  }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
+  panel.addEventListener('keydown', (e) => {
+    if (esc && e.key === 'Escape') { const x = close || panel.querySelector('.close-x'); if (x) { e.preventDefault(); e.stopPropagation(); x.click(); } }
+    else if (e.key === 'Tab' && modal) {
+      const f = focusables(); if (!f.length) return; const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  });
+}
+['chat','notes','timer','scorePanel','showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel'].forEach((id) => wireDialog(byId(id)));
+['whiteboard','measurePanel'].forEach((id) => wireDialog(byId(id), { esc: false })); // Esc is theirs (wb release / exit measure)
+wireDialog(byId('settingsModal'), { modal: true });
+wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => {
   const el = byId(id);
