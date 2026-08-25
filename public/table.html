@@ -36,8 +36,7 @@
       <button id="roomMembers" data-icon="users"><span class="lbl">Members</span></button>
       <button id="roomScene" data-icon="movie"><span class="lbl">Scenes</span></button>
       <button id="roomSaveState" data-icon="device-floppy"><span class="lbl">Save Table</span></button>
-      <button id="roomTable" data-icon="brand-airtable"><span class="lbl">Edit Table</span></button>
-      <button id="roomScaleGrid" data-icon="geometry"><span class="lbl">Scale/Grid</span></button>
+      <button id="roomSettings" data-icon="brand-airtable"><span class="lbl">Room Settings</span></button>
       <button id="roomSky" data-icon="sunset-2"><span class="lbl">Skyboxes</span></button>
       <button id="roomReset" class="danger" data-icon="trash"><span class="lbl">Reset</span></button>
     </div>
@@ -309,11 +308,17 @@
   <ul id="memberList"></ul>
 </div>
 
-
-
-<div id="tableModal" class="panel popout" hidden>
-  <div id="tableHead" class="panel-head"><b>Customize Table</b><button type="button" id="tableClose" class="close-x" aria-label="Close">✕</button></div>
-  <div class="tableBody">
+<div id="roomSettingsModal" hidden>
+  <div class="modalCard libraryCard roomSettingsCard">
+    <div class="libSticky">
+      <div class="panel-head"><b>Room Settings</b><button type="button" id="roomSettingsClose" class="close-x" aria-label="Close">✕</button></div>
+      <div class="libTabs">
+        <button class="libTab on" data-tab="table">Table Size &amp; Color</button>
+        <button class="libTab" data-tab="grid">Scale &amp; Grid</button>
+      </div>
+    </div>
+    <div class="libPane" data-pane="table">
+      <div class="tableBody">
   <div class="dimGrid">
     <label for="tableW" data-icon="arrow-autofit-width" title="Width">Width</label><span></span><label for="tableD" data-icon="arrow-autofit-height" title="Depth">Depth</label>
     <input id="tableW" type="number" min="8" max="40" step="1"><span class="dimX">×</span><input id="tableD" type="number" min="6" max="32" step="1">
@@ -324,12 +329,10 @@
       <div class="pop-menu" hidden><div id="feltSwatches" class="swatchRow"></div></div>
     </div>
     <label for="tableFelt">Custom</label><input type="color" id="tableFelt" value="#2f6b4f"></div>
-  </div>
-</div>
-
-<div id="scaleGridPanel" class="panel popout" hidden>
-  <div id="scaleGridHead" class="panel-head"><b>Scale & Grid Settings</b><button type="button" id="scaleGridClose" class="close-x" aria-label="Close">✕</button></div>
-  <div class="tableBody">
+      </div>
+    </div>
+    <div class="libPane" data-pane="grid" hidden>
+      <div class="tableBody">
   <div class="secLabel">Scale / Measurement</div>
   <div class="sizeRow"><label>Unit</label><div id="scaleUnits" class="chipRow">
     <button class="chip" data-unit="in" data-step="0.5">in</button>
@@ -364,6 +367,8 @@
     </div>
     <input type="color" id="gridColor" value="#ffffff"></div>
   <div class="sizeRow" id="gridLiftRow" hidden><label for="gridLift">Height</label><input id="gridLift" type="range" min="0" max="3" step="0.05"></div>
+      </div>
+    </div>
   </div>
 </div>
 

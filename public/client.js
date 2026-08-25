@@ -52,7 +52,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tableModal', 'scaleGridPanel', 'tracksPanel', 'whiteboard', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = ['tracksPanel', 'whiteboard', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -510,10 +510,21 @@ function rebuildGrid() {
   menu('roomBtn', 'roomGrp');
   wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); renderUnclaimed(); });
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
-  wire('roomTable', () => { byId('roomGrp').hidden = true; const tm = byId('tableModal'); tm.hidden = !tm.hidden; if (!tm.hidden) { byId('tableW').value = Math.round(room.state.tableX * 2); byId('tableD').value = Math.round(room.state.tableZ * 2); byId('tableFelt').value = room.state.feltColor || '#2f6b4f'; } });
-  wire('tableClose', () => byId('tableModal').hidden = true);
-  wire('roomScaleGrid', () => { byId('roomGrp').hidden = true; const sg = byId('scaleGridPanel'); sg.hidden = !sg.hidden; if (!sg.hidden) syncScalePanel(); }); // Scale & Grid pop-out
-  wire('scaleGridClose', () => byId('scaleGridPanel').hidden = true);
+  // Room Settings modal (UI_Redesign phase 3): tabbed Table Size & Color + Scale & Grid (Whiteboard + Skybox join in 3b).
+  { const rs = byId('roomSettingsModal');
+    const syncRoomSettings = () => {
+      byId('tableW').value = Math.round(room.state.tableX * 2);
+      byId('tableD').value = Math.round(room.state.tableZ * 2);
+      byId('tableFelt').value = room.state.feltColor || '#2f6b4f';
+      syncScalePanel();
+    };
+    wire('roomSettings', () => { byId('roomGrp').hidden = true; if (rs) { rs.hidden = false; syncRoomSettings(); } });
+    wire('roomSettingsClose', () => { if (rs) rs.hidden = true; });
+    rs?.querySelectorAll('.libTab').forEach((t) => t.onclick = () => {
+      rs.querySelectorAll('.libTab').forEach((x) => x.classList.toggle('on', x === t));
+      rs.querySelectorAll('.libPane').forEach((p) => { p.hidden = p.dataset.pane !== t.dataset.tab; });
+    });
+  }
   { // GM: whiteboard config — a Tools-menu panel that flows below the menu (not a full-screen modal)
     const wbPanel = byId('whiteboard'), wbBtn = byId('wbBtn');
     if (wbPanel && wbBtn) {
@@ -3012,8 +3023,9 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     }
   });
 }
-['showPanel','dropPanel','membersPanel','tableModal','scaleGridPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
+['showPanel','dropPanel','membersPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
 wireDialog(byId('settingsModal'), { modal: true });
+wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
 ['libraryPanel', 'builtinModal', 'skyPickModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
 
