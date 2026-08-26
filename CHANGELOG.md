@@ -38,6 +38,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Extend the same boundary to movement, card/deck, and hand-reassignment message
   modules, containing unexpected physics and room-state exceptions while keeping
   subsequent socket messages operational.
+- Show sanitized Colyseus `serverError` responses to the affected player, with
+  client-side throttling so cascading failures cannot create an alert storm.
 
 ## [0.10.0] — 2026-08-26
 

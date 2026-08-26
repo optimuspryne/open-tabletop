@@ -390,6 +390,13 @@ function rebuildGrid() {
     lastAssetErrorAt = now;
     alert(message || 'The library is temporarily unavailable.');
   });
+  let lastServerErrorAt = 0;
+  room.onMessage('serverError', ({ message } = {}) => {
+    const now = Date.now();
+    if (now - lastServerErrorAt < 5000) return; // a cascading room failure should produce one useful notice, not an alert storm
+    lastServerErrorAt = now;
+    alert(typeof message === 'string' && message ? message : 'The table operation could not be completed. Try again.');
+  });
   room.onMessage('memberList', (list) => { renderMembers(list); updateMembersPulse(list); }); // panel data + pending-pulse
 
   // Library creation/editing is admin-only; hide those controls for everyone else,
