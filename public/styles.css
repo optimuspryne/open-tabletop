@@ -315,6 +315,7 @@ a { color: var(--accent); text-decoration-thickness: 1px; } /* readable links on
 [hidden] { display: none !important; }
 
 /* ===== top-left toolbar ===== */
+.uiRow2 { flex-basis: 100%; display: flex; gap: var(--gap); }  /* Chat + Notes on their own row below the nav */
 #ui {
   position: fixed;
   top: var(--inset);
@@ -446,23 +447,6 @@ button.danger, .btn.danger {
   padding: 1px 5px;
   margin-left: 4px;
 }
-
-/* ===== Tools menu collapse ===== */
-.toolsLabel {
-  cursor: pointer;
-  user-select: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-.toolsChev {
-  font-size: .8em;
-  opacity: .7;
-  transition: transform .15s;
-}
-#toolsMenu.collapsed .toolsChev, #interactMenu.collapsed .toolsChev { transform: rotate(-90deg); }
-#toolsMenu.collapsed button, #interactMenu.collapsed button { display: none; }
 
 /* ===== How to Play modal ===== */
 .modalCard.helpCard {
@@ -2036,18 +2020,6 @@ body.admin {
   gap: var(--gap);
   width: 100%;
 }
-#toolsMenu, #interactMenu {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-  position: fixed;                        /* pop out from the bottom-left hamburgers, regardless of DOM dock */
-  left: var(--inset);
-  bottom: calc(var(--inset) + 52px);      /* just above #hamBar */
-  z-index: 8;
-  max-height: 70vh;
-  overflow-y: auto;
-}
 /* Bottom-left hamburger bar: [🖐️ Interactions] [🔧 Tools]. Emoji-only on touch / narrow screens. */
 #hamBar {
   position: fixed;
@@ -2060,7 +2032,6 @@ body.admin {
   gap: var(--gap);
 }
 .selectTool.edgeRight { position: fixed; right: var(--inset); bottom: var(--inset); z-index: 8; } /* mirrored Select on the right */
-#toolsToggle, #interactToggle { display: none; } /* the hamburgers are the triggers now */
 @media (max-width: 720px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
 
 /* ===== Phone layout: consistent, reactive UI ============================== */
@@ -2075,36 +2046,6 @@ body.admin {
     width: min(340px, 92vw) !important;
     max-height: 85vh; overflow-y: auto; margin: 0 !important;
   }
-}
-.toolsLabel {
-  color: var(--accent);
-  text-align: center;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  font-weight: 600;
-  padding-bottom: 2px;
-}
-#toolsMenu button, #interactMenu button { width: 100%; }
-/* Tools menu is a 2-column button grid (shorter than one tall column). The "Tools"
-   header spans both columns, and JS marks an odd last button `.span2` to fill its
-   row — so a non-GM (no Whiteboard button) gets How-to-Play in that empty slot. */
-#toolsMenu { display: grid; grid-template-columns: 1fr 1fr; align-content: start; }
-#toolsMenu .toolsLabel { grid-column: 1 / -1; }
-#toolsMenu button { text-align: center; }
-#toolsMenu button.span2 { grid-column: 1 / -1; }
-/* the tool/interaction panels flow within their dock, right below the menu (not floating) */
-#toolsDock > #notes,
-#toolsDock > #scorePanel,
-#toolsDock > #timer,
-#toolsDock > #whiteboard,
-#toolsDock > #chat {
-  position: static;
-  inset: auto;
-  transform: none;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 0;
-  max-height: none;
 }
 
 /* ===== sound + credits panels (fixed pop-outs, like Notes/Whiteboard) ===== */

@@ -140,23 +140,9 @@ function initPanels() {
       }).observe(panel);
     }
   }
-  const reset = byId('resetPanelsBtn');
-  if (reset) { reset.hidden = false; reset.onclick = resetPanelLayout; }
 }
 initPanels();
 
-// Tools menu is a 2-column grid: mark the odd last VISIBLE button `.span2` so it fills
-// its row. `!b.hidden` reflects both the GM gate (Whiteboard) and the desktop-only Reset
-// button, so a non-GM cleanly gets How-to-Play in the empty Whiteboard slot. Re-run
-// whenever those visibilities change (applyRole, and here after initPanels).
-function layoutToolsMenu() {
-  const menu = byId('toolsMenu'); if (!menu) return;
-  const btns = [...menu.querySelectorAll('button')];
-  btns.forEach(b => b.classList.remove('span2'));
-  const visible = btns.filter(b => !b.hidden);
-  if (visible.length % 2 === 1) visible[visible.length - 1].classList.add('span2');
-}
-layoutToolsMenu();
 
 // Append one chat message to the log; auto-scroll if the reader's at the bottom,
 // and flag the Tools button as unread when the panel's closed.
@@ -961,12 +947,6 @@ const pickId = () => {
 
 // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
 // see the INPUT intent map at the end of this file.
-// Bottom-left: the Tools ham toggles the (shrinking) Tools menu; Interactions is now a corner cluster (wireCluster below).
-{
-  const tools = byId('toolsMenu');
-  const placeAboveHam = (menu) => { if (!menu || menu.hidden) return; const bar = byId('hamBar'); if (bar) menu.style.bottom = (innerHeight - bar.getBoundingClientRect().top + 8) + 'px'; }; // open above the vertical hamburger stack
-  byId('toolsHam')?.addEventListener('click', () => { if (tools) { tools.hidden = !tools.hidden; placeAboveHam(tools); } });
-}
 { const b = byId('controlsBtn'); if (b) b.onclick = () => { byId('controlsModal').hidden = false; }; } // open How to Play
 { const b = byId('controlsClose'); if (b) b.onclick = () => { byId('controlsModal').hidden = true; }; }
 { const b = byId('leanBtn'); if (b) b.onclick = () => { leanActive = !leanActive; b.classList.toggle('on', leanActive); const t = leanActive ? 'Lean Out' : 'Lean In'; const l = b.querySelector('.lbl'); if (l) l.textContent = t; b.setAttribute('aria-label', t); }; } // toggle the closer-look camera (keep the icon; relabel only)
@@ -1840,7 +1820,6 @@ function applyRole(role) {
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
   gate('measureClearAll', 2);                                  // "Clear all overlays" (Measure panel): GM+
   if (window.OTT_EDITOR) { const mb = byId('membersBtn'); if (mb) mb.hidden = true; } // no member mgmt in the workshop
-  layoutToolsMenu(); // Whiteboard just changed visibility → re-balance the 2-column Tools grid
   applyBoardRole(); // scoreboard (helper+) and notes (gm+) edit affordances
 }
 

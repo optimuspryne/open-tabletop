@@ -28,8 +28,7 @@
 <div id="ui">
   <button id="lobbyBtn" data-icon="home-move"><span class="lbl">Lobby</span></button>
   <button id="settingsBtn" data-icon="settings"><span class="lbl">Settings</span></button>
-  <button id="chatBtn" data-icon="message-dots"><span class="lbl">Chat</span></button>
-  <button id="notesBtn" data-icon="notes"><span class="lbl">Notes</span></button>
+  <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
   <span class="menu">
     <button id="roomBtn" data-icon="user-cog"><span class="lbl">GM Controls</span></button>
     <div class="grp" id="roomGrp" hidden>
@@ -42,6 +41,10 @@
   <button id="lib2Btn" data-icon="books"><span class="lbl">Library</span></button>
   <button id="addBtn" class="admin-only" data-icon="library-plus"><span class="lbl">Add to Library</span></button>
   <button id="sceneSaveBtn" class="admin-only" data-icon="movie"><span class="lbl">Save Scene</span></button>
+  <div class="uiRow2">
+    <button id="chatBtn" data-icon="message-dots"><span class="lbl">Chat</span></button>
+    <button id="notesBtn" data-icon="notes"><span class="lbl">Notes</span></button>
+  </div>
 </div>
 <div id="inspectHint" class="panel" hidden>Drag to rotate · click or Esc to close</div>
 <div id="inspectColorRow" class="panel" hidden>
@@ -143,11 +146,6 @@
   </div>
 </div>
 <div id="toolsDock">
-  <div id="toolsMenu" class="panel" hidden>
-    <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
-    <button id="resetPanelsBtn" data-icon="restore" hidden><span class="lbl">Reset</span></button>
-    <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
-  </div>
   <div id="settingsModal" hidden>
     <div class="modalCard libraryCard">
       <div class="libSticky">
@@ -258,7 +256,6 @@
   <button id="interactHam" data-icon="hand-move"><span class="lbl">Interactions</span></button>
   <button class="selectTool" data-icon="select-all"><span class="lbl">Multi-Select</span></button>
   <button id="roll" data-icon="dice-5"><span class="lbl">Dice Box</span></button>
-  <button id="toolsHam" data-icon="tools"><span class="lbl">Tools</span></button>
 </div>
 <button class="selectTool edgeRight" data-icon="select-all"><span class="lbl">Multi-Select</span></button>
 <div id="leftRail">
