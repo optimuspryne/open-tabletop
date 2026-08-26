@@ -32,7 +32,7 @@ import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { groupIds, groupRecolor, groupRotation } from './server/message-validation.js';
+import { boundedString, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pointPayload, scalePayload, scorePayload, showPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -88,12 +88,6 @@ const GRID_LIFT_MAX = 3; // how high (world units) the table grid can float abov
 // A bounded image data-URL (the only avatar shape we accept — small enough to
 // sync in state, and never an arbitrary URL/script). Used by setAvatar + /me/avatar.
 const isBoundedImageDataURL = (data) => typeof data === 'string' && data.startsWith('data:image') && data.length < 60000;
-// A whiteboard stroke: a flat [x0,y0,x1,y1,...] path in normalized [0,1] board UV,
-// plus a color + width. Bounded so a bad client can't push junk or a huge payload.
-const validStroke = (s) => s && Array.isArray(s.pts) && s.pts.length >= 2 && s.pts.length <= 2000
-  && s.pts.every(n => typeof n === 'number' && n >= 0 && n <= 1)
-  && typeof s.color === 'string' && s.color.length <= 24
-  && typeof s.width === 'number' && isFinite(s.width) && s.width > 0 && s.width <= 0.2;
 // A skybox reference: '' (default), a local equirect URL, or a cube descriptor
 // {"t":"cube","f":[6 local urls]}. Only local /assets/sky/ or /sky/ paths, never
 // external — every client loads it.
@@ -995,23 +989,27 @@ class TableRoom extends Room {
       if (this.rank(client) < RANK.helper || !Array.isArray(ids)) return;
       for (const id of ids) if (this.state.pieces.has(id)) this.removePiece(id);
     });
-    this.onMessage('setName', (client, { name }) => {
+    this.onMessage('setName', (client, message) => {
+      const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 20 })); if (!parsed) return;
       const player = this.state.players.get(client.sessionId);
-      if (player && typeof name === 'string') player.name = name.trim().slice(0, 20) || player.name;
+      if (player) player.name = parsed.name.trim() || player.name;
     });
-    this.onMessage('setAvatar', (client, { data }) => {
+    this.onMessage('setAvatar', (client, message) => {
+      const parsed = oneField(message, 'data', (data) => isBoundedImageDataURL(data) ? data : null); if (!parsed) return;
       const player = this.state.players.get(client.sessionId);
-      if (player && isBoundedImageDataURL(data)) {
-        player.avatar = data;
+      if (player) {
+        player.avatar = parsed.data;
         // Persist to the account so it follows the user across sessions and rooms.
-        if (client.auth && client.auth.userId) db.setUserAvatar(client.auth.userId, data).catch(e => console.error('[setAvatar]', e.message));
+        if (client.auth && client.auth.userId) db.setUserAvatar(client.auth.userId, parsed.data).catch(e => console.error('[setAvatar]', e.message));
       }
     });
-    this.onMessage('notebook', (client, { text }) => {
+    this.onMessage('notebook', (client, message) => {
+      const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 4000 })); if (!parsed) return;
       // Private per-player notes: never synced, just held so they survive a reconnect.
-      if (typeof text === 'string') this.notebooks.set(client.sessionId, text.slice(0, 4000));
+      this.notebooks.set(client.sessionId, parsed.text);
     });
-    this.onMessage('timer', (client, msg = {}) => {
+    this.onMessage('timer', (client, message) => {
+      const msg = timerPayload(message); if (!msg) return;
       const t = this.state.timer, now = Date.now();
       if (t.running) { t.base = timerLive(t, now); t.running = false; t.since = 0; } // freeze at the live value first
       if (msg.action === 'start') { t.since = now; t.running = true; }
@@ -1026,20 +1024,21 @@ class TableRoom extends Room {
 
     // Durable scoreboard (helper+): add / remove / rename / adjust / set / clear.
     // Its own clear action — the table Reset deliberately leaves it alone.
-    this.onMessage('score', (client, msg = {}) => {
+    this.onMessage('score', (client, message) => {
       if (this.rank(client) < RANK.helper) return;
+      const msg = scorePayload(message); if (!msg) return;
       const s = this.state.scores;
       if (msg.action === 'add') {
         if (s.size >= 50) return; // cap the scoreboard so it can't be spammed unbounded
-        s.set('s' + (this.nextScoreId++), new ScoreRow(String(msg.label || 'Player').slice(0, 40), 0));
+        s.set('s' + (this.nextScoreId++), new ScoreRow(msg.label, 0));
       } else if (msg.action === 'remove') {
-        s.delete(String(msg.id));
+        s.delete(msg.id);
       } else if (msg.action === 'label') {
-        const row = s.get(String(msg.id)); if (row) row.label = String(msg.label || '').slice(0, 40);
+        const row = s.get(msg.id); if (row) row.label = msg.label;
       } else if (msg.action === 'adjust') {
-        const row = s.get(String(msg.id)); if (row && isFinite(msg.delta)) row.score = clamp(row.score + Math.trunc(msg.delta), -1e9, 1e9);
+        const row = s.get(msg.id); if (row) row.score = clamp(row.score + msg.delta, -1e9, 1e9);
       } else if (msg.action === 'set') {
-        const row = s.get(String(msg.id)); if (row && isFinite(msg.score)) row.score = clamp(Math.trunc(msg.score), -1e9, 1e9);
+        const row = s.get(msg.id); if (row) row.score = msg.score;
       } else if (msg.action === 'clear') {
         s.clear();
       } else return;
@@ -1048,57 +1047,37 @@ class TableRoom extends Room {
 
     // Durable room notes (GM only): the shared free-text field. GM-only editing
     // sidesteps concurrent-edit merges (effectively one writer).
-    this.onMessage('roomNotes', (client, { text } = {}) => {
-      if (this.rank(client) < RANK.gm || typeof text !== 'string') return;
-      this.state.notes = text.slice(0, 8000);
+    this.onMessage('roomNotes', (client, message) => {
+      if (this.rank(client) < RANK.gm) return;
+      const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 8000 })); if (!parsed) return;
+      this.state.notes = parsed.text;
       this.scheduleSave();
     });
 
     // Resize the play surface (GM+): rebuild the physics bounds + sync the new
     // size so clients rebuild the felt. Durable; the out-of-bounds net nudges any
     // now-outside pieces back in on the next tick.
-    this.onMessage('table', (client, msg = {}) => {
+    this.onMessage('table', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
-      const hx = clamp(+msg.x, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
-      const hz = clamp(+msg.z, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
-      if (!isFinite(hx) || !isFinite(hz)) return;
+      const parsed = tablePayload(message, TABLE_LIMIT); if (!parsed) return;
+      const { x: hx, z: hz } = parsed;
       this.state.tableX = hx; this.state.tableZ = hz;
       this.buildBounds(hx, hz);
       this.scheduleSave();
     });
-    this.onMessage('tableColor', (client, msg = {}) => {
+    this.onMessage('tableColor', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
-      const c = String(msg.color || '');
-      if (!/^#[0-9a-f]{6}$/i.test(c)) return;
-      this.state.feltColor = c;
+      const parsed = oneField(message, 'color', hexColor); if (!parsed) return;
+      this.state.feltColor = parsed.color;
       this.scheduleSave();
     });
     // Per-room measurement scale (GM+, durable). A display/snap layer only — it never
     // touches physics or piece sizes. Partial: only provided, valid fields change.
-    this.onMessage('scaleSet', (client, msg = {}) => {
+    this.onMessage('scaleSet', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
+      const msg = scalePayload(message, { gridLiftMax: GRID_LIFT_MAX }); if (!msg) return;
       const sc = this.state.scale;
-      if (msg.worldPerUnit !== undefined && Number.isFinite(+msg.worldPerUnit) && +msg.worldPerUnit > 0)
-        sc.worldPerUnit = clamp(+msg.worldPerUnit, 1e-3, 1e3);
-      if (typeof msg.unitLabel === 'string')
-        sc.unitLabel = msg.unitLabel.replace(/[\x00-\x1f]/g, '').trim().slice(0, 8);
-      if (msg.roundStep !== undefined && Number.isFinite(+msg.roundStep) && +msg.roundStep > 0)
-        sc.roundStep = clamp(+msg.roundStep, 1e-3, 1e2);
-      if (msg.cellWorld !== undefined && Number.isFinite(+msg.cellWorld) && +msg.cellWorld >= 0)
-        sc.cellWorld = clamp(+msg.cellWorld, 0, 1e3);           // cell width (X spacing)
-      if (msg.cellZ !== undefined && Number.isFinite(+msg.cellZ) && +msg.cellZ >= 0)
-        sc.cellZ = clamp(+msg.cellZ, 0, 1e3);                   // cell depth (Z spacing); 0 = square (= cellWorld)
-      if (msg.gridX !== undefined && Number.isFinite(+msg.gridX)) sc.gridX = clamp(+msg.gridX, -1e3, 1e3); // lattice offset X
-      if (msg.gridZ !== undefined && Number.isFinite(+msg.gridZ)) sc.gridZ = clamp(+msg.gridZ, -1e3, 1e3); // lattice offset Z
-      if (msg.gridStyle === 'square' || msg.gridStyle === 'hex' || msg.gridStyle === 'off')
-        sc.gridStyle = msg.gridStyle;
-      if (typeof msg.gridHidden === 'boolean') sc.gridHidden = msg.gridHidden; // grid still snaps, just isn't drawn
-      if (typeof msg.gridColor === 'string' && /^#[0-9a-f]{6}$/i.test(msg.gridColor))
-        sc.gridColor = msg.gridColor;                            // grid line colour (reads on any felt)
-      if (msg.gridLift !== undefined && Number.isFinite(+msg.gridLift))
-        sc.gridLift = clamp(+msg.gridLift, 0, GRID_LIFT_MAX);    // grid height above the felt
-      if (msg.snapAnchor === 'center' || msg.snapAnchor === 'cross')
-        sc.snapAnchor = msg.snapAnchor;                          // snap to cell centres or line crossings
+      for (const [key, value] of Object.entries(msg)) sc[key] = value;
       this.scheduleSave();
     });
 
@@ -1106,8 +1085,9 @@ class TableRoom extends Room {
     // square style, and the board's snap anchor (chess → cell centres, go → crossings).
     // Boards spawn centred at the origin where the grid is anchored, so no offset needed;
     // the GM can nudge the cell size afterward to account for any border in the model.
-    this.onMessage('calibrateGrid', (client, msg = {}) => {
+    this.onMessage('calibrateGrid', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
+      const msg = gridCalibrationPayload(message); if (!msg) return;
       this.calibrateGrid(msg);
     });
 
@@ -1115,9 +1095,8 @@ class TableRoom extends Room {
     // Public geometry. They ride the scene snapshot (see serializeScene), so a saved
     // or auto-saved table restores them. Any seated player adds/removes their own;
     // a GM removes any. Capped per-room and per-player so the map can't be spammed.
-    const clampCoord = (v) => clamp(+v || 0, -MEASURE.maxLen, MEASURE.maxLen);
-    this.onMessage('overlayAdd', (client, msg = {}) => {
-      if (!OVERLAY_KINDS.has(msg.kind)) return;
+    this.onMessage('overlayAdd', (client, message) => {
+      const msg = overlayGeometry(message, { kinds: OVERLAY_KINDS, maxLen: MEASURE.maxLen, requireKind: true }); if (!msg) return;
       if (this.state.overlays.size >= OVERLAY_MAX) return;       // room total cap
       let mine = 0;
       this.state.overlays.forEach(o => { if (o.owner === client.sessionId) mine++; });
@@ -1127,28 +1106,26 @@ class TableRoom extends Room {
       o.kind = msg.kind;
       o.owner = client.sessionId;
       o.color = (player && player.color) || '#ffffff';
-      o.x = clampCoord(msg.x); o.z = clampCoord(msg.z);
-      o.x2 = clampCoord(msg.x2); o.z2 = clampCoord(msg.z2);
-      o.w = clamp(+msg.w || 0, 0, MEASURE.maxLen);
-      o.ang = +msg.ang || 0;
+      o.x = msg.x; o.z = msg.z;
+      o.x2 = msg.x2; o.z2 = msg.z2;
+      o.w = msg.w || 0;
+      o.ang = msg.ang || 0;
       this.state.overlays.set('o' + (this.nextOverlayId++), o);
     });
-    this.onMessage('overlayMove', (client, msg = {}) => {       // reposition (owner or GM) — used from Step 4+
-      const o = this.state.overlays.get(String(msg.id));
+    this.onMessage('overlayMove', (client, message) => {       // reposition (owner or GM) — used from Step 4+
+      const msg = overlayMovePayload(message, { maxLen: MEASURE.maxLen }); if (!msg) return;
+      const o = this.state.overlays.get(msg.id);
       if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
-      if (msg.x !== undefined) o.x = clampCoord(msg.x);
-      if (msg.z !== undefined) o.z = clampCoord(msg.z);
-      if (msg.x2 !== undefined) o.x2 = clampCoord(msg.x2);
-      if (msg.z2 !== undefined) o.z2 = clampCoord(msg.z2);
-      if (msg.w !== undefined) o.w = clamp(+msg.w || 0, 0, MEASURE.maxLen);
-      if (msg.ang !== undefined) o.ang = +msg.ang || 0;
+      for (const key of ['x', 'z', 'x2', 'z2', 'w', 'ang']) if (msg[key] !== undefined) o[key] = msg[key];
     });
-    this.onMessage('overlayRemove', (client, msg = {}) => {     // delete one (owner or GM)
-      const o = this.state.overlays.get(String(msg.id));
+    this.onMessage('overlayRemove', (client, message) => {     // delete one (owner or GM)
+      const msg = overlayIdPayload(message); if (!msg) return;
+      const o = this.state.overlays.get(msg.id);
       if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
-      this.state.overlays.delete(String(msg.id));
+      this.state.overlays.delete(msg.id);
     });
-    this.onMessage('overlayClear', (client, msg = {}) => {     // scope 'all' (GM only) wipes every overlay; anything else clears just your own
+    this.onMessage('overlayClear', (client, message) => {     // scope 'all' (GM only) wipes every overlay; anything else clears just your own
+      const msg = oneField(message, 'scope', (scope) => ['all', 'mine'].includes(scope) ? scope : null); if (!msg) return;
       const all = msg.scope === 'all' && this.rank(client) >= RANK.gm, del = [];
       this.state.overlays.forEach((o, id) => { if (all || o.owner === client.sessionId) del.push(id); });
       for (const id of del) this.state.overlays.delete(id);
@@ -1156,27 +1133,32 @@ class TableRoom extends Room {
     // Live measurement preview: a transient relay (NOT synced state), so everyone
     // sees a ruler/template as it's dragged out. A missing/invalid kind means the
     // drag ended — clear the sender's preview. Stamps the sender's id + seat color.
-    this.onMessage('overlayDrag', (client, msg = {}) => {
+    this.onMessage('overlayDrag', (client, message) => {
+      const msg = overlayGeometry(message, { kinds: OVERLAY_KINDS, maxLen: MEASURE.maxLen, allowEmpty: true, requireKind: Object.keys(message || {}).length > 0 }); if (!msg) return;
       const player = this.state.players.get(client.sessionId);
       const color = (player && player.color) || '#ffffff';
-      const kind = OVERLAY_KINDS.has(msg.kind) ? msg.kind : null;
+      const kind = msg.kind;
       const out = kind
-        ? { from: client.sessionId, kind, color, x: clampCoord(msg.x), z: clampCoord(msg.z), x2: clampCoord(msg.x2), z2: clampCoord(msg.z2), w: clamp(+msg.w || 0, 0, MEASURE.maxLen), ang: +msg.ang || 0 }
+        ? { from: client.sessionId, kind, color, x: msg.x, z: msg.z, x2: msg.x2, z2: msg.z2, w: msg.w || 0, ang: msg.ang || 0 }
         : { from: client.sessionId, kind: null };
       this.broadcast('overlayDrag', out, { except: client });
     });
 
     // --- Whiteboard: a synced singleton on a track behind the players ----------
-    this.onMessage('wbEnable', (client, { on } = {}) => {
+    this.onMessage('wbEnable', (client, message) => {
       if (this.rank(client) < RANK.gm) return;             // spawn/enable is GM+
-      this.state.whiteboard.enabled = !!on;
-      if (!on) { this.strokes = []; this.state.whiteboard.owner = ''; this.broadcast('wbClear'); }
+      const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null); if (!parsed) return;
+      this.state.whiteboard.enabled = parsed.on;
+      if (!parsed.on) { this.strokes = []; this.state.whiteboard.owner = ''; this.broadcast('wbClear'); }
     });
-    this.onMessage('wbSet', (client, msg = {}) => {         // slide on the track / flip dark<->light (GM+)
+    this.onMessage('wbSet', (client, message) => {         // slide on the track / flip dark<->light (GM+)
       if (this.rank(client) < RANK.gm) return;
+      const angleMsg = oneField(message, 'angle', (angle) => finiteNumber(angle, { min: -TWO_PI, max: TWO_PI }));
+      const darkMsg = oneField(message, 'dark', (dark) => typeof dark === 'boolean' ? dark : null);
+      const msg = angleMsg || darkMsg; if (!msg) return;
       const wb = this.state.whiteboard;
-      if (isFinite(msg.angle)) wb.angle = ((msg.angle % TWO_PI) + TWO_PI) % TWO_PI;
-      if (typeof msg.dark === 'boolean') wb.dark = msg.dark;
+      if (msg.angle !== undefined) wb.angle = ((msg.angle % TWO_PI) + TWO_PI) % TWO_PI;
+      if (msg.dark !== undefined) wb.dark = msg.dark;
     });
     this.onMessage('wbClaim', (client) => {                 // double-click to own it (must be enabled + free)
       const wb = this.state.whiteboard;
@@ -1186,9 +1168,10 @@ class TableRoom extends Room {
       const wb = this.state.whiteboard;
       if (wb.owner === client.sessionId) wb.owner = '';
     });
-    this.onMessage('wbStroke', (client, stroke) => {        // owner draws; everyone else replays it
-      if (this.state.whiteboard.owner !== client.sessionId || !validStroke(stroke)) return;
-      stroke.sid = client.sessionId;                        // tag the drawer so their own echo is ignored client-side
+    this.onMessage('wbStroke', (client, message) => {        // owner draws; everyone else replays it
+      if (this.state.whiteboard.owner !== client.sessionId) return;
+      const parsed = whiteboardStroke(message); if (!parsed) return;
+      const stroke = { ...parsed, sid: client.sessionId };  // tag the drawer so their own echo is ignored client-side
       this.strokes.push(stroke);
       if (this.strokes.length > WHITEBOARD_MAX_STROKES) this.strokes.shift();
       this.broadcast('wbStroke', stroke);                   // to everyone (matches ping/wbClear, which deliver reliably)
@@ -1202,16 +1185,18 @@ class TableRoom extends Room {
 
     // --- Dice trays: one PERSONAL physics box per seat, on the track behind that player -----
     // No rank gate — a player toggles only their OWN tray. Putting it away clears its dice too.
-    this.onMessage('trayShow', (client, { on } = {}) => {
+    this.onMessage('trayShow', (client, message) => {
+      const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null); if (!parsed) return;
       const seat = this.seatOf(client); if (seat == null) return;
-      if (on) this.state.trays.set(String(seat), true);
+      if (parsed.on) this.state.trays.set(String(seat), true);
       else { this.state.trays.delete(String(seat)); this.clearTraySeat(seat); }
       this.buildTrays();
     });
 
     // Public text chat — broadcast to the room, keep a small rolling history for late joiners.
-    this.onMessage('chat', (client, { text } = {}) => {
-      const t = String(text || '').replace(/\s+/g, ' ').trim().slice(0, 400);
+    this.onMessage('chat', (client, message) => {
+      const parsed = oneField(message, 'text', (text) => boundedString(text, { min: 1, max: 2000 })); if (!parsed) return;
+      const t = parsed.text.replace(/\s+/g, ' ').trim().slice(0, 400);
       if (!t) return;
       const player = this.state.players.get(client.sessionId);
       const msg = { from: (player && player.name) || 'Player', text: t, ts: Date.now() };
@@ -1222,11 +1207,10 @@ class TableRoom extends Room {
     this.onMessage('chatLog', (client) => client.send('chatLog', { log: this.chatLog })); // late-join replay
 
     // --- Skybox: per-room panorama, GM-applied + synced; library is admin-only ---
-    this.onMessage('skybox', (client, { url } = {}) => {
+    this.onMessage('skybox', (client, message) => {
       if (this.rank(client) < RANK.gm) return;             // changing the room's skybox is GM+
-      const u = url == null ? '' : String(url);
-      if (!validSky(u)) return;
-      this.state.skybox = u;
+      const parsed = oneField(message, 'url', (url) => typeof url === 'string' && validSky(url) ? url : null); if (!parsed) return;
+      this.state.skybox = parsed.url;
       this.scheduleSave();                                 // durable, like the board/table
     });
     this.onMessage('listSkyboxes', (client) => this.sendAssetList(client, 'sky'));
@@ -1253,7 +1237,9 @@ class TableRoom extends Room {
     // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
     // to the chosen audience. Content goes out privately (like a hand); everyone
     // else just sees the public 'showing' count as a badge. Released → showStop.
-    this.onMessage('showStart', (client, { to, hids } = {}) => {
+    this.onMessage('showStart', (client, message) => {
+      const parsed = showPayload(message); if (!parsed) return;
+      const { to, hids } = parsed;
       const sid = client.sessionId;
       const hand = this.hands.get(sid) || [];
       if (!hand.length) return;
@@ -1277,11 +1263,11 @@ class TableRoom extends Room {
       }
     });
     this.onMessage('showStop', (client) => this.stopShow(client.sessionId));
-    this.onMessage('ping', (client, { x, z } = {}) => {
+    this.onMessage('ping', (client, message) => {
       // A transient "look here" marker. Public by nature, so just clamp to the
       // table and broadcast to everyone (the sender sees their own ping too).
-      if (!isFinite(x) || !isFinite(z)) return;
-      this.broadcast('ping', { sid: client.sessionId, x: clamp(x, -this.state.tableX, this.state.tableX), z: clamp(z, -this.state.tableZ, this.state.tableZ) });
+      const point = pointPayload(message); if (!point) return;
+      this.broadcast('ping', { sid: client.sessionId, x: clamp(point.x, -this.state.tableX, this.state.tableX), z: clamp(point.z, -this.state.tableZ, this.state.tableZ) });
     });
 
     this.setSimulationInterval((dt) => this.update(dt), 1000 / 60); // fixed 60Hz sim

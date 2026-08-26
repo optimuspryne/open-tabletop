@@ -1368,7 +1368,7 @@ input[type="range"]::-moz-range-thumb {
 .modalCard.lib2Card { background: rgba(28,33,39,.70); backdrop-filter: blur(4px); }
 
 /* Room Info dock: Room Notes section (UI_Redesign phase 4a) */
-.dockLabel { font-size: var(--fs-base); color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
+.dockLabel { font-size: var(--fs-sm-base); color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
 
 /* Room Info dock: Members section (UI_Redesign phase 4b) */
 #memberSection { display: flex; flex-direction: column; gap: 4px; }

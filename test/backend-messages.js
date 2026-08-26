@@ -1,6 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { boundedString, boundedUniqueIds, finiteNumber, finitePosition, groupIds, groupRecolor, groupRotation, isPlainObject } from '../server/message-validation.js';
+import {
+  boundedString, boundedUniqueIds, finiteNumber, finitePosition, groupIds,
+  gridCalibrationPayload, groupRecolor, groupRotation, isPlainObject, overlayGeometry,
+  overlayMovePayload, scalePayload, scorePayload, showPayload, tablePayload,
+  timerPayload, whiteboardStroke,
+} from '../server/message-validation.js';
 import { takeTopCard } from '../server/deck-state.js';
 
 test('movement accepts finite numeric coordinates without coercion', () => {
@@ -52,6 +57,62 @@ test('group recolor accepts integer colors or a team, never mixed inputs', () =>
     { ids: ['1'], color: 0x1000000 }, { ids: ['1'], team: true },
     { ids: ['1'], team: 1, color: 0 },
   ]) assert.equal(groupRecolor(message), null);
+});
+
+test('timer and scoreboard actions require exact bounded payloads', () => {
+  assert.deepEqual(timerPayload({ action: 'pause' }), { action: 'pause' });
+  assert.deepEqual(timerPayload({ action: 'set', mode: 'down', duration: 60000 }),
+    { action: 'set', mode: 'down', duration: 60000 });
+  assert.equal(timerPayload({ action: 'set', mode: 'down', duration: '60000' }), null);
+  assert.equal(timerPayload({ action: 'start', duration: 1 }), null);
+  assert.deepEqual(scorePayload({ action: 'adjust', id: 's12', delta: -2.8 }),
+    { action: 'adjust', id: 's12', delta: -2 });
+  assert.equal(scorePayload({ action: 'remove', id: 12 }), null);
+  assert.equal(scorePayload({ action: 'add', label: 'x'.repeat(41) }), null);
+});
+
+test('table and scale settings reject coercion and invalid partial updates', () => {
+  const limits = { minX: 4, maxX: 20, minZ: 3, maxZ: 20 };
+  assert.deepEqual(tablePayload({ x: 10, z: 7 }, limits), { x: 10, z: 7 });
+  assert.equal(tablePayload({ x: '10', z: 7 }, limits), null);
+  assert.equal(tablePayload({ x: 30, z: 7 }, limits), null);
+  assert.deepEqual(scalePayload({ gridStyle: 'square', cellWorld: 2, gridHidden: false }),
+    { gridStyle: 'square', cellWorld: 2, gridHidden: false });
+  assert.equal(scalePayload({ gridStyle: 'triangle' }), null);
+  assert.equal(scalePayload({ gridX: Infinity }), null);
+  assert.equal(scalePayload({ unknown: 1 }), null);
+});
+
+test('overlay geometry is finite, bounded, and structurally complete', () => {
+  const options = { kinds: new Set(['line', 'ruler']), maxLen: 100, requireKind: true };
+  assert.deepEqual(overlayGeometry({ kind: 'line', x: 0, z: 1, x2: 2, z2: 3, w: 1 }, options),
+    { kind: 'line', x: 0, z: 1, x2: 2, z2: 3, w: 1 });
+  assert.equal(overlayGeometry({ kind: 'line', x: 0, z: 1, x2: Infinity, z2: 3 }, options), null);
+  assert.equal(overlayGeometry({ kind: 'unknown', x: 0, z: 1, x2: 2, z2: 3 }, options), null);
+  assert.deepEqual(overlayMovePayload({ id: 'o2', x: 4 }, { maxLen: 100 }), { id: 'o2', x: 4 });
+  assert.equal(overlayMovePayload({ id: 'o2', x: '4' }, { maxLen: 100 }), null);
+});
+
+test('whiteboard strokes are copied and reject malformed or oversized paths', () => {
+  const raw = { pts: [0, 0.5, 1, 1], color: '#ffffff', width: 0.02 };
+  const parsed = whiteboardStroke(raw);
+  assert.deepEqual(parsed, raw);
+  assert.notEqual(parsed.pts, raw.pts);
+  assert.equal(whiteboardStroke({ ...raw, pts: [0, 0.5, 1] }), null);
+  assert.equal(whiteboardStroke({ ...raw, pts: [0, Infinity] }), null);
+  assert.equal(whiteboardStroke({ ...raw, pts: Array(2002).fill(0) }), null);
+  assert.equal(whiteboardStroke({ ...raw, sid: 'forged' }), null);
+});
+
+test('grid calibration and hand sharing use bounded enums and unique identifiers', () => {
+  assert.deepEqual(gridCalibrationPayload({}), {});
+  assert.deepEqual(gridCalibrationPayload({ cells: 19, anchor: 'cross' }), { cells: 19, anchor: 'cross' });
+  assert.equal(gridCalibrationPayload({ cells: '19', anchor: 'cross' }), null);
+  assert.equal(gridCalibrationPayload({ cells: 19, anchor: 'edge' }), null);
+  assert.deepEqual(showPayload({ to: ['session-2'], hids: ['h1', 'h2'] }),
+    { to: ['session-2'], hids: ['h1', 'h2'] });
+  assert.equal(showPayload({ to: ['session-2', 'session-2'], hids: ['h1'] }), null);
+  assert.equal(showPayload({ to: 'all', hids: [1] }), null);
 });
 
 test('drawing mutates deck count and returns cards in stack order', () => {
