@@ -326,7 +326,7 @@ function renderList(kind, list) {
 
 // client.js fans the three list messages here (and still renders the modal saved-lists).
 const listCache = {};
-window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); if (kind === 'sky') { const m = byId('skyPickModal'); if (m && !m.hidden) renderSkyPick(); } };
+window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); };
 window.onLibraryAdmin = () => { for (const k in listCache) renderList(k, listCache[k]); }; // admin status arrived → re-render
 
 // ---- built-in library (read-only: spawn the bundled pieces) ----------------
@@ -425,25 +425,6 @@ function renderBuiltin() {
 }
 
 // Room Controls → Skybox: a two-tab picker (built-in + custom), apply to the room.
-function renderSkyPick() {
-  const bi = byId('skyPickBuiltin');
-  if (bi) {
-    bi.replaceChildren();
-    bi.append(builtinCard(previewBox('empty'), 'Default (none)', 'Apply', () => ROOM.send('skybox', { url: '' })));
-    for (const s of (window.OTT_BUILTIN_SKIES || [])) {
-      const ref = skyRef(s);
-      const box = previewBox(); box.append(thumbImg(s.faces ? s.faces[0] : s.url));
-      bi.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
-    }
-  }
-  const cu = byId('skyPickCustom');
-  if (cu) {
-    cu.replaceChildren();
-    const list = listCache.sky || [];
-    if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet — add one from the editor.'; cu.appendChild(li); return; }
-    for (const it of list) cu.append(builtinCard(previewEl('sky', it), it.name, 'Apply', () => ROOM.send('skybox', { url: it.url })));
-  }
-}
 
 // ---- Add-to-Library: deck tab ----------------------------------------------
 const parseFaces = (raw) => {
@@ -808,14 +789,6 @@ window.onOttRoom = (room) => {
     byId('builtinClose').onclick = () => { builtin.hidden = true; };
     wireTabs(builtin);
     wireControls(builtin);
-  }
-  // Room Controls → Skybox: two-tab apply-picker (both pages).
-  const skyPick = byId('skyPickModal');
-  if (skyPick) {
-    const rs = byId('roomSky');
-    if (rs) rs.onclick = () => { const rg = byId('roomGrp'); if (rg) rg.hidden = true; skyPick.hidden = false; renderSkyPick(); room.send('listSkyboxes'); };
-    byId('skyPickClose').onclick = () => { skyPick.hidden = true; };
-    wireTabs(skyPick);
   }
   // Add-to-Library builder — editor only (absent on the table).
   const addModal = byId('addModal');

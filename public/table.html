@@ -37,7 +37,6 @@
       <button id="roomScene" data-icon="movie"><span class="lbl">Scenes</span></button>
       <button id="roomSaveState" data-icon="device-floppy"><span class="lbl">Save Table</span></button>
       <button id="roomSettings" data-icon="brand-airtable"><span class="lbl">Room Settings</span></button>
-      <button id="roomSky" data-icon="sunset-2"><span class="lbl">Skyboxes</span></button>
       <button id="roomReset" class="danger" data-icon="trash"><span class="lbl">Reset</span></button>
     </div>
   </span>
@@ -370,19 +369,6 @@
         <input id="wbAngle" type="range" min="0" max="360" step="5" value="0">
       </div>
     </div>
-  </div>
-</div>
-
-<div id="skyPickModal" hidden>
-  <div class="modalCard libraryCard">
-    <div id="skyPickHead" class="panel-head"><b>Skybox</b><button type="button" id="skyPickClose" class="close-x" aria-label="Close">✕</button></div>
-    <p class="libHint">Set the room's backdrop — applies for everyone at the table.</p>
-    <div class="libTabs">
-      <button class="libTab on" data-tab="builtin">Built-In</button>
-      <button class="libTab" data-tab="custom">Custom</button>
-    </div>
-    <div class="libPane" data-pane="builtin"><ul id="skyPickBuiltin" class="libList"></ul></div>
-    <div class="libPane" data-pane="custom" hidden><ul id="skyPickCustom" class="libList"></ul></div>
   </div>
 </div>
 
