@@ -32,6 +32,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Add a Colyseus message error boundary and apply it to asynchronous library
   handlers. Synchronous throws and promise rejections now receive structured safe
   logging plus a sanitized client error without disabling later room messages.
+- Apply the Colyseus boundary to asynchronous membership operations and await
+  member-list and lobby refreshes, so their failures are reported without becoming
+  unhandled rejections or disabling later room messages.
 
 ## [0.10.0] — 2026-08-26
 

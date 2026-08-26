@@ -31,11 +31,14 @@ function harness() {
     clientBy(sessionId) { return this.clients.find((client) => client.sessionId === sessionId); },
     sendHand(client) { calls.push(['sendHand', client.sessionId]); },
   };
-  registerMemberHandlers(room, { db });
-  return { room, handlers, calls, memberships, users };
+  registerMemberHandlers(room, { db, logger: { error() {} } });
+  return { room, handlers, calls, memberships, users, db };
 }
 
-const actor = (role, userId = '1') => ({ sessionId: `session-${userId}`, auth: { role, userId } });
+const actor = (role, userId = '1') => ({
+  sessionId: `session-${userId}`, auth: { role, userId }, sent: [],
+  send(type, payload) { this.sent.push({ type, payload }); },
+});
 
 test('member handler module registers its complete message family', () => {
   assert.deepEqual([...harness().handlers.keys()], ['members', 'admit', 'kick', 'setRole', 'reassignHand']);
@@ -120,4 +123,18 @@ test('malformed membership messages fail closed', async () => {
   await handlers.get('setRole')(owner, { userId: '2', role: 'owner' });
   handlers.get('reassignHand')(owner, { userId: '2', toSessionId: '' });
   assert.deepEqual(calls, []);
+});
+
+test('database rejection is contained and reported without disabling later member messages', async () => {
+  const { handlers, db, calls } = harness();
+  const owner = actor('owner');
+  const original = db.admitMember;
+  db.admitMember = async () => { throw new Error('database offline'); };
+  await handlers.get('admit')(owner, { userId: '2' });
+  assert.deepEqual(owner.sent, [{
+    type: 'serverError', payload: { operation: 'admit', message: 'Member operation unavailable. Try again.' },
+  }]);
+  db.admitMember = original;
+  await handlers.get('admit')(owner, { userId: '2' });
+  assert.equal(calls.some((call) => call[0] === 'admitMember'), true);
 });

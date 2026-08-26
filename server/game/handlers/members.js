@@ -1,24 +1,29 @@
 import { RANK } from '../../permissions.js';
 import { handReassignmentPayload, memberRolePayload, memberUserPayload } from '../../message-validation.js';
+import { safeMessage } from '../safe-message.js';
 
 // Database-backed room membership controls. Client-side visibility is only a
 // convenience; every mutation is independently authorized here.
-export function registerMemberHandlers(room, { db }) {
-  room.onMessage('members', (client) => {
-    if (room.rank(client) < RANK.gm) return;
-    room.sendMembers(client);
+export function registerMemberHandlers(room, { db, logger = console }) {
+  const memberMessage = (type, handler) => safeMessage(room, type, handler, {
+    logger, publicMessage: 'Member operation unavailable. Try again.',
   });
 
-  room.onMessage('admit', async (client, message) => {
+  memberMessage('members', async (client) => {
+    if (room.rank(client) < RANK.gm) return;
+    await room.sendMembers(client);
+  });
+
+  memberMessage('admit', async (client, message) => {
     if (room.rank(client) < RANK.gm || !room.roomId) return;
     const parsed = memberUserPayload(message); if (!parsed) return;
     const { userId } = parsed;
     await db.admitMember(room.roomId, userId);
-    room.notifyLobby(userId, 'notifyAdmitted');
-    room.broadcastMembers();
+    await room.notifyLobby(userId, 'notifyAdmitted');
+    await room.broadcastMembers();
   });
 
-  room.onMessage('kick', async (client, message) => {
+  memberMessage('kick', async (client, message) => {
     if (room.rank(client) < RANK.gm || !room.roomId) return;
     const parsed = memberUserPayload(message); if (!parsed) return;
     const { userId } = parsed;
@@ -33,11 +38,11 @@ export function registerMemberHandlers(room, { db }) {
       live.send('kicked');
       setTimeout(() => { try { live.leave(4000); } catch {} }, 150);
     }
-    room.notifyLobby(userId, 'notifyDeclined');
-    room.broadcastMembers();
+    await room.notifyLobby(userId, 'notifyDeclined');
+    await room.broadcastMembers();
   });
 
-  room.onMessage('setRole', async (client, message) => {
+  memberMessage('setRole', async (client, message) => {
     if (room.rank(client) < RANK.gm || !room.roomId) return;
     const parsed = memberRolePayload(message); if (!parsed) return;
     const { userId, role } = parsed;
@@ -53,7 +58,7 @@ export function registerMemberHandlers(room, { db }) {
       if (player) player.role = role;
       if (live.auth) live.auth.role = role;
     }
-    room.broadcastMembers();
+    await room.broadcastMembers();
   });
 
   room.onMessage('reassignHand', (client, message) => {
