@@ -32,6 +32,7 @@ import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
+import { groupIds, groupRecolor, groupRotation } from './server/message-validation.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -558,8 +559,8 @@ class TableRoom extends Room {
     // --- Group batch ops (multi-select): the existing per-piece actions applied across a
     // selection. Stand/snap toggle the group as a UNIT (if any is on, turn all off, else all on);
     // roll/flip/take act on the relevant subset (dice / cards) and ignore the rest.
-    this.onMessage('setStandGroup', (client, { ids } = {}) => {
-      if (!Array.isArray(ids)) return;
+    this.onMessage('setStandGroup', (client, message) => {
+      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       const anyStanding = ids.some(id => { const p = this.state.pieces.get(id); return p && this.standOf(p); });
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece) continue;
@@ -569,8 +570,8 @@ class TableRoom extends Room {
         const b = this.bodies.get(id); if (b) b.wakeUp();
       }
     });
-    this.onMessage('setSnapGroup', (client, { ids } = {}) => {
-      if (!Array.isArray(ids)) return;
+    this.onMessage('setSnapGroup', (client, message) => {
+      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       const anySnap = ids.some((id) => readProps(this.state.pieces.get(id)).snap);
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece) continue;
@@ -585,14 +586,14 @@ class TableRoom extends Room {
         }
       }
     });
-    this.onMessage('rollGroup', (client, { ids } = {}) => { // R with dice selected → roll them all
-      if (!Array.isArray(ids)) return;
+    this.onMessage('rollGroup', (client, message) => { // R with dice selected → roll them all
+      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       let n = 0;
       for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && p.type === 'die' && b) { rollDie(id, b.__traySeat != null ? SIM.trayRoll : SIM.roll); n++; } }
       if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
     });
-    this.onMessage('flipGroup', (client, { ids } = {}) => { // F with cards selected → flip them all
-      if (!Array.isArray(ids)) return;
+    this.onMessage('flipGroup', (client, message) => { // F with cards selected → flip them all
+      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       let n = 0;
       for (const id of ids) {
         const piece = this.state.pieces.get(id), b = this.bodies.get(id);
@@ -605,8 +606,8 @@ class TableRoom extends Room {
       }
       if (n) this.broadcast('sfx', { type: 'card-flip' });
     });
-    this.onMessage('takeGroup', (client, { ids } = {}) => { // H with cards selected → take them all to hand
-      if (!Array.isArray(ids)) return;
+    this.onMessage('takeGroup', (client, message) => { // H with cards selected → take them all to hand
+      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece || piece.type !== 'card') continue;
         const props = readProps(piece);
@@ -615,9 +616,10 @@ class TableRoom extends Room {
         this.removePiece(id);
       }
     });
-    this.onMessage('rotateGroup', (client, { ids, dir, angle } = {}) => { // [ / ] step ±45° (dir), or a continuous drag/dial (angle, radians)
-      if (!Array.isArray(ids) || !ids.length) return;
-      const rot = (typeof angle === 'number' && isFinite(angle)) ? Math.max(-Math.PI, Math.min(Math.PI, angle)) : (dir < 0 ? -1 : 1) * (Math.PI / 4);
+    this.onMessage('rotateGroup', (client, message) => { // [ / ] step ±45° (dir), or a continuous drag/dial (angle, radians)
+      const parsed = groupRotation(message, { max: SIM.maxPieces }); if (!parsed) return;
+      const { ids } = parsed;
+      const rot = parsed.angle !== undefined ? parsed.angle : parsed.dir * (Math.PI / 4);
       const bodies = [];
       for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && b && KINDS[p.type].mass > 0) bodies.push(b); } // skip static boards
       if (!bodies.length) return;
@@ -671,8 +673,9 @@ class TableRoom extends Room {
     // Recolor a whole multi-selection at once. One color/textColor is applied to every id it
     // fits: dice + props take `color` (dice also `textColor`), poker/coin dispensers take
     // `color`; anything it doesn't fit (cards, boards, team bowls) is silently skipped.
-    this.onMessage('recolorGroup', (client, { ids, color, textColor, team } = {}) => {
-      if (!Array.isArray(ids)) return;
+    this.onMessage('recolorGroup', (client, message) => {
+      const parsed = groupRecolor(message, { max: SIM.maxPieces }); if (!parsed) return;
+      const { ids, color, textColor, team } = parsed;
       for (const id of ids) this.recolorPiece(id, { color, textColor, team }); // color XOR team; each piece takes what fits
     });
     // Decks are built in chunks so no single message is huge (a text list can be
