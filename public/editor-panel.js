@@ -280,8 +280,8 @@ function previewEl(kind, it) {
   return wrap;
 }
 
-function renderList(kind, list) {
-  const ul = byId(LIST_UL[kind]); if (!ul) return;
+function renderList(kind, list, sink) {
+  const ul = (sink || ((k) => byId(LIST_UL[k])))(kind); if (!ul) return;
   ul.replaceChildren();
   if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + color + multi-select for spawnable assets
   if (!list.length) { const li = document.createElement('li'); li.className = 'libEmpty'; li.textContent = 'None yet.'; ul.appendChild(li); return; }
@@ -326,7 +326,7 @@ function renderList(kind, list) {
 
 // client.js fans the three list messages here (and still renders the modal saved-lists).
 const listCache = {};
-window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); };
+window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); const lm = byId('libraryModal'); if (lm && !lm.hidden) renderList(kind, list, (k) => byId('nlc_' + k)); };
 window.onLibraryAdmin = () => { for (const k in listCache) renderList(k, listCache[k]); }; // admin status arrived → re-render
 
 // ---- built-in library (read-only: spawn the bundled pieces) ----------------
@@ -344,15 +344,17 @@ const previewBox = (extraClass) => { const w = document.createElement('div'); w.
 // The url a built-in sky applies: a cubemap JSON blob, or its plain equirect url.
 const skyRef = (s) => s.faces ? JSON.stringify({ t: 'cube', f: s.faces }) : (s.url || '');
 
-function renderBuiltin() {
-  const dice = byId('biDice'); dice.replaceChildren(); spawnBar(dice);
+const _BIUL = { dice:'biDice', decks:'biDecks', boards:'biBoards', games:'biGames', objects:'biObjects', dispensers:'biDispensers', sky:'biSky' };
+function renderBuiltin(sink) {
+  sink = sink || ((k) => byId(_BIUL[k]));
+  const dice = sink('dice'); dice.replaceChildren(); spawnBar(dice);
   for (const sides of DIE_SIDES) {
     const box = previewBox(); box.append(thumbImg(diePreviewURL(sides)));
     dice.append(spawnCard({ preview: box, title: 'd' + sides, color: 'palette', dice: true,
       send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides, ...cp } }) }));
   }
 
-  const decks = byId('biDecks'); decks.replaceChildren(); spawnBar(decks);
+  const decks = sink('decks'); decks.replaceChildren(); spawnBar(decks);
   { const box = previewBox('deckPreview'); box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
     decks.append(spawnCard({ preview: box, title: 'Standard 52-card', color: 'none',
       send: () => ROOM.send('spawn', { type: 'deck', props: {} }) })); }
@@ -369,7 +371,7 @@ function renderBuiltin() {
     decks.append(spawnCard({ preview: box, title: 'Mahjong wall (144)', color: 'none',
       send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'mahjong' } }) })); } // the full wall on its own
 
-  const boards = byId('biBoards'); boards.replaceChildren();
+  const boards = sink('boards'); boards.replaceChildren();
   for (const key of Object.keys(BOARDS)) {
     const box = previewBox();
     fillAsync(box, BOARDS[key].proc ? Promise.resolve(procBoardTexURL(key)) : boardPreviewURL(BOARDS[key].model)); // proc boards paint their own preview
@@ -377,7 +379,7 @@ function renderBuiltin() {
   }
 
   // One-click starter games (table only; GM+). Loading one clears the table, so confirm first.
-  const games = byId('biGames'); if (games) { games.replaceChildren();
+  const games = sink('games'); if (games) { games.replaceChildren();
     const gamePreview = { chess: BOARDS.chess.model, checkers: BOARDS.chess.model, go: BOARDS.go.model };
     for (const g of STARTER_LIST) {
       const box = previewBox();
@@ -392,7 +394,7 @@ function renderBuiltin() {
     }
   }
 
-  const objs = byId('biObjects'); objs.replaceChildren(); spawnBar(objs);
+  const objs = sink('objects'); objs.replaceChildren(); spawnBar(objs);
   for (const p of PROP_LIST) {
     const box = previewBox(); fillAsync(box, propPreviewURL({ shape: p.id }));
     const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colors
@@ -402,7 +404,7 @@ function renderBuiltin() {
       send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }) }));
   }
 
-  const disp = byId('biDispensers'); disp.replaceChildren(); spawnBar(disp);
+  const disp = sink('dispensers'); disp.replaceChildren(); spawnBar(disp);
   for (const { id } of DISPENSER_LIST) {
     const spec = DISPENSERS[id]; if (!spec) continue;
     const box = previewBox();
@@ -415,13 +417,20 @@ function renderBuiltin() {
     }));
   }
 
-  const sky = byId('biSky'); sky.replaceChildren();
+  const sky = sink('sky'); sky.replaceChildren();
   for (const s of (window.OTT_BUILTIN_SKIES || [])) {
     const ref = skyRef(s);
     const box = previewBox(); box.append(thumbImg(s.faces ? s.faces[0] : s.url));
     sky.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
   }
   const bm = byId('builtinModal'); if (bm && bm._applySearch) bm._applySearch();
+}
+
+// Combined library (parallel test): built-in + custom into one modal, filtered by the source toggle.
+function renderLibrary() {
+  renderBuiltin((k) => byId('nlb_' + k));                                     // built-in kinds → nlb_* lists
+  for (const kind of ['deck', 'board', 'prop', 'sky', 'scene'])              // custom kinds → nlc_* lists
+    renderList(kind, listCache[kind] || [], (k) => byId('nlc_' + k));
 }
 
 // Room Controls → Skybox: a two-tab picker (built-in + custom), apply to the room.
@@ -789,6 +798,21 @@ window.onOttRoom = (room) => {
     byId('builtinClose').onclick = () => { builtin.hidden = true; };
     wireTabs(builtin);
     wireControls(builtin);
+  }
+
+  // Combined Library modal (parallel test alongside the two old ones).
+  const lib2 = byId('libraryModal');
+  if (lib2) {
+    byId('lib2Btn').onclick = () => { lib2.hidden = !lib2.hidden; if (!lib2.hidden) { renderLibrary(); refresh(); } };
+    byId('lib2Close').onclick = () => { lib2.hidden = true; };
+    wireTabs(lib2);
+    wireControls(lib2);
+    lib2.querySelectorAll('#lib2Source .chip').forEach((c) => c.onclick = () => {
+      lib2.querySelectorAll('#lib2Source .chip').forEach((x) => x.classList.toggle('on', x === c));
+      lib2.classList.remove('src-all', 'src-custom', 'src-builtin');
+      lib2.classList.add('src-' + c.dataset.src);
+    });
+    lib2.classList.add('src-all');
   }
   // Add-to-Library builder — editor only (absent on the table).
   const addModal = byId('addModal');

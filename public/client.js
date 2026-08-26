@@ -3019,7 +3019,7 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
-['libraryPanel', 'builtinModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
+['libraryPanel', 'builtinModal', 'libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
 
 // ---- shared-region cluster primitive (UI_Redesign phase 1) -----------------------------
 // N hamburger buttons share ONE region. Accordion within the cluster: one pane open at a
@@ -3081,7 +3081,7 @@ function wireCluster(region, hams, opts = {}) {
   if (r && ib) wireCluster(r, [{ btn: ib, pane: 'interactions' }], { open: 'right' });
 }
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
-['libraryPanel', 'builtinModal'].forEach((id) => {
+['libraryPanel', 'builtinModal', 'libraryModal'].forEach((id) => {
   const el = byId(id);
   if (el) new MutationObserver(() => applyIcons(el)).observe(el, { childList: true, subtree: true });
 });

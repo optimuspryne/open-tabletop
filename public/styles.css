@@ -1373,7 +1373,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* ===== modal overlays ===== */
 #controlsModal,
-#libraryPanel, #builtinModal, #addModal, #skyPickModal, #settingsModal, #roomSettingsModal {
+#libraryPanel, #builtinModal, #addModal, #skyPickModal, #settingsModal, #roomSettingsModal, #libraryModal {
   position: fixed;
   inset: 0;
   background: var(--overlay);
@@ -1394,6 +1394,23 @@ input[type="range"]::-moz-range-thumb {
 /* Room Settings: a see-through tabbed modal so the table & grid stay visible for live preview (UI_Redesign phase 3) */
 #roomSettingsModal { background: rgba(0,0,0,.25); }                 /* lighter backdrop than --overlay */
 .modalCard.roomSettingsCard { background: rgba(28,33,39,.74); backdrop-filter: blur(3px); width: min(480px, 92vw); }
+
+/* Combined Library modal (parallel test): Room-Settings-style see-through card, source toggle + badges */
+.modalCard.lib2Card { background: rgba(28,33,39,.86); backdrop-filter: blur(4px); }
+#libraryModal.src-custom  .lib2-bi { display: none; }   /* Custom  → hide built-in lists */
+#libraryModal.src-builtin .lib2-cu { display: none; }   /* Built-In → hide custom lists */
+#libraryModal .lib2-cu:not(:empty) { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; } /* separate the two sources when both show */
+/* little source badge, only in All view */
+#libraryModal.src-all .lib2-bi > .libCard, #libraryModal.src-all .lib2-cu > .libCard { position: relative; }
+#libraryModal.src-all .lib2-bi > .libCard::after,
+#libraryModal.src-all .lib2-cu > .libCard::after {
+  position: absolute; top: 6px; right: 6px; z-index: 1;
+  font-size: 9px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 1px 6px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--panel-solid); color: var(--muted); pointer-events: none;
+}
+#libraryModal.src-all .lib2-bi > .libCard::after { content: "Built-In"; }
+#libraryModal.src-all .lib2-cu > .libCard::after { content: "Custom"; color: var(--accent); border-color: var(--accent); }
 .modalCard h3 {
   margin: 0 0 12px;
   font-size: 16px;
