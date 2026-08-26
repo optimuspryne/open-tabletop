@@ -25,6 +25,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   within it, and the type tabs are a proper ARIA tablist with arrow-key
   navigation.
 ### Added
+- **The table shows its room name.** The room's display name is now synced to every client
+  (`state.roomName`), so the table page can label which table you're sitting at.
 - **Play cards from your hand in 3D.** Dragging a card out of your hand now shows the *real* card
   hovering over the table (replacing the old flat 2D ghost), so you can see exactly where it will
   land. It floats just above the felt so it clears boards and tiles (e.g. the Wordy grid) instead

@@ -49,7 +49,7 @@
   --inset: calc(clamp(10px, 1.4vw, 20px) * var(--ui-elements-scale));     /* panel distance from screen edges */
   --hand-side: calc(300px * var(--ui-elements-scale));                    /* room reserved each side for the bottom-corner controls */
   --gap: calc(clamp(6px, 0.7vw, 10px) * var(--ui-elements-scale));        /* gaps between controls */
-  --card-w: calc(clamp(112px, 10.6vw, 138px) * var(--ui-elements-scale)); /* hand-card width (+50% baseline; ratio locked below) */
+  --card-w: calc(clamp(80px, 7vw, 100px) * var(--ui-elements-scale)); /* hand-card width (+50% baseline; ratio locked below) */
 }
 
 /* ---- Shared panel primitives (docked panels + modal heads/closes) ---- */
@@ -120,7 +120,6 @@
 #notesText,
 #timerDur,
 .modalCard input[type=text], .modalCard textarea, .modalCard input[type=number], .modalCard select,
-#me input[type=text],
 #landing input[type=text], #landing input[type=email], #landing input[type=password],
 .scoreName input,
 .scoreAddRow input,
@@ -582,13 +581,6 @@ button.danger, .btn.danger {
 
 /* ===== right-edge toggled pop-outs: private notes, whiteboard, chat ===== */
 /* (all three share the same frame; positioning skeleton comes from .popout) */
-#notes, #whiteboard, #chat {
-  right: var(--inset);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(300px, 88vw);
-  gap: 6px;
-}
 #notesText {
   width: 100%;
   min-height: 160px;
@@ -997,30 +989,11 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ===== members panel (GM tools) ===== */
-#membersPanel {
-  left: var(--inset);
-  top: 15%;
-  transform: translateY(-50%);
-  width: min(240px, 90vw);
-  max-height: 70vh;
-  overflow: auto;
-  gap: 8px;
-}
 /* Customize Table — a centered modal (see the modal group above); its body scrolls if it
    outgrows the viewport, so the head/close stay put on short screens. */
 /* Customize Table + Scale & Grid — movable pop-out panels (position:fixed comes from
    .popout; JS makes them draggable and remembers where you put them). Both start near
    the top-left so they don't cover the table centre while you calibrate. */
-#tableModal, #scaleGridPanel { top: 60px; z-index: 8; max-height: 84vh; gap: 6px; }
-#tableModal { left: 16px; width: 232px; }
-#scaleGridPanel { left: 262px; width: 350px; }
-#tableModal > .tableBody, #scaleGridPanel > .tableBody {
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 0;
-}
 #memberList {
   list-style: none;
   margin: 0;
@@ -1081,7 +1054,6 @@ input[type="range"]::-moz-range-thumb {
   flex-direction: column;
   gap: 10px;
 }
-#libraryPanel { z-index: 9; }
 /* One tab (and pane) per asset type. */
 .libTabs {
   display: flex;
@@ -1367,7 +1339,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* ===== modal overlays ===== */
 #controlsModal,
-#libraryPanel, #builtinModal, #addModal, #skyPickModal, #settingsModal, #roomSettingsModal, #libraryModal {
+#addModal, #settingsModal, #roomSettingsModal, #libraryModal {
   position: fixed;
   inset: 0;
   background: var(--overlay);
@@ -1394,8 +1366,6 @@ input[type="range"]::-moz-range-thumb {
 
 /* Room Info dock: Room Notes section (UI_Redesign phase 4a) */
 .dockLabel { font-size: var(--fs-sm); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
-#roomNotesBox { display: flex; flex-direction: column; }
-#roomNotesBox textarea { width: 100%; resize: vertical; min-height: 64px; }
 
 /* Room Info dock: Members section (UI_Redesign phase 4b) */
 #memberSection { display: flex; flex-direction: column; gap: 4px; }
@@ -1534,16 +1504,6 @@ body.not-admin #skyAdmin { display: none; } /* only admins curate the skybox lib
 }
 
 /* ===== player panel (top-right) ===== */
-#panel {
-  position: fixed;
-  top: var(--inset);
-  right: var(--inset);
-  width: min(230px, 90vw);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font: var(--fs-sm)/1.6 var(--font);
-}
 #players {
   padding: 8px 10px;
   border-bottom: none;
@@ -1604,28 +1564,6 @@ body.not-admin .admin-wrap, body.not-admin .admin-only { display: none !importan
   flex: 0 0 auto;
 }
 
-#me {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  padding: 8px 10px;
-  border-radius: 0 0 var(--r-lg) var(--r-lg);
-}
-#me input[type=text] {
-  flex: 1;
-  min-width: 0;
-  padding: 5px 7px;
-  font: var(--fs-sm) var(--font);
-}
-#me .upload {
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 5px 8px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-#me .upload:hover { border-color: var(--accent); }
 .mav {
   width: 46px;
   height: 46px;
@@ -2051,13 +1989,13 @@ body.admin {
   align-items: flex-end;          /* mirror of #hamBar, aligned to the right edge */
   gap: var(--gap);
 }
-@media (max-width: 720px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
+@media (max-width: 720px, max-height: 500px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
 
 /* ===== Phone layout: consistent, reactive UI ============================== */
 @media (max-width: 720px), (pointer: coarse) {
   .grp { max-height: 70vh; overflow-y: auto; }                                 /* dropdowns can't run off-screen */
   #diceGrp { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; } /* dice fit a compact grid, not a tall column */
-  #hand { --card-w: calc(clamp(72px, 20vw, 100px) * var(--ui-elements-scale)); }         /* smaller hand cards on phones */
+  #hand { --card-w: calc(clamp(50px, 20vw, 80px) * var(--ui-elements-scale)); }         /* smaller hand cards on phones */
   .panel.popout, #measurePanel {                                               /* every pop-out opens as one centered modal, not scattered */
     position: fixed !important;
     top: 50% !important; left: 50% !important; right: auto !important; bottom: auto !important;
@@ -2079,7 +2017,6 @@ body.admin {
   #audioPanel, #creditsPanel, #tracksPanel { top: 50%; right: var(--inset); transform: translateY(-50%); }
   /* Slimmer player block so the rail is lighter on a phone. */
   .mav { width: 36px; height: 36px; }
-  #me { padding: 6px 8px; }
   #players, #status { padding: 6px 8px; }
 }
 #creditsPanel, #tracksPanel { max-height: 78vh; overflow-y: auto; }
@@ -2092,18 +2029,6 @@ body.admin {
 .volRow input[type=range] { flex: 1; min-width: 0; }
 
 /* Music modal — fixed top-right, just left of the rail; collapses to its "Music" button */
-#musicModal {
-  position: fixed;
-  top: var(--inset);
-  right: calc(min(270px, 80vw) + var(--inset) + var(--gap));
-  z-index: 8;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 10px 12px;
-}
-#musicModal.collapsed { padding: 0; background: none; border: none; box-shadow: none; backdrop-filter: none; }
-#musicModal.collapsed #musicBody { display: none; }
 #musicBody { display: flex; flex-direction: column; gap: 6px; }
 
 /* Hand wings — Show (left) / Drop (right) tabs perched on the hand's top corners */
@@ -2150,7 +2075,6 @@ body.admin {
 .panel.resizable#chat, .panel.resizable#notes,
 .panel.resizable#creditsPanel, .panel.resizable#tracksPanel,
 .panel.resizable#membersPanel { overflow: hidden; }
-.panel.resizable#membersPanel { display: flex; flex-direction: column; }
 .panel.resizable#chat #chatLog,
 .panel.resizable#notes #notesText,
 .panel.resizable#creditsPanel #creditsBody,
@@ -2277,7 +2201,6 @@ label:has(.ico) { display: inline-flex; align-items: center; justify-content: ce
    app's compact panels) instead of full-size bright text. */
 .tableBody .sizeRow { gap: 8px; margin: 6px 0; }
 .tableBody .sizeRow > label { flex: 0 0 78px; width: 78px; white-space: nowrap; font-size: var(--fs-sm); color: var(--text); opacity: .72; } /* fixed column so every control starts at the same x */
-#tableModal .sizeRow > label { flex: 0 0 auto; width: auto; min-width: 0; } /* Customize Table has nothing to align to — let "Felt" hug its swatch */
 /* Calibrate row: "Calibrate" label + a compact input + Set, with the prompt tucked under it (aligned to the control column). */
 .tableBody .calibRow { flex-wrap: wrap; }
 .tableBody .calibRow > input[type="text"] { flex: 0 1 96px; }
