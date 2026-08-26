@@ -669,7 +669,7 @@ function rebuildGrid() {
   room.onMessage('boardList', boards => { if (window.onLibraryList) window.onLibraryList('board', boards); });
   document.querySelectorAll('.selectTool').forEach((b) => b.onclick = () => setSelMode(!selMode)); // Select tool: felt-drag boxes a selection
   // (the #selSwatches row is built per-selection by refreshSelTools — it depends on what's selected)
-  byId('roll').onclick = () => openTray();          // Roll hops to YOUR tray (placing it if it isn't out)
+  document.querySelectorAll('.rollBtn').forEach((b) => b.onclick = () => openTray()); // Dice Box (both corners): hops to YOUR tray (placing it if it isn't out)
   { const b = byId('trayBack');  if (b) b.onclick = () => closeTray(); }                 // leave the view, tray stays
   { const b = byId('trayAway');  if (b) b.onclick = () => putTrayAway(); }               // put my tray away (clears its dice)
   qsa('#trayTools .trayDie').forEach(b => b.onclick = () => room.send('spawn', { type: 'die', props: { ...myDieProps(+b.dataset.sides), tray: true } })); // add a die to MY tray (in my saved color)
@@ -3021,12 +3021,17 @@ function wireCluster(region, hams, opts = {}) {
   if (!region || !hams.length) return;
   const anchor = hams[0].btn;
   const sheet = () => matchMedia('(max-width: 720px)').matches;
-  const place = () => {
+  const place = (h) => {
     if (sheet()) { region.style.left = region.style.top = ''; return; } // bottom sheet: let CSS own it
-    const r = anchor.getBoundingClientRect();
+    const a = (opts.perHam && h && h.btn) || anchor;   // per-ham clusters (mirrored corners) anchor to the clicked ham
+    const r = a.getBoundingClientRect();
     const clampX = (x) => Math.round(Math.max(8, Math.min(x, innerWidth - region.offsetWidth - 8)));
     const clampY = (y) => Math.round(Math.max(8, Math.min(y, innerHeight - region.offsetHeight - 8)));
-    if (opts.open === 'right') { region.style.left = clampX(r.right + 8) + 'px'; region.style.top = clampY(r.bottom - region.offsetHeight) + 'px'; }        // beside the ham, bottom-aligned
+    if (opts.open === 'right') {
+      const openLeft = r.right + 8 + region.offsetWidth > innerWidth - 8;  // no room to the right → open toward center
+      region.style.left = clampX(openLeft ? r.left - region.offsetWidth - 8 : r.right + 8) + 'px';
+      region.style.top = clampY(r.bottom - region.offsetHeight) + 'px';
+    }
     else if (opts.open === 'above') { region.style.left = clampX(r.left) + 'px'; region.style.top = clampY(r.top - region.offsetHeight - 8) + 'px'; }        // above the ham
     else { region.style.left = clampX(r.left) + 'px'; region.style.top = Math.round(r.bottom + 8) + 'px'; }                                                    // below (default)
   };
@@ -3037,7 +3042,7 @@ function wireCluster(region, hams, opts = {}) {
     if (current && current !== h) deactivate(); // switching panes: close the outgoing one
     hams.forEach((x) => x.btn.classList.remove('on'));
     region.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.dataset.pane === h.pane));
-    h.btn.classList.add('on'); region.hidden = false; place(); current = h;
+    h.btn.classList.add('on'); region.hidden = false; place(h); current = h;
     const f = region.querySelector('.pane.on textarea, .pane.on input:not([type=hidden])')
            || region.querySelector('.pane.on button:not(.regionClose), .pane.on [tabindex]');
     if (f) f.focus();
@@ -3049,7 +3054,7 @@ function wireCluster(region, hams, opts = {}) {
   }));
   region.querySelectorAll('.regionClose').forEach((b) => b.addEventListener('click', () => { close(); anchor.focus(); }));
   region.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); anchor.focus(); } });
-  addEventListener('resize', () => { if (!region.hidden) place(); });
+  addEventListener('resize', () => { if (!region.hidden) place(current); });
 }
 // Top-left cluster (UI_Redesign phase 2): Chat + Notes share one region (accordion).
 { const r = byId('regionTL'), cb = byId('chatBtn'), nb = byId('notesBtn');
@@ -3068,8 +3073,9 @@ function wireCluster(region, hams, opts = {}) {
   ]);
 }
 // Bottom-left corner cluster (UI_Redesign phase 2c): Interactions → My Seat / Lean In / Show / Drop.
-{ const r = byId('regionBL'), ib = byId('interactHam');
-  if (r && ib) wireCluster(r, [{ btn: ib, pane: 'interactions' }], { open: 'right' });
+{ const r = byId('regionBL'), ib = byId('interactHam'), ibR = byId('interactHamR');
+  const hams = [{ btn: ib, pane: 'interactions' }]; if (ibR) hams.push({ btn: ibR, pane: 'interactions' }); // mirrored right-corner ham
+  if (r && ib) wireCluster(r, hams, { open: 'right', perHam: true });
 }
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
 ['libraryModal'].forEach((id) => {

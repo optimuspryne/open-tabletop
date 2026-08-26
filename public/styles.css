@@ -2041,7 +2041,16 @@ body.admin {
   align-items: flex-start;
   gap: var(--gap);
 }
-.selectTool.edgeRight { position: fixed; right: var(--inset); bottom: var(--inset); z-index: 8; } /* mirrored Select on the right */
+#hamBarRight {
+  position: fixed;
+  right: var(--inset);
+  bottom: var(--inset);
+  z-index: 8;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;          /* mirror of #hamBar, aligned to the right edge */
+  gap: var(--gap);
+}
 @media (max-width: 720px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
 
 /* ===== Phone layout: consistent, reactive UI ============================== */
