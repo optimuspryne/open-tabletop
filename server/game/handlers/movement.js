@@ -1,10 +1,13 @@
 import { groupGrabPayload, groupMovePayload, groupReleasePayload, pieceIdPayload, pieceMovePayload, pieceReleasePayload } from '../../message-validation.js';
+import { safeMessage } from '../safe-message.js';
 
 // Exclusive piece ownership is the authority boundary for dragging. A client may
 // move/release only pieces it successfully claimed; group movement applies the
 // same rule independently to every selected piece.
-export function registerMovementHandlers(room, { isMovable, maxPieces = 80 }) {
-  room.onMessage('grab', (client, message) => {
+export function registerMovementHandlers(room, { isMovable, maxPieces = 80, logger = console }) {
+  const movementMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+
+  movementMessage('grab', (client, message) => {
     const parsed = pieceIdPayload(message); if (!parsed) return;
     const { id } = parsed;
     const piece = room.state.pieces.get(id);
@@ -13,21 +16,21 @@ export function registerMovementHandlers(room, { isMovable, maxPieces = 80 }) {
     }
   });
 
-  room.onMessage('move', (client, message) => {
+  movementMessage('move', (client, message) => {
     const parsed = pieceMovePayload(message); if (!parsed) return;
     const { id, x, y, z } = parsed;
     const piece = room.state.pieces.get(id);
     if (piece && piece.owner === client.sessionId) room.targets.set(id, { x, y, z });
   });
 
-  room.onMessage('release', (client, message) => {
+  movementMessage('release', (client, message) => {
     const parsed = pieceReleasePayload(message); if (!parsed) return;
     const { id, v } = parsed;
     const piece = room.state.pieces.get(id);
     if (piece && piece.owner === client.sessionId) room.releasePiece(id, v);
   });
 
-  room.onMessage('grabGroup', (client, message) => {
+  movementMessage('grabGroup', (client, message) => {
     const parsed = groupGrabPayload(message, { max: maxPieces }); if (!parsed) return;
     const { ids, anchor } = parsed;
     const anchorBody = room.bodies.get(anchor);
@@ -47,7 +50,7 @@ export function registerMovementHandlers(room, { isMovable, maxPieces = 80 }) {
     room.groups.set(client.sessionId, offsets);
   });
 
-  room.onMessage('moveGroup', (client, message) => {
+  movementMessage('moveGroup', (client, message) => {
     const target = groupMovePayload(message); if (!target) return;
     const group = room.groups.get(client.sessionId);
     if (!group) return;
@@ -59,7 +62,7 @@ export function registerMovementHandlers(room, { isMovable, maxPieces = 80 }) {
     }
   });
 
-  room.onMessage('releaseGroup', (client, message) => {
+  movementMessage('releaseGroup', (client, message) => {
     const parsed = groupReleasePayload(message); if (!parsed) return;
     const group = room.groups.get(client.sessionId);
     if (!group) return;

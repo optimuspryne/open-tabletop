@@ -61,7 +61,7 @@ export function registerMemberHandlers(room, { db, logger = console }) {
     await room.broadcastMembers();
   });
 
-  room.onMessage('reassignHand', (client, message) => {
+  memberMessage('reassignHand', (client, message) => {
     if (room.rank(client) < RANK.gm) return;
     const parsed = handReassignmentPayload(message); if (!parsed) return;
     const { userId, toSessionId } = parsed;

@@ -34,11 +34,15 @@ function harness() {
     dropSfx: () => 'card-drop',
     randomPosition: () => [0, 4, 0],
     shuffle: (cards) => cards.reverse(),
+    logger: { error() {} },
   });
   return { room, handlers, events };
 }
 
-const client = { sessionId: 'client-1', send() {} };
+const makeClient = () => ({
+  sessionId: 'client-1', sent: [], send(type, payload) { this.sent.push({ type, payload }); },
+});
+const client = makeClient();
 
 test('card handler module registers the complete card/deck message family', () => {
   const { handlers } = harness();
@@ -102,4 +106,21 @@ test('an inspected card returned to its deck restores count and clears pending s
   assert.deepEqual(room.deckCards.get('1'), ['front']);
   assert.equal(room.state.pieces.get('1').count, 1);
   assert.equal(room.pendingInspect.has(client.sessionId), false);
+});
+
+test('card exceptions are reported without disabling later messages', async () => {
+  const { room, handlers } = harness();
+  const user = makeClient();
+  const body = { velocity: { y: 0 }, wakeUp() {} };
+  room.state.pieces.set('1', { type: 'card', props: JSON.stringify({ front: 'ace', back: 'blue' }) });
+  room.bodies.set('1', body);
+  const broadcast = room.broadcast;
+  room.broadcast = () => { throw new Error('broadcast failure'); };
+  await handlers.get('flip')(user, { id: '1' });
+  assert.deepEqual(user.sent, [{
+    type: 'serverError', payload: { operation: 'flip', message: 'Server error. Try again.' },
+  }]);
+  room.broadcast = broadcast;
+  await handlers.get('flip')(user, { id: '1' });
+  assert.equal(room.cardData.has('1'), false);
 });

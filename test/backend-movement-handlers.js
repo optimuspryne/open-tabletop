@@ -14,12 +14,15 @@ function harness() {
     onMessage(name, handler) { handlers.set(name, handler); },
     releasePiece(id, velocity) { released.push({ id, velocity }); },
   };
-  registerMovementHandlers(room, { isMovable: (piece) => piece.movable === true });
+  registerMovementHandlers(room, { isMovable: (piece) => piece.movable === true, logger: { error() {} } });
   return { room, handlers, released };
 }
 
-const alice = { sessionId: 'alice' };
-const bob = { sessionId: 'bob' };
+const actor = (sessionId) => ({
+  sessionId, sent: [], send(type, payload) { this.sent.push({ type, payload }); },
+});
+const alice = actor('alice');
+const bob = actor('bob');
 
 test('movement module registers the single and group movement messages', () => {
   assert.deepEqual([...harness().handlers.keys()], ['grab', 'move', 'release', 'grabGroup', 'moveGroup', 'releaseGroup']);
@@ -86,4 +89,18 @@ test('malformed movement messages fail closed without changing state', () => {
   handlers.get('releaseGroup')(alice, null);
   assert.equal(room.targets.size, 0);
   assert.deepEqual(released, []);
+});
+
+test('movement exceptions are reported without disabling later messages', async () => {
+  const { room, handlers } = harness();
+  const user = actor('moving-client');
+  room.state.pieces.set('1', { movable: true, owner: user.sessionId });
+  room.releasePiece = () => { throw new Error('physics failure'); };
+  await handlers.get('release')(user, { id: '1', v: [0, 0, 0] });
+  assert.deepEqual(user.sent, [{
+    type: 'serverError', payload: { operation: 'release', message: 'Server error. Try again.' },
+  }]);
+  room.state.pieces.set('2', { movable: true, owner: '' });
+  await handlers.get('grab')(user, { id: '2' });
+  assert.equal(room.state.pieces.get('2').owner, user.sessionId);
 });
