@@ -373,9 +373,9 @@ class Overlay extends Schema {
 }
 defineTypes(Overlay, { kind: 'string', color: 'string', owner: 'string', x: 'number', z: 'number', x2: 'number', z2: 'number', w: 'number', ang: 'number' });
 class State extends Schema {
-  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.trays = new MapSchema(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); this.overlays = new MapSchema(); }
+  constructor() { super(); this.pieces = new MapSchema(); this.players = new MapSchema(); this.turn = ''; this.timer = new Timer(); this.scores = new MapSchema(); this.notes = ''; this.tableX = TABLE.x; this.tableZ = TABLE.z; this.whiteboard = new Whiteboard(); this.trays = new MapSchema(); this.skybox = ''; this.feltColor = '#2f6b4f'; this.roomName = ''; this.turnPending = ''; this.unclaimed = new MapSchema(); this.scale = new RoomScale(); this.overlays = new MapSchema(); }
 }
-defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, trays: { map: 'boolean' }, skybox: 'string', feltColor: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale, overlays: { map: Overlay } });
+defineTypes(State, { pieces: { map: Piece }, players: { map: Player }, turn: 'string', timer: Timer, scores: { map: ScoreRow }, notes: 'string', tableX: 'number', tableZ: 'number', whiteboard: Whiteboard, trays: { map: 'boolean' }, skybox: 'string', feltColor: 'string', roomName: 'string', turnPending: 'string', unclaimed: { map: 'string' }, scale: RoomScale, overlays: { map: Overlay } });
 
 const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
 
@@ -501,6 +501,7 @@ class TableRoom extends Room {
     this.roomCode = (options && options.code) || null;
     const roomRec = this.roomCode ? await db.findRoomByCode(this.roomCode) : null;
     this.roomId = roomRec ? roomRec.id : null; // this live table's persistent room id (for membership)
+    this.state.roomName = roomRec ? String(roomRec.name || '').slice(0, 60) : ''; // synced display name for the table header (empty for the code-less editor room)
     if (this.roomId) { // restore the durable scoreboard, notes, and table size for this room
       const rs = await db.getRoomState(this.roomId);
       for (const row of rs.scoreboard) {
