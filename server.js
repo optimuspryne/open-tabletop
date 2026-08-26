@@ -20,6 +20,9 @@ import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEA
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
+import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
+import { finitePosition } from './server/message-validation.js';
+import { takeTopCard } from './server/deck-state.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -327,7 +330,6 @@ defineTypes(Player, { seat: 'number', hand: 'number', name: 'string', color: 'st
 
 // Per-room role ladder — the server gates privileged actions by rank, and the
 // client hides tools it can't use (courtesy only; these checks are the real rule).
-const RANK = { player: 0, helper: 1, gm: 2, owner: 3 };
 // PUBLIC shared timer. We sync only the anchor (running/mode/base/since), never a
 // ticking number — each client computes the live value with timerLive(), the same
 // way the render loop interpolates piece positions locally. base = ms frozen at
@@ -549,10 +551,12 @@ class TableRoom extends Room {
     });
 
     this.onMessage('move', (client, msg) => {
+      const target = finitePosition(msg);
+      if (!target) return;
       const piece = this.state.pieces.get(msg.id);
       // Only the owner can steer their piece; update the servo's drag target.
       if (piece && piece.owner === client.sessionId) {
-        this.targets.set(msg.id, { x: msg.x, y: msg.y, z: msg.z });
+        this.targets.set(msg.id, target);
       }
     });
 
@@ -579,10 +583,12 @@ class TableRoom extends Room {
       this.groups.set(client.sessionId, offsets);
     });
     this.onMessage('moveGroup', (client, msg) => {
+      const target = finitePosition(msg);
+      if (!target) return;
       const g = this.groups.get(client.sessionId); if (!g) return;
       for (const [id, off] of g) {
         const p = this.state.pieces.get(id);
-        if (p && p.owner === client.sessionId) this.targets.set(id, { x: msg.x + off.x, y: msg.y + off.y, z: msg.z + off.z });
+        if (p && p.owner === client.sessionId) this.targets.set(id, { x: target.x + off.x, y: target.y + off.y, z: target.z + off.z });
       }
     });
     this.onMessage('releaseGroup', (client, msg) => {
@@ -692,15 +698,13 @@ class TableRoom extends Room {
     // Deal the top card face-down onto the table, just beside the deck.
     this.onMessage('dealToTable', (client, { deckId }) => {
       const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+      const draw = takeTopCard(deck, cards); if (!draw) return;
 
       const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const front = cards.pop();
       const id = this.spawnCardFlat(this.besideDeck(this.bodies.get(deckId)), { back, ...geoOf(dp) }); // only the back is public
-      this.cardData.set(id, { front }); // front stays private until taken or flipped
+      this.cardData.set(id, { front: draw.front }); // front stays private until taken or flipped
 
-      deck.count = cards.length;
-      if (!cards.length) this.removePiece(deckId);
+      if (draw.empty) this.removePiece(deckId);
       else this.updateDeckCollider(deckId);
       this.broadcast('sfx', { type: dropSfx('card', dp) }); // a tile deck clacks a tile, not paper
     });
@@ -710,34 +714,32 @@ class TableRoom extends Room {
     // it's added to the clicker's hand, never spawned on the table.
     this.onMessage('drawToHand', (client, { deckId }) => {
       const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+      const draw = takeTopCard(deck, cards); if (!draw) return;
       const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const front = cards.pop();
-      this.addToHand(client, front, back, geoOf(dp)); // sends the updated hand to the drawer only
-      deck.count = cards.length;
-      if (!cards.length) this.removePiece(deckId);
+      this.addToHand(client, draw.front, back, geoOf(dp)); // sends the updated hand to the drawer only
+      if (draw.empty) this.removePiece(deckId);
       else this.updateDeckCollider(deckId);
       this.broadcast('sfx', { type: dropSfx('card', dp) }); // a tile deck clacks a tile, not paper
     });
 
     // Deal the top card AND immediately give the dealer control to drag it out.
     this.onMessage('dealDrag', (client, msg) => {
+      const target = finitePosition(msg);
+      if (!target) return;
       const deck = this.state.pieces.get(msg.deckId), cards = this.deckCards.get(msg.deckId);
-      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+      const draw = takeTopCard(deck, cards); if (!draw) return;
 
       const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const front = cards.pop();
       const deckBody = this.bodies.get(msg.deckId);
       const id = this.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], { back, ...geoOf(dp) });
-      this.cardData.set(id, { front });
+      this.cardData.set(id, { front: draw.front });
 
-      deck.count = cards.length;
-      if (!cards.length) this.removePiece(msg.deckId);
+      if (draw.empty) this.removePiece(msg.deckId);
       else this.updateDeckCollider(msg.deckId);
 
       // Hand the card straight to the dealer's cursor.
       this.state.pieces.get(id).owner = client.sessionId;
-      this.targets.set(id, { x: msg.x, y: msg.y, z: msg.z });
+      this.targets.set(id, target);
       client.send('dealt', { id }); // tell the client which card it now holds
     });
 
@@ -783,15 +785,13 @@ class TableRoom extends Room {
     this.onMessage('drawInspect', (client, { deckId }) => {
       if (this.pendingInspect.has(client.sessionId)) return; // one at a time
       const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+      const draw = takeTopCard(deck, cards); if (!draw) return;
 
       const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const front = cards.pop();
-      deck.count = cards.length;
       this.updateDeckCollider(deckId);
 
-      this.pendingInspect.set(client.sessionId, { deckId, front, back, geo: geoOf(dp) });
-      client.send('inspectCard', { front, back, ...geoOf(dp) }); // PRIVATE: only the drawer sees the front; geo → correct tile proportions
+      this.pendingInspect.set(client.sessionId, { deckId, front: draw.front, back, geo: geoOf(dp) });
+      client.send('inspectCard', { front: draw.front, back, ...geoOf(dp) }); // PRIVATE: only the drawer sees the front; geo → correct tile proportions
     });
     // Place a drawn-to-inspect card: back on the deck, into your hand, or onto
     // the field face-up (public front) / face-down (front stays private).
@@ -2228,17 +2228,9 @@ class TableRoom extends Room {
 
   // --- Member-management authorization + list delivery ---
   // GMs manage helpers/players; only an owner manages GMs; nobody manages the owner.
-  canManage(actorRank, targetRole) {
-    if (targetRole === 'owner') return false;
-    if (targetRole === 'gm') return actorRank >= RANK.owner;
-    return actorRank >= RANK.gm;
-  }
+  canManage(actorRank, targetRole) { return canManageMember(actorRank, targetRole); }
   // Role changes: co-GM promote/demote is owner-only; the owner role is never set here.
-  canSetRole(actorRank, currentRole, newRole) {
-    if (newRole === 'owner' || currentRole === 'owner') return false;
-    if (newRole === 'gm' || currentRole === 'gm') return actorRank >= RANK.owner;
-    return actorRank >= RANK.gm;
-  }
+  canSetRole(actorRank, currentRole, newRole) { return canSetMemberRole(actorRank, currentRole, newRole); }
   async sendMembers(client) {
     if (this.roomId) client.send('memberList', await db.listMembers(this.roomId));
   }
@@ -2295,7 +2287,7 @@ class TableRoom extends Room {
     return { userId: user.id, username: user.username, avatar: user.avatar, role, isAdmin: user.isAdmin };
   }
 
-  rank(client) { return RANK[client.auth && client.auth.role] || 0; }
+  rank(client) { return rankOf(client.auth && client.auth.role); }
   isAdmin(client) { return !!(client.auth && client.auth.isAdmin); } // site admin — curates the library, spawns private assets anywhere
 
   onJoin(client) {
