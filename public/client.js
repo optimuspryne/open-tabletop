@@ -1823,6 +1823,7 @@ function applyRole(role) {
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('roomBtn', 2);                                          // Room Controls menu: GM+
   gate('memberSection', 2);                                    // Members management (dock): GM+
+  if (rank >= 2 && room) room.send('members');                 // (re)fetch on join/reconnect/promotion — allowReconnection skips onJoin's push, so the dock would otherwise stay blank after a refresh
   gate('lib2Btn', 1);                                          // Library (combined): Helper+
   // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
   const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
