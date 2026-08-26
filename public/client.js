@@ -1677,6 +1677,7 @@ function renderHand(cards) {
   el.innerHTML = '';
   el.classList.remove('collapsed');
   el.classList.remove('hand-dragging'); // a fresh render (after a play/cancel) reveals the hand
+  { const has = cards.length > 0; const sb = byId('showBtn'), db = byId('dropBtn'); if (sb) sb.hidden = !has; if (db) db.hidden = !has; } // Show/Drop flank the hand, only when you hold cards
   if (handCollapsed && cards.length && !selectMode) { // hidden: show only a peek tab (never while picking cards to show)
     el.classList.add('collapsed');
     const tab = document.createElement('button');

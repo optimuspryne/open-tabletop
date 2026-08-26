@@ -116,7 +116,11 @@
   <button id="selClear" data-icon="deselect"><span class="lbl">Clear</span></button>
 </div>
 </div>
-<div id="hand" class="panel"></div>
+<div id="handRow">
+  <button id="showBtn" class="handFlank" data-icon="cards" title="Show cards to others" hidden><span class="lbl">Show</span></button>
+  <div id="hand" class="panel"></div>
+  <button id="dropBtn" class="handFlank" data-icon="arrow-bar-down" title="Drop your hand" hidden><span class="lbl">Drop</span></button>
+</div>
 <div id="rightStack">
 <div id="identityBar">
   <button id="turnBtn" class="turnPill" data-icon="chevrons-right" title="Advance the turn" hidden><span class="lbl" id="turnMini"></span></button>
@@ -265,8 +269,6 @@
         <div class="regionHead"><b>Interactions</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>
         <button id="mySeatBtn" data-icon="armchair"><span class="lbl">My Seat</span></button>
         <button id="leanBtn" data-icon="zoom-in"><span class="lbl">Lean In</span></button>
-        <button id="showBtn" data-icon="cards"><span class="lbl">Show Cards</span></button>
-        <button id="dropBtn" data-icon="arrow-bar-down"><span class="lbl">Drop Hand</span></button>
       </div>
     </div>
     <div id="showPanel" class="panel popout" hidden>

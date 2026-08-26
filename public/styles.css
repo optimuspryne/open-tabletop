@@ -481,11 +481,20 @@ button.danger, .btn.danger {
 }
 
 /* ===== hand bar (bottom-center) ===== */
-#hand {
+#handRow {
   position: fixed;
   bottom: var(--inset);
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  z-index: 5;
+  max-width: calc(100vw - 2 * var(--inset));
+}
+.handFlank { flex: 0 0 auto; }
+.handFlank[hidden] { display: none; }
+#hand {
   display: none;
   gap: 6px;
   padding: 8px;
