@@ -138,3 +138,12 @@ test('database rejection is contained and reported without disabling later membe
   await handlers.get('admit')(owner, { userId: '2' });
   assert.equal(calls.some((call) => call[0] === 'admitMember'), true);
 });
+
+test('a lobby notification failure does not skip the local member-list refresh', async () => {
+  const { handlers, room, calls } = harness();
+  const owner = actor('owner');
+  room.notifyLobby = async () => { throw new Error('matchmaker offline'); };
+  await handlers.get('admit')(owner, { userId: '2' });
+  assert.equal(calls.some((call) => call[0] === 'broadcastMembers'), true);
+  assert.equal(owner.sent[0].type, 'serverError');
+});

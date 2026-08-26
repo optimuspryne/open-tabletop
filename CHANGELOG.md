@@ -43,6 +43,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Route every inline table message through the shared Colyseus boundary, so
   unexpected synchronous room-state and physics failures are logged, reported,
   and contained consistently with extracted and asynchronous handlers.
+- Await avatar persistence, initial member-list delivery, cross-instance lobby
+  notifications, and final room-state flushes. Detached lifecycle work can no
+  longer reject silently, while join-time list failures use the sanitized client
+  error boundary without ejecting the player.
 
 ## [0.10.0] — 2026-08-26
 

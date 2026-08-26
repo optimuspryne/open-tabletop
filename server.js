@@ -35,7 +35,7 @@ import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
 import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, saveBoardPayload, savePropPayload, saveSkyboxPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
-import { safeMessage } from './server/game/safe-message.js';
+import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -1001,13 +1001,13 @@ class TableRoom extends Room {
       const player = this.state.players.get(client.sessionId);
       if (player) player.name = parsed.name.trim() || player.name;
     });
-    tableMessage('setAvatar', (client, message) => {
+    tableMessage('setAvatar', async (client, message) => {
       const parsed = oneField(message, 'data', (data) => isBoundedImageDataURL(data) ? data : null); if (!parsed) return;
       const player = this.state.players.get(client.sessionId);
       if (player) {
-        player.avatar = parsed.data;
         // Persist to the account so it follows the user across sessions and rooms.
-        if (client.auth && client.auth.userId) db.setUserAvatar(client.auth.userId, parsed.data).catch(e => console.error('[setAvatar]', e.message));
+        if (client.auth && client.auth.userId) await db.setUserAvatar(client.auth.userId, parsed.data);
+        player.avatar = parsed.data;
       }
     });
     tableMessage('notebook', (client, message) => {
@@ -1945,24 +1945,26 @@ class TableRoom extends Room {
   // score clicks arrive in bursts, and saveStateNow always reads the latest state.
   scheduleSave() {
     if (!this.roomId || this._saveTimer) return;
-    this._saveTimer = setTimeout(() => { this._saveTimer = null; this.saveStateNow(); }, 800);
+    this._saveTimer = setTimeout(() => {
+      this._saveTimer = null;
+      void safeRoomTask(this, 'saveState', null, () => this.saveStateNow(), { notify: false });
+    }, 800);
   }
-  saveStateNow() {
+  async saveStateNow() {
     if (!this.roomId) return;
     const rows = [];
     this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
-    db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene,
-      scale: this.scaleSnapshot() })
-      .catch(e => console.error('[saveState]', e.message));
+    await db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene,
+      scale: this.scaleSnapshot() });
   }
-  onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save
+  async onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     LIVE_ROOMS.delete(this);
     if (this.state.pieces.size) { // only overwrite the saved state when there's actually something on the table
       const snap = this.serializeGame();
       if (JSON.stringify(snap).length <= SCENE_MAX_BYTES) this.savedScene = snap;
     }
     if (this._saveTimer) clearTimeout(this._saveTimer);
-    this.saveStateNow(); // flush — persists the snapshot + latest settings
+    await safeRoomTask(this, 'disposeSave', null, () => this.saveStateNow(), { notify: false }); // flush — persists the snapshot + latest settings
   }
 
   // Send a client the library list for one asset kind. Admins get everything
@@ -1998,10 +2000,8 @@ class TableRoom extends Room {
   // Tell the matching lobby (if anyone's waiting there) that a pending user's status
   // changed, so it can push + release them instead of them polling for it.
   async notifyLobby(userId, method) {
-    try {
-      const lobbies = await matchMaker.query({ name: 'lobby', code: this.roomCode });
-      for (const l of lobbies) matchMaker.remoteRoomCall(l.roomId, method, [userId]);
-    } catch (e) { /* no lobby up for this code */ }
+    const lobbies = await matchMaker.query({ name: 'lobby', code: this.roomCode });
+    await Promise.all(lobbies.map((lobby) => matchMaker.remoteRoomCall(lobby.roomId, method, [userId])));
   }
 
   // Called via the matchmaker when the owner closes the room from the lobby: tell
@@ -2046,7 +2046,7 @@ class TableRoom extends Room {
   rank(client) { return rankOf(client.auth && client.auth.role); }
   isAdmin(client) { return !!(client.auth && client.auth.isAdmin); } // site admin — curates the library, spawns private assets anywhere
 
-  onJoin(client) {
+  async onJoin(client) {
     const auth = client.auth || {};
     // Give the new player the lowest free seat and a color to match.
     const takenSeats = new Set();
@@ -2077,7 +2077,9 @@ class TableRoom extends Room {
 
     if (!this.state.turn) this.state.turn = client.sessionId; // first player to arrive starts
     this.sendHand(client);
-    if (this.rank(client) >= RANK.gm) this.sendMembers(client); // GMs get the member list up front (pending pulse)
+    if (this.rank(client) >= RANK.gm) await safeRoomTask(this, 'joinMembers', client, () => this.sendMembers(client), {
+      publicMessage: 'Member operation unavailable. Try again.',
+    }); // GMs get the member list up front (pending pulse)
     client.send('whoami', { isAdmin: this.isAdmin(client) }); // lets the client hide library-creation UI from non-admins
   }
 

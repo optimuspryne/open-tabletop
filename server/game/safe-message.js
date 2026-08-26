@@ -6,24 +6,36 @@ const safeContext = (room, client, type) => ({
   sessionId: client?.sessionId || undefined,
 });
 
+const report = (room, type, client, error, { errorType, publicMessage, logger, notify }) => {
+  const context = safeContext(room, client, type);
+  logger.error('[colyseus]', context, error && error.message ? error.message : error);
+  if (!notify || !client) return;
+  try { client.send(errorType, { operation: type, message: publicMessage }); }
+  catch (sendError) { logger.error('[colyseus:error-send]', context, sendError.message); }
+};
+
+export function safeRoomTask(room, type, client, task, {
+  errorType = 'serverError',
+  publicMessage = 'Server error. Try again.',
+  logger = console,
+  notify = true,
+} = {}) {
+  const options = { errorType, publicMessage, logger, notify };
+  try {
+    return Promise.resolve(task()).catch((error) => report(room, type, client, error, options));
+  } catch (error) {
+    report(room, type, client, error, options);
+    return Promise.resolve();
+  }
+}
+
 export function safeMessage(room, type, handler, {
   errorType = 'serverError',
   publicMessage = 'Server error. Try again.',
   logger = console,
 } = {}) {
-  const report = (client, error) => {
-    const context = safeContext(room, client, type);
-    logger.error('[colyseus]', context, error && error.message ? error.message : error);
-    try { client.send(errorType, { operation: type, message: publicMessage }); }
-    catch (sendError) { logger.error('[colyseus:error-send]', context, sendError.message); }
-  };
-
-  room.onMessage(type, (client, message) => {
-    try {
-      return Promise.resolve(handler(client, message)).catch((error) => report(client, error));
-    } catch (error) {
-      report(client, error);
-      return Promise.resolve();
-    }
-  });
+  room.onMessage(type, (client, message) => safeRoomTask(
+    room, type, client, () => handler(client, message),
+    { errorType, publicMessage, logger },
+  ));
 }

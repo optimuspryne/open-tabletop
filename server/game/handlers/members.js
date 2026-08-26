@@ -19,8 +19,10 @@ export function registerMemberHandlers(room, { db, logger = console }) {
     const parsed = memberUserPayload(message); if (!parsed) return;
     const { userId } = parsed;
     await db.admitMember(room.roomId, userId);
-    await room.notifyLobby(userId, 'notifyAdmitted');
-    await room.broadcastMembers();
+    await Promise.all([
+      room.notifyLobby(userId, 'notifyAdmitted'),
+      room.broadcastMembers(),
+    ]);
   });
 
   memberMessage('kick', async (client, message) => {
@@ -38,8 +40,10 @@ export function registerMemberHandlers(room, { db, logger = console }) {
       live.send('kicked');
       setTimeout(() => { try { live.leave(4000); } catch {} }, 150);
     }
-    await room.notifyLobby(userId, 'notifyDeclined');
-    await room.broadcastMembers();
+    await Promise.all([
+      room.notifyLobby(userId, 'notifyDeclined'),
+      room.broadcastMembers(),
+    ]);
   });
 
   memberMessage('setRole', async (client, message) => {

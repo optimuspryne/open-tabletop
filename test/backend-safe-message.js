@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { safeMessage } from '../server/game/safe-message.js';
+import { safeMessage, safeRoomTask } from '../server/game/safe-message.js';
 
 function harness(handler, options = {}) {
   let registered;
@@ -52,4 +52,13 @@ test('a failed invocation does not disable later room messages', async () => {
   assert.deepEqual(sent, [{
     type: 'assetError', payload: { operation: 'libraryRead', message: 'Library unavailable. Try again.' },
   }]);
+});
+
+test('safe room tasks contain detached lifecycle failures without a client notification when requested', async () => {
+  const logs = [];
+  const room = { roomId: 'room-1' };
+  await safeRoomTask(room, 'dispose', null, async () => { throw new Error('save failed'); }, {
+    logger: { error(...parts) { logs.push(parts); } }, notify: false,
+  });
+  assert.match(JSON.stringify(logs), /save failed/);
 });
