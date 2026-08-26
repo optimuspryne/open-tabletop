@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  assetMutationPayload, boundedString, boundedUniqueIds, cardPlacementPayload,
-  deckAppendPayload, dispenserDragPayload, finiteNumber, finitePosition, groupIds,
+  assetMutationPayload, boardRecordPayload, boundedString, boundedUniqueIds,
+  cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload,
+  dispenserDragPayload, finiteNumber, finitePosition, groupIds,
   gridCalibrationPayload, groupRecolor, groupRotation, isPlainObject, namedIdPayload,
-  overlayGeometry, overlayMovePayload, recolorPayload, scalePayload, scorePayload,
-  showPayload, tablePayload, timerPayload, whiteboardStroke,
+  overlayGeometry, overlayMovePayload, propRecordPayload, recolorPayload,
+  saveBoardPayload, savePropPayload, scalePayload, scorePayload, showPayload,
+  spawnPayload, tablePayload, timerPayload, whiteboardStroke,
 } from '../server/message-validation.js';
 import { takeTopCard } from '../server/deck-state.js';
 
@@ -147,6 +149,54 @@ test('deck append batches are bounded and copied after validating every referenc
   assert.notEqual(parsed.fronts, raw.fronts);
   assert.equal(deckAppendPayload({ fronts: ['/one', 'bad'] }, { max: 2, refOk }), null);
   assert.equal(deckAppendPayload({ fronts: ['/one', '/two', '/three'] }, { max: 2, refOk }), null);
+  assert.equal(deckAppendPayload({ fronts: ['/one', '/two'] }, { maxBytes: 5, refOk }), null);
+});
+
+test('board records accept only known built-ins or bounded local asset geometry', () => {
+  assert.deepEqual(boardRecordPayload({ board: 'chess' }, { boardKeys: ['chess'] }), { board: 'chess' });
+  assert.deepEqual(boardRecordPayload({ model: '/assets/props/a.glb', modelScale: 2, box: [1, 0.2, 1] }),
+    { model: '/assets/props/a.glb', modelScale: 2, box: [1, 0.2, 1] });
+  assert.deepEqual(boardRecordPayload({ w: 10, d: 8, tex: '/assets/boards/map.png' }),
+    { w: 10, d: 8, tex: '/assets/boards/map.png' });
+  assert.equal(boardRecordPayload({ board: 'unknown' }, { boardKeys: ['chess'] }), null);
+  assert.equal(boardRecordPayload({ model: 'https://evil.test/a.glb', modelScale: 2, box: [1, 1, 1] }), null);
+  assert.equal(boardRecordPayload({ w: '10', d: 8 }), null);
+});
+
+test('custom prop records validate model, collider, transforms, and colors', () => {
+  const value = { model: '/assets/props/a.glb', box: [1, 2, 1], stand: true, scale: 1, modelRot: [0, 1, 0], collider: 'cylinder', color: 123 };
+  assert.deepEqual(propRecordPayload(value, { colliders: ['cylinder'] }), value);
+  assert.equal(propRecordPayload({ ...value, box: [1, NaN, 1] }, { colliders: ['cylinder'] }), null);
+  assert.equal(propRecordPayload({ ...value, collider: 'mesh' }, { colliders: ['cylinder'] }), null);
+  assert.equal(propRecordPayload({ ...value, extra: true }, { colliders: ['cylinder'] }), null);
+});
+
+test('deck draft boundaries validate geometry, finish flags, names, and edit ids', () => {
+  const refOk = (value) => typeof value === 'string' && value.length < 100;
+  const sanitizeGeom = (value) => value && value.w === 2 ? { w: 2, h: 3 } : null;
+  assert.deepEqual(deckBeginPayload({ back: '/back', geom: { w: 2 } }, { refOk, sanitizeGeom }),
+    { back: '/back', geom: { w: 2, h: 3 } });
+  assert.equal(deckBeginPayload({ back: 2 }, { refOk, sanitizeGeom }), null);
+  assert.deepEqual(deckFinishPayload({ name: ' Deck ', spawn: false, editId: '4' }),
+    { name: 'Deck', spawn: false, editId: '4' });
+  assert.equal(deckFinishPayload({ name: 'Deck', spawn: 'no' }), null);
+  assert.equal(deckFinishPayload({ spawn: false, editId: '4' }), null);
+});
+
+test('save and spawn payloads reject unknown nested fields and unsupported types', () => {
+  assert.deepEqual(saveBoardPayload({ name: 'Map', board: { w: 10, d: 8 } }),
+    { name: 'Map', board: { w: 10, d: 8 }, editId: null });
+  const prop = { model: '/assets/props/a.glb', box: [1, 1, 1], stand: false, scale: 1 };
+  assert.deepEqual(savePropPayload({ name: 'Pawn', props: prop }, { colliders: [] }),
+    { name: 'Pawn', props: prop, editId: null });
+  const options = { boardKeys: ['chess'], propKeys: ['pawn'], dispenserKeys: ['chips'], colliders: ['flat'] };
+  assert.deepEqual(spawnPayload({ type: 'die', props: { sides: 20, color: 0xffffff } }, options),
+    { type: 'die', props: { sides: 20, color: 0xffffff } });
+  assert.deepEqual(spawnPayload({ type: 'prop', props: { shape: 'pawn', team: 1, snap: true } }, options),
+    { type: 'prop', props: { shape: 'pawn', team: 1, snap: true } });
+  assert.equal(spawnPayload({ type: 'prop', props: { shape: 'unknown' } }, options), null);
+  assert.equal(spawnPayload({ type: 'die', props: { sides: 20, injected: true } }, options), null);
+  assert.equal(spawnPayload({ type: 'admin', props: {} }, options), null);
 });
 
 test('drawing mutates deck count and returns cards in stack order', () => {

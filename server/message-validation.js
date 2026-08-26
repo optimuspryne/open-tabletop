@@ -219,9 +219,140 @@ export function cardPlacementPayload(message, { wholeHand = false } = {}) {
   return out;
 }
 
-export function deckAppendPayload(message, { max = 50, refOk }) {
+export function deckAppendPayload(message, { max = 50, maxBytes = 1024 * 1024, refOk }) {
   if (!exactObject(message, ['fronts']) || !Array.isArray(message.fronts) || !message.fronts.length || message.fronts.length > max) return null;
-  return message.fronts.every(refOk) ? { fronts: message.fronts.slice() } : null;
+  return message.fronts.every(refOk) && message.fronts.reduce((total, ref) => total + ref.length, 0) <= maxBytes
+    ? { fronts: message.fronts.slice() } : null;
+}
+
+const finiteTuple = (value, { length = 3, min = -Infinity, max = Infinity } = {}) => {
+  if (!Array.isArray(value) || value.length !== length) return null;
+  const out = value.map((item) => finiteNumber(item, { min, max }));
+  return out.includes(null) ? null : out;
+};
+
+const localAssetRef = (value, { extension = null } = {}) => {
+  if (boundedString(value, { min: 1, max: 300 }) === null || value.includes('..') || !value.startsWith('/assets/')) return null;
+  return extension && !value.toLowerCase().endsWith(extension) ? null : value;
+};
+
+export function boardRecordPayload(value, { boardKeys = [] } = {}) {
+  if (!isPlainObject(value)) return null;
+  if (value.board !== undefined) {
+    return exactObject(value, ['board']) && boardKeys.includes(value.board) ? { board: value.board } : null;
+  }
+  if (value.model !== undefined) {
+    if (!exactObject(value, ['model', 'modelScale', 'box'])) return null;
+    const model = localAssetRef(value.model, { extension: '.glb' });
+    const modelScale = finiteNumber(value.modelScale, { min: 1e-3, max: 1e3 });
+    const box = finiteTuple(value.box, { min: 1e-3, max: 100 });
+    return model && modelScale !== null && box ? { model, modelScale, box } : null;
+  }
+  if (!hasOnlyKeys(value, new Set(['w', 'd', 'tex'])) || !Object.hasOwn(value, 'w') || !Object.hasOwn(value, 'd')) return null;
+  const w = finiteNumber(value.w, { min: 0.1, max: 100 });
+  const d = finiteNumber(value.d, { min: 0.1, max: 100 });
+  if (w === null || d === null) return null;
+  const out = { w, d };
+  if (value.tex !== undefined && value.tex !== null) { const tex = localAssetRef(value.tex); if (!tex) return null; out.tex = tex; }
+  return out;
+}
+
+export function propRecordPayload(value, { colliders = [], allowSpawnOptions = false } = {}) {
+  if (!isPlainObject(value)) return null;
+  const allowed = ['model', 'box', 'stand', 'scale', 'modelRot', 'collider', 'color'];
+  if (allowSpawnOptions) allowed.push('snap');
+  if (!hasOnlyKeys(value, new Set(allowed))) return null;
+  const model = localAssetRef(value.model, { extension: '.glb' });
+  const box = finiteTuple(value.box, { min: 1e-3, max: 100 });
+  const scale = finiteNumber(value.scale, { min: 1e-3, max: 100 });
+  if (!model || !box || scale === null || typeof value.stand !== 'boolean') return null;
+  const out = { model, box, stand: value.stand, scale };
+  if (value.modelRot !== undefined) { const rot = finiteTuple(value.modelRot, { min: -Math.PI * 2, max: Math.PI * 2 }); if (!rot) return null; out.modelRot = rot; }
+  if (value.collider !== undefined) { if (!colliders.includes(value.collider)) return null; out.collider = value.collider; }
+  if (value.color !== undefined) { const color = finiteNumber(value.color, { min: 0, max: 0xffffff }); if (color === null || !Number.isInteger(color)) return null; out.color = color; }
+  if (allowSpawnOptions && value.snap !== undefined) { if (typeof value.snap !== 'boolean') return null; out.snap = value.snap; }
+  return out;
+}
+
+export function saveBoardPayload(message, options) {
+  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['name', 'board', 'editId']))) return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  const board = boardRecordPayload(message.board, options);
+  if (name === null || !name.trim() || !board) return null;
+  const out = { name: name.trim(), board, editId: null };
+  if (message.editId != null) { const id = databaseId(message.editId); if (id === null) return null; out.editId = id; }
+  return out;
+}
+
+export function savePropPayload(message, options) {
+  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['name', 'props', 'editId']))) return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  const props = propRecordPayload(message.props, options);
+  if (name === null || !name.trim() || !props) return null;
+  const out = { name: name.trim(), props, editId: null };
+  if (message.editId != null) { const id = databaseId(message.editId); if (id === null) return null; out.editId = id; }
+  return out;
+}
+
+export function deckBeginPayload(message, { refOk, sanitizeGeom }) {
+  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['back', 'geom'])) || !refOk(message.back)) return null;
+  const out = { back: message.back, geom: null };
+  if (message.geom !== undefined && message.geom !== null) { const geom = sanitizeGeom(message.geom); if (!geom) return null; out.geom = geom; }
+  return out;
+}
+
+export function deckFinishPayload(message) {
+  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['name', 'spawn', 'editId']))) return null;
+  const out = { name: null, spawn: true, editId: null };
+  if (message.name !== undefined && message.name !== null && message.name !== '') {
+    const name = boundedString(message.name, { min: 1, max: 60 }); if (name === null || !name.trim()) return null; out.name = name.trim();
+  }
+  if (message.spawn !== undefined) { if (typeof message.spawn !== 'boolean') return null; out.spawn = message.spawn; }
+  if (message.editId != null) { const id = databaseId(message.editId); if (id === null || !out.name) return null; out.editId = id; }
+  return out;
+}
+
+export function spawnPayload(message, { boardKeys = [], propKeys = [], dispenserKeys = [], colliders = [] } = {}) {
+  if (!exactObject(message, ['type', 'props']) || !isPlainObject(message.props)) return null;
+  const { type, props } = message;
+  if (type === 'die') {
+    if (!hasOnlyKeys(props, new Set(['sides', 'color', 'textColor', 'tray', 'snap']))) return null;
+    const sides = finiteNumber(props.sides, { min: 4, max: 20 });
+    if (sides === null || ![4, 6, 8, 10, 12, 20].includes(sides)) return null;
+    const out = { sides };
+    for (const key of ['color', 'textColor']) if (props[key] !== undefined) { const color = finiteNumber(props[key], { min: 0, max: 0xffffff }); if (color === null || !Number.isInteger(color)) return null; out[key] = color; }
+    for (const key of ['tray', 'snap']) if (props[key] !== undefined) { if (typeof props[key] !== 'boolean') return null; out[key] = props[key]; }
+    return { type, props: out };
+  }
+  if (type === 'deck') {
+    if (!hasOnlyKeys(props, new Set(['jokers', 'set', 'snap']))) return null;
+    const out = {};
+    if (props.jokers !== undefined) { if (typeof props.jokers !== 'boolean') return null; out.jokers = props.jokers; }
+    if (props.set !== undefined) { if (!['domino', 'letter', 'mahjong'].includes(props.set)) return null; out.set = props.set; }
+    if (props.snap !== undefined) { if (typeof props.snap !== 'boolean') return null; out.snap = props.snap; }
+    return { type, props: out };
+  }
+  if (type === 'board') { const board = boardRecordPayload(props, { boardKeys }); return board ? { type, props: board } : null; }
+  if (type === 'prop') {
+    if (props.model !== undefined) { const prop = propRecordPayload(props, { colliders, allowSpawnOptions: true }); return prop ? { type, props: prop } : null; }
+    if (!hasOnlyKeys(props, new Set(['shape', 'color', 'team', 'snap', 'stand'])) || !propKeys.includes(props.shape)) return null;
+    const out = { shape: props.shape };
+    if (props.color !== undefined) { const color = finiteNumber(props.color, { min: 0, max: 0xffffff }); if (color === null || !Number.isInteger(color)) return null; out.color = color; }
+    if (props.team !== undefined) { if (props.team !== 0 && props.team !== 1) return null; out.team = props.team; }
+    if (props.snap !== undefined) { if (typeof props.snap !== 'boolean') return null; out.snap = props.snap; }
+    if (props.stand !== undefined) { if (props.stand !== false && props.stand !== true && props.stand !== 'flat') return null; out.stand = props.stand; }
+    return { type, props: out };
+  }
+  if (type === 'dispenser') {
+    if (!hasOnlyKeys(props, new Set(['disp', 'color', 'team', 'count', 'snap'])) || !dispenserKeys.includes(props.disp)) return null;
+    const out = { disp: props.disp };
+    if (props.color !== undefined) { const color = finiteNumber(props.color, { min: 0, max: 0xffffff }); if (color === null || !Number.isInteger(color)) return null; out.color = color; }
+    if (props.team !== undefined) { if (props.team !== 0 && props.team !== 1) return null; out.team = props.team; }
+    if (props.count !== undefined) { const count = finiteNumber(props.count, { min: 1, max: 1000 }); if (count === null || !Number.isInteger(count)) return null; out.count = count; }
+    if (props.snap !== undefined) { if (typeof props.snap !== 'boolean') return null; out.snap = props.snap; }
+    return { type, props: out };
+  }
+  return null;
 }
 
 export function groupIds(message, { max = 80 } = {}) {

@@ -32,7 +32,7 @@ import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, scalePayload, scorePayload, showPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, saveBoardPayload, savePropPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -679,11 +679,10 @@ class TableRoom extends Room {
     });
     // Decks are built in chunks so no single message is huge (a text list can be
     // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
-    this.onMessage('deckBegin', (client, msg) => {
+    this.onMessage('deckBegin', (client, message) => {
       if (!this.isAdmin(client)) return; // building library decks is admin-only
-      const back = (msg && deckRefOk(msg.back)) ? msg.back : 'back';
-      const geom = sanitizeGeom(msg && msg.geom);      // optional custom card shape (fit-to-image decks)
-      this.drafts.set(client.sessionId, { back, cards: [], geom });
+      const msg = deckBeginPayload(message, { refOk: deckRefOk, sanitizeGeom }); if (!msg) return;
+      this.drafts.set(client.sessionId, { back: msg.back, cards: [], geom: msg.geom });
     });
     this.onMessage('deckAppend', (client, message) => {
       const draft = this.drafts.get(client.sessionId);
@@ -692,15 +691,15 @@ class TableRoom extends Room {
       if (draft.cards.length + msg.fronts.length > 1000) return;
       draft.cards.push(...msg.fronts);
     });
-    this.onMessage('deckFinish', async (client, msg) => {
+    this.onMessage('deckFinish', async (client, message) => {
       if (!this.isAdmin(client)) return;
+      const msg = deckFinishPayload(message); if (!msg) return;
       const draft = this.drafts.get(client.sessionId);
       this.drafts.delete(client.sessionId);
       if (!draft || !draft.cards.length) return;
       const geo = draft.geom ? { geom: draft.geom } : {};
-      const doSpawn = !msg || msg.spawn !== false; // default: spawn onto the table (also the back-compat path)
-      if (doSpawn) this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards, ...geo }); // spawn to test it live
-      if (msg && msg.name) {
+      if (msg.spawn) this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards, ...geo }); // spawn to test it live
+      if (msg.name) {
         try {
           if (msg.editId) await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom); // edit an existing deck in place
           else await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, geom: draft.geom, ownerId: client.auth.userId, isPublic: false });
@@ -727,45 +726,23 @@ class TableRoom extends Room {
       this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts, ...(deck.geom ? { geom: deck.geom } : {}) });
     });
 
-    this.onMessage('saveBoard', async (client, msg) => {
+    this.onMessage('saveBoard', async (client, message) => {
       if (!this.isAdmin(client)) return; // library curation is admin-only
-      const name = String((msg && msg.name) || '').slice(0, 60).trim();
-      if (!name) return;
-      const board = (msg && msg.board) || {};
-      let record;
-      if (board.board && BOARDS[board.board]) {
-        record = { board: board.board }; // a built-in board
-      } else if (board.model) {
-        record = { model: String(board.model).slice(0, 300), modelScale: +board.modelScale || 1,
-                   box: Array.isArray(board.box) ? board.box.map(v => +v) : undefined }; // an uploaded .glb
-      } else {
-        record = { w: board.w, d: board.d, tex: board.tex || null }; // a procedural board
-      }
+      const msg = saveBoardPayload(message, { boardKeys: Object.keys(BOARDS) }); if (!msg) return;
       try {
-        if (msg.editId) await db.updateBoard(msg.editId, name, record); // edit an existing board in place
-        else await db.insertBoard(name, record, { ownerId: client.auth.userId }); // private by default
+        if (msg.editId) await db.updateBoard(msg.editId, msg.name, msg.board); // edit an existing board in place
+        else await db.insertBoard(msg.name, msg.board, { ownerId: client.auth.userId }); // private by default
         this.sendAssetList(client, 'board');
       } catch (e) { console.error('[saveBoard]', e.message); }
     });
     this.onMessage('listBoards', (client) => this.sendAssetList(client, 'board'));
 
-    this.onMessage('saveProp', async (client, msg) => {
+    this.onMessage('saveProp', async (client, message) => {
       if (!this.isAdmin(client)) return;
-      const name = String((msg && msg.name) || '').slice(0, 60).trim();
-      if (!name) return;
-      const incoming = (msg && msg.props) || {};
-      if (!incoming.model) return; // only custom-model props are saveable
-      const props = {
-        model: String(incoming.model).slice(0, 300),
-        box: Array.isArray(incoming.box) ? incoming.box.map(v => +v) : undefined,
-        stand: !!incoming.stand,
-        scale: +incoming.scale || 1,
-      };
-      if (incoming.color != null) props.color = incoming.color | 0;
-      if (COLLIDER_TYPES.includes(incoming.collider)) props.collider = incoming.collider; // box is the default
+      const msg = savePropPayload(message, { colliders: COLLIDER_TYPES }); if (!msg) return;
       try {
-        if (msg.editId) await db.updateProp(msg.editId, name, props); // edit an existing prop in place
-        else await db.insertProp(name, props, { ownerId: client.auth.userId }); // private by default
+        if (msg.editId) await db.updateProp(msg.editId, msg.name, msg.props); // edit an existing prop in place
+        else await db.insertProp(msg.name, msg.props, { ownerId: client.auth.userId }); // private by default
         this.sendAssetList(client, 'prop');
       } catch (e) { console.error('[saveProp]', e.message); }
     });
@@ -884,8 +861,9 @@ class TableRoom extends Room {
       this.sendHand(client);    // updates the public count + sends the now-shorter private hand
       if (spawned) this.broadcast('sfx', { type: 'hand-drop' });
     });
-    this.onMessage('spawn', (client, msg) => {
+    this.onMessage('spawn', (client, message) => {
       if (this.state.pieces.size >= SIM.maxPieces) return;
+      const msg = spawnPayload(message, { boardKeys: Object.keys(BOARDS), propKeys: Object.keys(PROPS), dispenserKeys: Object.keys(DISPENSERS), colliders: COLLIDER_TYPES }); if (!msg) return;
       if (msg.type === 'board') {
         if (this.rank(client) < RANK.gm) return;   // reshaping the table is GM+
         this.swapBoard(msg.props || {}); // only one board at a time
