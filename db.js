@@ -8,23 +8,16 @@
 // Normalisation: a model's URL is the canonical column `file_url`; everything else
 // rides in the `props` jsonb bag. Reads splice the two back into the record shape
 // the game already expects, so nothing is stored twice.
-import fs from 'fs';
 import pg from 'pg';
 import { BOARDS } from './shared/pieces.js';
+import { databaseConnectionString } from './server/database-config.js';
 
 // The connection string comes from the environment, never from this file. Prefer
 // DATABASE_URL_FILE — a path to a file holding the string (the Docker-secrets
 // pattern, so the value never lands in the image or `docker inspect`) — and fall
 // back to DATABASE_URL. With neither set we throw at startup rather than guess a
 // default, so a missing config fails loudly instead of silently.
-function connectionString() {
-  const { DATABASE_URL_FILE, DATABASE_URL } = process.env;
-  if (DATABASE_URL_FILE) return fs.readFileSync(DATABASE_URL_FILE, 'utf8').trim();
-  if (DATABASE_URL) return DATABASE_URL;
-  throw new Error('Database not configured: set DATABASE_URL or DATABASE_URL_FILE (see .env.example).');
-}
-
-const pool = new pg.Pool({ connectionString: connectionString() });
+const pool = new pg.Pool({ connectionString: databaseConnectionString() });
 pool.on('error', (err) => console.error('[db] pool error:', err.message)); // don't crash on an idle-client drop
 
 export const close = () => pool.end(); // for one-off scripts to let the process exit
@@ -222,11 +215,9 @@ const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash,
 export async function createUser({ username, email, passwordHash = null, loginTokenHash = null, isAdmin = false }) {
   try {
     const hostStatus = passwordHash ? 'pending' : 'none';
-    // The very first account bootstraps as admin (NOT EXISTS is evaluated in the same
-    // statement, so it's atomic) — no manual SQL flip needed on a fresh install.
     const { rows } = await pool.query(
       `INSERT INTO users (username, email, password_hash, login_token_hash, is_admin, host_status)
-       VALUES ($1,$2,$3,$4, ($5 OR NOT EXISTS (SELECT 1 FROM users)), $6) RETURNING *`,
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
       [username, email, passwordHash, loginTokenHash, isAdmin, hostStatus]);
     return publicUser(rows[0]);
   } catch (e) {
@@ -235,6 +226,63 @@ export async function createUser({ username, email, passwordHash = null, loginTo
       const err = new Error(`${field} already taken`); err.conflict = field; throw err;
     }
     throw e;
+  }
+}
+
+// First-boot provisioning. The transaction-level advisory lock serializes multiple
+// app replicas; provisioning is allowed only on an empty users table. An existing
+// admin makes subsequent restarts a no-op, and existing non-admin users fail closed.
+export async function bootstrapAdmin({ username, email, passwordHash }) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('open-tabletop:admin-bootstrap'))");
+    const { rows: counts } = await client.query(
+      'SELECT count(*)::int AS users, count(*) FILTER (WHERE is_admin)::int AS admins FROM users');
+    if (counts[0].admins > 0) {
+      await client.query('COMMIT');
+      return { status: 'already-configured' };
+    }
+    if (counts[0].users > 0) {
+      throw new Error('Cannot bootstrap admin: users exist but none is an admin. Use npm run admin:grant -- <username-or-email>.');
+    }
+    const { rows } = await client.query(
+      `INSERT INTO users (username, email, password_hash, is_admin, host_status)
+       VALUES ($1,$2,$3,true,'approved') RETURNING *`, [username, email, passwordHash]);
+    await client.query('COMMIT');
+    return { status: 'created', user: publicUser(rows[0]) };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+// Local recovery command support. Exact case-insensitive username/email matching;
+// ambiguity fails closed. Revocation cannot remove the final administrator.
+export async function changeAdminByLogin(login, isAdmin) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('open-tabletop:admin-role-change'))");
+    const { rows } = await client.query(
+      'SELECT * FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1) FOR UPDATE', [login]);
+    if (rows.length !== 1) throw new Error(rows.length ? 'Login matches more than one account; use an unambiguous username or email.' : 'User not found.');
+    if (!isAdmin && rows[0].is_admin) {
+      const { rows: count } = await client.query('SELECT count(*)::int AS n FROM users WHERE is_admin = true');
+      if (count[0].n <= 1) throw new Error('Cannot revoke the final administrator.');
+    }
+    const { rows: updated } = await client.query(
+      "UPDATE users SET is_admin = $2, host_status = CASE WHEN $2 THEN 'approved' ELSE host_status END WHERE id = $1 RETURNING *",
+      [rows[0].id, !!isAdmin]);
+    await client.query('COMMIT');
+    return publicUser(updated[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 }
 

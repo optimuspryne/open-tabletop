@@ -19,6 +19,7 @@ import fs from 'fs';
 import path from 'path';
 import pg from 'pg';
 import { fileURLToPath } from 'url';
+import { databaseConnectionString } from './server/database-config.js';
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'postgres');
 const FILE_RE = /^\d{3,}_.+\.sql$/;  // numbered migrations only (skips schema.sql, grants_*.sql)
@@ -37,9 +38,7 @@ const BASELINE_MIGRATIONS = [
 // The migrator's connection string — an owner/DDL role, never the app role. Supports
 // the same `_FILE` (Docker-secret) form as db.js's DATABASE_URL. Null → not configured.
 function migrateConnectionString() {
-  const { MIGRATE_DATABASE_URL_FILE, MIGRATE_DATABASE_URL } = process.env;
-  if (MIGRATE_DATABASE_URL_FILE) return fs.readFileSync(MIGRATE_DATABASE_URL_FILE, 'utf8').trim();
-  return MIGRATE_DATABASE_URL || null;
+  return databaseConnectionString({ prefix: 'MIGRATE_', required: false });
 }
 
 // Drop the file's own standalone BEGIN/COMMIT so the body runs inside one

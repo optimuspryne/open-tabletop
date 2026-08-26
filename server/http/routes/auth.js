@@ -1,9 +1,8 @@
 import express from 'express';
 import { asyncRoute } from '../async-route.js';
 import { clientUser } from '../auth-context.js';
-
-export const validUsername = (value) => typeof value === 'string' && /^[a-zA-Z0-9_-]{3,20}$/.test(value.trim());
-export const validEmail = (value) => typeof value === 'string' && value.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
+import { validEmail, validUsername } from '../../auth-validation.js';
+export { validEmail, validUsername } from '../../auth-validation.js';
 
 export function createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPassword, makeToken, hashToken }) {
   const router = express.Router();

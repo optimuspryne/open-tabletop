@@ -1,5 +1,5 @@
 # Open Tabletop — app + Postgres.
-# First run:  cp .env.example .env  (set the two passwords),  then:  docker compose up -d
+# First run: copy .env.example, set admin identity, create all three files under secrets/, then start.
 services:
   db:
     image: postgres:16-alpine
@@ -7,13 +7,16 @@ services:
     environment:
       POSTGRES_USER: tabletop            # owner role — applies the schema (DDL)
       POSTGRES_DB: tabletop
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}  # used by the init script below
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_owner_password
+      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
     volumes:
       - db-data:/var/lib/postgresql/data
       # Init scripts run ONCE, on an empty data dir, in filename order:
       - ./postgres/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
       - ./docker/init-app-role.sh:/docker-entrypoint-initdb.d/02-app-role.sh:ro
+    secrets:
+      - db_owner_password
+      - app_db_password
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tabletop -d tabletop"]
       interval: 5s
@@ -28,17 +31,40 @@ services:
       db:
         condition: service_healthy           # wait until the schema + role are in place
     environment:
-      DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_NAME: tabletop
+      DATABASE_USER: tabletop_app
+      DATABASE_PASSWORD_FILE: /run/secrets/app_db_password
       # Owner (DDL) role — used ONLY at startup to auto-apply pending schema
       # migrations (see migrate.js), never for normal traffic. Remove it, or set
       # AUTO_MIGRATE=false, to manage migrations yourself.
-      MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
+      MIGRATE_DATABASE_HOST: db
+      MIGRATE_DATABASE_PORT: 5432
+      MIGRATE_DATABASE_NAME: tabletop
+      MIGRATE_DATABASE_USER: tabletop
+      MIGRATE_DATABASE_PASSWORD_FILE: /run/secrets/db_owner_password
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?set BOOTSTRAP_ADMIN_USERNAME in .env}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?set BOOTSTRAP_ADMIN_EMAIL in .env}
+      BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
       ASSETS_DIR: /data/assets
       # PORT: 2567
     ports:
       - "2567:2567"
     volumes:
       - assets:/data/assets                  # uploaded decks/boards/props/skyboxes
+    secrets:
+      - admin_password
+      - db_owner_password
+      - app_db_password
+
+secrets:
+  admin_password:
+    file: ./secrets/admin_password.txt
+  db_owner_password:
+    file: ./secrets/db_owner_password.txt
+  app_db_password:
+    file: ./secrets/app_db_password.txt
 
 volumes:
   db-data:

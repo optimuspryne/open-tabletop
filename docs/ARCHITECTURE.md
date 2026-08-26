@@ -59,11 +59,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`db.js`** — the Postgres connection pool and **every** query: the saved
   library (deck / board / prop / scene / skybox *metadata*; image/model files stay
   on disk) plus users, rooms, membership, and each room's durable settings. Config
-  comes from the environment only (`DATABASE_URL` / `DATABASE_URL_FILE`).
+  accepts `DATABASE_URL`, `DATABASE_URL_FILE`, or non-secret connection metadata
+  paired with `DATABASE_PASSWORD_FILE` (the Compose default).
 - **`migrate.js`** — the startup schema migrator: on boot it applies any
   `postgres/NNN_*.sql` not yet recorded in the `schema_migrations` table, in order,
-  as a privileged owner role (`MIGRATE_DATABASE_URL`) kept **separate** from the app's
-  least-privilege `DATABASE_URL`. Upgrades need no manual `psql` step, and it targets
+  as a privileged owner role (`MIGRATE_DATABASE_URL` or its password-file component
+  form) kept **separate** from the app's least-privilege connection. Upgrades need no manual `psql` step, and it targets
   any Postgres (stock or managed — there's no custom db image). `AUTO_MIGRATE=false` opts out.
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
@@ -700,10 +701,11 @@ re-request). Admins host regardless and are excluded from the pending count.
 
 **Admin console.** `/admin.html` (guarded by `is_admin`) manages all rooms
 (restore / purge soft-deleted) and users (grant/revoke admin, approve/reject/
-revoke host, delete-with-cascade). The **first account to sign up bootstraps as
-admin** — the signup `INSERT` sets `is_admin` when the users table is empty
-(an atomic `NOT EXISTS` in the same statement), so a fresh install needs no
-manual SQL flip.
+revoke host, delete-with-cascade). A fresh installation provisions its first
+administrator before the listener opens from `BOOTSTRAP_ADMIN_USERNAME`,
+`BOOTSTRAP_ADMIN_EMAIL`, and a password file. The transaction is advisory-locked
+and only permits an empty users table; normal signup never grants admin. Local
+`admin:grant` / `admin:revoke` commands provide recovery without an HTTP bootstrap.
 
 **Hardening.** The upload endpoints (`/upload`, `/upload-model`) are now gated by
 `requireAdmin` server-side — the "admin-only" guarantee no longer rests on the UI —

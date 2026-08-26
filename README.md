@@ -14,12 +14,18 @@ for you.
 ```bash
 git clone https://github.com/optimuspryne/open-tabletop.git
 cd open-tabletop
-cp .env.example .env        # then edit .env: set DB_PASSWORD and APP_DB_PASSWORD
+cp .env.example .env        # set bootstrap admin username/email
+mkdir -p secrets
+openssl rand -base64 32 > secrets/db_owner_password.txt
+openssl rand -base64 32 > secrets/app_db_password.txt
+openssl rand -base64 32 > secrets/admin_password.txt
+chmod 600 secrets/*.txt
 docker compose up -d
 ```
 
-Open **http://localhost:2567** (or your machine's LAN IP from another device). The **first account
-you sign up becomes the admin** — no SQL, no extra steps. Two named volumes keep your data:
+Open **http://localhost:2567** (or your machine's LAN IP from another device) and sign in with the
+bootstrap administrator configured above. Provisioning happens only against an empty users table;
+restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
@@ -84,13 +90,17 @@ Table State**, or an auto-save when the room empties — written into the room's
 4. **Point the app at it:** `cp .env.example .env`, set `DATABASE_URL` to the
    `tabletop_app` connection string (and `MIGRATE_DATABASE_URL` to the owner one for
    auto-migration). `npm start` auto-loads `.env`.
-5. **The first account is admin automatically** — sign up in the UI and you're
-   the admin; no SQL needed. Admins grant admin/host to others from the console.
-   (To promote someone later: `UPDATE users SET is_admin = true WHERE
-   lower(username) = lower('them');`.)
+5. **Provision an administrator explicitly.** Set `BOOTSTRAP_ADMIN_USERNAME`,
+   `BOOTSTRAP_ADMIN_EMAIL`, and `BOOTSTRAP_ADMIN_PASSWORD_FILE` before the first
+   start. Bootstrap runs only on an empty users table and never resets an existing
+   administrator. To recover or promote an existing account, run
+   `npm run admin:grant -- user@example.com`; use `admin:revoke` to remove access
+   (the final administrator cannot be revoked).
 
-Config comes from `DATABASE_URL`. There's no hardcoded fallback, so
-a missing config fails loudly at startup. For a remote DB, append `?sslmode=no-verify`
+Direct deployments normally use `DATABASE_URL` or `DATABASE_URL_FILE`. Docker Compose
+uses non-secret host/name/user metadata plus `DATABASE_PASSWORD_FILE`; migration keys
+use the same names with a `MIGRATE_` prefix. There's no hardcoded credential fallback,
+so missing or partial config fails loudly at startup. For a remote DB, append `?sslmode=no-verify`
 (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 turn on `ssl` server-side.
 
@@ -103,7 +113,12 @@ automatically on first start.
 ```bash
 git clone "https://github.com/optimuspryne/open-tabletop.git"
 cd open-tabletop/
-cp .env.example .env      # set DB_PASSWORD and APP_DB_PASSWORD
+cp .env.example .env      # set bootstrap admin username/email
+mkdir -p secrets
+openssl rand -base64 32 > secrets/db_owner_password.txt
+openssl rand -base64 32 > secrets/app_db_password.txt
+openssl rand -base64 32 > secrets/admin_password.txt
+chmod 600 secrets/*.txt
 docker compose up -d      # builds the image, starts Postgres, then the app
 ```
 
@@ -113,7 +128,19 @@ app **auto-applies any new migrations** itself at startup (via `MIGRATE_DATABASE
 so a `docker compose pull && up` is all it takes — no manual `psql` step. Two named
 volumes persist state: `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
-The **first account you sign up becomes admin automatically** — no SQL step needed.
+The administrator named in `.env` is created from the mounted password secret only
+when the users table is empty. Existing installations are left untouched. Recovery:
+`docker compose exec app npm run admin:grant -- user@example.com`.
+
+> **Upgrading an existing Compose install:** initialize
+> `secrets/db_owner_password.txt` and `secrets/app_db_password.txt` with the
+> **current** values of the old `DB_PASSWORD` and `APP_DB_PASSWORD` variables.
+> `npm run secrets:migrate` performs that copy without printing either value and
+> refuses to overwrite an existing secret.
+> Existing Postgres volumes retain their role passwords; merely generating new
+> secret values does not rotate them. After the secret-backed stack starts
+> successfully, remove those two password entries from `.env`. Rotate them later
+> only together with the corresponding PostgreSQL `ALTER ROLE` commands.
 
 ### Single container (bring your own Postgres)
 
@@ -556,7 +583,8 @@ stripping, image magic bytes), per-IP rate limits on uploads and auth, a per-use
 cross-room **live kick**, a socket **push** for the "you're admitted" signal (with a
 slow poll fallback), account **avatar uploads**, and an enforced **Content-Security-
 Policy** — `script-src 'self'`, no `unsafe-*`, with Three and Colyseus self-hosted
-under `public/vendor/` (no CDN). The first account to sign up is admin automatically.
+under `public/vendor/` (no CDN). The first administrator is explicitly provisioned
+from a password file before the public listener opens; ordinary signup never grants admin.
 Remaining optional hardening (post-parse model complexity limits, per-user storage
 caps, a shared-store rate limiter for multi-instance) is noted in
 `docs/ARCHITECTURE.md`.

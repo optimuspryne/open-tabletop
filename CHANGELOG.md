@@ -8,6 +8,15 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Security
+- Replace first-signup administrator promotion with explicit first-boot provisioning
+  from a Docker-mounted password secret. Provisioning runs before the public listener,
+  is transactionally locked, and only creates an account on an empty users table.
+- Add local `admin:grant` and `admin:revoke` recovery commands; revocation refuses to
+  remove the final administrator.
+- Move both Docker Compose database credentials from `.env`/container environment
+  variables into mounted secrets, including password-file connection support for
+  the application and migration roles.
 
 ### Accessibility
 - Lobby forms now use real <form> semantics (Enter-to-submit, labelled

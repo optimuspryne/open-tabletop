@@ -31,6 +31,7 @@ import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
+import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -2525,4 +2526,6 @@ const PORT = process.env.PORT || 2567;
 // Apply any pending schema migrations before serving. Fails fast (exits) rather than
 // booting on a half-migrated schema; no-ops when MIGRATE_DATABASE_URL isn't set.
 await runMigrations();
+const bootstrap = await bootstrapAdminFromEnvironment({ db, hashPassword });
+if (bootstrap.status === 'created') console.log(`[auth] provisioned bootstrap administrator: ${bootstrap.user.username}`);
 gameServer.listen(PORT).then(() => console.log(`\n  Open Tabletop running →  http://localhost:${PORT}\n`));

@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test",
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "admin:grant": "node --env-file-if-exists=.env scripts/admin-role.mjs grant",
+    "admin:revoke": "node --env-file-if-exists=.env scripts/admin-role.mjs revoke",
+    "secrets:migrate": "node --env-file-if-exists=.env scripts/migrate-compose-secrets.mjs"
   },
   "dependencies": {
     "@colyseus/core": "^0.17.0",

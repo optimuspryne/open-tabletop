@@ -515,9 +515,12 @@ admin sandbox for building and testing library assets live. Registered as the
 
 ## `db.js` — Postgres (library · users · rooms)
 
-The connection string comes from **`DATABASE_URL_FILE`** (a path to a secret file,
-priority) or **`DATABASE_URL`** — no hardcoded fallback; missing config throws at
-startup. For the library, a model's URL is the canonical `file_url` column and the
+The connection string comes from **`DATABASE_URL_FILE`** (a complete URL secret,
+highest priority), **`DATABASE_URL`**, or `DATABASE_HOST` / `DATABASE_PORT` /
+`DATABASE_NAME` / `DATABASE_USER` plus **`DATABASE_PASSWORD_FILE`**. Migration
+credentials accept the same keys with a `MIGRATE_` prefix. There is no hardcoded
+credential fallback; missing or partial config throws at startup. For the library,
+a model's URL is the canonical `file_url` column and the
 rest rides in a `props` jsonb bag, spliced back on read; bigint **`id`**s come back
 as strings (nullable `owner_id` via the `idOrNull` helper).
 
@@ -556,7 +559,9 @@ hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admi
 
 - `createUser({username,email,passwordHash,loginTokenHash,isAdmin}) → user` (a
   password ⇒ `host_status='pending'`; throws with `err.conflict = 'username' |
-  'email'` on a taken field), `findUserByLogin`, `findUserByToken`,
+  'email'` on a taken field; normal signup never infers admin), `bootstrapAdmin`
+  (advisory-locked, empty-table-only first-boot provisioning),
+  `changeAdminByLogin` (CLI recovery with final-admin protection), `findUserByLogin`, `findUserByToken`,
   `findUserById`, `setLoginToken`, `setPassword`, `setUserAvatar`, `listUsers`,
   `setAdmin`, `setHostStatus`, `countPendingHosts` (excludes admins),
   `roomsOwnedBy`, `purgeUser` (one transaction: null-out the user's asset

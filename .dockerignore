@@ -4,3 +4,4 @@ saved-assets
 .env
 .git
 .gitignore
+secrets
