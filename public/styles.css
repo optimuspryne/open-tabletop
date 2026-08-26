@@ -1402,6 +1402,12 @@ input[type="range"]::-moz-range-thumb {
 .dockLabel { font-size: var(--fs-sm); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
 #roomNotesBox { display: flex; flex-direction: column; }
 #roomNotesBox textarea { width: 100%; resize: vertical; min-height: 64px; }
+
+/* Room Info dock: Members section (UI_Redesign phase 4b) */
+#memberSection { display: flex; flex-direction: column; gap: 4px; }
+#memberSection #memberList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.pendingDot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-left: 6px; vertical-align: middle; box-shadow: 0 0 0 0 var(--accent); animation: pulse 1.6s infinite; }
+.pendingDot[hidden] { display: none; }
 #libraryModal.src-custom  .lib2-bi { display: none; }   /* Custom  → hide built-in lists */
 #libraryModal.src-builtin .lib2-cu { display: none; }   /* Built-In → hide custom lists */
 #libraryModal .lib2-cu:not(:empty) { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; } /* separate the two sources when both show */

@@ -33,7 +33,6 @@
   <span class="menu">
     <button id="roomBtn" data-icon="user-cog"><span class="lbl">GM Controls</span></button>
     <div class="grp" id="roomGrp" hidden>
-      <button id="roomMembers" data-icon="users"><span class="lbl">Members</span></button>
       <button id="roomScene" data-icon="movie"><span class="lbl">Scenes</span></button>
       <button id="roomSaveState" data-icon="device-floppy"><span class="lbl">Save Table</span></button>
       <button id="roomSettings" data-icon="brand-airtable"><span class="lbl">Room Settings</span></button>
@@ -67,11 +66,11 @@
   <button data-place="deck" data-icon="u-turn-left"><span class="lbl">Return to Deck</span></button>
 </div>
 <div id="wbTools" class="panel" hidden>
-  <span class="da-note">Whiteboard Controls</span>
-  <button id="wbPen" data-icon="highlight"><span class="lbl">Draw</span></button>
-  <button id="wbEraser" data-icon="eraser"><span class="lbl">Eraser</span></button>
-  <button id="wbClearBtn" data-icon="trash"><span class="lbl">Clear</span></button>
-  <button id="wbDone" data-icon="arrow-back-up"><span class="lbl">Return</span></button>
+  <span class="da-note">Whiteboard</span>
+  <button id="wbPen" class="on">✏️ Pen</button>
+  <button id="wbEraser">🧽 Eraser</button>
+  <button id="wbClearBtn" class="danger">Clear</button>
+  <button id="wbDone">Done <kbd>Esc</kbd></button>
 </div>
 <div id="trayTools" class="panel" hidden>
   <div class="pop-group">
@@ -126,6 +125,11 @@
 <div id="panel">
   <div>
     <div id="players" class="panel"></div>
+    <div id="memberSection" class="panel" hidden>
+      <div class="dockLabel">Members<span id="memberPending" class="pendingDot" hidden></span></div>
+      <div id="unclaimedHands" class="unclaimed"></div>
+      <ul id="memberList"></ul>
+    </div>
     <div id="roomNotesBox" class="panel">
       <div class="dockLabel">Room notes</div>
       <textarea id="roomNotes" rows="4" placeholder="GM notes for the room — house rules, current objective…"></textarea>
@@ -288,11 +292,6 @@
       </div>
     </div>
   </div>
-</div>
-<div id="membersPanel" class="panel popout" hidden>
-  <div id="membersHead" class="panel-head"><b>Members</b><button type="button" id="membersClose" class="close-x" aria-label="Close">✕</button></div>
-  <div id="unclaimedHands" class="unclaimed"></div>
-  <ul id="memberList"></ul>
 </div>
 
 <div id="roomSettingsModal" hidden>

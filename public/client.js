@@ -52,7 +52,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tracksPanel', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = ['tracksPanel', 'showPanel', 'dropPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -508,7 +508,8 @@ function rebuildGrid() {
   // Room Controls menu — the old spawn/add menus are gone; creation + spawning
   // now live in View Library, Built-Ins, and (editor) Add to Library.
   menu('roomBtn', 'roomGrp');
-  wire('roomMembers', () => { byId('roomGrp').hidden = true; const mp = byId('membersPanel'); mp.hidden = !mp.hidden; if (!mp.hidden) room.send('members'); renderUnclaimed(); });
+  // Members management now lives in the Room Info dock (GM-only #memberSection), populated by the
+  // memberList push; no popout to open.
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
   // Room Settings modal (UI_Redesign phase 3): tabbed Table Size & Color + Scale & Grid (Whiteboard + Skybox join in 3b).
   { const rs = byId('roomSettingsModal');
@@ -845,10 +846,7 @@ function rebuildGrid() {
     if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
   }, 100);
 
-  // ---- Members (GM tools): admit / kick / promote ----
-  const membersPanel = byId('membersPanel');
-  wire('membersBtn', () => { membersPanel.hidden = !membersPanel.hidden; if (!membersPanel.hidden) room.send('members'); renderUnclaimed(); });
-  byId('membersClose').onclick = () => { membersPanel.hidden = true; };
+  // ---- Members (GM tools): admit / kick / promote — rendered into the dock's #memberSection ----
 
   // ---- Show cards: pick an audience + scope, then hold the button to reveal ----
   const showPanel = byId('showPanel'), showAudience = byId('showAudience');
@@ -1836,6 +1834,7 @@ function applyRole(role) {
   const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('roomBtn', 2);                                          // Room Controls menu: GM+
+  gate('memberSection', 2);                                    // Members management (dock): GM+
   gate('lib2Btn', 1);                                          // Library (combined): Helper+
   // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
   const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
@@ -2484,10 +2483,8 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
 // GM sees new requests without opening the panel.
 function updateMembersPulse(list) {
   const pending = list.some((m) => m.status === 'pending');
-  const roomBtn = byId('roomBtn') || byId('membersBtn'); // Room menu on the table; standalone in the editor
-  if (roomBtn) roomBtn.classList.toggle('pulse', pending);
-  const roomMembers = byId('roomMembers');              // the Members item inside the Room menu
-  if (roomMembers) roomMembers.classList.toggle('pulse', pending);
+  const dot = byId('memberPending'); if (dot) dot.hidden = !pending;      // pending indicator in the dock
+  const sec = byId('memberSection'); if (sec) sec.classList.toggle('pulse', pending);
 }
 
 // Unclaimed hands from a loaded save whose owner hasn't returned. GM picks a
@@ -3014,7 +3011,7 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     }
   });
 }
-['showPanel','dropPanel','membersPanel','tracksPanel'].forEach((id) => wireDialog(byId(id)));
+['showPanel','dropPanel','tracksPanel'].forEach((id) => wireDialog(byId(id)));
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
