@@ -12,6 +12,7 @@ import pg from 'pg';
 import { databaseConnectionString } from './server/database-config.js';
 import { createLibraryQueries } from './server/library-queries.js';
 import { createUserQueries, publicUserRow } from './server/user-queries.js';
+import { createRoomQueries, roomRow } from './server/room-queries.js';
 
 // The connection string comes from the environment, never from this file. Prefer
 // DATABASE_URL_FILE — a path to a file holding the string (the Docker-secrets
@@ -27,6 +28,7 @@ export const close = () => pool.end(); // for one-off scripts to let the process
 const idOrNull = (v) => (v == null ? null : String(v));
 const library = createLibraryQueries((sql, params) => pool.query(sql, params));
 const userReads = createUserQueries((sql, params) => pool.query(sql, params));
+const roomReads = createRoomQueries((sql, params) => pool.query(sql, params));
 
 // ===== Decks =================================================================
 // cards = the ordered front refs (jsonb array); props = { back }.
@@ -316,10 +318,7 @@ export async function purgeUser(userId) {
 }
 
 // ===== Rooms ================================================================
-const roomShape = (r) => r && ({
-  id: String(r.id), ownerId: String(r.owner_id), code: r.code, name: r.name,
-  requireApproval: r.require_approval, createdAt: r.created_at, deletedAt: r.deleted_at,
-});
+const roomShape = roomRow;
 
 // Create a room AND its owner membership atomically (one CTE). Throws with
 // err.conflict = 'code' if the code is already in use by an active room.
@@ -341,46 +340,24 @@ export async function createRoom({ ownerId, code, name, requireApproval = true }
 }
 // Active room by code (soft-deleted rooms are invisible) — the join entry point.
 export async function findRoomByCode(code) {
-  try {
-    const { rows } = await pool.query('SELECT * FROM rooms WHERE code = $1 AND deleted_at IS NULL', [code]);
-    return roomShape(rows[0]) || null;
-  } catch (e) { console.error('[db] findRoomByCode:', e.message); return null; }
+  return roomReads.findRoomByCode(code);
 }
 export async function getRoom(id) {
-  try {
-    const { rows } = await pool.query('SELECT * FROM rooms WHERE id = $1', [id]);
-    return roomShape(rows[0]) || null;
-  } catch (e) { console.error('[db] getRoom:', e.message); return null; }
+  return roomReads.getRoom(id);
 }
 // Rooms a user belongs to, with their role/status there (active rooms only).
 export async function listRoomsForUser(userId) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT r.*, m.role, m.status FROM rooms r JOIN room_members m ON m.room_id = r.id
-       WHERE m.user_id = $1 AND r.deleted_at IS NULL ORDER BY r.created_at DESC`, [userId]);
-    return rows.map(r => ({ ...roomShape(r), role: r.role, status: r.status }));
-  } catch (e) { console.error('[db] listRoomsForUser:', e.message); return []; }
+  return roomReads.listRoomsForUser(userId);
 }
 // Every active room, shaped for the lobby — for site admins, who can see and
 // enter any room. Their own rooms keep the 'owner' role (so lobby management
 // still shows); the rest read as 'admin'. Always 'admitted' so Enter is enabled.
 export async function listRoomsForAdmin(adminId) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT r.*, u.username AS owner_name FROM rooms r JOIN users u ON u.id = r.owner_id
-       WHERE r.deleted_at IS NULL ORDER BY r.created_at DESC`);
-    return rows.map(r => ({ ...roomShape(r), ownerName: r.owner_name, status: 'admitted',
-      role: String(r.owner_id) === String(adminId) ? 'owner' : 'admin' }));
-  } catch (e) { console.error('[db] listRoomsForAdmin:', e.message); return []; }
+  return roomReads.listRoomsForAdmin(adminId);
 }
 // All rooms with owner name — the admin console (optionally including soft-deleted).
 export async function listRooms({ includeDeleted = false } = {}) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT r.*, u.username AS owner_name FROM rooms r JOIN users u ON u.id = r.owner_id
-       ${includeDeleted ? '' : 'WHERE r.deleted_at IS NULL'} ORDER BY r.created_at DESC`);
-    return rows.map(r => ({ ...roomShape(r), ownerName: r.owner_name }));
-  } catch (e) { console.error('[db] listRooms:', e.message); return []; }
+  return roomReads.listRooms({ includeDeleted });
 }
 export function setRoomPolicy(roomId, requireApproval) {
   return pool.query('UPDATE rooms SET require_approval = $2 WHERE id = $1', [roomId, requireApproval]);
@@ -391,11 +368,7 @@ export function renameRoom(roomId, name) {
 // Durable per-room state: scoreboard (array of {id,label,score}), GM notes, and
 // the play-surface half-extents. All survive restarts and are Reset-exempt.
 export async function getRoomState(roomId) {
-  try {
-    const { rows } = await pool.query('SELECT scoreboard, notes, table_x, table_z, skybox, felt_color, scene, scale FROM rooms WHERE id = $1', [roomId]);
-    if (!rows[0]) return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '', feltColor: '#2f6b4f', scene: null, scale: null };
-    return { scoreboard: rows[0].scoreboard || [], notes: rows[0].notes || '', tableX: Number(rows[0].table_x) || 10, tableZ: Number(rows[0].table_z) || 7, skybox: rows[0].skybox || '', feltColor: rows[0].felt_color || '#2f6b4f', scene: rows[0].scene || null, scale: rows[0].scale || null };
-  } catch (e) { console.error('[db] getRoomState:', e.message); return { scoreboard: [], notes: '', tableX: 10, tableZ: 7, skybox: '', feltColor: '#2f6b4f', scene: null, scale: null }; }
+  return roomReads.getRoomState(roomId);
 }
 export function saveRoomState(roomId, { scoreboard, notes, tableX, tableZ, skybox, feltColor, scene, scale }) {
   return pool.query('UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6, felt_color = $7, scene = $8, scale = $9 WHERE id = $1',
@@ -412,26 +385,14 @@ export function purgeRoom(roomId) { // admin only — permanent; cascades member
 }
 
 // ===== Membership ===========================================================
-const memberShape = (r) => r && ({ roomId: String(r.room_id), userId: String(r.user_id), role: r.role, status: r.status });
-
 // Join: create a membership if absent (status per the room's policy). Idempotent —
 // a returning member keeps their existing role/status (no reset to pending).
 export async function joinRoom({ roomId, userId, requireApproval }) {
-  try {
-    const status = requireApproval ? 'pending' : 'admitted';
-    const { rows } = await pool.query(
-      `INSERT INTO room_members (room_id, user_id, status) VALUES ($1,$2,$3)
-       ON CONFLICT (room_id, user_id) DO NOTHING RETURNING *`, [roomId, userId, status]);
-    if (rows[0]) return memberShape(rows[0]);  // fresh join
-    return getMembership(roomId, userId);       // already a member — keep their standing
-  } catch (e) { console.error('[db] joinRoom:', e.message); return null; }
+  return roomReads.joinRoom({ roomId, userId, requireApproval });
 }
 // The per-room role/status lookup that feeds every server-side permission check.
 export async function getMembership(roomId, userId) {
-  try {
-    const { rows } = await pool.query('SELECT * FROM room_members WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
-    return memberShape(rows[0]) || null;
-  } catch (e) { console.error('[db] getMembership:', e.message); return null; }
+  return roomReads.getMembership(roomId, userId);
 }
 export function admitMember(roomId, userId) { // GM approves a pending joiner
   return pool.query("UPDATE room_members SET status='admitted' WHERE room_id=$1 AND user_id=$2", [roomId, userId]);
@@ -444,11 +405,5 @@ export function setMemberRole(roomId, userId, role) { // flag helper / add co-gm
 }
 // Everyone in a room with their identity — the player list + approval queue.
 export async function listMembers(roomId) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT m.user_id, m.role, m.status, u.username, u.avatar FROM room_members m
-       JOIN users u ON u.id = m.user_id WHERE m.room_id = $1
-       ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'gm' THEN 1 WHEN 'helper' THEN 2 ELSE 3 END, u.username`, [roomId]);
-    return rows.map(r => ({ userId: String(r.user_id), username: r.username, avatar: r.avatar, role: r.role, status: r.status }));
-  } catch (e) { console.error('[db] listMembers:', e.message); return []; }
+  return roomReads.listMembers(roomId);
 }

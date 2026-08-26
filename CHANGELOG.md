@@ -26,6 +26,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Apply the same failure distinction to login/session lookup and admin user reads,
   so an outage cannot masquerade as invalid credentials, an expired session, an
   empty user list, zero pending hosts, or a user with no owned rooms.
+- Propagate room, membership, join, member-list, and durable room-state query
+  failures. An outage can no longer resemble a missing room/member, an empty lobby,
+  a rejected join, or a room reset to default settings.
 
 ## [0.10.0] — 2026-08-26
 
