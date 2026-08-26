@@ -22,13 +22,13 @@ import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
 import { finitePosition } from './server/message-validation.js';
-import { takeTopCard } from './server/deck-state.js';
 import { httpErrorHandler } from './server/http/async-route.js';
 import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
 import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
+import { registerCardHandlers } from './server/game/handlers/cards.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -681,72 +681,10 @@ class TableRoom extends Room {
       }
     });
 
-    // --- Cards: flip, deal, take ----------------------------------------------
-    this.onMessage('flip', (client, { id }) => {
-      const piece = this.state.pieces.get(id), body = this.bodies.get(id);
-      if (!piece || !body || piece.type !== 'card') return;
-      // A card's front lives in PUBLIC props when face-up, or PRIVATE cardData
-      // when face-down; flipping moves it between the two. The back is always
-      // public, so a face-down card's front is never sent to any client.
-      const props = JSON.parse(piece.props || '{}');
-      if (props.front) {                    // face-up → hide the front
-        this.cardData.set(id, { front: props.front });
-        delete props.front;
-      } else if (this.cardData.has(id)) {   // face-down → reveal the front
-        props.front = this.cardData.get(id).front;
-        this.cardData.delete(id);
-      }
-      piece.props = JSON.stringify(props);
-      body.wakeUp();
-      body.velocity.y = SIM.flipHop; // a small hop; the client plays the visual flip
-      this.broadcast('sfx', { type: 'card-flip' });
-    });
-    // Deal the top card face-down onto the table, just beside the deck.
-    this.onMessage('dealToTable', (client, { deckId }) => {
-      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      const draw = takeTopCard(deck, cards); if (!draw) return;
-
-      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const id = this.spawnCardFlat(this.besideDeck(this.bodies.get(deckId)), { back, ...geoOf(dp) }); // only the back is public
-      this.cardData.set(id, { front: draw.front }); // front stays private until taken or flipped
-
-      if (draw.empty) this.removePiece(deckId);
-      else this.updateDeckCollider(deckId);
-      this.broadcast('sfx', { type: dropSfx('card', dp) }); // a tile deck clacks a tile, not paper
-    });
-
-    // Single left-click on a deck: draw the top card straight into your OWN hand (a quick
-    // pick-up, distinct from left-DRAG which deals to the table). The front stays private —
-    // it's added to the clicker's hand, never spawned on the table.
-    this.onMessage('drawToHand', (client, { deckId }) => {
-      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      const draw = takeTopCard(deck, cards); if (!draw) return;
-      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      this.addToHand(client, draw.front, back, geoOf(dp)); // sends the updated hand to the drawer only
-      if (draw.empty) this.removePiece(deckId);
-      else this.updateDeckCollider(deckId);
-      this.broadcast('sfx', { type: dropSfx('card', dp) }); // a tile deck clacks a tile, not paper
-    });
-
-    // Deal the top card AND immediately give the dealer control to drag it out.
-    this.onMessage('dealDrag', (client, msg) => {
-      const target = finitePosition(msg);
-      if (!target) return;
-      const deck = this.state.pieces.get(msg.deckId), cards = this.deckCards.get(msg.deckId);
-      const draw = takeTopCard(deck, cards); if (!draw) return;
-
-      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const deckBody = this.bodies.get(msg.deckId);
-      const id = this.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], { back, ...geoOf(dp) });
-      this.cardData.set(id, { front: draw.front });
-
-      if (draw.empty) this.removePiece(msg.deckId);
-      else this.updateDeckCollider(msg.deckId);
-
-      // Hand the card straight to the dealer's cursor.
-      this.state.pieces.get(id).owner = client.sessionId;
-      this.targets.set(id, target);
-      client.send('dealt', { id }); // tell the client which card it now holds
+    // --- Cards: flip, deal, take, inspect, shuffle, split ----------------------
+    registerCardHandlers(this, {
+      flipHop: SIM.flipHop, maxPieces: SIM.maxPieces, spawnY: SIM.spawnY,
+      geoOf, dropSfx, randomPosition: rnd, shuffle,
     });
 
     // Dispensers: hand out one item on left-click / left-drag (right-drag moves the
@@ -774,85 +712,6 @@ class TableRoom extends Room {
       client.send('dealt', { id: newId });
     });
 
-    // Take a table card into your private hand (removing it from the table).
-    this.onMessage('takeCard', (client, { id }) => {
-      const piece = this.state.pieces.get(id);
-      if (!piece || piece.type !== 'card') return;
-      const props = JSON.parse(piece.props || '{}');
-      const front = (this.cardData.get(id) || {}).front || props.front;
-      const back = props.back || 'back';
-      this.addToHand(client, front, back, geoOf(props));
-      this.removePiece(id);
-    });
-
-    // Draw the top card so ONLY the drawer sees its front — like a private hand of
-    // one. The card sits in limbo (pendingInspect) until placed; the deck's count
-    // drops for everyone, but the deck itself stays so the card can be put back.
-    this.onMessage('drawInspect', (client, { deckId }) => {
-      if (this.pendingInspect.has(client.sessionId)) return; // one at a time
-      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      const draw = takeTopCard(deck, cards); if (!draw) return;
-
-      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      this.updateDeckCollider(deckId);
-
-      this.pendingInspect.set(client.sessionId, { deckId, front: draw.front, back, geo: geoOf(dp) });
-      client.send('inspectCard', { front: draw.front, back, ...geoOf(dp) }); // PRIVATE: only the drawer sees the front; geo → correct tile proportions
-    });
-    // Place a drawn-to-inspect card: back on the deck, into your hand, or onto
-    // the field face-up (public front) / face-down (front stays private).
-    this.onMessage('inspectPlace', (client, { where }) => {
-      const pending = this.pendingInspect.get(client.sessionId);
-      if (!pending) return;
-      this.pendingInspect.delete(client.sessionId);
-      const { deckId, front, back, geo = {} } = pending;
-
-      if (where === 'deck') { // return it to the top of the deck it came from
-        const cards = this.deckCards.get(deckId);
-        if (cards) {
-          cards.push(front);
-          const deck = this.state.pieces.get(deckId);
-          if (deck) deck.count = cards.length;
-          this.updateDeckCollider(deckId);
-        }
-        return;
-      }
-
-      if (where === 'hand') {
-        this.addToHand(client, front, back, geo);
-      } else { // 'field-up' (front public) or 'field-down' (front stays private)
-        const faceDown = where === 'field-down';
-        const deckBody = this.bodies.get(deckId);
-        const pos = deckBody ? this.besideDeck(deckBody) : rnd();
-        const id = this.spawnCardFlat(pos, faceDown ? { back, ...geo } : { front, back, ...geo });
-        if (faceDown) this.cardData.set(id, { front });
-      }
-
-      // The card has left the deck for good — clean up an emptied deck.
-      const cards = this.deckCards.get(deckId);
-      if (cards && cards.length === 0) this.removePiece(deckId);
-    });
-
-    this.onMessage('shuffle', (client, { deckId }) => {
-      const cards = this.deckCards.get(deckId);
-      if (cards) {
-        shuffle(cards);
-        this.broadcast('shuffled', { id: deckId }); // every client plays the riffle animation
-      }
-    });
-    // Split a deck in two: the original keeps the top half, a new (ephemeral) deck
-    // with the bottom half drops in beside it. Anyone who can touch decks can split.
-    this.onMessage('splitDeck', (client, { deckId } = {}) => {
-      const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
-      if (!deck || deck.type !== 'deck' || !cards || cards.length < 2) return;      // need 2+ cards to split
-      if (this.state.pieces.size >= SIM.maxPieces) return;
-      const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back';
-      const bottom = cards.splice(Math.floor(cards.length / 2));                    // original keeps the top half
-      deck.count = cards.length;
-      this.updateDeckCollider(deckId);
-      const p = this.bodies.get(deckId)?.position || { x: 0, z: 0 };
-      this.spawn('deck', [p.x + 2.2, SIM.spawnY, p.z], { back, cards: bottom, ...geoOf(dp) }); // the bottom half keeps the tile/geom
-    });
     // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
     this.onMessage('recolor', (client, { id, color, textColor, team } = {}) => {
       this.recolorPiece(id, { color, textColor, team });
