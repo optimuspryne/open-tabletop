@@ -456,6 +456,7 @@ function rebuildGrid() {
     cb(room.state).scores.onAdd((row) => { renderScores(); cb(row).listen('score', renderScores, false); cb(row).listen('label', renderScores, false); });
     cb(room.state).scores.onRemove(() => renderScores());
     cb(room.state).listen('notes', updateRoomNotes, false);
+    cb(room.state).listen('roomName', renderPlayers, false);
     cb(room.state).listen('tableX', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); rebuildGrid(); }, false);
     cb(room.state).listen('tableZ', () => { resizeTable(room.state.tableX, room.state.tableZ); rebuildSeats(); rebuildGrid(); }, false);
     cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
@@ -2421,9 +2422,10 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
     const tb = byId('turnBtn');
     if (tb) { tb.hidden = !t; tb.classList.toggle('myturn', room.state.turn === mySession); } // emphasize + light the chevron when it's yours
   } }
-  { const rt = byId('roomTitle'); if (rt) { // dock title, derived from the room owner (no room-name field yet)
-    let owner = ''; room.state.players.forEach((p) => { if (p.role === 'owner') owner = p.name; });
-    rt.textContent = owner ? owner + "\u2019s Table" : 'Shared Table';
+  { const rt = byId('roomTitle'); if (rt) { // dock title: real room name if set, else owner-derived (empty in the ?workshop=1 room)
+    const nm = (room.state.roomName || '').trim();
+    if (nm) rt.textContent = nm;
+    else { let owner = ''; room.state.players.forEach((p) => { if (p.role === 'owner') owner = p.name; }); rt.textContent = owner ? owner + "\u2019s Table" : 'Shared Table'; }
   } }
   const el = byId('players');
   if (!el) return;
