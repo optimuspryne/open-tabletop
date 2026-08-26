@@ -1839,7 +1839,7 @@ function applyRole(role) {
   gate('lib2Btn', 1);                                          // Library (combined): Helper+
   // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
   const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
-  gmTabs('libraryModal', ['boards', 'sky', 'scenes']);  // GM-only tabs within the combined library
+  gmTabs('libraryModal', ['boards', 'sky', 'scenes', 'games']);  // GM-only tabs within the combined library
   gate('roomCode', 2);                                         // room code display: GM+/owner/admin only
   gate('ctrlHelper', 1); gate('ctrlGM', 2);                    // How-to-Play sections revealed by role
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)

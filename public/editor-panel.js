@@ -93,7 +93,7 @@ function wireTabs(root) {
   });
 }
 // A per-modal controls row (multi-select buttons + divider + search), pinned in the sticky header.
-// Everything acts on the currently visible tab's list, found fresh each time via activeUl().
+// Everything acts on the currently visible tab's visible list(s), found fresh each time via activeUls().
 function wireControls(root) {
   const tabs = root.querySelector('.libTabs');
   if (!tabs || root.querySelector('.libControls')) return;
@@ -105,21 +105,24 @@ function wireControls(root) {
   const inp = document.createElement('input'); inp.type = 'search'; inp.className = 'libSearch'; inp.placeholder = 'Search\u2026';
   wrap.append(inp);
   row.append(sel, go, divider, wrap); tabs.after(row);
-  const activeUl = () => { const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden); return pane ? pane.querySelector('.libList') : null; };
-  sel.onclick = () => {
-    const ul = activeUl(); if (!ul) return;
-    const on = ul.classList.toggle('selecting'); sel.classList.toggle('on', on); go.hidden = !on;
-    if (!on) ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
+  // A combined-library pane can hold two lists (built-in + custom); act on all VISIBLE ones (respects the source toggle).
+  const activeUls = () => {
+    const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden);
+    return pane ? [...pane.querySelectorAll('.libList')].filter((ul) => getComputedStyle(ul).display !== 'none') : [];
   };
-  go.onclick = () => { const ul = activeUl(); if (ul) ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn()); };
-  root._resetSelect = () => { sel.classList.remove('on'); go.hidden = true; };
+  sel.onclick = () => {
+    const uls = activeUls(); if (!uls.length) return;
+    const on = !sel.classList.contains('on'); sel.classList.toggle('on', on); go.hidden = !on;
+    uls.forEach((ul) => { ul.classList.toggle('selecting', on); if (!on) ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel')); });
+  };
+  go.onclick = () => { activeUls().forEach((ul) => ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn())); };
+  root._resetSelect = () => { sel.classList.remove('on'); go.hidden = true; root.querySelectorAll('.libList.selecting').forEach((ul) => { ul.classList.remove('selecting'); ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel')); }); };
   root._applySearch = () => {
     const q = inp.value.trim().toLowerCase();
-    const ul = activeUl(); if (!ul) return;
-    ul.querySelectorAll('.libCard').forEach((card) => {
+    activeUls().forEach((ul) => ul.querySelectorAll('.libCard').forEach((card) => {
       const name = (card.querySelector('.libName')?.textContent || '').toLowerCase();
       card.style.display = (!q || name.includes(q)) ? '' : 'none';
-    });
+    }));
   };
   inp.oninput = root._applySearch;
 }
@@ -787,6 +790,8 @@ window.onOttRoom = (room) => {
       lib2.querySelectorAll('#lib2Source .chip').forEach((x) => x.classList.toggle('on', x === c));
       lib2.classList.remove('src-all', 'src-custom', 'src-builtin');
       lib2.classList.add('src-' + c.dataset.src);
+      if (lib2._resetSelect) lib2._resetSelect();   // select mode may span lists that just hid
+      if (lib2._applySearch) lib2._applySearch();    // re-filter the now-visible list(s)
     });
     lib2.classList.add('src-all');
     // Room Controls → Load a Scene: open the library straight to the Scenes tab.
