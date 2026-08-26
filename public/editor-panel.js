@@ -321,13 +321,13 @@ function renderList(kind, list, sink) {
       ul.appendChild(li);
     }
   }
-  const lp = byId('libraryPanel'); if (lp && lp._applySearch) lp._applySearch();
+  const lp = byId('libraryModal'); if (lp && lp._applySearch) lp._applySearch();
 }
 
 // client.js fans the three list messages here (and still renders the modal saved-lists).
 const listCache = {};
-window.onLibraryList = (kind, list) => { listCache[kind] = list; renderList(kind, list); const lm = byId('libraryModal'); if (lm && !lm.hidden) renderList(kind, list, (k) => byId('nlc_' + k)); };
-window.onLibraryAdmin = () => { for (const k in listCache) renderList(k, listCache[k]); }; // admin status arrived → re-render
+window.onLibraryList = (kind, list) => { listCache[kind] = list; const lm = byId('libraryModal'); if (lm && !lm.hidden) renderList(kind, list, (k) => byId('nlc_' + k)); };
+window.onLibraryAdmin = () => { const lm = byId('libraryModal'); if (lm && !lm.hidden) for (const k in listCache) renderList(k, listCache[k], (kk) => byId('nlc_' + kk)); }; // admin status arrived → re-render
 
 // ---- built-in library (read-only: spawn the bundled pieces) ----------------
 // One card, with a preview node and a Spawn/Apply button.
@@ -423,7 +423,7 @@ function renderBuiltin(sink) {
     const box = previewBox(); box.append(thumbImg(s.faces ? s.faces[0] : s.url));
     sky.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
   }
-  const bm = byId('builtinModal'); if (bm && bm._applySearch) bm._applySearch();
+  const bm = byId('libraryModal'); if (bm && bm._applySearch) bm._applySearch();
 }
 
 // Combined library (parallel test): built-in + custom into one modal, filtered by the source toggle.
@@ -774,31 +774,7 @@ window.onOttRoom = (room) => {
     (isText ? FILLERS.txtdeck : FILLERS.imgdeck)(d, clone);
   });
   const refresh = () => { room.send('listDecks'); room.send('listBoards'); room.send('listProps'); room.send('listScenes'); room.send('listSkyboxes'); };
-  // View Library (present on both the editor and the table)
-  const panel = byId('libraryPanel');
-  if (panel) {
-    byId('libraryBtn').onclick = () => { panel.hidden = !panel.hidden; if (!panel.hidden) refresh(); };
-    byId('libraryClose').onclick = () => { panel.hidden = true; };
-    wireTabs(panel);
-    wireControls(panel);
-    // Room Controls → Load a Scene: open the library straight to the Scenes tab.
-    const roomScene = byId('roomScene');
-    if (roomScene) roomScene.onclick = () => {
-      const rg = byId('roomGrp'); if (rg) rg.hidden = true;
-      panel.hidden = false;
-      const scenesTab = panel.querySelector('.libTab[data-tab="scenes"]');
-      if (scenesTab) scenesTab.click(); // activate via wireTabs
-      refresh();
-    };
-  }
-  // Built-in library — bundled pieces, spawn-only (client-side data, no server fetch).
-  const builtin = byId('builtinModal');
-  if (builtin) {
-    byId('builtinBtn').onclick = () => { builtin.hidden = !builtin.hidden; if (!builtin.hidden) renderBuiltin(); };
-    byId('builtinClose').onclick = () => { builtin.hidden = true; };
-    wireTabs(builtin);
-    wireControls(builtin);
-  }
+  // Old #libraryPanel + #builtinModal removed — one combined #libraryModal below.
 
   // Combined Library modal (parallel test alongside the two old ones).
   const lib2 = byId('libraryModal');
@@ -813,6 +789,13 @@ window.onOttRoom = (room) => {
       lib2.classList.add('src-' + c.dataset.src);
     });
     lib2.classList.add('src-all');
+    // Room Controls → Load a Scene: open the library straight to the Scenes tab.
+    const roomScene = byId('roomScene');
+    if (roomScene) roomScene.onclick = () => {
+      const rg = byId('roomGrp'); if (rg) rg.hidden = true;
+      lib2.hidden = false; renderLibrary(); refresh();
+      const t = lib2.querySelector('.libTab[data-tab="scenes"]'); if (t) t.click();
+    };
   }
   // Add-to-Library builder — editor only (absent on the table).
   const addModal = byId('addModal');

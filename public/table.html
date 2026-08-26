@@ -40,9 +40,7 @@
       <button id="roomReset" class="danger" data-icon="trash"><span class="lbl">Reset</span></button>
     </div>
   </span>
-  <button id="builtinBtn" data-icon="building-warehouse"><span class="lbl">Built-In Library</span></button>
-  <button id="libraryBtn" data-icon="books"><span class="lbl">Custom Library</span></button>
-  <button id="lib2Btn" data-icon="books"><span class="lbl">Library ✦</span></button>
+  <button id="lib2Btn" data-icon="books"><span class="lbl">Library</span></button>
   <button id="addBtn" class="admin-only" data-icon="library-plus"><span class="lbl">Add to Library</span></button>
   <button id="sceneSaveBtn" class="admin-only" data-icon="movie"><span class="lbl">Save Scene</span></button>
 </div>
@@ -501,62 +499,8 @@
     <div class="libPane" data-pane="scenes" hidden><ul id="nlc_scene" class="libList lib2-cu"></ul></div>
   </div>
 </div>
-<div id="libraryPanel" hidden>
-  <div class="modalCard libraryCard">
-  <div class="libSticky">
-  <div id="libraryHead" class="panel-head"><b>Library</b><button type="button" id="libraryClose" class="close-x" aria-label="Close">✕</button></div>
-  <p class="libHint">Browse and spawn shared assets. GMs can publish and manage them.</p>
-  <div class="libTabs">
-    <button class="libTab on" data-tab="decks">Decks</button>
-    <button class="libTab" data-tab="boards">Boards</button>
-    <button class="libTab" data-tab="props">Objects</button>
-    <button class="libTab" data-tab="sky">Skyboxes</button>
-    <button class="libTab" data-tab="scenes">Scenes</button>
-  </div>
-  </div>
-  <div class="libPane" data-pane="decks">
-    <ul id="libDecks" class="libList"></ul>
-  </div>
-  <div class="libPane" data-pane="boards" hidden>
-    <ul id="libBoards" class="libList"></ul>
-  </div>
-  <div class="libPane" data-pane="props" hidden>
-    <ul id="libProps" class="libList"></ul>
-  </div>
-  <div class="libPane" data-pane="sky" hidden>
-    <ul id="libSky" class="libList"></ul>
-  </div>
-  <div class="libPane" data-pane="scenes" hidden>
-    <ul id="libScenes" class="libList"></ul>
-  </div>
-  </div>
-</div>
 
 <!-- built-in asset library (editor only) — read-only, spawn built-ins -->
-<div id="builtinModal" hidden>
-  <div class="modalCard libraryCard">
-    <div class="libSticky">
-  <div id="builtinHead" class="panel-head"><b>Built-In Library</b><button type="button" id="builtinClose" class="close-x" aria-label="Close">✕</button></div>
-    <p class="libHint">Ready-made pieces bundled with Open Tabletop. Spawn them straight onto the table.</p>
-    <div class="libTabs">
-      <button class="libTab on" data-tab="dice">Dice</button>
-      <button class="libTab" data-tab="decks">Decks</button>
-      <button class="libTab" data-tab="boards">Boards</button>
-      <button class="libTab" data-tab="games">Games</button>
-      <button class="libTab" data-tab="objects">Objects</button>
-      <button class="libTab" data-tab="dispensers">Dispensers</button>
-      <button class="libTab" data-tab="sky">Skyboxes</button>
-    </div>
-  </div>
-    <div class="libPane" data-pane="dice"><ul id="biDice" class="libList"></ul></div>
-    <div class="libPane" data-pane="decks" hidden><ul id="biDecks" class="libList"></ul></div>
-    <div class="libPane" data-pane="boards" hidden><ul id="biBoards" class="libList"></ul></div>
-    <div class="libPane" data-pane="games" hidden><p class="libHint">One-click game setups. Loading one clears the table and places the board and pieces (GM only).</p><ul id="biGames" class="libList"></ul></div>
-    <div class="libPane" data-pane="objects" hidden><ul id="biObjects" class="libList"></ul></div>
-    <div class="libPane" data-pane="dispensers" hidden><ul id="biDispensers" class="libList"></ul></div>
-    <div class="libPane" data-pane="sky" hidden><ul id="biSky" class="libList"></ul></div>
-  </div>
-</div>
 
 <!-- add-to-library builder — create + save new assets (admins only) -->
 <div id="addModal" role="dialog" aria-modal="true" aria-labelledby="addTitle" tabindex="-1" hidden>

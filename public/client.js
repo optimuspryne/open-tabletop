@@ -1836,11 +1836,10 @@ function applyRole(role) {
   const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('roomBtn', 2);                                          // Room Controls menu: GM+
-  gate('libraryBtn', 1); gate('builtinBtn', 1);                // View Library + Built-Ins: Helper+ (both pages)
+  gate('lib2Btn', 1);                                          // Library (combined): Helper+
   // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
   const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
-  gmTabs('libraryPanel', ['boards', 'sky', 'scenes']);
-  gmTabs('builtinModal', ['boards', 'sky']);
+  gmTabs('libraryModal', ['boards', 'sky', 'scenes']);  // GM-only tabs within the combined library
   gate('roomCode', 2);                                         // room code display: GM+/owner/admin only
   gate('ctrlHelper', 1); gate('ctrlGM', 2);                    // How-to-Play sections revealed by role
   gate('reset', 2); gate('scenesBtn', 2); gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
@@ -3019,7 +3018,7 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
-['libraryPanel', 'builtinModal', 'libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
+['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
 
 // ---- shared-region cluster primitive (UI_Redesign phase 1) -----------------------------
 // N hamburger buttons share ONE region. Accordion within the cluster: one pane open at a
@@ -3081,7 +3080,7 @@ function wireCluster(region, hams, opts = {}) {
   if (r && ib) wireCluster(r, [{ btn: ib, pane: 'interactions' }], { open: 'right' });
 }
 // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
-['libraryPanel', 'builtinModal', 'libraryModal'].forEach((id) => {
+['libraryModal'].forEach((id) => {
   const el = byId(id);
   if (el) new MutationObserver(() => applyIcons(el)).observe(el, { childList: true, subtree: true });
 });
