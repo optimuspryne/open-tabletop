@@ -107,10 +107,13 @@
   gap: 6px;
 }
 .actions.end { justify-content: flex-end; }
+.actions .ico {
+   width: var(--fs-sm-base); height: var(--fs-sm-base);
+}
 .actions button {
   min-width: 4.5em;
   padding: 4px 9px;
-  font-size: var(--fs-sm);
+  font-size: var(--fs-sm-base);
   white-space: nowrap;
 }
 
@@ -1365,7 +1368,7 @@ input[type="range"]::-moz-range-thumb {
 .modalCard.lib2Card { background: rgba(28,33,39,.70); backdrop-filter: blur(4px); }
 
 /* Room Info dock: Room Notes section (UI_Redesign phase 4a) */
-.dockLabel { font-size: var(--fs-sm); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
+.dockLabel { font-size: var(--fs-base); color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
 
 /* Room Info dock: Members section (UI_Redesign phase 4b) */
 #memberSection { display: flex; flex-direction: column; gap: 4px; }
@@ -1922,26 +1925,25 @@ body.admin {
 .turnPill:hover { border-color: var(--accent); }
 .turnPill.myturn { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent), 0 0 12px -3px var(--accent); } /* your turn: emphasized + clearly actionable */
 .turnPill:not(.myturn) .ico { opacity: .45; } /* chevron dimmed when it is not yours to advance */
-#turnMini { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#turnMini { min-width: 0; overflow: hidden; text-overflow: ellipsis; display: inline; } /* always show the turn text, even in compact UI / icon-only mode (id beats the .lbl-hiding class rules) */
 /* Top-right corner: avatar + static name beside the Your Turn pill */
 /* Top-right identity box (image 2): Your Turn + avatar + name in one glassy pill */
 #identityBar { display: flex; align-items: center; gap: 8px; min-width: 0; background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 5px 8px; box-shadow: 0 6px 18px var(--shadow-soft); }
 #identityBar #myAv { margin-left: auto; }   /* push avatar + name to the right, turn indicator on the left */
 #identityBar .turnPill { background: rgba(255,255,255,.05); backdrop-filter: none; }  /* the Your Turn box reads as a control inside the glass, not glass-on-glass */
-.myName { font: var(--fs) var(--font); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
+.myName { font: var(--fs-base) var(--text); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
 
 /* Room Info dock (image 1): one glassy container, header (toggle + owner-derived name + code), titled sections */
-#roomInfo { background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: 0 6px 18px var(--shadow-soft); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
-#roomInfoHead { display: flex; align-items: center; gap: 8px; padding: 9px 11px; }
-#roomInfoHead #railToggle { flex: 0 0 auto; padding: 2px; background: none; border: none; color: var(--muted); cursor: pointer; display: inline-flex; }
+#roomInfo { background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+#roomInfoHead { display: flex; align-items: center; gap: 10px; padding: 9px 11px;}
+#roomInfoHead #railToggle { flex: 0 0 auto; padding: 0px; background: none; border: none; color: var(--text); cursor: pointer; display: inline-flex; }
 #roomInfoHead #railToggle:hover { color: var(--accent); }
-.roomTitleWrap { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-#roomTitle { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#roomInfoHead #roomCode { color: var(--muted); font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; }
+#roomInfoHead #roomTitle { color: var(--accent); cursor: pointer; white-space: nowrap; }
+#roomInfoHead #roomCode { color: var(--text); cursor: pointer; white-space: nowrap; }
 #roomInfoHead #roomCode:hover { color: var(--accent); }
 #roomInfoBody { display: flex; flex-direction: column; gap: var(--gap); padding: 0 11px 11px; }
 .dockSection { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
-.dockSection #players { display: flex; flex-direction: column; gap: 4px; }
+.dockSection #players { display: flex; flex-direction: column; gap: 4px; color: var(--text); }
 .dockSection #roomNotes { width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px; }
 #roomInfo.collapsed #roomInfoBody { display: none; } /* collapse to just the header (name + code) */
 
@@ -1989,7 +1991,7 @@ body.admin {
   align-items: flex-end;          /* mirror of #hamBar, aligned to the right edge */
   gap: var(--gap);
 }
-@media (max-width: 720px, max-height: 500px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
+@media (max-width: 720px), (max-height: 500px), (pointer: coarse) { body:not(.ui-full) .lbl { display: none; } } /* compact: labels collapse to icons on mobile (full mode keeps them)
 
 /* ===== Phone layout: consistent, reactive UI ============================== */
 @media (max-width: 720px), (pointer: coarse) {
