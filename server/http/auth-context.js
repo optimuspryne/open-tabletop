@@ -11,6 +11,18 @@ export function createRequireUser({ db, hashToken }) {
   };
 }
 
+export function createRequireAdmin(requireUser) {
+  return async function requireAdmin(req, res) {
+    const user = await requireUser(req, res);
+    if (!user) return null;
+    if (!user.isAdmin) {
+      res.status(403).json({ error: 'admin only' });
+      return null;
+    }
+    return user;
+  };
+}
+
 export const clientUser = (user) => user && ({
   id: user.id,
   username: user.username,

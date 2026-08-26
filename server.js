@@ -23,10 +23,12 @@ import { runMigrations } from './migrate.js'; // startup schema migrator (owner-
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
 import { finitePosition } from './server/message-validation.js';
 import { takeTopCard } from './server/deck-state.js';
-import { asyncRoute, httpErrorHandler } from './server/http/async-route.js';
-import { createRequireUser } from './server/http/auth-context.js';
+import { httpErrorHandler } from './server/http/async-route.js';
+import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
 import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
+import { createUploadRouter } from './server/http/routes/uploads.js';
+import { createAdminRouter } from './server/http/routes/admin.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -2635,6 +2637,7 @@ const rateLimitUpload = makeRateLimiter({ cap: 300, refillPerMs: 3 / 1000, messa
 // attempt; this is defense in depth and still leaves room for a few users behind one NAT.
 const rateLimitAuth = makeRateLimiter({ cap: 20, refillPerMs: 20 / 60000, message: 'too many attempts — please slow down' });
 const requireUser = createRequireUser({ db, hashToken });
+const requireAdmin = createRequireAdmin(requireUser);
 
 // Security headers: helmet's defaults (HSTS, nosniff, frame-deny, referrer, hide
 // X-Powered-By…) minus its built-in CSP — we define our own below.
@@ -2689,64 +2692,9 @@ app.use('/assets',
   express.static(ASSETS_DIR),
 );
 
-// ---- Upload hardening: validate bytes + throttle before writing anything to disk ----
-
-// Accept only real raster images (magic bytes), not whatever the Content-Type claims.
-function validImage(buf) {
-  if (!buf || buf.length < 12) return false;
-  if (buf[0] === 0xFF && buf[1] === 0xD8) return true;                                     // JPEG
-  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return true; // PNG
-  if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) return true;                  // GIF
-  if (buf[0] === 0x52 && buf[1] === 0x49 && buf[8] === 0x57 && buf[9] === 0x45) return true; // RIFF....WEBP
-  return false;
-}
-
-// Validate a binary glTF (.glb): magic + version + self-consistency, and reject any
-// external reference (buffer/image uri that isn't a data: URI) so a model can't pull
-// or exfiltrate over the network when a client loads it.
-function validateGlb(buf) {
-  if (!buf || buf.length < 20) return { ok: false, reason: 'not a .glb (too small)' };
-  if (buf.readUInt32LE(0) !== 0x46546C67) return { ok: false, reason: 'not a .glb (bad magic)' }; // 'glTF'
-  if (buf.readUInt32LE(4) !== 2) return { ok: false, reason: 'unsupported glTF version' };
-  if (buf.readUInt32LE(8) !== buf.length) return { ok: false, reason: 'declared length mismatch' };
-  const jsonLen = buf.readUInt32LE(12);
-  if (buf.readUInt32LE(16) !== 0x4E4F534A) return { ok: false, reason: 'first chunk is not JSON' }; // 'JSON'
-  if (20 + jsonLen > buf.length) return { ok: false, reason: 'JSON chunk overruns file' };
-  let gltf;
-  try { gltf = JSON.parse(buf.slice(20, 20 + jsonLen).toString('utf8')); }
-  catch { return { ok: false, reason: 'invalid glTF JSON' }; }
-  const uris = [...(gltf.buffers || []), ...(gltf.images || [])].map(x => x && x.uri).filter(Boolean);
-  if (uris.some(u => !/^data:/i.test(String(u)))) return { ok: false, reason: 'model contains an external reference' };
-  return { ok: true };
-}
-
-// Image upload: one image per request, sent as a raw body (this sidesteps the
-// WebSocket payload cap). Saved under a random name; responds with its URL ref.
-app.post('/upload', rateLimitUpload, express.raw({ type: 'image/*', limit: '16mb' }), asyncRoute(async (req, res) => {
-  try {
-    if (!await requireAdmin(req, res)) return; // library uploads are admin-only
-    if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
-    if (!validImage(req.body)) return res.status(415).json({ error: 'not a supported image' });
-    const contentType = req.headers['content-type'] || '';
-    const ext = (contentType.split('/')[1] || 'jpg').replace('jpeg', 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
-    res.json({ url: saveAsset(req.query.kind, req.body, ext) }); // ?kind=uploads|decks|boards|props
-  } catch (e) {
-    res.status(500).json({ error: 'save failed' });
-  }
-}));
-
-// Model upload: a raw .glb of any content-type. Saved into the props/ category.
-app.post('/upload-model', rateLimitUpload, express.raw({ type: () => true, limit: '16mb' }), asyncRoute(async (req, res) => {
-  try {
-    if (!await requireAdmin(req, res)) return; // library uploads are admin-only
-    if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
-    const v = validateGlb(req.body);
-    if (!v.ok) return res.status(415).json({ error: v.reason });
-    res.json({ url: saveAsset(req.query.kind || 'props', req.body, 'glb') });
-  } catch (e) {
-    res.status(500).json({ error: 'save failed' });
-  }
-}));
+// Raw image/model uploads are authenticated, byte-validated, and throttled in
+// their own router. saveAsset retains the allowlisted destination policy.
+app.use(createUploadRouter({ rateLimitUpload, requireAdmin, saveAsset }));
 
 // --- Auth (HTTP): signup / login / token-resolve --------------------------
 // The landing page talks to these before joining any room. Passwords use scrypt;
@@ -2755,11 +2703,6 @@ app.post('/upload-model', rateLimitUpload, express.raw({ type: () => true, limit
 app.use('/auth', createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPassword, makeToken, hashToken }));
 
 // --- Admin console (site superusers only) ---------------------------------
-async function requireAdmin(req, res) {
-  const user = await requireUser(req, res); if (!user) return null;
-  if (!user.isAdmin) { res.status(403).json({ error: 'admin only' }); return null; }
-  return user;
-}
 async function disposeLive(code) { // shut down a running table for this code, if any
   try {
     const live = await matchMaker.query({ name: 'table', code });
@@ -2779,76 +2722,8 @@ function kickUserEverywhere(userId) {
   return n;
 }
 
-app.get('/admin/rooms', asyncRoute(async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  res.json({ rooms: await db.listRooms({ includeDeleted: true }) }); // active + soft-deleted, with owner name
-}));
-app.get('/admin/orphans', asyncRoute(async (req, res) => {     // dry-run: report unreferenced files, delete nothing
-  if (!await requireAdmin(req, res)) return;
-  try {
-    const orphans = await findOrphanAssets();
-    res.json({ count: orphans.length, totalBytes: orphans.reduce((s, o) => s + o.size, 0), files: orphans.slice(0, 200).map(o => ({ url: o.url, size: o.size })) });
-  } catch (e) { console.error('[orphans scan]', e.message); res.status(500).json({ error: 'scan failed — nothing was deleted' }); }
-}));
-app.post('/admin/orphans/purge', asyncRoute(async (req, res) => { // re-scan fresh, then move orphans to .trash
-  if (!await requireAdmin(req, res)) return;
-  try {
-    const orphans = await findOrphanAssets();          // never trust a stale client list
-    const bytes = orphans.reduce((s, o) => s + o.size, 0);
-    const moved = trashOrphans(orphans);
-    res.json({ moved: moved.length, totalBytes: bytes });
-  } catch (e) { console.error('[orphans purge]', e.message); res.status(500).json({ error: 'scan failed — nothing was deleted' }); }
-}));
-app.get('/admin/users', asyncRoute(async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  res.json({ users: await db.listUsers() });
-}));
-app.get('/admin/pending-count', asyncRoute(async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  res.json({ pending: await db.countPendingHosts() }); // for the console/lobby badge
-}));
-app.post('/admin/users/:id/host', express.json({ limit: '1kb' }), asyncRoute(async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  const status = req.body && req.body.status;
-  if (!['approved', 'pending', 'none'].includes(status)) return res.status(400).json({ error: 'bad status' });
-  await db.setHostStatus(req.params.id, status); // approve -> 'approved', reject/revoke -> 'none'
-  res.json({ ok: true });
-}));
-app.post('/admin/rooms/:id/restore', asyncRoute(async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
-  await db.restoreRoom(req.params.id); // clears deleted_at (only works if the code is still free)
-  res.json({ ok: true });
-}));
-app.delete('/admin/rooms/:id', asyncRoute(async (req, res) => { // permanent purge (cascades members)
-  if (!await requireAdmin(req, res)) return;
-  const room = await db.getRoom(req.params.id);
-  if (room) await disposeLive(room.code);
-  await db.purgeRoom(req.params.id);
-  res.json({ ok: true });
-}));
-app.post('/admin/users/:id/admin', express.json({ limit: '1kb' }), asyncRoute(async (req, res) => {
-  const me = await requireAdmin(req, res); if (!me) return;
-  const makeAdmin = !!(req.body && req.body.isAdmin);
-  if (String(req.params.id) === String(me.id) && !makeAdmin) {
-    return res.status(400).json({ error: 'you cannot remove your own admin rights' }); // avoid locking out the last admin
-  }
-  await db.setAdmin(req.params.id, makeAdmin);
-  res.json({ ok: true });
-}));
-app.post('/admin/users/:id/kick', asyncRoute(async (req, res) => { // drop a user from every live table (doesn't touch their account)
-  if (!await requireAdmin(req, res)) return;
-  res.json({ ok: true, rooms: kickUserEverywhere(req.params.id) });
-}));
-app.delete('/admin/users/:id', asyncRoute(async (req, res) => {
-  const me = await requireAdmin(req, res); if (!me) return;
-  if (String(req.params.id) === String(me.id)) return res.status(400).json({ error: 'you cannot delete your own account' });
-  const target = await db.findUserById(req.params.id);
-  if (!target) return res.status(404).json({ error: 'user not found' });
-  for (const r of await db.roomsOwnedBy(req.params.id)) await disposeLive(r.code); // dispose the tables they own
-  kickUserEverywhere(req.params.id); // and drop them from any other live table they're in
-  try { await db.purgeUser(req.params.id); }
-  catch (e) { console.error('[purge user]', e.message); return res.status(500).json({ error: 'could not delete user' }); }
-  res.json({ ok: true });
+app.use('/admin', createAdminRouter({
+  db, requireAdmin, findOrphanAssets, trashOrphans, disposeLive, kickUserEverywhere,
 }));
 
 // Must be registered after every HTTP route so rejected async handlers land here.

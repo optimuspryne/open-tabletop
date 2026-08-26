@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { asyncRoute, httpErrorHandler } from '../server/http/async-route.js';
-import { clientUser, createRequireUser } from '../server/http/auth-context.js';
+import { clientUser, createRequireUser, createRequireAdmin } from '../server/http/auth-context.js';
 import { validEmail, validUsername } from '../server/http/routes/auth.js';
 
 test('asyncRoute forwards rejected promises to Express next', async () => {
@@ -51,6 +51,21 @@ test('bearer authentication rejects missing and non-Bearer credentials', async (
     assert.equal(response.statusCode, 401);
     assert.deepEqual(response.body, { error: 'not signed in' });
   }
+});
+
+test('admin authentication rejects ordinary users and returns administrators', async () => {
+  const responses = [];
+  const response = {
+    status(code) { responses.push(code); return this; },
+    json(body) { responses.push(body); return this; },
+  };
+  const rejectAdmin = createRequireAdmin(async () => ({ id: '1', isAdmin: false }));
+  assert.equal(await rejectAdmin({}, response), null);
+  assert.deepEqual(responses, [403, { error: 'admin only' }]);
+
+  const admin = { id: '2', isAdmin: true };
+  const acceptAdmin = createRequireAdmin(async () => admin);
+  assert.equal(await acceptAdmin({}, response), admin);
 });
 
 test('public user shape never exposes authentication hashes', () => {
