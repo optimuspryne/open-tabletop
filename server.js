@@ -32,7 +32,7 @@ import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { boundedString, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pointPayload, scalePayload, scorePayload, showPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, scalePayload, scorePayload, showPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -80,6 +80,7 @@ const SIM = {
 // front that's meant to stay hidden can't be discovered by poking at /assets.
 const ASSETS_DIR = process.env.ASSETS_DIR || './saved-assets';
 const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props', 'sky'];
+const LIBRARY_KINDS = ['deck', 'board', 'prop', 'scene', 'sky'];
 for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recursive: true });
 
 // Clamp a number into [min, max].
@@ -638,7 +639,9 @@ class TableRoom extends Room {
     // Dispensers: hand out one item on left-click / left-drag (right-drag moves the
     // whole thing, handled by the generic grab). Uniform, public copies — no private
     // list, unlike a deck. dispense = drop beside it; dispenseDrag = drop + carry.
-    this.onMessage('dispense', (client, { id } = {}) => {
+    this.onMessage('dispense', (client, message) => {
+      const parsed = pieceIdPayload(message); if (!parsed) return;
+      const { id } = parsed;
       const disp = this.state.pieces.get(id);
       if (!disp || disp.type !== 'dispenser') return;
       const item = this.dispenserItem(disp); if (!item) return;
@@ -647,7 +650,8 @@ class TableRoom extends Room {
       this.afterDispense(disp, id);
       this.broadcast('sfx', { type: 'object-drop' });
     });
-    this.onMessage('dispenseDrag', (client, msg = {}) => {
+    this.onMessage('dispenseDrag', (client, message) => {
+      const msg = dispenserDragPayload(message); if (!msg) return;
       const disp = this.state.pieces.get(msg.id);
       if (!disp || disp.type !== 'dispenser') return;
       const item = this.dispenserItem(disp); if (!item) return;
@@ -661,8 +665,9 @@ class TableRoom extends Room {
     });
 
     // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
-    this.onMessage('recolor', (client, { id, color, textColor, team } = {}) => {
-      this.recolorPiece(id, { color, textColor, team });
+    this.onMessage('recolor', (client, message) => {
+      const { id, ...colors } = recolorPayload(message) || {}; if (!id) return;
+      this.recolorPiece(id, colors);
     });
     // Recolor a whole multi-selection at once. One color/textColor is applied to every id it
     // fits: dice + props take `color` (dice also `textColor`), poker/coin dispensers take
@@ -680,12 +685,12 @@ class TableRoom extends Room {
       const geom = sanitizeGeom(msg && msg.geom);      // optional custom card shape (fit-to-image decks)
       this.drafts.set(client.sessionId, { back, cards: [], geom });
     });
-    this.onMessage('deckAppend', (client, msg) => {
+    this.onMessage('deckAppend', (client, message) => {
       const draft = this.drafts.get(client.sessionId);
-      if (!draft || !msg || !Array.isArray(msg.fronts)) return;
-      for (const front of msg.fronts) {
-        if (deckRefOk(front) && draft.cards.length < 1000) draft.cards.push(front);
-      }
+      if (!draft) return;
+      const msg = deckAppendPayload(message, { refOk: deckRefOk }); if (!msg) return;
+      if (draft.cards.length + msg.fronts.length > 1000) return;
+      draft.cards.push(...msg.fronts);
     });
     this.onMessage('deckFinish', async (client, msg) => {
       if (!this.isAdmin(client)) return;
@@ -705,16 +710,18 @@ class TableRoom extends Room {
     });
 
     // --- Library: save / list / load decks, boards, props ---------------------
-    this.onMessage('saveDeck', async (client, msg) => {
+    this.onMessage('saveDeck', async (client, message) => {
       if (!this.isAdmin(client)) return;
-      if (await this.saveDeckById(msg && msg.deckId, msg && msg.name, client.auth.userId)) {
+      const msg = namedIdPayload(message, { idKey: 'deckId' }); if (!msg) return;
+      if (await this.saveDeckById(msg.deckId, msg.name, client.auth.userId)) {
         this.sendAssetList(client, 'deck');
       }
     });
     this.onMessage('listDecks', (client) => this.sendAssetList(client, 'deck'));
-    this.onMessage('loadDeck', async (client, msg) => {
+    this.onMessage('loadDeck', async (client, message) => {
       if (this.rank(client) < RANK.helper) return;
-      const deck = await db.getDeck(msg && msg.id);
+      const msg = assetIdPayload(message); if (!msg) return;
+      const deck = await db.getDeck(msg.id);
       if (!deck) return;
       if (!deck.isPublic && !this.isAdmin(client)) return; // private assets: admins only
       this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts, ...(deck.geom ? { geom: deck.geom } : {}) });
@@ -765,33 +772,37 @@ class TableRoom extends Room {
     this.onMessage('listProps', (client) => this.sendAssetList(client, 'prop'));
 
     // --- Asset admin (site admins): toggle visibility, rename, delete ----------
-    this.onMessage('assetPublic', async (client, msg) => {
-      if (!this.isAdmin(client) || !msg) return;
-      try { await db.setAssetPublic(msg.kind, msg.id, !!msg.isPublic); this.sendAssetList(client, msg.kind); }
+    this.onMessage('assetPublic', async (client, message) => {
+      if (!this.isAdmin(client)) return;
+      const msg = assetMutationPayload(message, { kinds: LIBRARY_KINDS, mode: 'public' }); if (!msg) return;
+      try { await db.setAssetPublic(msg.kind, msg.id, msg.isPublic); this.sendAssetList(client, msg.kind); }
       catch (e) { console.error('[assetPublic]', e.message); }
     });
-    this.onMessage('assetRename', async (client, msg) => {
-      if (!this.isAdmin(client) || !msg) return;
-      const name = String(msg.name || '').slice(0, 60).trim(); if (!name) return;
-      try { await db.renameAsset(msg.kind, msg.id, name); this.sendAssetList(client, msg.kind); }
+    this.onMessage('assetRename', async (client, message) => {
+      if (!this.isAdmin(client)) return;
+      const msg = assetMutationPayload(message, { kinds: LIBRARY_KINDS, mode: 'rename' }); if (!msg) return;
+      try { await db.renameAsset(msg.kind, msg.id, msg.name); this.sendAssetList(client, msg.kind); }
       catch (e) { console.error('[assetRename]', e.message); }
     });
-    this.onMessage('getDeck', async (client, msg) => { // fetch a deck's full cards/back for the editor to pre-fill
-      if (!this.isAdmin(client) || !msg) return;
+    this.onMessage('getDeck', async (client, message) => { // fetch a deck's full cards/back for the editor to pre-fill
+      if (!this.isAdmin(client)) return;
+      const msg = assetIdPayload(message); if (!msg) return;
       const d = await db.getDeck(msg.id);
       if (d) client.send('deckData', { id: msg.id, name: d.name, back: d.back, fronts: d.fronts, geom: d.geom });
     });
-    this.onMessage('assetDelete', async (client, msg) => {
-      if (!this.isAdmin(client) || !msg) return;
+    this.onMessage('assetDelete', async (client, message) => {
+      if (!this.isAdmin(client)) return;
+      const msg = assetMutationPayload(message, { kinds: LIBRARY_KINDS, mode: 'delete' }); if (!msg) return;
       try { await db.deleteAsset(msg.kind, msg.id); this.sendAssetList(client, msg.kind); }
       catch (e) { console.error('[assetDelete]', e.message); }
     });
 
     // --- Scenes: a saved whole-table setup ------------------------------------
     this.onMessage('listScenes', (client) => this.sendAssetList(client, 'scene'));
-    this.onMessage('sceneSave', async (client, msg = {}) => {
+    this.onMessage('sceneSave', async (client, message) => {
       if (!this.isAdmin(client)) return; // scenes are curated in the editor (admin-only)
-      const name = String(msg.name || '').slice(0, 60).trim(); if (!name) return;
+      const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 60 })); if (!parsed || !parsed.name.trim()) return;
+      const name = parsed.name.trim();
       const payload = this.serializeScene();
       if (JSON.stringify(payload).length > SCENE_MAX_BYTES) { // don't let inline art bloat the row
         client.send('sceneError', { message: 'Scene is too large to save. Save its decks to the library first so their card art is stored as files, then try again.' });
@@ -802,8 +813,9 @@ class TableRoom extends Room {
         this.sendAssetList(client, 'scene');
       } catch (e) { console.error('[sceneSave]', e.message); }
     });
-    this.onMessage('sceneLoad', async (client, msg = {}) => {
+    this.onMessage('sceneLoad', async (client, message) => {
       if (this.rank(client) < RANK.gm) return; // replacing the whole table is GM+
+      const msg = assetIdPayload(message); if (!msg) return;
       const scene = await db.getScene(msg.id);
       if (!scene) return;
       if (!scene.isPublic && !this.isAdmin(client)) return; // private scenes: admins only
@@ -821,9 +833,10 @@ class TableRoom extends Room {
       client.send('stateSaved', {});
     });
 
-    this.onMessage('loadBoard', async (client, msg) => {
+    this.onMessage('loadBoard', async (client, message) => {
       if (this.rank(client) < RANK.gm) return; // changing the board reshapes the table: GM+
-      const data = await db.getBoard(msg && msg.id);
+      const msg = assetIdPayload(message); if (!msg) return;
+      const data = await db.getBoard(msg.id);
       if (!data) return;
       if (!data.isPublic && !this.isAdmin(client)) return; // private assets: admins only
       const rec = data.rec;
@@ -833,7 +846,9 @@ class TableRoom extends Room {
       this.swapBoard(props);
     });
     // Play a card from your hand onto the table, face-up or face-down.
-    this.onMessage('playCard', (client, { hid, faceDown, x, z }) => {
+    this.onMessage('playCard', (client, message) => {
+      const parsed = cardPlacementPayload(message); if (!parsed) return;
+      const { hid, faceDown, x, z } = parsed;
       const hand = this.hands.get(client.sessionId);
       if (!hand) return;
       const index = hand.findIndex(card => card.hid === hid);
@@ -851,7 +866,9 @@ class TableRoom extends Room {
 
     // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or
     // down, spread just in front of their marker (x/z sent by the client).
-    this.onMessage('handToTable', (client, { faceDown, x, z } = {}) => {
+    this.onMessage('handToTable', (client, message) => {
+      const parsed = cardPlacementPayload(message, { wholeHand: true }); if (!parsed) return;
+      const { faceDown, x, z } = parsed;
       const hand = this.hands.get(client.sessionId);
       if (!hand || !hand.length) return;
       const cx = typeof x === 'number' ? x : 0, cz = typeof z === 'number' ? z : 0;
@@ -900,7 +917,7 @@ class TableRoom extends Room {
       this.state.pieces.forEach((piece, id) => { const b = this.bodies.get(id); if (piece.type === 'die' && b && b.__traySeat === seat) { rollDie(id, SIM.trayRoll); n++; } });
       if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
     });
-    this.onMessage('rollOne', (client, msg = {}) => { const p = this.state.pieces.get(msg.id); const b = this.bodies.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id, b && b.__traySeat != null ? SIM.trayRoll : SIM.roll); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
+    this.onMessage('rollOne', (client, message) => { const msg = pieceIdPayload(message); if (!msg) return; const p = this.state.pieces.get(msg.id); const b = this.bodies.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id, b && b.__traySeat != null ? SIM.trayRoll : SIM.roll); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
     // Scoop: gather the caller's tray dice back to the middle (a light re-rack).
     this.onMessage('trayScoop', (client) => {
       const seat = this.seatOf(client); if (seat == null || !this.state.trays.get(String(seat))) return;
@@ -924,13 +941,16 @@ class TableRoom extends Room {
     });
 
     // Load a one-click starter game — clears the table and sets up the chosen game (GM+).
-    this.onMessage('loadStarter', (client, { game } = {}) => {
+    this.onMessage('loadStarter', (client, message) => {
       if (this.rank(client) < RANK.gm) return;   // replacing the whole table is GM+ (like scene load / reset)
-      if (STARTERS[game]) this.setupStarter(game);
+      const parsed = oneField(message, 'game', (game) => typeof game === 'string' && STARTERS[game] ? game : null); if (!parsed) return;
+      this.setupStarter(parsed.game);
     });
 
     // Toggle a piece's keep-upright/flat behaviour (the U key).
-    this.onMessage('setStand', (client, { id }) => {
+    this.onMessage('setStand', (client, message) => {
+      const parsed = pieceIdPayload(message); if (!parsed) return;
+      const { id } = parsed;
       const piece = this.state.pieces.get(id);
       if (!piece) return;
       const props = readProps(piece);
@@ -943,7 +963,9 @@ class TableRoom extends Room {
     // Per-piece snap-to-grid flag (mirrors setStand). Toggling it ON snaps the piece to
     // its nearest cell right away (when a grid is active); from then on every drop lands
     // on a cell. OFF restores free placement.
-    this.onMessage('setSnap', (client, { id } = {}) => {
+    this.onMessage('setSnap', (client, message) => {
+      const parsed = pieceIdPayload(message); if (!parsed) return;
+      const { id } = parsed;
       const piece = this.state.pieces.get(id);
       if (!piece) return;
       const props = readProps(piece);
@@ -964,7 +986,9 @@ class TableRoom extends Room {
     });
 
     // Snap a held piece a quarter-turn onward, and level it (middle-click).
-    this.onMessage('snap', (client, { id }) => {
+    this.onMessage('snap', (client, message) => {
+      const parsed = pieceIdPayload(message); if (!parsed) return;
+      const { id } = parsed;
       const piece = this.state.pieces.get(id);
       if (!piece || piece.owner !== client.sessionId) return;
       const body = this.bodies.get(id);
@@ -984,9 +1008,10 @@ class TableRoom extends Room {
     registerMemberHandlers(this, { db });
 
     this.onMessage('nextTurn', () => this.advanceTurn());
-    this.onMessage('remove', (client, { id }) => { if (this.rank(client) < RANK.helper) return; if (this.state.pieces.has(id)) this.removePiece(id); });
-    this.onMessage('removeGroup', (client, { ids } = {}) => { // delete a whole multi-selection at once (helper+)
-      if (this.rank(client) < RANK.helper || !Array.isArray(ids)) return;
+    this.onMessage('remove', (client, message) => { if (this.rank(client) < RANK.helper) return; const parsed = pieceIdPayload(message); if (parsed && this.state.pieces.has(parsed.id)) this.removePiece(parsed.id); });
+    this.onMessage('removeGroup', (client, message) => { // delete a whole multi-selection at once (helper+)
+      if (this.rank(client) < RANK.helper) return;
+      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       for (const id of ids) if (this.state.pieces.has(id)) this.removePiece(id);
     });
     this.onMessage('setName', (client, message) => {

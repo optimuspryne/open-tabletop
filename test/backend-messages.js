@@ -1,10 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  boundedString, boundedUniqueIds, finiteNumber, finitePosition, groupIds,
-  gridCalibrationPayload, groupRecolor, groupRotation, isPlainObject, overlayGeometry,
-  overlayMovePayload, scalePayload, scorePayload, showPayload, tablePayload,
-  timerPayload, whiteboardStroke,
+  assetMutationPayload, boundedString, boundedUniqueIds, cardPlacementPayload,
+  deckAppendPayload, dispenserDragPayload, finiteNumber, finitePosition, groupIds,
+  gridCalibrationPayload, groupRecolor, groupRotation, isPlainObject, namedIdPayload,
+  overlayGeometry, overlayMovePayload, recolorPayload, scalePayload, scorePayload,
+  showPayload, tablePayload, timerPayload, whiteboardStroke,
 } from '../server/message-validation.js';
 import { takeTopCard } from '../server/deck-state.js';
 
@@ -113,6 +114,39 @@ test('grid calibration and hand sharing use bounded enums and unique identifiers
     { to: ['session-2'], hids: ['h1', 'h2'] });
   assert.equal(showPayload({ to: ['session-2', 'session-2'], hids: ['h1'] }), null);
   assert.equal(showPayload({ to: 'all', hids: [1] }), null);
+});
+
+test('asset mutations require allowlisted kinds, database ids, and exact fields', () => {
+  const kinds = ['deck', 'board'];
+  assert.deepEqual(assetMutationPayload({ kind: 'deck', id: '42', isPublic: false }, { kinds, mode: 'public' }),
+    { kind: 'deck', id: '42', isPublic: false });
+  assert.deepEqual(assetMutationPayload({ kind: 'board', id: '7', name: ' New name ' }, { kinds, mode: 'rename' }),
+    { kind: 'board', id: '7', name: 'New name' });
+  assert.equal(assetMutationPayload({ kind: 'users', id: '42', isPublic: true }, { kinds, mode: 'public' }), null);
+  assert.equal(assetMutationPayload({ kind: 'deck', id: 42, isPublic: true }, { kinds, mode: 'public' }), null);
+  assert.equal(assetMutationPayload({ kind: 'deck', id: '42', isPublic: 1 }, { kinds, mode: 'public' }), null);
+  assert.deepEqual(namedIdPayload({ deckId: '8', name: 'Cards' }, { idKey: 'deckId' }), { deckId: '8', name: 'Cards' });
+});
+
+test('single-piece actions, drags, and card placements reject coercion', () => {
+  assert.deepEqual(recolorPayload({ id: '2', color: 0x123456 }), { id: '2', color: 0x123456 });
+  assert.equal(recolorPayload({ id: 2, color: 0x123456 }), null);
+  assert.deepEqual(dispenserDragPayload({ id: '2', x: 1, y: 2, z: 3 }), { id: '2', x: 1, y: 2, z: 3 });
+  assert.equal(dispenserDragPayload({ id: '2', x: '1', y: 2, z: 3 }), null);
+  assert.deepEqual(cardPlacementPayload({ hid: 'h3', faceDown: true, x: 1, z: 2 }),
+    { hid: 'h3', faceDown: true, x: 1, z: 2 });
+  assert.equal(cardPlacementPayload({ hid: 'h3', faceDown: 1 }), null);
+  assert.equal(cardPlacementPayload({ hid: 'h3', faceDown: true, x: 1 }), null);
+});
+
+test('deck append batches are bounded and copied after validating every reference', () => {
+  const refOk = (value) => typeof value === 'string' && value.startsWith('/');
+  const raw = { fronts: ['/one', '/two'] };
+  const parsed = deckAppendPayload(raw, { max: 2, refOk });
+  assert.deepEqual(parsed, raw);
+  assert.notEqual(parsed.fronts, raw.fronts);
+  assert.equal(deckAppendPayload({ fronts: ['/one', 'bad'] }, { max: 2, refOk }), null);
+  assert.equal(deckAppendPayload({ fronts: ['/one', '/two', '/three'] }, { max: 2, refOk }), null);
 });
 
 test('drawing mutates deck count and returns cards in stack order', () => {

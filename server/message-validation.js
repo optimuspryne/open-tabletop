@@ -174,6 +174,56 @@ export function showPayload(message, { maxAudience = 20, maxCards = 1000 } = {})
   return to && hids ? { to, hids } : null;
 }
 
+export const databaseId = (value) => boundedString(value, { min: 1, max: 20, pattern: /^\d+$/ });
+export const pieceIdPayload = (message) => oneField(message, 'id', (id) => boundedString(id, { min: 1, max: 20, pattern: /^\d+$/ }));
+export const assetIdPayload = (message) => oneField(message, 'id', databaseId);
+
+export function assetMutationPayload(message, { kinds, mode }) {
+  const keys = mode === 'public' ? ['kind', 'id', 'isPublic']
+    : mode === 'rename' ? ['kind', 'id', 'name'] : ['kind', 'id'];
+  if (!exactObject(message, keys) || !kinds.includes(message.kind)) return null;
+  const id = databaseId(message.id); if (id === null) return null;
+  if (mode === 'public') return typeof message.isPublic === 'boolean' ? { kind: message.kind, id, isPublic: message.isPublic } : null;
+  if (mode === 'rename') {
+    const name = boundedString(message.name, { min: 1, max: 60 });
+    return name === null || !name.trim() ? null : { kind: message.kind, id, name: name.trim() };
+  }
+  return { kind: message.kind, id };
+}
+
+export function namedIdPayload(message, { idKey = 'id', optionalId = false } = {}) {
+  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['name', idKey]))) return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  if (name === null || !name.trim()) return null;
+  const rawId = message[idKey];
+  if (rawId == null && optionalId) return { name: name.trim(), [idKey]: null };
+  const id = databaseId(rawId);
+  return id === null ? null : { name: name.trim(), [idKey]: id };
+}
+
+export function dispenserDragPayload(message) {
+  if (!exactObject(message, ['id', 'x', 'y', 'z'])) return null;
+  const id = boundedString(message.id, { min: 1, max: 20, pattern: /^\d+$/ });
+  if (id === null || ![message.x, message.y, message.z].every(Number.isFinite)) return null;
+  return { id, x: message.x, y: message.y, z: message.z };
+}
+
+export function cardPlacementPayload(message, { wholeHand = false } = {}) {
+  const keys = wholeHand ? ['faceDown', 'x', 'z'] : ['hid', 'faceDown', 'x', 'z'];
+  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(keys)) || typeof message.faceDown !== 'boolean') return null;
+  const out = { faceDown: message.faceDown };
+  if (!wholeHand) { const hid = boundedString(message.hid, { min: 2, max: 20, pattern: /^h\d+$/ }); if (hid === null) return null; out.hid = hid; }
+  const hasX = message.x !== undefined, hasZ = message.z !== undefined;
+  if (hasX !== hasZ || (hasX && (!Number.isFinite(message.x) || !Number.isFinite(message.z)))) return null;
+  if (hasX) { out.x = message.x; out.z = message.z; }
+  return out;
+}
+
+export function deckAppendPayload(message, { max = 50, refOk }) {
+  if (!exactObject(message, ['fronts']) || !Array.isArray(message.fronts) || !message.fronts.length || message.fronts.length > max) return null;
+  return message.fronts.every(refOk) ? { fronts: message.fronts.slice() } : null;
+}
+
 export function groupIds(message, { max = 80 } = {}) {
   if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['ids']))) return null;
   return boundedUniqueIds(message.ids, { max });
@@ -209,6 +259,17 @@ export function groupRecolor(message, { max = 80 } = {}) {
     out.textColor = textColor;
   }
   return out;
+}
+
+export function recolorPayload(message) {
+  if (!isPlainObject(message)) return null;
+  const { id, ...colors } = message;
+  const pieceId = boundedString(id, { min: 1, max: 20, pattern: /^\d+$/ });
+  if (pieceId === null) return null;
+  const parsed = groupRecolor({ ids: [pieceId], ...colors }, { max: 1 });
+  if (!parsed) return null;
+  const { ids: ignored, ...out } = parsed;
+  return { id: pieceId, ...out };
 }
 
 // Invalid coordinates must never enter the physics engine.
