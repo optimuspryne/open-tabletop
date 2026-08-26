@@ -52,10 +52,17 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`shared/pieces.js`** — the single source of truth for physics dimensions,
   masses, colors, dice vertices, and the prop/board registries. Imported by
   *both* sides so a collider and its mesh are built from the same numbers.
-- **`server.js`** — the authority: the cannon-es world, the Colyseus room, all
-  message handlers, the Postgres-backed asset library (via `db.js`), and the
-  private (non-synced) memory that holds secrets. All physics tuning is in one
-  `SIM` config block.
+- **`server.js`** — the authority and composition root: the cannon-es world,
+  Colyseus room classes, remaining table-message handlers, HTTP/security setup,
+  and the private (non-synced) memory that holds secrets. Card, movement, and
+  membership handlers live under `server/game/handlers/`; HTTP route factories
+  live under `server/http/routes/`. All physics tuning remains in one `SIM` block.
+- **`server/` support modules** — shared permission and validation rules,
+  card/deck state helpers, the piece-props codec, upload validation, database and
+  session configuration, bootstrap-admin provisioning, async HTTP boundaries,
+  auth context, and the extracted handler/router modules. These are deliberately
+  dependency-injected so the backend seams can be tested without starting a room
+  or listener.
 - **`db.js`** — the Postgres connection pool and **every** query: the saved
   library (deck / board / prop / scene / skybox *metadata*; image/model files stay
   on disk) plus users, rooms, membership, and each room's durable settings. Config
@@ -77,6 +84,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
   render loop. Holds the mutable session state (`room`, `down`, `inspect`,
   `meshes`, `buffers`).
+- **`public/controls.js`** — the input seam: mouse and touch profiles translate
+  raw events into device-neutral pointer/command intents consumed by `client.js`.
 - **`public/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
   clips pooled per logical name, played fire-and-forget) plus an HTML5 `<audio>`
   **background-music** player. Volumes/mutes/shuffle are per-player, in
@@ -84,18 +93,19 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`public/credits.js`** — the attribution manifest: the `MUSIC` playlist (which
   drives *both* the music player and the credits panel) plus `SFX_CREDITS` and
   `LIB_CREDITS`. The CC-BY music makes the in-app credits mandatory, not cosmetic.
+- **`public/icons.js` / `public/equalize.js`** — shared icon/tooltip behavior plus
+  early UI-mode restoration and grouped-action sizing across pages.
 - **The pages** — `index.html` + `landing.js` (the lobby: quick-join, login, room
   list, host request), `table.html` (the game table, which loads the client
-  chain), `editor.html` + `editor-panel.js` (the admin-only library editor,
-  reusing the game client — `editor.html` now shares the game table's full HUD
-  plus the Add-to-Library builder, so building assets looks and behaves like
-  sitting at a table), `admin.html` + `admin.js` (the admin console), and
+  chain and, with `?workshop=1`, the admin-only library workshop plus
+  `editor-panel.js`), `editor.html` (a compatibility redirect to that workshop),
+  `admin.html` + `admin.js` (the admin console), and
   `styles.css` (all UI styling: the design-token `:root` block, then a layer of
   shared component primitives the pages compose from — `.panel`/`.popout` pop-out
   panels, `.field` inputs, `.chip`, `.miniLabel`, `.tile`, `.actions` — over the
   per-page layouts. Restyling a control means editing its one class, not every
   `#id` that uses it).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`010`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`011`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -109,7 +119,7 @@ seat, hand *count*, name, color, avatar, `showing` count (how many cards they're
 revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
 the room dressing (`scores`, `notes`, `tableX/Z`, `whiteboard`, `trays` — which seats'
 personal dice trays are out, `skybox`,
-`feltColor`); and whose turn it is — including, after a resumed game, the public
+`feltColor`, `roomName`); and whose turn it is — including, after a resumed game, the public
 `turnPending` name and the `unclaimed` (`userId → name`) map that the GM's
 reassign UI reads. Names only ever appear there, never the cards themselves.
 
@@ -553,9 +563,9 @@ delete) are admin-only, while listing and spawning are visibility-gated — publ
 assets are spawnable by GMs/helpers, private ones only by admins (who can also
 spawn them into any game room). Admins build and test assets in a dedicated
 **editor room** (`EditorRoom`, with an admin-only `onAuth`) that reuses the whole
-table engine. The game table and the editor share the same asset UI — **View
-Library** and **Built-Ins** pickers (plus a Room Controls Skybox picker), driven
-by `editor-panel.js` over `window.onOttRoom` — while **Add to Library** (creation)
+  table engine. The game table and workshop share one combined **Library** modal
+  (built-ins, custom assets, games, and skyboxes), driven by `editor-panel.js` over
+  `window.onOttRoom`; **Add to Library** (creation)
 is editor-only and the asset handlers refuse non-admin creation/curation.
 See "Accounts, rooms & roles" below.
 
@@ -667,8 +677,8 @@ drawing**, which clears only on an explicit `wbClear`. New rooms start **empty**
 ## Accounts, rooms & roles
 
 The lobby/auth layer is built and enforced server-side. **Postgres** holds
-accounts (passwords hashed with scrypt in `auth.js`; passwordless players carry a
-hashed device token instead), rooms, and per-room membership; asset **files** stay
+accounts (passwords hashed with scrypt in `auth.js`; every browser credential is
+stored only as a hash in an expiring `user_sessions` row), rooms, and per-room membership; asset **files** stay
 on the volume and live table state stays in memory. Credentials come from the
 environment, never code.
 

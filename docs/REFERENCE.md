@@ -8,19 +8,27 @@ The codebase:
 | File | Runtime | Role |
 |------|---------|------|
 | `shared/pieces.js` | both | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries |
-| `server.js` | Node | Authoritative physics + Colyseus rooms + HTTP (auth/rooms/admin) + Postgres |
+| `server.js` | Node | Composition root: authoritative physics, Colyseus rooms, remaining handlers, HTTP/security setup |
 | `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
+| `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
+| `server/game/handlers/*.js` | Node | Extracted card, movement, and membership message handlers |
+| `server/http/*.js` + `server/http/routes/*.js` | Node | HTTP auth/error seams and auth/room/admin/upload routers |
+| `server/{auth-validation,permissions,message-validation,deck-state}.js` + `server/game/props-codec.js` | Node | Shared validation/rules, state helpers, canonical piece-props codec |
+| `server/{database-config,session-config,bootstrap-admin}.js` | Node | DB config, session lifetime, and first-boot admin provisioning |
+| `server/assets/upload-validation.js` | Node | Image magic-byte and self-contained GLB validation |
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
 | `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |
+| `public/controls.js` | browser | Mouse/touch profiles translated into device-neutral intents |
 | `public/audio.js` | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced) |
 | `public/credits.js` | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player *and* credits panel) |
+| `public/icons.js` / `public/equalize.js` | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing |
 | `public/{landing,admin,editor-panel}.js` | browser | Lobby, admin console, library-editor UI (HTTP + room) |
 | `public/*.html` + `styles.css` | browser | Page shells (table/editor/index/admin) + UI styling |
 
-Client import chain (no cycles): `shared ← core ← graphics ← client`, with
-`client` also importing `audio ← credits`.
+The main client import chain has no cycles: `shared ← core ← graphics ← client`,
+with `client` also importing `controls` and `audio ← credits`.
 
 ---
 
@@ -42,8 +50,7 @@ classDiagram
         +SIM config
         +buildWorld() / buildCollider(type,props) / dieShape(sides)
         +buildSimpleDeck() / saveAsset() / saveImageRef()
-        +HTTP: /upload /auth/* /rooms/* /host/* /admin/*
-        +requireUser / requireAdmin / clientUser
+        +compose extracted message handlers and HTTP routers
     }
     class Auth["auth.js"] {
         +hashPassword / verifyPassword (scrypt)
@@ -52,7 +59,7 @@ classDiagram
     class Db["db.js"] {
         <<Postgres>>
         +library: list/get/insert/update + asset-admin
-        +users: createUser/find*/setAdmin/setHostStatus/purgeUser
+        +users/sessions: create/find/createSession/revoke/admin/host/purge
         +rooms: createRoom/find/list/policy/softDelete/purge
         +members: joinRoom/admit/kick/setRole/listMembers
     }
@@ -116,7 +123,7 @@ classDiagram
     Server ..> Db
     TableRoom ..> Db : library / rooms / members
     TableRoom <..> Client : Colyseus sync + messages
-    Pages ..> Server : HTTP (auth/rooms/admin)
+    Pages ..> Server : HTTP + lobby/table sockets
 ```
 
 ## The core loop (intent up, state down)
@@ -142,7 +149,7 @@ flowchart LR
 
 ## `shared/pieces.js` — single source of truth
 
-Pure data + two functions, imported by both sides.
+Pure constants and helpers imported by both sides.
 
 ### Constants
 
@@ -335,7 +342,8 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   presence = that seat's *personal* dice tray is out; the tray dice are ordinary `die` pieces
   tagged `props.traySeat`, not schema here), **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
-  color), **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
+  color), **`roomName`** (synced table-header label; empty in the workshop),
+  **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
   measurement/template annotations), and the resumed-game public labels
   **`turnPending`** (name of an absent turn-holder) + **`unclaimed`** (map
   `userId → name` of saved hands awaiting their owner — the GM's reassign UI reads
@@ -502,6 +510,7 @@ admin sandbox for building and testing library assets live. Registered as the
   admin only, with a pending-aware 403), `POST /rooms/join` (join or waitlist by
   code), `PATCH /rooms/:id` (rename / approval — owner or admin), `DELETE
   /rooms/:id` (soft-delete + dispose the live room).
+- **Profile:** `POST /me/avatar` (bounded image data URL for the authenticated user).
 - **Host:** `POST /host/request` (request host access; sets a password first if
   the account is passwordless → `pending`).
 - **Admin** (`requireAdmin`): `GET /admin/rooms`, `GET /admin/users`,
@@ -509,6 +518,7 @@ admin sandbox for building and testing library assets live. Registered as the
   /admin/rooms/:id` (purge), `POST /admin/users/:id/admin` (grant/revoke — can't
   revoke your own), `POST /admin/users/:id/host` (approve/reject/revoke),
   `DELETE /admin/users/:id` (purge, cascades owned rooms + memberships),
+  `POST /admin/users/:id/kick` (disconnect that account from every live table),
   **`GET /admin/orphans`** (dry-run: `/assets` files no library row, room, or live
   table references — old enough to be safe), **`POST /admin/orphans/purge`**
   (re-scan, move them to `saved-assets/.trash/`).
@@ -532,7 +542,8 @@ return the flag:
 
 - **Decks** — `listDecks({includePrivate}) → [{id,name,count,isPublic,ownerId}]`,
   `getDeck(id) → {name,back,fronts,isPublic,ownerId}`,
-  `insertDeck({name,back,fronts,ownerId,isPublic}) → id`, `updateDeck(id, {…})`.
+  `insertDeck({name,back,fronts,geom,ownerId,isPublic}) → id`,
+  `updateDeck(id,name,back,fronts,geom)`.
 - **Boards** — `listBoards({includePrivate}) → [{id,name,kind,isPublic,ownerId}]`,
   `getBoard(id) → {rec,name,isPublic,ownerId}` (`rec` is one of `{board}` /
   `{model,…}` / `{w,d,tex}`), `insertBoard(name, rec, {ownerId,isPublic}) → id`.
@@ -559,19 +570,20 @@ per-room measurement scale) and
 hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admin`;
 `authUser` adds the hashes (used only on the password-verify path).
 
-- `createUser({username,email,passwordHash,loginTokenHash,isAdmin}) → user` (a
+- `createUser({username,email,passwordHash,loginTokenHash,sessionExpiresAt,isAdmin}) → user` (a
   password ⇒ `host_status='pending'`; throws with `err.conflict = 'username' |
   'email'` on a taken field; normal signup never infers admin), `bootstrapAdmin`
   (advisory-locked, empty-table-only first-boot provisioning),
   `changeAdminByLogin` (CLI recovery with final-admin protection), `findUserByLogin`, `findUserByToken`,
-  `findUserById`, `setLoginToken`, `setPassword`, `setUserAvatar`, `listUsers`,
+  `findUserById`, `createSession`, `revokeSession`, `revokeUserSessions`,
+  `setPassword`, `setUserAvatar`, `listUsers`,
   `setAdmin`, `setHostStatus`, `countPendingHosts` (excludes admins),
   `roomsOwnedBy`, `purgeUser` (one transaction: null-out the user's asset
   ownership, delete their owned rooms, delete the user — cascades memberships).
 
 **Rooms & membership.** `createRoom({ownerId,code,name,requireApproval}) → room`
 (atomic room + owner-membership CTE), `findRoomByCode`, `getRoom`,
-`listRoomsForUser`, `listRooms({includeDeleted})`, `setRoomPolicy`, `renameRoom`,
+`listRoomsForUser`, `listRoomsForAdmin`, `listRooms({includeDeleted})`, `setRoomPolicy`, `renameRoom`,
 `softDeleteRoom`, `restoreRoom`, `purgeRoom`; `joinRoom` (idempotent — a returning
 member keeps their standing), `getMembership`, `admitMember`, `kickMember` (hard
 delete), `setMemberRole`, `listMembers`.
@@ -693,12 +705,13 @@ felt), and the config:
 ### Networking
 
 Connects to the `table` room — or the admin-only **`editor`** room when
-`window.OTT_EDITOR` is set (editor.html), handing the live room to the panel via
+`table.html?workshop=1` sets `window.OTT_EDITOR`, handing the live room to the panel via
 `window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
 marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
 (→ `resizeTable` + `rebuildGrid`), the `scale` grid fields (→ `rebuildGrid` /
 `syncScalePanel`), `trays` (→ `syncTrays` — one tray mesh per enabled seat), and
+`roomName` (→ the Room Info header), plus
 `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
 list and the "Waiting on {name}" turn row). Direct messages: `hand` → `renderHand`,
 `dealt` (adopt a dealt card), `inspectCard` → open draw-to-inspect, `notebook`
@@ -768,16 +781,14 @@ hasn't returned), and **`renderUnclaimed`** builds the Members panel's **Unclaim
 hands** list — each saved player gets a **"Give to…"** picker that sends
 `reassignHand`.
 
-### Chat, sound & music (Tools panels)
+### Chat, sound & music
 
 - **`addChatMsg(m)`** appends a public-chat line (auto-scroll if at bottom, unread
-  dot on the Tools button); the input sends `chat` and the panel requests `chatLog`
+  dot on the Chat button); the input sends `chat` and the panel requests `chatLog`
   on open. Sender names render via `textContent`, so a name can't inject markup.
-- The **🔊 Sound** panel wires `public/audio.js`: SFX volume/mute, music
-  volume/mute, play/pause (`toggleMusic`), `nextTrack`, shuffle (`getShuffle`/
-  `setShuffle`), a now-playing line via `onMusicTrack`, a **track picker**
-  (`playTrack` over the `MUSIC` list), and a **Credits & licenses** panel built
-  from `MUSIC_CREDIT` + `SFX_CREDITS` + `LIB_CREDITS`. `resumeAudio` is armed on the
+- The top-right **Music** pane provides playback, next, shuffle, and track picking;
+  **Settings → Sounds** holds SFX/music volume and mute, while its credits view is
+  built from `MUSIC_CREDIT` + `SFX_CREDITS` + `LIB_CREDITS`. `resumeAudio` is armed on the
   first `pointerdown`; pickup cues are played locally, landing/flip/deal/shuffle
   cues arrive as server `sfx`/`shuffled` messages.
 
@@ -843,11 +854,12 @@ credits panel.
 
 ---
 
-## The lobby & admin pages (standalone)
+## Lobby, admin, and workshop pages
 
-Plain modules that talk to the HTTP API with `fetch` — no Three.js, no Colyseus.
-A shared `api(path, {method, auth, body})` helper attaches the Bearer token and
-unwraps errors; the device token lives in `localStorage`.
+The lobby and admin use `fetch`; the lobby also opens a small Colyseus `lobby`
+socket while a join request is pending. The workshop panel rides the full Three.js /
+Colyseus table client. API helpers attach the Bearer token and unwrap errors; the
+device token lives in `localStorage`.
 
 - **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
   'home')` switches between quick-join (passwordless signup + join), login/
@@ -855,16 +867,18 @@ unwraps errors; the device token lives in `localStorage`.
   and picks one of three host states from `canOwnRooms` / `hostStatus` (create
   form · pending note · **Request host access** button → `onRequestHost`, which
   prompts for a password if the account is passwordless). Owners get
-  rename/approval/close controls; a pending joiner **polls** `/rooms` and
-  auto-forwards on admission. Admins see an **Admin** link with a pending-host
+  rename/approval/close controls; a pending joiner holds a per-code lobby socket
+  for immediate admission/decline and retains a 15-second `/rooms` poll as fallback.
+  Logout revokes the current server-side session before returning to quick join.
+  Admins see an **Admin** link with a pending-host
   count badge (`updateAdminBadge`). A **Full labels** toggle by Log out
   flips `body.ui-full` and saves `ott-ui-full` (mirrors the in-room Settings › UI toggle).
 - **`public/admin.js`** (admin.html) — the admin console. Guards on `/auth/token`
   → `isAdmin`, then renders the rooms table (rename / approval / close / restore /
   purge) and the users table (grant/revoke admin, **approve/reject/revoke host**,
-  delete). Admins host implicitly, so they're kept out of the host queue and the
+  kick from all live rooms, delete). Admins host implicitly, so they're kept out of the host queue and the
   header's pending badge.
-- **`public/editor-panel.js`** (editor.html) — the library-management panel. Rides
+- **`public/editor-panel.js`** (`table.html?workshop=1`; `editor.html` redirects there) — the library-management panel. Rides
   on the game client's room via `window.onOttRoom`, and gets listings through
   `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).
   Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
