@@ -1,5 +1,6 @@
 import { takeTopCard } from '../../deck-state.js';
 import { finitePosition } from '../../message-validation.js';
+import { readProps, writeProps } from '../props-codec.js';
 
 // Register the card/deck message family against a TableRoom-compatible object.
 // Rendering/physics policy stays injected so this module owns orchestration only.
@@ -9,7 +10,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     const piece = room.state.pieces.get(id);
     const body = room.bodies.get(id);
     if (!piece || !body || piece.type !== 'card') return;
-    const props = JSON.parse(piece.props || '{}');
+    const props = readProps(piece);
     if (props.front) {
       room.cardData.set(id, { front: props.front });
       delete props.front;
@@ -17,7 +18,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
       props.front = room.cardData.get(id).front;
       room.cardData.delete(id);
     }
-    piece.props = JSON.stringify(props);
+    writeProps(piece, props);
     body.wakeUp();
     body.velocity.y = flipHop;
     room.broadcast('sfx', { type: 'card-flip' });
@@ -28,7 +29,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
-    const props = JSON.parse(deck.props || '{}');
+    const props = readProps(deck);
     const id = room.spawnCardFlat(room.besideDeck(room.bodies.get(deckId)), { back: props.back || 'back', ...geoOf(props) });
     room.cardData.set(id, { front: draw.front });
     finishDraw(room, deckId, draw.empty);
@@ -40,7 +41,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
-    const props = JSON.parse(deck.props || '{}');
+    const props = readProps(deck);
     room.addToHand(client, draw.front, props.back || 'back', geoOf(props));
     finishDraw(room, deckId, draw.empty);
     room.broadcast('sfx', { type: dropSfx('card', props) });
@@ -55,7 +56,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     if (!deckBody) return;
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
-    const props = JSON.parse(deck.props || '{}');
+    const props = readProps(deck);
     const id = room.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], { back: props.back || 'back', ...geoOf(props) });
     room.cardData.set(id, { front: draw.front });
     finishDraw(room, deckId, draw.empty);
@@ -68,7 +69,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     const { id } = message || {};
     const piece = room.state.pieces.get(id);
     if (!piece || piece.type !== 'card') return;
-    const props = JSON.parse(piece.props || '{}');
+    const props = readProps(piece);
     const front = (room.cardData.get(id) || {}).front || props.front;
     room.addToHand(client, front, props.back || 'back', geoOf(props));
     room.removePiece(id);
@@ -80,7 +81,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
-    const props = JSON.parse(deck.props || '{}');
+    const props = readProps(deck);
     const geo = geoOf(props);
     room.updateDeckCollider(deckId);
     room.pendingInspect.set(client.sessionId, { deckId, front: draw.front, back: props.back || 'back', geo });
@@ -129,7 +130,7 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
     const deck = room.state.pieces.get(deckId);
     const cards = room.deckCards.get(deckId);
     if (!deck || deck.type !== 'deck' || !cards || cards.length < 2 || room.state.pieces.size >= maxPieces) return;
-    const props = JSON.parse(deck.props || '{}');
+    const props = readProps(deck);
     const bottom = cards.splice(Math.floor(cards.length / 2));
     deck.count = cards.length;
     room.updateDeckCollider(deckId);

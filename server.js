@@ -30,6 +30,7 @@ import { createAdminRouter } from './server/http/routes/admin.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
+import { readProps, writeProps } from './server/game/props-codec.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -561,20 +562,20 @@ class TableRoom extends Room {
       const anyStanding = ids.some(id => { const p = this.state.pieces.get(id); return p && this.standOf(p); });
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece) continue;
-        const props = JSON.parse(piece.props || '{}');
+        const props = readProps(piece);
         props.stand = anyStanding ? false : this.naturalStand(piece);
-        piece.props = JSON.stringify(props);
+        writeProps(piece, props);
         const b = this.bodies.get(id); if (b) b.wakeUp();
       }
     });
     this.onMessage('setSnapGroup', (client, { ids } = {}) => {
       if (!Array.isArray(ids)) return;
-      const anySnap = ids.some(id => { const p = this.state.pieces.get(id); try { return !!(p && JSON.parse(p.props || '{}').snap); } catch { return false; } });
+      const anySnap = ids.some((id) => readProps(this.state.pieces.get(id)).snap);
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece) continue;
-        const props = JSON.parse(piece.props || '{}');
+        const props = readProps(piece);
         props.snap = !anySnap;
-        piece.props = JSON.stringify(props);
+        writeProps(piece, props);
         const b = this.bodies.get(id);
         if (b) {
           if (props.snap && gridActive(this.state.scale)) { const p = snapToCell(b.position.x, b.position.z, this.state.scale); b.position.x = p.x; b.position.z = p.z; b.velocity.setZero(); b.angularVelocity.setZero(); this.targets.delete(id); }
@@ -595,10 +596,10 @@ class TableRoom extends Room {
       for (const id of ids) {
         const piece = this.state.pieces.get(id), b = this.bodies.get(id);
         if (!piece || !b || piece.type !== 'card') continue;
-        const props = JSON.parse(piece.props || '{}');
+        const props = readProps(piece);
         if (props.front) { this.cardData.set(id, { front: props.front }); delete props.front; }        // face-up → hide
         else if (this.cardData.has(id)) { props.front = this.cardData.get(id).front; this.cardData.delete(id); } // face-down → reveal
-        piece.props = JSON.stringify(props);
+        writeProps(piece, props);
         b.wakeUp(); b.velocity.y = SIM.flipHop; n++;
       }
       if (n) this.broadcast('sfx', { type: 'card-flip' });
@@ -607,7 +608,7 @@ class TableRoom extends Room {
       if (!Array.isArray(ids)) return;
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece || piece.type !== 'card') continue;
-        const props = JSON.parse(piece.props || '{}');
+        const props = readProps(piece);
         const front = (this.cardData.get(id) || {}).front || props.front;
         this.addToHand(client, front, props.back || 'back', geoOf(props));
         this.removePiece(id);
@@ -934,9 +935,9 @@ class TableRoom extends Room {
     this.onMessage('setStand', (client, { id }) => {
       const piece = this.state.pieces.get(id);
       if (!piece) return;
-      const props = JSON.parse(piece.props || '{}');
+      const props = readProps(piece);
       props.stand = this.standOf(piece) ? false : this.naturalStand(piece); // on → off, or off → its natural mode
-      piece.props = JSON.stringify(props);
+      writeProps(piece, props);
       const body = this.bodies.get(id);
       if (body) body.wakeUp();
     });
@@ -947,9 +948,9 @@ class TableRoom extends Room {
     this.onMessage('setSnap', (client, { id } = {}) => {
       const piece = this.state.pieces.get(id);
       if (!piece) return;
-      const props = JSON.parse(piece.props || '{}');
+      const props = readProps(piece);
       props.snap = !props.snap;
-      piece.props = JSON.stringify(props);
+      writeProps(piece, props);
       const body = this.bodies.get(id);
       if (body) {
         if (props.snap && gridActive(this.state.scale)) {
@@ -1334,13 +1335,13 @@ class TableRoom extends Room {
       piece.count = deckData.cards.length;
       const deckProps = { back: deckData.back, ...geoOf(deckData) }; // deck-level tile/geom rides to its cards
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel]) deckProps.model = deckData.deckModel; // an optional 3D box/bag skin (server-set only)
-      piece.props = JSON.stringify(deckProps);
+      writeProps(piece, deckProps);
     } else if (type === 'dispenser') {
       const d = DISPENSERS[props.disp] || {};
       piece.count = (d.infinite || !d.count) ? 0 : clamp(+props.count || d.count.def, 1, d.count.max); // remaining items (0 = infinite)
-      piece.props = JSON.stringify(props);
+      writeProps(piece, props);
     } else {
-      piece.props = JSON.stringify(props);
+      writeProps(piece, props);
     }
 
     this.writeTransform(piece, body);
@@ -1413,7 +1414,7 @@ class TableRoom extends Room {
     let boardId = null;
     this.state.pieces.forEach((p, id) => { if (!boardId && p.type === 'board') boardId = id; }); // the single table board
     if (!boardId) return null;
-    const spec = BOARDS[JSON.parse(this.state.pieces.get(boardId).props || '{}').board];
+    const spec = BOARDS[readProps(this.state.pieces.get(boardId)).board];
     let gaps, anchor;
     if (spec && spec.grid) { gaps = spec.grid.cells; anchor = spec.grid.anchor; }
     else { anchor = msg.anchor === 'cross' ? 'cross' : 'center'; const count = Math.round(+msg.cells); gaps = anchor === 'cross' ? count - 1 : count; }
@@ -1445,7 +1446,7 @@ class TableRoom extends Room {
   dealFromDeckToSeats(deckId, n) {
     const deck = this.state.pieces.get(deckId), cards = this.deckCards.get(deckId);
     if (!deck || !cards) return;
-    const dp = JSON.parse(deck.props || '{}'), back = dp.back || 'back', geo = geoOf(dp);
+    const dp = readProps(deck), back = dp.back || 'back', geo = geoOf(dp);
     for (const client of this.clients) {
       if (this.seatOf(client) == null) continue;                        // seated players only
       for (let i = 0; i < n && cards.length; i++) this.addToHand(client, cards.pop(), back, geo);
@@ -1500,7 +1501,7 @@ class TableRoom extends Room {
     const body = this.bodies.get(deckId), piece = this.state.pieces.get(deckId);
     if (!body || !piece) return;
     while (body.shapes.length) body.removeShape(body.shapes[0]);
-    const props = JSON.parse(piece.props || '{}');
+    const props = readProps(piece);
     const skin = props.model && DECK_MODELS[props.model];
     if (skin) {                                            // a modeled deck (box/bag): a fixed box, not a growing stack
       const [bx, by, bz] = skin.box;
@@ -1523,7 +1524,7 @@ class TableRoom extends Room {
   updateStackCollider(id) {
     const body = this.bodies.get(id), piece = this.state.pieces.get(id);
     if (!body || !piece) return;
-    const d = DISPENSERS[JSON.parse(piece.props || '{}').disp];
+    const d = DISPENSERS[readProps(piece).disp];
     if (!d || d.body !== 'stack') return;
     const box = PROPS[d.item].collider.box, r = box[0], discH = box[1] * 2;
     while (body.shapes.length) body.removeShape(body.shapes[0]);
@@ -1536,7 +1537,7 @@ class TableRoom extends Room {
   // The spawn spec a dispenser hands out: an existing PROP, tinted (poker/coin) or
   // team-colored (go bowl) from the dispenser's own config.
   dispenserItem(piece) {
-    const props = JSON.parse(piece.props || '{}');
+    const props = readProps(piece);
     const d = DISPENSERS[props.disp]; if (!d) return null;
     const itemProps = { shape: d.item };
     if (d.team) itemProps.team = props.team ? 1 : 0;          // go bowl → a team stone
@@ -1548,7 +1549,7 @@ class TableRoom extends Room {
   // After a dispense: a finite dispenser shrinks and is removed when empty; an
   // infinite one (bowl) is unchanged.
   afterDispense(piece, id) {
-    const d = DISPENSERS[JSON.parse(piece.props || '{}').disp];
+    const d = DISPENSERS[readProps(piece).disp];
     if (!d || d.infinite) return;
     piece.count = Math.max(0, piece.count - 1);
     if (piece.count <= 0) this.removePiece(id);
@@ -1563,7 +1564,7 @@ class TableRoom extends Room {
     const cleanName = String(name || '').slice(0, 60).trim();
     if (!cleanName) return false;
     try {
-      let back = JSON.parse(piece.props || '{}').back || 'back';
+      let back = readProps(piece).back || 'back';
       if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back';   // inline art -> file, store the URL
       const savedFronts = fronts.map(front => isDataURL(front) ? (saveImageRef(front, 'decks') || front) : front);
       await db.insertDeck({ name: cleanName, back, fronts: savedFronts, ownerId }); // private by default
@@ -1579,7 +1580,7 @@ class TableRoom extends Room {
   //   'flat' → keep it lying flat (decks, checkers, coins)
   //   falsy  → don't self-right at all
   standOf(piece) {
-    const props = JSON.parse(piece.props || '{}');
+    const props = readProps(piece);
     if (props.stand !== undefined) return props.stand; // per-instance override (the U-key toggle)
     if (piece.type === 'deck' || piece.type === 'dispenser') return 'flat'; // stacks/bowls settle flat
     return (PROPS[props.shape] || {}).stand;           // else the prop shape's default
@@ -1589,7 +1590,7 @@ class TableRoom extends Room {
   // (so a coin/checker lies down) and "stand tall" otherwise.
   naturalStand(piece) {
     if (piece.type === 'deck' || piece.type === 'dispenser') return 'flat';
-    const props = JSON.parse(piece.props || '{}'), spec = PROPS[props.shape] || {};
+    const props = readProps(piece), spec = PROPS[props.shape] || {};
     if (spec.stand) return spec.stand;
     const box = spec.collider && spec.collider.box;
     return (box && box[1] <= box[0] && box[1] <= box[2]) ? 'flat' : true;
@@ -1614,11 +1615,11 @@ class TableRoom extends Room {
   recolorPiece(id, opts = {}) {
     const piece = this.state.pieces.get(id);
     if (!piece) return false;
-    const props = JSON.parse(piece.props || '{}');
+    const props = readProps(piece);
     const dispDef = piece.type === 'dispenser' ? DISPENSERS[props.disp] : null;
     const next = colorProps(piece.type, props, opts, dispDef);
     if (!next) return false;
-    piece.props = JSON.stringify(next); // synced → every client rebuilds the piece with the new tint
+    writeProps(piece, next); // synced → every client rebuilds the piece with the new tint
     return true;
   }
 
@@ -1723,7 +1724,7 @@ class TableRoom extends Room {
 
     const body = this.bodies.get(id);
     if (body) {
-      if (piece.type !== 'deck' && gridActive(this.state.scale) && JSON.parse(piece.props || '{}').snap) {
+      if (piece.type !== 'deck' && gridActive(this.state.scale) && readProps(piece).snap) {
         const p = snapToCell(body.position.x, body.position.z, this.state.scale); // the bag carries snap for its tiles, but shouldn't itself jump to a cell
         body.position.x = p.x; body.position.z = p.z;
         body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
@@ -1745,7 +1746,7 @@ class TableRoom extends Room {
         const onDeck = Math.abs(body.position.x - deckBody.position.x) < SIM.absorb.x
                     && Math.abs(body.position.z - deckBody.position.z) < SIM.absorb.z;
         if (onDeck) {
-          const front = (this.cardData.get(id) || {}).front || JSON.parse(piece.props || '{}').front;
+          const front = (this.cardData.get(id) || {}).front || readProps(piece).front;
           if (front) cards.push(front);
           this.state.pieces.get(deckId).count = cards.length;
           this.updateDeckCollider(deckId);
@@ -1758,7 +1759,7 @@ class TableRoom extends Room {
     // A chip/coin/stone dropped on its matching dispenser rejoins it (finite → count++; the
     // infinite bowl just takes it back). Match by the exact item the stack hands out.
     if (piece.type === 'prop' && body) {
-      const pp = JSON.parse(piece.props || '{}');
+      const pp = readProps(piece);
       for (const [dispId, disp] of this.state.pieces) {
         if (disp.type !== 'dispenser') continue;
         const want = this.dispenserItem(disp); if (!want || want.props.shape !== pp.shape) continue;
@@ -1766,7 +1767,7 @@ class TableRoom extends Room {
         if (want.props.team != null && (pp.team ? 1 : 0) !== want.props.team) continue;
         const dispBody = this.bodies.get(dispId);
         if (!dispBody) continue;
-        const d = DISPENSERS[JSON.parse(disp.props || '{}').disp];
+        const d = DISPENSERS[readProps(disp).disp];
         const fbox = d && (d.body === 'stack' ? (PROPS[d.item].collider.box) : (d.collider && d.collider.box));
         const reach = (fbox ? Math.max(fbox[0], fbox[2]) : 0.5) + 0.5;
         const dx = body.position.x - dispBody.position.x, dz = body.position.z - dispBody.position.z;
@@ -1848,7 +1849,7 @@ class TableRoom extends Room {
   serializeScene() {
     const pieces = [];
     this.state.pieces.forEach((piece, id) => {
-      let props = JSON.parse(piece.props || '{}');
+      let props = readProps(piece);
       if (piece.type === 'deck') {
         const cards = (this.deckCards.get(id) || []).slice();
         for (const pend of this.pendingInspect.values()) if (pend.deckId === id) cards.unshift(pend.front); // fold a mid-inspect draw back onto its deck so a save never loses it
@@ -2135,7 +2136,7 @@ class TableRoom extends Room {
   }
   wantsSnap(piece) {
     if (!gridActive(this.state.scale)) return false;
-    try { return !!JSON.parse(piece.props || '{}').snap; } catch { return false; }
+    return !!readProps(piece).snap;
   }
 
   update(dtMs) {
