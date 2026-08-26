@@ -11,6 +11,7 @@
 import pg from 'pg';
 import { databaseConnectionString } from './server/database-config.js';
 import { createLibraryQueries } from './server/library-queries.js';
+import { createUserQueries, publicUserRow } from './server/user-queries.js';
 
 // The connection string comes from the environment, never from this file. Prefer
 // DATABASE_URL_FILE — a path to a file holding the string (the Docker-secrets
@@ -25,6 +26,7 @@ export const close = () => pool.end(); // for one-off scripts to let the process
 // pg returns bigint as a string; keep ids as strings, but preserve NULL as null.
 const idOrNull = (v) => (v == null ? null : String(v));
 const library = createLibraryQueries((sql, params) => pool.query(sql, params));
+const userReads = createUserQueries((sql, params) => pool.query(sql, params));
 
 // ===== Decks =================================================================
 // cards = the ordered front refs (jsonb array); props = { back }.
@@ -158,12 +160,7 @@ export function deleteAsset(kind, id) {
 // FAST deterministic hash (e.g. sha256) so they can be looked up by equality;
 // storing the hash means a DB leak doesn't expose live tokens. Hashes never leave
 // this module except to the auth path — the *public* shape omits them.
-const publicUser = (r) => r && ({
-  id: String(r.id), username: r.username, email: r.email, avatar: r.avatar,
-  isAdmin: r.is_admin, hostStatus: r.host_status, hasPassword: !!r.password_hash,
-  canOwnRooms: r.host_status === 'approved' || r.is_admin, // approved host, or any admin
-});
-const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash });
+const publicUser = publicUserRow;
 
 // Create an account. A password sets host_status = 'pending' (must be approved by
 // an admin before hosting); passwordless => 'none'. Throws with err.conflict =
@@ -256,28 +253,14 @@ export async function changeAdminByLogin(login, isAdmin) {
 // Login/join entry point: look up by username OR email (case-insensitive). Returns
 // the AUTH shape (with hashes) so the server can verify a password.
 export async function findUserByLogin(login) {
-  try {
-    const { rows } = await pool.query(
-      'SELECT * FROM users WHERE lower(username) = lower($1) OR lower(email) = lower($1) LIMIT 1', [login]);
-    return authUser(rows[0]) || null;
-  } catch (e) { console.error('[db] findUserByLogin:', e.message); return null; }
+  return userReads.findUserByLogin(login);
 }
 // Resolve a device token (pass its HASH) to its user — the passwordless "login".
 export async function findUserByToken(tokenHash) {
-  if (!tokenHash) return null;
-  try {
-    const { rows } = await pool.query(
-      `SELECT u.* FROM user_sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = $1 AND s.expires_at > now()`, [tokenHash]);
-    return publicUser(rows[0]) || null; // the token match already authenticated them
-  } catch (e) { console.error('[db] findUserByToken:', e.message); return null; }
+  return userReads.findUserByToken(tokenHash);
 }
 export async function findUserById(id) {
-  try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    return publicUser(rows[0]) || null;
-  } catch (e) { console.error('[db] findUserById:', e.message); return null; }
+  return userReads.findUserById(id);
 }
 export function createSession(userId, tokenHash, expiresAt) {
   return pool.query(
@@ -298,10 +281,7 @@ export function setUserAvatar(userId, avatar) {
 }
 // Admin console: everyone, no hashes (publicUser omits them).
 export async function listUsers() {
-  try {
-    const { rows } = await pool.query('SELECT * FROM users ORDER BY created_at');
-    return rows.map((r) => ({ ...publicUser(r), createdAt: r.created_at }));
-  } catch (e) { console.error('[db] listUsers:', e.message); return []; }
+  return userReads.listUsers();
 }
 export function setAdmin(userId, isAdmin) {
   return pool.query('UPDATE users SET is_admin = $2 WHERE id = $1', [userId, !!isAdmin]);
@@ -310,17 +290,11 @@ export function setHostStatus(userId, status) { // 'none' | 'pending' | 'approve
   return pool.query('UPDATE users SET host_status = $2 WHERE id = $1', [userId, status]);
 }
 export async function countPendingHosts() {
-  try {
-    const { rows } = await pool.query("SELECT count(*)::int AS n FROM users WHERE host_status = 'pending' AND is_admin = false");
-    return rows[0].n;
-  } catch (e) { console.error('[db] countPendingHosts:', e.message); return 0; }
+  return userReads.countPendingHosts();
 }
 // Rooms this user owns (active + soft-deleted) — codes let the caller dispose live tables.
 export async function roomsOwnedBy(userId) {
-  try {
-    const { rows } = await pool.query('SELECT id, code FROM rooms WHERE owner_id = $1', [userId]);
-    return rows.map((r) => ({ id: String(r.id), code: r.code }));
-  } catch (e) { console.error('[db] roomsOwnedBy:', e.message); return []; }
+  return userReads.roomsOwnedBy(userId);
 }
 // Permanently delete a user and everything that would otherwise block/​orphan it,
 // in one transaction: release their library assets (kept as shared), purge the

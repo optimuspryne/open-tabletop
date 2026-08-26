@@ -23,6 +23,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Make saved-library reads distinguish successful empty/not-found results from
   PostgreSQL failures. Database outages now reject and produce an explicit library
   error for the requesting socket instead of silently rendering an empty library.
+- Apply the same failure distinction to login/session lookup and admin user reads,
+  so an outage cannot masquerade as invalid credentials, an expired session, an
+  empty user list, zero pending hosts, or a user with no owned rooms.
 
 ## [0.10.0] — 2026-08-26
 
