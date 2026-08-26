@@ -549,6 +549,11 @@ class TableRoom extends Room {
     this.state.scores.forEach((_, id) => { const n = /^s(\d+)$/.exec(id); if (n) this.nextScoreId = Math.max(this.nextScoreId, +n[1] + 1); });
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
+    // Contain unexpected failures in every inline table message. Specialized
+    // library handlers below override the public message while sharing the same
+    // logging and recovery behavior.
+    const tableMessage = (type, handler) => safeMessage(this, type, handler);
+
     // --- Movement: grab → drag → release (single + multi-select) ---------
     registerMovementHandlers(this, {
       isMovable: (piece) => !!(KINDS[piece.type] && KINDS[piece.type].mass > 0),
@@ -558,7 +563,7 @@ class TableRoom extends Room {
     // --- Group batch ops (multi-select): the existing per-piece actions applied across a
     // selection. Stand/snap toggle the group as a UNIT (if any is on, turn all off, else all on);
     // roll/flip/take act on the relevant subset (dice / cards) and ignore the rest.
-    this.onMessage('setStandGroup', (client, message) => {
+    tableMessage('setStandGroup', (client, message) => {
       const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       const anyStanding = ids.some(id => { const p = this.state.pieces.get(id); return p && this.standOf(p); });
       for (const id of ids) {
@@ -569,7 +574,7 @@ class TableRoom extends Room {
         const b = this.bodies.get(id); if (b) b.wakeUp();
       }
     });
-    this.onMessage('setSnapGroup', (client, message) => {
+    tableMessage('setSnapGroup', (client, message) => {
       const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       const anySnap = ids.some((id) => readProps(this.state.pieces.get(id)).snap);
       for (const id of ids) {
@@ -585,13 +590,13 @@ class TableRoom extends Room {
         }
       }
     });
-    this.onMessage('rollGroup', (client, message) => { // R with dice selected → roll them all
+    tableMessage('rollGroup', (client, message) => { // R with dice selected → roll them all
       const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       let n = 0;
       for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && p.type === 'die' && b) { rollDie(id, b.__traySeat != null ? SIM.trayRoll : SIM.roll); n++; } }
       if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
     });
-    this.onMessage('flipGroup', (client, message) => { // F with cards selected → flip them all
+    tableMessage('flipGroup', (client, message) => { // F with cards selected → flip them all
       const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       let n = 0;
       for (const id of ids) {
@@ -605,7 +610,7 @@ class TableRoom extends Room {
       }
       if (n) this.broadcast('sfx', { type: 'card-flip' });
     });
-    this.onMessage('takeGroup', (client, message) => { // H with cards selected → take them all to hand
+    tableMessage('takeGroup', (client, message) => { // H with cards selected → take them all to hand
       const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       for (const id of ids) {
         const piece = this.state.pieces.get(id); if (!piece || piece.type !== 'card') continue;
@@ -615,7 +620,7 @@ class TableRoom extends Room {
         this.removePiece(id);
       }
     });
-    this.onMessage('rotateGroup', (client, message) => { // [ / ] step ±45° (dir), or a continuous drag/dial (angle, radians)
+    tableMessage('rotateGroup', (client, message) => { // [ / ] step ±45° (dir), or a continuous drag/dial (angle, radians)
       const parsed = groupRotation(message, { max: SIM.maxPieces }); if (!parsed) return;
       const { ids } = parsed;
       const rot = parsed.angle !== undefined ? parsed.angle : parsed.dir * (Math.PI / 4);
@@ -643,7 +648,7 @@ class TableRoom extends Room {
     // Dispensers: hand out one item on left-click / left-drag (right-drag moves the
     // whole thing, handled by the generic grab). Uniform, public copies — no private
     // list, unlike a deck. dispense = drop beside it; dispenseDrag = drop + carry.
-    this.onMessage('dispense', (client, message) => {
+    tableMessage('dispense', (client, message) => {
       const parsed = pieceIdPayload(message); if (!parsed) return;
       const { id } = parsed;
       const disp = this.state.pieces.get(id);
@@ -654,7 +659,7 @@ class TableRoom extends Room {
       this.afterDispense(disp, id);
       this.broadcast('sfx', { type: 'object-drop' });
     });
-    this.onMessage('dispenseDrag', (client, message) => {
+    tableMessage('dispenseDrag', (client, message) => {
       const msg = dispenserDragPayload(message); if (!msg) return;
       const disp = this.state.pieces.get(msg.id);
       if (!disp || disp.type !== 'dispenser') return;
@@ -669,14 +674,14 @@ class TableRoom extends Room {
     });
 
     // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
-    this.onMessage('recolor', (client, message) => {
+    tableMessage('recolor', (client, message) => {
       const { id, ...colors } = recolorPayload(message) || {}; if (!id) return;
       this.recolorPiece(id, colors);
     });
     // Recolor a whole multi-selection at once. One color/textColor is applied to every id it
     // fits: dice + props take `color` (dice also `textColor`), poker/coin dispensers take
     // `color`; anything it doesn't fit (cards, boards, team bowls) is silently skipped.
-    this.onMessage('recolorGroup', (client, message) => {
+    tableMessage('recolorGroup', (client, message) => {
       const parsed = groupRecolor(message, { max: SIM.maxPieces }); if (!parsed) return;
       const { ids, color, textColor, team } = parsed;
       for (const id of ids) this.recolorPiece(id, { color, textColor, team }); // color XOR team; each piece takes what fits
@@ -686,12 +691,12 @@ class TableRoom extends Room {
     const assetMessage = (type, handler) => safeMessage(this, type, handler, {
       errorType: 'assetError', publicMessage: 'Library unavailable. Try again.',
     });
-    this.onMessage('deckBegin', (client, message) => {
+    tableMessage('deckBegin', (client, message) => {
       if (!this.isAdmin(client)) return; // building library decks is admin-only
       const msg = deckBeginPayload(message, { refOk: deckRefOk, sanitizeGeom }); if (!msg) return;
       this.drafts.set(client.sessionId, { back: msg.back, cards: [], geom: msg.geom });
     });
-    this.onMessage('deckAppend', (client, message) => {
+    tableMessage('deckAppend', (client, message) => {
       const draft = this.drafts.get(client.sessionId);
       if (!draft) return;
       const msg = deckAppendPayload(message, { refOk: deckRefOk }); if (!msg) return;
@@ -797,7 +802,7 @@ class TableRoom extends Room {
       if (!scene.isPublic && !this.isAdmin(client)) return; // private scenes: admins only
       this.applyScene(scene.payload);
     });
-    this.onMessage('stateSave', (client) => { // GM checkpoints the live table so it survives an empty room
+    tableMessage('stateSave', (client) => { // GM checkpoints the live table so it survives an empty room
       if (this.rank(client) < RANK.gm) return;
       const payload = this.serializeGame();
       if (JSON.stringify(payload).length > SCENE_MAX_BYTES) {
@@ -822,7 +827,7 @@ class TableRoom extends Room {
       this.swapBoard(props);
     });
     // Play a card from your hand onto the table, face-up or face-down.
-    this.onMessage('playCard', (client, message) => {
+    tableMessage('playCard', (client, message) => {
       const parsed = cardPlacementPayload(message); if (!parsed) return;
       const { hid, faceDown, x, z } = parsed;
       const hand = this.hands.get(client.sessionId);
@@ -842,7 +847,7 @@ class TableRoom extends Room {
 
     // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or
     // down, spread just in front of their marker (x/z sent by the client).
-    this.onMessage('handToTable', (client, message) => {
+    tableMessage('handToTable', (client, message) => {
       const parsed = cardPlacementPayload(message, { wholeHand: true }); if (!parsed) return;
       const { faceDown, x, z } = parsed;
       const hand = this.hands.get(client.sessionId);
@@ -860,7 +865,7 @@ class TableRoom extends Room {
       this.sendHand(client);    // updates the public count + sends the now-shorter private hand
       if (spawned) this.broadcast('sfx', { type: 'hand-drop' });
     });
-    this.onMessage('spawn', (client, message) => {
+    tableMessage('spawn', (client, message) => {
       if (this.state.pieces.size >= SIM.maxPieces) return;
       const msg = spawnPayload(message, { boardKeys: Object.keys(BOARDS), propKeys: Object.keys(PROPS), dispenserKeys: Object.keys(DISPENSERS), colliders: COLLIDER_TYPES }); if (!msg) return;
       if (msg.type === 'board') {
@@ -888,15 +893,15 @@ class TableRoom extends Room {
     };
     // The Roll button hops you to YOUR tray; "Roll all" flings only your seat's dice, with a
     // gentler impulse so they tumble inside the walls instead of leaping out.
-    this.onMessage('roll', (client) => {
+    tableMessage('roll', (client) => {
       const seat = this.seatOf(client); if (seat == null) return;
       let n = 0;
       this.state.pieces.forEach((piece, id) => { const b = this.bodies.get(id); if (piece.type === 'die' && b && b.__traySeat === seat) { rollDie(id, SIM.trayRoll); n++; } });
       if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
     });
-    this.onMessage('rollOne', (client, message) => { const msg = pieceIdPayload(message); if (!msg) return; const p = this.state.pieces.get(msg.id); const b = this.bodies.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id, b && b.__traySeat != null ? SIM.trayRoll : SIM.roll); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
+    tableMessage('rollOne', (client, message) => { const msg = pieceIdPayload(message); if (!msg) return; const p = this.state.pieces.get(msg.id); const b = this.bodies.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id, b && b.__traySeat != null ? SIM.trayRoll : SIM.roll); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
     // Scoop: gather the caller's tray dice back to the middle (a light re-rack).
-    this.onMessage('trayScoop', (client) => {
+    tableMessage('trayScoop', (client) => {
       const seat = this.seatOf(client); if (seat == null || !this.state.trays.get(String(seat))) return;
       const c = this.trayCenterFor(seat), angle = seatAngle(seat);
       let n = 0;
@@ -907,10 +912,10 @@ class TableRoom extends Room {
       });
       if (n) this.broadcast('sfx', { type: 'die-roll' });
     });
-    this.onMessage('trayClear', (client) => { const seat = this.seatOf(client); if (seat != null) this.clearTraySeat(seat); }); // remove just your tray's dice
+    tableMessage('trayClear', (client) => { const seat = this.seatOf(client); if (seat != null) this.clearTraySeat(seat); }); // remove just your tray's dice
 
     // Wipe the room back to an empty table — pieces and all private state.
-    this.onMessage('reset', (client) => {
+    tableMessage('reset', (client) => {
       if (this.rank(client) < RANK.gm) return; // wiping the table is GM+
       this.clearTable();
       const t = this.state.timer; // stop and zero the shared timer too
@@ -918,14 +923,14 @@ class TableRoom extends Room {
     });
 
     // Load a one-click starter game — clears the table and sets up the chosen game (GM+).
-    this.onMessage('loadStarter', (client, message) => {
+    tableMessage('loadStarter', (client, message) => {
       if (this.rank(client) < RANK.gm) return;   // replacing the whole table is GM+ (like scene load / reset)
       const parsed = oneField(message, 'game', (game) => typeof game === 'string' && STARTERS[game] ? game : null); if (!parsed) return;
       this.setupStarter(parsed.game);
     });
 
     // Toggle a piece's keep-upright/flat behaviour (the U key).
-    this.onMessage('setStand', (client, message) => {
+    tableMessage('setStand', (client, message) => {
       const parsed = pieceIdPayload(message); if (!parsed) return;
       const { id } = parsed;
       const piece = this.state.pieces.get(id);
@@ -940,7 +945,7 @@ class TableRoom extends Room {
     // Per-piece snap-to-grid flag (mirrors setStand). Toggling it ON snaps the piece to
     // its nearest cell right away (when a grid is active); from then on every drop lands
     // on a cell. OFF restores free placement.
-    this.onMessage('setSnap', (client, message) => {
+    tableMessage('setSnap', (client, message) => {
       const parsed = pieceIdPayload(message); if (!parsed) return;
       const { id } = parsed;
       const piece = this.state.pieces.get(id);
@@ -963,7 +968,7 @@ class TableRoom extends Room {
     });
 
     // Snap a held piece a quarter-turn onward, and level it (middle-click).
-    this.onMessage('snap', (client, message) => {
+    tableMessage('snap', (client, message) => {
       const parsed = pieceIdPayload(message); if (!parsed) return;
       const { id } = parsed;
       const piece = this.state.pieces.get(id);
@@ -984,19 +989,19 @@ class TableRoom extends Room {
     // --- Member management (DB-backed; all mutations authorized server-side) ---
     registerMemberHandlers(this, { db });
 
-    this.onMessage('nextTurn', () => this.advanceTurn());
-    this.onMessage('remove', (client, message) => { if (this.rank(client) < RANK.helper) return; const parsed = pieceIdPayload(message); if (parsed && this.state.pieces.has(parsed.id)) this.removePiece(parsed.id); });
-    this.onMessage('removeGroup', (client, message) => { // delete a whole multi-selection at once (helper+)
+    tableMessage('nextTurn', () => this.advanceTurn());
+    tableMessage('remove', (client, message) => { if (this.rank(client) < RANK.helper) return; const parsed = pieceIdPayload(message); if (parsed && this.state.pieces.has(parsed.id)) this.removePiece(parsed.id); });
+    tableMessage('removeGroup', (client, message) => { // delete a whole multi-selection at once (helper+)
       if (this.rank(client) < RANK.helper) return;
       const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
       for (const id of ids) if (this.state.pieces.has(id)) this.removePiece(id);
     });
-    this.onMessage('setName', (client, message) => {
+    tableMessage('setName', (client, message) => {
       const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 20 })); if (!parsed) return;
       const player = this.state.players.get(client.sessionId);
       if (player) player.name = parsed.name.trim() || player.name;
     });
-    this.onMessage('setAvatar', (client, message) => {
+    tableMessage('setAvatar', (client, message) => {
       const parsed = oneField(message, 'data', (data) => isBoundedImageDataURL(data) ? data : null); if (!parsed) return;
       const player = this.state.players.get(client.sessionId);
       if (player) {
@@ -1005,12 +1010,12 @@ class TableRoom extends Room {
         if (client.auth && client.auth.userId) db.setUserAvatar(client.auth.userId, parsed.data).catch(e => console.error('[setAvatar]', e.message));
       }
     });
-    this.onMessage('notebook', (client, message) => {
+    tableMessage('notebook', (client, message) => {
       const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 4000 })); if (!parsed) return;
       // Private per-player notes: never synced, just held so they survive a reconnect.
       this.notebooks.set(client.sessionId, parsed.text);
     });
-    this.onMessage('timer', (client, message) => {
+    tableMessage('timer', (client, message) => {
       const msg = timerPayload(message); if (!msg) return;
       const t = this.state.timer, now = Date.now();
       if (t.running) { t.base = timerLive(t, now); t.running = false; t.since = 0; } // freeze at the live value first
@@ -1026,7 +1031,7 @@ class TableRoom extends Room {
 
     // Durable scoreboard (helper+): add / remove / rename / adjust / set / clear.
     // Its own clear action — the table Reset deliberately leaves it alone.
-    this.onMessage('score', (client, message) => {
+    tableMessage('score', (client, message) => {
       if (this.rank(client) < RANK.helper) return;
       const msg = scorePayload(message); if (!msg) return;
       const s = this.state.scores;
@@ -1049,7 +1054,7 @@ class TableRoom extends Room {
 
     // Durable room notes (GM only): the shared free-text field. GM-only editing
     // sidesteps concurrent-edit merges (effectively one writer).
-    this.onMessage('roomNotes', (client, message) => {
+    tableMessage('roomNotes', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
       const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 8000 })); if (!parsed) return;
       this.state.notes = parsed.text;
@@ -1059,7 +1064,7 @@ class TableRoom extends Room {
     // Resize the play surface (GM+): rebuild the physics bounds + sync the new
     // size so clients rebuild the felt. Durable; the out-of-bounds net nudges any
     // now-outside pieces back in on the next tick.
-    this.onMessage('table', (client, message) => {
+    tableMessage('table', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
       const parsed = tablePayload(message, TABLE_LIMIT); if (!parsed) return;
       const { x: hx, z: hz } = parsed;
@@ -1067,7 +1072,7 @@ class TableRoom extends Room {
       this.buildBounds(hx, hz);
       this.scheduleSave();
     });
-    this.onMessage('tableColor', (client, message) => {
+    tableMessage('tableColor', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
       const parsed = oneField(message, 'color', hexColor); if (!parsed) return;
       this.state.feltColor = parsed.color;
@@ -1075,7 +1080,7 @@ class TableRoom extends Room {
     });
     // Per-room measurement scale (GM+, durable). A display/snap layer only — it never
     // touches physics or piece sizes. Partial: only provided, valid fields change.
-    this.onMessage('scaleSet', (client, message) => {
+    tableMessage('scaleSet', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
       const msg = scalePayload(message, { gridLiftMax: GRID_LIFT_MAX }); if (!msg) return;
       const sc = this.state.scale;
@@ -1087,7 +1092,7 @@ class TableRoom extends Room {
     // square style, and the board's snap anchor (chess → cell centres, go → crossings).
     // Boards spawn centred at the origin where the grid is anchored, so no offset needed;
     // the GM can nudge the cell size afterward to account for any border in the model.
-    this.onMessage('calibrateGrid', (client, message) => {
+    tableMessage('calibrateGrid', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
       const msg = gridCalibrationPayload(message); if (!msg) return;
       this.calibrateGrid(msg);
@@ -1097,7 +1102,7 @@ class TableRoom extends Room {
     // Public geometry. They ride the scene snapshot (see serializeScene), so a saved
     // or auto-saved table restores them. Any seated player adds/removes their own;
     // a GM removes any. Capped per-room and per-player so the map can't be spammed.
-    this.onMessage('overlayAdd', (client, message) => {
+    tableMessage('overlayAdd', (client, message) => {
       const msg = overlayGeometry(message, { kinds: OVERLAY_KINDS, maxLen: MEASURE.maxLen, requireKind: true }); if (!msg) return;
       if (this.state.overlays.size >= OVERLAY_MAX) return;       // room total cap
       let mine = 0;
@@ -1114,19 +1119,19 @@ class TableRoom extends Room {
       o.ang = msg.ang || 0;
       this.state.overlays.set('o' + (this.nextOverlayId++), o);
     });
-    this.onMessage('overlayMove', (client, message) => {       // reposition (owner or GM) — used from Step 4+
+    tableMessage('overlayMove', (client, message) => {       // reposition (owner or GM) — used from Step 4+
       const msg = overlayMovePayload(message, { maxLen: MEASURE.maxLen }); if (!msg) return;
       const o = this.state.overlays.get(msg.id);
       if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
       for (const key of ['x', 'z', 'x2', 'z2', 'w', 'ang']) if (msg[key] !== undefined) o[key] = msg[key];
     });
-    this.onMessage('overlayRemove', (client, message) => {     // delete one (owner or GM)
+    tableMessage('overlayRemove', (client, message) => {     // delete one (owner or GM)
       const msg = overlayIdPayload(message); if (!msg) return;
       const o = this.state.overlays.get(msg.id);
       if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
       this.state.overlays.delete(msg.id);
     });
-    this.onMessage('overlayClear', (client, message) => {     // scope 'all' (GM only) wipes every overlay; anything else clears just your own
+    tableMessage('overlayClear', (client, message) => {     // scope 'all' (GM only) wipes every overlay; anything else clears just your own
       const msg = oneField(message, 'scope', (scope) => ['all', 'mine'].includes(scope) ? scope : null); if (!msg) return;
       const all = msg.scope === 'all' && this.rank(client) >= RANK.gm, del = [];
       this.state.overlays.forEach((o, id) => { if (all || o.owner === client.sessionId) del.push(id); });
@@ -1135,7 +1140,7 @@ class TableRoom extends Room {
     // Live measurement preview: a transient relay (NOT synced state), so everyone
     // sees a ruler/template as it's dragged out. A missing/invalid kind means the
     // drag ended — clear the sender's preview. Stamps the sender's id + seat color.
-    this.onMessage('overlayDrag', (client, message) => {
+    tableMessage('overlayDrag', (client, message) => {
       const msg = overlayGeometry(message, { kinds: OVERLAY_KINDS, maxLen: MEASURE.maxLen, allowEmpty: true, requireKind: Object.keys(message || {}).length > 0 }); if (!msg) return;
       const player = this.state.players.get(client.sessionId);
       const color = (player && player.color) || '#ffffff';
@@ -1147,13 +1152,13 @@ class TableRoom extends Room {
     });
 
     // --- Whiteboard: a synced singleton on a track behind the players ----------
-    this.onMessage('wbEnable', (client, message) => {
+    tableMessage('wbEnable', (client, message) => {
       if (this.rank(client) < RANK.gm) return;             // spawn/enable is GM+
       const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null); if (!parsed) return;
       this.state.whiteboard.enabled = parsed.on;
       if (!parsed.on) { this.strokes = []; this.state.whiteboard.owner = ''; this.broadcast('wbClear'); }
     });
-    this.onMessage('wbSet', (client, message) => {         // slide on the track / flip dark<->light (GM+)
+    tableMessage('wbSet', (client, message) => {         // slide on the track / flip dark<->light (GM+)
       if (this.rank(client) < RANK.gm) return;
       const angleMsg = oneField(message, 'angle', (angle) => finiteNumber(angle, { min: -TWO_PI, max: TWO_PI }));
       const darkMsg = oneField(message, 'dark', (dark) => typeof dark === 'boolean' ? dark : null);
@@ -1162,15 +1167,15 @@ class TableRoom extends Room {
       if (msg.angle !== undefined) wb.angle = ((msg.angle % TWO_PI) + TWO_PI) % TWO_PI;
       if (msg.dark !== undefined) wb.dark = msg.dark;
     });
-    this.onMessage('wbClaim', (client) => {                 // double-click to own it (must be enabled + free)
+    tableMessage('wbClaim', (client) => {                 // double-click to own it (must be enabled + free)
       const wb = this.state.whiteboard;
       if (wb.enabled && !wb.owner) wb.owner = client.sessionId;
     });
-    this.onMessage('wbRelease', (client) => {               // exit inspect -> release
+    tableMessage('wbRelease', (client) => {               // exit inspect -> release
       const wb = this.state.whiteboard;
       if (wb.owner === client.sessionId) wb.owner = '';
     });
-    this.onMessage('wbStroke', (client, message) => {        // owner draws; everyone else replays it
+    tableMessage('wbStroke', (client, message) => {        // owner draws; everyone else replays it
       if (this.state.whiteboard.owner !== client.sessionId) return;
       const parsed = whiteboardStroke(message); if (!parsed) return;
       const stroke = { ...parsed, sid: client.sessionId };  // tag the drawer so their own echo is ignored client-side
@@ -1178,16 +1183,16 @@ class TableRoom extends Room {
       if (this.strokes.length > WHITEBOARD_MAX_STROKES) this.strokes.shift();
       this.broadcast('wbStroke', stroke);                   // to everyone (matches ping/wbClear, which deliver reliably)
     });
-    this.onMessage('wbClear', (client) => {                 // owner or GM+ wipes it
+    tableMessage('wbClear', (client) => {                 // owner or GM+ wipes it
       if (this.state.whiteboard.owner !== client.sessionId && this.rank(client) < RANK.gm) return;
       this.strokes = [];
       this.broadcast('wbClear');
     });
-    this.onMessage('wbStrokes', (client) => client.send('wbStrokes', { strokes: this.strokes })); // late-join replay
+    tableMessage('wbStrokes', (client) => client.send('wbStrokes', { strokes: this.strokes })); // late-join replay
 
     // --- Dice trays: one PERSONAL physics box per seat, on the track behind that player -----
     // No rank gate — a player toggles only their OWN tray. Putting it away clears its dice too.
-    this.onMessage('trayShow', (client, message) => {
+    tableMessage('trayShow', (client, message) => {
       const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null); if (!parsed) return;
       const seat = this.seatOf(client); if (seat == null) return;
       if (parsed.on) this.state.trays.set(String(seat), true);
@@ -1196,7 +1201,7 @@ class TableRoom extends Room {
     });
 
     // Public text chat — broadcast to the room, keep a small rolling history for late joiners.
-    this.onMessage('chat', (client, message) => {
+    tableMessage('chat', (client, message) => {
       const parsed = oneField(message, 'text', (text) => boundedString(text, { min: 1, max: 2000 })); if (!parsed) return;
       const t = parsed.text.replace(/\s+/g, ' ').trim().slice(0, 400);
       if (!t) return;
@@ -1206,17 +1211,17 @@ class TableRoom extends Room {
       if (this.chatLog.length > 80) this.chatLog.shift();
       this.broadcast('chatMsg', msg);
     });
-    this.onMessage('chatLog', (client) => client.send('chatLog', { log: this.chatLog })); // late-join replay
+    tableMessage('chatLog', (client) => client.send('chatLog', { log: this.chatLog })); // late-join replay
 
     // --- Skybox: per-room panorama, GM-applied + synced; library is admin-only ---
-    this.onMessage('skybox', (client, message) => {
+    tableMessage('skybox', (client, message) => {
       if (this.rank(client) < RANK.gm) return;             // changing the room's skybox is GM+
       const parsed = oneField(message, 'url', (url) => typeof url === 'string' && validSky(url) ? url : null); if (!parsed) return;
       this.state.skybox = parsed.url;
       this.scheduleSave();                                 // durable, like the board/table
     });
     assetMessage('listSkyboxes', (client) => this.sendAssetList(client, 'sky'));
-    this.onMessage('handSync', (client) => this.sendHand(client)); // re-send private hand (e.g. after a page refresh/reconnect)
+    tableMessage('handSync', (client) => this.sendHand(client)); // re-send private hand (e.g. after a page refresh/reconnect)
     assetMessage('saveSkybox', async (client, message) => {
       if (!this.isAdmin(client)) return;                   // curating the library is admin-only
       const fail = (message) => client.send('skyError', { message });
@@ -1234,7 +1239,7 @@ class TableRoom extends Room {
     // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
     // to the chosen audience. Content goes out privately (like a hand); everyone
     // else just sees the public 'showing' count as a badge. Released → showStop.
-    this.onMessage('showStart', (client, message) => {
+    tableMessage('showStart', (client, message) => {
       const parsed = showPayload(message); if (!parsed) return;
       const { to, hids } = parsed;
       const sid = client.sessionId;
@@ -1259,8 +1264,8 @@ class TableRoom extends Room {
         if (cl) cl.send('showFan', { sid, cards: payload }); // private content, to the audience alone
       }
     });
-    this.onMessage('showStop', (client) => this.stopShow(client.sessionId));
-    this.onMessage('ping', (client, message) => {
+    tableMessage('showStop', (client) => this.stopShow(client.sessionId));
+    tableMessage('ping', (client, message) => {
       // A transient "look here" marker. Public by nature, so just clamp to the
       // table and broadcast to everyone (the sender sees their own ping too).
       const point = pointPayload(message); if (!point) return;

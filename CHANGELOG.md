@@ -40,6 +40,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   subsequent socket messages operational.
 - Show sanitized Colyseus `serverError` responses to the affected player, with
   client-side throttling so cascading failures cannot create an alert storm.
+- Route every inline table message through the shared Colyseus boundary, so
+  unexpected synchronous room-state and physics failures are logged, reported,
+  and contained consistently with extracted and asynchronous handlers.
 
 ## [0.10.0] — 2026-08-26
 
