@@ -1972,7 +1972,7 @@ body.admin {
 }
 
 /* ===== Right rail — players panel on top, Tools menu + its panels below ===== */
-#rightRail {
+#rightStack {
   position: fixed;
   top: var(--inset);
   right: var(--inset);
@@ -1984,9 +1984,6 @@ body.admin {
   flex-direction: column;
   gap: var(--gap);
 }
-/* Step B: pinned head (collapse toggle + turn indicator + Next turn) over a collapsible body. */
-#railHead { display: flex; align-items: center; gap: 6px; }
-#railToggle { flex: 0 0 auto; padding: 4px 9px; }
 /* Your Turn pill (UI_Redesign): turn indicator + click-to-advance */
 .turnPill { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px; font: var(--fs) var(--font); color: var(--accent); white-space: nowrap; overflow: hidden; background: var(--panel); border: 1px solid var(--border); border-radius: var(--r); padding: 6px calc(9px * var(--ui-elements-scale)); backdrop-filter: var(--blur); cursor: pointer; }
 .turnPill[hidden] { display: none; }
@@ -1996,19 +1993,26 @@ body.admin {
 #turnMini { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* Top-right corner: avatar + static name beside the Your Turn pill */
 /* Top-right identity box (image 2): Your Turn + avatar + name in one glassy pill */
-#identityBar { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 5px 8px; box-shadow: 0 6px 18px var(--shadow-soft); }
+#identityBar { display: flex; align-items: center; gap: 8px; min-width: 0; background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 5px 8px; box-shadow: 0 6px 18px var(--shadow-soft); }
 #identityBar #myAv { margin-left: auto; }   /* push avatar + name to the right, turn indicator on the left */
 #identityBar .turnPill { background: rgba(255,255,255,.05); backdrop-filter: none; }  /* the Your Turn box reads as a control inside the glass, not glass-on-glass */
 .myName { font: var(--fs) var(--font); color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 96px; }
-#railBody { display: flex; flex-direction: column; gap: var(--gap); }
-#rightRail.collapsed { width: min(270px, 80vw); } /* same width as expanded — toggling hides the body, not the width */
-#rightRail.collapsed #railBody { display: none; }
 
-#rightRail #panel {
-  position: static;
-  inset: auto;
-  width: 100%;
-}
+/* Room Info dock (image 1): one glassy container, header (toggle + owner-derived name + code), titled sections */
+#roomInfo { background: var(--panel); backdrop-filter: var(--blur); border: 1px solid var(--border); border-radius: var(--r-xl); box-shadow: 0 6px 18px var(--shadow-soft); overflow: hidden; display: flex; flex-direction: column; min-height: 0; }
+#roomInfoHead { display: flex; align-items: center; gap: 8px; padding: 9px 11px; }
+#roomInfoHead #railToggle { flex: 0 0 auto; padding: 2px; background: none; border: none; color: var(--muted); cursor: pointer; display: inline-flex; }
+#roomInfoHead #railToggle:hover { color: var(--accent); }
+.roomTitleWrap { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+#roomTitle { color: var(--text); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#roomInfoHead #roomCode { color: var(--muted); font-size: var(--fs-sm); cursor: pointer; white-space: nowrap; }
+#roomInfoHead #roomCode:hover { color: var(--accent); }
+#roomInfoBody { display: flex; flex-direction: column; gap: var(--gap); padding: 0 11px 11px; }
+.dockSection { background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 8px 10px; display: flex; flex-direction: column; gap: 5px; }
+.dockSection #players { display: flex; flex-direction: column; gap: 4px; }
+.dockSection #roomNotes { width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px; }
+#roomInfo.collapsed #roomInfoBody { display: none; } /* collapse to just the header (name + code) */
+
 #toolsDock {
   display: flex;
   flex-direction: column;
@@ -2106,7 +2110,7 @@ body.admin {
 /* ===== sound + credits panels (fixed pop-outs, like Notes/Whiteboard) ===== */
 #audioPanel, #creditsPanel, #tracksPanel {
   top: var(--inset);                                          /* aligned with the room code */
-  right: calc(var(--inset) + min(285px, 92vw) + var(--gap));  /* just left of #rightRail */
+  right: calc(var(--inset) + min(285px, 92vw) + var(--gap));  /* just left of the right dock */
   width: min(340px, 90vw);
   gap: 6px;
 }

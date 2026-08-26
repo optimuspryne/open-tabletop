@@ -281,7 +281,7 @@ function rebuildGrid() {
   mySession = room.sessionId;
   if (!editorMode) { // room code, top-right — applyRole reveals it to GM+ only
     const rc = byId('roomCode');
-    if (rc) { rc.textContent = 'Room Code: ' + code; rc.title = 'Click to copy'; rc.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(code); }; }
+    if (rc) { rc.textContent = 'Code: ' + code; rc.title = 'Click to copy'; rc.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(code); }; }
   }
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
@@ -699,10 +699,10 @@ function rebuildGrid() {
   { const b = byId('trayClearBtn'); if (b) b.onclick = () => room.send('trayClear'); } // remove MY dice
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
   byId('turnBtn').onclick = () => room.send('nextTurn'); // the Your Turn pill advances the turn (server enforces who may)
-  { // Right rail: collapse to a compact pinned head (toggle + turn + Next turn). Starts collapsed on mobile/narrow.
-    const rail = byId('rightRail'), tog = byId('railToggle');
+  { // Room Info dock: collapse to just the header (name + code). Starts collapsed on mobile/narrow.
+    const rail = byId('roomInfo'), tog = byId('railToggle');
     if (rail && tog) {
-      const apply = (c) => { rail.classList.toggle('collapsed', c); setIcon(tog, c ? 'square-chevron-left' : 'square-chevron-right'); tog.setAttribute('aria-label', c ? 'Show panel' : 'Collapse panel'); };
+      const apply = (c) => { rail.classList.toggle('collapsed', c); setIcon(tog, c ? 'square-chevron-right' : 'square-chevron-down'); tog.setAttribute('aria-label', c ? 'Show room info' : 'Collapse'); };
       tog.onclick = () => apply(!rail.classList.contains('collapsed'));
       apply(matchMedia('(pointer: coarse), (max-width: 720px)').matches); // set initial state + icon
     }
@@ -2430,6 +2430,10 @@ function renderPlayers() { // built with DOM + textContent so a player's name ca
     tm.textContent = t;
     const tb = byId('turnBtn');
     if (tb) { tb.hidden = !t; tb.classList.toggle('myturn', room.state.turn === mySession); } // emphasize + light the chevron when it's yours
+  } }
+  { const rt = byId('roomTitle'); if (rt) { // dock title, derived from the room owner (no room-name field yet)
+    let owner = ''; room.state.players.forEach((p) => { if (p.role === 'owner') owner = p.name; });
+    rt.textContent = owner ? owner + "\u2019s Table" : 'Shared Table';
   } }
   const el = byId('players');
   if (!el) return;

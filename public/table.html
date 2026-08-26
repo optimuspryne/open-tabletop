@@ -114,32 +114,33 @@
 </div>
 </div>
 <div id="hand" class="panel"></div>
-<div id="rightRail">
-<div id="railHead">
-  <button id="railToggle" title="Collapse panel">▶</button>
-  <div id="identityBar">
-    <button id="turnBtn" class="turnPill" data-icon="chevrons-right" title="Advance the turn" hidden><span class="lbl" id="turnMini"></span></button>
-    <span id="myAv" class="mav editable" title="Change your avatar"></span>
-    <span id="myName" class="myName"></span>
-    <input id="avatarInput" type="file" accept="image/*" hidden>
-  </div>
+<div id="rightStack">
+<div id="identityBar">
+  <button id="turnBtn" class="turnPill" data-icon="chevrons-right" title="Advance the turn" hidden><span class="lbl" id="turnMini"></span></button>
+  <span id="myAv" class="mav editable" title="Change your avatar"></span>
+  <span id="myName" class="myName"></span>
+  <input id="avatarInput" type="file" accept="image/*" hidden>
 </div>
-<div id="railBody">
-<div id="roomCode" class="panel" hidden></div>
-<div id="panel">
-  <div>
-    <div id="players" class="panel"></div>
-    <div id="memberSection" class="panel" hidden>
+<div id="roomInfo">
+  <div id="roomInfoHead">
+    <button id="railToggle" title="Collapse">▾</button>
+    <div class="roomTitleWrap"><b id="roomTitle"></b><span id="roomCode" title="Click to copy" hidden></span></div>
+  </div>
+  <div id="roomInfoBody">
+    <div class="dockSection">
+      <div class="dockLabel">Players</div>
+      <div id="players"></div>
+    </div>
+    <div class="dockSection">
+      <div class="dockLabel">Room notes</div>
+      <textarea id="roomNotes" rows="4" placeholder="GM notes for the room — house rules, current objective…"></textarea>
+    </div>
+    <div id="memberSection" class="dockSection" hidden>
       <div class="dockLabel">Members<span id="memberPending" class="pendingDot" hidden></span></div>
       <div id="unclaimedHands" class="unclaimed"></div>
       <ul id="memberList"></ul>
     </div>
-    <div id="roomNotesBox" class="panel">
-      <div class="dockLabel">Room notes</div>
-      <textarea id="roomNotes" rows="4" placeholder="GM notes for the room — house rules, current objective…"></textarea>
-    </div>
   </div>
-</div>
 </div>
 <div id="toolsDock">
   <div id="toolsMenu" class="panel" hidden>
