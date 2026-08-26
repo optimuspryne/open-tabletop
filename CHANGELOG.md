@@ -8,6 +8,17 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-08-26
+
+### Breaking
+- **Docker Compose now requires secret files.** Before upgrading with the bundled
+  `docker-compose.yml`, create `secrets/db_owner_password.txt`,
+  `secrets/app_db_password.txt`, and `secrets/admin_password.txt`; database passwords
+  are no longer read from `DB_PASSWORD` and `APP_DB_PASSWORD` in `.env`. Run
+  `npm run secrets:migrate` to copy the two existing database values safely, then
+  create the administrator password file separately. Deployments using direct
+  `DATABASE_URL` / `MIGRATE_DATABASE_URL` environment variables remain supported.
+
 ### Security
 - Replace perpetual single-device login tokens with expiring, independently
   revocable sessions. Multiple devices can stay signed in concurrently, logout
@@ -432,7 +443,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.10.0
 [0.9.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.9.0
 [0.8.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.8.0
 [0.7.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.7.0

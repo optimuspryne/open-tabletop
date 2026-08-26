@@ -29,7 +29,7 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.9.0` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.10.0` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
@@ -154,7 +154,7 @@ app image against it:
 docker run -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.9.0
+  optimuspryne/open-tabletop:0.10.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -206,7 +206,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.9.0
+    image: optimuspryne/open-tabletop:0.10.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:
