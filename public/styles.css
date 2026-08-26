@@ -149,6 +149,7 @@
    A button group ("cluster") opens ONE anchored region; one pane shows at a time.
    Desktop: an overlay anchored under the cluster (position set in JS). Mobile: a
    full-width bottom sheet. Independent across clusters; accordion within a cluster. */
+#regionBL { width: 140px; }  /* Interactions holds only My Seat + Lean In — no need for the full 300px region */
 .region {
   position: fixed;
   z-index: 9;

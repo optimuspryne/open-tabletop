@@ -869,7 +869,7 @@ function rebuildGrid() {
 
   byId('showBtn').onclick = () => {
     showPanel.hidden = !showPanel.hidden;
-    if (!showPanel.hidden) buildAudienceChips(); else exitSelectMode();
+    if (!showPanel.hidden) { buildAudienceChips(); placeAbovePanel(showPanel, byId('showBtn'), 'left'); } else exitSelectMode();
   };
   byId('showClose').onclick = () => { showPanel.hidden = true; exitSelectMode(); };
   scopeHand.onclick = () => { scopeHand.classList.add('on'); scopeSel.classList.remove('on'); if (selectMode) exitSelectMode(); };
@@ -958,7 +958,7 @@ const pickId = () => {
     room.send('handToTable', { faceDown, x: s.hand[0] - s.out[0] * 2, z: s.hand[2] - s.out[2] * 2 }); // just in front of the marker
     if (dropPanel) dropPanel.hidden = true;
   };
-  { const b = byId('dropBtn'); if (b) b.onclick = () => { if (dropPanel) dropPanel.hidden = !dropPanel.hidden; }; }
+  { const b = byId('dropBtn'); if (b) b.onclick = () => { if (dropPanel) { dropPanel.hidden = !dropPanel.hidden; if (!dropPanel.hidden) placeAbovePanel(dropPanel, b, 'right'); } }; }
   { const b = byId('dropDown'); if (b) b.onclick = () => dropAt(true); }
   { const b = byId('dropUp'); if (b) b.onclick = () => dropAt(false); }
   { const b = byId('dropClose'); if (b) b.onclick = () => { if (dropPanel) dropPanel.hidden = true; }; }
@@ -1672,6 +1672,16 @@ addEventListener('pointercancel', (e) => { // a cancelled drag must still discar
   document.body.style.userSelect = document.body.style.webkitUserSelect = '';
 });
 
+// Pop a bottom-anchored config panel just above its flank button (Show/Drop, either side of the hand).
+// On mobile the popout's !important centering wins, so this only takes effect on desktop.
+function placeAbovePanel(panel, btn, side) {
+  if (!panel || !btn) return;
+  const r = btn.getBoundingClientRect();
+  panel.style.top = 'auto'; panel.style.transform = 'none';
+  panel.style.bottom = Math.round(innerHeight - r.top + 8) + 'px';
+  if (side === 'right') { panel.style.right = Math.round(Math.max(8, innerWidth - r.right)) + 'px'; panel.style.left = 'auto'; }
+  else { panel.style.left = Math.round(Math.max(8, r.left)) + 'px'; panel.style.right = 'auto'; }
+}
 function renderHand(cards) {
   const el = byId('hand');
   el.innerHTML = '';
