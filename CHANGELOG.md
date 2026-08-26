@@ -19,6 +19,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   closed while Redis is unavailable, and resolve client IPs through an explicitly
   configured reverse-proxy hop count.
 
+### Reliability
+- Make saved-library reads distinguish successful empty/not-found results from
+  PostgreSQL failures. Database outages now reject and produce an explicit library
+  error for the requesting socket instead of silently rendering an empty library.
+
 ## [0.10.0] — 2026-08-26
 
 ### Breaking

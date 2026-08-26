@@ -723,7 +723,7 @@ class TableRoom extends Room {
     this.onMessage('loadDeck', async (client, message) => {
       if (this.rank(client) < RANK.helper) return;
       const msg = assetIdPayload(message); if (!msg) return;
-      const deck = await db.getDeck(msg.id);
+      const deck = await this.readAsset(client, 'deck', () => db.getDeck(msg.id));
       if (!deck) return;
       if (!deck.isPublic && !this.isAdmin(client)) return; // private assets: admins only
       this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts, ...(deck.geom ? { geom: deck.geom } : {}) });
@@ -767,7 +767,7 @@ class TableRoom extends Room {
     this.onMessage('getDeck', async (client, message) => { // fetch a deck's full cards/back for the editor to pre-fill
       if (!this.isAdmin(client)) return;
       const msg = assetIdPayload(message); if (!msg) return;
-      const d = await db.getDeck(msg.id);
+      const d = await this.readAsset(client, 'deck', () => db.getDeck(msg.id));
       if (d) client.send('deckData', { id: msg.id, name: d.name, back: d.back, fronts: d.fronts, geom: d.geom });
     });
     this.onMessage('assetDelete', async (client, message) => {
@@ -796,7 +796,7 @@ class TableRoom extends Room {
     this.onMessage('sceneLoad', async (client, message) => {
       if (this.rank(client) < RANK.gm) return; // replacing the whole table is GM+
       const msg = assetIdPayload(message); if (!msg) return;
-      const scene = await db.getScene(msg.id);
+      const scene = await this.readAsset(client, 'scene', () => db.getScene(msg.id));
       if (!scene) return;
       if (!scene.isPublic && !this.isAdmin(client)) return; // private scenes: admins only
       this.applyScene(scene.payload);
@@ -816,7 +816,7 @@ class TableRoom extends Room {
     this.onMessage('loadBoard', async (client, message) => {
       if (this.rank(client) < RANK.gm) return; // changing the board reshapes the table: GM+
       const msg = assetIdPayload(message); if (!msg) return;
-      const data = await db.getBoard(msg.id);
+      const data = await this.readAsset(client, 'board', () => db.getBoard(msg.id));
       if (!data) return;
       if (!data.isPublic && !this.isAdmin(client)) return; // private assets: admins only
       const rec = data.rec;
@@ -1973,11 +1973,28 @@ class TableRoom extends Room {
   // (incl. private); everyone else gets only published (public) assets.
   async sendAssetList(client, kind) {
     const includePrivate = this.isAdmin(client);
-    if (kind === 'deck') client.send('deckList', await db.listDecks({ includePrivate }));
-    else if (kind === 'board') client.send('boardList', await db.listBoards({ includePrivate }));
-    else if (kind === 'prop') client.send('propList', await db.listProps({ includePrivate }));
-    else if (kind === 'scene') client.send('sceneList', await db.listScenes({ includePrivate }));
-    else if (kind === 'sky') client.send('skyList', await db.listSkyboxes({ includePrivate }));
+    const config = {
+      deck: ['deckList', () => db.listDecks({ includePrivate })],
+      board: ['boardList', () => db.listBoards({ includePrivate })],
+      prop: ['propList', () => db.listProps({ includePrivate })],
+      scene: ['sceneList', () => db.listScenes({ includePrivate })],
+      sky: ['skyList', () => db.listSkyboxes({ includePrivate })],
+    }[kind];
+    if (!config) return false;
+    const list = await this.readAsset(client, kind, config[1]);
+    if (list === undefined) return false;
+    client.send(config[0], list);
+    return true;
+  }
+
+  async readAsset(client, kind, read) {
+    try {
+      return await read();
+    } catch (error) {
+      console.error(`[asset:${kind}]`, error.message);
+      client.send('assetError', { kind, message: 'Library unavailable. Try again.' });
+      return undefined;
+    }
   }
 
   // --- Member-management authorization + list delivery ---

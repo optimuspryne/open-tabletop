@@ -383,6 +383,13 @@ function rebuildGrid() {
   room.onMessage('wbClear', () => { wbStrokesLocal.length = 0; if (wbTex) wbClearCanvas(); });
   room.onMessage('skyList', (list) => { if (window.onLibraryList) window.onLibraryList('sky', list || []); }); // fans to the library + skybox picker
   room.onMessage('skyError', ({ message } = {}) => { const e = byId('skyErr'); if (e) e.textContent = message || 'Could not add that skybox.'; });
+  let lastAssetErrorAt = 0;
+  room.onMessage('assetError', ({ message } = {}) => {
+    const now = Date.now();
+    if (now - lastAssetErrorAt < 5000) return; // one refresh requests every asset kind; report one outage, not five alerts
+    lastAssetErrorAt = now;
+    alert(message || 'The library is temporarily unavailable.');
+  });
   room.onMessage('memberList', (list) => { renderMembers(list); updateMembersPulse(list); }); // panel data + pending-pulse
 
   // Library creation/editing is admin-only; hide those controls for everyone else,

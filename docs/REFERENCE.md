@@ -18,6 +18,7 @@ The codebase:
 | `server/{database-config,session-config,bootstrap-admin}.js` | Node | DB config, session lifetime, and first-boot admin provisioning |
 | `server/assets/upload-validation.js` | Node | Image magic-byte and self-contained GLB validation |
 | `server/{rate-limit,redis-config}.js` | Node | Redis/memory token-bucket stores, fail-closed HTTP middleware, Redis URL and trusted-proxy configuration |
+| `server/library-queries.js` | Node | Testable saved-library read queries; successful empty/not-found results stay distinct from PostgreSQL rejection |
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
 | `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |

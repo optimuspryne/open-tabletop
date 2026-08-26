@@ -9,8 +9,8 @@
 // rides in the `props` jsonb bag. Reads splice the two back into the record shape
 // the game already expects, so nothing is stored twice.
 import pg from 'pg';
-import { BOARDS } from './shared/pieces.js';
 import { databaseConnectionString } from './server/database-config.js';
+import { createLibraryQueries } from './server/library-queries.js';
 
 // The connection string comes from the environment, never from this file. Prefer
 // DATABASE_URL_FILE — a path to a file holding the string (the Docker-secrets
@@ -24,6 +24,7 @@ export const close = () => pool.end(); // for one-off scripts to let the process
 
 // pg returns bigint as a string; keep ids as strings, but preserve NULL as null.
 const idOrNull = (v) => (v == null ? null : String(v));
+const library = createLibraryQueries((sql, params) => pool.query(sql, params));
 
 // ===== Decks =================================================================
 // cards = the ordered front refs (jsonb array); props = { back }.
@@ -31,19 +32,10 @@ const idOrNull = (v) => (v == null ? null : String(v));
 // it (editing stays admin-only regardless). Lists are public-only unless the
 // caller passes includePrivate (admins).
 export async function listDecks({ includePrivate = false } = {}) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, jsonb_array_length(cards) AS count, cards->>0 AS first, props->>'back' AS back, is_public, owner_id FROM custom_decks
-       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, count: Number(r.count), first: r.first || null, back: r.back || 'back', isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
-  } catch (e) { console.error('[db] listDecks:', e.message); return []; }
+  return library.listDecks({ includePrivate });
 }
 export async function getDeck(id) {
-  try {
-    const { rows } = await pool.query('SELECT name, cards, props, is_public, owner_id FROM custom_decks WHERE id = $1', [id]);
-    if (!rows[0]) return null;
-    return { name: rows[0].name, fronts: rows[0].cards || [], back: (rows[0].props || {}).back || 'back', geom: (rows[0].props || {}).geom || null, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
-  } catch (e) { console.error('[db] getDeck:', e.message); return null; }
+  return library.getDeck(id);
 }
 export function insertDeck({ name, back, fronts, geom = null, ownerId = null, isPublic = false }) {
   return pool.query(
@@ -61,28 +53,13 @@ export function updateDeck(id, name, back, fronts, geom = null) {
 // A board record is one of: { board } (built-in) | { model, modelScale, box }
 // (uploaded .glb) | { w, d, tex } (procedural). model → file_url; the rest → props.
 const boardType = (rec) => rec.model ? 'glb' : (rec.tex ? 'image' : 'flat'); // the CHECK-constrained label
-function boardKind(rec) { // short descriptor for the load menu
-  if (rec.board) return BOARDS[rec.board] ? BOARDS[rec.board].name : rec.board;
-  if (rec.model) return 'model';
-  return `${rec.w || 8}\u00d7${rec.d || 8}`;
-}
-const boardRecord = (row) => { const rec = { ...(row.props || {}) }; if (row.file_url) rec.model = row.file_url; return rec; };
 
 export async function listBoards({ includePrivate = false } = {}) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, file_url, props, is_public, owner_id FROM custom_boards
-       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => { const rec = boardRecord(r); return { ...rec, id: String(r.id), name: r.name, kind: boardKind(rec), preview: r.file_url || (r.props && r.props.tex) || null, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }; });
-  } catch (e) { console.error('[db] listBoards:', e.message); return []; }
+  return library.listBoards({ includePrivate });
 }
 // Returns a wrapper: .rec is the spawn record, plus visibility/owner for gating.
 export async function getBoard(id) {
-  try {
-    const { rows } = await pool.query('SELECT name, file_url, props, is_public, owner_id FROM custom_boards WHERE id = $1', [id]);
-    if (!rows[0]) return null;
-    return { rec: boardRecord(rows[0]), name: rows[0].name, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
-  } catch (e) { console.error('[db] getBoard:', e.message); return null; }
+  return library.getBoard(id);
 }
 export function insertBoard(name, rec, { ownerId = null, isPublic = false } = {}) {
   const { model, ...rest } = rec;
@@ -101,15 +78,8 @@ export function updateBoard(id, name, rec) {
 // ===== Props (custom model objects) ==========================================
 // A prop is always a .glb model: file_url = the model URL; props = the rest
 // ({ box, stand, scale, color? }). Reads splice model back in for spawning.
-const propRecord = (row) => ({ model: row.file_url, ...(row.props || {}) });
-
 export async function listProps({ includePrivate = false } = {}) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, file_url, props, is_public, owner_id FROM custom_objects
-       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, props: propRecord(r), isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
-  } catch (e) { console.error('[db] listProps:', e.message); return []; }
+  return library.listProps({ includePrivate });
 }
 export function insertProp(name, props, { ownerId = null, isPublic = false } = {}) {
   const { model, ...rest } = props;
@@ -127,19 +97,10 @@ export function updateProp(id, name, props) {
 
 // ===== Scenes (a saved whole-table setup) ===================================
 export async function listScenes({ includePrivate = false } = {}) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, is_public, owner_id FROM custom_scenes
-       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
-  } catch (e) { console.error('[db] listScenes:', e.message); return []; }
+  return library.listScenes({ includePrivate });
 }
 export async function getScene(id) {
-  try {
-    const { rows } = await pool.query('SELECT name, props, is_public, owner_id FROM custom_scenes WHERE id = $1', [id]);
-    if (!rows[0]) return null;
-    return { name: rows[0].name, payload: rows[0].props || {}, isPublic: rows[0].is_public, ownerId: idOrNull(rows[0].owner_id) };
-  } catch (e) { console.error('[db] getScene:', e.message); return null; }
+  return library.getScene(id);
 }
 export function insertScene({ name, payload, ownerId = null, isPublic = false }) {
   return pool.query(
@@ -149,12 +110,7 @@ export function insertScene({ name, payload, ownerId = null, isPublic = false })
 
 // ===== Skyboxes (admin-curated equirectangular panoramas) ===================
 export async function listSkyboxes({ includePrivate = false } = {}) {
-  try {
-    const { rows } = await pool.query(
-      `SELECT id, name, file_url, is_public, owner_id FROM custom_skyboxes
-       ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`);
-    return rows.map(r => ({ id: String(r.id), name: r.name, url: r.file_url, isPublic: r.is_public, ownerId: idOrNull(r.owner_id) }));
-  } catch (e) { console.error('[db] listSkyboxes:', e.message); return []; }
+  return library.listSkyboxes({ includePrivate });
 }
 export function insertSkybox({ name, url, ownerId = null, isPublic = false }) {
   return pool.query(
