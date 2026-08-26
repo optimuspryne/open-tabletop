@@ -117,7 +117,12 @@
 <div id="rightRail">
 <div id="railHead">
   <button id="railToggle" title="Collapse panel">▶</button>
-  <button id="turnBtn" class="turnPill" data-icon="chevrons-right" title="Advance the turn" hidden><span class="lbl" id="turnMini"></span></button>
+  <div id="identityBar">
+    <button id="turnBtn" class="turnPill" data-icon="chevrons-right" title="Advance the turn" hidden><span class="lbl" id="turnMini"></span></button>
+    <span id="myAv" class="mav editable" title="Change your avatar"></span>
+    <span id="myName" class="myName"></span>
+    <input id="avatarInput" type="file" accept="image/*" hidden>
+  </div>
 </div>
 <div id="railBody">
 <div id="roomCode" class="panel" hidden></div>
@@ -132,11 +137,6 @@
     <div id="roomNotesBox" class="panel">
       <div class="dockLabel">Room notes</div>
       <textarea id="roomNotes" rows="4" placeholder="GM notes for the room — house rules, current objective…"></textarea>
-    </div>
-    <div id="me" class="panel">
-      <span id="myAv" class="mav editable" title="Change your avatar"></span>
-      <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
-      <input id="avatarInput" type="file" accept="image/*" hidden>
     </div>
   </div>
 </div>

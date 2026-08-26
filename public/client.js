@@ -447,11 +447,11 @@ function rebuildGrid() {
 
   // seats, turn order, and other players' fanned hand-backs (all public info)
   cb(room.state).players.onAdd((player, sid) => {
-    if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); applyRole(player.role); byId('nameInput').value = player.name; updateMyPreview(player.avatar); refreshMyChip(); }
+    if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); applyRole(player.role); { const mn = byId('myName'); if (mn) mn.textContent = player.name; } updateMyPreview(player.avatar); refreshMyChip(); }
     refreshFan(sid); refreshMarker(sid); renderPlayers(); renderUnclaimed();
     cb(player).listen('hand', () => { refreshFan(sid); renderPlayers(); }, false);
     cb(player).listen('seat', () => { if (sid === mySession) { mySeat = player.seat; applySeat(mySeat); refreshMyChip(); } refreshFan(sid); refreshMarker(sid); }, false);
-    cb(player).listen('name', () => { refreshMarker(sid); renderPlayers(); }, false);
+    cb(player).listen('name', () => { if (sid === mySession) { const mn = byId('myName'); if (mn) mn.textContent = player.name; } refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('role', () => { if (sid === mySession) applyRole(player.role); renderPlayers(); }, false);
     cb(player).listen('avatar', () => { if (sid === mySession) updateMyPreview(player.avatar); else refreshMarker(sid); renderPlayers(); }, false);
     cb(player).listen('color', () => { if (sid === mySession) refreshMyChip(); refreshMarker(sid); renderPlayers(); }, false);
@@ -707,10 +707,6 @@ function rebuildGrid() {
       apply(matchMedia('(pointer: coarse), (max-width: 720px)').matches); // set initial state + icon
     }
   }
-  byId('nameInput').addEventListener('change', e => {
-    const name = e.target.value.trim();
-    if (name) room.send('setName', { name });
-  });
   byId('avatarInput').addEventListener('change', async e => {
     const file = e.target.files[0];
     if (!file) return;
