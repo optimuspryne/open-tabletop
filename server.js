@@ -29,6 +29,7 @@ import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
+import { registerMemberHandlers } from './server/game/handlers/members.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -980,63 +981,10 @@ class TableRoom extends Room {
       body.wakeUp();
     });
 
-    // --- Member management (GM tools): admit pending joiners, kick, promote ----
-    // Pending joiners aren't connected (onAuth turned them away), so the list comes
-    // from the DB, not the live room. All gated server-side; the client only shows
-    // the panel to GMs.
-    this.onMessage('members', (client) => {
-      if (this.rank(client) < RANK.gm) return;
-      this.sendMembers(client);
-    });
-    this.onMessage('admit', async (client, { userId } = {}) => {
-      if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
-      await db.admitMember(this.roomId, userId);
-      this.notifyLobby(userId, 'notifyAdmitted'); // push to them if they're waiting in the lobby
-      this.broadcastMembers();
-    });
-    this.onMessage('kick', async (client, { userId } = {}) => {
-      if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
-      if (String(userId) === String(client.auth.userId)) return; // no kicking yourself
-      const m = await db.getMembership(this.roomId, userId);
-      if (!m || !this.canManage(this.rank(client), m.role)) return;
-      const target = await db.findUserById(userId);
-      if (target && target.isAdmin) return; // site admins can't be kicked
-      await db.kickMember(this.roomId, userId);
-      const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
-      if (live) { live.send('kicked'); setTimeout(() => { try { live.leave(4000); } catch (e) {} }, 150); } // notice, then drop (consented → no reconnection)
-      this.notifyLobby(userId, 'notifyDeclined'); // a pending joiner is waiting in the lobby, not the table
-      this.broadcastMembers();
-    });
-    this.onMessage('setRole', async (client, { userId, role } = {}) => {
-      if (this.rank(client) < RANK.gm || !this.roomId || !userId) return;
-      if (String(userId) === String(client.auth.userId)) return; // no changing your own role
-      if (!['helper', 'player', 'gm'].includes(role)) return;
-      const m = await db.getMembership(this.roomId, userId);
-      if (!m || !this.canSetRole(this.rank(client), m.role, role)) return;
-      const target = await db.findUserById(userId);
-      if (target && target.isAdmin) return; // site admins keep full control — can't be demoted
-      await db.setMemberRole(this.roomId, userId, role);
-      const live = this.clients.find(c => c.auth && String(c.auth.userId) === String(userId));
-      if (live) { // reflect the change live so their tools update immediately
-        const p = this.state.players.get(live.sessionId);
-        if (p) p.role = role;
-        if (live.auth) live.auth.role = role;
-      }
-      this.broadcastMembers();
-    });
+    // --- Member management (DB-backed; all mutations authorized server-side) ---
+    registerMemberHandlers(this, { db });
 
     this.onMessage('nextTurn', () => this.advanceTurn());
-    this.onMessage('reassignHand', (client, { userId, toSessionId } = {}) => { // GM hands an unclaimed hand to a present player
-      if (this.rank(client) < RANK.gm) return;
-      const uid = userId != null ? String(userId) : null;
-      if (!uid || !this.pendingHands.has(uid)) return;
-      const target = this.clientBy(toSessionId);
-      if (!target) return; // must land on someone present
-      const held = this.pendingHands.get(uid);
-      this.hands.set(toSessionId, (this.hands.get(toSessionId) || []).concat(held.cards)); // merge onto any hand they hold
-      this.pendingHands.delete(uid); this.state.unclaimed.delete(uid);
-      this.sendHand(target);
-    });
     this.onMessage('remove', (client, { id }) => { if (this.rank(client) < RANK.helper) return; if (this.state.pieces.has(id)) this.removePiece(id); });
     this.onMessage('removeGroup', (client, { ids } = {}) => { // delete a whole multi-selection at once (helper+)
       if (this.rank(client) < RANK.helper || !Array.isArray(ids)) return;
