@@ -673,7 +673,9 @@ on the volume and live table state stays in memory. Credentials come from the
 environment, never code.
 
 **Accounts.** A *player* is passwordless (display name + device token); a *host*
-has a password. `onAuth` resolves the token to a user and the room code to a room,
+has a password. Each browser login has its own hashed, expiring row in
+`user_sessions`, so devices coexist and can be revoked independently. `onAuth`
+resolves the token to a user and the room code to a room,
 admits only admitted members (else rejects with a waiting/forbidden message), and
 stamps the membership **role** — and the account's admin flag — onto the connection
 (`client.auth`).

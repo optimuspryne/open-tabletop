@@ -285,7 +285,13 @@ async function onJoin() {
   } catch (e) { setStatus(errEl, e.message); }
 }
 
-const onLogout = () => { byId('adminBtn').hidden=true; stopPolling(); clearToken(); showQuickJoin(); };
+const onLogout = async () => {
+  const raw = token();
+  byId('adminBtn').hidden = true; stopPolling(); clearToken(); showQuickJoin();
+  if (raw) {
+    try { await api('/auth/logout', { method: 'POST', body: { token: raw } }); } catch { /* local logout still succeeds */ }
+  }
+};
 
 // Center-crop + shrink a chosen image to a small square JPEG data-URL (kept tiny
 // so it fits the same bounded rule the server enforces).

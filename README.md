@@ -81,9 +81,9 @@ Table State**, or an auto-save when the room empties — written into the room's
      the least-privilege `tabletop_app` role; DDL runs only through this separate owner
      URL, and only at boot. Works against stock Postgres or any managed instance.
    - **Or apply it by hand** (as the owner). Fresh install: `psql -U tabletop -d
-     tabletop -f postgres/schema.sql` (the flattened baseline of `001`–`010`, which also
+     tabletop -f postgres/schema.sql` (the flattened current schema, which also
      seeds `schema_migrations`). Upgrade: apply the numbered migrations in order
-     (`001_custom_assets.sql` → … → `010_room_scale.sql`). Set **`AUTO_MIGRATE=false`**
+     (`001_custom_assets.sql` → … → `011_user_sessions.sql`). Set **`AUTO_MIGRATE=false`**
      (or just leave `MIGRATE_DATABASE_URL` unset) to keep the app out of the schema.
      (The per-migration backfills matter on a populated DB but are no-ops on an empty
      one, so they're dropped from the baseline.)
@@ -96,6 +96,9 @@ Table State**, or an auto-save when the room empties — written into the room's
    administrator. To recover or promote an existing account, run
    `npm run admin:grant -- user@example.com`; use `admin:revoke` to remove access
    (the final administrator cannot be revoked).
+
+Login credentials are separate, per-device sessions that expire after 30 days.
+Set `SESSION_TTL_DAYS` to a whole number from 1–365 to change that lifetime.
 
 Direct deployments normally use `DATABASE_URL` or `DATABASE_URL_FILE`. Docker Compose
 uses non-secret host/name/user metadata plus `DATABASE_PASSWORD_FILE`; migration keys

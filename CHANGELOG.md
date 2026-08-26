@@ -9,6 +9,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Security
+- Replace perpetual single-device login tokens with expiring, independently
+  revocable sessions. Multiple devices can stay signed in concurrently, logout
+  now invalidates the server-side credential, and existing tokens receive a
+  30-day expiry during migration.
 - Replace first-signup administrator promotion with explicit first-boot provisioning
   from a Docker-mounted password secret. Provisioning runs before the public listener,
   is transactionally locked, and only creates an account on an empty users table.

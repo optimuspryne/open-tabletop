@@ -492,8 +492,10 @@ admin sandbox for building and testing library assets live. Registered as the
 - **Uploads:** `POST /upload?kind=` (one resized image → `{ url }`),
   `POST /upload-model?kind=props` (a raw `.glb` → `{ url }`).
 - **Auth:** `POST /auth/signup` (with a password → host, pending approval; without
-  → passwordless player), `POST /auth/login` (rotates the device token),
-  `POST /auth/token` (resolve a token → current user). `requireUser` is the
+  → passwordless player), `POST /auth/login` (creates a device session),
+  `POST /auth/token` (resolve a token → current user), `POST /auth/logout`
+  (revoke this session), and `POST /auth/logout-all` (revoke every session for the
+  authenticated account). `requireUser` is the
   Bearer-token guard; `clientUser` is the safe projection sent to clients
   (`isAdmin`, `canOwnRooms`, `hostStatus`, `hasPassword`).
 - **Rooms:** `GET /rooms` (your rooms), `POST /rooms` (create — approved-host or
@@ -587,7 +589,9 @@ Node `crypto` only. Passwords: **`hashPassword(pw)`** / **`verifyPassword(pw,
 stored)`** — salted scrypt in a `scrypt$salt$hash` string, compared in constant
 time. Device tokens (for passwordless players and "remember me"): **`makeToken()`**
 mints a 256-bit base64url token; **`hashToken(token)`** sha256-hashes it for
-storage and lookup, so a DB leak never exposes a live token.
+storage and lookup, so a DB leak never exposes a live token. Their hashes and
+expiry timestamps live in `user_sessions`; `SESSION_TTL_DAYS` controls the
+lifetime (30 days by default, bounded to 1–365).
 
 ---
 

@@ -207,25 +207,36 @@ const publicUser = (r) => r && ({
   isAdmin: r.is_admin, hostStatus: r.host_status, hasPassword: !!r.password_hash,
   canOwnRooms: r.host_status === 'approved' || r.is_admin, // approved host, or any admin
 });
-const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash, loginTokenHash: r.login_token_hash });
+const authUser = (r) => r && ({ ...publicUser(r), passwordHash: r.password_hash });
 
 // Create an account. A password sets host_status = 'pending' (must be approved by
 // an admin before hosting); passwordless => 'none'. Throws with err.conflict =
 // 'username' | 'email' if that field is taken.
-export async function createUser({ username, email, passwordHash = null, loginTokenHash = null, isAdmin = false }) {
+export async function createUser({ username, email, passwordHash = null, loginTokenHash = null, sessionExpiresAt = null, isAdmin = false }) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const hostStatus = passwordHash ? 'pending' : 'none';
-    const { rows } = await pool.query(
-      `INSERT INTO users (username, email, password_hash, login_token_hash, is_admin, host_status)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING *`,
-      [username, email, passwordHash, loginTokenHash, isAdmin, hostStatus]);
+    const { rows } = await client.query(
+      `INSERT INTO users (username, email, password_hash, is_admin, host_status)
+       VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [username, email, passwordHash, isAdmin, hostStatus]);
+    if (loginTokenHash) {
+      await client.query(
+        'INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+        [rows[0].id, loginTokenHash, sessionExpiresAt]);
+    }
+    await client.query('COMMIT');
     return publicUser(rows[0]);
   } catch (e) {
+    await client.query('ROLLBACK');
     if (e.code === '23505') {
       const field = e.constraint === 'users_email_key' ? 'email' : 'username';
       const err = new Error(`${field} already taken`); err.conflict = field; throw err;
     }
     throw e;
+  } finally {
+    client.release();
   }
 }
 
@@ -299,7 +310,10 @@ export async function findUserByLogin(login) {
 export async function findUserByToken(tokenHash) {
   if (!tokenHash) return null;
   try {
-    const { rows } = await pool.query('SELECT * FROM users WHERE login_token_hash = $1', [tokenHash]);
+    const { rows } = await pool.query(
+      `SELECT u.* FROM user_sessions s
+       JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = $1 AND s.expires_at > now()`, [tokenHash]);
     return publicUser(rows[0]) || null; // the token match already authenticated them
   } catch (e) { console.error('[db] findUserByToken:', e.message); return null; }
 }
@@ -309,8 +323,16 @@ export async function findUserById(id) {
     return publicUser(rows[0]) || null;
   } catch (e) { console.error('[db] findUserById:', e.message); return null; }
 }
-export function setLoginToken(userId, tokenHash) {
-  return pool.query('UPDATE users SET login_token_hash = $2 WHERE id = $1', [userId, tokenHash]);
+export function createSession(userId, tokenHash, expiresAt) {
+  return pool.query(
+    'INSERT INTO user_sessions (user_id, token_hash, expires_at) VALUES ($1,$2,$3)',
+    [userId, tokenHash, expiresAt]);
+}
+export function revokeSession(tokenHash) {
+  return pool.query('DELETE FROM user_sessions WHERE token_hash = $1', [tokenHash]).then((r) => r.rowCount > 0);
+}
+export function revokeUserSessions(userId) {
+  return pool.query('DELETE FROM user_sessions WHERE user_id = $1', [userId]).then((r) => r.rowCount);
 }
 export function setPassword(userId, passwordHash) { // a player upgrading to a GM account
   return pool.query('UPDATE users SET password_hash = $2 WHERE id = $1', [userId, passwordHash]);

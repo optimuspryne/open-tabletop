@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–010, meant for a FRESH
+-- This is the flattened end state of migrations 001–011, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -16,8 +16,8 @@ BEGIN;
 
 -- ===== Users ================================================================
 -- Global identity + auth. A password_hash means the account can host (create/own
--- rooms) once approved; NULL means a passwordless player. login_token_hash is the
--- durable device credential, stored HASHED (a DB leak must not hand out logins).
+-- rooms) once approved; NULL means a passwordless player. Durable device
+-- credentials live separately in user_sessions so each device can be revoked.
 -- is_admin is the site-wide superuser, above every room owner. host_status gates
 -- hosting: 'none' (player) / 'pending' (awaiting an admin) / 'approved'.
 CREATE TABLE users (
@@ -25,7 +25,6 @@ CREATE TABLE users (
   username          text        NOT NULL,
   email             text        NOT NULL,
   password_hash     text,                                -- set => a host account
-  login_token_hash  text,                                -- device token (hashed)
   is_admin          boolean     NOT NULL DEFAULT false,
   host_status       text        NOT NULL DEFAULT 'none'
                                 CHECK (host_status IN ('none', 'pending', 'approved')),
@@ -35,6 +34,16 @@ CREATE TABLE users (
 -- Case-insensitive uniqueness — you sign in by username or email.
 CREATE UNIQUE INDEX users_username_key ON users (lower(username));
 CREATE UNIQUE INDEX users_email_key    ON users (lower(email));
+
+CREATE TABLE user_sessions (
+  id           bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id      bigint      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash   text        NOT NULL UNIQUE,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  expires_at   timestamptz NOT NULL
+);
+CREATE INDEX user_sessions_user_idx ON user_sessions (user_id);
+CREATE INDEX user_sessions_expires_idx ON user_sessions (expires_at);
 
 -- ===== Rooms ================================================================
 -- Durable, owned tables. Soft-deleted rooms keep their row (deleted_at set) until
@@ -138,7 +147,7 @@ CREATE TABLE custom_skyboxes (
 CREATE INDEX custom_skyboxes_owner_idx ON custom_skyboxes (owner_id);
 
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–010, so record them as
+-- This baseline IS the flattened result of migrations 001–011, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -151,6 +160,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('001_custom_assets.sql'), ('002_auth.sql'), ('003_asset_visibility.sql'),
   ('004_host_status.sql'),   ('005_room_board.sql'), ('006_room_table.sql'),
   ('007_scenes.sql'),        ('008_room_skybox.sql'), ('009_room_state.sql'),
-  ('010_room_scale.sql');
+  ('010_room_scale.sql'),       ('011_user_sessions.sql');
 
 COMMIT;

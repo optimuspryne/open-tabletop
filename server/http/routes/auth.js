@@ -2,6 +2,7 @@ import express from 'express';
 import { asyncRoute } from '../async-route.js';
 import { clientUser } from '../auth-context.js';
 import { validEmail, validUsername } from '../../auth-validation.js';
+import { sessionExpiresAt } from '../../session-config.js';
 export { validEmail, validUsername } from '../../auth-validation.js';
 
 export function createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPassword, makeToken, hashToken }) {
@@ -16,7 +17,8 @@ export function createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPasswo
     try {
       const passwordHash = password ? await hashPassword(String(password)) : null;
       const raw = makeToken();
-      const user = await db.createUser({ username: username.trim(), email: email.trim(), passwordHash, loginTokenHash: hashToken(raw) });
+      const user = await db.createUser({ username: username.trim(), email: email.trim(), passwordHash,
+        loginTokenHash: hashToken(raw), sessionExpiresAt: sessionExpiresAt() });
       res.json({ user: clientUser(user), token: raw });
     } catch (error) {
       if (error.conflict) return res.status(409).json({ error: `that ${error.conflict} is already taken`, field: error.conflict });
@@ -33,7 +35,7 @@ export function createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPasswo
       return res.status(401).json({ error: 'invalid login or password' });
     }
     const raw = makeToken();
-    await db.setLoginToken(user.id, hashToken(raw));
+    await db.createSession(user.id, hashToken(raw), sessionExpiresAt());
     res.json({ user: clientUser(user), token: raw });
   }));
 
@@ -41,6 +43,20 @@ export function createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPasswo
     const user = await db.findUserByToken(hashToken(String((req.body && req.body.token) || '')));
     if (!user) return res.status(401).json({ error: 'invalid or expired token' });
     res.json({ user: clientUser(user) });
+  }));
+
+  router.post('/logout', json, asyncRoute(async (req, res) => {
+    const raw = String((req.body && req.body.token) || '');
+    if (raw) await db.revokeSession(hashToken(raw));
+    res.status(204).end();
+  }));
+
+  router.post('/logout-all', json, asyncRoute(async (req, res) => {
+    const raw = String((req.body && req.body.token) || '');
+    const user = raw ? await db.findUserByToken(hashToken(raw)) : null;
+    if (!user) return res.status(401).json({ error: 'not signed in' });
+    await db.revokeUserSessions(user.id);
+    res.status(204).end();
   }));
 
   return router;
