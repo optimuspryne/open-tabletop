@@ -23,6 +23,10 @@ import { runMigrations } from './migrate.js'; // startup schema migrator (owner-
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
 import { finitePosition } from './server/message-validation.js';
 import { takeTopCard } from './server/deck-state.js';
+import { asyncRoute, httpErrorHandler } from './server/http/async-route.js';
+import { createRequireUser } from './server/http/auth-context.js';
+import { createAuthRouter } from './server/http/routes/auth.js';
+import { createRoomsRouter } from './server/http/routes/rooms.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -2630,6 +2634,7 @@ const rateLimitUpload = makeRateLimiter({ cap: 300, refillPerMs: 3 / 1000, messa
 // Auth: brute-force + signup-spam guard. ~20/min per IP — scrypt already slows each
 // attempt; this is defense in depth and still leaves room for a few users behind one NAT.
 const rateLimitAuth = makeRateLimiter({ cap: 20, refillPerMs: 20 / 60000, message: 'too many attempts — please slow down' });
+const requireUser = createRequireUser({ db, hashToken });
 
 // Security headers: helmet's defaults (HSTS, nosniff, frame-deny, referrer, hide
 // X-Powered-By…) minus its built-in CSP — we define our own below.
@@ -2717,7 +2722,7 @@ function validateGlb(buf) {
 
 // Image upload: one image per request, sent as a raw body (this sidesteps the
 // WebSocket payload cap). Saved under a random name; responds with its URL ref.
-app.post('/upload', rateLimitUpload, express.raw({ type: 'image/*', limit: '16mb' }), async (req, res) => {
+app.post('/upload', rateLimitUpload, express.raw({ type: 'image/*', limit: '16mb' }), asyncRoute(async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return; // library uploads are admin-only
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
@@ -2728,10 +2733,10 @@ app.post('/upload', rateLimitUpload, express.raw({ type: 'image/*', limit: '16mb
   } catch (e) {
     res.status(500).json({ error: 'save failed' });
   }
-});
+}));
 
 // Model upload: a raw .glb of any content-type. Saved into the props/ category.
-app.post('/upload-model', rateLimitUpload, express.raw({ type: () => true, limit: '16mb' }), async (req, res) => {
+app.post('/upload-model', rateLimitUpload, express.raw({ type: () => true, limit: '16mb' }), asyncRoute(async (req, res) => {
   try {
     if (!await requireAdmin(req, res)) return; // library uploads are admin-only
     if (!req.body || !req.body.length) return res.status(400).json({ error: 'empty' });
@@ -2741,158 +2746,13 @@ app.post('/upload-model', rateLimitUpload, express.raw({ type: () => true, limit
   } catch (e) {
     res.status(500).json({ error: 'save failed' });
   }
-});
+}));
 
 // --- Auth (HTTP): signup / login / token-resolve --------------------------
 // The landing page talks to these before joining any room. Passwords use scrypt;
 // a successful signup or login also issues a durable device token — the raw value
 // is returned once (stored client-side) so return visits log in without a password.
-const clientUser = (u) => u && ({ id: u.id, username: u.username, email: u.email, avatar: u.avatar, isAdmin: u.isAdmin, canOwnRooms: u.canOwnRooms, hostStatus: u.hostStatus, hasPassword: u.hasPassword });
-const validUsername = (s) => typeof s === 'string' && /^[a-zA-Z0-9_-]{3,20}$/.test(s.trim());
-const validEmail = (s) => typeof s === 'string' && s.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s.trim());
-
-app.post('/auth/signup', rateLimitAuth, express.json({ limit: '1kb' }), async (req, res) => {
-  const { username, email, password } = req.body || {};
-  if (!validUsername(username)) return res.status(400).json({ error: 'username must be 3–20 chars (letters, numbers, _ or -)' });
-  if (!validEmail(email)) return res.status(400).json({ error: 'invalid email' });
-  if (password != null && String(password).length < 8) return res.status(400).json({ error: 'password must be at least 8 characters' });
-  try {
-    const passwordHash = password ? await hashPassword(String(password)) : null; // password => a GM account
-    const raw = makeToken();
-    const user = await db.createUser({ username: username.trim(), email: email.trim(), passwordHash, loginTokenHash: hashToken(raw) });
-    res.json({ user: clientUser(user), token: raw }); // client stores `token` for auto-login
-  } catch (e) {
-    if (e.conflict) return res.status(409).json({ error: `that ${e.conflict} is already taken`, field: e.conflict });
-    console.error('[signup]', e.message); res.status(500).json({ error: 'signup failed' });
-  }
-});
-
-app.post('/auth/login', rateLimitAuth, express.json({ limit: '1kb' }), async (req, res) => {
-  const { login, password } = req.body || {};
-  if (!login || !password) return res.status(400).json({ error: 'login and password required' });
-  const u = await db.findUserByLogin(String(login).trim());
-  // Same response whether the account is missing, passwordless, or the password is
-  // wrong — don't reveal which. (Passwordless players can't password-login.)
-  if (!u || !u.passwordHash || !(await verifyPassword(String(password), u.passwordHash))) {
-    return res.status(401).json({ error: 'invalid login or password' });
-  }
-  const raw = makeToken();
-  await db.setLoginToken(u.id, hashToken(raw)); // rotate the device token on each login
-  res.json({ user: clientUser(u), token: raw });
-});
-
-app.post('/auth/token', rateLimitAuth, express.json({ limit: '1kb' }), async (req, res) => {
-  const u = await db.findUserByToken(hashToken(String((req.body && req.body.token) || '')));
-  if (!u) return res.status(401).json({ error: 'invalid or expired token' });
-  res.json({ user: clientUser(u) }); // auto-login on a return visit
-});
-
-// --- Rooms (HTTP): the lobby the landing page uses -------------------------
-// Token-authenticated: the client sends its device token as a Bearer header and
-// we resolve it to the acting user. (Enforcing membership/roles inside the live
-// table is the next slice; this just creates rooms + records who's joined.)
-async function requireUser(req, res) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-  const user = token ? await db.findUserByToken(hashToken(token)) : null;
-  if (!user) { res.status(401).json({ error: 'not signed in' }); return null; }
-  return user;
-}
-const roomCode = () => crypto.randomBytes(4).toString('hex').toUpperCase(); // 8 hex chars
-
-app.get('/rooms', async (req, res) => {
-  const user = await requireUser(req, res); if (!user) return;
-  const rooms = user.isAdmin ? await db.listRoomsForAdmin(user.id) : await db.listRoomsForUser(user.id);
-  res.json({ rooms });
-});
-
-app.post('/rooms', express.json({ limit: '1kb' }), async (req, res) => {
-  const user = await requireUser(req, res); if (!user) return;
-  if (!user.canOwnRooms) {
-    return res.status(403).json({ error: user.hostStatus === 'pending'
-      ? 'Your host access is pending admin approval.'
-      : 'You need approved host access to create rooms.' });
-  }
-  const name = String((req.body && req.body.name) || '').trim().slice(0, 60) || 'Untitled Table';
-  const requireApproval = !(req.body && req.body.requireApproval === false); // default true
-  for (let attempt = 0; attempt < 5; attempt++) { // retry the rare code collision
-    try {
-      const room = await db.createRoom({ ownerId: user.id, code: roomCode(), name, requireApproval });
-      return res.json({ room });
-    } catch (e) {
-      if (e.conflict === 'code') continue;
-      console.error('[create room]', e.message); return res.status(500).json({ error: 'could not create room' });
-    }
-  }
-  res.status(500).json({ error: 'could not allocate a room code' });
-});
-
-// Set the signed-in user's avatar from the lobby (no room needed). Same bounded
-// image-data-URL rule as the in-room setAvatar handler.
-app.post('/me/avatar', express.json({ limit: '128kb' }), async (req, res) => {
-  const user = await requireUser(req, res); if (!user) return;
-  const data = req.body && req.body.data;
-  if (!isBoundedImageDataURL(data)) {
-    return res.status(400).json({ error: 'invalid image' });
-  }
-  try { await db.setUserAvatar(user.id, data); res.json({ ok: true, avatar: data }); }
-  catch (e) { console.error('[me/avatar]', e.message); res.status(500).json({ error: 'could not save avatar' }); }
-});
-
-// A player asks to become a host. Sets host_status = pending for an admin to
-// approve. A passwordless player must set a password in the same step (hosting
-// needs one). No-op if they can already host.
-app.post('/host/request', express.json({ limit: '1kb' }), async (req, res) => {
-  const user = await requireUser(req, res); if (!user) return;
-  if (user.canOwnRooms) return res.json({ user: clientUser(user) });
-  if (!user.hasPassword) {
-    const pw = req.body && req.body.password;
-    if (!pw || String(pw).length < 8) return res.status(400).json({ error: 'set a password (8+ characters) to request host access' });
-    await db.setPassword(user.id, await hashPassword(String(pw)));
-  }
-  await db.setHostStatus(user.id, 'pending');
-  res.json({ user: clientUser(await db.findUserById(user.id)) });
-});
-
-app.post('/rooms/join', express.json({ limit: '1kb' }), async (req, res) => {
-  const user = await requireUser(req, res); if (!user) return;
-  const code = String((req.body && req.body.code) || '').trim().toUpperCase();
-  const room = await db.findRoomByCode(code);
-  if (!room) return res.status(404).json({ error: 'no active room with that code' });
-  const membership = await db.joinRoom({ roomId: room.id, userId: user.id, requireApproval: room.requireApproval });
-  // If they land pending, nudge any live table so its GMs' Members button pulses.
-  if (membership && membership.status === 'pending') {
-    try {
-      const live = await matchMaker.query({ name: 'table', code });
-      for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'broadcastMembers');
-    } catch (e) { /* no live table; GMs will see it when they open the panel */ }
-  }
-  res.json({ room, membership }); // membership.status is 'pending' or 'admitted'
-});
-
-// Room lifecycle (owner or site-admin only): rename, toggle join policy, close.
-async function ownedRoom(req, res) {
-  const user = await requireUser(req, res); if (!user) return null;
-  const room = await db.getRoom(req.params.id);
-  if (!room || room.deletedAt) { res.status(404).json({ error: 'room not found' }); return null; }
-  if (String(room.ownerId) !== String(user.id) && !user.isAdmin) { res.status(403).json({ error: 'not your room' }); return null; }
-  return { user, room };
-}
-
-app.patch('/rooms/:id', express.json({ limit: '1kb' }), async (req, res) => {
-  const ctx = await ownedRoom(req, res); if (!ctx) return;
-  const name = req.body && typeof req.body.name === 'string' ? req.body.name.trim().slice(0, 60) : null;
-  if (name) await db.renameRoom(ctx.room.id, name);
-  if (req.body && typeof req.body.requireApproval === 'boolean') await db.setRoomPolicy(ctx.room.id, req.body.requireApproval);
-  res.json({ room: await db.getRoom(ctx.room.id) });
-});
-
-app.delete('/rooms/:id', async (req, res) => {
-  const ctx = await ownedRoom(req, res); if (!ctx) return;
-  await db.softDeleteRoom(ctx.room.id); // soft delete: hidden + unjoinable; code frees up
-  await disposeLive(ctx.room.code);     // shut down the live table if one is running (kick everyone out)
-  res.json({ ok: true });
-});
+app.use('/auth', createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPassword, makeToken, hashToken }));
 
 // --- Admin console (site superusers only) ---------------------------------
 async function requireAdmin(req, res) {
@@ -2906,6 +2766,8 @@ async function disposeLive(code) { // shut down a running table for this code, i
     for (const r of live) await matchMaker.remoteRoomCall(r.roomId, 'closeAndDispose');
   } catch (e) { /* none running */ }
 }
+app.use(createRoomsRouter({ db, requireUser, hashPassword, isBoundedImageDataURL, matchMaker, disposeLive }));
+
 // Drop a user from EVERY live table they're currently in (admin action). Reuses the
 // per-room kick's 'kicked' notice + consented leave. In-process (single-instance) scope.
 function kickUserEverywhere(userId) {
@@ -2917,18 +2779,18 @@ function kickUserEverywhere(userId) {
   return n;
 }
 
-app.get('/admin/rooms', async (req, res) => {
+app.get('/admin/rooms', asyncRoute(async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.json({ rooms: await db.listRooms({ includeDeleted: true }) }); // active + soft-deleted, with owner name
-});
-app.get('/admin/orphans', async (req, res) => {     // dry-run: report unreferenced files, delete nothing
+}));
+app.get('/admin/orphans', asyncRoute(async (req, res) => {     // dry-run: report unreferenced files, delete nothing
   if (!await requireAdmin(req, res)) return;
   try {
     const orphans = await findOrphanAssets();
     res.json({ count: orphans.length, totalBytes: orphans.reduce((s, o) => s + o.size, 0), files: orphans.slice(0, 200).map(o => ({ url: o.url, size: o.size })) });
   } catch (e) { console.error('[orphans scan]', e.message); res.status(500).json({ error: 'scan failed — nothing was deleted' }); }
-});
-app.post('/admin/orphans/purge', async (req, res) => { // re-scan fresh, then move orphans to .trash
+}));
+app.post('/admin/orphans/purge', asyncRoute(async (req, res) => { // re-scan fresh, then move orphans to .trash
   if (!await requireAdmin(req, res)) return;
   try {
     const orphans = await findOrphanAssets();          // never trust a stale client list
@@ -2936,35 +2798,35 @@ app.post('/admin/orphans/purge', async (req, res) => { // re-scan fresh, then mo
     const moved = trashOrphans(orphans);
     res.json({ moved: moved.length, totalBytes: bytes });
   } catch (e) { console.error('[orphans purge]', e.message); res.status(500).json({ error: 'scan failed — nothing was deleted' }); }
-});
-app.get('/admin/users', async (req, res) => {
+}));
+app.get('/admin/users', asyncRoute(async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.json({ users: await db.listUsers() });
-});
-app.get('/admin/pending-count', async (req, res) => {
+}));
+app.get('/admin/pending-count', asyncRoute(async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.json({ pending: await db.countPendingHosts() }); // for the console/lobby badge
-});
-app.post('/admin/users/:id/host', express.json({ limit: '1kb' }), async (req, res) => {
+}));
+app.post('/admin/users/:id/host', express.json({ limit: '1kb' }), asyncRoute(async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const status = req.body && req.body.status;
   if (!['approved', 'pending', 'none'].includes(status)) return res.status(400).json({ error: 'bad status' });
   await db.setHostStatus(req.params.id, status); // approve -> 'approved', reject/revoke -> 'none'
   res.json({ ok: true });
-});
-app.post('/admin/rooms/:id/restore', async (req, res) => {
+}));
+app.post('/admin/rooms/:id/restore', asyncRoute(async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   await db.restoreRoom(req.params.id); // clears deleted_at (only works if the code is still free)
   res.json({ ok: true });
-});
-app.delete('/admin/rooms/:id', async (req, res) => { // permanent purge (cascades members)
+}));
+app.delete('/admin/rooms/:id', asyncRoute(async (req, res) => { // permanent purge (cascades members)
   if (!await requireAdmin(req, res)) return;
   const room = await db.getRoom(req.params.id);
   if (room) await disposeLive(room.code);
   await db.purgeRoom(req.params.id);
   res.json({ ok: true });
-});
-app.post('/admin/users/:id/admin', express.json({ limit: '1kb' }), async (req, res) => {
+}));
+app.post('/admin/users/:id/admin', express.json({ limit: '1kb' }), asyncRoute(async (req, res) => {
   const me = await requireAdmin(req, res); if (!me) return;
   const makeAdmin = !!(req.body && req.body.isAdmin);
   if (String(req.params.id) === String(me.id) && !makeAdmin) {
@@ -2972,12 +2834,12 @@ app.post('/admin/users/:id/admin', express.json({ limit: '1kb' }), async (req, r
   }
   await db.setAdmin(req.params.id, makeAdmin);
   res.json({ ok: true });
-});
-app.post('/admin/users/:id/kick', async (req, res) => { // drop a user from every live table (doesn't touch their account)
+}));
+app.post('/admin/users/:id/kick', asyncRoute(async (req, res) => { // drop a user from every live table (doesn't touch their account)
   if (!await requireAdmin(req, res)) return;
   res.json({ ok: true, rooms: kickUserEverywhere(req.params.id) });
-});
-app.delete('/admin/users/:id', async (req, res) => {
+}));
+app.delete('/admin/users/:id', asyncRoute(async (req, res) => {
   const me = await requireAdmin(req, res); if (!me) return;
   if (String(req.params.id) === String(me.id)) return res.status(400).json({ error: 'you cannot delete your own account' });
   const target = await db.findUserById(req.params.id);
@@ -2987,7 +2849,10 @@ app.delete('/admin/users/:id', async (req, res) => {
   try { await db.purgeUser(req.params.id); }
   catch (e) { console.error('[purge user]', e.message); return res.status(500).json({ error: 'could not delete user' }); }
   res.json({ ok: true });
-});
+}));
+
+// Must be registered after every HTTP route so rejected async handlers land here.
+app.use(httpErrorHandler);
 
 const httpServer = createServer(app);
 // A pending joiner holds a socket here (instead of polling) while awaiting approval.
