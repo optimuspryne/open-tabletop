@@ -29,6 +29,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Propagate room, membership, join, member-list, and durable room-state query
   failures. An outage can no longer resemble a missing room/member, an empty lobby,
   a rejected join, or a room reset to default settings.
+- Add a Colyseus message error boundary and apply it to asynchronous library
+  handlers. Synchronous throws and promise rejections now receive structured safe
+  logging plus a sanitized client error without disabling later room messages.
 
 ## [0.10.0] — 2026-08-26
 

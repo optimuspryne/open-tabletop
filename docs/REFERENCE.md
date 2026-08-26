@@ -21,6 +21,7 @@ The codebase:
 | `server/library-queries.js` | Node | Testable saved-library read queries; successful empty/not-found results stay distinct from PostgreSQL rejection |
 | `server/user-queries.js` | Node | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection |
 | `server/room-queries.js` | Node | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection |
+| `server/game/safe-message.js` | Node | Colyseus message error boundary: catches sync/async failures, logs payload-free room/user context, and sends sanitized client errors |
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
 | `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |
