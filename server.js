@@ -21,7 +21,6 @@ import * as db from './db.js'; // Postgres-backed saved-asset library (metadata;
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
-import { finitePosition } from './server/message-validation.js';
 import { httpErrorHandler } from './server/http/async-route.js';
 import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
 import { createAuthRouter } from './server/http/routes/auth.js';
@@ -29,6 +28,7 @@ import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
+import { registerMovementHandlers } from './server/game/handlers/movement.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -547,60 +547,9 @@ class TableRoom extends Room {
     this.state.scores.forEach((_, id) => { const n = /^s(\d+)$/.exec(id); if (n) this.nextScoreId = Math.max(this.nextScoreId, +n[1] + 1); });
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
-    // --- Movement: grab → drag → release --------------------------------------
-    this.onMessage('grab', (client, { id }) => {
-      const piece = this.state.pieces.get(id);
-      // Claim the piece if it's free, movable, and not mid-flip.
-      if (piece && !piece.owner && !this.flips.has(id) && KINDS[piece.type].mass > 0) {
-        piece.owner = client.sessionId;
-      }
-    });
-
-    this.onMessage('move', (client, msg) => {
-      const target = finitePosition(msg);
-      if (!target) return;
-      const piece = this.state.pieces.get(msg.id);
-      // Only the owner can steer their piece; update the servo's drag target.
-      if (piece && piece.owner === client.sessionId) {
-        this.targets.set(msg.id, target);
-      }
-    });
-
-    this.onMessage('release', (client, msg) => {
-      const piece = this.state.pieces.get(msg.id);
-      if (piece && piece.owner === client.sessionId) this.releasePiece(msg.id, msg.v);
-    });
-
-    // --- Group move (multi-select): one client owns MANY pieces and drives each to
-    // (anchor point + its stored offset). The servo (Pass 1) already moves every owned piece
-    // toward its own target, so a group drag is: claim the free ones, remember each offset from
-    // the anchor, then feed a single point per frame. Ownership stays exclusive, so a piece
-    // someone else holds is silently left out.
-    this.onMessage('grabGroup', (client, { ids, anchor } = {}) => {
-      if (!Array.isArray(ids)) return;
-      const ab = this.bodies.get(anchor); if (!ab) return;
-      const offsets = new Map();
-      for (const id of ids) {
-        const p = this.state.pieces.get(id), body = this.bodies.get(id);
-        if (!p || !body || p.owner || this.flips.has(id) || KINDS[p.type].mass <= 0) continue; // only free, movable pieces
-        p.owner = client.sessionId;
-        offsets.set(id, { x: body.position.x - ab.position.x, y: body.position.y - ab.position.y, z: body.position.z - ab.position.z });
-      }
-      this.groups.set(client.sessionId, offsets);
-    });
-    this.onMessage('moveGroup', (client, msg) => {
-      const target = finitePosition(msg);
-      if (!target) return;
-      const g = this.groups.get(client.sessionId); if (!g) return;
-      for (const [id, off] of g) {
-        const p = this.state.pieces.get(id);
-        if (p && p.owner === client.sessionId) this.targets.set(id, { x: target.x + off.x, y: target.y + off.y, z: target.z + off.z });
-      }
-    });
-    this.onMessage('releaseGroup', (client, msg) => {
-      const g = this.groups.get(client.sessionId); if (!g) return;
-      for (const [id] of g) { const p = this.state.pieces.get(id); if (p && p.owner === client.sessionId) this.releasePiece(id, msg && msg.v); }
-      this.groups.delete(client.sessionId);
+    // --- Movement: grab → drag → release (single + multi-select) ---------
+    registerMovementHandlers(this, {
+      isMovable: (piece) => !!(KINDS[piece.type] && KINDS[piece.type].mass > 0),
     });
 
     // --- Group batch ops (multi-select): the existing per-piece actions applied across a
