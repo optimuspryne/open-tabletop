@@ -52,7 +52,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tracksPanel', 'whiteboard', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = ['tracksPanel', 'showPanel', 'dropPanel', 'membersPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -517,6 +517,12 @@ function rebuildGrid() {
       byId('tableD').value = Math.round(room.state.tableZ * 2);
       byId('tableFelt').value = room.state.feltColor || '#2f6b4f';
       syncScalePanel();
+      const wb = room.state.whiteboard;
+      if (wb) {
+        byId('wbEnabled').classList.toggle('on', wb.enabled); setIcon(byId('wbEnabled'), wb.enabled ? 'eye' : 'eye-off');
+        qsa('#roomSettingsModal [data-wbstyle]').forEach((c) => c.classList.toggle('on', c.dataset.wbstyle === (wb.dark ? 'dark' : 'light')));
+        byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
+      }
     };
     wire('roomSettings', () => { byId('roomGrp').hidden = true; if (rs) { rs.hidden = false; syncRoomSettings(); } });
     wire('roomSettingsClose', () => { if (rs) rs.hidden = true; });
@@ -525,25 +531,12 @@ function rebuildGrid() {
       rs.querySelectorAll('.libPane').forEach((p) => { p.hidden = p.dataset.pane !== t.dataset.tab; });
     });
   }
-  { // GM: whiteboard config — a Tools-menu panel that flows below the menu (not a full-screen modal)
-    const wbPanel = byId('whiteboard'), wbBtn = byId('wbBtn');
-    if (wbPanel && wbBtn) {
-      wbBtn.onclick = () => {
-        wbPanel.hidden = !wbPanel.hidden;
-        if (!wbPanel.hidden) { // sync controls from current room state on open
-          const wb = room.state.whiteboard;
-          byId('wbEnabled').classList.toggle('on', wb.enabled); setIcon(byId('wbEnabled'), wb.enabled ? 'eye' : 'eye-off');
-          qsa('#whiteboard [data-wbstyle]').forEach(c => c.classList.toggle('on', c.dataset.wbstyle === (wb.dark ? 'dark' : 'light')));
-          byId('wbAngle').value = Math.round(wb.angle * 180 / Math.PI);
-        }
-      };
-      const wbClose = byId('wbClose'); if (wbClose) wbClose.onclick = () => { wbPanel.hidden = true; };
-    }
-  }
+  // Whiteboard config now lives in the Room Settings → Whiteboard tab (GM-only); synced on open above.
+  // The controls themselves (Show / style / angle) are wired below.
   { const el = byId('wbEnabled'); if (el) el.onclick = () => { const on = !el.classList.contains('on'); el.classList.toggle('on', on); setIcon(el, on ? 'eye' : 'eye-off'); room.send('wbEnable', { on }); }; }
   { const el = byId('wbAngle'); if (el) el.oninput = () => room.send('wbSet', { angle: (+el.value) * Math.PI / 180 }); }
-  qsa('#whiteboard [data-wbstyle]').forEach(c => c.onclick = () => {
-    qsa('#whiteboard [data-wbstyle]').forEach(x => x.classList.remove('on'));
+  qsa('#roomSettingsModal [data-wbstyle]').forEach(c => c.onclick = () => {
+    qsa('#roomSettingsModal [data-wbstyle]').forEach(x => x.classList.remove('on'));
     c.classList.add('on');
     room.send('wbSet', { dark: c.dataset.wbstyle === 'dark' });
   });
@@ -1843,7 +1836,6 @@ function applyRole(role) {
   const rank = myRank;
   const gate = (id, min) => { const el = byId(id); if (el) el.hidden = rank < min; };
   gate('roomBtn', 2);                                          // Room Controls menu: GM+
-  gate('wbBtn', 2);                                            // Whiteboard config (Tools menu): GM+
   gate('libraryBtn', 1); gate('builtinBtn', 1);                // View Library + Built-Ins: Helper+ (both pages)
   // Within those modals, boards/skyboxes/scenes are GM+ — helpers only spawn decks + objects.
   const gmTabs = (modalId, tabs) => tabs.forEach((t) => { const el = qs(`#${modalId} .libTab[data-tab="${t}"]`); if (el) el.hidden = rank < 2; });
@@ -3023,7 +3015,7 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     }
   });
 }
-['showPanel','dropPanel','membersPanel','tracksPanel','whiteboard'].forEach((id) => wireDialog(byId(id)));
+['showPanel','dropPanel','membersPanel','tracksPanel'].forEach((id) => wireDialog(byId(id)));
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });

@@ -140,7 +140,6 @@
   <div id="toolsMenu" class="panel" hidden>
     <div class="toolsLabel" id="toolsToggle">Tools <span class="toolsChev">▾</span></div>
     <button id="resetPanelsBtn" data-icon="restore" hidden><span class="lbl">Reset</span></button>
-    <button id="wbBtn" data-icon="chalkboard"><span class="lbl">Whiteboard</span></button>
     <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
   </div>
   <div id="settingsModal" hidden>
@@ -181,18 +180,6 @@
   <div id="tracksPanel" class="panel popout" hidden>
     <div id="tracksHead" class="panel-head"><b>Pick a Track</b><button type="button" id="tracksClose" class="close-x" aria-label="Close">✕</button></div>
     <div id="tracksBody"></div>
-  </div>
-  <div id="whiteboard" class="panel popout" hidden>
-    <div id="wbHead" class="panel-head"><b>Whiteboard</b><button type="button" id="wbClose" class="close-x" aria-label="Close">✕</button></div>
-    <div id="wbVisibility" class="showLabel"><b>Visibility</b></div>
-    <div class="chipRow"><button id="wbEnabled" class="chip chk" data-icon="eye-off"><span class="lbl">Show</span></button></div>
-    <div id="wbStyle" class="showLabel"><b>Style</b></div>
-    <div class="chipRow">
-      <button class="chip on" data-wbstyle="dark" data-icon="writing-sign"><span class="lbl">Chalkboard</span></button>
-      <button class="chip" data-wbstyle="light" data-icon="writing"><span class="lbl">Whiteboard</span></button>
-    </div>
-    <div id="wbLocation" class="showLabel"><b>Location</b></div>
-    <input id="wbAngle" type="range" min="0" max="360" step="5" value="0">
   </div>
   <div id="regionTL" class="region" hidden>
     <div class="pane" data-pane="chat">
@@ -315,6 +302,7 @@
       <div class="libTabs">
         <button class="libTab on" data-tab="table">Table Size &amp; Color</button>
         <button class="libTab" data-tab="grid">Scale &amp; Grid</button>
+        <button class="libTab" data-tab="wb">Whiteboard</button>
       </div>
     </div>
     <div class="libPane" data-pane="table">
@@ -367,6 +355,19 @@
     </div>
     <input type="color" id="gridColor" value="#ffffff"></div>
   <div class="sizeRow" id="gridLiftRow" hidden><label for="gridLift">Height</label><input id="gridLift" type="range" min="0" max="3" step="0.05"></div>
+      </div>
+    </div>
+    <div class="libPane" data-pane="wb" hidden>
+      <div class="tableBody">
+        <div id="wbVisibility" class="showLabel"><b>Visibility</b></div>
+        <div class="chipRow"><button id="wbEnabled" class="chip chk" data-icon="eye-off"><span class="lbl">Show</span></button></div>
+        <div id="wbStyle" class="showLabel"><b>Style</b></div>
+        <div class="chipRow">
+          <button class="chip on" data-wbstyle="dark" data-icon="writing-sign"><span class="lbl">Chalkboard</span></button>
+          <button class="chip" data-wbstyle="light" data-icon="writing"><span class="lbl">Whiteboard</span></button>
+        </div>
+        <div id="wbLocation" class="showLabel"><b>Location</b></div>
+        <input id="wbAngle" type="range" min="0" max="360" step="5" value="0">
       </div>
     </div>
   </div>
