@@ -3069,7 +3069,7 @@ function wireCluster(region, hams, opts = {}) {
 // Top-right cluster (UI_Redesign phase 2b): Score + Music + Measure + Timer.
 { const r = byId('regionTR'), sb = byId('scoreBtn'), ab = byId('audioBtn'), mb = byId('measureBtn'), tb = byId('timerBtn');
   if (r && sb && tb) wireCluster(r, [
-    { btn: sb, pane: 'score', onOpen: () => { renderScores(); updateRoomNotes(); } },
+    { btn: sb, pane: 'score', onOpen: () => { renderScores(); } },
     { btn: ab, pane: 'music' },
     { btn: mb, pane: 'measure', onOpen: enterMeasure, onClose: exitMeasure },
     { btn: tb, pane: 'timer' },

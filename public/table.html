@@ -67,11 +67,11 @@
   <button data-place="deck" data-icon="u-turn-left"><span class="lbl">Return to Deck</span></button>
 </div>
 <div id="wbTools" class="panel" hidden>
-  <span class="da-note">Whiteboard</span>
-  <button id="wbPen" class="on">✏️ Pen</button>
-  <button id="wbEraser">🧽 Eraser</button>
-  <button id="wbClearBtn" class="danger">Clear</button>
-  <button id="wbDone">Done <kbd>Esc</kbd></button>
+  <span class="da-note">Whiteboard Controls</span>
+  <button id="wbPen" data-icon="highlight"><span class="lbl">Draw</span></button>
+  <button id="wbEraser" data-icon="eraser"><span class="lbl">Eraser</span></button>
+  <button id="wbClearBtn" data-icon="trash"><span class="lbl">Clear</span></button>
+  <button id="wbDone" data-icon="arrow-back-up"><span class="lbl">Return</span></button>
 </div>
 <div id="trayTools" class="panel" hidden>
   <div class="pop-group">
@@ -126,6 +126,10 @@
 <div id="panel">
   <div>
     <div id="players" class="panel"></div>
+    <div id="roomNotesBox" class="panel">
+      <div class="dockLabel">Room notes</div>
+      <textarea id="roomNotes" rows="4" placeholder="GM notes for the room — house rules, current objective…"></textarea>
+    </div>
     <div id="me" class="panel">
       <span id="myAv" class="mav editable" title="Change your avatar"></span>
       <input id="nameInput" type="text" placeholder="Your name" maxlength="20">
@@ -204,8 +208,6 @@
         <div class="scoreAddRow"><input id="scoreAddName" type="text" placeholder="Add player / team…" maxlength="40"><button id="scoreAdd" data-icon="user-plus"><span class="lbl">Add</span></button></div>
         <button id="scoreClear" class="danger" data-icon="trash"><span class="lbl">Clear all</span></button>
       </div>
-      <div class="scoreNotesLabel">Room notes</div>
-      <textarea id="roomNotes" rows="5" placeholder="GM notes for the room — house rules, current objective…"></textarea>
     </div>
     <div class="pane" data-pane="music">
       <div class="regionHead"><b>Music</b><button type="button" class="close-x regionClose" aria-label="Close">✕</button></div>

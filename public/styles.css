@@ -1397,6 +1397,11 @@ input[type="range"]::-moz-range-thumb {
 
 /* Combined Library modal (parallel test): Room-Settings-style see-through card, source toggle + badges */
 .modalCard.lib2Card { background: rgba(28,33,39,.70); backdrop-filter: blur(4px); }
+
+/* Room Info dock: Room Notes section (UI_Redesign phase 4a) */
+.dockLabel { font-size: var(--fs-sm); color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 2px 0 4px; }
+#roomNotesBox { display: flex; flex-direction: column; }
+#roomNotesBox textarea { width: 100%; resize: vertical; min-height: 64px; }
 #libraryModal.src-custom  .lib2-bi { display: none; }   /* Custom  → hide built-in lists */
 #libraryModal.src-builtin .lib2-cu { display: none; }   /* Built-In → hide custom lists */
 #libraryModal .lib2-cu:not(:empty) { border-top: 1px solid var(--border); margin-top: 6px; padding-top: 6px; } /* separate the two sources when both show */
