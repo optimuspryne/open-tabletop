@@ -8,6 +8,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Security
+- Validate and normalize every payload-bearing table WebSocket message before it
+  reaches authorization, physics, room state, private hands, or database calls.
+  Batch sizes, nested asset records, identifiers, strings, coordinates, velocities,
+  colors, enums, and uploaded-asset references now fail closed instead of being
+  coerced or partially accepted.
+
 ## [0.10.0] — 2026-08-26
 
 ### Breaking

@@ -51,55 +51,55 @@ test('card handler module registers the complete card/deck message family', () =
 test('flipping moves a face between public props and private card data', () => {
   const { room, handlers, events } = harness();
   const body = { velocity: { y: 0 }, wakeUpCalled: false, wakeUp() { this.wakeUpCalled = true; } };
-  room.state.pieces.set('card', { type: 'card', props: JSON.stringify({ front: 'ace', back: 'blue' }) });
-  room.bodies.set('card', body);
+  room.state.pieces.set('1', { type: 'card', props: JSON.stringify({ front: 'ace', back: 'blue' }) });
+  room.bodies.set('1', body);
 
-  handlers.get('flip')(client, { id: 'card' });
-  assert.deepEqual(JSON.parse(room.state.pieces.get('card').props), { back: 'blue' });
-  assert.deepEqual(room.cardData.get('card'), { front: 'ace' });
+  handlers.get('flip')(client, { id: '1' });
+  assert.deepEqual(JSON.parse(room.state.pieces.get('1').props), { back: 'blue' });
+  assert.deepEqual(room.cardData.get('1'), { front: 'ace' });
   assert.equal(body.velocity.y, 1.6);
 
-  handlers.get('flip')(client, { id: 'card' });
-  assert.deepEqual(JSON.parse(room.state.pieces.get('card').props), { back: 'blue', front: 'ace' });
-  assert.equal(room.cardData.has('card'), false);
+  handlers.get('flip')(client, { id: '1' });
+  assert.deepEqual(JSON.parse(room.state.pieces.get('1').props), { back: 'blue', front: 'ace' });
+  assert.equal(room.cardData.has('1'), false);
   assert.equal(events.filter((event) => event.name === 'sfx').length, 2);
 });
 
 test('drawing the final deck card adds it privately and removes the empty deck', () => {
   const { room, handlers, events } = harness();
-  room.state.pieces.set('deck', { type: 'deck', count: 1, props: JSON.stringify({ back: 'blue', tile: 'domino' }) });
-  room.deckCards.set('deck', ['hidden-front']);
-  handlers.get('drawToHand')(client, { deckId: 'deck' });
+  room.state.pieces.set('1', { type: 'deck', count: 1, props: JSON.stringify({ back: 'blue', tile: 'domino' }) });
+  room.deckCards.set('1', ['hidden-front']);
+  handlers.get('drawToHand')(client, { deckId: '1' });
 
-  assert.equal(room.state.pieces.has('deck'), false);
-  assert.equal(room.deckCards.get('deck').length, 0);
+  assert.equal(room.state.pieces.has('1'), false);
+  assert.equal(room.deckCards.get('1').length, 0);
   assert.deepEqual(events.find((event) => event.name === 'hand').payload,
     { client, front: 'hidden-front', back: 'blue', geo: { tile: 'domino' } });
 });
 
 test('malformed drag messages cannot consume a card or create a physics target', () => {
   const { room, handlers } = harness();
-  room.state.pieces.set('deck', { type: 'deck', count: 1, props: '{}' });
-  room.deckCards.set('deck', ['front']);
-  room.bodies.set('deck', { position: { x: 0, y: 1, z: 0 } });
+  room.state.pieces.set('1', { type: 'deck', count: 1, props: '{}' });
+  room.deckCards.set('1', ['front']);
+  room.bodies.set('1', { position: { x: 0, y: 1, z: 0 } });
 
-  for (const message of [null, { deckId: 'deck', x: Infinity, y: 1, z: 2 }, { deckId: 'deck', x: '0', y: 1, z: 2 }]) {
+  for (const message of [null, { deckId: '1', x: Infinity, y: 1, z: 2 }, { deckId: '1', x: '0', y: 1, z: 2 }]) {
     handlers.get('dealDrag')(client, message);
   }
-  assert.deepEqual(room.deckCards.get('deck'), ['front']);
+  assert.deepEqual(room.deckCards.get('1'), ['front']);
   assert.equal(room.targets.size, 0);
 });
 
 test('an inspected card returned to its deck restores count and clears pending state', () => {
   const { room, handlers } = harness();
-  room.state.pieces.set('deck', { type: 'deck', count: 1, props: JSON.stringify({ back: 'red' }) });
-  room.deckCards.set('deck', ['front']);
-  handlers.get('drawInspect')(client, { deckId: 'deck' });
-  assert.equal(room.deckCards.get('deck').length, 0);
+  room.state.pieces.set('1', { type: 'deck', count: 1, props: JSON.stringify({ back: 'red' }) });
+  room.deckCards.set('1', ['front']);
+  handlers.get('drawInspect')(client, { deckId: '1' });
+  assert.equal(room.deckCards.get('1').length, 0);
   assert.equal(room.pendingInspect.has(client.sessionId), true);
 
   handlers.get('inspectPlace')(client, { where: 'deck' });
-  assert.deepEqual(room.deckCards.get('deck'), ['front']);
-  assert.equal(room.state.pieces.get('deck').count, 1);
+  assert.deepEqual(room.deckCards.get('1'), ['front']);
+  assert.equal(room.state.pieces.get('1').count, 1);
   assert.equal(room.pendingInspect.has(client.sessionId), false);
 });

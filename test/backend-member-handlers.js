@@ -35,7 +35,7 @@ function harness() {
   return { room, handlers, calls, memberships, users };
 }
 
-const actor = (role, userId = role) => ({ sessionId: `session-${userId}`, auth: { role, userId } });
+const actor = (role, userId = '1') => ({ sessionId: `session-${userId}`, auth: { role, userId } });
 
 test('member handler module registers its complete message family', () => {
   assert.deepEqual([...harness().handlers.keys()], ['members', 'admit', 'kick', 'setRole', 'reassignHand']);
@@ -46,46 +46,46 @@ test('players and helpers cannot list or mutate membership', async () => {
   for (const role of ['player', 'helper']) {
     const client = actor(role);
     handlers.get('members')(client);
-    await handlers.get('admit')(client, { userId: 'target' });
-    await handlers.get('kick')(client, { userId: 'target' });
-    await handlers.get('setRole')(client, { userId: 'target', role: 'helper' });
+    await handlers.get('admit')(client, { userId: '2' });
+    await handlers.get('kick')(client, { userId: '2' });
+    await handlers.get('setRole')(client, { userId: '2', role: 'helper' });
   }
   assert.deepEqual(calls, []);
 });
 
 test('a GM can admit a pending member and notify the waiting lobby', async () => {
   const { handlers, calls } = harness();
-  await handlers.get('admit')(actor('gm'), { userId: 'target' });
+  await handlers.get('admit')(actor('gm'), { userId: '2' });
   assert.deepEqual(calls, [
-    ['admitMember', 'room-1', 'target'],
-    ['notifyLobby', 'target', 'notifyAdmitted'],
+    ['admitMember', 'room-1', '2'],
+    ['notifyLobby', '2', 'notifyAdmitted'],
     ['broadcastMembers'],
   ]);
 });
 
 test('GM cannot kick a GM, owner, self, or site administrator', async () => {
   const { handlers, calls, memberships, users } = harness();
-  memberships.set('other-gm', { role: 'gm' });
-  memberships.set('owner', { role: 'owner' });
-  memberships.set('admin', { role: 'player' });
-  users.set('admin', { isAdmin: true });
-  const gm = actor('gm', 'acting-gm');
+  memberships.set('2', { role: 'gm' });
+  memberships.set('3', { role: 'owner' });
+  memberships.set('4', { role: 'player' });
+  users.set('4', { isAdmin: true });
+  const gm = actor('gm', '1');
 
-  await handlers.get('kick')(gm, { userId: 'acting-gm' });
-  await handlers.get('kick')(gm, { userId: 'other-gm' });
-  await handlers.get('kick')(gm, { userId: 'owner' });
-  await handlers.get('kick')(gm, { userId: 'admin' });
+  await handlers.get('kick')(gm, { userId: '1' });
+  await handlers.get('kick')(gm, { userId: '2' });
+  await handlers.get('kick')(gm, { userId: '3' });
+  await handlers.get('kick')(gm, { userId: '4' });
   assert.equal(calls.some((call) => call[0] === 'kickMember'), false);
 });
 
 test('an owner can promote a helper to GM and live state updates immediately', async () => {
   const { room, handlers, calls, memberships } = harness();
-  memberships.set('target', { role: 'helper' });
-  const target = actor('helper', 'target');
+  memberships.set('2', { role: 'helper' });
+  const target = actor('helper', '2');
   room.clients.push(target);
   room.state.players.set(target.sessionId, { role: 'helper' });
 
-  await handlers.get('setRole')(actor('owner'), { userId: 'target', role: 'gm' });
+  await handlers.get('setRole')(actor('owner'), { userId: '2', role: 'gm' });
   assert.equal(target.auth.role, 'gm');
   assert.equal(room.state.players.get(target.sessionId).role, 'gm');
   assert.equal(calls.some((call) => call[0] === 'setMemberRole' && call[3] === 'gm'), true);
@@ -93,18 +93,18 @@ test('an owner can promote a helper to GM and live state updates immediately', a
 
 test('hand reassignment is GM-only and merges onto the recipient hand', () => {
   const { room, handlers, calls } = harness();
-  const recipient = actor('player', 'recipient');
+  const recipient = actor('player', '2');
   room.clients.push(recipient);
-  room.pendingHands.set('departed', { cards: [{ front: 'ace' }] });
-  room.state.unclaimed.set('departed', 'Departed Player');
+  room.pendingHands.set('3', { cards: [{ front: 'ace' }] });
+  room.state.unclaimed.set('3', 'Departed Player');
   room.hands.set(recipient.sessionId, [{ front: 'king' }]);
 
-  handlers.get('reassignHand')(actor('player'), { userId: 'departed', toSessionId: recipient.sessionId });
-  assert.equal(room.pendingHands.has('departed'), true);
-  handlers.get('reassignHand')(actor('gm'), { userId: 'departed', toSessionId: recipient.sessionId });
+  handlers.get('reassignHand')(actor('player'), { userId: '3', toSessionId: recipient.sessionId });
+  assert.equal(room.pendingHands.has('3'), true);
+  handlers.get('reassignHand')(actor('gm'), { userId: '3', toSessionId: recipient.sessionId });
   assert.deepEqual(room.hands.get(recipient.sessionId), [{ front: 'king' }, { front: 'ace' }]);
-  assert.equal(room.pendingHands.has('departed'), false);
-  assert.equal(room.state.unclaimed.has('departed'), false);
+  assert.equal(room.pendingHands.has('3'), false);
+  assert.equal(room.state.unclaimed.has('3'), false);
   assert.equal(calls.some((call) => call[0] === 'sendHand'), true);
 });
 
@@ -115,5 +115,9 @@ test('malformed membership messages fail closed', async () => {
   await handlers.get('kick')(owner, null);
   await handlers.get('setRole')(owner, null);
   handlers.get('reassignHand')(owner, null);
+  await handlers.get('admit')(owner, { userId: 2 });
+  await handlers.get('kick')(owner, { userId: '2', unexpected: true });
+  await handlers.get('setRole')(owner, { userId: '2', role: 'owner' });
+  handlers.get('reassignHand')(owner, { userId: '2', toSessionId: '' });
   assert.deepEqual(calls, []);
 });

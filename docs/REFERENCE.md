@@ -443,6 +443,14 @@ helper+), **`setStandGroup`** / **`setSnapGroup`** (`{ids}` — **U** / **G**, t
 **`[`** / **`]`**, rotate the whole formation ±45° about its centroid — each position *and* each
 body's facing; skips boards).
 
+All payload-bearing handlers treat the socket as an untrusted boundary and normalize
+their input through `server/message-validation.js` before lookup or mutation. The
+normalizers accept plain objects with only the documented keys, require finite values
+without string coercion, bound text and batch sizes, validate identifiers/enums/nested
+asset records, and return fresh trusted values or `null`. Payloadless messages are the
+only handlers without a normalizer. Invalid messages fail closed without a partial
+state change or database call.
+
 Per-piece flags (rank-gated, mirror each other): **`setStand`** (`{id}` — toggle
 keep-upright; **U**), **`setSnap`** (`{id}` — toggle snap-to-grid, snapping the piece
 to its cell immediately when a grid is active; **G**), **`snap`** (`{id}` — step a held

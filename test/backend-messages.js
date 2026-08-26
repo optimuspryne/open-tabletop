@@ -5,9 +5,11 @@ import {
   cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload,
   dispenserDragPayload, finiteNumber, finitePosition, groupIds,
   gridCalibrationPayload, groupRecolor, groupRotation, isPlainObject, namedIdPayload,
-  overlayGeometry, overlayMovePayload, propRecordPayload, recolorPayload,
-  saveBoardPayload, savePropPayload, scalePayload, scorePayload, showPayload,
-  spawnPayload, tablePayload, timerPayload, whiteboardStroke,
+  deckDragPayload, deckIdPayload, handReassignmentPayload, inspectPlacementPayload,
+  memberRolePayload, memberUserPayload, overlayGeometry, overlayMovePayload,
+  propRecordPayload, recolorPayload, saveBoardPayload, savePropPayload,
+  saveSkyboxPayload, scalePayload, scorePayload, showPayload, spawnPayload,
+  tablePayload, timerPayload, whiteboardStroke,
 } from '../server/message-validation.js';
 import { takeTopCard } from '../server/deck-state.js';
 
@@ -197,6 +199,31 @@ test('save and spawn payloads reject unknown nested fields and unsupported types
   assert.equal(spawnPayload({ type: 'prop', props: { shape: 'unknown' } }, options), null);
   assert.equal(spawnPayload({ type: 'die', props: { sides: 20, injected: true } }, options), null);
   assert.equal(spawnPayload({ type: 'admin', props: {} }, options), null);
+});
+
+test('member and extracted card messages validate ids, roles, coordinates, and placement enums', () => {
+  assert.deepEqual(memberUserPayload({ userId: '12' }), { userId: '12' });
+  assert.deepEqual(memberRolePayload({ userId: '12', role: 'helper' }), { userId: '12', role: 'helper' });
+  assert.deepEqual(handReassignmentPayload({ userId: '12', toSessionId: 'session-x' }),
+    { userId: '12', toSessionId: 'session-x' });
+  assert.equal(memberUserPayload({ userId: 12 }), null);
+  assert.equal(memberRolePayload({ userId: '12', role: 'owner' }), null);
+  assert.deepEqual(deckIdPayload({ deckId: '4' }), { deckId: '4' });
+  assert.deepEqual(deckDragPayload({ deckId: '4', x: 1, y: 2, z: 3 }), { deckId: '4', x: 1, y: 2, z: 3 });
+  assert.equal(deckDragPayload({ deckId: '4', x: NaN, y: 2, z: 3 }), null);
+  assert.deepEqual(inspectPlacementPayload({ where: 'field-down' }), { where: 'field-down' });
+  assert.equal(inspectPlacementPayload({ where: 'discard' }), null);
+});
+
+test('skybox saves accept only exact local panorama or six-face cube payloads', () => {
+  const urlOk = (url) => typeof url === 'string' && !url.includes('..') && url.length < 300;
+  assert.deepEqual(saveSkyboxPayload({ name: ' Night ', url: '/assets/sky/night.jpg', isPublic: false }, { urlOk }),
+    { name: 'Night', type: 'equirect', url: '/assets/sky/night.jpg', isPublic: false });
+  const faces = Array.from({ length: 6 }, (_, i) => `/assets/sky/${i}.jpg`);
+  assert.deepEqual(saveSkyboxPayload({ name: 'Cube', type: 'cube', faces, isPublic: true }, { urlOk }),
+    { name: 'Cube', type: 'cube', faces, isPublic: true });
+  assert.equal(saveSkyboxPayload({ name: 'Remote', url: 'https://evil.test/x.jpg', isPublic: false }, { urlOk }), null);
+  assert.equal(saveSkyboxPayload({ name: 'Cube', type: 'cube', faces: faces.slice(1), isPublic: true }, { urlOk }), null);
 });
 
 test('drawing mutates deck count and returns cards in stack order', () => {

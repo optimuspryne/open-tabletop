@@ -1,12 +1,13 @@
 import { takeTopCard } from '../../deck-state.js';
-import { finitePosition } from '../../message-validation.js';
+import { deckDragPayload, deckIdPayload, inspectPlacementPayload, pieceIdPayload } from '../../message-validation.js';
 import { readProps, writeProps } from '../props-codec.js';
 
 // Register the card/deck message family against a TableRoom-compatible object.
 // Rendering/physics policy stays injected so this module owns orchestration only.
 export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, dropSfx, randomPosition, shuffle }) {
   room.onMessage('flip', (client, message) => {
-    const { id } = message || {};
+    const parsed = pieceIdPayload(message); if (!parsed) return;
+    const { id } = parsed;
     const piece = room.state.pieces.get(id);
     const body = room.bodies.get(id);
     if (!piece || !body || piece.type !== 'card') return;
@@ -25,7 +26,8 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('dealToTable', (client, message) => {
-    const { deckId } = message || {};
+    const parsed = deckIdPayload(message); if (!parsed) return;
+    const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
@@ -37,7 +39,8 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('drawToHand', (client, message) => {
-    const { deckId } = message || {};
+    const parsed = deckIdPayload(message); if (!parsed) return;
+    const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
@@ -48,9 +51,9 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('dealDrag', (client, message) => {
-    const target = finitePosition(message);
-    if (!target) return;
-    const deckId = message.deckId;
+    const parsed = deckDragPayload(message); if (!parsed) return;
+    const { deckId, x, y, z } = parsed;
+    const target = { x, y, z };
     const deck = room.state.pieces.get(deckId);
     const deckBody = room.bodies.get(deckId);
     if (!deckBody) return;
@@ -66,7 +69,8 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('takeCard', (client, message) => {
-    const { id } = message || {};
+    const parsed = pieceIdPayload(message); if (!parsed) return;
+    const { id } = parsed;
     const piece = room.state.pieces.get(id);
     if (!piece || piece.type !== 'card') return;
     const props = readProps(piece);
@@ -77,7 +81,8 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
 
   room.onMessage('drawInspect', (client, message) => {
     if (room.pendingInspect.has(client.sessionId)) return;
-    const { deckId } = message || {};
+    const parsed = deckIdPayload(message); if (!parsed) return;
+    const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
@@ -89,11 +94,12 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('inspectPlace', (client, message) => {
+    const parsed = inspectPlacementPayload(message); if (!parsed) return;
     const pending = room.pendingInspect.get(client.sessionId);
     if (!pending) return;
     room.pendingInspect.delete(client.sessionId);
     const { deckId, front, back, geo = {} } = pending;
-    const where = message && message.where;
+    const { where } = parsed;
     if (where === 'deck') {
       const cards = room.deckCards.get(deckId);
       if (cards) {
@@ -118,7 +124,8 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('shuffle', (client, message) => {
-    const { deckId } = message || {};
+    const parsed = deckIdPayload(message); if (!parsed) return;
+    const { deckId } = parsed;
     const cards = room.deckCards.get(deckId);
     if (!cards) return;
     shuffle(cards);
@@ -126,7 +133,8 @@ export function registerCardHandlers(room, { flipHop, maxPieces, spawnY, geoOf, 
   });
 
   room.onMessage('splitDeck', (client, message) => {
-    const { deckId } = message || {};
+    const parsed = deckIdPayload(message); if (!parsed) return;
+    const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
     const cards = room.deckCards.get(deckId);
     if (!deck || deck.type !== 'deck' || !cards || cards.length < 2 || room.state.pieces.size >= maxPieces) return;

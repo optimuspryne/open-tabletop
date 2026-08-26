@@ -355,6 +355,85 @@ export function spawnPayload(message, { boardKeys = [], propKeys = [], dispenser
   return null;
 }
 
+export function memberUserPayload(message) {
+  return oneField(message, 'userId', databaseId);
+}
+
+export function memberRolePayload(message) {
+  if (!exactObject(message, ['userId', 'role'])) return null;
+  const userId = databaseId(message.userId);
+  return userId && ['helper', 'player', 'gm'].includes(message.role) ? { userId, role: message.role } : null;
+}
+
+export function handReassignmentPayload(message) {
+  if (!exactObject(message, ['userId', 'toSessionId'])) return null;
+  const userId = databaseId(message.userId);
+  const toSessionId = boundedString(message.toSessionId, { min: 1, max: 128 });
+  return userId && toSessionId ? { userId, toSessionId } : null;
+}
+
+export function deckIdPayload(message) {
+  return oneField(message, 'deckId', (id) => boundedString(id, { min: 1, max: 20, pattern: /^\d+$/ }));
+}
+
+export function deckDragPayload(message) {
+  if (!exactObject(message, ['deckId', 'x', 'y', 'z'])) return null;
+  const deckId = boundedString(message.deckId, { min: 1, max: 20, pattern: /^\d+$/ });
+  if (!deckId || ![message.x, message.y, message.z].every(Number.isFinite)) return null;
+  return { deckId, x: message.x, y: message.y, z: message.z };
+}
+
+export function inspectPlacementPayload(message) {
+  return oneField(message, 'where', (where) => ['deck', 'hand', 'field-up', 'field-down'].includes(where) ? where : null);
+}
+
+export function saveSkyboxPayload(message, { urlOk }) {
+  if (!isPlainObject(message)) return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  if (name === null || !name.trim() || typeof message.isPublic !== 'boolean') return null;
+  if (message.type === 'cube') {
+    if (!exactObject(message, ['name', 'type', 'faces', 'isPublic']) || !Array.isArray(message.faces) || message.faces.length !== 6) return null;
+    if (!message.faces.every((url) => typeof url === 'string' && url.startsWith('/assets/sky/') && urlOk(url))) return null;
+    return { name: name.trim(), type: 'cube', faces: message.faces.slice(), isPublic: message.isPublic };
+  }
+  if (!exactObject(message, ['name', 'url', 'isPublic']) || typeof message.url !== 'string'
+      || !message.url.startsWith('/assets/sky/') || !urlOk(message.url)) return null;
+  return { name: name.trim(), type: 'equirect', url: message.url, isPublic: message.isPublic };
+}
+
+export function pieceMovePayload(message) {
+  if (!exactObject(message, ['id', 'x', 'y', 'z'])) return null;
+  const id = boundedString(message.id, { min: 1, max: 20, pattern: /^\d+$/ });
+  return id && [message.x, message.y, message.z].every(Number.isFinite)
+    ? { id, x: message.x, y: message.y, z: message.z } : null;
+}
+
+const velocity = (value) => finiteTuple(value, { min: -1e4, max: 1e4 });
+
+export function pieceReleasePayload(message) {
+  if (!exactObject(message, ['id', 'v'])) return null;
+  const id = boundedString(message.id, { min: 1, max: 20, pattern: /^\d+$/ });
+  const v = velocity(message.v);
+  return id && v ? { id, v } : null;
+}
+
+export function groupGrabPayload(message, { max = 80 } = {}) {
+  if (!exactObject(message, ['ids', 'anchor'])) return null;
+  const ids = boundedUniqueIds(message.ids, { max });
+  const anchor = boundedString(message.anchor, { min: 1, max: 20, pattern: /^\d+$/ });
+  return ids && anchor && ids.includes(anchor) ? { ids, anchor } : null;
+}
+
+export function groupReleasePayload(message) {
+  const parsed = oneField(message, 'v', velocity);
+  return parsed && parsed.v ? parsed : null;
+}
+
+export function groupMovePayload(message) {
+  if (!exactObject(message, ['x', 'y', 'z']) || ![message.x, message.y, message.z].every(Number.isFinite)) return null;
+  return { x: message.x, y: message.y, z: message.z };
+}
+
 export function groupIds(message, { max = 80 } = {}) {
   if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['ids']))) return null;
   return boundedUniqueIds(message.ids, { max });

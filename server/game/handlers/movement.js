@@ -1,11 +1,12 @@
-import { finitePosition } from '../../message-validation.js';
+import { groupGrabPayload, groupMovePayload, groupReleasePayload, pieceIdPayload, pieceMovePayload, pieceReleasePayload } from '../../message-validation.js';
 
 // Exclusive piece ownership is the authority boundary for dragging. A client may
 // move/release only pieces it successfully claimed; group movement applies the
 // same rule independently to every selected piece.
-export function registerMovementHandlers(room, { isMovable }) {
+export function registerMovementHandlers(room, { isMovable, maxPieces = 80 }) {
   room.onMessage('grab', (client, message) => {
-    const { id } = message || {};
+    const parsed = pieceIdPayload(message); if (!parsed) return;
+    const { id } = parsed;
     const piece = room.state.pieces.get(id);
     if (piece && !piece.owner && !room.flips.has(id) && isMovable(piece)) {
       piece.owner = client.sessionId;
@@ -13,21 +14,22 @@ export function registerMovementHandlers(room, { isMovable }) {
   });
 
   room.onMessage('move', (client, message) => {
-    const target = finitePosition(message);
-    if (!target) return;
-    const piece = room.state.pieces.get(message.id);
-    if (piece && piece.owner === client.sessionId) room.targets.set(message.id, target);
+    const parsed = pieceMovePayload(message); if (!parsed) return;
+    const { id, x, y, z } = parsed;
+    const piece = room.state.pieces.get(id);
+    if (piece && piece.owner === client.sessionId) room.targets.set(id, { x, y, z });
   });
 
   room.onMessage('release', (client, message) => {
-    const { id, v } = message || {};
+    const parsed = pieceReleasePayload(message); if (!parsed) return;
+    const { id, v } = parsed;
     const piece = room.state.pieces.get(id);
     if (piece && piece.owner === client.sessionId) room.releasePiece(id, v);
   });
 
   room.onMessage('grabGroup', (client, message) => {
-    const { ids, anchor } = message || {};
-    if (!Array.isArray(ids)) return;
+    const parsed = groupGrabPayload(message, { max: maxPieces }); if (!parsed) return;
+    const { ids, anchor } = parsed;
     const anchorBody = room.bodies.get(anchor);
     if (!anchorBody) return;
     const offsets = new Map();
@@ -46,8 +48,7 @@ export function registerMovementHandlers(room, { isMovable }) {
   });
 
   room.onMessage('moveGroup', (client, message) => {
-    const target = finitePosition(message);
-    if (!target) return;
+    const target = groupMovePayload(message); if (!target) return;
     const group = room.groups.get(client.sessionId);
     if (!group) return;
     for (const [id, offset] of group) {
@@ -59,11 +60,12 @@ export function registerMovementHandlers(room, { isMovable }) {
   });
 
   room.onMessage('releaseGroup', (client, message) => {
+    const parsed = groupReleasePayload(message); if (!parsed) return;
     const group = room.groups.get(client.sessionId);
     if (!group) return;
     for (const [id] of group) {
       const piece = room.state.pieces.get(id);
-      if (piece && piece.owner === client.sessionId) room.releasePiece(id, message && message.v);
+      if (piece && piece.owner === client.sessionId) room.releasePiece(id, parsed.v);
     }
     room.groups.delete(client.sessionId);
   });

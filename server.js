@@ -32,7 +32,7 @@ import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, saveBoardPayload, savePropPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, saveBoardPayload, savePropPayload, saveSkyboxPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -549,6 +549,7 @@ class TableRoom extends Room {
     // --- Movement: grab → drag → release (single + multi-select) ---------
     registerMovementHandlers(this, {
       isMovable: (piece) => !!(KINDS[piece.type] && KINDS[piece.type].mass > 0),
+      maxPieces: SIM.maxPieces,
     });
 
     // --- Group batch ops (multi-select): the existing per-piece actions applied across a
@@ -1218,23 +1219,18 @@ class TableRoom extends Room {
     });
     this.onMessage('listSkyboxes', (client) => this.sendAssetList(client, 'sky'));
     this.onMessage('handSync', (client) => this.sendHand(client)); // re-send private hand (e.g. after a page refresh/reconnect)
-    this.onMessage('saveSkybox', async (client, msg = {}) => {
+    this.onMessage('saveSkybox', async (client, message) => {
       if (!this.isAdmin(client)) return;                   // curating the library is admin-only
       const fail = (message) => client.send('skyError', { message });
-      const name = String(msg.name || '').slice(0, 60).trim();
-      if (!name) return fail('Give it a name.');
+      const msg = saveSkyboxPayload(message, { urlOk: skyUrlOk });
+      if (!msg) return fail('Invalid skybox details.');
       let ref;                                             // the stored reference: an equirect URL or a cube descriptor
       if (msg.type === 'cube') {
-        const faces = Array.isArray(msg.faces) ? msg.faces.map(String) : [];
-        if (faces.length !== 6) return fail('A cubemap needs exactly six faces.');
-        if (!faces.every(u => u.startsWith('/assets/sky/') && skyUrlOk(u))) return fail('Each face must be an uploaded image.');
-        ref = JSON.stringify({ t: 'cube', f: faces });
+        ref = JSON.stringify({ t: 'cube', f: msg.faces });
       } else {
-        const url = String(msg.url || '');
-        if (!url.startsWith('/assets/sky/') || !skyUrlOk(url)) return fail('Upload a panorama image first.');
-        ref = url;
+        ref = msg.url;
       }
-      try { await db.insertSkybox({ name, url: ref, ownerId: client.auth.userId, isPublic: msg.isPublic !== false }); this.sendAssetList(client, 'sky'); }
+      try { await db.insertSkybox({ name: msg.name, url: ref, ownerId: client.auth.userId, isPublic: msg.isPublic }); this.sendAssetList(client, 'sky'); }
       catch (e) { console.error('[saveSkybox]', e.message); fail('Server error saving the skybox.'); }
     });
     // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
