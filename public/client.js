@@ -698,7 +698,7 @@ function rebuildGrid() {
   { const b = byId('trayScoop');    if (b) b.onclick = () => room.send('trayScoop'); } // gather MY dice back to the middle
   { const b = byId('trayClearBtn'); if (b) b.onclick = () => room.send('trayClear'); } // remove MY dice
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
-  byId('nextTurn').onclick = () => room.send('nextTurn');
+  byId('turnBtn').onclick = () => room.send('nextTurn'); // the Your Turn pill advances the turn (server enforces who may)
   { // Right rail: collapse to a compact pinned head (toggle + turn + Next turn). Starts collapsed on mobile/narrow.
     const rail = byId('rightRail'), tog = byId('railToggle');
     if (rail && tog) {
@@ -2427,11 +2427,13 @@ function exitWbDraw() {
 }
 
 function renderPlayers() { // built with DOM + textContent so a player's name can never inject HTML
-  { const tm = byId('turnMini'); if (tm) { // compact turn indicator for the collapsed rail
+  { const tm = byId('turnMini'); if (tm) { // the Your Turn pill: state + click-to-advance
     let t = '';
     if (room.state.turnPending) t = '\u23F3 ' + room.state.turnPending;
-    else if (room.state.turn) { const p = room.state.players.get(room.state.turn); t = room.state.turn === mySession ? 'Your turn' : (p && p.name ? p.name + "'s turn" : 'In play'); }
+    else if (room.state.turn) { const p = room.state.players.get(room.state.turn); t = room.state.turn === mySession ? 'Your Turn' : (p && p.name ? p.name + "'s turn" : 'In play'); }
     tm.textContent = t;
+    const tb = byId('turnBtn');
+    if (tb) { tb.hidden = !t; tb.classList.toggle('myturn', room.state.turn === mySession); } // emphasize + light the chevron when it's yours
   } }
   const el = byId('players');
   if (!el) return;
