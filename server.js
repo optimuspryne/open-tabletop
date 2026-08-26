@@ -33,6 +33,8 @@ import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
 import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, saveBoardPayload, savePropPayload, saveSkyboxPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
+import { trustedProxyHops } from './server/redis-config.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -2361,27 +2363,14 @@ class EditorRoom extends TableRoom {
 
 // --- Boot: Colyseus + Express (both served on the same port) ----------------
 const app = express();
-
-// Per-IP token-bucket rate limiter (in-memory; resets on restart, single-instance).
-// A burst allowance that refills over time — tuned per use below.
-function makeRateLimiter({ cap, refillPerMs, message }) {
-  const buckets = new Map(); // ip -> { tokens, last }
-  return (req, res, next) => {
-    const ip = req.ip || (req.socket && req.socket.remoteAddress) || 'unknown';
-    const now = Date.now();
-    const b = buckets.get(ip) || { tokens: cap, last: now };
-    b.tokens = Math.min(cap, b.tokens + (now - b.last) * refillPerMs);
-    b.last = now;
-    if (b.tokens < 1) { buckets.set(ip, b); return res.status(429).json({ error: message }); }
-    b.tokens -= 1; buckets.set(ip, b);
-    next();
-  };
-}
+const proxyHops = trustedProxyHops();
+if (proxyHops > 0) app.set('trust proxy', proxyHops);
+const rateLimitStore = await createRateLimitStore();
 // Uploads: big burst (a deck's back + every front go back-to-back), ~180/min sustained.
-const rateLimitUpload = makeRateLimiter({ cap: 300, refillPerMs: 3 / 1000, message: 'too many uploads — slow down' });
+const rateLimitUpload = makeRateLimiter({ store: rateLimitStore, namespace: 'upload', cap: 300, refillPerMs: 3 / 1000, message: 'too many uploads — slow down' });
 // Auth: brute-force + signup-spam guard. ~20/min per IP — scrypt already slows each
 // attempt; this is defense in depth and still leaves room for a few users behind one NAT.
-const rateLimitAuth = makeRateLimiter({ cap: 20, refillPerMs: 20 / 60000, message: 'too many attempts — please slow down' });
+const rateLimitAuth = makeRateLimiter({ store: rateLimitStore, namespace: 'auth', cap: 20, refillPerMs: 20 / 60000, message: 'too many attempts — please slow down' });
 const requireUser = createRequireUser({ db, hashToken });
 const requireAdmin = createRequireAdmin(requireUser);
 

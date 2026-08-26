@@ -14,6 +14,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   Batch sizes, nested asset records, identifiers, strings, coordinates, velocities,
   colors, enums, and uploaded-asset references now fail closed instead of being
   coerced or partially accepted.
+- Replace process-local IP rate limits with an atomic Redis token bucket shared by
+  every app replica. Limits now expire automatically, return `Retry-After`, fail
+  closed while Redis is unavailable, and resolve client IPs through an explicitly
+  configured reverse-proxy hop count.
 
 ## [0.10.0] — 2026-08-26
 

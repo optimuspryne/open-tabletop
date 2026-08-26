@@ -23,6 +23,16 @@ services:
       timeout: 3s
       retries: 12
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   app:
     build: .
     # image: YOURNAME/open-tabletop:0.10.0  # <- swap `build: .` for this to run a published image
@@ -30,12 +40,15 @@ services:
     depends_on:
       db:
         condition: service_healthy           # wait until the schema + role are in place
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_HOST: db
       DATABASE_PORT: 5432
       DATABASE_NAME: tabletop
       DATABASE_USER: tabletop_app
       DATABASE_PASSWORD_FILE: /run/secrets/app_db_password
+      REDIS_URL: redis://redis:6379
       # Owner (DDL) role — used ONLY at startup to auto-apply pending schema
       # migrations (see migrate.js), never for normal traffic. Remove it, or set
       # AUTO_MIGRATE=false, to manage migrations yourself.

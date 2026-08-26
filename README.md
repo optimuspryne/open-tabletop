@@ -41,13 +41,13 @@ paths are below.
 ## Run via NPM
 
 ```bash
-# Set up Postgres and DATABASE_URL first — see "Database" below
+# Set up Postgres and Redis first — see "Database" and "Redis" below
 git clone "https://github.com/optimuspryne/open-tabletop.git"
 cd open-tabletop/
 npm install
 # Copy the .env.example file
 cp .env.example .env
-# Then set `DATABASE_URL` in .env to the `tabletop_app` connection string.
+# Then set `DATABASE_URL` and `REDIS_URL` in .env.
 # `npm start` auto-loads `.env`.
 npm start
 ```
@@ -107,11 +107,22 @@ so missing or partial config fails loudly at startup. For a remote DB, append `?
 (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 turn on `ssl` server-side.
 
+## Redis
+
+Redis holds the shared token buckets for authentication and upload rate limits.
+Set `REDIS_URL` (or `REDIS_URL_FILE`) for direct and clustered deployments. Production
+startup fails if Redis is not configured, and protected requests fail closed with
+`503` if it becomes unavailable. `RATE_LIMIT_STORE=memory` is an explicit local-only
+fallback; its entries are periodically expired, but its limits are not shared between
+processes. If TLS terminates at a reverse proxy, set `TRUST_PROXY_HOPS` to the exact
+number of proxies between the client and this app; leaving it at `0` ignores forwarded
+addresses.
+
 ## Run with Docker Compose
 
-The repo ships a `Dockerfile` and `docker-compose.yml` that bring up the app **and**
-Postgres — including the two-role DB setup (owner + least-privilege app role), applied
-automatically on first start.
+The repo ships a `Dockerfile` and `docker-compose.yml` that bring up the app, Postgres,
+and an ephemeral Redis rate-limit store — including the two-role DB setup (owner +
+least-privilege app role), applied automatically on first start.
 
 ```bash
 git clone "https://github.com/optimuspryne/open-tabletop.git"
@@ -582,14 +593,15 @@ header and on the lobby's Admin link.
 
 The full accounts / rooms / roles / admin / library-curation layer is built, and the
 hardening pass is complete: admin-gated + validated uploads (glTF magic + external-URI
-stripping, image magic bytes), per-IP rate limits on uploads and auth, a per-user
+stripping, image magic bytes), Redis-backed per-IP rate limits shared across app
+replicas for uploads and auth, a per-user
 cross-room **live kick**, a socket **push** for the "you're admitted" signal (with a
 slow poll fallback), account **avatar uploads**, and an enforced **Content-Security-
 Policy** — `script-src 'self'`, no `unsafe-*`, with Three and Colyseus self-hosted
 under `public/vendor/` (no CDN). The first administrator is explicitly provisioned
 from a password file before the public listener opens; ordinary signup never grants admin.
-Remaining optional hardening (post-parse model complexity limits, per-user storage
-caps, a shared-store rate limiter for multi-instance) is noted in
+Remaining optional hardening (post-parse model complexity limits and per-user storage
+caps) is noted in
 `docs/ARCHITECTURE.md`.
 
 ## Notes
