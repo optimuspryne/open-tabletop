@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-08-26
+
 ### Security
 - Validate and normalize every payload-bearing table WebSocket message before it
   reaches authorization, physics, room state, private hands, or database calls.
@@ -47,6 +49,27 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   notifications, and final room-state flushes. Detached lifecycle work can no
   longer reject silently, while join-time list failures use the sanitized client
   error boundary without ejecting the player.
+
+### Changed
+- Split the remaining major table-server systems into focused modules for saved
+  library messages, piece and group operations, room state and settings, overlays
+  and whiteboards, chat and sharing features, physics construction, and scene
+  persistence. This substantially reduces `server.js` while preserving the
+  existing network protocol and gameplay behavior.
+- Make the database layer pool-injectable so production keeps its existing shared
+  connection while tests and other consumers can provide an isolated PostgreSQL
+  pool.
+
+### Internal
+- Add ESLint and Prettier configuration plus `lint`, `format`, `format:check`, and
+  combined `check` scripts; reformat the codebase and resolve the resulting lint
+  warnings.
+- Add CI quality and dependency-security gates for linting, formatting, fast tests,
+  lockfile validation, and production dependency auditing.
+- Add a disposable PostgreSQL 16 integration suite that applies the production
+  schema and least-privilege grants, exercises real database constraints and CRUD,
+  and cleans up its isolated container automatically. CI runs the same suite
+  against an ephemeral PostgreSQL service.
 
 ## [0.10.0] — 2026-08-26
 
