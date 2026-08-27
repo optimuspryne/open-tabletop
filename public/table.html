@@ -4,26 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Open Tabletop</title>
-    <link rel="stylesheet" href="/styles.css" />
-    <script>
-      try {
-        var a = localStorage.getItem('ott-accent');
-        if (a && /^#[0-9a-f]{6}$/i.test(a)) {
-          var s = document.documentElement.style;
-          s.setProperty('--accent', a);
-          s.setProperty(
-            '--accent-soft',
-            'rgba(' +
-              parseInt(a.slice(1, 3), 16) +
-              ',' +
-              parseInt(a.slice(3, 5), 16) +
-              ',' +
-              parseInt(a.slice(5, 7), 16) +
-              ',.25)',
-          );
-        }
-      } catch (e) {}
-    </script>
+    <link rel="stylesheet" href="/styles.css"/>
     <script src="/equalize.js" defer></script>
   </head>
   <body class="ui-full not-admin">
@@ -2309,14 +2290,12 @@
 
     <script src="/vendor/colyseus.js"></script>
     <!-- Three.js via import map (kept ESM) -->
-    <script type="importmap">
-      {
-        "imports": {
-          "three": "/vendor/three/three.module.js",
-          "three/addons/": "/vendor/three/addons/"
-        }
-      }
-    </script>
+<script type="importmap">
+{ "imports": {
+  "three": "/vendor/three/three.module.js",
+  "three/addons/": "/vendor/three/addons/"
+}}
+</script>
 
     <script type="module" src="/client.js"></script>
     <script type="module" src="/editor-panel.js"></script>

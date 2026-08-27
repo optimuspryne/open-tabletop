@@ -2042,9 +2042,7 @@ app.use(helmet({ contentSecurityPolicy: false }));
 // feature-detects eval and falls back to its non-inline decoder when it's blocked.
 // Violations still POST to /csp-report so real ones surface in the logs.
 const CSP_INLINE = [
-  "'sha256-i/yI+mRMoFQQ4YqK4dbxQlxozrQncj7xjpWdHUUvfns='", // accent-color bootstrap (all pages)
   "'sha256-GPCT8IS0bOltxV6o5zObSqdYe/Cpv1tKzAj9rjuR+yM='", // import map (table, editor)
-  "'sha256-C+qoepFpRED4aJXCZO8fNnC4cmFGPYrKJqdMHxsEub4='", // window.OTT_EDITOR flag (editor)
 ];
 app.use(
   helmet.contentSecurityPolicy({
