@@ -11,7 +11,8 @@ The codebase:
 | `server.js` | Node | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup |
 | `server/physics.js` | Node | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers |
 | `server/game/scene-persistence.js` | Node | Portable scene/game snapshot serialization and validated restoration |
-| `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
+| `db.js` | Node | Production Postgres pool composition and compatibility exports |
+| `server/database.js` | Node | Pool-injected database factory: library, users, rooms, membership |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
 | `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
 | `server/game/handlers/*.js` | Node | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers |
@@ -589,9 +590,15 @@ admin sandbox for building and testing library assets live. Registered as the
 
 ---
 
-## `db.js` — Postgres (library · users · rooms)
+## `db.js` + `server/database.js` — Postgres (library · users · rooms)
 
-The connection string comes from **`DATABASE_URL_FILE`** (a complete URL secret,
+`db.js` creates the production `pg.Pool`, passes it to
+**`createDatabase(pool)`**, and re-exports the resulting operations under their
+existing names. Tests can import the factory from `server/database.js` and inject
+an isolated pool without loading environment configuration or sharing global
+database state.
+
+The production connection string comes from **`DATABASE_URL_FILE`** (a complete URL secret,
 highest priority), **`DATABASE_URL`**, or `DATABASE_HOST` / `DATABASE_PORT` /
 `DATABASE_NAME` / `DATABASE_USER` plus **`DATABASE_PASSWORD_FILE`**. Migration
 credentials accept the same keys with a `MIGRATE_` prefix. There is no hardcoded
