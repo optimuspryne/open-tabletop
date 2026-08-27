@@ -254,6 +254,22 @@ SQL
 docker restart open-tabletop-app
 ```
 
+## Testing
+
+```bash
+npm test                  # fast unit/harness suite; no services required
+npm run test:integration  # disposable PostgreSQL 16 integration suite
+npm run check             # lint, formatting, and fast tests
+```
+
+`test:integration` starts a randomly named PostgreSQL container on a random local
+port, applies the production schema and least-privilege app grants, runs the real
+database tests, then removes the container and its storage. Docker is required;
+Docker Compose is not. The runner refuses any database whose name does not end in
+`_test`.
+
+CI runs the same integration tests against its own PostgreSQL 16 service.
+
 ## What's in the box
 
 - **Dice**

@@ -13,6 +13,7 @@ The codebase:
 | `server/game/scene-persistence.js` | Node | Portable scene/game snapshot serialization and validated restoration |
 | `db.js` | Node | Production Postgres pool composition and compatibility exports |
 | `server/database.js` | Node | Pool-injected database factory: library, users, rooms, membership |
+| `scripts/test-database.mjs` | Node | Guarded disposable-PostgreSQL lifecycle and integration-test runner |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
 | `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
 | `server/game/handlers/*.js` | Node | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers |
@@ -597,6 +598,13 @@ admin sandbox for building and testing library assets live. Registered as the
 existing names. Tests can import the factory from `server/database.js` and inject
 an isolated pool without loading environment configuration or sharing global
 database state.
+
+`npm run test:integration` either starts and removes a local `postgres:16-alpine`
+container or uses paired `TEST_DATABASE_OWNER_URL` / `TEST_DATABASE_URL` values
+provided by CI. Both URLs must name a database ending in `_test`. The suite
+applies the production schema and app-role grants, then verifies least privilege,
+transactions, constraints, membership/state persistence, and library CRUD against
+real PostgreSQL.
 
 The production connection string comes from **`DATABASE_URL_FILE`** (a complete URL secret,
 highest priority), **`DATABASE_URL`**, or `DATABASE_HOST` / `DATABASE_PORT` /

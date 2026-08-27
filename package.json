@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
-    "test": "node --test",
+    "test": "node --test test/*.js",
+    "test:integration": "node scripts/test-database.mjs",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write \"**/*.{js,mjs}\" package.json",
     "format:check": "prettier --check \"**/*.{js,mjs}\" package.json",
