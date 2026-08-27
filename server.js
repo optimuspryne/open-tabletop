@@ -15,8 +15,7 @@ import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
-import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, deckHeight, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -41,6 +40,7 @@ import { boundedString, cardPlacementPayload, dispenserDragPayload, oneField, pi
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
+import { buildCollider, buildWorld, COLLIDER_TYPES } from './server/physics.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -177,157 +177,6 @@ function trashOrphans(orphans) {
   return moved;
 }
 
-// --- Colliders ---------------------------------------------------------------
-// Build the cannon-es collider for a piece from its shared shape descriptor.
-// The collider is always a simple primitive (box/sphere/convex-hull); the fancy
-// visual mesh is the client's job, and only needs to roughly match this.
-// Turn a collider type + half-extents into a CANNON shape. Off-centre shapes (flat)
-// return { shape, offset }. Shared by uploaded and built-in props, so every type —
-// box | sphere | cylinder | cone | flat — behaves identically for both.
-const COLLIDER_TYPES = ['sphere', 'cylinder', 'cone', 'flat']; // shapes colliderShape understands (box = default); reused to validate uploads
-function colliderShape(type, hx, hy, hz, opts = {}) {
-  if (type === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
-  if (type === 'cylinder' || type === 'cone') {
-    const r = Math.max(hx, hz);                                                   // horizontal radius
-    const sides = Math.max(3, (opts.sides | 0) || 16);                            // 16 = round; 3/6/… = prisms & N-gon pyramids
-    const top = type === 'cone' ? r * 0.05 : (opts.top != null ? r * opts.top : r); // cone = tiny apex; top < 1 = truncated cone
-    return new CANNON.Cylinder(top, r, hy * 2, sides);                            // Y-oriented in cannon-es
-  }
-  if (type === 'flat') {
-    const t = 0.06;                                                               // thin base footprint so pieces slide over it
-    return { shape: new CANNON.Box(new CANNON.Vec3(hx, t, hz)), offset: new CANNON.Vec3(0, -(hy - t), 0) };
-  }
-  return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));                             // default: box
-}
-
-function buildCollider(type, props) {
-  const shape = KINDS[type].shape;
-
-  if (shape === 'die') return dieShape(props.sides || 6);
-
-  if (shape === 'prop') {
-    // Uploaded .glb: measured half-extents + an optional collider type (default box).
-    if (props.model && Array.isArray(props.box)) {
-      const [hx, hy, hz] = props.box.map(v => clamp(+v || 0.5, 0.05, 4));
-      return colliderShape(props.collider, hx, hy, hz);
-    }
-    // Built-in shape: authored half-extents (scaled by the universal prop scale) + an optional type.
-    const spec = (PROPS[props.shape] || PROPS.box).collider;
-    const scale = clamp(+props.scale || 1, 0.3, 3); // matches the client's mesh scale
-    const [bx, by, bz] = spec.box.map(v => v * scale);
-    return colliderShape(spec.type, bx, by, bz, { sides: spec.sides, top: spec.top });
-  }
-
-  if (type === 'board') {
-    // A built-in model board or an uploaded .glb board — both supply a box.
-    const builtin = props.board && BOARDS[props.board];
-    const box = builtin ? builtin.box
-              : (props.model && Array.isArray(props.box)) ? props.box
-              : null;
-    if (box) {
-      const [hx, hy, hz] = box.map(v => clamp(+v || 0.05, 0.02, 2 * TABLE.x));
-      return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
-    }
-    // A plain procedural board, sized by width/depth.
-    if (props.w || props.d) {
-      const width = clamp(props.w || 8, 2, 2 * TABLE.x - 2);
-      const depth = clamp(props.d || 8, 2, 2 * TABLE.z - 2);
-      return new CANNON.Box(new CANNON.Vec3(width / 2, 0.05, depth / 2));
-    }
-  }
-
-  if (shape === 'dispenser') {
-    const d = DISPENSERS[props.disp];
-    if (!d) return new CANNON.Box(new CANNON.Vec3(0.4, 0.2, 0.4));
-    if (d.body === 'stack') { // a growing cylinder, height ∝ visible count (see updateStackCollider)
-      const box = PROPS[d.item].collider.box, r = box[0], discH = box[1] * 2;
-      const n = stackVisible(props.count ?? d.count.def);
-      return new CANNON.Cylinder(r, r, Math.max(discH, n * discH), 16);
-    }
-    const [hx, hy, hz] = d.collider.box; // 'model' bowl — a fixed box
-    return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
-  }
-
-  // A card's collider is intentionally thicker than the visible card, which is
-  // what keeps a stack of them stable instead of jittering apart.
-  if (type === 'card') {
-    const g = cardGeom(props), hy = Math.max(g.th, SIM.cards.colliderThick);         // thickness at least the card collider
-    // A hexagon card gets a matching 6-gon prism (Y-oriented cylinder = flat hex), so it collides —
-    // and will snap to a future hex grid — as the shape it looks like. Others keep the box footprint.
-    return g.shape === 'hex'
-      ? new CANNON.Cylinder(g.hh, g.hh, hy * 2, 6)         // radius = circumradius (pointy-top); cannon's 6-gon aligns with the mesh
-      : new CANNON.Box(new CANNON.Vec3(g.hw, hy, g.hh));
-  }
-
-  return new CANNON.Box(new CANNON.Vec3(...shape.box));
-}
-
-// --- Small 3-vector helpers (plain [x, y, z] arrays) -------------------------
-const sub = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
-const cross = (a, b) => [a[1]*b[2] - a[2]*b[1], a[2]*b[0] - a[0]*b[2], a[0]*b[1] - a[1]*b[0]];
-const dot = (a, b) => a[0]*b[0] + a[1]*b[1] + a[2]*b[2];
-const norm = (a) => { const length = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0]/length, a[1]/length, a[2]/length]; };
-const averagePoint = (points) => {
-  const sum = points.reduce((acc, p) => [acc[0] + p[0], acc[1] + p[1], acc[2] + p[2]], [0, 0, 0]);
-  return sum.map(component => component / points.length);
-};
-
-// Build the physics collider for a polyhedral die from the SAME vertices the
-// client uses for its mesh, so the two can never drift apart.
-//
-// We take the convex hull, then merge hull triangles that share a face-normal
-// into a single polygon face (a d10's kite faces become one face each). This
-// matters for stability: leaving a face as several coplanar triangles makes
-// cannon's contact solver jitter — that's what once made a resting d10 slowly
-// wander across the table on its own.
-function dieShape(sides) {
-  const cubeCollider = () => new CANNON.Box(new CANNON.Vec3(dieR(6), dieR(6), dieR(6)));
-  if (sides === 6) return cubeCollider(); // a d6 is just a cube
-
-  const vertices = dieVerts(sides);
-  if (!vertices) return cubeCollider(); // unknown die → fall back to a cube
-
-  try {
-    // 1. Group the hull's triangles by shared normal — each group is one flat face.
-    const faceGroups = [];
-    for (const [a, b, c] of convexHull(vertices)) {
-      const normal = norm(cross(sub(vertices[b], vertices[a]), sub(vertices[c], vertices[a])));
-      let group = faceGroups.find(existing => dot(existing.normal, normal) > 0.999);
-      if (!group) {
-        group = { normal, indices: new Set() };
-        faceGroups.push(group);
-      }
-      group.indices.add(a);
-      group.indices.add(b);
-      group.indices.add(c);
-    }
-
-    // 2. For each face, order its vertices around the centre, wound outward.
-    const faces = faceGroups.map(group => {
-      const indices = [...group.indices];
-      const centroid = averagePoint(indices.map(i => vertices[i]));
-
-      // Sort vertices by their angle within the face's own 2D plane.
-      const refAxis = norm(sub(vertices[indices[0]], centroid));
-      const perpAxis = cross(group.normal, refAxis);
-      const angleOf = (i) => Math.atan2(dot(sub(vertices[i], centroid), perpAxis), dot(sub(vertices[i], centroid), refAxis));
-      indices.sort((i, j) => angleOf(i) - angleOf(j));
-
-      // cannon needs faces wound so their normal points outward; flip if not.
-      const woundNormal = cross(sub(vertices[indices[1]], vertices[indices[0]]), sub(vertices[indices[2]], vertices[indices[0]]));
-      if (dot(woundNormal, group.normal) < 0) indices.reverse();
-      return indices;
-    });
-
-    return new CANNON.ConvexPolyhedron({
-      vertices: vertices.map(v => new CANNON.Vec3(v[0], v[1], v[2])),
-      faces,
-    });
-  } catch (e) {
-    return cubeCollider(); // any hull failure → a safe cube
-  }
-}
-
 // --- Synced state ----------------------------------------------------------
 // defineTypes() is the no-build-step way to declare schema in plain JS.
 // (The modern alternative is TypeScript with @type() decorators.)
@@ -408,30 +257,6 @@ const OVERLAY_MAX = 200;
 const OVERLAY_MAX_PER_PLAYER = 40;
 const OVERLAY_KINDS = new Set(['ruler', 'circle', 'cone', 'line']); // valid overlay kinds (add here + in the client OVERLAY registry)
 
-// --- Physics world -----------------------------------------------------------
-// Create the single cannon-es world. The table surface + containment walls are
-// added separately by buildBounds() so the GM can resize them at runtime.
-// Returns the world with its shared contact material attached (spawn() reuses it).
-function buildWorld() {
-  const world = new CANNON.World({ gravity: new CANNON.Vec3(0, SIM.gravity, 0) });
-  world.broadphase = new CANNON.SAPBroadphase(world);
-  world.allowSleep = true; // let resting pieces sleep — cheap, and they sync nothing
-  world.solver.iterations = SIM.solverIterations;
-
-  // One material shared by everything; the contact settings tune how firm/bouncy
-  // collisions feel (see SIM.contact for the stack-stability trade-offs).
-  const material = new CANNON.Material('surface');
-  world.addContactMaterial(new CANNON.ContactMaterial(material, material, {
-    friction: SIM.friction,
-    restitution: SIM.restitution,
-    contactEquationStiffness: SIM.contact.stiffness,
-    contactEquationRelaxation: SIM.contact.relaxation,
-  }));
-
-  world.__mat = material; // stash the shared material for spawn() and buildBounds() to reuse
-  return world;
-}
-
 const rnd = () => [(Math.random() - 0.5) * 8, SIM.spawnY, (Math.random() - 0.5) * 6];
 // The landing/drop cue for a piece. A TILE (a card/deck carrying a `tile` kind — domino/letter/mahjong)
 // clacks like a tile / thunks like its wooden box, instead of the paper card/deck sounds.
@@ -509,7 +334,7 @@ const geoOf = (o) => { const g = {}; if (o && o.tile) g.tile = o.tile; if (o && 
 class TableRoom extends Room {
   async onCreate(options) {
     this.setState(new State());
-    this.world = buildWorld();
+    this.world = buildWorld(SIM);
     this.mat = this.world.__mat;
     LIVE_ROOMS.add(this); // so orphan cleanup can see this table's live asset references
     this.roomCode = (options && options.code) || null;
@@ -725,7 +550,7 @@ class TableRoom extends Room {
   spawn(type, pos, props = {}, quat = null) {
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: this.mat });
-    const collider = buildCollider(type, props);
+    const collider = buildCollider(type, props, { cardColliderThickness: SIM.cards.colliderThick });
     if (collider.shape) body.addShape(collider.shape, collider.offset); // some colliders (flat) sit off-centre
     else body.addShape(collider);
     body.position.set(pos[0], pos[1], pos[2]);

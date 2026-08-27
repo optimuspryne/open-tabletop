@@ -8,7 +8,8 @@ The codebase:
 | File | Runtime | Role |
 |------|---------|------|
 | `shared/pieces.js` | both | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries |
-| `server.js` | Node | Composition root: authoritative physics, Colyseus rooms, remaining handlers, HTTP/security setup |
+| `server.js` | Node | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup |
+| `server/physics.js` | Node | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers |
 | `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
 | `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
@@ -53,9 +54,14 @@ classDiagram
     }
     class Server["server.js"] {
         +SIM config
-        +buildWorld() / buildCollider(type,props) / dieShape(sides)
         +buildSimpleDeck() / saveAsset() / saveImageRef()
         +compose extracted message handlers and HTTP routers
+    }
+    class Physics["server/physics.js"] {
+        +buildWorld(simulation)
+        +buildCollider(type, props, options)
+        +colliderShape(type, hx, hy, hz, options)
+        +dieShape(sides)
     }
     class Auth["auth.js"] {
         +hashPassword / verifyPassword (scrypt)
@@ -114,6 +120,7 @@ classDiagram
         +fetch to the HTTP API
     }
     Shared <.. Server
+    Shared <.. Physics
     Shared <.. Core
     Shared <.. Graphics
     Shared <.. Client
@@ -123,6 +130,7 @@ classDiagram
     Credits <.. Audio
     Audio <.. Client
     Server *-- TableRoom
+    Server ..> Physics
     TableRoom <|-- EditorRoom
     Server ..> Auth
     Server ..> Db
@@ -282,7 +290,7 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   *(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
   gone — that logic now lives in `db.js`.)*
 
-### Physics helpers (module scope)
+### `server/physics.js` — physics construction
 
 - **`buildCollider(type, props) → CANNON.Shape`** — dice → `dieShape`; boards →
   built-in/uploaded box (by half-height) else procedural `w×d`; props run through
@@ -306,11 +314,14 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 - **`geoOf(o)`** — the public geometry/behavior a card/tile inherits from its deck (`tile`, `geom`,
   `snap`), threaded through deck → hand → played tile so a face-down tile keeps its true shape while
   its face stays private. **`dropSfx(type, props)`** picks the tile vs. card/deck drop cue.
-- **`buildWorld()`**, **`rnd()`**, **`shuffle()`**.
+- **`buildWorld(simulation)`** — creates the Cannon world, broadphase, shared
+  contact material, sleep policy, and solver tuning from `SIM`.
+- **`rnd()`**, **`shuffle()`** remain small `server.js` gameplay helpers.
 - Small shared helpers keep the handlers flat: **`clamp`**, **`addWall`** /
   **`cubeCollider`** (world + collider building), **`spawnCardFlat`** /
   **`besideDeck`** / **`addToHand`** (deal/hand placement), **`swapBoard`**,
-  **`averagePoint`**.
+  Physics-only vector helpers, including **`averagePoint`**, stay private to
+  `server/physics.js`.
 
 ### Schema (synced state)
 
