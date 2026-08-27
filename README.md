@@ -217,7 +217,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.10.0
+    image: optimuspryne/open-tabletop:0.11.0
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:
