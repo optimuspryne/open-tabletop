@@ -41,6 +41,11 @@ import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
 import { buildCollider, buildWorld, COLLIDER_TYPES } from './server/physics.js';
+import {
+  applyScene as applyPersistedScene,
+  serializeGame as serializePersistedGame,
+  serializeScene as serializePersistedScene,
+} from './server/game/scene-persistence.js';
 
 // --- Simulation tuning (all the physics "feel" constants in one place) -------
 const SIM = {
@@ -1103,29 +1108,7 @@ class TableRoom extends Room {
   }
 
   serializeScene() {
-    const pieces = [];
-    this.state.pieces.forEach((piece, id) => {
-      let props = readProps(piece);
-      if (piece.type === 'deck') {
-        const cards = (this.deckCards.get(id) || []).slice();
-        for (const pend of this.pendingInspect.values()) if (pend.deckId === id) cards.unshift(pend.front); // fold a mid-inspect draw back onto its deck so a save never loses it
-        // Serialize the box/bag skin as `deckModel` (the spawn-input name) so it round-trips on restore.
-        props = { back: props.back || 'back', cards, ...geoOf(props), ...(props.model ? { deckModel: props.model } : {}) };
-      }
-      else if (piece.type === 'card') { const cd = this.cardData.get(id); if (cd && cd.front) props = { ...props, front: cd.front, faceDown: true }; }
-      pieces.push({ type: piece.type, props, x: piece.x, y: piece.y, z: piece.z, q: [piece.qx, piece.qy, piece.qz, piece.qw] });
-    });
-    // Overlays are public geometry, so they ride the scene by value (no owner — a
-    // saved session's sessionIds are meaningless on reload; restored overlays are
-    // table-owned and GM-managed). Color is kept so they look the same on load.
-    const overlays = [];
-    this.state.overlays.forEach(o => overlays.push({ kind: o.kind, color: o.color, x: o.x, z: o.z, x2: o.x2, z2: o.z2, w: o.w, ang: o.ang }));
-    // Which seats have a personal tray out rides the scene (an array of seat indices); the tray
-    // DICE are ordinary pieces carrying `traySeat`, so they're already in `pieces` above.
-    const trays = [];
-    this.state.trays.forEach((on, seat) => { if (on) trays.push(+seat); });
-    return { table: { x: this.state.tableX, z: this.state.tableZ }, pieces, overlays,
-             scale: this.scaleSnapshot(), trays };
+    return serializePersistedScene(this, { geoOf });
   }
 
   // Full game snapshot = the portable scene PLUS the private per-player layer
@@ -1133,81 +1116,20 @@ class TableRoom extends Room {
   // so it can rebind on reload. Used by auto-save + the GM checkpoint; library
   // scenes stay hands-free (they call serializeScene directly).
   serializeGame() {
-    const scene = this.serializeScene();
-    const byUser = new Map();
-    for (const [sid, cards] of this.hands) {       // players still connected (e.g. a GM manual checkpoint)
-      if (!cards || !cards.length) continue;
-      const c = this.clientBy(sid);
-      const uid = c && c.auth && c.auth.userId;
-      if (uid == null) continue;
-      const p = this.state.players.get(sid);
-      byUser.set(String(uid), { name: (p && p.name) || '', cards: cards.slice() });
-    }
-    for (const [uid, held] of this.pendingHands)   // already-departed hands (the only ones left on dispose)
-      byUser.set(String(uid), { name: held.name || '', cards: held.cards.slice() });
-    const hands = [];
-    for (const [uid, held] of byUser) hands.push({ userId: uid, name: held.name, cards: held.cards });
-    let turn = null;
-    if (this.state.turn) {
-      const tc = this.clientBy(this.state.turn);
-      if (tc && tc.auth && tc.auth.userId != null) {
-        const tp = this.state.players.get(this.state.turn);
-        turn = { userId: String(tc.auth.userId), name: (tp && tp.name) || '' };
-      }
-    }
-    return { ...scene, hands, turn };
+    return serializePersistedGame(this, { geoOf });
   }
 
   // Replace the whole table with a scene: clear, resize, then rebuild every piece
   // at its saved transform. Boards go through swapBoard; everything else keeps its
   // exact orientation via the spawn quaternion.
   applyScene(scene) {
-    if (!scene || typeof scene !== 'object') return;
-    this.clearTable();
-    const tx = clamp(+(scene.table && scene.table.x) || TABLE.x, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
-    const tz = clamp(+(scene.table && scene.table.z) || TABLE.z, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
-    this.state.tableX = tx; this.state.tableZ = tz; this.buildBounds(tx, tz);
-    this.applyScale(scene.scale); // grid + measurement calibration ride the scene (no-op if absent)
-    this.applyTrays(scene.trays); // restore which seats' trays are out BEFORE their dice spawn, so the walls exist
-    for (const e of (Array.isArray(scene.pieces) ? scene.pieces : [])) {
-      if (this.state.pieces.size >= SIM.maxPieces) break;
-      if (!e || !KINDS[e.type]) continue;
-      const props = e.props || {};
-      if (e.type === 'board') { this.swapBoard(props); continue; }
-      const fdFront = (e.type === 'card' && props.faceDown && props.front) ? props.front : null;
-      let sp = props;
-      if (fdFront) { sp = { ...props }; delete sp.front; delete sp.faceDown; } // face-down: keep the front OUT of public props, or it renders face-up
-      const id = this.spawn(e.type, [+e.x || 0, Number.isFinite(+e.y) ? +e.y : 2, +e.z || 0], sp, Array.isArray(e.q) ? e.q : null);
-      if (fdFront) this.cardData.set(id, { front: fdFront });
-    }
-    // Restore saved overlays (public geometry). clearTable() already emptied the map;
-    // rebuild each as table-owned (owner '') so it's GM-managed, not tied to a gone session.
-    const cc = (v) => clamp(+v || 0, -MEASURE.maxLen, MEASURE.maxLen);
-    for (const e of (Array.isArray(scene.overlays) ? scene.overlays : [])) {
-      if (this.state.overlays.size >= OVERLAY_MAX) break;
-      if (!e || !OVERLAY_KINDS.has(e.kind)) continue;
-      const o = new Overlay();
-      o.kind = e.kind; o.owner = ''; o.color = e.color || '#ffffff';
-      o.x = cc(e.x); o.z = cc(e.z); o.x2 = cc(e.x2); o.z2 = cc(e.z2);
-      o.w = clamp(+e.w || 0, 0, MEASURE.maxLen); o.ang = +e.ang || 0;
-      this.state.overlays.set('o' + (this.nextOverlayId++), o);
-    }
-    // Stage any saved private layer (hands + turn) for account-rebinding as owners return.
-    this.pendingHands.clear(); this.pendingTurn = null;
-    this.state.unclaimed.clear(); this.state.turnPending = '';
-    if (Array.isArray(scene.hands)) {
-      for (const h of scene.hands) {
-        if (!h || h.userId == null || !Array.isArray(h.cards) || !h.cards.length) continue;
-        this.pendingHands.set(String(h.userId), { name: h.name || '', cards: h.cards.slice() });
-        this.state.unclaimed.set(String(h.userId), h.name || '');
-      }
-    }
-    if (scene.turn && scene.turn.userId != null) {
-      this.pendingTurn = String(scene.turn.userId);
-      this.state.turnPending = scene.turn.name || '';
-      this.state.turn = ''; // no live session holds it yet; a rebind or GM-advance resolves it
-    }
-    this.scheduleSave(); // the new table size is durable
+    applyPersistedScene(this, scene, {
+      createOverlay: () => new Overlay(),
+      maxPieces: SIM.maxPieces,
+      overlayKinds: OVERLAY_KINDS,
+      overlayMax: OVERLAY_MAX,
+      tableLimits: TABLE_LIMIT,
+    });
   }
 
   // Persist the durable room state (scoreboard + notes + table size). Debounced —

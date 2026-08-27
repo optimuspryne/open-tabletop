@@ -10,6 +10,7 @@ The codebase:
 | `shared/pieces.js` | both | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries |
 | `server.js` | Node | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup |
 | `server/physics.js` | Node | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers |
+| `server/game/scene-persistence.js` | Node | Portable scene/game snapshot serialization and validated restoration |
 | `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
 | `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
@@ -63,6 +64,11 @@ classDiagram
         +colliderShape(type, hx, hy, hz, options)
         +dieShape(sides)
     }
+    class ScenePersistence["server/game/scene-persistence.js"] {
+        +serializeScene(room, options)
+        +serializeGame(room, options)
+        +applyScene(room, scene, options)
+    }
     class Auth["auth.js"] {
         +hashPassword / verifyPassword (scrypt)
         +makeToken / hashToken (device tokens)
@@ -82,7 +88,7 @@ classDiagram
         pendingHands, pendingTurn, chatLog
         +onAuth() rank() isAdmin()
         +spawn() update() sendHand() saveDeckById() advanceTurn()
-        +serializeScene/serializeGame/applyScene
+        +serialization/restoration facade methods
         +sendMembers/broadcastMembers/sendAssetList/closeAndDispose
         +gameplay + library + member handlers
     }
@@ -121,6 +127,7 @@ classDiagram
     }
     Shared <.. Server
     Shared <.. Physics
+    Shared <.. ScenePersistence
     Shared <.. Core
     Shared <.. Graphics
     Shared <.. Client
@@ -131,6 +138,7 @@ classDiagram
     Audio <.. Client
     Server *-- TableRoom
     Server ..> Physics
+    TableRoom ..> ScenePersistence
     TableRoom <|-- EditorRoom
     Server ..> Auth
     Server ..> Db
@@ -323,6 +331,23 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   Physics-only vector helpers, including **`averagePoint`**, stay private to
   `server/physics.js`.
 
+### `server/game/scene-persistence.js` — snapshots and restoration
+
+- **`serializeScene(room, {geoOf})`** — creates the portable public snapshot:
+  table size, pieces and transforms, exact deck order, protected face-down card
+  fronts, overlays, measurement/grid scale, and enabled tray seats.
+- **`serializeGame(room, options)`** — adds private hands and turn ownership,
+  converting ephemeral Colyseus session IDs to stable user IDs so returning
+  accounts can reclaim them.
+- **`applyScene(room, scene, options)`** — validates and clamps the table,
+  pieces, overlays, and private layer before rebuilding through the room's
+  existing spawn/bounds/tray APIs. Restored overlays become table-owned, and
+  hands/turns are staged for account rebinding.
+
+`TableRoom.serializeScene`, `serializeGame`, and `applyScene` are thin facades
+that supply room-specific limits and constructors. Debouncing and the final
+Postgres write remain in `server/game/handlers/room-state.js`.
+
 ### Schema (synced state)
 
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
@@ -389,10 +414,11 @@ Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step �
 out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
-**`advanceTurn`**, **`serializeScene`** (portable template: table size + pieces +
+**`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
+portable template: table size + pieces +
 deck order + face-down fronts + overlays + the room **`scale`** (measurement + grid),
 no player identity), **`serializeGame`** (a scene *plus* account-keyed `hands` + `turn`,
-session→`userId` resolved), **`applyScene`** (rebuild pieces + overlays, **apply the
+session→`userId` resolved), **`applyScene`** (delegates validated restore; rebuild pieces + overlays, **apply the
 scene's `scale`** via `applyScale`, then *stage* the private layer into
 `pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
 member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
