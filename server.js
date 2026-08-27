@@ -34,9 +34,10 @@ import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { registerPieceHandlers } from './server/game/handlers/pieces.js';
 import { registerRoomStateHandlers, saveRoomStateNow, scheduleRoomSave } from './server/game/handlers/room-state.js';
 import { registerOverlayHandlers } from './server/game/handlers/overlays.js';
+import { registerRoomFeatureHandlers } from './server/game/handlers/room-features.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { boundedString, cardPlacementPayload, dispenserDragPayload, oneField, pieceIdPayload, pointPayload, showPayload } from './server/message-validation.js';
+import { boundedString, cardPlacementPayload, dispenserDragPayload, oneField, pieceIdPayload } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -668,34 +669,6 @@ class TableRoom extends Room {
       this.sendHand(client);    // updates the public count + sends the now-shorter private hand
       if (spawned) this.broadcast('sfx', { type: 'hand-drop' });
     });
-    const rollDie = (id, roll) => { // fling one die: random horizontal spread + upward pop + tumble
-      const body = this.bodies.get(id); if (!body) return;
-      body.wakeUp();
-      body.velocity.set((Math.random() - 0.5) * roll.spread, roll.up, (Math.random() - 0.5) * roll.spread);
-      body.angularVelocity.set((Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin, (Math.random() - 0.5) * roll.spin);
-    };
-    // The Roll button hops you to YOUR tray; "Roll all" flings only your seat's dice, with a
-    // gentler impulse so they tumble inside the walls instead of leaping out.
-    tableMessage('roll', (client) => {
-      const seat = this.seatOf(client); if (seat == null) return;
-      let n = 0;
-      this.state.pieces.forEach((piece, id) => { const b = this.bodies.get(id); if (piece.type === 'die' && b && b.__traySeat === seat) { rollDie(id, SIM.trayRoll); n++; } });
-      if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
-    });
-    // Scoop: gather the caller's tray dice back to the middle (a light re-rack).
-    tableMessage('trayScoop', (client) => {
-      const seat = this.seatOf(client); if (seat == null || !this.state.trays.get(String(seat))) return;
-      const c = this.trayCenterFor(seat), angle = seatAngle(seat);
-      let n = 0;
-      this.state.pieces.forEach((piece, id) => {
-        const b = this.bodies.get(id); if (piece.type !== 'die' || !b || b.__traySeat !== seat) return;
-        const p = trayPlace({ x: (Math.random() - 0.5) * 1.4, y: 0.6, z: (Math.random() - 0.5) * 1.0 }, c, angle);
-        b.position.set(p.x, p.y, p.z); b.velocity.setZero(); b.angularVelocity.setZero(); b.wakeUp(); n++;
-      });
-      if (n) this.broadcast('sfx', { type: 'die-roll' });
-    });
-    tableMessage('trayClear', (client) => { const seat = this.seatOf(client); if (seat != null) this.clearTraySeat(seat); }); // remove just your tray's dice
-
     // Wipe the room back to an empty table — pieces and all private state.
     tableMessage('reset', (client) => {
       if (this.rank(client) < RANK.gm) return; // wiping the table is GM+
@@ -738,71 +711,9 @@ class TableRoom extends Room {
       maxStrokes: WHITEBOARD_MAX_STROKES,
     });
 
-    // --- Dice trays: one PERSONAL physics box per seat, on the track behind that player -----
-    // No rank gate — a player toggles only their OWN tray. Putting it away clears its dice too.
-    tableMessage('trayShow', (client, message) => {
-      const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null); if (!parsed) return;
-      const seat = this.seatOf(client); if (seat == null) return;
-      if (parsed.on) this.state.trays.set(String(seat), true);
-      else { this.state.trays.delete(String(seat)); this.clearTraySeat(seat); }
-      this.buildTrays();
-    });
-
-    // Public text chat — broadcast to the room, keep a small rolling history for late joiners.
-    tableMessage('chat', (client, message) => {
-      const parsed = oneField(message, 'text', (text) => boundedString(text, { min: 1, max: 2000 })); if (!parsed) return;
-      const t = parsed.text.replace(/\s+/g, ' ').trim().slice(0, 400);
-      if (!t) return;
-      const player = this.state.players.get(client.sessionId);
-      const msg = { from: (player && player.name) || 'Player', text: t, ts: Date.now() };
-      this.chatLog.push(msg);
-      if (this.chatLog.length > 80) this.chatLog.shift();
-      this.broadcast('chatMsg', msg);
-    });
-    tableMessage('chatLog', (client) => client.send('chatLog', { log: this.chatLog })); // late-join replay
-
-    // --- Skybox: per-room panorama, GM-applied + synced; library is admin-only ---
-    tableMessage('skybox', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;             // changing the room's skybox is GM+
-      const parsed = oneField(message, 'url', (url) => typeof url === 'string' && validSky(url) ? url : null); if (!parsed) return;
-      this.state.skybox = parsed.url;
-      this.scheduleSave();                                 // durable, like the board/table
-    });
-    tableMessage('handSync', (client) => this.sendHand(client)); // re-send private hand (e.g. after a page refresh/reconnect)
-    // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
-    // to the chosen audience. Content goes out privately (like a hand); everyone
-    // else just sees the public 'showing' count as a badge. Released → showStop.
-    tableMessage('showStart', (client, message) => {
-      const parsed = showPayload(message); if (!parsed) return;
-      const { to, hids } = parsed;
-      const sid = client.sessionId;
-      const hand = this.hands.get(sid) || [];
-      if (!hand.length) return;
-      const cards = hids === 'all' ? hand.slice()
-                  : Array.isArray(hids) ? hand.filter(c => hids.includes(c.hid))
-                  : null;
-      if (!cards || !cards.length) return;
-      const audience = new Set();
-      if (to === 'all') this.state.players.forEach((_, s) => { if (s !== sid) audience.add(s); });
-      else if (Array.isArray(to)) for (const s of to) { if (s !== sid && this.state.players.has(s)) audience.add(s); }
-      if (!audience.size) return;
-
-      this.stopShow(sid); // replace any prior show
-      this.shows.set(sid, { to: audience, cards });
-      const player = this.state.players.get(sid);
-      if (player) player.showing = cards.length; // public badge (count only)
-      const payload = cards.map(c => ({ front: c.front, back: c.back }));
-      for (const viewer of audience) {
-        const cl = this.clientBy(viewer);
-        if (cl) cl.send('showFan', { sid, cards: payload }); // private content, to the audience alone
-      }
-    });
-    tableMessage('showStop', (client) => this.stopShow(client.sessionId));
-    tableMessage('ping', (client, message) => {
-      // A transient "look here" marker. Public by nature, so just clamp to the
-      // table and broadcast to everyone (the sender sees their own ping too).
-      const point = pointPayload(message); if (!point) return;
-      this.broadcast('ping', { sid: client.sessionId, x: clamp(point.x, -this.state.tableX, this.state.tableX), z: clamp(point.z, -this.state.tableZ, this.state.tableZ) });
+    registerRoomFeatureHandlers(this, {
+      trayRoll: SIM.trayRoll,
+      validSky,
     });
 
     this.setSimulationInterval((dt) => this.update(dt), 1000 / 60); // fixed 60Hz sim

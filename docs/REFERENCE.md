@@ -12,7 +12,7 @@ The codebase:
 | `db.js` | Node | Postgres pool + all queries: library, users, rooms, membership |
 | `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
 | `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
-| `server/game/handlers/*.js` | Node | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, membership, and saved-library message handlers |
+| `server/game/handlers/*.js` | Node | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers |
 | `server/http/*.js` + `server/http/routes/*.js` | Node | HTTP auth/error seams and auth/room/admin/upload routers |
 | `server/{auth-validation,permissions,message-validation,deck-state}.js` + `server/game/props-codec.js` | Node | Shared validation/rules, state helpers, canonical piece-props codec |
 | `server/{database-config,session-config,bootstrap-admin}.js` | Node | DB config, session lifetime, and first-boot admin provisioning |
