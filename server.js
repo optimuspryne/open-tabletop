@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, dieSpawnProps, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -31,9 +31,10 @@ import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { registerLibraryHandlers } from './server/game/handlers/library.js';
+import { registerPieceHandlers } from './server/game/handlers/pieces.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { boundedString, cardPlacementPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { boundedString, cardPlacementPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, hexColor, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, scalePayload, scorePayload, showPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -561,83 +562,17 @@ class TableRoom extends Room {
       maxPieces: SIM.maxPieces,
     });
 
-    // --- Group batch ops (multi-select): the existing per-piece actions applied across a
-    // selection. Stand/snap toggle the group as a UNIT (if any is on, turn all off, else all on);
-    // roll/flip/take act on the relevant subset (dice / cards) and ignore the rest.
-    tableMessage('setStandGroup', (client, message) => {
-      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
-      const anyStanding = ids.some(id => { const p = this.state.pieces.get(id); return p && this.standOf(p); });
-      for (const id of ids) {
-        const piece = this.state.pieces.get(id); if (!piece) continue;
-        const props = readProps(piece);
-        props.stand = anyStanding ? false : this.naturalStand(piece);
-        writeProps(piece, props);
-        const b = this.bodies.get(id); if (b) b.wakeUp();
-      }
-    });
-    tableMessage('setSnapGroup', (client, message) => {
-      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
-      const anySnap = ids.some((id) => readProps(this.state.pieces.get(id)).snap);
-      for (const id of ids) {
-        const piece = this.state.pieces.get(id); if (!piece) continue;
-        const props = readProps(piece);
-        props.snap = !anySnap;
-        writeProps(piece, props);
-        const b = this.bodies.get(id);
-        if (b) {
-          if (props.snap && gridActive(this.state.scale)) { const p = snapToCell(b.position.x, b.position.z, this.state.scale); b.position.x = p.x; b.position.z = p.z; b.velocity.setZero(); b.angularVelocity.setZero(); this.targets.delete(id); }
-          else if (b.__pinned) this.unpinPiece(id);
-          b.wakeUp();
-        }
-      }
-    });
-    tableMessage('rollGroup', (client, message) => { // R with dice selected → roll them all
-      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
-      let n = 0;
-      for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && p.type === 'die' && b) { rollDie(id, b.__traySeat != null ? SIM.trayRoll : SIM.roll); n++; } }
-      if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
-    });
-    tableMessage('flipGroup', (client, message) => { // F with cards selected → flip them all
-      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
-      let n = 0;
-      for (const id of ids) {
-        const piece = this.state.pieces.get(id), b = this.bodies.get(id);
-        if (!piece || !b || piece.type !== 'card') continue;
-        const props = readProps(piece);
-        if (props.front) { this.cardData.set(id, { front: props.front }); delete props.front; }        // face-up → hide
-        else if (this.cardData.has(id)) { props.front = this.cardData.get(id).front; this.cardData.delete(id); } // face-down → reveal
-        writeProps(piece, props);
-        b.wakeUp(); b.velocity.y = SIM.flipHop; n++;
-      }
-      if (n) this.broadcast('sfx', { type: 'card-flip' });
-    });
-    tableMessage('takeGroup', (client, message) => { // H with cards selected → take them all to hand
-      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
-      for (const id of ids) {
-        const piece = this.state.pieces.get(id); if (!piece || piece.type !== 'card') continue;
-        const props = readProps(piece);
-        const front = (this.cardData.get(id) || {}).front || props.front;
-        this.addToHand(client, front, props.back || 'back', geoOf(props));
-        this.removePiece(id);
-      }
-    });
-    tableMessage('rotateGroup', (client, message) => { // [ / ] step ±45° (dir), or a continuous drag/dial (angle, radians)
-      const parsed = groupRotation(message, { max: SIM.maxPieces }); if (!parsed) return;
-      const { ids } = parsed;
-      const rot = parsed.angle !== undefined ? parsed.angle : parsed.dir * (Math.PI / 4);
-      const bodies = [];
-      for (const id of ids) { const p = this.state.pieces.get(id), b = this.bodies.get(id); if (p && b && KINDS[p.type].mass > 0) bodies.push(b); } // skip static boards
-      if (!bodies.length) return;
-      let cx = 0, cz = 0; for (const b of bodies) { cx += b.position.x; cz += b.position.z; } cx /= bodies.length; cz /= bodies.length;
-      const s = Math.sin(rot), c = Math.cos(rot);
-      const dq = new CANNON.Quaternion(); dq.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), rot);
-      for (const b of bodies) {
-        const dx = b.position.x - cx, dz = b.position.z - cz;
-        b.position.x = cx + dx * c + dz * s;   // rotate each position about the centroid (same convention as trayPlace)
-        b.position.z = cz - dx * s + dz * c;
-        const nq = new CANNON.Quaternion(); dq.mult(b.quaternion, nq); b.quaternion.copy(nq); // and turn each piece's facing to match
-        b.velocity.setZero(); b.angularVelocity.setZero(); b.wakeUp();
-      }
+    registerPieceHandlers(this, {
+      maxPieces: SIM.maxPieces,
+      flipHop: SIM.flipHop,
+      roll: SIM.roll,
+      trayRoll: SIM.trayRoll,
+      boardKeys: Object.keys(BOARDS),
+      propKeys: Object.keys(PROPS),
+      dispenserKeys: Object.keys(DISPENSERS),
+      colliders: COLLIDER_TYPES,
+      geoOf,
+      randomPosition: rnd,
     });
 
     // --- Cards: flip, deal, take, inspect, shuffle, split ----------------------
@@ -674,19 +609,6 @@ class TableRoom extends Room {
       client.send('dealt', { id: newId });
     });
 
-    // Tint a die or built-in prop (cosmetic; anyone who can inspect can recolor).
-    tableMessage('recolor', (client, message) => {
-      const { id, ...colors } = recolorPayload(message) || {}; if (!id) return;
-      this.recolorPiece(id, colors);
-    });
-    // Recolor a whole multi-selection at once. One color/textColor is applied to every id it
-    // fits: dice + props take `color` (dice also `textColor`), poker/coin dispensers take
-    // `color`; anything it doesn't fit (cards, boards, team bowls) is silently skipped.
-    tableMessage('recolorGroup', (client, message) => {
-      const parsed = groupRecolor(message, { max: SIM.maxPieces }); if (!parsed) return;
-      const { ids, color, textColor, team } = parsed;
-      for (const id of ids) this.recolorPiece(id, { color, textColor, team }); // color XOR team; each piece takes what fits
-    });
     registerLibraryHandlers(this, {
       db,
       boardKeys: Object.keys(BOARDS),
@@ -750,26 +672,6 @@ class TableRoom extends Room {
       this.sendHand(client);    // updates the public count + sends the now-shorter private hand
       if (spawned) this.broadcast('sfx', { type: 'hand-drop' });
     });
-    tableMessage('spawn', (client, message) => {
-      if (this.state.pieces.size >= SIM.maxPieces) return;
-      const msg = spawnPayload(message, { boardKeys: Object.keys(BOARDS), propKeys: Object.keys(PROPS), dispenserKeys: Object.keys(DISPENSERS), colliders: COLLIDER_TYPES }); if (!msg) return;
-      if (msg.type === 'board') {
-        if (this.rank(client) < RANK.gm) return;   // reshaping the table is GM+
-        this.swapBoard(msg.props || {}); // only one board at a time
-      } else if (msg.props && msg.props.tray) {
-        // A die into the caller's OWN tray: any player, only a die, only when their tray is out.
-        // The server owns the seat and the drop spot (client can't spoof another seat's tray).
-        const seat = this.seatOf(client);
-        if (msg.type !== 'die' || seat == null || !this.state.trays.get(String(seat))) return;
-        this.spawn('die', this.trayDropPos(seat), { ...dieSpawnProps(msg.props), traySeat: seat });
-        this.broadcast('sfx', { type: 'die-roll' }); // a little clack as it lands in the tray
-      } else {
-        if (this.rank(client) < RANK.helper) return; // spawning pieces is Helper+
-        const props = msg.type === 'die' ? dieSpawnProps(msg.props) : (msg.props || {}); // validate a table die's color too
-        this.spawn(msg.type, rnd(), props);
-      }
-    });
-
     const rollDie = (id, roll) => { // fling one die: random horizontal spread + upward pop + tumble
       const body = this.bodies.get(id); if (!body) return;
       body.wakeUp();
@@ -784,7 +686,6 @@ class TableRoom extends Room {
       this.state.pieces.forEach((piece, id) => { const b = this.bodies.get(id); if (piece.type === 'die' && b && b.__traySeat === seat) { rollDie(id, SIM.trayRoll); n++; } });
       if (n) this.broadcast('sfx', { type: n > 1 ? 'dice-roll' : 'die-roll' });
     });
-    tableMessage('rollOne', (client, message) => { const msg = pieceIdPayload(message); if (!msg) return; const p = this.state.pieces.get(msg.id); const b = this.bodies.get(msg.id); if (p && p.type === 'die') { rollDie(msg.id, b && b.__traySeat != null ? SIM.trayRoll : SIM.roll); this.broadcast('sfx', { type: 'die-roll' }); } }); // right-click a single die
     // Scoop: gather the caller's tray dice back to the middle (a light re-rack).
     tableMessage('trayScoop', (client) => {
       const seat = this.seatOf(client); if (seat == null || !this.state.trays.get(String(seat))) return;
@@ -814,73 +715,10 @@ class TableRoom extends Room {
       this.setupStarter(parsed.game);
     });
 
-    // Toggle a piece's keep-upright/flat behaviour (the U key).
-    tableMessage('setStand', (client, message) => {
-      const parsed = pieceIdPayload(message); if (!parsed) return;
-      const { id } = parsed;
-      const piece = this.state.pieces.get(id);
-      if (!piece) return;
-      const props = readProps(piece);
-      props.stand = this.standOf(piece) ? false : this.naturalStand(piece); // on → off, or off → its natural mode
-      writeProps(piece, props);
-      const body = this.bodies.get(id);
-      if (body) body.wakeUp();
-    });
-
-    // Per-piece snap-to-grid flag (mirrors setStand). Toggling it ON snaps the piece to
-    // its nearest cell right away (when a grid is active); from then on every drop lands
-    // on a cell. OFF restores free placement.
-    tableMessage('setSnap', (client, message) => {
-      const parsed = pieceIdPayload(message); if (!parsed) return;
-      const { id } = parsed;
-      const piece = this.state.pieces.get(id);
-      if (!piece) return;
-      const props = readProps(piece);
-      props.snap = !props.snap;
-      writeProps(piece, props);
-      const body = this.bodies.get(id);
-      if (body) {
-        if (props.snap && gridActive(this.state.scale)) {
-          const p = snapToCell(body.position.x, body.position.z, this.state.scale);
-          body.position.x = p.x; body.position.z = p.z;
-          body.velocity.set(0, 0, 0); body.angularVelocity.set(0, 0, 0);
-          this.targets.delete(id);
-        } else if (body.__pinned) {
-          this.unpinPiece(id); // snap turned off → free it right away
-        }
-        body.wakeUp();
-      }
-    });
-
-    // Snap a held piece a quarter-turn onward, and level it (middle-click).
-    tableMessage('snap', (client, message) => {
-      const parsed = pieceIdPayload(message); if (!parsed) return;
-      const { id } = parsed;
-      const piece = this.state.pieces.get(id);
-      if (!piece || piece.owner !== client.sessionId) return;
-      const body = this.bodies.get(id);
-      if (!body) return;
-
-      // Read the piece's current facing, then advance to the next 45° step.
-      const forward = new CANNON.Vec3(0, 0, 1), worldForward = new CANNON.Vec3();
-      body.quaternion.vmult(forward, worldForward);
-      const step = Math.PI / 4;
-      const yaw = (Math.round(Math.atan2(worldForward.x, worldForward.z) / step) + 1) * step;
-      body.quaternion.set(0, Math.sin(yaw / 2), 0, Math.cos(yaw / 2)); // pure yaw = flat + 45° step
-      body.angularVelocity.setZero();
-      body.wakeUp();
-    });
-
     // --- Member management (DB-backed; all mutations authorized server-side) ---
     registerMemberHandlers(this, { db });
 
     tableMessage('nextTurn', () => this.advanceTurn());
-    tableMessage('remove', (client, message) => { if (this.rank(client) < RANK.helper) return; const parsed = pieceIdPayload(message); if (parsed && this.state.pieces.has(parsed.id)) this.removePiece(parsed.id); });
-    tableMessage('removeGroup', (client, message) => { // delete a whole multi-selection at once (helper+)
-      if (this.rank(client) < RANK.helper) return;
-      const ids = groupIds(message, { max: SIM.maxPieces }); if (!ids) return;
-      for (const id of ids) if (this.state.pieces.has(id)) this.removePiece(id);
-    });
     tableMessage('setName', (client, message) => {
       const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 20 })); if (!parsed) return;
       const player = this.state.players.get(client.sessionId);
