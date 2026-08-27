@@ -203,7 +203,7 @@ function watchLobby(room) {
 }
 
 async function refreshRooms() {
-  let rooms = [];
+  let rooms;
   try {
     ({ rooms } = await api('/rooms', { auth: true }));
   } catch {

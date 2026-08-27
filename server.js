@@ -211,7 +211,7 @@ async function findOrphanAssets() {
   const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
   const orphans = [];
   for (const kind of ASSET_KINDS) {
-    let names = [];
+    let names;
     try {
       names = fs.readdirSync(path.join(ASSETS_DIR, kind));
     } catch {
@@ -1297,7 +1297,7 @@ class TableRoom extends Room {
   // clamp it back inside that seat's current footprint. Cheap and only matters on resize.
   repositionTrayDice() {
     if (!this.bodies) return; // buildBounds() runs in onCreate before the bodies map exists — nothing to move yet
-    this.bodies.forEach((body, id) => {
+    this.bodies.forEach((body, _id) => {
       if (body.__traySeat == null) return;
       const seat = body.__traySeat,
         angle = seatAngle(seat),

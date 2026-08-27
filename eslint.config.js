@@ -23,7 +23,7 @@ export default [
         'warn',
         {
           argsIgnorePattern: '^_',
-          caughtErrorsIgnorePattern: '^_',
+          caughtErrors: 'none',
           varsIgnorePattern: '^_',
         },
       ],

@@ -155,7 +155,7 @@ export function overlayMovePayload(message, options) {
   if (!isPlainObject(message)) return null;
   const id = boundedString(message.id, { min: 2, max: 20, pattern: /^o\d+$/ });
   if (id === null) return null;
-  const { id: ignored, ...geometry } = message;
+  const { id: _ignored, ...geometry } = message;
   const parsed = overlayGeometry(geometry, options);
   return parsed && Object.keys(parsed).length ? { id, ...parsed } : null;
 }
@@ -722,7 +722,7 @@ export function recolorPayload(message) {
   if (pieceId === null) return null;
   const parsed = groupRecolor({ ids: [pieceId], ...colors }, { max: 1 });
   if (!parsed) return null;
-  const { ids: ignored, ...out } = parsed;
+  const { ids: _ignored, ...out } = parsed;
   return { id: pieceId, ...out };
 }
 

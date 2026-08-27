@@ -24,8 +24,6 @@ pool.on('error', (err) => console.error('[db] pool error:', err.message)); // do
 
 export const close = () => pool.end(); // for one-off scripts to let the process exit
 
-// pg returns bigint as a string; keep ids as strings, but preserve NULL as null.
-const idOrNull = (v) => (v == null ? null : String(v));
 const library = createLibraryQueries((sql, params) => pool.query(sql, params));
 const userReads = createUserQueries((sql, params) => pool.query(sql, params));
 const roomReads = createRoomQueries((sql, params) => pool.query(sql, params));

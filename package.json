@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node --env-file-if-exists=.env server.js",
     "test": "node --test",
-    "lint": "eslint .",
+    "lint": "eslint . --max-warnings=0",
     "format": "prettier --write \"**/*.{js,mjs}\" package.json",
     "format:check": "prettier --check \"**/*.{js,mjs}\" package.json",
     "check": "npm run lint && npm run format:check && npm test",

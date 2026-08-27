@@ -3,10 +3,8 @@ import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
 import {
-  KINDS as PHYS,
   PROPS,
   COLORS,
-  DECK_VISUAL,
   CARD_ROUND,
   TILES,
   HEX_HH,
@@ -23,7 +21,6 @@ import {
   stackDiscH,
   stackVisible,
   gridActive,
-  TRAY,
   trayParts,
 } from '/shared/pieces.js';
 
@@ -538,9 +535,6 @@ function numberedD4(color, textColor) {
   return group;
 }
 
-// Collider box half-extents for a kind, shared with the server's shape descriptor.
-const halfExtents = (type) => PHYS[type].shape.box;
-
 // Resolve a texture REFERENCE (a short string) to a THREE texture, cached:
 //   'back'                    → the procedural classic card back
 //   'rank:A:♠:#000'           → a procedural playing-card face
@@ -868,7 +862,7 @@ function cornerRadiusFrac(img) {
   const scale = Math.min(1, 400 / Math.max(NW, NH)); // sample at reduced res — plenty for a radius
   const w = Math.max(2, Math.round(NW * scale)),
     h = Math.max(2, Math.round(NH * scale));
-  const { canvas, ctx } = makeCanvas(w, h);
+  const { ctx } = makeCanvas(w, h);
   ctx.drawImage(img, 0, 0, w, h);
   let data;
   try {

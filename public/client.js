@@ -15,14 +15,9 @@ import {
   trayMesh,
   cTex,
   cardMesh,
-  propColor,
-  measureModel,
-  measureBoard,
   resizeToCanvas,
   parseCardFront,
   cardPreviewURL,
-  uploadImage,
-  uploadModel,
   makePlayerTexture,
   nameTag,
   makeYouChipTexture,
@@ -31,8 +26,6 @@ import {
 import { applyIcons, setIcon, initTip } from './icons.js';
 import {
   KINDS as PHYS,
-  PROPS,
-  PROP_LIST,
   BOARDS,
   DIE_SIDES,
   DICE_SETS,
@@ -230,20 +223,6 @@ function persistPanel(panel, id) {
     height: panel.style.height ? r.height : 0,
   };
   writePanelLayout(layout);
-}
-function resetPanelLayout() {
-  writePanelLayout({});
-  for (const id of PANEL_MOVABLE) {
-    const panel = byId(id);
-    if (!panel) continue;
-    panel.classList.remove('floating', 'resizable');
-    panel.style.left =
-      panel.style.top =
-      panel.style.width =
-      panel.style.height =
-      panel.style.zIndex =
-        '';
-  }
 }
 function initPanels() {
   if (!matchMedia('(pointer: fine)').matches) return; // desktop / precise pointer only — keep the docked layout on touch
@@ -1403,8 +1382,7 @@ function rebuildGrid() {
   // text so it survives a reconnect (see the 'notebook' message below).
   const notesText = byId('notesText'); // Notes now opens via the shared-region cluster (see wireCluster below)
   // Audio settings (Tools menu): effects volume + mute, persisted client-side.
-  const sfxVol = byId('sfxVol'),
-    sfxMute = byId('sfxMute');
+  const sfxVol = byId('sfxVol');
   {
     // Music open/close is handled by the top-right cluster (audioBtn → music pane; wireCluster below).
     // The audio keeps playing when the pane is closed — only the controls hide.

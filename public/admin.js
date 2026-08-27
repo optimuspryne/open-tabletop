@@ -50,7 +50,7 @@ let myId = null;
 async function loadRooms() {
   const tbody = byId('roomsBody');
   tbody.replaceChildren();
-  let rooms = [];
+  let rooms;
   try {
     ({ rooms } = await api('/admin/rooms'));
   } catch (e) {
@@ -91,7 +91,7 @@ async function loadRooms() {
 async function loadUsers() {
   const tbody = byId('usersBody');
   tbody.replaceChildren();
-  let users = [];
+  let users;
   try {
     ({ users } = await api('/admin/users'));
   } catch (e) {
