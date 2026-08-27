@@ -30,9 +30,10 @@ import { createAdminRouter } from './server/http/routes/admin.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
+import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { assetIdPayload, assetMutationPayload, boundedString, cardPlacementPayload, deckAppendPayload, deckBeginPayload, deckFinishPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, namedIdPayload, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, saveBoardPayload, savePropPayload, saveSkyboxPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { boundedString, cardPlacementPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, groupIds, groupRecolor, groupRotation, hexColor, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, recolorPayload, scalePayload, scorePayload, showPayload, spawnPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -686,122 +687,18 @@ class TableRoom extends Room {
       const { ids, color, textColor, team } = parsed;
       for (const id of ids) this.recolorPiece(id, { color, textColor, team }); // color XOR team; each piece takes what fits
     });
-    // Decks are built in chunks so no single message is huge (a text list can be
-    // hundreds of cards): deckBegin → deckAppend (batches) → deckFinish.
-    const assetMessage = (type, handler) => safeMessage(this, type, handler, {
-      errorType: 'assetError', publicMessage: 'Library unavailable. Try again.',
-    });
-    tableMessage('deckBegin', (client, message) => {
-      if (!this.isAdmin(client)) return; // building library decks is admin-only
-      const msg = deckBeginPayload(message, { refOk: deckRefOk, sanitizeGeom }); if (!msg) return;
-      this.drafts.set(client.sessionId, { back: msg.back, cards: [], geom: msg.geom });
-    });
-    tableMessage('deckAppend', (client, message) => {
-      const draft = this.drafts.get(client.sessionId);
-      if (!draft) return;
-      const msg = deckAppendPayload(message, { refOk: deckRefOk }); if (!msg) return;
-      if (draft.cards.length + msg.fronts.length > 1000) return;
-      draft.cards.push(...msg.fronts);
-    });
-    assetMessage('deckFinish', async (client, message) => {
-      if (!this.isAdmin(client)) return;
-      const msg = deckFinishPayload(message); if (!msg) return;
-      const draft = this.drafts.get(client.sessionId);
-      this.drafts.delete(client.sessionId);
-      if (!draft || !draft.cards.length) return;
-      const geo = draft.geom ? { geom: draft.geom } : {};
-      if (msg.spawn) this.spawn('deck', rnd(), { back: draft.back, cards: draft.cards, ...geo }); // spawn to test it live
-      if (msg.name) {
-        if (msg.editId) await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom); // edit an existing deck in place
-        else await db.insertDeck({ name: msg.name, back: draft.back, fronts: draft.cards, geom: draft.geom, ownerId: client.auth.userId, isPublic: false });
-        await this.sendAssetList(client, 'deck');
-      }
+    registerLibraryHandlers(this, {
+      db,
+      boardKeys: Object.keys(BOARDS),
+      colliders: COLLIDER_TYPES,
+      libraryKinds: LIBRARY_KINDS,
+      refOk: deckRefOk,
+      sanitizeGeom,
+      randomPosition: rnd,
+      sceneMaxBytes: SCENE_MAX_BYTES,
+      skyUrlOk,
     });
 
-    // --- Library: save / list / load decks, boards, props ---------------------
-    assetMessage('saveDeck', async (client, message) => {
-      if (!this.isAdmin(client)) return;
-      const msg = namedIdPayload(message, { idKey: 'deckId' }); if (!msg) return;
-      if (await this.saveDeckById(msg.deckId, msg.name, client.auth.userId)) {
-        await this.sendAssetList(client, 'deck');
-      }
-    });
-    assetMessage('listDecks', (client) => this.sendAssetList(client, 'deck'));
-    assetMessage('loadDeck', async (client, message) => {
-      if (this.rank(client) < RANK.helper) return;
-      const msg = assetIdPayload(message); if (!msg) return;
-      const deck = await db.getDeck(msg.id);
-      if (!deck) return;
-      if (!deck.isPublic && !this.isAdmin(client)) return; // private assets: admins only
-      this.spawn('deck', rnd(), { back: deck.back, cards: deck.fronts, ...(deck.geom ? { geom: deck.geom } : {}) });
-    });
-
-    assetMessage('saveBoard', async (client, message) => {
-      if (!this.isAdmin(client)) return; // library curation is admin-only
-      const msg = saveBoardPayload(message, { boardKeys: Object.keys(BOARDS) }); if (!msg) return;
-      if (msg.editId) await db.updateBoard(msg.editId, msg.name, msg.board); // edit an existing board in place
-      else await db.insertBoard(msg.name, msg.board, { ownerId: client.auth.userId }); // private by default
-      await this.sendAssetList(client, 'board');
-    });
-    assetMessage('listBoards', (client) => this.sendAssetList(client, 'board'));
-
-    assetMessage('saveProp', async (client, message) => {
-      if (!this.isAdmin(client)) return;
-      const msg = savePropPayload(message, { colliders: COLLIDER_TYPES }); if (!msg) return;
-      if (msg.editId) await db.updateProp(msg.editId, msg.name, msg.props); // edit an existing prop in place
-      else await db.insertProp(msg.name, msg.props, { ownerId: client.auth.userId }); // private by default
-      await this.sendAssetList(client, 'prop');
-    });
-    assetMessage('listProps', (client) => this.sendAssetList(client, 'prop'));
-
-    // --- Asset admin (site admins): toggle visibility, rename, delete ----------
-    assetMessage('assetPublic', async (client, message) => {
-      if (!this.isAdmin(client)) return;
-      const msg = assetMutationPayload(message, { kinds: LIBRARY_KINDS, mode: 'public' }); if (!msg) return;
-      await db.setAssetPublic(msg.kind, msg.id, msg.isPublic);
-      await this.sendAssetList(client, msg.kind);
-    });
-    assetMessage('assetRename', async (client, message) => {
-      if (!this.isAdmin(client)) return;
-      const msg = assetMutationPayload(message, { kinds: LIBRARY_KINDS, mode: 'rename' }); if (!msg) return;
-      await db.renameAsset(msg.kind, msg.id, msg.name);
-      await this.sendAssetList(client, msg.kind);
-    });
-    assetMessage('getDeck', async (client, message) => { // fetch a deck's full cards/back for the editor to pre-fill
-      if (!this.isAdmin(client)) return;
-      const msg = assetIdPayload(message); if (!msg) return;
-      const d = await db.getDeck(msg.id);
-      if (d) client.send('deckData', { id: msg.id, name: d.name, back: d.back, fronts: d.fronts, geom: d.geom });
-    });
-    assetMessage('assetDelete', async (client, message) => {
-      if (!this.isAdmin(client)) return;
-      const msg = assetMutationPayload(message, { kinds: LIBRARY_KINDS, mode: 'delete' }); if (!msg) return;
-      await db.deleteAsset(msg.kind, msg.id);
-      await this.sendAssetList(client, msg.kind);
-    });
-
-    // --- Scenes: a saved whole-table setup ------------------------------------
-    assetMessage('listScenes', (client) => this.sendAssetList(client, 'scene'));
-    assetMessage('sceneSave', async (client, message) => {
-      if (!this.isAdmin(client)) return; // scenes are curated in the editor (admin-only)
-      const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 60 })); if (!parsed || !parsed.name.trim()) return;
-      const name = parsed.name.trim();
-      const payload = this.serializeScene();
-      if (JSON.stringify(payload).length > SCENE_MAX_BYTES) { // don't let inline art bloat the row
-        client.send('sceneError', { message: 'Scene is too large to save. Save its decks to the library first so their card art is stored as files, then try again.' });
-        return;
-      }
-      await db.insertScene({ name, payload, ownerId: client.auth.userId }); // private by default
-      await this.sendAssetList(client, 'scene');
-    });
-    assetMessage('sceneLoad', async (client, message) => {
-      if (this.rank(client) < RANK.gm) return; // replacing the whole table is GM+
-      const msg = assetIdPayload(message); if (!msg) return;
-      const scene = await db.getScene(msg.id);
-      if (!scene) return;
-      if (!scene.isPublic && !this.isAdmin(client)) return; // private scenes: admins only
-      this.applyScene(scene.payload);
-    });
     tableMessage('stateSave', (client) => { // GM checkpoints the live table so it survives an empty room
       if (this.rank(client) < RANK.gm) return;
       const payload = this.serializeGame();
@@ -814,18 +711,6 @@ class TableRoom extends Room {
       client.send('stateSaved', {});
     });
 
-    assetMessage('loadBoard', async (client, message) => {
-      if (this.rank(client) < RANK.gm) return; // changing the board reshapes the table: GM+
-      const msg = assetIdPayload(message); if (!msg) return;
-      const data = await db.getBoard(msg.id);
-      if (!data) return;
-      if (!data.isPublic && !this.isAdmin(client)) return; // private assets: admins only
-      const rec = data.rec;
-      const props = rec.board ? { board: rec.board }
-                  : rec.model ? { model: rec.model, modelScale: rec.modelScale, box: rec.box }
-                  : { w: rec.w, d: rec.d, tex: rec.tex || undefined };
-      this.swapBoard(props);
-    });
     // Play a card from your hand onto the table, face-up or face-down.
     tableMessage('playCard', (client, message) => {
       const parsed = cardPlacementPayload(message); if (!parsed) return;
@@ -1220,22 +1105,7 @@ class TableRoom extends Room {
       this.state.skybox = parsed.url;
       this.scheduleSave();                                 // durable, like the board/table
     });
-    assetMessage('listSkyboxes', (client) => this.sendAssetList(client, 'sky'));
     tableMessage('handSync', (client) => this.sendHand(client)); // re-send private hand (e.g. after a page refresh/reconnect)
-    assetMessage('saveSkybox', async (client, message) => {
-      if (!this.isAdmin(client)) return;                   // curating the library is admin-only
-      const fail = (message) => client.send('skyError', { message });
-      const msg = saveSkyboxPayload(message, { urlOk: skyUrlOk });
-      if (!msg) return fail('Invalid skybox details.');
-      let ref;                                             // the stored reference: an equirect URL or a cube descriptor
-      if (msg.type === 'cube') {
-        ref = JSON.stringify({ t: 'cube', f: msg.faces });
-      } else {
-        ref = msg.url;
-      }
-      await db.insertSkybox({ name: msg.name, url: ref, ownerId: client.auth.userId, isPublic: msg.isPublic });
-      await this.sendAssetList(client, 'sky');
-    });
     // Hold-to-show: reveal some of your hand, face-up in your seat fan, but only
     // to the chosen audience. Content goes out privately (like a hand); everyone
     // else just sees the public 'showing' count as a badge. Released → showStop.
