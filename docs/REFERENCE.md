@@ -443,9 +443,10 @@ caller's seat index, or `null`), **`clearTraySeat(seat)`** (remove that seat's t
 `serializeScene` adds a **`trays`** array of enabled seat indices (the dice ride as ordinary
 `traySeat`-tagged pieces); `applyScene` calls `applyTrays` before the dice respawn.
 
-Gameplay handlers (rank-gated): `grab`, `move`, `release`, `flip`, `dealToTable`,
+Gameplay handlers (authorization varies by operation): `grab`, `move`, `release`, `flip`, `dealToTable`,
 `dealDrag`, **`drawToHand`** (left-click a deck → its top card to your hand),
-`takeCard`, `playCard`, `shuffle`, **`splitDeck`** (deal a deck in
+`takeCard`, `playCard`, **`handToTable`** (drop the caller's whole hand face-up or
+face-down), `shuffle`, **`splitDeck`** (deal a deck in
 two — original keeps the top half, a new ephemeral deck gets the rest),
 **`drawInspect`/`inspectPlace`** (private draw-to-inspect; the `inspectCard` message carries the
 deck's `geo` so the preview shows the tile's real proportions), **`loadStarter`** →
@@ -468,6 +469,11 @@ of any `RoomScale` field: `worldPerUnit`/`unitLabel`/`roundStep`/`gridStyle`/
 clamped), **`calibrateGrid`** (fit a square grid to the board on the table — sets
 `gridStyle`, per-axis cell size from the collider ÷ cell count, and the anchor),
 **`skybox`** (apply a background).
+
+Dispenser handlers: **`dispense`** creates one item beside a dispenser and
+**`dispenseDrag`** creates one already owned by the caller's drag gesture. Finite
+stacks decrement and disappear at zero; infinite bowls remain, and compatible
+pieces dropped back onto a dispenser are absorbed by the shared release path.
 
 Dice-tray handlers (personal, keyed on the caller's seat — **no rank gate**):
 **`trayShow`** (`{on}` — toggle *your* seat's tray in `State.trays`; on off it also clears the
@@ -518,8 +524,9 @@ server validates the kind against `OVERLAY_KINDS`, enforces the `OVERLAY_MAX` /
 `owner`+`color`), **`overlayMove`** (`{id, x?, z?, x2?, z2?, w?, ang?}` — reposition,
 owner or gm+), **`overlayRemove`** (`{id}` — owner or gm+), **`overlayClear`**
 (`{scope}` — `'all'` is GM-gated and wipes the map; anything else clears only your
-own). No down-messages — the `overlays` map delta-syncs, so a late joiner gets them in
-the initial state.
+own), and **`overlayDrag`** (broadcast an ephemeral live placement preview to
+everyone except its sender). Placed overlays use the delta-synced map, so a late
+joiner gets them in the initial state; `overlayDrag` is the only direct down-message.
 
 Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
 **`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**

@@ -29,7 +29,7 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.10.0` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.11.0` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
@@ -162,24 +162,33 @@ If you already run Postgres (managed or otherwise), skip Compose and run just th
 app image against it:
 
 ```bash
-docker run -p 2567:2567 -v ott-assets:/data/assets \
+docker run --name open-tabletop-app -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
-  optimuspryne/open-tabletop:0.10.0
+  -e REDIS_URL=redis://redis-host:6379 \
+  optimuspryne/open-tabletop:0.11.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
 # (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 # turn on `ssl` server-side.
 ```
+Open **http://localhost:2567**, create an account, then explicitly promote it to
+administrator status:
+
+```bash
+docker exec open-tabletop-app npm run admin:grant -- your@email.example
+```
+Once an admin account has been created, it can be used to promote other accounts to admin status.
 
 ### Deploying via 'Stack' in Portainer
 
 #### Web Editor ####
 
 There's no custom database image — deploy against **stock `postgres`**. The app builds
-and migrates its own schema on boot (via `MIGRATE_DATABASE_URL`), so the only one-time
-setup is creating the least-privilege `tabletop_app` role. Since the web editor can't
+and migrates its own schema on boot (via `MIGRATE_DATABASE_URL`). Database setup requires
+the least-privilege `tabletop_app` role; administrator provisioning is described after
+the stack. Since the web editor can't
 mount local files, the stack below injects that role setup as an inline `config`. Set
 `DB_PASSWORD` and `APP_DB_PASSWORD` in the stack's environment.
 
@@ -216,6 +225,16 @@ services:
       timeout: 3s
       retries: 12
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
   app:
     image: optimuspryne/open-tabletop:0.11.0
     restart: unless-stopped
@@ -223,17 +242,27 @@ services:
     depends_on:
       db:
         condition: service_healthy           # wait until the role is in place
+      redis:
+        condition: service_healthy
     environment:
       DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
       # Owner (DDL) role — the app builds & migrates the schema on boot (migrate.js).
       MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
       ASSETS_DIR: /data/assets
+      REDIS_URL: redis://redis:6379
       # PORT: 2567
     ports:
       - "2567:2567"
     volumes:
       - ./assets:/data/assets                  # uploaded decks/boards/props/skyboxes
 ```
+Open **http://localhost:2567**, create an account, then explicitly promote it to
+administrator status:
+
+```bash
+docker exec open-tabletop-app npm run admin:grant -- your@email.example
+```
+Once an admin account has been created, it can be used to promote other accounts to admin status.
 
 On first boot the db creates `tabletop_app` from the inline config, and the app builds the
 full schema via `MIGRATE_DATABASE_URL` (adopting an existing schema if you're pointing at
@@ -272,158 +301,204 @@ CI runs the same integration tests against its own PostgreSQL 16 service.
 
 ## What's in the box
 
-- **Dice**
-  * d4–d20 (the `☰ 🎲 Add Dice` or `🧱 Browse Built-Ins` menus).
-  * One `die` kind parameterized by `props.sides`.
-  * D6 is a numbered box, the rest are numbered convex polyhedra whose mesh (client) and collider (server) come from one vertex list.
-  * Dice get **independent body and number colors**.
-- **Props/Objects**
-  * Built-In Objects (`🧱 Browse Built-Ins` menu):
-  * Built-in basic shapes: box, pyramid, sphere, cuboid, cone, cylinder, truncated cone, hex prism, triangle prism, hex pyramid, checker, crowned checker, go stone (flattened sphere).
-  * Built-in `.glb` files: coin, poker chip, token, chess pieces.
-  * Custom `.glb` objects (`📚 Browse Custom Library` menu). Curated in the **Editor library**(admin accounts only)
-- **Cards, decks & hidden hands** - Face-down stacks, private hands.
-  * Built-in **standard 52-** and **54-card (with jokers)** decks (`🧱 Browse Built-Ins` menu).
-  * Custom decks, image based or text based (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only).
-  * Image decks can **fit their art** (no crop/stretch) and choose a **shape** (rounded, square, or hexagon) and **thickness**.
-  * **Left-click** a deck to draw its top card to your hand, **left-drag** to deal to the table, **right-click** to shuffle, **double-click** to peek (draw-to-inspect).
-- **Tile games** — the same card system also drives *tiles* (a card with its own footprint, thickness, and shape). One-click **Games** (`🧱 Browse Built-Ins` → Games):
-  * **Dominoes** (a double-six boneyard, dealt 7 to a hand), **Wordy McWordface** (a legally-distinct word game on a 15×15 premium board — played tiles snap to cells), and **Mahjong** (the full 144-tile wall, dealt 13 to a hand).
-  * Their draw piles wear a **bentwood box** — a deck can take a 3D model *skin* while still working as a normal draw pile.
-- **Boards** (`🧱 Browse Built-Ins` menu).
-  * Two built-in `.glb` boards (Chess/Checkers and Go), plus **procedural boards** drawn from data (the Wordy McWordface premium grid).
-  * Custom `.glb` or flat image boards (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only)
-- **`🖊️ Whiteboard`** A shared tilt-up **whiteboard** to sketch on.
-  * Only one drawer at a time.  Marker color matches assigned player color.
-  * Visibility, style, and location is GM controlled.
-- **`🌄Skyboxes`** - Equirect or CubeMap backgrounds.
-  * GM Controlled
-  * Built-in Skyboxes (`🧱 Browse Built-Ins` menu).
-  * Custom Skyboxes (`📚 Browse Custom Library` menu), curated in the **Editor library** (admin accounts only).
-- **Seats, presence & turns**
-  * A seat per player, standing name/avatar markers.
-  * Automatically assigned color.
-  * Turn indicator, turn can be advanced using the 'Next Turn' button.
-  * On a **resumed game**, a turn whose owner hasn't rejoined yet shows as
-    **"⏳ Waiting on {name}"** until they return or a GM advances the turn.
-- **Live Table 'Tools'** - Look for the **'Tools'** menu on the right, collapsible.
-  * **`📝 Private Notes`** A private, per-player ephemeral.
-  * **`💬 Chat`** A public room chat, ephemeral.
-  * **`📊 Scoreboard`** A shared scoreboard + GM room notes.
-  * **`⏱️ Timer`** A shared clock, stopwatch or countdown.
-  * **`🖊️ Whiteboard`** See the above section.
-  * **`❔ How to Play`** A full list of controls, changes based on player role (player, helper, GM).
-  * **`🔊 Sound`** Volume and music controls, private, per-player.  Controls sound effects and music volume levels separetely (or 'mute').  Music tracks (Provided by: [Kevin MacLeod, CC BY 4.0](https://incompetech.com/)) can be picked individually, played in alphabetical order, or shuffled. 
-- **Player 'Interactions'** - Look for the **Interactions** menu on the left, collapsible.
-  * `🔎 Lean In` zooms the camera view in slightly, to simulate 'leaning over the table'.
-  * `↩ My Seat` snaps the camera back to the players assigned seat.
-  * `🔄 Roll Dice` rolls all dice on the table.
-  * `🃏 Show Hand` press **hold-to-show** to show cards to chosen players or the whole table. Revealed face-up in your seat fan with a public "SHOWING n" badge on your player card.
-  * `🂠 Drop Hand` drop your entire hand on the table (face-up or face-down).
-  * **Name tags** appear over pieces others are holding.
-  * There is also an **attention ping** (middle-mouse-click / **P**) that pulses a colored ring at a spot.
-- **Accounts Types**
-  * 'Quick Join' Users: Enter a display name, an email, and a room code to quickly join — no sign-up needed to play. (The email is currently just a unique identifier; it doesn't have to be valid yet.) Rooms by default still require GM approval for entry.
-  * GM Accounts:  Create an account with a password, then request 'host access' on your lobby view. An Admin needs to grant approval before you can host.  Once approved you can create rooms, spawn all public assets, promote/demote players, approve new entries, load scenes, change the skybox, save the table state and kick players from your rooms.
-  * Admin Accounts: Only another Admin can promote a GM account to 'Admin' status.  Admins have full control: they can close and purge any room.  Kick any player from all active tables.  Delete any account, scan for orphaned assets to move to the trash. Demote and promote accounts.  Most importantly only Admins can add or delete items from the `📚 Custom Library` using the `📚 Library Editor`.
-- **Room Roles**
-  * Player: Can interact with objects/cards/decks on the table.  Can use all 'Interactions' and limited use of 'Tools'.
-  * GM (Owner): Has full control of any rooms they create.
-  * GM (Promoted): Can perform all GM functions, except: closing a room
-  * Admin: Admins are default owners and GMs of any rooms.  They can close or delete any room. They can kick anyone, including GMs and Owners.
-- **Curated Custom Library** - While logged in as an Admin at the 'lobby' page, click `⚙️ Admin` --> `📚 Library Editor`.  Here you can manage all of your custom assets.  All custom assets by default are set as 'private'.  Admins must 'publish' them before GMs can spawn them.
-  * Upload custom objects as `.glb` files.  Scale, collider-shape and orientation can be set before upload.
-  * Upload custom decks.  Image decks take a single 'back image' and numerous 'face images', colors can be fully customized.  You can enter an optional 'back text', and fronts take a list of 'front texts': one per-line, comma-separated or JSON format.  A .csv or .txt file can also be uploaded.
-  * Upload custom boards.  Boards can either be `.glb` files (they will be automatically scaled), or a 2D image can be uploaded, with dimensions specified to create a custom 'image board'.
-  * Upload custom skyboxes. You can upload panoramic or cubemap skyboxes.
-  * Scenes: set up a table the way you like, then save it as a **scene** — a
-    portable *template* (table size + pieces + deck order + face-down faces, but
-    **no players, hands, or turn**) that loads onto any table. Resuming an
-    in-progress game *with* its hands and turn is a separate, per-room mechanism —
-    see "Saving & resuming games".
+- **Authoritative shared table.** The server simulates every movable object with
+  cannon-es and synchronizes transforms through Colyseus. Players can grab, throw,
+  flip, rotate, recolor, keep upright, snap to a square/hex grid, and batch-operate
+  a local multi-selection without exposing physics authority to the browser.
+- **Dice and personal trays.** Numbered d4, d6, d8, d10, d12, and d20 share their
+  mesh/collider geometry. Body and number colors are independent. Each seat can
+  open a private-positioned tray, stock dice into it, roll or re-rack only that
+  seat's dice, and clear it.
+- **Props and dispensers.** Built-ins include primitive solids, checkers, Go
+  stones, coins, poker chips, a generic token, and a complete modeled chess set.
+  Finite chip/coin stacks dispense matching pieces and shrink; Go bowls dispense
+  unlimited team-colored stones. Compatible pieces dropped back onto a dispenser
+  are absorbed. Custom `.glb` props support scale, orientation, collider choice,
+  standing behavior, and material tinting.
+- **Cards, decks, hands, and tiles.** Standard decks support optional jokers,
+  private hands, face-down cards, shuffle/split, draw-to-hand, deal-and-drag,
+  draw-to-inspect, hold-to-show, and whole-hand drops. The same hidden-information
+  system powers dominoes, letter tiles, mahjong, custom card geometry, and deck
+  skins such as the bentwood box. See the detailed section below.
+- **Boards, grids, and measurement.** Built-in modeled Chess/Checkers and Go
+  boards plus the procedural Wordy board can calibrate the room grid. GMs control
+  cell size, offsets, snap anchor, square/hex style, visibility, color, height,
+  measurement units, and rounding. Players can place durable rulers, lines,
+  circles, and cones; a live preview is shown while positioning them.
+- **Seven one-click games.** Chess, Checkers, Go, Dominoes, Wordy McWordface,
+  Mahjong, and Poker Night set up their board, pieces, deck, starting hands,
+  bowls, or chip stacks as appropriate.
+- **Room presentation and collaboration.** Resizable/recolorable felt, built-in
+  or custom equirectangular/cubemap skyboxes, seated name/avatar markers, turn
+  tracking, attention pings, a shared timer, scoreboard and GM notes, public chat,
+  private notebooks, and a tilt-up single-drawer whiteboard.
+- **Per-player controls.** Return to seat, Lean In, dice-tray controls, show/drop
+  hand, role-aware help, and separate local SFX/music volume, mute, shuffle, and
+  track selection. Held pieces show the holder's name; touch has long-press menus
+  for the same common actions available to mouse users.
+- **Accounts, rooms, and recovery.** Passwordless quick-join players and approved
+  password hosts use persistent device sessions. Per-room roles, optional join
+  approval with live admit/decline notification, reconnect support, durable room
+  settings, explicit checkpoints, and auto-saved game snapshots keep play resumable.
+- **Admin-curated library.** Admins create, test, publish, rename, and delete
+  private/public decks, boards, props, scenes, and skyboxes in the live workshop.
+  Asset metadata lives in Postgres, uploaded files live under `ASSETS_DIR`, and
+  orphan cleanup moves unreferenced files to a recoverable trash directory.
 
 ## Files
 
 ```
-CHANGELOG.md         release notes (Keep a Changelog)
-RELEASING.md         versioning + release process
-server.js            Colyseus rooms + authoritative cannon-es physics + HTTP (auth/rooms/admin) + Postgres
-db.js                Postgres pool + all queries (library, users, rooms, membership)
-migrate.js           startup schema migrator (applies pending migrations, tracked in schema_migrations)
-auth.js              password hashing (scrypt) + device-token hashing (no deps)
-shared/pieces.js     piece specs (mass, colliders, palettes, dice verts, prop/board registries) + timerLive
-postgres/            SQL migrations 001–010 + schema.sql (fresh-install baseline) + grants_app_role.sql
-docs/                ARCHITECTURE.md, REFERENCE.md, ASSET_CREDITS.md
-Dockerfile           app image build (node:22-alpine, npm ci --omit=dev)
-docker-compose.yml   app + stock Postgres stack (reads .env for the two DB passwords)
-docker/              init-app-role.sh (creates the least-priv app role on first DB start)
+server.js              composition root: Colyseus rooms, simulation, remaining handlers, HTTP/security
+db.js                  production Postgres pool composed from server/database.js
+auth.js                password hashing (scrypt) and device-token helpers
+migrate.js             owner-role startup migration runner
+package.json           runtime dependencies and npm scripts
+.env.example           direct-run and Compose configuration examples
+
+server/
+  physics.js           Cannon world setup and collider construction
+  database.js          injected library, user, room, membership, and state queries
+  *-queries.js         focused library/user/room read-query modules
+  *-config.js          database, Redis, and session configuration
+  permissions.js       room-role ranking and authorization helpers
+  message-validation.js socket payload normalizers and bounds
+  rate-limit.js        Redis/memory token buckets and HTTP middleware
+  bootstrap-admin.js   first-boot administrator provisioning
+  assets/              image and self-contained GLB upload validation
+  game/
+    handlers/          movement, pieces, cards, library, rooms, overlays, and members
+    scene-persistence.js portable scene/game serialization and restoration
+    safe-message.js    Colyseus message and lifecycle error boundaries
+    props-codec.js     canonical synced-piece props encoding
+  http/
+    routes/            auth, rooms/profile/host, admin, and upload routers
+    async-route.js     async Express error boundary
+    auth-context.js    Bearer-user and administrator guards
+
+shared/pieces.js       shared piece physics/render data, registries, geometry, grids, and trays
+postgres/              migrations 001–011, flattened schema, and app-role grants
+scripts/               admin roles, icon generation, secret migration, DB integration runner
+test/                  unit/harness tests plus PostgreSQL integration tests
+docs/                  architecture, code reference, credits, release, and design notes
+docker/                first-start least-privilege Postgres role setup
+Dockerfile             production Node 22 image
+docker-compose.yml     app + Postgres + Redis with Docker secret files
+
 public/
-  index.html         landing / lobby page (quick-join, login, room list, host request)
-  landing.js         landing-page logic (auth calls, room list, host-access request)
-  table.html         the game table shell: importmap + toolbar + panels + modals
-  editor.html        admin-only library editor (reuses the table engine)
-  editor-panel.js    the editor's library-management panel (publish / rename / delete / spawn)
-  admin.html         admin console shell (rooms + users tables)
-  admin.js           admin-console logic (room/user management, host approvals)
-  styles.css         all UI styling (design-token :root block, shared chrome, page layouts)
-  core.js            scene/camera/renderer/controls + the CONFIG and LIGHTING tunables
-  graphics.js        every texture & mesh builder, model loading, the KIND registry
-  client.js          the game-table runtime: networking, interaction, seats, render loop
-  audio.js           Web Audio SFX engine + HTML5 background-music player
-  credits.js         music playlist + attribution manifest (SFX / music / libs)
-  models/            bundled CC0 .glb assets (chess, checkers, go, misc, boards)
-  sounds/            built-in sound effects (see "Sound effects" below)
+  index.html/landing.js lobby, authentication, room list, and host requests
+  table.html/client.js  table shell and runtime networking/interaction/render loop
+  editor.html           compatibility redirect to table.html?workshop=1
+  editor-panel.js       library workshop: create, curate, preview, and spawn assets
+  admin.html/admin.js   site administration UI
+  core.js               Three.js scene/camera/renderer plus CONFIG and LIGHTING
+  graphics.js           textures, meshes, model loading, and the KIND registry
+  controls.js           mouse/touch profiles converted to device-neutral intents
+  audio.js/credits.js   local SFX/music playback and attribution manifests
+  icons.js/equalize.js  shared icon behavior and early UI preference restoration
+  styles.css            shared design tokens, components, and page layouts
+  vendor/               self-hosted Three.js and Colyseus browser libraries
+  models/, sounds/      bundled models and sound effects
 ```
 
-The game client is a **linear import chain**: `shared ← core ← graphics ←
-client`. `table.html` and `editor.html` load `client.js`; its `import`s pull in
-the rest (the editor also loads `editor-panel.js`). The landing and admin pages
+The main game-client chain is `shared ← core ← graphics ← client`, with
+`client` also importing `controls` and `audio ← credits`. `table.html` loads
+`client.js` and `editor-panel.js`; `editor.html` redirects to its `?workshop=1` mode.
+The landing and admin pages
 are standalone (`landing.js` / `admin.js`, plain `fetch` to the HTTP API).
 Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus are self-hosted under `public/vendor/`, so there are no third-party CDN fetches at runtime. That's also what makes the enforced `script-src 'self'` Content-Security-Policy possible.
 
 ## Tuning knobs (edit and reload)
 
-- **`SIM`** in `server.js` — all physics: gravity, damping, card-stack stability
+- **`SIM`** in `server.js` — simulation feel: gravity, damping, card-stack stability
   (`SIM.cards.colliderThick` is the main dial), solver iterations, timestep,
-  throw caps, self-righting.
+  throw/roll behavior, collision sounds, spawn/bounds behavior, self-righting,
+  and the live-piece cap. Piece dimensions and collider construction themselves
+  live in `shared/pieces.js` and `server/physics.js`.
 - **`CONFIG`** in `public/core.js` — client feel: grab/scroll height, model
   normalization size, render delay, input thresholds, inspect zoom, drop-marker
-  look, spawn-input ranges, texture resolutions.
+  and measurement-overlay appearance, spawn/upload ranges, texture resolutions,
+  and shuffle animation.
 - **`LIGHTING`** in `public/core.js` — hemisphere fill, sun, environment-map
   strength (three numbers).
-- **Feature dials** — named constants you can nudge: `WHITEBOARD_MAX_STROKES` /
-  `WHITEBOARD_RES` (whiteboard history cap + canvas resolution),
-  `LEAN_AMOUNT` (how far "Lean in" dollies, `client.js`), `ORPHAN_MIN_AGE_MS`
-  (cleanup age guard), `SCENE_MAX_BYTES` and `TABLE_LIMIT` (server guards).
+- **Server limits** in `server.js` — `TABLE_LIMIT` (resizable-table bounds),
+  `SCENE_MAX_BYTES` (snapshot-size guard), `GRID_LIFT_MAX` (maximum grid height),
+  `OVERLAY_MAX` / `OVERLAY_MAX_PER_PLAYER` (placed-template caps), and
+  `ORPHAN_MIN_AGE_MS` (cleanup age guard).
+- **Whiteboard** — `WHITEBOARD_RES` and `WB` in `public/client.js` control canvas
+  resolution and physical size/placement. `WHITEBOARD_MAX_STROKES` exists in both
+  `server.js` and `public/client.js`; keep the two values equal so server history
+  and the client's replay mirror have the same cap.
+- **Input and cameras** in `public/client.js` — `LEAN_AMOUNT` controls the Lean In
+  offset, `HAND_HOVER` the whole-hand drop preview height, `VIEW` the normal seat
+  camera, and `TRAY_CAM` the dice-tray camera and transition. In
+  `public/controls.js`, `LONG_PRESS_MS` / `LONG_PRESS_SLOP` control touch
+  long-press timing and movement tolerance; keep the slop aligned with
+  `CONFIG.input.dragPx`.
+- **Rendering** — `SHADOW_MARGIN` in `public/core.js` pads the directional-light
+  shadow camera around the live table.
 
-## Add a new piece type
+## Add a piece variant or kind
 
-1. Add its physics spec to `shared/pieces.js` — an entry in `KINDS` (mass +
-   shape) or, for a prop variant, in `PROPS` (mass + collider + `render` shape
-   **or** a bundled `model` path).
-2. Add/extend the mesh builder in `public/graphics.js` and, if it's a new kind,
-   an entry in the `KIND` registry (mesh + interaction verbs).
+The small path is a new **variant of an existing kind**. Add data to the relevant
+registry in `shared/pieces.js` (`PROPS`, `BOARDS`, `DISPENSERS`, deck/tile data,
+and so on), add any required mesh or painter support in `public/graphics.js`, and
+expose it through the built-in or library UI. Existing spawning, synchronization,
+movement, and scene persistence can then reuse that kind's established behavior.
 
-Everything downstream — spawning, dragging, throwing, sync — then works
-automatically, because it only ever handles generic "pieces".
+A genuinely new synced **kind** touches more seams:
+
+1. Add its mass/shape descriptor to `KINDS` in `shared/pieces.js` and its mesh plus
+   interaction verbs to the client `KIND` registry in `public/graphics.js`.
+2. Extend `spawnPayload` in `server/message-validation.js` with an exact,
+   bounded props schema; unknown kinds are rejected rather than passed through.
+3. Add collider construction in `server/physics.js` when the generic boxed-shape
+   fallback is not sufficient.
+4. Add a spawn/library UI path and any new socket handlers, including payload
+   validation and the appropriate role checks.
+5. Update client lifecycle behavior where needed: props/count-driven mesh rebuilds,
+   inspection, touch menus, selection actions, labels, and special interactions.
+6. Extend scene serialization/restoration if the kind carries hidden, ordered, or
+   otherwise specialized server-only state. Plain public props already round-trip.
+7. Add tests for spawn validation, mesh/collider geometry, authorization and custom
+   handlers, plus scene round-tripping.
+
+Generic movement and transform synchronization are reusable, but kind-specific
+behavior is intentionally explicit at the trust, physics, UI, and persistence
+boundaries.
 
 ## Decks, hidden hands & the privacy invariant
 
-- **Deck**: a face-down stack. Its ordered cards live only in server memory
-  (`deckCards`); synced state exposes just `type: deck` and `count` (the visible
-  height). **Left-click** deals the top card face-down beside the deck;
-  **left-drag** deals-and-carries; **right-drag** moves the deck; **right-click**
-  shuffles; **double-click** draws privately into inspect (below).
-- **Table card**: a dealt card's face is private (`cardData`) until taken or
-  flipped. **Left-click** takes it into your hand; **right-click** reveals it.
-  Faces show a traditional **corner index** (rank over suit, mirrored).
-- **Hand** (bottom bar): your private cards, sent to you alone (`sendHand`),
-  never broadcast. **Left** drag/click plays **face-down**; **right** drag/click
-  plays **face-up**.
+The public deck piece contains its back, geometry/skin, and card count; its ordered
+fronts remain in the server-only `deckCards` map. The visible stack and collider
+shrink with that public count, but clients cannot inspect the remaining order.
 
-The invariant: **if it's synced it's public; if it's secret it's server-only.**
-Deck order, face-down fronts, drawn-but-unplaced cards, and hands never enter the
-broadcast state.
+- **Deck actions:** left-click draws the top card directly to your private hand;
+  left-drag deals it face-down and adopts it into the drag; right-drag moves the
+  deck; right-click shuffles; double-click draws privately into inspect. The touch
+  menu exposes draw, shuffle, split, move, inspect, and save actions. A loose card
+  released onto a deck is absorbed into that deck.
+- **Table cards:** a face-down card publishes only its back and geometry. Its front
+  stays in `cardData` until the card is flipped or taken. Left-click takes a card
+  to hand and right-click flips it; group actions can flip or take a selection.
+- **Private hands:** only the owner receives the `hand` message containing card
+  fronts. Other players see the public count and chosen hand-back image. Cards can
+  be played face-up or face-down individually, the whole hand can be dropped around
+  a chosen point, and hold-to-show sends selected cards only to the chosen audience
+  while publishing merely a `SHOWING n` badge.
+- **Tiles and custom geometry:** dominoes, letter tiles, mahjong, and custom-shaped
+  image cards are still the `card` kind. Public geometry follows a card through
+  deck → hand → table while its face remains private, so thickness, aspect,
+  square/rounded/hex shape, and snap behavior survive every transition. A deck's
+  optional 3D skin remains with the deck and round-trips through scene snapshots.
+- **Persistence and reconnects:** a saved game stores hands and turns by stable
+  account ID. Returning players reclaim them automatically; absent owners appear
+  as unclaimed hands that a GM can reassign. A reconnect explicitly requests the
+  private hand again because it is not part of synchronized room state.
+
+The invariant is unchanged: **if it is synchronized, treat it as public; secrets
+remain server-only and are sent directly only to their intended player or audience.**
+That includes deck order, face-down fronts, hands, inspect draws, active show
+audiences, and pending hands restored from a snapshot.
 
 ## Draw-to-inspect
 

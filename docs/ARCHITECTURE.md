@@ -277,6 +277,10 @@ The kinds:
   `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
   and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box) in place of the stack
   while still working as an ordinary draw pile.
+- **dispenser** — a reusable source for an existing prop: finite poker/coin stacks
+  shrink as they hand out copies, while Go bowls are unlimited. Left-click drops one
+  beside the source, left-drag adopts the new item into the drag, and dropping a
+  compatible item back onto a dispenser returns it.
 - **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
   box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Color comes
   from a picker, a two-color **team** palette, or a per-material **tint**; a
@@ -658,7 +662,8 @@ separate tabs stay distinct.
 ## The message protocol (intent up, state down)
 
 - **Up (client → server):** `grab`, `move`, `release`, `flip`, `dealToTable`,
-  `dealDrag`, `takeCard`, `playCard`, `shuffle`, `splitDeck`, `drawInspect`,
+  `drawToHand`, `dealDrag`, `takeCard`, `playCard`, `handToTable`, `shuffle`,
+  `splitDeck`, `drawInspect`,
   `inspectPlace`, `recolor`, `deckBegin`/`deckAppend`/`deckFinish`,
   `saveDeck`/`listDecks`/`loadDeck`, `saveProp`/`listProps`,
   `listBoards`/`saveBoard`/`loadBoard`, `sceneSave`/`sceneLoad`/`listScenes`,
@@ -666,6 +671,10 @@ separate tabs stay distinct.
   `assetPublic`/`assetRename`/`assetDelete` (admin curation),
   `members`/`admit`/`kick`/`setRole`/`reassignHand` (GM member management),
   `stateSave` (GM checkpoints the live game into the room's `scene`),
+  `loadStarter` (GM replaces the table with a built-in game),
+  `dispense`/`dispenseDrag` (take one object from a dispenser),
+  `overlayAdd`/`overlayMove`/`overlayRemove`/`overlayClear`/`overlayDrag`
+  (persistent templates and ephemeral placement previews),
   `wbEnable`/`wbClaim`/`wbRelease`/`wbSet`/`wbStroke`/`wbClear`/`wbStrokes`
   (whiteboard), `chat`/`chatLog` (public chat — send, and request the backlog),
   `score`/`roomNotes`/`table`/`tableColor`/`scaleSet`/`calibrateGrid` (durable room
@@ -682,13 +691,15 @@ separate tabs stay distinct.
   private hand after a reconnect). (Library load/edit key on a row **`id`** — the
   Postgres primary key — not a filename slug.)
 - **Down (server → client):** synced state (pieces, players, turn, timer, scores,
-  notes, tableX/Z, whiteboard, trays, skybox) plus direct messages — `hand` (your private
+  notes, tableX/Z, whiteboard, trays, skybox, felt color, room name, scale/grid,
+  overlays, unclaimed hands, and a pending turn) plus direct messages — `hand` (your private
   cards), `dealt` (adopt a dealt card as the dragged piece), `inspectCard` (a drawn
   front for you alone), `notebook` (your private notes), `showFan` (cards someone
   is showing *you*), `ping` (a broadcast attention marker), `sfx` (a shared sound
   cue — landing/flip/deal), `shuffled` (play the riffle), `chatMsg`/`chatLog`
   (a broadcast chat line / the late-join backlog),
-  `wbStroke`/`wbStrokes`/`wbClear` (whiteboard replay), `whoami` (your
+  `wbStroke`/`wbStrokes`/`wbClear` (whiteboard replay), `overlayDrag` (another
+  player's live overlay preview), `whoami` (your
   admin flag — gates the creation UI), `memberList` (the room's members, for GMs),
   `roomClosed`/`kicked` (lifecycle notices), `stateSaved` (the GM's Save Table
   State went through), and the library listings
@@ -697,11 +708,12 @@ separate tabs stay distinct.
 
 ## Reset & room lifecycle
 
-**Reset** wipes the whole room to an empty table — every piece (boards included),
-all hands, every private map, any active shows, and the shared timer. Two things
-it leaves alone: the room's **durable settings** (scoreboard, GM notes, table
-size, skybox — room configuration, not table contents), and the **whiteboard
-drawing**, which clears only on an explicit `wbClear`. New rooms start **empty**
+**Reset** wipes the table contents: every piece (boards included), all hands,
+piece/deck bookkeeping, active shows, placed overlays, and the shared timer. It
+leaves the room's **durable settings** (scoreboard, GM notes, table size, skybox —
+room configuration, not table contents) plus ephemeral notebooks, chat history,
+and the whiteboard drawing; the latter clears only on an explicit `wbClear`.
+New rooms start **empty**
 (the default-seed call is disabled); you build the table from the toolbar.
 
 ## Accounts, rooms & roles
@@ -764,8 +776,8 @@ documented memory adapter remains available only for local development/tests.
 addresses are trusted. Redis establishes shared infrastructure but does not alone
 provide clustered Colyseus presence, room discovery, or socket routing.
 **CSP is enforced:** Three + Colyseus are self-hosted under
-`/vendor` (no CDN fetches), so the policy locks scripts to `'self'` plus three
-inline-script hashes — no `'unsafe-inline'`/`'unsafe-eval'` (Colyseus feature-detects
+`/vendor` (no CDN fetches), so the policy locks scripts to `'self'` plus one
+allowlisted inline import-map hash — no `'unsafe-inline'`/`'unsafe-eval'` (Colyseus feature-detects
 eval and falls back to its non-inline decoder). Violations POST to `/csp-report`. This
 also shapes the client: a *new* inline `<script>` would fail the hash allowlist, so the compact/full
 labels preference is applied from **`equalize.js`** — a small external file loaded `defer` on every
