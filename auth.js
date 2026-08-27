@@ -28,5 +28,9 @@ export async function verifyPassword(password, stored) {
   return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
 }
 
-export function makeToken() { return crypto.randomBytes(32).toString('base64url'); }
-export function hashToken(raw) { return crypto.createHash('sha256').update(String(raw)).digest('hex'); }
+export function makeToken() {
+  return crypto.randomBytes(32).toString('base64url');
+}
+export function hashToken(raw) {
+  return crypto.createHash('sha256').update(String(raw)).digest('hex');
+}

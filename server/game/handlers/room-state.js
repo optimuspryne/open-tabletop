@@ -12,14 +12,10 @@ import {
 } from '../../message-validation.js';
 import { safeMessage, safeRoomTask } from '../safe-message.js';
 
-export function registerRoomStateHandlers(room, {
-  createScoreRow,
-  tableLimits,
-  gridLiftMax,
-  sceneMaxBytes,
-  now = Date.now,
-  logger = console,
-}) {
+export function registerRoomStateHandlers(
+  room,
+  { createScoreRow, tableLimits, gridLiftMax, sceneMaxBytes, now = Date.now, logger = console },
+) {
   const roomMessage = (type, handler) => safeMessage(room, type, handler, { logger });
 
   roomMessage('stateSave', (client) => {
@@ -27,7 +23,8 @@ export function registerRoomStateHandlers(room, {
     const payload = room.serializeGame();
     if (JSON.stringify(payload).length > sceneMaxBytes) {
       client.send('sceneError', {
-        message: 'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.',
+        message:
+          'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.',
       });
       return;
     }
@@ -58,7 +55,8 @@ export function registerRoomStateHandlers(room, {
       timer.base = timer.mode === 'down' ? timer.duration : 0;
     } else if (msg.action === 'set') {
       if (msg.mode === 'up' || msg.mode === 'down') timer.mode = msg.mode;
-      if (Number.isFinite(msg.duration)) timer.duration = Math.max(0, Math.min(86400000, msg.duration));
+      if (Number.isFinite(msg.duration))
+        timer.duration = Math.max(0, Math.min(86400000, msg.duration));
       timer.base = timer.mode === 'down' ? timer.duration : 0;
     }
   });
@@ -131,11 +129,10 @@ export function registerRoomStateHandlers(room, {
   });
 }
 
-export function scheduleRoomSave(room, {
-  delay = 800,
-  setTimer = setTimeout,
-  logger = console,
-} = {}) {
+export function scheduleRoomSave(
+  room,
+  { delay = 800, setTimer = setTimeout, logger = console } = {},
+) {
   if (!room.roomId || room._saveTimer) return;
   room._saveTimer = setTimer(() => {
     room._saveTimer = null;
@@ -149,11 +146,13 @@ export function scheduleRoomSave(room, {
 export async function saveRoomStateNow(room, { db }) {
   if (!room.roomId) return;
   const scoreboard = [];
-  room.state.scores.forEach((row, id) => scoreboard.push({
-    id,
-    label: row.label,
-    score: row.score,
-  }));
+  room.state.scores.forEach((row, id) =>
+    scoreboard.push({
+      id,
+      label: row.label,
+      score: row.score,
+    }),
+  );
   await db.saveRoomState(room.roomId, {
     scoreboard,
     notes: room.state.notes,

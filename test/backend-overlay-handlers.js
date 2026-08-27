@@ -3,8 +3,18 @@ import assert from 'node:assert/strict';
 import { registerOverlayHandlers } from '../server/game/handlers/overlays.js';
 
 const MESSAGE_NAMES = [
-  'overlayAdd', 'overlayMove', 'overlayRemove', 'overlayClear', 'overlayDrag',
-  'wbEnable', 'wbSet', 'wbClaim', 'wbRelease', 'wbStroke', 'wbClear', 'wbStrokes',
+  'overlayAdd',
+  'overlayMove',
+  'overlayRemove',
+  'overlayClear',
+  'overlayDrag',
+  'wbEnable',
+  'wbSet',
+  'wbClaim',
+  'wbRelease',
+  'wbStroke',
+  'wbClear',
+  'wbStrokes',
 ];
 
 function harness({ rank = 0, maxOverlays = 200, maxPerPlayer = 40, maxStrokes = 2 } = {}) {
@@ -21,9 +31,15 @@ function harness({ rank = 0, maxOverlays = 200, maxPerPlayer = 40, maxStrokes = 
       ]),
       whiteboard: { enabled: false, owner: '', angle: 0, dark: false },
     },
-    onMessage(name, handler) { handlers.set(name, handler); },
-    rank() { return rank; },
-    broadcast(name, payload, options) { events.push({ name, payload, options }); },
+    onMessage(name, handler) {
+      handlers.set(name, handler);
+    },
+    rank() {
+      return rank;
+    },
+    broadcast(name, payload, options) {
+      events.push({ name, payload, options });
+    },
   };
   registerOverlayHandlers(room, {
     createOverlay: () => ({}),
@@ -40,7 +56,9 @@ function harness({ rank = 0, maxOverlays = 200, maxPerPlayer = 40, maxStrokes = 
 const client = (sessionId = 'client-1') => ({
   sessionId,
   sent: [],
-  send(type, payload) { this.sent.push({ type, payload }); },
+  send(type, payload) {
+    this.sent.push({ type, payload });
+  },
 });
 
 const ruler = { kind: 'ruler', x: 1, z: 2, x2: 3, z2: 4, w: 1 };
@@ -90,11 +108,13 @@ test('live overlay drags are relayed without echoing to the sender', async () =>
   const { handlers, events } = harness();
   const owner = client();
   await handlers.get('overlayDrag')(owner, ruler);
-  assert.deepEqual(events, [{
-    name: 'overlayDrag',
-    payload: { from: 'client-1', color: '#123456', ...ruler, ang: 0 },
-    options: { except: owner },
-  }]);
+  assert.deepEqual(events, [
+    {
+      name: 'overlayDrag',
+      payload: { from: 'client-1', color: '#123456', ...ruler, ang: 0 },
+      options: { except: owner },
+    },
+  ]);
 });
 
 test('whiteboard ownership gates drawing and retains only bounded history', async () => {

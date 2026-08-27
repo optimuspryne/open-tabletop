@@ -33,16 +33,18 @@ export function serializeScene(room, { geoOf }) {
   });
 
   const overlays = [];
-  room.state.overlays.forEach((overlay) => overlays.push({
-    kind: overlay.kind,
-    color: overlay.color,
-    x: overlay.x,
-    z: overlay.z,
-    x2: overlay.x2,
-    z2: overlay.z2,
-    w: overlay.w,
-    ang: overlay.ang,
-  }));
+  room.state.overlays.forEach((overlay) =>
+    overlays.push({
+      kind: overlay.kind,
+      color: overlay.color,
+      x: overlay.x,
+      z: overlay.z,
+      x2: overlay.x2,
+      z2: overlay.z2,
+      w: overlay.w,
+      ang: overlay.ang,
+    }),
+  );
 
   const trays = [];
   room.state.trays.forEach((enabled, seat) => {
@@ -98,24 +100,30 @@ export function serializeGame(room, options) {
   return { ...scene, hands, turn };
 }
 
-export function applyScene(room, scene, {
-  createOverlay,
-  maxPieces,
-  overlayKinds,
-  overlayMax,
-  tableLimits,
-}) {
+export function applyScene(
+  room,
+  scene,
+  { createOverlay, maxPieces, overlayKinds, overlayMax, tableLimits },
+) {
   if (!scene || typeof scene !== 'object') return;
   room.clearTable();
-  const tableX = clamp(+(scene.table && scene.table.x) || TABLE.x, tableLimits.minX, tableLimits.maxX);
-  const tableZ = clamp(+(scene.table && scene.table.z) || TABLE.z, tableLimits.minZ, tableLimits.maxZ);
+  const tableX = clamp(
+    +(scene.table && scene.table.x) || TABLE.x,
+    tableLimits.minX,
+    tableLimits.maxX,
+  );
+  const tableZ = clamp(
+    +(scene.table && scene.table.z) || TABLE.z,
+    tableLimits.minZ,
+    tableLimits.maxZ,
+  );
   room.state.tableX = tableX;
   room.state.tableZ = tableZ;
   room.buildBounds(tableX, tableZ);
   room.applyScale(scene.scale);
   room.applyTrays(scene.trays);
 
-  for (const entry of (Array.isArray(scene.pieces) ? scene.pieces : [])) {
+  for (const entry of Array.isArray(scene.pieces) ? scene.pieces : []) {
     if (room.state.pieces.size >= maxPieces) break;
     if (!entry || !KINDS[entry.type]) continue;
     const props = entry.props || {};
@@ -123,9 +131,8 @@ export function applyScene(room, scene, {
       room.swapBoard(props);
       continue;
     }
-    const faceDownFront = entry.type === 'card' && props.faceDown && props.front
-      ? props.front
-      : null;
+    const faceDownFront =
+      entry.type === 'card' && props.faceDown && props.front ? props.front : null;
     let publicProps = props;
     if (faceDownFront) {
       publicProps = { ...props };
@@ -142,7 +149,7 @@ export function applyScene(room, scene, {
   }
 
   const coordinate = (value) => clamp(+value || 0, -MEASURE.maxLen, MEASURE.maxLen);
-  for (const entry of (Array.isArray(scene.overlays) ? scene.overlays : [])) {
+  for (const entry of Array.isArray(scene.overlays) ? scene.overlays : []) {
     if (room.state.overlays.size >= overlayMax) break;
     if (!entry || !overlayKinds.has(entry.kind)) continue;
     const overlay = createOverlay();
@@ -164,7 +171,8 @@ export function applyScene(room, scene, {
   room.state.turnPending = '';
   if (Array.isArray(scene.hands)) {
     for (const hand of scene.hands) {
-      if (!hand || hand.userId == null || !Array.isArray(hand.cards) || !hand.cards.length) continue;
+      if (!hand || hand.userId == null || !Array.isArray(hand.cards) || !hand.cards.length)
+        continue;
       room.pendingHands.set(String(hand.userId), {
         name: hand.name || '',
         cards: hand.cards.slice(),

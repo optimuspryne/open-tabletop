@@ -15,20 +15,23 @@ import { safeMessage } from '../safe-message.js';
 // Register piece and multi-selection operations. The room remains responsible
 // for constructing/removing physics bodies; this module owns message policy and
 // the small body mutations that implement user intent.
-export function registerPieceHandlers(room, {
-  maxPieces,
-  flipHop,
-  roll,
-  trayRoll,
-  boardKeys,
-  propKeys,
-  dispenserKeys,
-  colliders,
-  geoOf,
-  randomPosition,
-  random = Math.random,
-  logger = console,
-}) {
+export function registerPieceHandlers(
+  room,
+  {
+    maxPieces,
+    flipHop,
+    roll,
+    trayRoll,
+    boardKeys,
+    propKeys,
+    dispenserKeys,
+    colliders,
+    geoOf,
+    randomPosition,
+    random = Math.random,
+    logger = console,
+  },
+) {
   const pieceMessage = (type, handler) => safeMessage(room, type, handler, { logger });
   const idsFrom = (message) => groupIds(message, { max: maxPieces });
 
@@ -124,10 +127,13 @@ export function registerPieceHandlers(room, {
       return piece && body && KINDS[piece.type]?.mass > 0 ? [body] : [];
     });
     if (!bodies.length) return;
-    const center = bodies.reduce((sum, body) => ({
-      x: sum.x + body.position.x,
-      z: sum.z + body.position.z,
-    }), { x: 0, z: 0 });
+    const center = bodies.reduce(
+      (sum, body) => ({
+        x: sum.x + body.position.x,
+        z: sum.z + body.position.z,
+      }),
+      { x: 0, z: 0 },
+    );
     center.x /= bodies.length;
     center.z /= bodies.length;
     const sin = Math.sin(rotation);
@@ -175,7 +181,7 @@ export function registerPieceHandlers(room, {
       return;
     }
     if (room.rank(client) < RANK.helper) return;
-    const props = msg.type === 'die' ? dieSpawnProps(msg.props) : (msg.props || {});
+    const props = msg.type === 'die' ? dieSpawnProps(msg.props) : msg.props || {};
     room.spawn(msg.type, randomPosition(), props);
   });
 

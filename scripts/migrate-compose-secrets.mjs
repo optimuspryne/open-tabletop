@@ -17,7 +17,9 @@ fs.chmodSync(directory, 0o700);
 
 const existing = mappings.filter(([, filename]) => fs.existsSync(path.join(directory, filename)));
 if (existing.length) {
-  console.error(`Refusing to overwrite existing secret(s): ${existing.map(([, filename]) => `secrets/${filename}`).join(', ')}`);
+  console.error(
+    `Refusing to overwrite existing secret(s): ${existing.map(([, filename]) => `secrets/${filename}`).join(', ')}`,
+  );
   process.exit(1);
 }
 
@@ -27,11 +29,15 @@ for (const [name, filename] of mappings) {
     fs.writeFileSync(target, process.env[name], { encoding: 'utf8', flag: 'wx', mode: 0o600 });
     console.log(`Created secrets/${filename} from ${name}.`);
   } catch (error) {
-    console.error(error.code === 'EEXIST'
-      ? `Refusing to overwrite existing secrets/${filename}.`
-      : `Could not create secrets/${filename}: ${error.message}`);
+    console.error(
+      error.code === 'EEXIST'
+        ? `Refusing to overwrite existing secrets/${filename}.`
+        : `Could not create secrets/${filename}: ${error.message}`,
+    );
     process.exit(1);
   }
 }
 
-console.log('Secrets migrated. Keep the old .env values until the updated stack starts successfully, then remove them.');
+console.log(
+  'Secrets migrated. Keep the old .env values until the updated stack starts successfully, then remove them.',
+);

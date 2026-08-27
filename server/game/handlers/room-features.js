@@ -3,13 +3,10 @@ import { RANK } from '../../permissions.js';
 import { boundedString, oneField, pointPayload, showPayload } from '../../message-validation.js';
 import { safeMessage } from '../safe-message.js';
 
-export function registerRoomFeatureHandlers(room, {
-  trayRoll,
-  validSky,
-  now = Date.now,
-  random = Math.random,
-  logger = console,
-}) {
+export function registerRoomFeatureHandlers(
+  room,
+  { trayRoll, validSky, now = Date.now, random = Math.random, logger = console },
+) {
   const featureMessage = (type, handler) => safeMessage(room, type, handler, { logger });
 
   featureMessage('roll', (client) => {
@@ -34,11 +31,15 @@ export function registerRoomFeatureHandlers(room, {
     room.state.pieces.forEach((piece, id) => {
       const body = room.bodies.get(id);
       if (piece.type !== 'die' || !body || body.__traySeat !== seat) return;
-      const position = trayPlace({
-        x: (random() - 0.5) * 1.4,
-        y: 0.6,
-        z: (random() - 0.5) * 1,
-      }, center, angle);
+      const position = trayPlace(
+        {
+          x: (random() - 0.5) * 1.4,
+          y: 0.6,
+          z: (random() - 0.5) * 1,
+        },
+        center,
+        angle,
+      );
       body.position.set(position.x, position.y, position.z);
       body.velocity.setZero();
       body.angularVelocity.setZero();
@@ -54,7 +55,7 @@ export function registerRoomFeatureHandlers(room, {
   });
 
   featureMessage('trayShow', (client, message) => {
-    const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null);
+    const parsed = oneField(message, 'on', (on) => (typeof on === 'boolean' ? on : null));
     if (!parsed) return;
     const seat = room.seatOf(client);
     if (seat == null) return;
@@ -82,7 +83,9 @@ export function registerRoomFeatureHandlers(room, {
 
   featureMessage('skybox', (client, message) => {
     if (room.rank(client) < RANK.gm) return;
-    const parsed = oneField(message, 'url', (url) => typeof url === 'string' && validSky(url) ? url : null);
+    const parsed = oneField(message, 'url', (url) =>
+      typeof url === 'string' && validSky(url) ? url : null,
+    );
     if (!parsed) return;
     room.state.skybox = parsed.url;
     room.scheduleSave();
@@ -96,9 +99,12 @@ export function registerRoomFeatureHandlers(room, {
     const sid = client.sessionId;
     const hand = room.hands.get(sid) || [];
     if (!hand.length) return;
-    const cards = parsed.hids === 'all'
-      ? hand.slice()
-      : Array.isArray(parsed.hids) ? hand.filter((card) => parsed.hids.includes(card.hid)) : null;
+    const cards =
+      parsed.hids === 'all'
+        ? hand.slice()
+        : Array.isArray(parsed.hids)
+          ? hand.filter((card) => parsed.hids.includes(card.hid))
+          : null;
     if (!cards?.length) return;
     const audience = new Set();
     if (parsed.to === 'all') {

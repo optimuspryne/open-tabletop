@@ -22,7 +22,7 @@ import { fileURLToPath } from 'url';
 import { databaseConnectionString } from './server/database-config.js';
 
 const MIGRATIONS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'postgres');
-const FILE_RE = /^\d{3,}_.+\.sql$/;  // numbered migrations only (skips schema.sql, grants_*.sql)
+const FILE_RE = /^\d{3,}_.+\.sql$/; // numbered migrations only (skips schema.sql, grants_*.sql)
 
 // The migrations subsumed by postgres/schema.sql — the state every deployment already had
 // before this migrator existed. FROZEN: never add newer files here. Used to "adopt" a
@@ -30,9 +30,16 @@ const FILE_RE = /^\d{3,}_.+\.sql$/;  // numbered migrations only (skips schema.s
 // already has them). A deployment must be on the release just before the migrator (schema at
 // this baseline) before upgrading — i.e. upgrade sequentially from anything older.
 const BASELINE_MIGRATIONS = [
-  '001_custom_assets.sql', '002_auth.sql', '003_asset_visibility.sql', '004_host_status.sql',
-  '005_room_board.sql', '006_room_table.sql', '007_scenes.sql', '008_room_skybox.sql',
-  '009_room_state.sql', '010_room_scale.sql',
+  '001_custom_assets.sql',
+  '002_auth.sql',
+  '003_asset_visibility.sql',
+  '004_host_status.sql',
+  '005_room_board.sql',
+  '006_room_table.sql',
+  '007_scenes.sql',
+  '008_room_skybox.sql',
+  '009_room_state.sql',
+  '010_room_scale.sql',
 ];
 
 // The migrator's connection string — an owner/DDL role, never the app role. Supports
@@ -43,7 +50,11 @@ function migrateConnectionString() {
 
 // Drop the file's own standalone BEGIN/COMMIT so the body runs inside one
 // transaction WE control (migration + its schema_migrations row commit together).
-const stripTxn = (sql) => sql.split('\n').filter(l => !/^\s*(begin|commit)\s*;\s*$/i.test(l)).join('\n');
+const stripTxn = (sql) =>
+  sql
+    .split('\n')
+    .filter((l) => !/^\s*(begin|commit)\s*;\s*$/i.test(l))
+    .join('\n');
 
 export async function runMigrations() {
   if (process.env.AUTO_MIGRATE === 'false' || process.env.AUTO_MIGRATE === '0') {
@@ -52,12 +63,17 @@ export async function runMigrations() {
   }
   const connectionString = migrateConnectionString();
   if (!connectionString) {
-    console.log('[migrate] MIGRATE_DATABASE_URL not set — skipping auto-migration. Apply ' +
-      'postgres/NNN_*.sql by hand, or set MIGRATE_DATABASE_URL (an owner/DDL role) to auto-apply.');
+    console.log(
+      '[migrate] MIGRATE_DATABASE_URL not set — skipping auto-migration. Apply ' +
+        'postgres/NNN_*.sql by hand, or set MIGRATE_DATABASE_URL (an owner/DDL role) to auto-apply.',
+    );
     return;
   }
 
-  const files = fs.readdirSync(MIGRATIONS_DIR).filter(f => FILE_RE.test(f)).sort();
+  const files = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((f) => FILE_RE.test(f))
+    .sort();
   const client = new pg.Client({ connectionString });
   await client.connect();
   try {
@@ -66,7 +82,7 @@ export async function runMigrations() {
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
     const { rows } = await client.query('SELECT version FROM schema_migrations');
-    let applied = new Set(rows.map(r => r.version));
+    let applied = new Set(rows.map((r) => r.version));
 
     // Adopt a pre-tracking database: if nothing is recorded yet but the app schema is
     // already present (a deployment from before this migrator existed), record the frozen
@@ -77,13 +93,18 @@ export async function runMigrations() {
       const present = (await client.query("SELECT to_regclass('public.rooms') AS t")).rows[0].t;
       if (present) {
         for (const f of BASELINE_MIGRATIONS) {
-          await client.query('INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING', [f]);
+          await client.query(
+            'INSERT INTO schema_migrations (version) VALUES ($1) ON CONFLICT DO NOTHING',
+            [f],
+          );
         }
         applied = new Set(BASELINE_MIGRATIONS);
-        console.log(`[migrate] adopted an existing schema — recorded the ${BASELINE_MIGRATIONS.length}-migration baseline (nothing replayed).`);
+        console.log(
+          `[migrate] adopted an existing schema — recorded the ${BASELINE_MIGRATIONS.length}-migration baseline (nothing replayed).`,
+        );
       }
     }
-    const pending = files.filter(f => !applied.has(f));
+    const pending = files.filter((f) => !applied.has(f));
     if (!pending.length) {
       console.log(`[migrate] up to date (${applied.size} applied, ${files.length} on disk).`);
       return;
@@ -100,7 +121,7 @@ export async function runMigrations() {
       } catch (e) {
         await client.query('ROLLBACK');
         console.error(`[migrate]   ✗ ${file}: ${e.message}`);
-        throw e;  // fail fast — never boot the app on a half-migrated schema
+        throw e; // fail fast — never boot the app on a half-migrated schema
       }
     }
     console.log('[migrate] done.');

@@ -20,12 +20,14 @@ export function buildWorld(simulation) {
   world.allowSleep = true;
   world.solver.iterations = simulation.solverIterations;
   const material = new CANNON.Material('surface');
-  world.addContactMaterial(new CANNON.ContactMaterial(material, material, {
-    friction: simulation.friction,
-    restitution: simulation.restitution,
-    contactEquationStiffness: simulation.contact.stiffness,
-    contactEquationRelaxation: simulation.contact.relaxation,
-  }));
+  world.addContactMaterial(
+    new CANNON.ContactMaterial(material, material, {
+      friction: simulation.friction,
+      restitution: simulation.restitution,
+      contactEquationStiffness: simulation.contact.stiffness,
+      contactEquationRelaxation: simulation.contact.relaxation,
+    }),
+  );
   world.__mat = material;
   return world;
 }
@@ -34,10 +36,9 @@ export function colliderShape(type, hx, hy, hz, options = {}) {
   if (type === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
   if (type === 'cylinder' || type === 'cone') {
     const radius = Math.max(hx, hz);
-    const sides = Math.max(3, (options.sides | 0) || 16);
-    const top = type === 'cone'
-      ? radius * 0.05
-      : options.top != null ? radius * options.top : radius;
+    const sides = Math.max(3, options.sides | 0 || 16);
+    const top =
+      type === 'cone' ? radius * 0.05 : options.top != null ? radius * options.top : radius;
     return new CANNON.Cylinder(top, radius, hy * 2, sides);
   }
   if (type === 'flat') {
@@ -112,7 +113,9 @@ export function dieShape(sides) {
   try {
     const faceGroups = [];
     for (const [a, b, c] of convexHull(vertices)) {
-      const normal = normalize(cross(subtract(vertices[b], vertices[a]), subtract(vertices[c], vertices[a])));
+      const normal = normalize(
+        cross(subtract(vertices[b], vertices[a]), subtract(vertices[c], vertices[a])),
+      );
       let group = faceGroups.find((candidate) => dot(candidate.normal, normal) > 0.999);
       if (!group) {
         group = { normal, indices: new Set() };
@@ -127,10 +130,11 @@ export function dieShape(sides) {
       const centroid = averagePoint(indices.map((index) => vertices[index]));
       const reference = normalize(subtract(vertices[indices[0]], centroid));
       const perpendicular = cross(group.normal, reference);
-      const angleOf = (index) => Math.atan2(
-        dot(subtract(vertices[index], centroid), perpendicular),
-        dot(subtract(vertices[index], centroid), reference),
-      );
+      const angleOf = (index) =>
+        Math.atan2(
+          dot(subtract(vertices[index], centroid), perpendicular),
+          dot(subtract(vertices[index], centroid), reference),
+        );
       indices.sort((left, right) => angleOf(left) - angleOf(right));
       const woundNormal = cross(
         subtract(vertices[indices[1]], vertices[indices[0]]),

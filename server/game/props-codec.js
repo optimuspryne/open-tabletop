@@ -13,5 +13,7 @@ export function readProps(piece) {
 
 export function writeProps(piece, props) {
   if (!piece) return;
-  piece.props = JSON.stringify(props && typeof props === 'object' && !Array.isArray(props) ? props : {});
+  piece.props = JSON.stringify(
+    props && typeof props === 'object' && !Array.isArray(props) ? props : {},
+  );
 }

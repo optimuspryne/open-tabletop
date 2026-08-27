@@ -7,8 +7,15 @@ import {
 } from '../server/game/handlers/room-state.js';
 
 const MESSAGE_NAMES = [
-  'stateSave', 'notebook', 'timer', 'score', 'roomNotes',
-  'table', 'tableColor', 'scaleSet', 'calibrateGrid',
+  'stateSave',
+  'notebook',
+  'timer',
+  'score',
+  'roomNotes',
+  'table',
+  'tableColor',
+  'scaleSet',
+  'calibrateGrid',
 ];
 
 function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}) {
@@ -29,13 +36,27 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
       skybox: '',
       scale: { gridStyle: 'off', cellWorld: 0 },
     },
-    onMessage(name, handler) { handlers.set(name, handler); },
-    rank() { return rank; },
-    serializeGame() { return scene; },
-    scheduleSave() { events.push({ name: 'save' }); },
-    buildBounds(x, z) { events.push({ name: 'bounds', payload: { x, z } }); },
-    calibrateGrid(payload) { events.push({ name: 'grid', payload }); },
-    scaleSnapshot() { return { ...this.state.scale }; },
+    onMessage(name, handler) {
+      handlers.set(name, handler);
+    },
+    rank() {
+      return rank;
+    },
+    serializeGame() {
+      return scene;
+    },
+    scheduleSave() {
+      events.push({ name: 'save' });
+    },
+    buildBounds(x, z) {
+      events.push({ name: 'bounds', payload: { x, z } });
+    },
+    calibrateGrid(payload) {
+      events.push({ name: 'grid', payload });
+    },
+    scaleSnapshot() {
+      return { ...this.state.scale };
+    },
   };
   registerRoomStateHandlers(room, {
     createScoreRow: (label, score) => ({ label, score }),
@@ -51,7 +72,9 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
 const client = () => ({
   sessionId: 'client-1',
   sent: [],
-  send(type, payload) { this.sent.push({ type, payload }); },
+  send(type, payload) {
+    this.sent.push({ type, payload });
+  },
 });
 
 test('room-state module registers the complete settings and persistence family', () => {
@@ -109,27 +132,41 @@ test('durable room serialization includes settings, score rows, scene, and scale
   room.state.scores.set('s1', { label: 'Heroes', score: 7 });
   const calls = [];
   await saveRoomStateNow(room, {
-    db: { async saveRoomState(...args) { calls.push(args); } },
+    db: {
+      async saveRoomState(...args) {
+        calls.push(args);
+      },
+    },
   });
-  assert.deepEqual(calls, [[room.roomId, {
-    scoreboard: [{ id: 's1', label: 'Heroes', score: 7 }],
-    notes: 'notes',
-    tableX: 10,
-    tableZ: 7,
-    skybox: '',
-    feltColor: '#006633',
-    scene: room.savedScene,
-    scale: { gridStyle: 'off', cellWorld: 0 },
-  }]]);
+  assert.deepEqual(calls, [
+    [
+      room.roomId,
+      {
+        scoreboard: [{ id: 's1', label: 'Heroes', score: 7 }],
+        notes: 'notes',
+        tableX: 10,
+        tableZ: 7,
+        skybox: '',
+        feltColor: '#006633',
+        scene: room.savedScene,
+        scale: { gridStyle: 'off', cellWorld: 0 },
+      },
+    ],
+  ]);
 });
 
 test('save scheduling is debounced until the pending callback runs', async () => {
   const { room } = harness();
   let callback;
   let saves = 0;
-  room.saveStateNow = async () => { saves++; };
+  room.saveStateNow = async () => {
+    saves++;
+  };
   const options = {
-    setTimer(fn) { callback = fn; return { pending: true }; },
+    setTimer(fn) {
+      callback = fn;
+      return { pending: true };
+    },
     logger: { error() {} },
   };
   scheduleRoomSave(room, options);

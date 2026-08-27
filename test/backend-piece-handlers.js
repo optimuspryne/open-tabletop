@@ -3,9 +3,21 @@ import assert from 'node:assert/strict';
 import { registerPieceHandlers } from '../server/game/handlers/pieces.js';
 
 const MESSAGE_NAMES = [
-  'setStandGroup', 'setSnapGroup', 'rollGroup', 'flipGroup', 'takeGroup',
-  'rotateGroup', 'recolor', 'recolorGroup', 'spawn', 'rollOne', 'setStand',
-  'setSnap', 'snap', 'remove', 'removeGroup',
+  'setStandGroup',
+  'setSnapGroup',
+  'rollGroup',
+  'flipGroup',
+  'takeGroup',
+  'rotateGroup',
+  'recolor',
+  'recolorGroup',
+  'spawn',
+  'rollOne',
+  'setStand',
+  'setSnap',
+  'snap',
+  'remove',
+  'removeGroup',
 ];
 
 function vector(initial = {}) {
@@ -13,8 +25,12 @@ function vector(initial = {}) {
     x: initial.x || 0,
     y: initial.y || 0,
     z: initial.z || 0,
-    set(x, y, z) { Object.assign(this, { x, y, z }); },
-    setZero() { this.set(0, 0, 0); },
+    set(x, y, z) {
+      Object.assign(this, { x, y, z });
+    },
+    setZero() {
+      this.set(0, 0, 0);
+    },
   };
 }
 
@@ -24,7 +40,9 @@ function body(position = {}) {
     velocity: vector(),
     angularVelocity: vector(),
     wakeCount: 0,
-    wakeUp() { this.wakeCount++; },
+    wakeUp() {
+      this.wakeCount++;
+    },
   };
 }
 
@@ -40,19 +58,46 @@ function harness({ rank = 3 } = {}) {
     bodies: new Map(),
     targets: new Map(),
     cardData: new Map(),
-    onMessage(name, handler) { handlers.set(name, handler); },
-    rank() { return rank; },
-    standOf(piece) { return JSON.parse(piece.props || '{}').stand || false; },
-    naturalStand() { return 'upright'; },
-    unpinPiece(id) { events.push({ name: 'unpin', payload: id }); },
-    broadcast(name, payload) { events.push({ name, payload }); },
-    addToHand(client, front, back, geo) { events.push({ name: 'hand', payload: { client, front, back, geo } }); },
-    removePiece(id) { this.state.pieces.delete(id); events.push({ name: 'remove', payload: id }); },
-    recolorPiece(id, colors) { events.push({ name: 'recolor', payload: { id, colors } }); },
-    spawn(type, position, props) { events.push({ name: 'spawn', payload: { type, position, props } }); },
-    swapBoard(props) { events.push({ name: 'board', payload: props }); },
-    seatOf() { return 0; },
-    trayDropPos() { return [4, 2, 5]; },
+    onMessage(name, handler) {
+      handlers.set(name, handler);
+    },
+    rank() {
+      return rank;
+    },
+    standOf(piece) {
+      return JSON.parse(piece.props || '{}').stand || false;
+    },
+    naturalStand() {
+      return 'upright';
+    },
+    unpinPiece(id) {
+      events.push({ name: 'unpin', payload: id });
+    },
+    broadcast(name, payload) {
+      events.push({ name, payload });
+    },
+    addToHand(client, front, back, geo) {
+      events.push({ name: 'hand', payload: { client, front, back, geo } });
+    },
+    removePiece(id) {
+      this.state.pieces.delete(id);
+      events.push({ name: 'remove', payload: id });
+    },
+    recolorPiece(id, colors) {
+      events.push({ name: 'recolor', payload: { id, colors } });
+    },
+    spawn(type, position, props) {
+      events.push({ name: 'spawn', payload: { type, position, props } });
+    },
+    swapBoard(props) {
+      events.push({ name: 'board', payload: props });
+    },
+    seatOf() {
+      return 0;
+    },
+    trayDropPos() {
+      return [4, 2, 5];
+    },
   };
   registerPieceHandlers(room, {
     maxPieces: 80,
@@ -63,7 +108,7 @@ function harness({ rank = 3 } = {}) {
     propKeys: ['pawn'],
     dispenserKeys: ['chips'],
     colliders: ['flat'],
-    geoOf: (props) => props.tile ? { tile: props.tile } : {},
+    geoOf: (props) => (props.tile ? { tile: props.tile } : {}),
     randomPosition: () => [1, 4, 2],
     random: () => 0.5,
     logger: { error() {} },
@@ -79,7 +124,10 @@ test('piece handler module registers the complete piece and group family', () =>
 
 test('group flipping keeps hidden card fronts in private room state', async () => {
   const { room, handlers, events } = harness();
-  room.state.pieces.set('1', { type: 'card', props: JSON.stringify({ front: 'ace', back: 'blue' }) });
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ front: 'ace', back: 'blue' }),
+  });
   room.bodies.set('1', body());
   await handlers.get('flipGroup')(client, { ids: ['1'] });
 

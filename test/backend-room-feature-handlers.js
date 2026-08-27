@@ -3,15 +3,30 @@ import assert from 'node:assert/strict';
 import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
 
 const MESSAGE_NAMES = [
-  'roll', 'trayScoop', 'trayClear', 'trayShow', 'chat', 'chatLog',
-  'skybox', 'handSync', 'showStart', 'showStop', 'ping',
+  'roll',
+  'trayScoop',
+  'trayClear',
+  'trayShow',
+  'chat',
+  'chatLog',
+  'skybox',
+  'handSync',
+  'showStart',
+  'showStop',
+  'ping',
 ];
 
 function vector() {
   return {
-    x: 0, y: 0, z: 0,
-    set(x, y, z) { Object.assign(this, { x, y, z }); },
-    setZero() { this.set(0, 0, 0); },
+    x: 0,
+    y: 0,
+    z: 0,
+    set(x, y, z) {
+      Object.assign(this, { x, y, z });
+    },
+    setZero() {
+      this.set(0, 0, 0);
+    },
   };
 }
 
@@ -22,7 +37,9 @@ function dieBody(seat = 0) {
     velocity: vector(),
     angularVelocity: vector(),
     wakeCount: 0,
-    wakeUp() { this.wakeCount++; },
+    wakeUp() {
+      this.wakeCount++;
+    },
   };
 }
 
@@ -30,7 +47,9 @@ function makeClient(sessionId) {
   return {
     sessionId,
     sent: [],
-    send(type, payload) { this.sent.push({ type, payload }); },
+    send(type, payload) {
+      this.sent.push({ type, payload });
+    },
   };
 }
 
@@ -59,17 +78,39 @@ function harness({ rank = 0 } = {}) {
       tableX: 10,
       tableZ: 7,
     },
-    onMessage(name, handler) { handlers.set(name, handler); },
-    rank() { return rank; },
-    seatOf(client) { return client.sessionId === 'client-1' ? 0 : 1; },
-    trayCenterFor() { return { x: 0, z: 0 }; },
-    clearTraySeat(seat) { events.push({ name: 'clearTray', payload: seat }); },
-    buildTrays() { events.push({ name: 'buildTrays' }); },
-    broadcast(name, payload) { events.push({ name, payload }); },
-    scheduleSave() { events.push({ name: 'save' }); },
-    sendHand(client) { events.push({ name: 'hand', payload: client.sessionId }); },
-    stopShow(sid) { events.push({ name: 'stopShow', payload: sid }); },
-    clientBy(sid) { return clients.get(sid); },
+    onMessage(name, handler) {
+      handlers.set(name, handler);
+    },
+    rank() {
+      return rank;
+    },
+    seatOf(client) {
+      return client.sessionId === 'client-1' ? 0 : 1;
+    },
+    trayCenterFor() {
+      return { x: 0, z: 0 };
+    },
+    clearTraySeat(seat) {
+      events.push({ name: 'clearTray', payload: seat });
+    },
+    buildTrays() {
+      events.push({ name: 'buildTrays' });
+    },
+    broadcast(name, payload) {
+      events.push({ name, payload });
+    },
+    scheduleSave() {
+      events.push({ name: 'save' });
+    },
+    sendHand(client) {
+      events.push({ name: 'hand', payload: client.sessionId });
+    },
+    stopShow(sid) {
+      events.push({ name: 'stopShow', payload: sid });
+    },
+    clientBy(sid) {
+      return clients.get(sid);
+    },
   };
   registerRoomFeatureHandlers(room, {
     trayRoll: { up: 8, spread: 13, spin: 30 },
@@ -138,10 +179,12 @@ test('showing cards sends faces only to the selected audience', async () => {
 
   assert.equal(room.state.players.get('client-1').showing, 1);
   assert.deepEqual([...room.shows.get('client-1').to], ['client-2']);
-  assert.deepEqual(clients.get('client-2').sent, [{
-    type: 'showFan',
-    payload: { sid: 'client-1', cards: [{ front: 'king', back: 'blue' }] },
-  }]);
+  assert.deepEqual(clients.get('client-2').sent, [
+    {
+      type: 'showFan',
+      payload: { sid: 'client-1', cards: [{ front: 'king', back: 'blue' }] },
+    },
+  ]);
   assert.deepEqual(clients.get('client-3').sent, []);
   assert.deepEqual(events, [{ name: 'stopShow', payload: 'client-1' }]);
 });
@@ -149,8 +192,10 @@ test('showing cards sends faces only to the selected audience', async () => {
 test('pings are clamped to the current table bounds', async () => {
   const { handlers, events } = harness();
   await handlers.get('ping')(makeClient('client-1'), { x: 50, z: -50 });
-  assert.deepEqual(events, [{
-    name: 'ping',
-    payload: { sid: 'client-1', x: 10, z: -7 },
-  }]);
+  assert.deepEqual(events, [
+    {
+      name: 'ping',
+      payload: { sid: 'client-1', x: 10, z: -7 },
+    },
+  ]);
 });

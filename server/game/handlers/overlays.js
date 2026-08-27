@@ -11,15 +11,10 @@ import { safeMessage } from '../safe-message.js';
 
 const TWO_PI = Math.PI * 2;
 
-export function registerOverlayHandlers(room, {
-  createOverlay,
-  kinds,
-  maxLength,
-  maxOverlays,
-  maxPerPlayer,
-  maxStrokes,
-  logger = console,
-}) {
+export function registerOverlayHandlers(
+  room,
+  { createOverlay, kinds, maxLength, maxOverlays, maxPerPlayer, maxStrokes, logger = console },
+) {
   const overlayMessage = (type, handler) => safeMessage(room, type, handler, { logger });
 
   overlayMessage('overlayAdd', (client, message) => {
@@ -63,7 +58,9 @@ export function registerOverlayHandlers(room, {
   });
 
   overlayMessage('overlayClear', (client, message) => {
-    const msg = oneField(message, 'scope', (scope) => ['all', 'mine'].includes(scope) ? scope : null);
+    const msg = oneField(message, 'scope', (scope) =>
+      ['all', 'mine'].includes(scope) ? scope : null,
+    );
     if (!msg) return;
     const clearAll = msg.scope === 'all' && room.rank(client) >= RANK.gm;
     const ids = [];
@@ -101,7 +98,7 @@ export function registerOverlayHandlers(room, {
 
   overlayMessage('wbEnable', (client, message) => {
     if (room.rank(client) < RANK.gm) return;
-    const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null);
+    const parsed = oneField(message, 'on', (on) => (typeof on === 'boolean' ? on : null));
     if (!parsed) return;
     room.state.whiteboard.enabled = parsed.on;
     if (!parsed.on) {
@@ -113,8 +110,10 @@ export function registerOverlayHandlers(room, {
 
   overlayMessage('wbSet', (client, message) => {
     if (room.rank(client) < RANK.gm) return;
-    const angle = oneField(message, 'angle', (value) => finiteNumber(value, { min: -TWO_PI, max: TWO_PI }));
-    const dark = oneField(message, 'dark', (value) => typeof value === 'boolean' ? value : null);
+    const angle = oneField(message, 'angle', (value) =>
+      finiteNumber(value, { min: -TWO_PI, max: TWO_PI }),
+    );
+    const dark = oneField(message, 'dark', (value) => (typeof value === 'boolean' ? value : null));
     const msg = angle || dark;
     if (!msg) return;
     if (msg.angle !== undefined) {

@@ -23,13 +23,14 @@ export function createRequireAdmin(requireUser) {
   };
 }
 
-export const clientUser = (user) => user && ({
-  id: user.id,
-  username: user.username,
-  email: user.email,
-  avatar: user.avatar,
-  isAdmin: user.isAdmin,
-  canOwnRooms: user.canOwnRooms,
-  hostStatus: user.hostStatus,
-  hasPassword: user.hasPassword,
-});
+export const clientUser = (user) =>
+  user && {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    avatar: user.avatar,
+    isAdmin: user.isAdmin,
+    canOwnRooms: user.canOwnRooms,
+    hostStatus: user.hostStatus,
+    hasPassword: user.hasPassword,
+  };

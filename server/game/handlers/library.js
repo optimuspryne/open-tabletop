@@ -22,23 +22,27 @@ const LIBRARY_ERROR = {
 // Register the saved-asset library message family against a TableRoom-compatible
 // object. Room capabilities stay injected so this module owns orchestration,
 // validation, authorization, and database interaction without owning physics.
-export function registerLibraryHandlers(room, {
-  db,
-  boardKeys,
-  colliders,
-  libraryKinds,
-  refOk,
-  sanitizeGeom,
-  randomPosition,
-  sceneMaxBytes,
-  skyUrlOk,
-  logger = console,
-}) {
+export function registerLibraryHandlers(
+  room,
+  {
+    db,
+    boardKeys,
+    colliders,
+    libraryKinds,
+    refOk,
+    sanitizeGeom,
+    randomPosition,
+    sceneMaxBytes,
+    skyUrlOk,
+    logger = console,
+  },
+) {
   const tableMessage = (type, handler) => safeMessage(room, type, handler, { logger });
-  const assetMessage = (type, handler) => safeMessage(room, type, handler, {
-    logger,
-    ...LIBRARY_ERROR,
-  });
+  const assetMessage = (type, handler) =>
+    safeMessage(room, type, handler, {
+      logger,
+      ...LIBRARY_ERROR,
+    });
 
   tableMessage('deckBegin', (client, message) => {
     if (!room.isAdmin(client)) return;
@@ -63,7 +67,8 @@ export function registerLibraryHandlers(room, {
     room.drafts.delete(client.sessionId);
     if (!draft || !draft.cards.length) return;
     const geo = draft.geom ? { geom: draft.geom } : {};
-    if (msg.spawn) room.spawn('deck', randomPosition(), { back: draft.back, cards: draft.cards, ...geo });
+    if (msg.spawn)
+      room.spawn('deck', randomPosition(), { back: draft.back, cards: draft.cards, ...geo });
     if (!msg.name) return;
     if (msg.editId) {
       await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom);
@@ -141,13 +146,14 @@ export function registerLibraryHandlers(room, {
     const msg = assetIdPayload(message);
     if (!msg) return;
     const deck = await db.getDeck(msg.id);
-    if (deck) client.send('deckData', {
-      id: msg.id,
-      name: deck.name,
-      back: deck.back,
-      fronts: deck.fronts,
-      geom: deck.geom,
-    });
+    if (deck)
+      client.send('deckData', {
+        id: msg.id,
+        name: deck.name,
+        back: deck.back,
+        fronts: deck.fronts,
+        geom: deck.geom,
+      });
   });
   assetMessage('assetDelete', async (client, message) => {
     if (!room.isAdmin(client)) return;
@@ -165,7 +171,8 @@ export function registerLibraryHandlers(room, {
     const payload = room.serializeScene();
     if (JSON.stringify(payload).length > sceneMaxBytes) {
       client.send('sceneError', {
-        message: 'Scene is too large to save. Save its decks to the library first so their card art is stored as files, then try again.',
+        message:
+          'Scene is too large to save. Save its decks to the library first so their card art is stored as files, then try again.',
       });
       return;
     }
@@ -188,8 +195,10 @@ export function registerLibraryHandlers(room, {
     const data = await db.getBoard(msg.id);
     if (!data || (!data.isPublic && !room.isAdmin(client))) return;
     const rec = data.rec;
-    const props = rec.board ? { board: rec.board }
-      : rec.model ? { model: rec.model, modelScale: rec.modelScale, box: rec.box }
+    const props = rec.board
+      ? { board: rec.board }
+      : rec.model
+        ? { model: rec.model, modelScale: rec.modelScale, box: rec.box }
         : { w: rec.w, d: rec.d, tex: rec.tex || undefined };
     room.swapBoard(props);
   });
@@ -200,9 +209,7 @@ export function registerLibraryHandlers(room, {
     const fail = (message) => client.send('skyError', { message });
     const msg = saveSkyboxPayload(message, { urlOk: skyUrlOk });
     if (!msg) return fail('Invalid skybox details.');
-    const url = msg.type === 'cube'
-      ? JSON.stringify({ t: 'cube', f: msg.faces })
-      : msg.url;
+    const url = msg.type === 'cube' ? JSON.stringify({ t: 'cube', f: msg.faces }) : msg.url;
     await db.insertSkybox({
       name: msg.name,
       url,

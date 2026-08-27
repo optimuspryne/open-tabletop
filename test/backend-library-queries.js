@@ -16,19 +16,36 @@ test('successful empty library queries remain ordinary empty and not-found resul
 
 test('library query failures reject instead of masquerading as empty results', async () => {
   const outage = new Error('database unavailable');
-  const library = createLibraryQueries(async () => { throw outage; });
+  const library = createLibraryQueries(async () => {
+    throw outage;
+  });
   for (const read of [
-    () => library.listDecks(), () => library.getDeck('1'),
-    () => library.listBoards(), () => library.getBoard('1'),
-    () => library.listProps(), () => library.listScenes(),
-    () => library.getScene('1'), () => library.listSkyboxes(),
-  ]) await assert.rejects(read, (error) => error === outage);
+    () => library.listDecks(),
+    () => library.getDeck('1'),
+    () => library.listBoards(),
+    () => library.getBoard('1'),
+    () => library.listProps(),
+    () => library.listScenes(),
+    () => library.getScene('1'),
+    () => library.listSkyboxes(),
+  ])
+    await assert.rejects(read, (error) => error === outage);
 });
 
 test('library rows retain their public API shapes', async () => {
-  const rows = [{ id: 7, name: 'Cards', count: '2', first: 'ace', back: null, is_public: true, owner_id: 3 }];
+  const rows = [
+    { id: 7, name: 'Cards', count: '2', first: 'ace', back: null, is_public: true, owner_id: 3 },
+  ];
   const library = createLibraryQueries(async () => ({ rows }));
-  assert.deepEqual(await library.listDecks(), [{
-    id: '7', name: 'Cards', count: 2, first: 'ace', back: 'back', isPublic: true, ownerId: '3',
-  }]);
+  assert.deepEqual(await library.listDecks(), [
+    {
+      id: '7',
+      name: 'Cards',
+      count: 2,
+      first: 'ace',
+      back: 'back',
+      isPublic: true,
+      ownerId: '3',
+    },
+  ]);
 });

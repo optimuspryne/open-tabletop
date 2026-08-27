@@ -3,13 +3,24 @@ import fs from 'fs';
 // Resolve either a complete URL (literal or Docker-secret file) or construct one
 // from non-secret connection metadata plus a password file. Prefix is '' for the
 // app role and 'MIGRATE_' for the owner/DDL role.
-export function databaseConnectionString({ env = process.env, prefix = '', required = true, readFile = fs.readFileSync } = {}) {
+export function databaseConnectionString({
+  env = process.env,
+  prefix = '',
+  required = true,
+  readFile = fs.readFileSync,
+} = {}) {
   const key = (name) => `${prefix}${name}`;
   const urlFile = env[key('DATABASE_URL_FILE')];
   if (urlFile) return String(readFile(urlFile, 'utf8')).trim();
   if (env[key('DATABASE_URL')]) return env[key('DATABASE_URL')];
 
-  const componentKeys = ['DATABASE_HOST', 'DATABASE_PORT', 'DATABASE_NAME', 'DATABASE_USER', 'DATABASE_PASSWORD_FILE'];
+  const componentKeys = [
+    'DATABASE_HOST',
+    'DATABASE_PORT',
+    'DATABASE_NAME',
+    'DATABASE_USER',
+    'DATABASE_PASSWORD_FILE',
+  ];
   const configured = componentKeys.some((name) => env[key(name)]);
   if (configured) {
     const host = String(env[key('DATABASE_HOST')] || '').trim();
@@ -27,5 +38,7 @@ export function databaseConnectionString({ env = process.env, prefix = '', requi
   }
 
   if (!required) return null;
-  throw new Error(`Database not configured: set ${key('DATABASE_URL')}, ${key('DATABASE_URL_FILE')}, or password-file connection components.`);
+  throw new Error(
+    `Database not configured: set ${key('DATABASE_URL')}, ${key('DATABASE_URL_FILE')}, or password-file connection components.`,
+  );
 }

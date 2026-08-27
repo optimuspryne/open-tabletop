@@ -47,9 +47,18 @@ test('migration configuration uses its independent prefixed credentials', () => 
 
 test('incomplete and empty password-file configuration fails closed', () => {
   assert.throws(() => databaseConnectionString({ env: { DATABASE_HOST: 'db' } }), /incomplete/);
-  assert.throws(() => databaseConnectionString({
-    env: { DATABASE_HOST: 'db', DATABASE_NAME: 'tabletop', DATABASE_USER: 'app', DATABASE_PASSWORD_FILE: '/secret' },
-    readFile: () => '\n',
-  }), /empty/);
+  assert.throws(
+    () =>
+      databaseConnectionString({
+        env: {
+          DATABASE_HOST: 'db',
+          DATABASE_NAME: 'tabletop',
+          DATABASE_USER: 'app',
+          DATABASE_PASSWORD_FILE: '/secret',
+        },
+        readFile: () => '\n',
+      }),
+    /empty/,
+  );
   assert.equal(databaseConnectionString({ env: {}, required: false }), null);
 });

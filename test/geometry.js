@@ -2,7 +2,14 @@
 // collider read, so a card's rendered size and physics footprint can't drift. Run: `node --test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cardGeom, geomFromImage, sanitizeGeom, TILES, KINDS, CARD_ROUND } from '../shared/pieces.js';
+import {
+  cardGeom,
+  geomFromImage,
+  sanitizeGeom,
+  TILES,
+  KINDS,
+  CARD_ROUND,
+} from '../shared/pieces.js';
 
 test('cardGeom default = the standard playing card (unchanged behavior)', () => {
   const g = cardGeom({});
@@ -51,10 +58,10 @@ test('geomFromImage: a standard-proportioned image yields the standard card', ()
 });
 
 test('geomFromImage: aspect is preserved for portrait, landscape, and square', () => {
-  const wide = geomFromImage(1000, 500);   // 2:1
+  const wide = geomFromImage(1000, 500); // 2:1
   assert.ok(Math.abs(wide.w / wide.h - 2) < 0.02);
-  assert.equal(wide.w, TILES.card.h);       // longer side = card length
-  const tall = geomFromImage(400, 800);     // 1:2
+  assert.equal(wide.w, TILES.card.h); // longer side = card length
+  const tall = geomFromImage(400, 800); // 1:2
   assert.ok(Math.abs(tall.w / tall.h - 0.5) < 0.02);
   assert.equal(tall.h, TILES.card.h);
   const sq = geomFromImage(600, 600);
@@ -65,7 +72,7 @@ test('geomFromImage: keeps card thickness + corner radius, and a resulting geom 
   const g = geomFromImage(300, 900);
   assert.equal(g.t, TILES.card.t);
   assert.equal(g.round, CARD_ROUND);
-  const resolved = cardGeom({ geom: g });   // must round-trip through the resolver
+  const resolved = cardGeom({ geom: g }); // must round-trip through the resolver
   assert.equal(resolved.hw, g.w);
   assert.equal(resolved.hh, g.h);
 });
@@ -73,7 +80,13 @@ test('geomFromImage: keeps card thickness + corner radius, and a resulting geom 
 test('sanitizeGeom: accepts sane geoms, rejects junk and out-of-range', () => {
   assert.equal(sanitizeGeom(null), null);
   assert.equal(sanitizeGeom({ w: 0, h: 1 }), null);
-  assert.equal(sanitizeGeom({ w: 5, h: 1 }), null);   // > 3 half-extent
-  assert.deepEqual(sanitizeGeom({ w: 0.75, h: 1.05 }), { w: 0.75, h: 1.05, t: TILES.card.t, round: CARD_ROUND, shape: 'rect' });
+  assert.equal(sanitizeGeom({ w: 5, h: 1 }), null); // > 3 half-extent
+  assert.deepEqual(sanitizeGeom({ w: 0.75, h: 1.05 }), {
+    w: 0.75,
+    h: 1.05,
+    t: TILES.card.t,
+    round: CARD_ROUND,
+    shape: 'rect',
+  });
   assert.equal(sanitizeGeom({ w: 1, h: 2, t: 0.02, round: 0.1 }).t, 0.02);
 });

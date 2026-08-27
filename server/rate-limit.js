@@ -42,7 +42,9 @@ export class RedisTokenBucketStore {
     return { allowed: Number(result[0]) === 1, retryAfterMs: Number(result[1]) || 0 };
   }
 
-  close() { return this.client.quit(); }
+  close() {
+    return this.client.quit();
+  }
 }
 
 export class MemoryTokenBucketStore {
@@ -57,7 +59,9 @@ export class MemoryTokenBucketStore {
     const now = this.now();
     const ttlMs = Math.max(1000, Math.ceil(cap / refillPerMs));
     const prior = this.buckets.get(key);
-    let tokens = prior ? Math.min(cap, prior.tokens + Math.max(0, now - prior.last) * refillPerMs) : cap;
+    let tokens = prior
+      ? Math.min(cap, prior.tokens + Math.max(0, now - prior.last) * refillPerMs)
+      : cap;
     const allowed = tokens >= 1;
     const retryAfterMs = allowed ? 0 : Math.ceil((1 - tokens) / refillPerMs);
     if (allowed) tokens -= 1;
@@ -70,13 +74,21 @@ export class MemoryTokenBucketStore {
     for (const [key, bucket] of this.buckets) if (bucket.expiresAt <= now) this.buckets.delete(key);
   }
 
-  close() { if (this.timer) clearInterval(this.timer); }
+  close() {
+    if (this.timer) clearInterval(this.timer);
+  }
 }
 
 export async function createRateLimitStore({ env = process.env, logger = console } = {}) {
-  const mode = String(env.RATE_LIMIT_STORE || '').trim().toLowerCase();
-  if (mode && mode !== 'redis' && mode !== 'memory') throw new Error('RATE_LIMIT_STORE must be redis or memory.');
-  const redisUrl = redisConnectionUrl({ env, required: mode === 'redis' || (env.NODE_ENV === 'production' && mode !== 'memory') });
+  const mode = String(env.RATE_LIMIT_STORE || '')
+    .trim()
+    .toLowerCase();
+  if (mode && mode !== 'redis' && mode !== 'memory')
+    throw new Error('RATE_LIMIT_STORE must be redis or memory.');
+  const redisUrl = redisConnectionUrl({
+    env,
+    required: mode === 'redis' || (env.NODE_ENV === 'production' && mode !== 'memory'),
+  });
   if (mode === 'memory' || (!redisUrl && env.NODE_ENV !== 'production')) {
     logger.warn('[rate-limit] using in-memory store; set REDIS_URL for multi-instance deployments');
     return new MemoryTokenBucketStore();
@@ -88,7 +100,8 @@ export async function createRateLimitStore({ env = process.env, logger = console
 }
 
 export function makeRateLimiter({ store, namespace, cap, refillPerMs, message, logger = console }) {
-  if (!store || !namespace || !(cap > 0) || !(refillPerMs > 0)) throw new Error('Invalid rate limiter configuration.');
+  if (!store || !namespace || !(cap > 0) || !(refillPerMs > 0))
+    throw new Error('Invalid rate limiter configuration.');
   return async (req, res, next) => {
     const ip = req.ip || req.socket?.remoteAddress || 'unknown';
     try {

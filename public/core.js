@@ -10,19 +10,19 @@ import { TABLE } from '/shared/pieces.js';
 // ===== CONFIG — client-side tunables (the visual mirror of the server's SIM) =
 // Everything a designer might want to nudge lives here, grouped by concern.
 const CONFIG = {
-  grab:    { height: 1, min: 0.30, max: 6, step: 0.35, deckHeight: 1.6 }, // held-piece float height + scroll range/step; deckHeight = how high dealt cards ride
-  model:   { size: 1.6 },                       // custom .glb props normalize their largest dimension to this
-  render:  { delay: 60 },                       // ms: draw this far behind live state (interpolation buffer)
-  ranges:  { scale: [0.3, 3], qty: [1, 12], boardW: [2, 18], boardD: [2, 12] }, // spawn-modal input clamps [min, max]
-  inspect: { fit: 2.4, dist: 5, drop: 0.2 },    // enlarged inspect view: target size, distance from camera, downward offset
-  marker:  { inner: 0.34, outer: 0.5, opacity: 0.35, lift: 0.02 }, // "drop preview" ring: radii, opacity, height above the surface
-  label:   { lift: 0.62, w: 1.15, h: 0.36 },    // floating name tag over a held piece: height above the piece + world size
-  ping:    { dur: 1200, inner: 0.35, outer: 0.5, lift: 0.05, grow: 2.4 }, // attention ping: lifetime (ms), ring radii, height above surface, expansion factor
-  measure: { fill: 0.14, edge: 0.08 },          // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
-  input:   { dblMs: 280, clickMs: 300, dragPx: 6, inspectPx: 4, handPx: 8 }, // click/drag feel: double-click window, click-defer (ms), drag thresholds (px)
-  tex:     { die: 256, board: 512 },            // canvas texture resolutions (higher = sharper, more GPU memory)
-  upload:  { cardW: 512, cardH: 716, board: 1024, type: 'image/png', quality: 1.0 }, // uploaded image size + encoding (PNG = lossless; quality only affects lossy types)
-  anim:    { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
+  grab: { height: 1, min: 0.3, max: 6, step: 0.35, deckHeight: 1.6 }, // held-piece float height + scroll range/step; deckHeight = how high dealt cards ride
+  model: { size: 1.6 }, // custom .glb props normalize their largest dimension to this
+  render: { delay: 60 }, // ms: draw this far behind live state (interpolation buffer)
+  ranges: { scale: [0.3, 3], qty: [1, 12], boardW: [2, 18], boardD: [2, 12] }, // spawn-modal input clamps [min, max]
+  inspect: { fit: 2.4, dist: 5, drop: 0.2 }, // enlarged inspect view: target size, distance from camera, downward offset
+  marker: { inner: 0.34, outer: 0.5, opacity: 0.35, lift: 0.02 }, // "drop preview" ring: radii, opacity, height above the surface
+  label: { lift: 0.62, w: 1.15, h: 0.36 }, // floating name tag over a held piece: height above the piece + world size
+  ping: { dur: 1200, inner: 0.35, outer: 0.5, lift: 0.05, grow: 2.4 }, // attention ping: lifetime (ms), ring radii, height above surface, expansion factor
+  measure: { fill: 0.14, edge: 0.08 }, // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
+  input: { dblMs: 280, clickMs: 300, dragPx: 6, inspectPx: 4, handPx: 8 }, // click/drag feel: double-click window, click-defer (ms), drag thresholds (px)
+  tex: { die: 256, board: 512 }, // canvas texture resolutions (higher = sharper, more GPU memory)
+  upload: { cardW: 512, cardH: 716, board: 1024, type: 'image/png', quality: 1.0 }, // uploaded image size + encoding (PNG = lossless; quality only affects lossy types)
+  anim: { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
 };
 
 // Clamp a number into [min, max] (same helper as the server's; exported for reuse).
@@ -30,9 +30,9 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // The three lighting intensities most worth tweaking to taste.
 const LIGHTING = {
-  hemi: 0.30, // soft sky/ground fill (ambient)
-  sun:  2.50, // main directional light + shadows
-  env:  0.45, // environment-map reflection strength (0 = flat, 1 = full studio)
+  hemi: 0.3, // soft sky/ground fill (ambient)
+  sun: 2.5, // main directional light + shadows
+  env: 0.45, // environment-map reflection strength (0 = flat, 1 = full studio)
 };
 
 // ===== Scene, camera, renderer ==============================================
@@ -57,7 +57,7 @@ controls.maxPolarAngle = Math.PI * 0.49; // don't let the camera drop below the 
 // Dim every light and material inside a prebuilt environment by `factor`, so we
 // can borrow RoomEnvironment's studio look at a subtler intensity.
 const dimEnvironment = (env, factor) => {
-  env.traverse(node => {
+  env.traverse((node) => {
     if (node.isLight) node.intensity *= factor;
     if (node.material && node.material.color) node.material.color.multiplyScalar(factor);
   });
@@ -67,7 +67,10 @@ const dimEnvironment = (env, factor) => {
 // A neutral studio environment so PBR/metallic materials (including custom .glb)
 // reflect something instead of rendering dark. Subtle — mostly helps metals read.
 const pmremGenerator = new THREE.PMREMGenerator(renderer);
-scene.environment = pmremGenerator.fromScene(dimEnvironment(new RoomEnvironment(), LIGHTING.env), 0.04).texture;
+scene.environment = pmremGenerator.fromScene(
+  dimEnvironment(new RoomEnvironment(), LIGHTING.env),
+  0.04,
+).texture;
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, LIGHTING.hemi));
 
@@ -76,17 +79,22 @@ sun.position.set(10, 18, 8);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.camera.near = 1;
-sun.shadow.camera.far  = 55;     // tight depth range = far more precision, so bias can stay tiny
-sun.shadow.normalBias  = 0.001;  // tiny (tight depth range gives the precision) — no peter-panning, still no .glb acne
-sun.shadow.bias        = -0.0002; // small depth bias to back it up
+sun.shadow.camera.far = 55; // tight depth range = far more precision, so bias can stay tiny
+sun.shadow.normalBias = 0.001; // tiny (tight depth range gives the precision) — no peter-panning, still no .glb acne
+sun.shadow.bias = -0.0002; // small depth bias to back it up
 
 // Size the sun's shadow frustum to a table half-extent (+ margin for shadows cast past the edge).
 const SHADOW_MARGIN = 4;
 function fitShadow(hx, hz) {
-  Object.assign(sun.shadow.camera, { left: -(hx + SHADOW_MARGIN), right: hx + SHADOW_MARGIN, top: hz + SHADOW_MARGIN, bottom: -(hz + SHADOW_MARGIN) });
+  Object.assign(sun.shadow.camera, {
+    left: -(hx + SHADOW_MARGIN),
+    right: hx + SHADOW_MARGIN,
+    top: hz + SHADOW_MARGIN,
+    bottom: -(hz + SHADOW_MARGIN),
+  });
   sun.shadow.camera.updateProjectionMatrix();
 }
-fitShadow(TABLE.x, TABLE.z);     // initial frustum from the default table size
+fitShadow(TABLE.x, TABLE.z); // initial frustum from the default table size
 scene.add(sun);
 
 // ===== Table ================================================================
@@ -106,6 +114,8 @@ function resizeTable(hx, hz) {
 }
 
 // Recolor the felt (the GM picked a new table color).
-function setTableColor(color) { if (color) tableMesh.material.color.set(color); }
+function setTableColor(color) {
+  if (color) tableMesh.material.color.set(color);
+}
 
 export { CONFIG, clamp, scene, camera, renderer, controls, resizeTable, setTableColor };

@@ -3,11 +3,26 @@
 // real 24-bit colors, dropping anything else. Run: `node --test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dieSpawnProps, clampColor, colorProps, recolorPalette, METALS, DIE_SIDES, DICE_SETS, PALETTE, readableInk, DIE_INK, DIE_INK_LIGHT } from '../shared/pieces.js';
+import {
+  dieSpawnProps,
+  clampColor,
+  colorProps,
+  recolorPalette,
+  METALS,
+  DIE_SIDES,
+  DICE_SETS,
+  PALETTE,
+  readableInk,
+  DIE_INK,
+  DIE_INK_LIGHT,
+} from '../shared/pieces.js';
 
 test('dieSpawnProps: a valid die + colors passes through', () => {
-  assert.deepEqual(dieSpawnProps({ sides: 20, color: 0x2ecc71, textColor: 0x141414 }),
-    { sides: 20, color: 0x2ecc71, textColor: 0x141414 });
+  assert.deepEqual(dieSpawnProps({ sides: 20, color: 0x2ecc71, textColor: 0x141414 }), {
+    sides: 20,
+    color: 0x2ecc71,
+    textColor: 0x141414,
+  });
 });
 
 test('dieSpawnProps: no colors → just the sides (back-compat, no default set)', () => {
@@ -45,14 +60,15 @@ test('clampColor: endpoints valid, just outside invalid', () => {
 });
 
 test('readableInk: dark ink on light bodies, light ink on dark bodies', () => {
-  assert.equal(readableInk(0xffffff), DIE_INK);        // white → dark numbers
-  assert.equal(readableInk(0xf4f1ea), DIE_INK);        // ivory → dark
-  assert.equal(readableInk(0x000000), DIE_INK_LIGHT);  // black → light numbers
-  assert.equal(readableInk(0x1c1c1e), DIE_INK_LIGHT);  // onyx → light
+  assert.equal(readableInk(0xffffff), DIE_INK); // white → dark numbers
+  assert.equal(readableInk(0xf4f1ea), DIE_INK); // ivory → dark
+  assert.equal(readableInk(0x000000), DIE_INK_LIGHT); // black → light numbers
+  assert.equal(readableInk(0x1c1c1e), DIE_INK_LIGHT); // onyx → light
 });
 
 test('readableInk: always returns one of the two inks', () => {
-  for (let c = 0; c <= 0xffffff; c += 0x0a0b0c) {       // sweep the cube
+  for (let c = 0; c <= 0xffffff; c += 0x0a0b0c) {
+    // sweep the cube
     const ink = readableInk(c);
     assert.ok(ink === DIE_INK || ink === DIE_INK_LIGHT, `unexpected ink for ${c.toString(16)}`);
   }
@@ -80,13 +96,18 @@ test('a dice set round-trips through the spawn sanitizer with its auto ink', () 
 
 // colorProps — the shared recolor validator used by single recolor AND the multi-select batch.
 test('colorProps: a die takes body + number color', () => {
-  assert.deepEqual(colorProps('die', { sides: 20 }, { color: 0x1f7a4d, textColor: 0xf4f1ea }),
-    { sides: 20, color: 0x1f7a4d, textColor: 0xf4f1ea });
+  assert.deepEqual(colorProps('die', { sides: 20 }, { color: 0x1f7a4d, textColor: 0xf4f1ea }), {
+    sides: 20,
+    color: 0x1f7a4d,
+    textColor: 0xf4f1ea,
+  });
 });
 
 test('colorProps: a prop takes body color; textColor is ignored for it', () => {
-  assert.deepEqual(colorProps('prop', { shape: 'box' }, { color: 0xd14b4b, textColor: 0x111111 }),
-    { shape: 'box', color: 0xd14b4b });
+  assert.deepEqual(colorProps('prop', { shape: 'box' }, { color: 0xd14b4b, textColor: 0x111111 }), {
+    shape: 'box',
+    color: 0xd14b4b,
+  });
 });
 
 test('colorProps: cards and boards are not recolorable → null', () => {
@@ -101,18 +122,25 @@ test('colorProps: an out-of-range color is rejected → null (no partial write)'
 });
 
 test('colorProps: a poker/coin dispenser takes a tint; a team bowl needs a team flag', () => {
-  assert.deepEqual(colorProps('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, { item: 'chip' }),
-    { disp: 'poker', color: 0xd9c24b });
+  assert.deepEqual(
+    colorProps('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, { item: 'chip' }),
+    { disp: 'poker', color: 0xd9c24b },
+  );
   assert.equal(colorProps('dispenser', { disp: 'poker' }, { color: 0xd9c24b }, null), null); // unknown dispenser
-  assert.equal(colorProps('dispenser', { disp: 'gobowl' }, { color: 0xd9c24b }, { team: true }), null); // team bowl ignores color
-  assert.deepEqual(colorProps('dispenser', { disp: 'gobowl' }, { team: 1 }, { team: true }),
-    { disp: 'gobowl', team: 1 });
+  assert.equal(
+    colorProps('dispenser', { disp: 'gobowl' }, { color: 0xd9c24b }, { team: true }),
+    null,
+  ); // team bowl ignores color
+  assert.deepEqual(colorProps('dispenser', { disp: 'gobowl' }, { team: 1 }, { team: true }), {
+    disp: 'gobowl',
+    team: 1,
+  });
 });
 
 test('colorProps: does not mutate the input props', () => {
   const props = { sides: 8 };
   const out = colorProps('die', props, { color: 0x123456 });
-  assert.equal('color' in props, false);   // original untouched
+  assert.equal('color' in props, false); // original untouched
   assert.equal(out.color, 0x123456);
 });
 
@@ -126,8 +154,14 @@ test('every palette color (except Neutral) survives the recolor validator', () =
 // colorProps — team pieces switch SET, not a freeform color (props.color is ignored on render).
 test('colorProps: a team prop takes a team index, not a freeform color', () => {
   assert.equal(colorProps('prop', { shape: 'checker' }, { color: 0xff0000 }), null); // color alone → rejected
-  assert.deepEqual(colorProps('prop', { shape: 'checker' }, { team: 1 }), { shape: 'checker', team: 1 });
-  assert.deepEqual(colorProps('prop', { shape: 'chess-queen' }, { team: 0 }), { shape: 'chess-queen', team: 0 });
+  assert.deepEqual(colorProps('prop', { shape: 'checker' }, { team: 1 }), {
+    shape: 'checker',
+    team: 1,
+  });
+  assert.deepEqual(colorProps('prop', { shape: 'chess-queen' }, { team: 0 }), {
+    shape: 'chess-queen',
+    team: 0,
+  });
 });
 
 test('colorProps: a non-team prop (coin/general) still takes a color', () => {
@@ -136,9 +170,12 @@ test('colorProps: a non-team prop (coin/general) still takes a color', () => {
 });
 
 test('colorProps: a limited-palette object rejects an off-palette color (group-recolor safety)', () => {
-  assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xd14b4b }), null);       // red isn't a metal
+  assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xd14b4b }), null); // red isn't a metal
   assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xc0c0c0 }).color, 0xc0c0c0); // silver is
-  assert.equal(colorProps('dispenser', { disp: 'coinStack' }, { color: 0x5fae5f }, { swatches: 'metals' }), null); // green isn't a metal
+  assert.equal(
+    colorProps('dispenser', { disp: 'coinStack' }, { color: 0x5fae5f }, { swatches: 'metals' }),
+    null,
+  ); // green isn't a metal
 });
 
 // recolorPalette — the allowed-colors descriptor the recolor UI reads.
@@ -156,7 +193,10 @@ test('recolorPalette: coins expose the metals palette only (no freeform, no Neut
   assert.equal(o.free, false);
   assert.equal(o.team, false);
   assert.deepEqual(o.swatches, METALS);
-  assert.equal(o.swatches.some(s => s.hex == null), false); // no Neutral entry
+  assert.equal(
+    o.swatches.some((s) => s.hex == null),
+    false,
+  ); // no Neutral entry
 });
 
 test('recolorPalette: a general prop gets the full palette + freeform', () => {
@@ -166,7 +206,10 @@ test('recolorPalette: a general prop gets the full palette + freeform', () => {
 });
 
 test('recolorPalette: a coin dispenser is metals-only; a go bowl is a team set', () => {
-  assert.deepEqual(recolorPalette('dispenser', { disp: 'coinStack' }, { swatches: 'metals' }).swatches, METALS);
+  assert.deepEqual(
+    recolorPalette('dispenser', { disp: 'coinStack' }, { swatches: 'metals' }).swatches,
+    METALS,
+  );
   const bowl = recolorPalette('dispenser', { disp: 'goBowl' }, { team: 'go' });
   assert.equal(bowl.team, true);
   assert.equal(bowl.swatches.length, 2);

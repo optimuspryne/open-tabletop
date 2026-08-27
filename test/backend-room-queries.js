@@ -16,14 +16,21 @@ test('successful absent room and membership reads retain their domain results', 
 
 test('room, state, join, and membership outages reject instead of returning fallback data', async () => {
   const outage = new Error('database unavailable');
-  const rooms = createRoomQueries(async () => { throw outage; });
+  const rooms = createRoomQueries(async () => {
+    throw outage;
+  });
   for (const read of [
-    () => rooms.findRoomByCode('CODE'), () => rooms.getRoom('1'),
-    () => rooms.listRoomsForUser('1'), () => rooms.listRoomsForAdmin('1'),
-    () => rooms.listRooms(), () => rooms.getRoomState('1'),
+    () => rooms.findRoomByCode('CODE'),
+    () => rooms.getRoom('1'),
+    () => rooms.listRoomsForUser('1'),
+    () => rooms.listRoomsForAdmin('1'),
+    () => rooms.listRooms(),
+    () => rooms.getRoomState('1'),
     () => rooms.joinRoom({ roomId: '1', userId: '2', requireApproval: true }),
-    () => rooms.getMembership('1', '2'), () => rooms.listMembers('1'),
-  ]) await assert.rejects(read, (error) => error === outage);
+    () => rooms.getMembership('1', '2'),
+    () => rooms.listMembers('1'),
+  ])
+    await assert.rejects(read, (error) => error === outage);
 });
 
 test('an idempotent join performs membership lookup only after a successful empty insert', async () => {
@@ -33,16 +40,30 @@ test('an idempotent join performs membership lookup only after a successful empt
     if (sql.startsWith('INSERT')) return { rows: [] };
     return { rows: [{ room_id: 1, user_id: 2, role: 'player', status: 'admitted' }] };
   });
-  assert.deepEqual(await rooms.joinRoom({ roomId: '1', userId: '2', requireApproval: true }),
-    { roomId: '1', userId: '2', role: 'player', status: 'admitted' });
+  assert.deepEqual(await rooms.joinRoom({ roomId: '1', userId: '2', requireApproval: true }), {
+    roomId: '1',
+    userId: '2',
+    role: 'player',
+    status: 'admitted',
+  });
   assert.equal(calls.length, 2);
 });
 
 test('stored room state is shaped only after a successful query', async () => {
-  const rooms = createRoomQueries(async () => ({ rows: [{
-    scoreboard: [{ id: 's1', label: 'A', score: 2 }], notes: 'note', table_x: '12', table_z: '8',
-    skybox: '/sky.jpg', felt_color: '#123456', scene: { pieces: [] }, scale: { worldPerUnit: 2 },
-  }] }));
+  const rooms = createRoomQueries(async () => ({
+    rows: [
+      {
+        scoreboard: [{ id: 's1', label: 'A', score: 2 }],
+        notes: 'note',
+        table_x: '12',
+        table_z: '8',
+        skybox: '/sky.jpg',
+        felt_color: '#123456',
+        scene: { pieces: [] },
+        scale: { worldPerUnit: 2 },
+      },
+    ],
+  }));
   const state = await rooms.getRoomState('1');
   assert.equal(state.tableX, 12);
   assert.equal(state.tableZ, 8);

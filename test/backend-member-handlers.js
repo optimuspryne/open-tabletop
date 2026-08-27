@@ -9,11 +9,23 @@ function harness() {
   const memberships = new Map();
   const users = new Map();
   const db = {
-    async admitMember(roomId, userId) { calls.push(['admitMember', roomId, userId]); },
-    async getMembership(roomId, userId) { calls.push(['getMembership', roomId, userId]); return memberships.get(String(userId)) || null; },
-    async findUserById(userId) { calls.push(['findUserById', userId]); return users.get(String(userId)) || null; },
-    async kickMember(roomId, userId) { calls.push(['kickMember', roomId, userId]); },
-    async setMemberRole(roomId, userId, role) { calls.push(['setMemberRole', roomId, userId, role]); },
+    async admitMember(roomId, userId) {
+      calls.push(['admitMember', roomId, userId]);
+    },
+    async getMembership(roomId, userId) {
+      calls.push(['getMembership', roomId, userId]);
+      return memberships.get(String(userId)) || null;
+    },
+    async findUserById(userId) {
+      calls.push(['findUserById', userId]);
+      return users.get(String(userId)) || null;
+    },
+    async kickMember(roomId, userId) {
+      calls.push(['kickMember', roomId, userId]);
+    },
+    async setMemberRole(roomId, userId, role) {
+      calls.push(['setMemberRole', roomId, userId, role]);
+    },
   };
   const room = {
     roomId: 'room-1',
@@ -21,27 +33,48 @@ function harness() {
     pendingHands: new Map(),
     hands: new Map(),
     state: { players: new Map(), unclaimed: new Map() },
-    onMessage(name, handler) { handlers.set(name, handler); },
-    rank(client) { return RANK[client.auth.role] ?? RANK.player; },
+    onMessage(name, handler) {
+      handlers.set(name, handler);
+    },
+    rank(client) {
+      return RANK[client.auth.role] ?? RANK.player;
+    },
     canManage: canManageMember,
     canSetRole: canSetMemberRole,
-    sendMembers(client) { calls.push(['sendMembers', client.sessionId]); },
-    notifyLobby(userId, method) { calls.push(['notifyLobby', userId, method]); },
-    broadcastMembers() { calls.push(['broadcastMembers']); },
-    clientBy(sessionId) { return this.clients.find((client) => client.sessionId === sessionId); },
-    sendHand(client) { calls.push(['sendHand', client.sessionId]); },
+    sendMembers(client) {
+      calls.push(['sendMembers', client.sessionId]);
+    },
+    notifyLobby(userId, method) {
+      calls.push(['notifyLobby', userId, method]);
+    },
+    broadcastMembers() {
+      calls.push(['broadcastMembers']);
+    },
+    clientBy(sessionId) {
+      return this.clients.find((client) => client.sessionId === sessionId);
+    },
+    sendHand(client) {
+      calls.push(['sendHand', client.sessionId]);
+    },
   };
   registerMemberHandlers(room, { db, logger: { error() {} } });
   return { room, handlers, calls, memberships, users, db };
 }
 
 const actor = (role, userId = '1') => ({
-  sessionId: `session-${userId}`, auth: { role, userId }, sent: [],
-  send(type, payload) { this.sent.push({ type, payload }); },
+  sessionId: `session-${userId}`,
+  auth: { role, userId },
+  sent: [],
+  send(type, payload) {
+    this.sent.push({ type, payload });
+  },
 });
 
 test('member handler module registers its complete message family', () => {
-  assert.deepEqual([...harness().handlers.keys()], ['members', 'admit', 'kick', 'setRole', 'reassignHand']);
+  assert.deepEqual(
+    [...harness().handlers.keys()],
+    ['members', 'admit', 'kick', 'setRole', 'reassignHand'],
+  );
 });
 
 test('players and helpers cannot list or mutate membership', async () => {
@@ -78,7 +111,10 @@ test('GM cannot kick a GM, owner, self, or site administrator', async () => {
   await handlers.get('kick')(gm, { userId: '2' });
   await handlers.get('kick')(gm, { userId: '3' });
   await handlers.get('kick')(gm, { userId: '4' });
-  assert.equal(calls.some((call) => call[0] === 'kickMember'), false);
+  assert.equal(
+    calls.some((call) => call[0] === 'kickMember'),
+    false,
+  );
 });
 
 test('an owner can promote a helper to GM and live state updates immediately', async () => {
@@ -91,7 +127,10 @@ test('an owner can promote a helper to GM and live state updates immediately', a
   await handlers.get('setRole')(actor('owner'), { userId: '2', role: 'gm' });
   assert.equal(target.auth.role, 'gm');
   assert.equal(room.state.players.get(target.sessionId).role, 'gm');
-  assert.equal(calls.some((call) => call[0] === 'setMemberRole' && call[3] === 'gm'), true);
+  assert.equal(
+    calls.some((call) => call[0] === 'setMemberRole' && call[3] === 'gm'),
+    true,
+  );
 });
 
 test('hand reassignment is GM-only and merges onto the recipient hand', () => {
@@ -108,7 +147,10 @@ test('hand reassignment is GM-only and merges onto the recipient hand', () => {
   assert.deepEqual(room.hands.get(recipient.sessionId), [{ front: 'king' }, { front: 'ace' }]);
   assert.equal(room.pendingHands.has('3'), false);
   assert.equal(room.state.unclaimed.has('3'), false);
-  assert.equal(calls.some((call) => call[0] === 'sendHand'), true);
+  assert.equal(
+    calls.some((call) => call[0] === 'sendHand'),
+    true,
+  );
 });
 
 test('malformed membership messages fail closed', async () => {
@@ -129,21 +171,34 @@ test('database rejection is contained and reported without disabling later membe
   const { handlers, db, calls } = harness();
   const owner = actor('owner');
   const original = db.admitMember;
-  db.admitMember = async () => { throw new Error('database offline'); };
+  db.admitMember = async () => {
+    throw new Error('database offline');
+  };
   await handlers.get('admit')(owner, { userId: '2' });
-  assert.deepEqual(owner.sent, [{
-    type: 'serverError', payload: { operation: 'admit', message: 'Member operation unavailable. Try again.' },
-  }]);
+  assert.deepEqual(owner.sent, [
+    {
+      type: 'serverError',
+      payload: { operation: 'admit', message: 'Member operation unavailable. Try again.' },
+    },
+  ]);
   db.admitMember = original;
   await handlers.get('admit')(owner, { userId: '2' });
-  assert.equal(calls.some((call) => call[0] === 'admitMember'), true);
+  assert.equal(
+    calls.some((call) => call[0] === 'admitMember'),
+    true,
+  );
 });
 
 test('a lobby notification failure does not skip the local member-list refresh', async () => {
   const { handlers, room, calls } = harness();
   const owner = actor('owner');
-  room.notifyLobby = async () => { throw new Error('matchmaker offline'); };
+  room.notifyLobby = async () => {
+    throw new Error('matchmaker offline');
+  };
   await handlers.get('admit')(owner, { userId: '2' });
-  assert.equal(calls.some((call) => call[0] === 'broadcastMembers'), true);
+  assert.equal(
+    calls.some((call) => call[0] === 'broadcastMembers'),
+    true,
+  );
   assert.equal(owner.sent[0].type, 'serverError');
 });

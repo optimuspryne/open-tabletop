@@ -2,7 +2,30 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer } from './core.js';
-import { KINDS as PHYS, PROPS, COLORS, DECK_VISUAL, CARD_ROUND, TILES, HEX_HH, cardGeom, dieVerts, dieR, DIE_GLYPH, BOARDS, BOARD_SIZE, DECK_MODELS, TABLE, MEASURE, DISPENSERS, stackDiscH, stackVisible, gridActive, TRAY, trayParts } from '/shared/pieces.js';
+import {
+  KINDS as PHYS,
+  PROPS,
+  COLORS,
+  DECK_VISUAL,
+  CARD_ROUND,
+  TILES,
+  HEX_HH,
+  cardGeom,
+  dieVerts,
+  dieR,
+  DIE_GLYPH,
+  BOARDS,
+  BOARD_SIZE,
+  DECK_MODELS,
+  TABLE,
+  MEASURE,
+  DISPENSERS,
+  stackDiscH,
+  stackVisible,
+  gridActive,
+  TRAY,
+  trayParts,
+} from '/shared/pieces.js';
 
 // ===== Shared helpers =======================================================
 
@@ -28,7 +51,9 @@ function maxAnisotropy() {
 // The face of a standard playing card: rank + suit small in two opposite corners
 // and large in the middle. `color` is the suit color (black or red).
 function cardFront(rank, suit, color) {
-  const S = 2, w = 300, h = 420;
+  const S = 2,
+    w = 300,
+    h = 420;
   const { canvas, ctx } = makeCanvas(w * S, h * S);
   ctx.scale(S, S); // render at 2× for crisper rank/suit text
 
@@ -49,8 +74,15 @@ function cardFront(rank, suit, color) {
     ctx.fillText(suit, 0, 42);
   };
 
-  ctx.save(); ctx.translate(34, 52); drawIndex(); ctx.restore();                                // top-left
-  ctx.save(); ctx.translate(w - 34, h - 52); ctx.rotate(Math.PI); drawIndex(); ctx.restore();   // bottom-right, rotated 180°
+  ctx.save();
+  ctx.translate(34, 52);
+  drawIndex();
+  ctx.restore(); // top-left
+  ctx.save();
+  ctx.translate(w - 34, h - 52);
+  ctx.rotate(Math.PI);
+  drawIndex();
+  ctx.restore(); // bottom-right, rotated 180°
 
   ctx.font = 'bold 140px Georgia';
   ctx.fillText(rank, w / 2, h / 2 + 56); // big centre rank
@@ -60,7 +92,9 @@ function cardFront(rank, suit, color) {
 // A joker face: a star motif over "JOKER", in the joker's color (a deck ships one
 // warm-red and one near-black joker). Same card proportions/border as cardFront.
 function jokerFace(color) {
-  const S = 2, w = 300, h = 420;
+  const S = 2,
+    w = 300,
+    h = 420;
   const { canvas, ctx } = makeCanvas(w * S, h * S);
   ctx.scale(S, S);
   ctx.fillStyle = '#fbfbf7';
@@ -72,9 +106,21 @@ function jokerFace(color) {
   ctx.fillStyle = color || '#141414';
   ctx.textAlign = 'center';
   // Corner index: a "J" over a small star, mirrored bottom-right like a rank index.
-  const drawIndex = () => { ctx.font = 'bold 60px Georgia'; ctx.fillText('J', 0, 0); ctx.font = '34px Georgia'; ctx.fillText('★', 0, 38); };
-  ctx.save(); ctx.translate(34, 48); drawIndex(); ctx.restore();
-  ctx.save(); ctx.translate(w - 34, h - 48); ctx.rotate(Math.PI); drawIndex(); ctx.restore();
+  const drawIndex = () => {
+    ctx.font = 'bold 60px Georgia';
+    ctx.fillText('J', 0, 0);
+    ctx.font = '34px Georgia';
+    ctx.fillText('★', 0, 38);
+  };
+  ctx.save();
+  ctx.translate(34, 48);
+  drawIndex();
+  ctx.restore();
+  ctx.save();
+  ctx.translate(w - 34, h - 48);
+  ctx.rotate(Math.PI);
+  drawIndex();
+  ctx.restore();
   // Centre: a big star over the word JOKER.
   ctx.textBaseline = 'middle';
   ctx.font = 'bold 120px Georgia';
@@ -87,57 +133,88 @@ function jokerFace(color) {
 // The pips (0–6) for one half of a domino, in the standard 3×3 layout, within [x0,y0,cw,ch].
 function drawPips(ctx, n, x0, y0, cw, ch, color) {
   if (!n) return;
-  const P = { c: [0.5, 0.5], tl: [0.28, 0.28], tr: [0.72, 0.28], ml: [0.28, 0.5], mr: [0.72, 0.5], bl: [0.28, 0.72], br: [0.72, 0.72] };
-  const SETS = { 1: ['c'], 2: ['tl', 'br'], 3: ['tl', 'c', 'br'], 4: ['tl', 'tr', 'bl', 'br'], 5: ['tl', 'tr', 'c', 'bl', 'br'], 6: ['tl', 'ml', 'bl', 'tr', 'mr', 'br'] };
+  const P = {
+    c: [0.5, 0.5],
+    tl: [0.28, 0.28],
+    tr: [0.72, 0.28],
+    ml: [0.28, 0.5],
+    mr: [0.72, 0.5],
+    bl: [0.28, 0.72],
+    br: [0.72, 0.72],
+  };
+  const SETS = {
+    1: ['c'],
+    2: ['tl', 'br'],
+    3: ['tl', 'c', 'br'],
+    4: ['tl', 'tr', 'bl', 'br'],
+    5: ['tl', 'tr', 'c', 'bl', 'br'],
+    6: ['tl', 'ml', 'bl', 'tr', 'mr', 'br'],
+  };
   const r = Math.min(cw, ch) * 0.1;
   ctx.fillStyle = color || '#1a1a1a';
-  for (const key of (SETS[n] || [])) {
+  for (const key of SETS[n] || []) {
     const [fx, fy] = P[key];
-    ctx.beginPath(); ctx.arc(x0 + fx * cw, y0 + fy * ch, r, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x0 + fx * cw, y0 + fy * ch, r, 0, Math.PI * 2);
+    ctx.fill();
   }
 }
 // A domino tile face: two pip halves (a over b) split by a divider. Drawn at the tile's 1:2
 // footprint so it maps cleanly onto the domino geometry (no stretch).
 function dominoFace(a, b) {
-  const w = 300, h = 600;
+  const w = 300,
+    h = 600;
   const { canvas, ctx } = makeCanvas(w, h);
   ctx.fillStyle = '#f4f1ea';
-  ctx.fillRect(0, 0, w, h);                                        // full square fill; the mesh's mask rounds the corners
-  const m = w * 0.12;                                              // the dividing bar across the middle
-  ctx.strokeStyle = '#888'; ctx.lineWidth = 4;
-  ctx.beginPath(); ctx.moveTo(m, h / 2); ctx.lineTo(w - m, h / 2); ctx.stroke();
-  drawPips(ctx, a, m, m, w - 2 * m, h / 2 - 2 * m);               // top half = a
-  drawPips(ctx, b, m, h / 2 + m, w - 2 * m, h / 2 - 2 * m);       // bottom half = b
+  ctx.fillRect(0, 0, w, h); // full square fill; the mesh's mask rounds the corners
+  const m = w * 0.12; // the dividing bar across the middle
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(m, h / 2);
+  ctx.lineTo(w - m, h / 2);
+  ctx.stroke();
+  drawPips(ctx, a, m, m, w - 2 * m, h / 2 - 2 * m); // top half = a
+  drawPips(ctx, b, m, h / 2 + m, w - 2 * m, h / 2 - 2 * m); // bottom half = b
   return cTex(canvas);
 }
 // A blank domino back: ivory tile with a subtle inset border (not the playing-card cross-hatch).
 function dominoBack() {
-  const w = 300, h = 600;
+  const w = 300,
+    h = 600;
   const { canvas, ctx } = makeCanvas(w, h);
   ctx.fillStyle = '#efe9da';
-  ctx.fillRect(0, 0, w, h);                                        // full square fill; the mesh's mask rounds the corners
-  ctx.strokeStyle = '#c9bfa6'; ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.roundRect(22, 22, w - 44, h - 44, 0.06 * w); ctx.stroke();
+  ctx.fillRect(0, 0, w, h); // full square fill; the mesh's mask rounds the corners
+  ctx.strokeStyle = '#c9bfa6';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.roundRect(22, 22, w - 44, h - 44, 0.06 * w);
+  ctx.stroke();
   return cTex(canvas);
 }
 // A word-tile FACE: a big letter with a small point value in the lower-right (blank = an empty tile).
 function letterTileFace(letter, value) {
   const S = 300;
   const { canvas, ctx } = makeCanvas(S, S);
-  ctx.fillStyle = '#f2e8cf';                                        // warm wood; the mesh's mask rounds the corners
+  ctx.fillStyle = '#f2e8cf'; // warm wood; the mesh's mask rounds the corners
   ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = '#2c2115';                                        // ink (matches WORDY_COLORS.ink)
+  ctx.fillStyle = '#2c2115'; // ink (matches WORDY_COLORS.ink)
   const L = String(letter || '').toUpperCase();
   if (L) {
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.font = '700 190px Georgia, "Times New Roman", serif';
     ctx.fillText(L, S * 0.46, S * 0.52);
-    ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'alphabetic';
     ctx.font = '600 60px Georgia, serif';
-    ctx.fillText(String(value ?? ''), S * 0.9, S * 0.88);          // point value, lower-right
+    ctx.fillText(String(value ?? ''), S * 0.9, S * 0.88); // point value, lower-right
   } else {
-    ctx.strokeStyle = 'rgba(44,33,21,0.18)'; ctx.lineWidth = 6;     // blank tile: a faint frame so it still reads as a tile
-    ctx.beginPath(); ctx.roundRect(40, 40, S - 80, S - 80, 24); ctx.stroke();
+    ctx.strokeStyle = 'rgba(44,33,21,0.18)';
+    ctx.lineWidth = 6; // blank tile: a faint frame so it still reads as a tile
+    ctx.beginPath();
+    ctx.roundRect(40, 40, S - 80, S - 80, 24);
+    ctx.stroke();
   }
   return cTex(canvas);
 }
@@ -147,19 +224,28 @@ function letterBack() {
   const { canvas, ctx } = makeCanvas(S, S);
   ctx.fillStyle = '#e7dcc0';
   ctx.fillRect(0, 0, S, S);
-  ctx.strokeStyle = '#c9bfa6'; ctx.lineWidth = 6;
-  ctx.beginPath(); ctx.roundRect(24, 24, S - 48, S - 48, 0.08 * S); ctx.stroke();
+  ctx.strokeStyle = '#c9bfa6';
+  ctx.lineWidth = 6;
+  ctx.beginPath();
+  ctx.roundRect(24, 24, S - 48, S - 48, 0.08 * S);
+  ctx.stroke();
   return cTex(canvas);
 }
 // A mahjong tile BACK: the iconic green bakelite face (the wall, face-down tiles).
 function mahjongBack() {
-  const w = 300, h = 418;
+  const w = 300,
+    h = 418;
   const { canvas, ctx } = makeCanvas(w, h);
   const g = ctx.createLinearGradient(0, 0, w, h);
-  g.addColorStop(0, '#2f7d5b'); g.addColorStop(1, '#245f45');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-  ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.lineWidth = 8;
-  ctx.beginPath(); ctx.roundRect(20, 20, w - 40, h - 40, 0.06 * w); ctx.stroke();
+  g.addColorStop(0, '#2f7d5b');
+  g.addColorStop(1, '#245f45');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.roundRect(20, 20, w - 40, h - 40, 0.06 * w);
+  ctx.stroke();
   return cTex(canvas);
 }
 
@@ -182,7 +268,8 @@ function cardBack() {
 
 // An 8×8 checker/felt texture — the default procedural board top.
 function boardTex() {
-  const squares = 8, size = CONFIG.tex.board;
+  const squares = 8,
+    size = CONFIG.tex.board;
   const { canvas, ctx } = makeCanvas(size, size);
 
   const cell = size / squares;
@@ -200,7 +287,8 @@ function boardTex() {
 let _deckEdgeTex;
 function deckEdgeTex() {
   if (_deckEdgeTex) return _deckEdgeTex;
-  const w = 4, h = 256;
+  const w = 4,
+    h = 256;
   const { canvas, ctx } = makeCanvas(w, h);
 
   ctx.fillStyle = '#' + COLORS.deckEdge.toString(16).padStart(6, '0'); // paper base color
@@ -208,7 +296,7 @@ function deckEdgeTex() {
   ctx.lineWidth = 1;
   for (let y = 2; y < h; y += 4) {
     // Alternate a shadow line and a highlight line to fake stacked paper layers.
-    ctx.strokeStyle = (y % 8 < 4) ? 'rgba(120,108,90,0.75)' : 'rgba(255,255,255,0.22)';
+    ctx.strokeStyle = y % 8 < 4 ? 'rgba(120,108,90,0.75)' : 'rgba(255,255,255,0.22)';
     ctx.beginPath();
     ctx.moveTo(0, y + 0.5);
     ctx.lineTo(w, y + 0.5);
@@ -258,7 +346,8 @@ function drawNumber(ctx, size, value, color) {
 
 // Cached number textures: transparent-background digits for the label planes on
 // polyhedral dice, and ivory-background digits for the flat d6 box faces.
-const _digitTex = new Map(), _faceTex = new Map();
+const _digitTex = new Map(),
+  _faceTex = new Map();
 
 function digitTexture(value, text) {
   const def = text == null;
@@ -273,7 +362,7 @@ function digitTexture(value, text) {
 
 const hexOf = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
 function numberFaceTexture(value, body, text) {
-  const def = body == null && text == null;                 // the shared, cached ivory face
+  const def = body == null && text == null; // the shared, cached ivory face
   if (def && _faceTex.has(value)) return _faceTex.get(value);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
@@ -281,7 +370,7 @@ function numberFaceTexture(value, body, text) {
   ctx.fillRect(0, 0, size, size);
   drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
   const texture = cTex(canvas);
-  if (def) _faceTex.set(value, texture);                    // only the default is cached (custom faces are per-die)
+  if (def) _faceTex.set(value, texture); // only the default is cached (custom faces are per-die)
   return texture;
 }
 
@@ -289,7 +378,11 @@ function numberFaceTexture(value, body, text) {
 function numberLabel(value, size, text) {
   return new THREE.Mesh(
     new THREE.PlaneGeometry(size, size),
-    new THREE.MeshBasicMaterial({ map: digitTexture(value, text), transparent: true, depthWrite: false }),
+    new THREE.MeshBasicMaterial({
+      map: digitTexture(value, text),
+      transparent: true,
+      depthWrite: false,
+    }),
   );
 }
 
@@ -298,9 +391,16 @@ function numberLabel(value, size, text) {
 // faces by grouping triangles that share a normal (same trick as the server's
 // collider), then drop a numbered label at each face's centre.
 function convexDie(sides, color, textColor) {
-  const points = dieVerts(sides).map(v => new THREE.Vector3(v[0], v[1], v[2]));
+  const points = dieVerts(sides).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(points);
-  const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color ?? COLORS.ivory, roughness: 0.45, flatShading: true }));
+  const die = new THREE.Mesh(
+    geo,
+    new THREE.MeshStandardMaterial({
+      color: color ?? COLORS.ivory,
+      roughness: 0.45,
+      flatShading: true,
+    }),
+  );
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -309,8 +409,12 @@ function convexDie(sides, color, textColor) {
 
   // Group the mesh's triangles into faces by shared normal.
   const pos = geo.getAttribute('position');
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3();
+  const a = new THREE.Vector3(),
+    b = new THREE.Vector3(),
+    c = new THREE.Vector3();
+  const ab = new THREE.Vector3(),
+    ac = new THREE.Vector3(),
+    normal = new THREE.Vector3();
   const faces = [];
   for (let i = 0; i < pos.count; i += 3) {
     a.fromBufferAttribute(pos, i);
@@ -320,7 +424,7 @@ function convexDie(sides, color, textColor) {
     ac.subVectors(c, a);
     normal.crossVectors(ab, ac).normalize();
 
-    let face = faces.find(f => f.normal.dot(normal) > 0.999);
+    let face = faces.find((f) => f.normal.dot(normal) > 0.999);
     if (!face) {
       face = { normal: normal.clone(), verts: new Map() };
       faces.push(face);
@@ -336,11 +440,11 @@ function convexDie(sides, color, textColor) {
   faces.forEach((face, index) => {
     const verts = [...face.verts.values()];
     const centroid = new THREE.Vector3();
-    verts.forEach(v => centroid.add(v));
+    verts.forEach((v) => centroid.add(v));
     centroid.multiplyScalar(1 / verts.length);
 
     let circumRadius = 0;
-    verts.forEach(v => circumRadius = Math.max(circumRadius, v.distanceTo(centroid)));
+    verts.forEach((v) => (circumRadius = Math.max(circumRadius, v.distanceTo(centroid))));
     const inRadius = circumRadius * Math.cos(Math.PI / verts.length);
 
     const label = numberLabel(index + 1, inRadius * 1.25 * DIE_GLYPH, textColor);
@@ -354,9 +458,16 @@ function convexDie(sides, color, textColor) {
 // A d4 is read by its top vertex, not a top face — so each of the 4 vertices
 // carries a number, printed at that corner on all three faces touching it.
 function numberedD4(color, textColor) {
-  const verts = dieVerts(4).map(v => new THREE.Vector3(v[0], v[1], v[2]));
+  const verts = dieVerts(4).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(verts);
-  const die = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: color ?? COLORS.ivory, roughness: 0.45, flatShading: true }));
+  const die = new THREE.Mesh(
+    geo,
+    new THREE.MeshStandardMaterial({
+      color: color ?? COLORS.ivory,
+      roughness: 0.45,
+      flatShading: true,
+    }),
+  );
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -365,18 +476,28 @@ function numberedD4(color, textColor) {
 
   // Which vertex number (1..4) a given corner is — the nearest of the 4 verts.
   const vertexNumber = (corner) => {
-    let best = 0, bestDist = 1e9;
+    let best = 0,
+      bestDist = 1e9;
     verts.forEach((v, i) => {
       const dist = v.distanceTo(corner);
-      if (dist < bestDist) { bestDist = dist; best = i; }
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = i;
+      }
     });
     return best + 1;
   };
 
   const pos = geo.getAttribute('position');
-  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
-  const ab = new THREE.Vector3(), ac = new THREE.Vector3(), normal = new THREE.Vector3();
-  const right = new THREE.Vector3(), up = new THREE.Vector3(), basis = new THREE.Matrix4();
+  const a = new THREE.Vector3(),
+    b = new THREE.Vector3(),
+    c = new THREE.Vector3();
+  const ab = new THREE.Vector3(),
+    ac = new THREE.Vector3(),
+    normal = new THREE.Vector3();
+  const right = new THREE.Vector3(),
+    up = new THREE.Vector3(),
+    basis = new THREE.Matrix4();
 
   for (let i = 0; i < pos.count; i += 3) {
     a.fromBufferAttribute(pos, i);
@@ -386,8 +507,16 @@ function numberedD4(color, textColor) {
     ac.subVectors(c, a);
     normal.crossVectors(ab, ac).normalize();
 
-    const centroid = new THREE.Vector3().add(a).add(b).add(c).multiplyScalar(1 / 3);
-    const circumRadius = Math.max(a.distanceTo(centroid), b.distanceTo(centroid), c.distanceTo(centroid));
+    const centroid = new THREE.Vector3()
+      .add(a)
+      .add(b)
+      .add(c)
+      .multiplyScalar(1 / 3);
+    const circumRadius = Math.max(
+      a.distanceTo(centroid),
+      b.distanceTo(centroid),
+      c.distanceTo(centroid),
+    );
 
     // One label per corner of this face, oriented so the digit points outward
     // toward its own vertex (that's why each number appears three times). Unlike the
@@ -402,7 +531,7 @@ function numberedD4(color, textColor) {
       up.crossVectors(normal, right).normalize();
       basis.makeBasis(right, up, normal);
       label.quaternion.setFromRotationMatrix(basis);
-      label.position.copy(corner).lerp(centroid, 0.40).addScaledVector(normal, 0.015);
+      label.position.copy(corner).lerp(centroid, 0.4).addScaledVector(normal, 0.015);
       group.add(label);
     }
   }
@@ -418,7 +547,8 @@ const halfExtents = (type) => PHYS[type].shape.box;
 //   'text:[#col:][#bg:]words' → a procedural text card face
 //   'tback:color:[#tc:]words' → a procedural text card back
 //   'data:...' or a URL       → a loaded image (uploaded card art or a file)
-const _texCache = new Map(), _texLoader = new THREE.TextureLoader();
+const _texCache = new Map(),
+  _texLoader = new THREE.TextureLoader();
 
 // Load an external image URL as an sRGB texture with anisotropic filtering.
 function loadImageTexture(url) {
@@ -439,9 +569,15 @@ export function parseCardFront(ref) {
     return { kind: 'rank', rank, suit, color };
   }
   if (ref.startsWith('joker:')) return { kind: 'joker', color: ref.slice(6) || COLORS.ink };
-  if (ref.startsWith('domino:')) { const [, a, b] = ref.split(':'); return { kind: 'domino', a: +a || 0, b: +b || 0 }; }
+  if (ref.startsWith('domino:')) {
+    const [, a, b] = ref.split(':');
+    return { kind: 'domino', a: +a || 0, b: +b || 0 };
+  }
   if (ref === 'domback') return { kind: 'domback' };
-  if (ref.startsWith('letter:')) { const [, l, v] = ref.split(':'); return { kind: 'letter', letter: l || '', value: +v || 0 }; } // 'letter:A:1'; blank = 'letter::0'
+  if (ref.startsWith('letter:')) {
+    const [, l, v] = ref.split(':');
+    return { kind: 'letter', letter: l || '', value: +v || 0 };
+  } // 'letter:A:1'; blank = 'letter::0'
   if (ref === 'lback') return { kind: 'lback' };
   if (ref === 'mjback') return { kind: 'mjback' };
   if (ref.startsWith('text:')) {
@@ -473,8 +609,10 @@ function resolveTexture(ref) {
   else if (parsed.kind === 'letter') texture = letterTileFace(parsed.letter, parsed.value);
   else if (parsed.kind === 'lback') texture = letterBack();
   else if (parsed.kind === 'mjback') texture = mahjongBack();
-  else if (parsed.kind === 'text') texture = textFaceTexture(parsed.text, parsed.color, parsed.bg, parsed.accent);
-  else if (parsed.kind === 'tback') texture = textBackTexture(parsed.bg, parsed.text, parsed.textColor, parsed.accent);
+  else if (parsed.kind === 'text')
+    texture = textFaceTexture(parsed.text, parsed.color, parsed.bg, parsed.accent);
+  else if (parsed.kind === 'tback')
+    texture = textBackTexture(parsed.bg, parsed.text, parsed.textColor, parsed.accent);
   else texture = loadImageTexture(parsed.ref);
 
   _texCache.set(ref, texture);
@@ -519,7 +657,9 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
   ctx.font = `${weight} ${fontSize}px system-ui,sans-serif`;
   let lines = wrapLines(ctx, text, w - pad * 2);
   // shrink until the block fits vertically AND no single line overflows horizontally (long/unbreakable words)
-  const overflows = () => lines.length * fontSize * 1.25 > h - pad * 2 || lines.some((l) => ctx.measureText(l).width > w - pad * 2);
+  const overflows = () =>
+    lines.length * fontSize * 1.25 > h - pad * 2 ||
+    lines.some((l) => ctx.measureText(l).width > w - pad * 2);
   while (overflows() && fontSize > 8) {
     fontSize -= 2;
     ctx.font = `${weight} ${fontSize}px system-ui,sans-serif`;
@@ -527,7 +667,7 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
   }
 
   const lineHeight = fontSize * 1.25;
-  let y = h / 2 - (lines.length - 1) * lineHeight / 2;
+  let y = h / 2 - ((lines.length - 1) * lineHeight) / 2;
   for (const line of lines) {
     ctx.fillText(line, w / 2, y);
     y += lineHeight;
@@ -536,13 +676,16 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
 
 // A procedural card FACE showing wrapped text (for custom text decks).
 function textFaceTexture(text, color, bg, accent) {
-  const S = 2, w = 300, h = 420;
+  const S = 2,
+    w = 300,
+    h = 420;
   const { canvas, ctx } = makeCanvas(w * S, h * S);
   ctx.scale(S, S); // render at 2× so text stays crisp when a card is near the camera (draw in logical 300×420)
 
   ctx.fillStyle = bg || '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
-  const inset = 6, r = Math.max(0, CARD_ROUND * w - inset); // rounded frame, following the card's corners
+  const inset = 6,
+    r = Math.max(0, CARD_ROUND * w - inset); // rounded frame, following the card's corners
   ctx.strokeStyle = accent || '#ddd';
   ctx.lineWidth = 6;
   ctx.beginPath();
@@ -556,12 +699,14 @@ function textFaceTexture(text, color, bg, accent) {
 
 // A procedural card BACK showing optional wrapped text (for custom text decks).
 function textBackTexture(color, text, textColor, accent) {
-  const w = 256, h = 358;
+  const w = 256,
+    h = 358;
   const { canvas, ctx } = makeCanvas(w, h);
 
   ctx.fillStyle = color || '#7d2b2b';
   ctx.fillRect(0, 0, w, h);
-  const inset = 8, r = Math.max(0, CARD_ROUND * w - inset); // rounded frame, following the card's corners
+  const inset = 8,
+    r = Math.max(0, CARD_ROUND * w - inset); // rounded frame, following the card's corners
   ctx.strokeStyle = accent || 'rgba(255,255,255,.45)';
   ctx.lineWidth = 6;
   ctx.beginPath();
@@ -591,12 +736,14 @@ function resizeToCanvas(file, w, h, fit, bg) {
         ctx.fillStyle = bg || '#ffffff';
         ctx.fillRect(0, 0, w, h);
         const scale = Math.min(w / img.width, h / img.height);
-        const drawW = img.width * scale, drawH = img.height * scale;
+        const drawW = img.width * scale,
+          drawH = img.height * scale;
         ctx.drawImage(img, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
       } else {
         // Cover-fit: scale up to fill, centre, and let the overflow crop.
         const scale = Math.max(w / img.width, h / img.height);
-        const drawW = img.width * scale, drawH = img.height * scale;
+        const drawW = img.width * scale,
+          drawH = img.height * scale;
         ctx.drawImage(img, (w - drawW) / 2, (h - drawH) / 2, drawW, drawH);
       }
       URL.revokeObjectURL(img.src);
@@ -610,8 +757,12 @@ function resizeToCanvas(file, w, h, fit, bg) {
 // Resize `file` and encode it to an image Blob for HTTP upload (format/quality
 // come from CONFIG.upload).
 function imgToBlob(file, w, h, fit, bg) {
-  return resizeToCanvas(file, w, h, fit, bg)
-    .then(canvas => new Promise(resolve => canvas.toBlob(blob => resolve(blob), CONFIG.upload.type, CONFIG.upload.quality)));
+  return resizeToCanvas(file, w, h, fit, bg).then(
+    (canvas) =>
+      new Promise((resolve) =>
+        canvas.toBlob((blob) => resolve(blob), CONFIG.upload.type, CONFIG.upload.quality),
+      ),
+  );
 }
 
 // POST a body to an upload endpoint with the auth token; return the stored URL ref.
@@ -620,7 +771,10 @@ function imgToBlob(file, w, h, fit, bg) {
 async function postUpload(path, contentType, body) {
   const response = await fetch(path, {
     method: 'POST',
-    headers: { 'Content-Type': contentType, 'Authorization': 'Bearer ' + (localStorage.getItem('tabletop.token') || '') },
+    headers: {
+      'Content-Type': contentType,
+      Authorization: 'Bearer ' + (localStorage.getItem('tabletop.token') || ''),
+    },
     body,
   });
   if (!response.ok) throw new Error('upload failed');
@@ -635,11 +789,24 @@ function uploadModel(file) {
 // Load a .glb and return its true world-space bounds { size, center }, with all
 // node transforms baked in.
 function measureGlb(url, rot) {
-  return new Promise((resolve, reject) => gltfLoader.load(url, gltf => {
-    if (rot) { gltf.scene.rotation.set(rot[0], rot[1], rot[2]); gltf.scene.updateMatrixWorld(true); } // measure the reoriented model
-    const box = new THREE.Box3().setFromObject(gltf.scene);
-    resolve({ size: box.getSize(new THREE.Vector3()), center: box.getCenter(new THREE.Vector3()) });
-  }, undefined, reject));
+  return new Promise((resolve, reject) =>
+    gltfLoader.load(
+      url,
+      (gltf) => {
+        if (rot) {
+          gltf.scene.rotation.set(rot[0], rot[1], rot[2]);
+          gltf.scene.updateMatrixWorld(true);
+        } // measure the reoriented model
+        const box = new THREE.Box3().setFromObject(gltf.scene);
+        resolve({
+          size: box.getSize(new THREE.Vector3()),
+          center: box.getCenter(new THREE.Vector3()),
+        });
+      },
+      undefined,
+      reject,
+    ),
+  );
 }
 
 // Centre a loaded model at the origin, then scale it — either by a fixed factor
@@ -649,7 +816,8 @@ function fitModel(obj, opts) {
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
-  const scale = opts.scale != null ? opts.scale : (opts.target / (Math.max(size.x, size.y, size.z) || 1));
+  const scale =
+    opts.scale != null ? opts.scale : opts.target / (Math.max(size.x, size.y, size.z) || 1);
   obj.scale.setScalar(scale);
   obj.position.copy(center).multiplyScalar(-scale);
   return scale;
@@ -658,15 +826,15 @@ function fitModel(obj, opts) {
 // The normalized collider half-extents [hx, hy, hz] for an uploaded model prop.
 function measureModel(url, scale = 1, rot) {
   return measureGlb(url, rot).then(({ size }) => {
-    const normScale = MODEL_SIZE * scale / (Math.max(size.x, size.y, size.z) || 1);
-    return [size.x * normScale / 2, size.y * normScale / 2, size.z * normScale / 2];
+    const normScale = (MODEL_SIZE * scale) / (Math.max(size.x, size.y, size.z) || 1);
+    return [(size.x * normScale) / 2, (size.y * normScale) / 2, (size.z * normScale) / 2];
   });
 }
 
 // Resize one image and POST it; return the URL ref the server stored it under.
 async function uploadImage(file, w = CONFIG.upload.cardW, h = CONFIG.upload.cardH, fit, kind, bg) {
   const blob = await imgToBlob(file, w, h, fit, bg);
-  const query = kind ? ('?kind=' + encodeURIComponent(kind)) : '';
+  const query = kind ? '?kind=' + encodeURIComponent(kind) : '';
   return postUpload('/upload' + query, CONFIG.upload.type, blob);
 }
 // The natural pixel size of an image file → { w, h }, or null on error. Used to size a card/tile
@@ -675,8 +843,14 @@ function measureImage(file) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => { URL.revokeObjectURL(url); resolve({ w: img.naturalWidth, h: img.naturalHeight, round: cornerRadiusFrac(img) }); };
-    img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ w: img.naturalWidth, h: img.naturalHeight, round: cornerRadiusFrac(img) });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
     img.src = url;
   });
 }
@@ -688,27 +862,52 @@ function measureImage(file) {
 // square / fully-opaque image (a plain photo fills its rectangle edge-to-edge). Falls back to the
 // standard card radius if the pixels can't be read.
 function cornerRadiusFrac(img) {
-  const NW = img.naturalWidth, NH = img.naturalHeight;
+  const NW = img.naturalWidth,
+    NH = img.naturalHeight;
   if (!NW || !NH) return CARD_ROUND;
-  const scale = Math.min(1, 400 / Math.max(NW, NH));          // sample at reduced res — plenty for a radius
-  const w = Math.max(2, Math.round(NW * scale)), h = Math.max(2, Math.round(NH * scale));
+  const scale = Math.min(1, 400 / Math.max(NW, NH)); // sample at reduced res — plenty for a radius
+  const w = Math.max(2, Math.round(NW * scale)),
+    h = Math.max(2, Math.round(NH * scale));
   const { canvas, ctx } = makeCanvas(w, h);
   ctx.drawImage(img, 0, 0, w, h);
   let data;
-  try { data = ctx.getImageData(0, 0, w, h).data; } catch (e) { return CARD_ROUND; }  // tainted canvas
-  const A = 128, alpha = (x, y) => data[(y * w + x) * 4 + 3];
-  let minX = w, minY = h, maxX = -1, maxY = -1;               // bounding box of the opaque pixels
-  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (alpha(x, y) >= A) {
-    if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
-  }
-  if (maxX < minX || maxY < minY) return CARD_ROUND;          // no opaque pixels (shouldn't happen)
+  try {
+    data = ctx.getImageData(0, 0, w, h).data;
+  } catch (e) {
+    return CARD_ROUND;
+  } // tainted canvas
+  const A = 128,
+    alpha = (x, y) => data[(y * w + x) * 4 + 3];
+  let minX = w,
+    minY = h,
+    maxX = -1,
+    maxY = -1; // bounding box of the opaque pixels
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++)
+      if (alpha(x, y) >= A) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+  if (maxX < minX || maxY < minY) return CARD_ROUND; // no opaque pixels (shouldn't happen)
   const bw = maxX - minX + 1;
   if (alpha(minX, minY) >= A && alpha(maxX, minY) >= A && alpha(minX, maxY) >= A) return 0; // corners solid → square
   // On a rounded rect, the top edge's opaque span starts `r` in from the left, and the left edge's
   // opaque span starts `r` down from the top. Average the two estimates for robustness.
-  let rv = 0; for (let y = minY; y <= maxY; y++) if (alpha(minX, y) >= A) { rv = y - minY; break; }
-  let rh = 0; for (let x = minX; x <= maxX; x++) if (alpha(x, minY) >= A) { rh = x - minX; break; }
-  return Math.max(0, Math.min(0.5, +(((rh + rv) / 2) / bw).toFixed(4)));
+  let rv = 0;
+  for (let y = minY; y <= maxY; y++)
+    if (alpha(minX, y) >= A) {
+      rv = y - minY;
+      break;
+    }
+  let rh = 0;
+  for (let x = minX; x <= maxX; x++)
+    if (alpha(x, minY) >= A) {
+      rh = x - minX;
+      break;
+    }
+  return Math.max(0, Math.min(0.5, +((rh + rv) / 2 / bw).toFixed(4)));
 }
 // --- Die, card, and mask meshes ---------------------------------------------
 
@@ -720,7 +919,13 @@ function dieMesh(props = {}) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
       new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
-      faceOrder.map(n => new THREE.MeshStandardMaterial({ map: numberFaceTexture(n, props.color, props.textColor), roughness: 0.5 })),
+      faceOrder.map(
+        (n) =>
+          new THREE.MeshStandardMaterial({
+            map: numberFaceTexture(n, props.color, props.textColor),
+            roughness: 0.5,
+          }),
+      ),
     );
   }
   if (sides === 4) return numberedD4(props.color, props.textColor);
@@ -738,7 +943,8 @@ function roundMask(hw = TILES.card.w, hh = TILES.card.h, round = CARD_ROUND) {
   const key = round.toFixed(3) + ':' + aspect.toFixed(3);
   let tex = _roundMasks.get(key);
   if (tex) return tex;
-  const w = 300, h = Math.max(1, Math.round(300 * aspect));
+  const w = 300,
+    h = Math.max(1, Math.round(300 * aspect));
   const { canvas, ctx } = makeCanvas(w, h);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, w, h);
@@ -755,20 +961,22 @@ function roundMask(hw = TILES.card.w, hh = TILES.card.h, round = CARD_ROUND) {
 // and whose four edges are invisible. A face-down card omits the front texture
 // so its hidden face can never even be rendered client-side.
 function cardMesh(props = {}) {
-  const { hw, hh, th, round, shape } = cardGeom(props);     // footprint/thickness/shape (standard card, a tile, or explicit geom)
+  const { hw, hh, th, round, shape } = cardGeom(props); // footprint/thickness/shape (standard card, a tile, or explicit geom)
 
   // A HEXAGON card/tile: a regular flat-top hex prism — the GEOMETRY is the silhouette (no alpha mask),
   // and it matches the 6-gon collider exactly, so it's ready for hex grids. Thin → invisible edges;
   // thick → ivory sides. The image maps across the hex's bounding box (art outside the hex is clipped).
   if (shape === 'hex') {
-    const geo = hexGeo(hh, th * 2);                        // hh = the hexagon's circumradius (pointy-top)
-    const edge = th > 0.03
-      ? new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7 })
-      : new THREE.MeshBasicMaterial({ visible: false });
-    const faceMat = (ref) => new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 });
+    const geo = hexGeo(hh, th * 2); // hh = the hexagon's circumradius (pointy-top)
+    const edge =
+      th > 0.03
+        ? new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7 })
+        : new THREE.MeshBasicMaterial({ visible: false });
+    const faceMat = (ref) =>
+      new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 });
     const backMat = faceMat(props.back);
     const frontMat = props.front ? faceMat(props.front) : backMat;
-    return new THREE.Mesh(geo, [frontMat, backMat, edge]);  // groups: 0=top(front), 1=bottom(back), 2=sides
+    return new THREE.Mesh(geo, [frontMat, backMat, edge]); // groups: 0=top(front), 1=bottom(back), 2=sides
   }
 
   // A chunky TILE (domino) is a rounded SOLID — real rounded side walls and opaque procedural faces,
@@ -782,7 +990,10 @@ function cardMesh(props = {}) {
     const capMask = roundMask(hw, hh, round);
     const capMat = (ref) => {
       const m = { map: resolveTexture(ref), roughness: 0.6 };
-      if (parseCardFront(ref || 'back').kind === 'image') { m.alphaMap = capMask; m.alphaTest = 0.5; }
+      if (parseCardFront(ref || 'back').kind === 'image') {
+        m.alphaMap = capMask;
+        m.alphaTest = 0.5;
+      }
       return new THREE.MeshStandardMaterial(m);
     };
     const backMat = capMat(props.back);
@@ -795,17 +1006,26 @@ function cardMesh(props = {}) {
   // transparency (uploaded card PNGs have transparent rounded corners) AND a rounded-rect mask (for
   // procedural faces, which are opaque). So the card matches its art exactly: no mesh-imposed frame or
   // thickness, and a transparent corner pixel is discarded instead of rendering as a dark chunk.
-  const mask = roundMask(hw, hh, round);                    // round is measured from the art for image decks
+  const mask = roundMask(hw, hh, round); // round is measured from the art for image decks
   const invisible = new THREE.MeshBasicMaterial({ visible: false });
-  const faceMat = (ref) => new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaMap: mask, alphaTest: 0.5, roughness: 0.6 });
+  const faceMat = (ref) =>
+    new THREE.MeshStandardMaterial({
+      map: resolveTexture(ref),
+      alphaMap: mask,
+      alphaTest: 0.5,
+      roughness: 0.6,
+    });
   const backMat = faceMat(props.back);
-  const frontMat = props.front ? faceMat(props.front) : backMat;   // face-down: both faces show the back
+  const frontMat = props.front ? faceMat(props.front) : backMat; // face-down: both faces show the back
   const geo = new THREE.BoxGeometry(hw * 2, th * 2, hh * 2);
   // Box material order: +X, -X, +Y(top), -Y(bottom), +Z, -Z → front on top, back beneath, edges hidden.
   const mesh = new THREE.Mesh(geo, [invisible, invisible, frontMat, backMat, invisible, invisible]);
   // Cast a shadow that follows the alpha silhouette, not the square box — no dark sliver at the corners.
   mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
-    depthPacking: THREE.RGBADepthPacking, map: resolveTexture(props.front || props.back), alphaMap: mask, alphaTest: 0.5,
+    depthPacking: THREE.RGBADepthPacking,
+    map: resolveTexture(props.front || props.back),
+    alphaMap: mask,
+    alphaTest: 0.5,
   });
   return mesh;
 }
@@ -819,7 +1039,8 @@ function propColor(props) {
   return props.color ?? COLORS.neutralProp;
 }
 
-const propMat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05 });
+const propMat = (color) =>
+  new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05 });
 const gltfLoader = new GLTFLoader();
 const MODEL_SIZE = CONFIG.model.size; // custom-model normalization target
 
@@ -829,13 +1050,20 @@ const MODEL_SIZE = CONFIG.model.size; // custom-model normalization target
 // `beforeFit(scene)` runs on the raw scene before fitting (e.g. to reorient it).
 function loadModelGroup(url, fitOpts, onMesh, beforeFit) {
   const group = new THREE.Group();
-  gltfLoader.load(url, gltf => {
-    const obj = gltf.scene;
-    if (beforeFit) beforeFit(obj);
-    fitModel(obj, fitOpts);
-    obj.traverse(node => { if (node.isMesh) onMesh(node); });
-    group.add(obj);
-  }, undefined, () => {});
+  gltfLoader.load(
+    url,
+    (gltf) => {
+      const obj = gltf.scene;
+      if (beforeFit) beforeFit(obj);
+      fitModel(obj, fitOpts);
+      obj.traverse((node) => {
+        if (node.isMesh) onMesh(node);
+      });
+      group.add(obj);
+    },
+    undefined,
+    () => {},
+  );
   return group;
 }
 
@@ -850,9 +1078,10 @@ function propMesh(props = {}) {
     const builtin = !props.model && !!spec.model; // built-ins keep FIXED set proportions; custom uploads normalize
 
     // Work out how the model gets colored (used by paint below):
-    const teamTint = builtin && spec.team ? propColor(props) : null;                                  // a team set → recolor every slot
-    const pick = (!builtin || !spec.ownMaterial || spec.tintMaterial) ? (props.color ?? null) : null; // the player's picked color
-    const matte = (color, side) => new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+    const teamTint = builtin && spec.team ? propColor(props) : null; // a team set → recolor every slot
+    const pick = !builtin || !spec.ownMaterial || spec.tintMaterial ? (props.color ?? null) : null; // the player's picked color
+    const matte = (color, side) =>
+      new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
 
     // Decide the fate of one material slot on the loaded model.
     const paint = (material) => {
@@ -864,7 +1093,8 @@ function propMesh(props = {}) {
         material.metalness = 0;
         return material;
       }
-      if (builtin && spec.ownMaterial) { // keep the model's own materials, just de-metal
+      if (builtin && spec.ownMaterial) {
+        // keep the model's own materials, just de-metal
         material.metalness = 0;
         return material;
       }
@@ -873,15 +1103,22 @@ function propMesh(props = {}) {
 
     return loadModelGroup(
       modelUrl,
-      builtin ? { scale: (spec.modelScale || 1) * (props.scale || 1) } : { target: MODEL_SIZE * (props.scale || 1) },
-      node => {
+      builtin
+        ? { scale: (spec.modelScale || 1) * (props.scale || 1) }
+        : { target: MODEL_SIZE * (props.scale || 1) },
+      (node) => {
         if (node.geometry) node.geometry.computeVertexNormals(); // smooth normals — kills the flat-shading seam on flat .glb faces
         if (!node.material) return;
         node.castShadow = true;
         node.receiveShadow = true;
-        node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+        node.material = Array.isArray(node.material)
+          ? node.material.map(paint)
+          : paint(node.material);
       },
-      (obj) => { const mr = builtin ? spec.modelRot : props.modelRot; if (mr) obj.rotation.set(mr[0], mr[1], mr[2]); }, // reorient: built-in template, or a per-upload modelRot
+      (obj) => {
+        const mr = builtin ? spec.modelRot : props.modelRot;
+        if (mr) obj.rotation.set(mr[0], mr[1], mr[2]);
+      }, // reorient: built-in template, or a per-upload modelRot
     );
   }
 
@@ -897,15 +1134,22 @@ function propShapeMesh(props = {}) {
   const render = spec.render;
   const material = propMat(propColor(props));
   switch (render.prim) {
-    case 'sphere': return new THREE.Mesh(new THREE.SphereGeometry(render.r, 24, 16), material);
-    case 'cone':   return new THREE.Mesh(new THREE.ConeGeometry(render.r, render.h, render.seg), material);
-    case 'cyl':    return new THREE.Mesh(new THREE.CylinderGeometry(render.rTop ?? render.r, render.r, render.h, render.seg ?? 32), material);
+    case 'sphere':
+      return new THREE.Mesh(new THREE.SphereGeometry(render.r, 24, 16), material);
+    case 'cone':
+      return new THREE.Mesh(new THREE.ConeGeometry(render.r, render.h, render.seg), material);
+    case 'cyl':
+      return new THREE.Mesh(
+        new THREE.CylinderGeometry(render.rTop ?? render.r, render.r, render.h, render.seg ?? 32),
+        material,
+      );
     case 'lens': {
       const mesh = new THREE.Mesh(new THREE.SphereGeometry(render.r, 24, 16), material);
       mesh.scale.y = render.sy; // squash the sphere into a lens
       return mesh;
     }
-    default: return new THREE.Mesh(new THREE.BoxGeometry(...(render.size || [1, 1, 1])), material);
+    default:
+      return new THREE.Mesh(new THREE.BoxGeometry(...(render.size || [1, 1, 1])), material);
   }
 }
 // A rounded-rectangle THREE.Shape (w×d, corner radius `radius`), centred on the origin — used as the
@@ -915,13 +1159,19 @@ function propShapeMesh(props = {}) {
 // alpha corner masks. Using the same arc everywhere makes the side wall's corner match the card on top.
 function roundedRectShape(w, d, radius) {
   const shape = new THREE.Shape();
-  const hw = w / 2, hd = d / 2, r = Math.max(0, Math.min(radius, hw, hd));
+  const hw = w / 2,
+    hd = d / 2,
+    r = Math.max(0, Math.min(radius, hw, hd));
   const HALF_PI = Math.PI / 2;
   shape.moveTo(-hw + r, -hd);
-  shape.lineTo(hw - r, -hd);   shape.absarc(hw - r, -hd + r, r, -HALF_PI, 0, false);            // bottom-right
-  shape.lineTo(hw, hd - r);    shape.absarc(hw - r, hd - r, r, 0, HALF_PI, false);              // top-right
-  shape.lineTo(-hw + r, hd);   shape.absarc(-hw + r, hd - r, r, HALF_PI, Math.PI, false);       // top-left
-  shape.lineTo(-hw, -hd + r);  shape.absarc(-hw + r, -hd + r, r, Math.PI, 3 * HALF_PI, false);  // bottom-left
+  shape.lineTo(hw - r, -hd);
+  shape.absarc(hw - r, -hd + r, r, -HALF_PI, 0, false); // bottom-right
+  shape.lineTo(hw, hd - r);
+  shape.absarc(hw - r, hd - r, r, 0, HALF_PI, false); // top-right
+  shape.lineTo(-hw + r, hd);
+  shape.absarc(-hw + r, hd - r, r, HALF_PI, Math.PI, false); // top-left
+  shape.lineTo(-hw, -hd + r);
+  shape.absarc(-hw + r, -hd + r, r, Math.PI, 3 * HALF_PI, false); // bottom-left
   return shape;
 }
 
@@ -932,24 +1182,51 @@ function roundedRectShape(w, d, radius) {
 function extrudeShape(shape, W, D, depth) {
   const uvGenerator = {
     generateTopUV(geometry, vertices, iA, iB, iC) {
-      const uv = i => new THREE.Vector2((vertices[i * 3] + W / 2) / W, (vertices[i * 3 + 1] + D / 2) / D);
+      const uv = (i) =>
+        new THREE.Vector2((vertices[i * 3] + W / 2) / W, (vertices[i * 3 + 1] + D / 2) / D);
       return [uv(iA), uv(iB), uv(iC)];
     },
-    generateSideWallUV() { return [new THREE.Vector2(0, 0), new THREE.Vector2(1, 0), new THREE.Vector2(1, 1), new THREE.Vector2(0, 1)]; },
+    generateSideWallUV() {
+      return [
+        new THREE.Vector2(0, 0),
+        new THREE.Vector2(1, 0),
+        new THREE.Vector2(1, 1),
+        new THREE.Vector2(0, 1),
+      ];
+    },
   };
-  const geo = new THREE.ExtrudeGeometry(shape, { depth, bevelEnabled: false, UVGenerator: uvGenerator });
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth,
+    bevelEnabled: false,
+    UVGenerator: uvGenerator,
+  });
   geo.translate(0, 0, -depth / 2);
-  geo.rotateX(-Math.PI / 2);                          // extrude direction Z → up (Y), centred
+  geo.rotateX(-Math.PI / 2); // extrude direction Z → up (Y), centred
   const pos = geo.attributes.position;
-  const A = new THREE.Vector3(), B = new THREE.Vector3(), C = new THREE.Vector3(), AB = new THREE.Vector3(), AC = new THREE.Vector3(), N = new THREE.Vector3();
+  const A = new THREE.Vector3(),
+    B = new THREE.Vector3(),
+    C = new THREE.Vector3(),
+    AB = new THREE.Vector3(),
+    AC = new THREE.Vector3(),
+    N = new THREE.Vector3();
   const tris = pos.count / 3;
   geo.clearGroups();
-  let runStart = 0, runMat = -1;
-  for (let t = 0; t < tris; t++) {                    // classify each triangle: +Y top, -Y bottom, else wall
-    A.fromBufferAttribute(pos, t * 3); B.fromBufferAttribute(pos, t * 3 + 1); C.fromBufferAttribute(pos, t * 3 + 2);
-    AB.subVectors(B, A); AC.subVectors(C, A); N.crossVectors(AB, AC).normalize();
+  let runStart = 0,
+    runMat = -1;
+  for (let t = 0; t < tris; t++) {
+    // classify each triangle: +Y top, -Y bottom, else wall
+    A.fromBufferAttribute(pos, t * 3);
+    B.fromBufferAttribute(pos, t * 3 + 1);
+    C.fromBufferAttribute(pos, t * 3 + 2);
+    AB.subVectors(B, A);
+    AC.subVectors(C, A);
+    N.crossVectors(AB, AC).normalize();
     const mat = N.y > 0.5 ? 0 : N.y < -0.5 ? 1 : 2;
-    if (mat !== runMat) { if (runMat >= 0) geo.addGroup(runStart * 3, (t - runStart) * 3, runMat); runStart = t; runMat = mat; }
+    if (mat !== runMat) {
+      if (runMat >= 0) geo.addGroup(runStart * 3, (t - runStart) * 3, runMat);
+      runStart = t;
+      runMat = mat;
+    }
   }
   geo.addGroup(runStart * 3, (tris - runStart) * 3, runMat);
   return geo;
@@ -963,12 +1240,14 @@ function tileGeo(W, D, radius, depth) {
 // the extrude's rotateX its vertices land at world XZ angles ±30°/±90°/±150° — exactly where cannon's
 // default 6-gon collider puts them, so mesh and collider match with no rotation. Height = 2r, width = r·√3.
 function hexShape(r) {
-  const s = HEX_HH * r;                                // half-width = r·√3/2
+  const s = HEX_HH * r; // half-width = r·√3/2
   const shape = new THREE.Shape();
   shape.moveTo(0, r);
-  shape.lineTo(s, r / 2); shape.lineTo(s, -r / 2);
+  shape.lineTo(s, r / 2);
+  shape.lineTo(s, -r / 2);
   shape.lineTo(0, -r);
-  shape.lineTo(-s, -r / 2); shape.lineTo(-s, r / 2);
+  shape.lineTo(-s, -r / 2);
+  shape.lineTo(-s, r / 2);
   shape.closePath();
   return shape;
 }
@@ -982,34 +1261,49 @@ function hexGeo(r, depth) {
 // tile the layer-line edge texture around the sides.
 function deckMesh(props = {}) {
   const skin = props.model && DECK_MODELS[props.model];
-  if (skin) {                                       // a modeled deck skin (bag/box/pile): the .glb replaces the card stack
-    return loadModelGroup(skin.model, { scale: skin.modelScale }, node => {
-      node.castShadow = true; node.receiveShadow = true;
+  if (skin) {
+    // a modeled deck skin (bag/box/pile): the .glb replaces the card stack
+    return loadModelGroup(skin.model, { scale: skin.modelScale }, (node) => {
+      node.castShadow = true;
+      node.receiveShadow = true;
       const mats = Array.isArray(node.material) ? node.material : [node.material];
-      mats.forEach(m => { if (m) m.metalness = 0; }); // de-metal so the wood reads under the table lights
+      mats.forEach((m) => {
+        if (m) m.metalness = 0;
+      }); // de-metal so the wood reads under the table lights
     });
   }
 
-  const g = cardGeom(props);                        // a deck of tiles (dominoes) is shaped like its tiles
+  const g = cardGeom(props); // a deck of tiles (dominoes) is shaped like its tiles
   // A deck IS a stack of its cards, so its footprint and corner are the card's exactly — the paper side
   // wall then hugs the card silhouette and its rounded corner is concentric with the card's on top,
   // instead of bulging past it (the old fixed +0.06 margin rounded off a wider box, so the side-wall
   // curve never matched a custom card's).
-  const hex = g.shape === 'hex';                    // a deck of hexagon cards is a hex stack
-  const W = g.hw * 2, D = g.hh * 2;
+  const hex = g.shape === 'hex'; // a deck of hexagon cards is a hex stack
+  const W = g.hw * 2,
+    D = g.hh * 2;
   const radius = Math.min(g.round * W, W * 0.49, D * 0.49);
 
   const uvGenerator = {
     generateTopUV(geometry, vertices, indexA, indexB, indexC) {
-      const uvForIndex = i => new THREE.Vector2((vertices[i * 3] + W / 2) / W, (vertices[i * 3 + 1] + D / 2) / D);
+      const uvForIndex = (i) =>
+        new THREE.Vector2((vertices[i * 3] + W / 2) / W, (vertices[i * 3 + 1] + D / 2) / D);
       return [uvForIndex(indexA), uvForIndex(indexB), uvForIndex(indexC)];
     },
     generateSideWallUV() {
-      return [new THREE.Vector2(0, 0), new THREE.Vector2(1, 0), new THREE.Vector2(1, 1), new THREE.Vector2(0, 1)];
+      return [
+        new THREE.Vector2(0, 0),
+        new THREE.Vector2(1, 0),
+        new THREE.Vector2(1, 1),
+        new THREE.Vector2(0, 1),
+      ];
     },
   };
 
-  const geo = new THREE.ExtrudeGeometry(hex ? hexShape(g.hh) : roundedRectShape(W, D, radius), { depth: 1, bevelEnabled: false, UVGenerator: uvGenerator });
+  const geo = new THREE.ExtrudeGeometry(hex ? hexShape(g.hh) : roundedRectShape(W, D, radius), {
+    depth: 1,
+    bevelEnabled: false,
+    UVGenerator: uvGenerator,
+  });
   geo.translate(0, 0, -0.5);
   geo.rotateX(-Math.PI / 2); // extrude direction Z → up (Y), centred on the origin
 
@@ -1017,8 +1311,17 @@ function deckMesh(props = {}) {
   // the card mesh (footprint matches, so radius/W == g.round) so a transparent corner is discarded, not
   // rendered as a dark chunk. For a hex deck the GEOMETRY is the silhouette, so just alpha-test the art.
   const back = hex
-    ? new THREE.MeshStandardMaterial({ map: resolveTexture(props.back), alphaTest: 0.5, roughness: 0.6 })
-    : new THREE.MeshStandardMaterial({ map: resolveTexture(props.back), alphaMap: roundMask(g.hw, g.hh, g.round), alphaTest: 0.4, roughness: 0.6 });
+    ? new THREE.MeshStandardMaterial({
+        map: resolveTexture(props.back),
+        alphaTest: 0.5,
+        roughness: 0.6,
+      })
+    : new THREE.MeshStandardMaterial({
+        map: resolveTexture(props.back),
+        alphaMap: roundMask(g.hw, g.hh, g.round),
+        alphaTest: 0.4,
+        roughness: 0.6,
+      });
   const edge = new THREE.MeshStandardMaterial({ map: deckEdgeTex(), roughness: 0.85 });
   return new THREE.Mesh(geo, [back, edge]); // material group 0 = top/bottom caps, 1 = side walls
 }
@@ -1028,7 +1331,7 @@ function deckMesh(props = {}) {
 function measureBoard(url) {
   return measureGlb(url).then(({ size }) => {
     const scale = BOARD_SIZE / (Math.max(size.x, size.z) || 1); // fit the X/Z footprint
-    return { scale, box: [size.x * scale / 2, size.y * scale / 2, size.z * scale / 2] };
+    return { scale, box: [(size.x * scale) / 2, (size.y * scale) / 2, (size.z * scale) / 2] };
   });
 }
 
@@ -1039,17 +1342,22 @@ function measureBoard(url) {
 function drawStar(ctx, cx, cy, outer, inner, points) {
   ctx.beginPath();
   for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 ? inner : outer, a = (Math.PI * i) / points - Math.PI / 2;
+    const r = i % 2 ? inner : outer,
+      a = (Math.PI * i) / points - Math.PI / 2;
     ctx[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * r, cy + Math.sin(a) * r);
   }
-  ctx.closePath(); ctx.fill();
+  ctx.closePath();
+  ctx.fill();
 }
 // Wordy McWordface board: a cells×cells grid with coloured premium squares (from WORDY_PREMIUM /
 // WORDY_COLORS via the board's `paint`). The texture is divided into equal cells, so its squares line
 // up 1:1 with the snap grid (calibrateGrid derives cell = board width ÷ cells).
 function wordGridTex(paint = {}) {
-  const cells = paint.cells || 15, prem = paint.premium || [], col = paint.colors || {};
-  const px = 900, cell = px / cells;
+  const cells = paint.cells || 15,
+    prem = paint.premium || [],
+    col = paint.colors || {};
+  const px = 900,
+    cell = px / cells;
   const { canvas, ctx } = makeCanvas(px, px);
   ctx.fillStyle = col.base || '#e9ddc2';
   ctx.fillRect(0, 0, px, px);
@@ -1058,34 +1366,52 @@ function wordGridTex(paint = {}) {
   for (let r = 0; r < cells; r++) {
     const row = prem[r] || '';
     for (let c = 0; c < cells; c++) {
-      const ch = row[c] || '.', x = c * cell, y = r * cell;
-      if (fillFor[ch]) { ctx.fillStyle = fillFor[ch]; ctx.fillRect(x, y, cell, cell); }
-      if (ch === '*') { ctx.fillStyle = col.ink || '#2c2115'; drawStar(ctx, x + cell / 2, y + cell / 2, cell * 0.3, cell * 0.14, 5); }
-      else if (label[ch]) {
+      const ch = row[c] || '.',
+        x = c * cell,
+        y = r * cell;
+      if (fillFor[ch]) {
+        ctx.fillStyle = fillFor[ch];
+        ctx.fillRect(x, y, cell, cell);
+      }
+      if (ch === '*') {
+        ctx.fillStyle = col.ink || '#2c2115';
+        drawStar(ctx, x + cell / 2, y + cell / 2, cell * 0.3, cell * 0.14, 5);
+      } else if (label[ch]) {
         ctx.fillStyle = 'rgba(44,33,21,0.72)';
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
         ctx.font = `700 ${Math.round(cell * 0.24)}px system-ui, sans-serif`;
         ctx.fillText(label[ch], x + cell / 2, y + cell / 2);
       }
     }
   }
-  ctx.strokeStyle = col.line || '#c3b184'; ctx.lineWidth = Math.max(1, px / 600);
+  ctx.strokeStyle = col.line || '#c3b184';
+  ctx.lineWidth = Math.max(1, px / 600);
   for (let i = 0; i <= cells; i++) {
     const p = Math.round(i * cell) + 0.5;
-    ctx.beginPath(); ctx.moveTo(p, 0); ctx.lineTo(p, px); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(0, p); ctx.lineTo(px, p); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p, 0);
+    ctx.lineTo(p, px);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, p);
+    ctx.lineTo(px, p);
+    ctx.stroke();
   }
   return cTex(canvas);
 }
 const BOARD_PAINTERS = { wordgrid: wordGridTex };
 // A data-URL preview of a procedural board's top, for the library (proc boards have no .glb to snapshot).
 export function procBoardTexURL(key) {
-  const b = BOARDS[key]; if (!b || !b.proc) return null;
+  const b = BOARDS[key];
+  if (!b || !b.proc) return null;
   const ck = 'proc:' + key;
   if (_prevCache.has(ck)) return _prevCache.get(ck);
-  const painter = BOARD_PAINTERS[b.proc]; if (!painter) return null;
+  const painter = BOARD_PAINTERS[b.proc];
+  if (!painter) return null;
   const tex = painter(b.paint || {});
-  const url = (tex && tex.image && tex.image.toDataURL) ? tex.image.toDataURL('image/jpeg', 0.85) : null;
+  const url =
+    tex && tex.image && tex.image.toDataURL ? tex.image.toDataURL('image/jpeg', 0.85) : null;
   if (url) _prevCache.set(ck, url);
   return url;
 }
@@ -1099,29 +1425,40 @@ function boardMesh(props = {}) {
     // centre at origin (the server sits it on the table by half-height)
     return loadModelGroup(
       modelUrl,
-      { scale: builtin ? builtin.modelScale : (props.modelScale || 1) },
-      node => {
+      { scale: builtin ? builtin.modelScale : props.modelScale || 1 },
+      (node) => {
         node.receiveShadow = true;
         node.castShadow = false;
         const materials = Array.isArray(node.material) ? node.material : [node.material];
-        materials.forEach(m => { if (m) m.metalness = 0; }); // de-metal so the board's own colors read
+        materials.forEach((m) => {
+          if (m) m.metalness = 0;
+        }); // de-metal so the board's own colors read
       },
     );
   }
 
-  if (builtin && builtin.proc) { // a procedural board: a slab sized by its box, top painted from data
+  if (builtin && builtin.proc) {
+    // a procedural board: a slab sized by its box, top painted from data
     const [hx, hy, hz] = builtin.box;
     const painter = BOARD_PAINTERS[builtin.proc];
     const map = painter ? painter(builtin.paint || {}) : boardTex();
     const top = new THREE.MeshStandardMaterial({ map, roughness: 0.85 });
     const edge = new THREE.MeshStandardMaterial({ color: COLORS.boardEdge });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), [edge, edge, top, edge, edge, edge]);
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), [
+      edge,
+      edge,
+      top,
+      edge,
+      edge,
+      edge,
+    ]);
     mesh.receiveShadow = true;
     return mesh;
   }
 
   // A plain procedural board: a textured slab.
-  const w = props.w || 8, d = props.d || 8;
+  const w = props.w || 8,
+    d = props.d || 8;
   let map = boardTex();
   if (props.tex) map = loadImageTexture(props.tex); // a full uploaded image, stretched across the top
   const top = new THREE.MeshStandardMaterial({ map, roughness: 0.8 });
@@ -1135,7 +1472,8 @@ function boardMesh(props = {}) {
 // A material name matches a tint slot if it equals the slot OR is a Blender-style
 // duplicate of it ("c1.001", "c1.002") — one logical slot can split across meshes on
 // export, so tinting must catch every copy, not just the first.
-const isTintSlot = (name, slot) => !!slot && typeof name === 'string' && (name === slot || name.startsWith(slot + '.'));
+const isTintSlot = (name, slot) =>
+  !!slot && typeof name === 'string' && (name === slot || name.startsWith(slot + '.'));
 
 // A small stable number from a dispenser's id, to seed its stack's facing jitter so two
 // otherwise-identical stacks don't face the same way. Any missing id → 0 (a fixed but
@@ -1143,8 +1481,11 @@ const isTintSlot = (name, slot) => !!slot && typeof name === 'string' && (name =
 function stackSeed(id) {
   let h = 2166136261 >>> 0;
   const s = id == null ? '' : String(id);
-  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
-  return (h >>> 0) % 9973 / 9973 * 1000;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (((h >>> 0) % 9973) / 9973) * 1000;
 }
 
 // Parsed stack item models, keyed by item shape. The first build loads the .glb
@@ -1158,18 +1499,23 @@ const _stackProto = new Map();
 function dispenserMesh(props = {}) {
   const spec = DISPENSERS[props.disp];
   if (!spec) return new THREE.Group();
-  const matte = (color, side) => new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+  const matte = (color, side) =>
+    new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
 
   if (spec.body === 'model') {
     const teamTint = spec.team ? COLORS.team[spec.team][props.team ? 1 : 0] : null;
     const paint = (m) => {
       if (teamTint != null && isTintSlot(m.name, spec.tintMaterial)) return matte(teamTint, m.side);
-      m.metalness = 0; return m; // shell keeps its baked look
+      m.metalness = 0;
+      return m; // shell keeps its baked look
     };
-    return loadModelGroup(spec.model, { target: MODEL_SIZE * (spec.modelScale || 1) }, node => {
+    return loadModelGroup(spec.model, { target: MODEL_SIZE * (spec.modelScale || 1) }, (node) => {
       if (!node.material) return;
-      node.castShadow = true; node.receiveShadow = true;
-      node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.material = Array.isArray(node.material)
+        ? node.material.map(paint)
+        : paint(node.material);
     });
   }
 
@@ -1179,8 +1525,15 @@ function dispenserMesh(props = {}) {
   const n = stackVisible(props.count ?? spec.count.def);
   const tint = props.color ?? null;
   const paint = (m) => {
-    if (item.tintMaterial) { if (tint != null && isTintSlot(m.name, item.tintMaterial)) return matte(tint, m.side); m.metalness = 0; return m; }
-    if (item.ownMaterial) { m.metalness = 0; return m; }
+    if (item.tintMaterial) {
+      if (tint != null && isTintSlot(m.name, item.tintMaterial)) return matte(tint, m.side);
+      m.metalness = 0;
+      return m;
+    }
+    if (item.ownMaterial) {
+      m.metalness = 0;
+      return m;
+    }
     return tint != null ? matte(tint, m.side) : m;
   };
   // Per-disc facing jitter so a chip stack looks tumbled, not machine-aligned.
@@ -1188,26 +1541,43 @@ function dispenserMesh(props = {}) {
   // shrinks (dealing just drops the top disc — the rest don't reshuffle), and the seed
   // (the piece id) makes two identical stacks side by side face differently.
   const seed = stackSeed(props._seed);
-  const spin = (i) => { const x = Math.sin((i + 1) * 127.1 + seed) * 43758.5453; return (x - Math.floor(x)) * Math.PI * 2; };
+  const spin = (i) => {
+    const x = Math.sin((i + 1) * 127.1 + seed) * 43758.5453;
+    return (x - Math.floor(x)) * Math.PI * 2;
+  };
   const group = new THREE.Group();
-  const fill = (rawScene) => {                              // build the stack from a cached raw scene
+  const fill = (rawScene) => {
+    // build the stack from a cached raw scene
     const proto = rawScene.clone(true);
-    fitModel(proto, { scale: item.modelScale || 1 });      // centre + scale, matching a spawned item
-    proto.traverse(node => {
+    fitModel(proto, { scale: item.modelScale || 1 }); // centre + scale, matching a spawned item
+    proto.traverse((node) => {
       if (!node.isMesh || !node.material) return;
-      node.castShadow = true; node.receiveShadow = true;
-      node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+      node.castShadow = true;
+      node.receiveShadow = true;
+      node.material = Array.isArray(node.material)
+        ? node.material.map(paint)
+        : paint(node.material);
     });
     for (let i = 0; i < n; i++) {
-      const clone = proto.clone(true);                     // shares geometry/material — cheap
-      clone.position.y = (i - (n - 1) / 2) * discH;         // centred stack, discs flush
-      clone.rotation.y = spin(i);                           // tumbled facing (see spin above)
+      const clone = proto.clone(true); // shares geometry/material — cheap
+      clone.position.y = (i - (n - 1) / 2) * discH; // centred stack, discs flush
+      clone.rotation.y = spin(i); // tumbled facing (see spin above)
       group.add(clone);
     }
   };
   const cached = _stackProto.get(spec.item);
-  if (cached) fill(cached);                                 // rebuild path: synchronous, no blink
-  else gltfLoader.load(item.model, gltf => { _stackProto.set(spec.item, gltf.scene); fill(gltf.scene); }, undefined, () => {});
+  if (cached)
+    fill(cached); // rebuild path: synchronous, no blink
+  else
+    gltfLoader.load(
+      item.model,
+      (gltf) => {
+        _stackProto.set(spec.item, gltf.scene);
+        fill(gltf.scene);
+      },
+      undefined,
+      () => {},
+    );
   return group;
 }
 
@@ -1218,10 +1588,10 @@ function dispenserMesh(props = {}) {
 // lclick / rclick: click actions (message names).
 // Adding a kind = one entry here + one in the shared KINDS descriptor.
 const KIND = {
-  die:   { mesh: dieMesh,   grab: 0, rclick: 'roll' },
-  card:  { mesh: cardMesh,  grab: 0, lclick: 'takeCard', rclick: 'flip' },
-  prop:  { mesh: propMesh,  grab: 0 },
-  deck:  { mesh: deckMesh,  grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
+  die: { mesh: dieMesh, grab: 0, rclick: 'roll' },
+  card: { mesh: cardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
+  prop: { mesh: propMesh, grab: 0 },
+  deck: { mesh: deckMesh, grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
   board: { mesh: boardMesh },
   dispenser: { mesh: dispenserMesh, grab: 2, ldrag: 'dispense', lclick: 'dispense' }, // right-drag moves; left dispenses one
 };
@@ -1233,22 +1603,34 @@ const KIND = {
 // reads on any felt. Returns null when there's no grid to draw. Square only for now.
 export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
   if (!gridActive(scale) || scale.gridStyle !== 'square' || scale.gridHidden) return null; // hidden: still snaps, just not drawn
-  const cell = +scale.cellWorld, hx = +tableX, hz = +tableZ;
-  const cz = +scale.cellZ > 0 ? +scale.cellZ : cell;          // rectangular grids: separate depth spacing
-  const ox = +scale.gridX || 0, oz = +scale.gridZ || 0;       // lattice offset (align to a printed map)
+  const cell = +scale.cellWorld,
+    hx = +tableX,
+    hz = +tableZ;
+  const cz = +scale.cellZ > 0 ? +scale.cellZ : cell; // rectangular grids: separate depth spacing
+  const ox = +scale.gridX || 0,
+    oz = +scale.gridZ || 0; // lattice offset (align to a printed map)
   if (!(cell > 0) || !(hx > 0) || !(hz > 0)) return null;
   if ((hx / cell) * 2 > 300 || (hz / cz) * 2 > 300) return null; // sanity cap: skip a hair-fine grid (perf)
   const pts = [];
-  for (let m = Math.ceil((-hx - ox) / cell); m <= Math.floor((hx - ox) / cell); m++) { // constant-x lines, spaced by cell
-    const x = ox + m * cell; pts.push(x, 0, -hz, x, 0, hz);
+  for (let m = Math.ceil((-hx - ox) / cell); m <= Math.floor((hx - ox) / cell); m++) {
+    // constant-x lines, spaced by cell
+    const x = ox + m * cell;
+    pts.push(x, 0, -hz, x, 0, hz);
   }
-  for (let m = Math.ceil((-hz - oz) / cz); m <= Math.floor((hz - oz) / cz); m++) {       // constant-z lines, spaced by cz
-    const z = oz + m * cz; pts.push(-hx, 0, z, hx, 0, z);
+  for (let m = Math.ceil((-hz - oz) / cz); m <= Math.floor((hz - oz) / cz); m++) {
+    // constant-z lines, spaced by cz
+    const z = oz + m * cz;
+    pts.push(-hx, 0, z, hx, 0, z);
   }
   const color = /^#[0-9a-f]{6}$/i.test(scale.gridColor || '') ? scale.gridColor : '#ffffff';
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.55, depthWrite: false });
+  const mat = new THREE.LineBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.55,
+    depthWrite: false,
+  });
   const lines = new THREE.LineSegments(geo, mat);
   lines.renderOrder = 2; // over the felt, under floating labels; pieces still occlude it (depthTest on)
   return lines;
@@ -1260,13 +1642,21 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
 // it by the tray angle (Three's rotation.y matches the server's trayPlace transform).
 function trayMesh(feltColor) {
   const g = new THREE.Group();
-  const felt = new THREE.MeshStandardMaterial({ color: feltColor || 0x2f6b4f, roughness: 0.85, metalness: 0 });
+  const felt = new THREE.MeshStandardMaterial({
+    color: feltColor || 0x2f6b4f,
+    roughness: 0.85,
+    metalness: 0,
+  });
   const wood = new THREE.MeshStandardMaterial({ color: 0x4a3b2a, roughness: 0.8, metalness: 0 });
   trayParts().forEach((p, i) => {
     if (p.noMesh) return; // the lid is a physics-only cap — never drawn, or it'd block the top-down view
-    const m = new THREE.Mesh(new THREE.BoxGeometry(p.hx * 2, p.hy * 2, p.hz * 2), i === 0 ? felt : wood);
+    const m = new THREE.Mesh(
+      new THREE.BoxGeometry(p.hx * 2, p.hy * 2, p.hz * 2),
+      i === 0 ? felt : wood,
+    );
     m.position.set(p.x, p.y, p.z);
-    m.castShadow = i !== 0; m.receiveShadow = true;
+    m.castShadow = i !== 0;
+    m.receiveShadow = true;
     g.add(m);
   });
   return g;
@@ -1278,35 +1668,66 @@ function trayMesh(feltColor) {
 // the client owns (it needs the room's scale + formatMeasure). A new overlay kind
 // is one entry here + one server-side kind string — the sync/interaction is generic.
 function overlayBar(ax, az, bx, bz, color, thick = 0.06) {
-  const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz) || 0.0001;
-  const mat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false });
+  const dx = bx - ax,
+    dz = bz - az,
+    len = Math.hypot(dx, dz) || 0.0001;
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+  });
   const g = new THREE.Group();
   const bar = new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, thick), mat);
   bar.position.set((ax + bx) / 2, 0, (az + bz) / 2);
-  bar.rotation.y = Math.atan2(-dz, dx);           // align the bar's +X along A→B
+  bar.rotation.y = Math.atan2(-dz, dx); // align the bar's +X along A→B
   g.add(bar);
-  for (const [px, pz] of [[ax, az], [bx, bz]]) {  // small end dots mark the two points
+  for (const [px, pz] of [
+    [ax, az],
+    [bx, bz],
+  ]) {
+    // small end dots mark the two points
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(thick, thick, 0.03, 12), mat);
     cap.position.set(px, 0, pz);
     g.add(cap);
   }
   return g;
 }
-function rulerMesh(o) { return overlayBar(o.x, o.z, o.x2, o.z2, o.color); }
+function rulerMesh(o) {
+  return overlayBar(o.x, o.z, o.x2, o.z2, o.color);
+}
 
 // Template materials: a faint interior FILL and a solid EDGE, both flat and
 // unlit like the ruler bar. Fill opacity + edge weight are client-feel tunables
 // (CONFIG.measure); DoubleSide so a template reads from under the table too.
-function overlayFill(color) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: CONFIG.measure.fill, depthWrite: false, side: THREE.DoubleSide }); }
-function overlayEdge(color) { return new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }); }
+function overlayFill(color) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: CONFIG.measure.fill,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
+function overlayEdge(color) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+}
 
 // A flat pie-slice in the XZ plane: apex at the origin, bisector along +X,
 // spanning ±half out to radius L. Built directly flat (every y = 0) so a single
 // rotation.y aims it — the same trick overlayBar uses to avoid tilt composition.
 function sectorGeometry(L, half, seg = 40) {
-  const pos = [], step = (2 * half) / seg;
+  const pos = [],
+    step = (2 * half) / seg;
   for (let i = 0; i < seg; i++) {
-    const t0 = -half + step * i, t1 = -half + step * (i + 1);
+    const t0 = -half + step * i,
+      t1 = -half + step * (i + 1);
     pos.push(0, 0, 0, Math.cos(t0) * L, 0, Math.sin(t0) * L, Math.cos(t1) * L, 0, Math.sin(t1) * L);
   }
   const geo = new THREE.BufferGeometry();
@@ -1321,10 +1742,15 @@ function circleTemplate(o) {
   const r = Math.hypot(o.x2 - o.x, o.z2 - o.z) || 0.0001;
   const g = new THREE.Group();
   const disc = new THREE.Mesh(new THREE.CircleGeometry(r, 64), overlayFill(o.color));
-  disc.rotation.x = -Math.PI / 2; disc.position.set(o.x, 0, o.z);
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.set(o.x, 0, o.z);
   g.add(disc);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(Math.max(0, r - CONFIG.measure.edge), r, 64), overlayEdge(o.color));
-  ring.rotation.x = -Math.PI / 2; ring.position.set(o.x, 0.002, o.z); // lift the rim off the disc to avoid z-fighting
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(Math.max(0, r - CONFIG.measure.edge), r, 64),
+    overlayEdge(o.color),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(o.x, 0.002, o.z); // lift the rim off the disc to avoid z-fighting
   g.add(ring);
   return g;
 }
@@ -1332,11 +1758,13 @@ function circleTemplate(o) {
 // cone: a flat sector. Apex A, facing A→B, length = |A→B|, half-angle o.ang
 // (default MEASURE.coneAngle). rotation.y aims the +X bisector down A→B.
 function coneTemplate(o) {
-  const dx = o.x2 - o.x, dz = o.z2 - o.z, L = Math.hypot(dx, dz) || 0.0001;
+  const dx = o.x2 - o.x,
+    dz = o.z2 - o.z,
+    L = Math.hypot(dx, dz) || 0.0001;
   const half = o.ang > 0 ? o.ang : MEASURE.coneAngle;
   const sector = new THREE.Mesh(sectorGeometry(L, half), overlayFill(o.color));
   sector.position.set(o.x, 0, o.z);
-  sector.rotation.y = Math.atan2(-dz, dx);        // +X bisector along A→B (overlayBar's convention)
+  sector.rotation.y = Math.atan2(-dz, dx); // +X bisector along A→B (overlayBar's convention)
   const g = new THREE.Group();
   g.add(sector);
   return g;
@@ -1345,11 +1773,13 @@ function coneTemplate(o) {
 // line: a width×length lane. From A toward B, length = |A→B|, width o.w
 // (default MEASURE.lineWidth). A faint band plus a solid centre line for read.
 function lineTemplate(o) {
-  const dx = o.x2 - o.x, dz = o.z2 - o.z, L = Math.hypot(dx, dz) || 0.0001;
+  const dx = o.x2 - o.x,
+    dz = o.z2 - o.z,
+    L = Math.hypot(dx, dz) || 0.0001;
   const w = o.w > 0 ? o.w : MEASURE.lineWidth;
   const band = new THREE.Mesh(new THREE.BoxGeometry(L, 0.02, w), overlayFill(o.color));
   band.position.set((o.x + o.x2) / 2, -0.005, (o.z + o.z2) / 2); // just under the centre line (avoid z-fight)
-  band.rotation.y = Math.atan2(-dz, dx);          // long axis along A→B
+  band.rotation.y = Math.atan2(-dz, dx); // long axis along A→B
   const g = new THREE.Group();
   g.add(band);
   g.add(overlayBar(o.x, o.z, o.x2, o.z2, o.color, 0.04)); // the centre line
@@ -1359,10 +1789,10 @@ function lineTemplate(o) {
 // A registry parallel to KIND (see the block above): kind → mesh builder. Adding
 // an overlay kind is one entry here + one string in the server's OVERLAY_KINDS.
 const OVERLAY = {
-  ruler:  { build: rulerMesh },
+  ruler: { build: rulerMesh },
   circle: { build: circleTemplate },
-  cone:   { build: coneTemplate },
-  line:   { build: lineTemplate },
+  cone: { build: coneTemplate },
+  line: { build: lineTemplate },
 };
 
 // ---- Library preview thumbnails (editor) -----------------------------------
@@ -1372,11 +1802,19 @@ const OVERLAY = {
 let _thumb = null;
 function thumbRig() {
   if (_thumb) return _thumb;
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
-  renderer.setSize(220, 220); renderer.setPixelRatio(1); renderer.setClearColor(0x000000, 0);
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    preserveDrawingBuffer: true,
+  });
+  renderer.setSize(220, 220);
+  renderer.setPixelRatio(1);
+  renderer.setClearColor(0x000000, 0);
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xffffff, 0x555555, 1.25));
-  const key = new THREE.DirectionalLight(0xffffff, 1.15); key.position.set(4, 6, 5); scene.add(key);
+  const key = new THREE.DirectionalLight(0xffffff, 1.15);
+  key.position.set(4, 6, 5);
+  scene.add(key);
   const cam = new THREE.PerspectiveCamera(32, 1, 0.01, 5000);
   _thumb = { renderer, scene, cam };
   return _thumb;
@@ -1385,13 +1823,17 @@ function snapshot(obj) {
   const { renderer, scene, cam } = thumbRig();
   const box = new THREE.Box3().setFromObject(obj);
   if (box.isEmpty()) return null;
-  const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3()),
+    center = box.getCenter(new THREE.Vector3());
   const maxDim = Math.max(size.x, size.y, size.z) || 1;
-  obj.position.sub(center);                                    // centre it at the origin
+  obj.position.sub(center); // centre it at the origin
   scene.add(obj);
   const d = maxDim * 2.4;
-  cam.position.set(d * 0.85, d * 0.72, d); cam.lookAt(0, 0, 0);
-  cam.near = maxDim / 100; cam.far = maxDim * 40; cam.updateProjectionMatrix();
+  cam.position.set(d * 0.85, d * 0.72, d);
+  cam.lookAt(0, 0, 0);
+  cam.near = maxDim / 100;
+  cam.far = maxDim * 40;
+  cam.updateProjectionMatrix();
   renderer.render(scene, cam);
   const url = renderer.domElement.toDataURL('image/png');
   scene.remove(obj);
@@ -1406,7 +1848,8 @@ export function cardPreviewURL(ref) {
   if (r.startsWith('/') || r.startsWith('http') || r.startsWith('data:')) return r;
   if (_prevCache.has(r)) return _prevCache.get(r);
   const tex = resolveTexture(r);
-  const url = (tex && tex.image && tex.image.toDataURL) ? tex.image.toDataURL('image/jpeg', 0.85) : null;
+  const url =
+    tex && tex.image && tex.image.toDataURL ? tex.image.toDataURL('image/jpeg', 0.85) : null;
   if (url) _prevCache.set(r, url);
   return url;
 }
@@ -1418,9 +1861,13 @@ export async function propPreviewURL(props = {}) {
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
   try {
-    if (modelUrl) { const gltf = await gltfLoader.loadAsync(modelUrl); url = snapshot(gltf.scene); }
-    else url = snapshot(propShapeMesh(props));
-  } catch (e) { /* leave null → the card shows a placeholder */ }
+    if (modelUrl) {
+      const gltf = await gltfLoader.loadAsync(modelUrl);
+      url = snapshot(gltf.scene);
+    } else url = snapshot(propShapeMesh(props));
+  } catch (e) {
+    /* leave null → the card shows a placeholder */
+  }
   if (url) _prevCache.set(key, url);
   return url;
 }
@@ -1430,8 +1877,14 @@ export async function boardPreviewURL(fileUrl) {
   const key = 'b:' + fileUrl;
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
-  if (/\.glb$/i.test(fileUrl)) { try { const gltf = await gltfLoader.loadAsync(fileUrl); url = snapshot(gltf.scene); } catch (e) { /* null */ } }
-  else url = fileUrl; // an image URL (jpg/png/webp…)
+  if (/\.glb$/i.test(fileUrl)) {
+    try {
+      const gltf = await gltfLoader.loadAsync(fileUrl);
+      url = snapshot(gltf.scene);
+    } catch (e) {
+      /* null */
+    }
+  } else url = fileUrl; // an image URL (jpg/png/webp…)
   if (url) _prevCache.set(key, url);
   return url;
 }
@@ -1441,7 +1894,11 @@ export function diePreviewURL(sides) {
   const key = 'd:' + sides;
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
-  try { url = snapshot(dieMesh({ sides })); } catch (e) { /* null → placeholder */ }
+  try {
+    url = snapshot(dieMesh({ sides }));
+  } catch (e) {
+    /* null → placeholder */
+  }
   if (url) _prevCache.set(key, url);
   return url;
 }
@@ -1449,9 +1906,15 @@ export function diePreviewURL(sides) {
 // A local (not-yet-uploaded) .glb File → a rendered thumbnail data-URL, for previews.
 export async function glbFilePreviewURL(file, rot) {
   const url = URL.createObjectURL(file);
-  try { const gltf = await gltfLoader.loadAsync(url); if (rot) gltf.scene.rotation.set(rot[0], rot[1], rot[2]); return snapshot(gltf.scene); }
-  catch (e) { return null; }
-  finally { URL.revokeObjectURL(url); }
+  try {
+    const gltf = await gltfLoader.loadAsync(url);
+    if (rot) gltf.scene.rotation.set(rot[0], rot[1], rot[2]);
+    return snapshot(gltf.scene);
+  } catch (e) {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 // ---- Player / UI textures (seat markers, name tags, the "YOU" chip) ---------
@@ -1473,7 +1936,8 @@ function roundRect(ctx, x, y, w, h, r) {
 // default silhouette) clipped to a circle, their name, and a "SHOWING n" badge
 // while they're revealing cards. Redrawn once the avatar image loads.
 function makePlayerTexture(player) {
-  const width = 256, height = 320;
+  const width = 256,
+    height = 320;
   const { canvas, ctx } = makeCanvas(width, height);
 
   const draw = (img) => {
@@ -1498,19 +1962,26 @@ function makePlayerTexture(player) {
       ctx.fillStyle = '#3a4048';
       ctx.fillRect(0, 0, width, height);
       ctx.fillStyle = '#c8ccd2';
-      ctx.beginPath(); ctx.arc(width / 2, 104, 34, 0, 7); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(width / 2, 210, 62, 52, 0, Math.PI, 0); ctx.fill();
+      ctx.beginPath();
+      ctx.arc(width / 2, 104, 34, 0, 7);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(width / 2, 210, 62, 52, 0, Math.PI, 0);
+      ctx.fill();
     }
     ctx.restore();
     ctx.strokeStyle = player.color;
     ctx.lineWidth = 5;
-    ctx.beginPath(); ctx.arc(width / 2, 120, 78, 0, 7); ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(width / 2, 120, 78, 0, 7);
+    ctx.stroke();
     // Name.
     ctx.fillStyle = '#e8e6e0';
     ctx.font = 'bold 30px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText((player.name || 'Player').slice(0, 14), width / 2, 270);
-    if (player.showing > 0) { // public "is revealing cards" badge — count only, never the content
+    if (player.showing > 0) {
+      // public "is revealing cards" badge — count only, never the content
       ctx.fillStyle = player.color;
       roundRect(ctx, width / 2 - 64, 12, 128, 30, 15);
       ctx.fill();
@@ -1525,14 +1996,19 @@ function makePlayerTexture(player) {
 
   const tex = cTex(canvas);
   draw(null);
-  if (player.avatar) { const img = new Image(); img.onload = () => draw(img); img.src = player.avatar; }
+  if (player.avatar) {
+    const img = new Image();
+    img.onload = () => draw(img);
+    img.src = player.avatar;
+  }
   return tex;
 }
 
 // A small floating name-tag texture: translucent pill, border in the player's
 // color, their name centred. Shown over a piece while someone else holds it.
 function nameTag(name, color) {
-  const width = 256, height = 80;
+  const width = 256,
+    height = 80;
   const { canvas, ctx } = makeCanvas(width, height);
   ctx.fillStyle = 'rgba(20,24,29,0.9)';
   roundRect(ctx, 4, 4, width - 8, height - 8, 18);
@@ -1553,13 +2029,37 @@ function nameTag(name, color) {
 function makeYouChipTexture(color) {
   const { canvas, ctx } = makeCanvas(128, 128);
   ctx.clearRect(0, 0, 128, 128);
-  ctx.beginPath(); ctx.arc(64, 64, 58, 0, 7);
-  ctx.fillStyle = 'rgba(20,24,29,0.5)'; ctx.fill();
-  ctx.lineWidth = 8; ctx.strokeStyle = color; ctx.stroke();
-  ctx.fillStyle = color; ctx.font = 'bold 42px system-ui, sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.beginPath();
+  ctx.arc(64, 64, 58, 0, 7);
+  ctx.fillStyle = 'rgba(20,24,29,0.5)';
+  ctx.fill();
+  ctx.lineWidth = 8;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.font = 'bold 42px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
   ctx.fillText('YOU', 64, 66);
   return cTex(canvas);
 }
 
-export { KIND, OVERLAY, trayMesh, makeCanvas, cTex, cardMesh, propColor, measureModel, measureBoard, resizeToCanvas, splitColorText, uploadImage, uploadModel, measureImage, makePlayerTexture, nameTag, makeYouChipTexture };
+export {
+  KIND,
+  OVERLAY,
+  trayMesh,
+  makeCanvas,
+  cTex,
+  cardMesh,
+  propColor,
+  measureModel,
+  measureBoard,
+  resizeToCanvas,
+  splitColorText,
+  uploadImage,
+  uploadModel,
+  measureImage,
+  makePlayerTexture,
+  nameTag,
+  makeYouChipTexture,
+};
