@@ -7,5 +7,5 @@ test('every inline TableRoom message uses the shared error boundary', async () =
   const tableRoom = source.slice(source.indexOf('class TableRoom'), source.indexOf('class EditorRoom'));
   assert.equal(tableRoom.includes('this.onMessage('), false);
   assert.equal(tableRoom.includes('assetMessage('), false);
-  assert.equal((tableRoom.match(/tableMessage\('/g) || []).length, 32);
+  assert.equal((tableRoom.match(/tableMessage\('/g) || []).length, 20);
 });

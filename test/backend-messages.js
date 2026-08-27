@@ -107,6 +107,9 @@ test('whiteboard strokes are copied and reject malformed or oversized paths', ()
   assert.equal(whiteboardStroke({ ...raw, pts: [0, Infinity] }), null);
   assert.equal(whiteboardStroke({ ...raw, pts: Array(2002).fill(0) }), null);
   assert.equal(whiteboardStroke({ ...raw, sid: 'forged' }), null);
+  assert.deepEqual(whiteboardStroke({ ...raw, erase: false }), { ...raw, erase: false });
+  assert.deepEqual(whiteboardStroke({ ...raw, erase: true }), { ...raw, erase: true });
+  assert.equal(whiteboardStroke({ ...raw, erase: 'yes' }), null);
 });
 
 test('grid calibration and hand sharing use bounded enums and unique identifiers', () => {

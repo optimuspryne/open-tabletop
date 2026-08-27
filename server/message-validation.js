@@ -136,12 +136,21 @@ export function overlayMovePayload(message, options) {
 }
 
 export function whiteboardStroke(message) {
-  if (!exactObject(message, ['pts', 'color', 'width'])) return null;
+  const keys = message?.erase === undefined
+    ? ['pts', 'color', 'width']
+    : ['pts', 'color', 'width', 'erase'];
+  if (!exactObject(message, keys)) return null;
   if (!Array.isArray(message.pts) || message.pts.length < 2 || message.pts.length > 2000 || message.pts.length % 2) return null;
   if (!message.pts.every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) return null;
   const color = boundedString(message.color, { min: 1, max: 24 });
   const width = finiteNumber(message.width, { min: Number.MIN_VALUE, max: 0.2 });
-  return color === null || width === null ? null : { pts: message.pts.slice(), color, width };
+  if (color === null || width === null || (message.erase !== undefined && typeof message.erase !== 'boolean')) return null;
+  return {
+    pts: message.pts.slice(),
+    color,
+    width,
+    ...(message.erase === undefined ? {} : { erase: message.erase }),
+  };
 }
 
 export function pointPayload(message) {

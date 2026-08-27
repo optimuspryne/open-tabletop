@@ -33,9 +33,10 @@ import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { registerPieceHandlers } from './server/game/handlers/pieces.js';
 import { registerRoomStateHandlers, saveRoomStateNow, scheduleRoomSave } from './server/game/handlers/room-state.js';
+import { registerOverlayHandlers } from './server/game/handlers/overlays.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { boundedString, cardPlacementPayload, dispenserDragPayload, finiteNumber, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, showPayload, whiteboardStroke } from './server/message-validation.js';
+import { boundedString, cardPlacementPayload, dispenserDragPayload, oneField, pieceIdPayload, pointPayload, showPayload } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -405,7 +406,6 @@ const WHITEBOARD_MAX_STROKES = 2000;
 const OVERLAY_MAX = 200;
 const OVERLAY_MAX_PER_PLAYER = 40;
 const OVERLAY_KINDS = new Set(['ruler', 'circle', 'cone', 'line']); // valid overlay kinds (add here + in the client OVERLAY registry)
-const TWO_PI = Math.PI * 2;
 
 // --- Physics world -----------------------------------------------------------
 // Create the single cannon-es world. The table surface + containment walls are
@@ -729,97 +729,14 @@ class TableRoom extends Room {
         player.avatar = parsed.data;
       }
     });
-    // --- Overlays: flat measurement/template annotations (not physics) --------
-    // Public geometry. They ride the scene snapshot (see serializeScene), so a saved
-    // or auto-saved table restores them. Any seated player adds/removes their own;
-    // a GM removes any. Capped per-room and per-player so the map can't be spammed.
-    tableMessage('overlayAdd', (client, message) => {
-      const msg = overlayGeometry(message, { kinds: OVERLAY_KINDS, maxLen: MEASURE.maxLen, requireKind: true }); if (!msg) return;
-      if (this.state.overlays.size >= OVERLAY_MAX) return;       // room total cap
-      let mine = 0;
-      this.state.overlays.forEach(o => { if (o.owner === client.sessionId) mine++; });
-      if (mine >= OVERLAY_MAX_PER_PLAYER) return;                // per-player cap
-      const player = this.state.players.get(client.sessionId);
-      const o = new Overlay();
-      o.kind = msg.kind;
-      o.owner = client.sessionId;
-      o.color = (player && player.color) || '#ffffff';
-      o.x = msg.x; o.z = msg.z;
-      o.x2 = msg.x2; o.z2 = msg.z2;
-      o.w = msg.w || 0;
-      o.ang = msg.ang || 0;
-      this.state.overlays.set('o' + (this.nextOverlayId++), o);
+    registerOverlayHandlers(this, {
+      createOverlay: () => new Overlay(),
+      kinds: OVERLAY_KINDS,
+      maxLength: MEASURE.maxLen,
+      maxOverlays: OVERLAY_MAX,
+      maxPerPlayer: OVERLAY_MAX_PER_PLAYER,
+      maxStrokes: WHITEBOARD_MAX_STROKES,
     });
-    tableMessage('overlayMove', (client, message) => {       // reposition (owner or GM) — used from Step 4+
-      const msg = overlayMovePayload(message, { maxLen: MEASURE.maxLen }); if (!msg) return;
-      const o = this.state.overlays.get(msg.id);
-      if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
-      for (const key of ['x', 'z', 'x2', 'z2', 'w', 'ang']) if (msg[key] !== undefined) o[key] = msg[key];
-    });
-    tableMessage('overlayRemove', (client, message) => {     // delete one (owner or GM)
-      const msg = overlayIdPayload(message); if (!msg) return;
-      const o = this.state.overlays.get(msg.id);
-      if (!o || (o.owner !== client.sessionId && this.rank(client) < RANK.gm)) return;
-      this.state.overlays.delete(msg.id);
-    });
-    tableMessage('overlayClear', (client, message) => {     // scope 'all' (GM only) wipes every overlay; anything else clears just your own
-      const msg = oneField(message, 'scope', (scope) => ['all', 'mine'].includes(scope) ? scope : null); if (!msg) return;
-      const all = msg.scope === 'all' && this.rank(client) >= RANK.gm, del = [];
-      this.state.overlays.forEach((o, id) => { if (all || o.owner === client.sessionId) del.push(id); });
-      for (const id of del) this.state.overlays.delete(id);
-    });
-    // Live measurement preview: a transient relay (NOT synced state), so everyone
-    // sees a ruler/template as it's dragged out. A missing/invalid kind means the
-    // drag ended — clear the sender's preview. Stamps the sender's id + seat color.
-    tableMessage('overlayDrag', (client, message) => {
-      const msg = overlayGeometry(message, { kinds: OVERLAY_KINDS, maxLen: MEASURE.maxLen, allowEmpty: true, requireKind: Object.keys(message || {}).length > 0 }); if (!msg) return;
-      const player = this.state.players.get(client.sessionId);
-      const color = (player && player.color) || '#ffffff';
-      const kind = msg.kind;
-      const out = kind
-        ? { from: client.sessionId, kind, color, x: msg.x, z: msg.z, x2: msg.x2, z2: msg.z2, w: msg.w || 0, ang: msg.ang || 0 }
-        : { from: client.sessionId, kind: null };
-      this.broadcast('overlayDrag', out, { except: client });
-    });
-
-    // --- Whiteboard: a synced singleton on a track behind the players ----------
-    tableMessage('wbEnable', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;             // spawn/enable is GM+
-      const parsed = oneField(message, 'on', (on) => typeof on === 'boolean' ? on : null); if (!parsed) return;
-      this.state.whiteboard.enabled = parsed.on;
-      if (!parsed.on) { this.strokes = []; this.state.whiteboard.owner = ''; this.broadcast('wbClear'); }
-    });
-    tableMessage('wbSet', (client, message) => {         // slide on the track / flip dark<->light (GM+)
-      if (this.rank(client) < RANK.gm) return;
-      const angleMsg = oneField(message, 'angle', (angle) => finiteNumber(angle, { min: -TWO_PI, max: TWO_PI }));
-      const darkMsg = oneField(message, 'dark', (dark) => typeof dark === 'boolean' ? dark : null);
-      const msg = angleMsg || darkMsg; if (!msg) return;
-      const wb = this.state.whiteboard;
-      if (msg.angle !== undefined) wb.angle = ((msg.angle % TWO_PI) + TWO_PI) % TWO_PI;
-      if (msg.dark !== undefined) wb.dark = msg.dark;
-    });
-    tableMessage('wbClaim', (client) => {                 // double-click to own it (must be enabled + free)
-      const wb = this.state.whiteboard;
-      if (wb.enabled && !wb.owner) wb.owner = client.sessionId;
-    });
-    tableMessage('wbRelease', (client) => {               // exit inspect -> release
-      const wb = this.state.whiteboard;
-      if (wb.owner === client.sessionId) wb.owner = '';
-    });
-    tableMessage('wbStroke', (client, message) => {        // owner draws; everyone else replays it
-      if (this.state.whiteboard.owner !== client.sessionId) return;
-      const parsed = whiteboardStroke(message); if (!parsed) return;
-      const stroke = { ...parsed, sid: client.sessionId };  // tag the drawer so their own echo is ignored client-side
-      this.strokes.push(stroke);
-      if (this.strokes.length > WHITEBOARD_MAX_STROKES) this.strokes.shift();
-      this.broadcast('wbStroke', stroke);                   // to everyone (matches ping/wbClear, which deliver reliably)
-    });
-    tableMessage('wbClear', (client) => {                 // owner or GM+ wipes it
-      if (this.state.whiteboard.owner !== client.sessionId && this.rank(client) < RANK.gm) return;
-      this.strokes = [];
-      this.broadcast('wbClear');
-    });
-    tableMessage('wbStrokes', (client) => client.send('wbStrokes', { strokes: this.strokes })); // late-join replay
 
     // --- Dice trays: one PERSONAL physics box per seat, on the track behind that player -----
     // No rank gate — a player toggles only their OWN tray. Putting it away clears its dice too.
