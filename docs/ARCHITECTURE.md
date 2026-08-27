@@ -59,10 +59,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   live under `server/http/routes/`. All physics tuning remains in one `SIM` block.
 - **`server/` support modules** — shared permission and validation rules,
   card/deck state helpers, the piece-props codec, upload validation, database and
-  session configuration, bootstrap-admin provisioning, async HTTP boundaries,
-  auth context, and the extracted handler/router modules. These are deliberately
-  dependency-injected so the backend seams can be tested without starting a room
-  or listener.
+  session/Redis configuration, bootstrap-admin provisioning, async HTTP and
+  Colyseus boundaries, auth context, and the extracted handler/router modules.
+  These are deliberately dependency-injected so the backend seams can be tested
+  without starting a room or listener.
 - **`db.js`** — the Postgres connection pool and **every** query: the saved
   library (deck / board / prop / scene / skybox *metadata*; image/model files stay
   on disk) plus users, rooms, membership, and each room's durable settings. Config
@@ -110,6 +110,36 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
   role on first DB start; the `Dockerfile` itself lives at the repo root).
+
+## Trust and failure boundaries
+
+Every payload-bearing Colyseus message crosses `server/message-validation.js`
+before authorization, lookup, physics, state, or database work. Normalizers accept
+only plain objects with documented keys, finite numbers, bounded strings/batches,
+and allowlisted identifiers/enums/nested records. They return a fresh trusted value
+or `null`; invalid messages fail closed without partial work. Payloadless messages
+are the only exception because they carry nothing to validate.
+
+Every table message then runs through `safeMessage`: synchronous throws and rejected
+promises are logged with payload-free room/user/session context and converted to a
+sanitized `serverError` (or the narrower asset/member error) for that client. The
+browser throttles generic notices to prevent alert storms. `safeRoomTask` applies the
+same policy to join-time and detached lifecycle work; authorization failures and
+reconnection timeouts remain normal Colyseus control flow. Persistence, lobby calls,
+and final room saves are awaited or explicitly contained, so rejected promises do not
+escape unnoticed or disable later socket messages.
+
+Postgres absence is a domain result; Postgres failure is an exception. The injected
+library/user/room read modules preserve that distinction: a real not-found/empty/default
+result remains `null`/`[]`/a default state, while connection/query failures reject into
+the HTTP or Colyseus error boundary. An outage therefore cannot masquerade as bad
+credentials, a missing room, an empty library/member list, or reset room settings.
+
+HTTP authentication and upload limits use Redis atomic token buckets keyed by purpose
+and resolved client IP. All replicas spend the same allowance; bucket TTLs remove stale
+IPs, and Redis failure returns `503` instead of silently removing protection. The
+in-memory adapter is limited to development/tests. Correct IP identity depends on an
+exact `TRUST_PROXY_HOPS` deployment setting; Redis alone does not cluster Colyseus rooms.
 
 ## Public vs. secret (how hidden information works)
 

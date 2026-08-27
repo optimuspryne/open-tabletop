@@ -21,7 +21,7 @@ The codebase:
 | `server/library-queries.js` | Node | Testable saved-library read queries; successful empty/not-found results stay distinct from PostgreSQL rejection |
 | `server/user-queries.js` | Node | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection |
 | `server/room-queries.js` | Node | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection |
-| `server/game/safe-message.js` | Node | Colyseus message error boundary: catches sync/async failures, logs payload-free room/user context, and sends sanitized client errors |
+| `server/game/safe-message.js` | Node | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
 | `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
 | `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |
@@ -456,6 +456,15 @@ asset records, and return fresh trusted values or `null`. Payloadless messages a
 only handlers without a normalizer. Invalid messages fail closed without a partial
 state change or database call.
 
+All extracted and inline table handlers register through **`safeMessage(room,
+type, handler, options)`**. It contains synchronous throws and promise rejections,
+logs only operation/room/user/session context (never the payload), and sends a
+sanitized `serverError` by default. Library and membership handlers select narrower
+public messages/error types. **`safeRoomTask(room,type,client,task,options)`** extends
+the same boundary to join-time and detached lifecycle work; `notify:false` keeps
+clientless saves log-only. The browser displays generic `serverError` messages at
+most once per five seconds.
+
 Per-piece flags (rank-gated, mirror each other): **`setStand`** (`{id}` — toggle
 keep-upright; **U**), **`setSnap`** (`{id}` — toggle snap-to-grid, snapping the piece
 to its cell immediately when a grid is active; **G**), **`snap`** (`{id}` — step a held
@@ -535,6 +544,11 @@ admin sandbox for building and testing library assets live. Registered as the
   **`GET /admin/orphans`** (dry-run: `/assets` files no library row, room, or live
   table references — old enough to be safe), **`POST /admin/orphans/purge`**
   (re-scan, move them to `saved-assets/.trash/`).
+- **Rate limiting:** auth and upload middleware use atomic Redis token buckets
+  namespaced by purpose and resolved IP. TTL is the time to refill a bucket, so
+  inactive IP keys expire. Redis errors fail closed with `503` and `Retry-After`;
+  the memory store is for local development/tests only. `TRUST_PROXY_HOPS` must
+  equal the deployment's proxy depth before forwarded addresses are accepted.
 
 ---
 
@@ -603,8 +617,12 @@ delete), `setMemberRole`, `listMembers`.
 
 - **`close()`** — end the pool (for one-off scripts).
 
-List functions swallow errors → `[]`; getters → `null`; inserts/updates throw
-(handlers catch).
+Successful absence keeps its domain shape: list reads return `[]`, getters return
+`null`, counts may return `0`, and missing durable room state receives documented
+defaults. PostgreSQL connection/query failures are never converted to those values;
+library, user, and room read helpers reject into the HTTP or Colyseus boundary just
+like writes. This distinction prevents an outage from looking like ordinary empty
+data, invalid credentials, or a missing room.
 
 ---
 
