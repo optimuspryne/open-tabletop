@@ -16,7 +16,7 @@ import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, timerLive, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
+import { KINDS, PROPS, BOARDS, TABLE, dieVerts, dieR, deckHeight, MEASURE, DISPENSERS, stackVisible, gridActive, snapToCell, TRAY, trayCenter, trayParts, trayPlace, inTray, colorProps, STARTERS, cardGeom, sanitizeGeom, seatAngle, SEAT_ANGLES, LETTER_DIST, MAHJONG, DECK_MODELS } from './shared/pieces.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -32,9 +32,10 @@ import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
 import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { registerPieceHandlers } from './server/game/handlers/pieces.js';
+import { registerRoomStateHandlers, saveRoomStateNow, scheduleRoomSave } from './server/game/handlers/room-state.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import { boundedString, cardPlacementPayload, dispenserDragPayload, finiteNumber, gridCalibrationPayload, hexColor, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, scalePayload, scorePayload, showPayload, tablePayload, timerPayload, whiteboardStroke } from './server/message-validation.js';
+import { boundedString, cardPlacementPayload, dispenserDragPayload, finiteNumber, oneField, overlayGeometry, overlayIdPayload, overlayMovePayload, pieceIdPayload, pointPayload, showPayload, whiteboardStroke } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -621,16 +622,11 @@ class TableRoom extends Room {
       skyUrlOk,
     });
 
-    tableMessage('stateSave', (client) => { // GM checkpoints the live table so it survives an empty room
-      if (this.rank(client) < RANK.gm) return;
-      const payload = this.serializeGame();
-      if (JSON.stringify(payload).length > SCENE_MAX_BYTES) {
-        client.send('sceneError', { message: 'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.' });
-        return;
-      }
-      this.savedScene = payload;
-      this.scheduleSave();
-      client.send('stateSaved', {});
+    registerRoomStateHandlers(this, {
+      createScoreRow: (label, score) => new ScoreRow(label, score),
+      tableLimits: TABLE_LIMIT,
+      gridLiftMax: GRID_LIFT_MAX,
+      sceneMaxBytes: SCENE_MAX_BYTES,
     });
 
     // Play a card from your hand onto the table, face-up or face-down.
@@ -733,94 +729,6 @@ class TableRoom extends Room {
         player.avatar = parsed.data;
       }
     });
-    tableMessage('notebook', (client, message) => {
-      const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 4000 })); if (!parsed) return;
-      // Private per-player notes: never synced, just held so they survive a reconnect.
-      this.notebooks.set(client.sessionId, parsed.text);
-    });
-    tableMessage('timer', (client, message) => {
-      const msg = timerPayload(message); if (!msg) return;
-      const t = this.state.timer, now = Date.now();
-      if (t.running) { t.base = timerLive(t, now); t.running = false; t.since = 0; } // freeze at the live value first
-      if (msg.action === 'start') { t.since = now; t.running = true; }
-      else if (msg.action === 'reset') { t.base = t.mode === 'down' ? t.duration : 0; }
-      else if (msg.action === 'set') {
-        if (msg.mode === 'up' || msg.mode === 'down') t.mode = msg.mode;
-        if (typeof msg.duration === 'number' && isFinite(msg.duration)) t.duration = clamp(msg.duration, 0, 86400000);
-        t.base = t.mode === 'down' ? t.duration : 0; // switching mode / duration resets to the start value
-      }
-      // 'pause' needs nothing more — the freeze above already did it.
-    });
-
-    // Durable scoreboard (helper+): add / remove / rename / adjust / set / clear.
-    // Its own clear action — the table Reset deliberately leaves it alone.
-    tableMessage('score', (client, message) => {
-      if (this.rank(client) < RANK.helper) return;
-      const msg = scorePayload(message); if (!msg) return;
-      const s = this.state.scores;
-      if (msg.action === 'add') {
-        if (s.size >= 50) return; // cap the scoreboard so it can't be spammed unbounded
-        s.set('s' + (this.nextScoreId++), new ScoreRow(msg.label, 0));
-      } else if (msg.action === 'remove') {
-        s.delete(msg.id);
-      } else if (msg.action === 'label') {
-        const row = s.get(msg.id); if (row) row.label = msg.label;
-      } else if (msg.action === 'adjust') {
-        const row = s.get(msg.id); if (row) row.score = clamp(row.score + msg.delta, -1e9, 1e9);
-      } else if (msg.action === 'set') {
-        const row = s.get(msg.id); if (row) row.score = msg.score;
-      } else if (msg.action === 'clear') {
-        s.clear();
-      } else return;
-      this.scheduleSave();
-    });
-
-    // Durable room notes (GM only): the shared free-text field. GM-only editing
-    // sidesteps concurrent-edit merges (effectively one writer).
-    tableMessage('roomNotes', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;
-      const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 8000 })); if (!parsed) return;
-      this.state.notes = parsed.text;
-      this.scheduleSave();
-    });
-
-    // Resize the play surface (GM+): rebuild the physics bounds + sync the new
-    // size so clients rebuild the felt. Durable; the out-of-bounds net nudges any
-    // now-outside pieces back in on the next tick.
-    tableMessage('table', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;
-      const parsed = tablePayload(message, TABLE_LIMIT); if (!parsed) return;
-      const { x: hx, z: hz } = parsed;
-      this.state.tableX = hx; this.state.tableZ = hz;
-      this.buildBounds(hx, hz);
-      this.scheduleSave();
-    });
-    tableMessage('tableColor', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;
-      const parsed = oneField(message, 'color', hexColor); if (!parsed) return;
-      this.state.feltColor = parsed.color;
-      this.scheduleSave();
-    });
-    // Per-room measurement scale (GM+, durable). A display/snap layer only — it never
-    // touches physics or piece sizes. Partial: only provided, valid fields change.
-    tableMessage('scaleSet', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;
-      const msg = scalePayload(message, { gridLiftMax: GRID_LIFT_MAX }); if (!msg) return;
-      const sc = this.state.scale;
-      for (const [key, value] of Object.entries(msg)) sc[key] = value;
-      this.scheduleSave();
-    });
-
-    // Match the grid to a board on the table: cell size from its footprint ÷ cell count,
-    // square style, and the board's snap anchor (chess → cell centres, go → crossings).
-    // Boards spawn centred at the origin where the grid is anchored, so no offset needed;
-    // the GM can nudge the cell size afterward to account for any border in the model.
-    tableMessage('calibrateGrid', (client, message) => {
-      if (this.rank(client) < RANK.gm) return;
-      const msg = gridCalibrationPayload(message); if (!msg) return;
-      this.calibrateGrid(msg);
-    });
-
     // --- Overlays: flat measurement/template annotations (not physics) --------
     // Public geometry. They ride the scene snapshot (see serializeScene), so a saved
     // or auto-saved table restores them. Any seated player adds/removes their own;
@@ -1652,18 +1560,10 @@ class TableRoom extends Room {
   // Persist the durable room state (scoreboard + notes + table size). Debounced —
   // score clicks arrive in bursts, and saveStateNow always reads the latest state.
   scheduleSave() {
-    if (!this.roomId || this._saveTimer) return;
-    this._saveTimer = setTimeout(() => {
-      this._saveTimer = null;
-      void safeRoomTask(this, 'saveState', null, () => this.saveStateNow(), { notify: false });
-    }, 800);
+    scheduleRoomSave(this);
   }
   async saveStateNow() {
-    if (!this.roomId) return;
-    const rows = [];
-    this.state.scores.forEach((row, id) => rows.push({ id, label: row.label, score: row.score }));
-    await db.saveRoomState(this.roomId, { scoreboard: rows, notes: this.state.notes, tableX: this.state.tableX, tableZ: this.state.tableZ, skybox: this.state.skybox, feltColor: this.state.feltColor, scene: this.savedScene,
-      scale: this.scaleSnapshot() });
+    await saveRoomStateNow(this, { db });
   }
   async onDispose() { // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     LIVE_ROOMS.delete(this);
