@@ -1879,7 +1879,7 @@ function rebuildGrid() {
         k === 'all' ? 'everyone' : room.state.players.get(k)?.name || 'player',
       );
       const hids = showHids();
-      const count = Array.isArray(hids) ? hids.length : (hands?.length ?? 0);
+      const count = Array.isArray(hids) ? hids.length : myHand.length;
       showStatus.textContent = names.length
         ? 'showing ' + (Array.isArray(hids) ? count + ' card(s)' : 'your hand') + ' to ' + names.join(', ') + ' · tap to stop'
         : '';
@@ -3121,22 +3121,6 @@ addEventListener('pointercancel', (e) => {
   document.body.style.userSelect = document.body.style.webkitUserSelect = '';
 });
 
-// Pop a bottom-anchored config panel just above its flank button (Show/Drop, either side of the hand).
-// On mobile the popout's !important centering wins, so this only takes effect on desktop.
-function placeAbovePanel(panel, btn, side) {
-  if (!panel || !btn) return;
-  const r = btn.getBoundingClientRect();
-  panel.style.top = 'auto';
-  panel.style.transform = 'none';
-  panel.style.bottom = Math.round(innerHeight - r.top + 8) + 'px';
-  if (side === 'right') {
-    panel.style.right = Math.round(Math.max(8, innerWidth - r.right)) + 'px';
-    panel.style.left = 'auto';
-  } else {
-    panel.style.left = Math.round(Math.max(8, r.left)) + 'px';
-    panel.style.right = 'auto';
-  }
-}
 function renderHand(cards) {
   const el = byId('hand');
   el.innerHTML = '';
