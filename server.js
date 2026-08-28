@@ -585,6 +585,7 @@ class TableRoom extends Room {
     this.drafts = new Map(); // sessionId -> {back,cards} PRIVATE: a deck being built in chunks
     this.cardData = new Map(); // id -> { front }         PRIVATE: a face-down table card's hidden face
     this.hands = new Map(); // sessionId -> [{hid,front,back}]  PRIVATE: each player's hidden hand
+    this.lastDrop = new Map(); // sessionId -> { ids:[pieceId], ts }  PRIVATE: undo for handToTable
     this.notebooks = new Map(); // sessionId -> text               PRIVATE: each player's private notes (ephemeral; dies with the room)
     this.strokes = []; // whiteboard stroke history (server-held; sent to late-joiners, gone on dispose)
     this.chatLog = []; // recent public chat (server-held; last 80, sent to late-joiners, gone on dispose)
@@ -731,22 +732,44 @@ class TableRoom extends Room {
       const cx = typeof x === 'number' ? x : 0,
         cz = typeof z === 'number' ? z : 0;
       let spawned = 0;
+      const ids = []; // remember what we created, so the drop can be undone
       for (const card of hand) {
         if (this.state.pieces.size >= SIM.maxPieces) break; // respect the piece cap
-        const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6]; // small spread in front of them
+        const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6];
         const id = this.spawnCardFlat(
           pos,
           faceDown
             ? { back: card.back, ...geoOf(card) }
             : { front: card.front, back: card.back, ...geoOf(card) },
         );
-        if (faceDown) this.cardData.set(id, { front: card.front }); // face-down: front stays private until flipped
+        if (faceDown) this.cardData.set(id, { front: card.front });
+        ids.push(id);
         spawned++;
       }
-      hand.splice(0, spawned); // remove just the cards that made it onto the table
-      this.sendHand(client); // updates the public count + sends the now-shorter private hand
-      if (spawned) this.broadcast('sfx', { type: 'hand-drop' });
+      hand.splice(0, spawned);
+      this.sendHand(client);
+      if (spawned) {
+        this.lastDrop.set(client.sessionId, { ids, ts: Date.now() });
+        this.broadcast('sfx', { type: 'hand-drop' });
+      }
     });
+    tableMessage('handFromTable', (client) => {
+          const batch = this.lastDrop.get(client.sessionId);
+          this.lastDrop.delete(client.sessionId); // one shot, either way
+          if (!batch || Date.now() - batch.ts > 30000) return; // 30s grace, matching the toast
+          let restored = 0;
+          for (const id of batch.ids) {
+            const piece = this.state.pieces.get(id);
+            if (!piece || piece.type !== 'card') continue; // moved, taken, or table reset
+            const props = readProps(piece);
+            const front = (this.cardData.get(id) || {}).front || props.front;
+            this.addToHand(client, front, props.back || 'back', geoOf(props));
+            this.removePiece(id);
+            restored++;
+          }
+          client.send('dropUndone', { restored });
+          if (restored) this.broadcast('sfx', { type: 'card-take' });
+        });
     // Wipe the room back to an empty table — pieces and all private state.
     tableMessage('reset', (client) => {
       if (this.rank(client) < RANK.gm) return; // wiping the table is GM+
@@ -1954,6 +1977,7 @@ class TableRoom extends Room {
       this.state.unclaimed.set(_uid, _nm);
     }
     this.hands.delete(client.sessionId);
+    this.lastDrop.delete(client.sessionId);
     this.notebooks.delete(client.sessionId);
     this.stopShow(client.sessionId); // clear any hold-to-show they had live
 

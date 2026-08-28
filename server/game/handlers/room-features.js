@@ -93,6 +93,10 @@ export function registerRoomFeatureHandlers(
 
   featureMessage('handSync', (client) => room.sendHand(client));
 
+  featureMessage('whoami', (client) =>
+      client.send('whoami', { isAdmin: room.isAdmin(client) }),
+    ); // re-requestable: allowReconnection skips onJoin, so a refresh never gets the push
+
   featureMessage('showStart', (client, message) => {
     const parsed = showPayload(message);
     if (!parsed) return;

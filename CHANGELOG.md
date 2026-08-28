@@ -6,7 +6,120 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See [RELEASING.md](RELEASING.md) for what each version bump means and how releases are cut.
 
-## [Unreleased]
+## [0.12.0] — 2026-08-28
+
+A full pass over the table interface — the HUD, every pop-out pane, both library
+modals, the lobby, the admin console, and a purpose-built layout for phones and
+tablets. No server change: every message the new UI sends already existed.
+
+### Added
+- **Phones and tablets get their own layout.** Any touch device (and any window under
+  900px) now drives the interface with **bottom sheets** instead of anchored overlays.
+  A sheet has three drag stops — a **peek** that keeps a chat you're watching on screen
+  with its composer still reachable, two-thirds, and full — and you throw it between them;
+  a flick down dismisses it. One sheet at a time, and switching panes is the chip row in
+  its header rather than close-then-open.
+- **One top bar.** The bar now carries ☰, the room name, the running timer value, turn
+  state, and your avatar — the room **code** moved into a new **Room info** sheet (with
+  Copy and, where the browser offers it, Share), and the turn pill collapses to a caret
+  when it isn't your turn.
+- **A ☰ drawer** folds both top clusters into one grouped list — Open, Room, Table, and
+  Leave in the footer. Every row is a proxy for the real button, so role gating and the
+  chat unread badge come along unchanged.
+- **A seat button and a ⊕ fan, on every device.** One round **seat** button replaces both
+  bottom hamburger bars: seat actions first, the roster below, anchored to the button and
+  flipped by the space actually available. **⊕** fans out Roll dice / Spawn / Select /
+  Measure in an arc that always opens toward the middle of the screen, so a press in any
+  corner keeps every item on screen. On touch, long-pressing a **piece** opens the same
+  fan with that piece's own verbs.
+- **A pull-up hand tray.** The hand became a tab that shows a fanned card edge and a count;
+  pull it up for show-faces, your cards, and the drop pair stacked above each other, which
+  is what keeps every target thumb-sized on a 392px screen.
+- **Icon hints on touch.** Compact chrome is forced on touch devices, so icon-only buttons
+  now teach themselves: long-press any of them for the same themed hint desktop gets on hover.
+- **Long-press tips, source badges and a ••• curation menu in the library.** Every asset
+  card states whether it's **custom** or **built-in**, keeps Spawn and Edit inline, and moves
+  Clone / Publish / Rename / Delete into an overflow menu — a popover on desktop, a bottom
+  sheet on touch that names the asset in its header and confirms Delete inline instead of
+  firing a browser dialog. Publish states the current state rather than flipping its label.
+- **Library search spans every tab.** A query now searches all panes at once, groups the
+  results by kind, and puts hit counts on the tab chips; clearing it returns you to the pane
+  you were in. Result rows keep each item's real primary action.
+- **An Amount stepper on dispenser cards**, so a chip or coin stack's starting count is set
+  on the card. The infinite Go bowl says so instead of showing a disabled control.
+
+### Changed
+- **The table HUD reads as three groups, not eight buttons.** Top-left is two pills (Add to
+  Library and Save Scene moved into the GM menu; How to Play and Settings into a `•••`
+  overflow; Chat and Notes went icon-only), and the tools cluster, identity pill and dock
+  now stack as one right-hand column. Score / Music / Measure are icon-only — Timer keeps
+  its label because that text is the live value.
+- **Every pop-out pane shares one anatomy** — a header with a hairline and ✕, a body, and a
+  pinned footer only where the pane has a persistent action. Chat gained **timestamps** and
+  right-aligns your own messages; the scoreboard's − / value / + now read as one inline
+  stepper per row.
+- **Show and Drop lost their panels.** Showing cards is a latched strip of faces above your
+  hand — tap a face to show it, tap again to stop — and Drop is two buttons with a toast.
+- **The Library is a window, not a list.** Sticky header, one tab grammar, a segmented
+  All / Custom / Built-In control, and a horizontal card per asset (preview, name, badges,
+  controls, actions) so card heights match. On a landscape phone the three header rows
+  flatten into one and cards go four across.
+- **Add to Library shares that window.** The builder's six panes now sit under the same
+  sticky header and tab grammar; the thickness / shape / padding rows are indented under
+  the **Fit to image** toggle they belong to; the fronts drop target shows a real thumbnail
+  grid with a count ("52 selected", "+45") instead of the first file's preview; and each
+  pane's Save / Save + Spawn pair states where the asset lands.
+- **Room Settings and Settings wear the same window** as the two library modals, so all four
+  read as one family.
+- **The lobby is three cards** — Create, Join, Available rooms — with owner row actions behind
+  the same `•••` overflow, and the pending row shows its live "watching" state. The admin
+  console's tables are themed, its pending count is a real badge, and storage cleanup reads
+  Scan → Clean up.
+- **Tablets keep full-width sheets** rather than a docked pane — a deliberate call, recorded
+  in `docs/UI_Redesign_Phase7.md` with the rejected alternative.
+- **Accent color means one thing.** Accent is now interactive-and-state (icons, the turn pill,
+  active chips, hover borders, focus rings); surfaces, body text, dividers and card faces stay
+  neutral. Danger keeps its own red at every accent.
+
+### Fixed
+- **The library's ••• menu no longer gets clipped.** It has to live inside the card's action
+  row, which sits in a scrolling pane inside a window that hides its overflow, so it was cut
+  off on the first and last rows. It's now placed as its own layer from the button's position,
+  flipping above or below by available space.
+- **The Measure pane says what the selected shape does again** — ruler reads distance, circle
+  radius, cone its spread, line its lane width, with the angle and width read from the real
+  config.
+- **Scale & Grid stopped colliding with itself.** Long labels ("Objects Snap-To?") overflowed a
+  fixed 78px column and painted over the controls beside them; labels now wrap, the pane's chips
+  run at label size, and number fields cap their width. **Round to** no longer shows
+  `0.10000000149` — the value arrives as a 32-bit float and is displayed at typing precision.
+- **The "Scan for orphaned files" icon** (and any other icon added since the sprite generator
+  broke — see Internal) renders instead of leaving a blank space.
+- **A full-screen modal's ✕ is always reachable on a phone.** A centred card taller than the
+  *visual* viewport (`100vh` excludes the URL bar) pushed its own header off the top of the
+  screen. Modals now pin to the top of a `dvh`-measured viewport, and library cards go
+  list-shaped in portrait so the modal stops outgrowing the screen in the first place.
+- **The roster in the seat popover is legible** — it was inheriting a near-black text color from
+  where it's borrowed.
+- **Dock rows fit on one line.** A global `min-width: 4.5em` on action buttons, plus toolbar-sized
+  icons inside a 270px dock, were breaking player and member rows onto three lines.
+
+### Internal
+- **`npm run build:icons` works again.** It located the existing sprite with a regex anchored on
+  `<svg class="icon-sprite"`; once the pages were formatted by Prettier that tag spans several
+  lines, the match failed, `.replace()` became a silent no-op, and every icon added to the list
+  since then never reached a page — while the script still reported success. It now matches the
+  tag whatever the formatting and **fails loudly** if a page comes out unchanged. `search` was
+  also missing from the icon list.
+- **A `data-icon` with no matching sprite symbol is now visible.** It logs which id is missing and
+  draws a dashed placeholder instead of rendering nothing.
+- **A symbol may declare its own paint.** `.ico` sets `fill: none; stroke: currentColor`, which
+  silently blanked fill-based (Tabler *filled*) symbols; the wrapper now honours a symbol's own
+  `fill` / `stroke` / `stroke-width`.
+- **`overflowMenu` and `openActionSheet` moved into `public/icons.js`**, which the lobby, table
+  and admin pages already share.
+- Implementation notes, the slice-by-slice record and the decisions taken (including what was
+  rejected and why) live in `docs/UI_Redesign_Phase7.md`.
 
 ## [0.11.0] — 2026-08-26
 
@@ -506,7 +619,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.11.0
 [0.10.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.10.0
 [0.9.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.9.0
 [0.8.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.8.0

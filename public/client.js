@@ -168,7 +168,7 @@ enhanceNumberInputs();
 // of the dock into a free-floating spot; a few content-heavy ones also resize.
 // Layout is remembered per-browser in localStorage — pure-UI state, never synced
 // (same instinct as audio settings). "Reset panel layout" (Tools menu) re-docks all.
-const PANEL_MOVABLE = ['tracksPanel', 'showPanel', 'dropPanel']; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating)
+const PANEL_MOVABLE = []; // Customize Table + Scale & Grid are movable pop-outs (drag them aside while calibrating); the show/drop/tracks pop-outs became inline controls in 7i–7j
 // Every movable panel is resizable (size them to taste); chat/notes additionally
 // flex their inner scroll region (see styles.css) so resizing grows the content.
 const PANEL_RESIZABLE = new Set(PANEL_MOVABLE);
@@ -290,12 +290,28 @@ initPanels();
 function addChatMsg(m) {
   const log = byId('chatLog');
   if (!log || !m) return;
+  const mine = (m.from || '') === (byId('myName')?.textContent || '').trim();
   const row = document.createElement('div');
-  row.className = 'chatMsg';
+  row.className = 'chatMsg' + (mine ? ' me' : '');
+  const head = document.createElement('div');
+  head.className = 'chatHead';
   const who = document.createElement('span');
   who.className = 'chatFrom';
-  who.textContent = (m.from || 'Player') + ': ';
-  row.append(who, document.createTextNode(m.text || ''));
+  who.textContent = mine ? 'you' : m.from || 'Player';
+  head.append(who);
+  if (m.ts) {
+    const t = document.createElement('span');
+    t.className = 'chatTime';
+    t.textContent = new Date(m.ts).toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    head.append(t);
+  }
+  const text = document.createElement('div');
+  text.className = 'chatText';
+  text.textContent = m.text || '';
+  row.append(head, text);
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
   log.appendChild(row);
   if (atBottom) log.scrollTop = log.scrollHeight;
@@ -303,6 +319,44 @@ function addChatMsg(m) {
     reg = byId('regionTL');
   const chatShowing = reg && !reg.hidden && reg.querySelector('.pane[data-pane="chat"].on');
   if (!chatShowing && chatBtn) chatBtn.classList.add('hasUnread');
+}
+
+// A brief confirmation for actions that have no visible dialog (drop hand, …).
+let toastTimer = null;
+function toast(text, icon = 'check', action = null) {
+  const el = byId('toast');
+  if (!el) return;
+  el.replaceChildren();
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'ico ico-' + icon);
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#i-' + icon);
+  svg.appendChild(use);
+  const span = document.createElement('span');
+  span.textContent = text;
+  el.append(svg, span);
+  if (action) {
+    // An undoable action carries its own way out, rather than a separate history stack.
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toastAction';
+    b.textContent = action.label;
+    b.onclick = () => {
+      action.fn();
+      el.hidden = true;
+    };
+    el.append(b);
+  }
+  el.hidden = false;
+  el.setAttribute('role', 'status');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(
+    () => {
+      el.hidden = true;
+    },
+    action ? 8000 : 2600,
+  ); // an undoable action gets longer to be undone
 }
 
 // ===== Networking ===========================================================
@@ -682,6 +736,8 @@ function rebuildGrid() {
     window.OTT_IS_ADMIN = myIsAdmin; // editor-panel.js gates library management on this
     if (window.onLibraryAdmin) window.onLibraryAdmin(); // re-render the library so admin-only buttons appear/hide
     document.body.classList.toggle('not-admin', !myIsAdmin);
+    const rb = byId('roomBtn');
+        if (rb && myIsAdmin) rb.hidden = false; // late whoami must not leave the menu hidden for an admin
   });
 
   // Forced exits: the GM kicked me, or the owner closed the room. These end the
@@ -743,6 +799,12 @@ function rebuildGrid() {
     playSfx('shuffle');
   }); // everyone sees + hears the riffle
   room.onMessage('sfx', ({ type } = {}) => playSfx(type)); // shared cue (roll/flip/deal) broadcast by the server
+  // The undo may be partial (another player picked some up) or stale (30s window gone).
+  room.onMessage('dropUndone', ({ restored } = {}) => {
+    if (restored)
+      toast('Returned ' + restored + ' card' + (restored === 1 ? '' : 's') + ' to your hand');
+    else toast('Those cards are no longer on the table', 'x');
+  });
   room.onMessage('inspectCard', ({ front, back, tile, geom }) =>
     inspectMesh(cardMesh({ front, back, tile, geom }), { drawn: true, type: 'card' }),
   ); // drawn card — front is ours alone; tile/geom → correct proportions
@@ -943,6 +1005,7 @@ function rebuildGrid() {
   // Room Controls menu — the old spawn/add menus are gone; creation + spawning
   // now live in View Library, Built-Ins, and (editor) Add to Library.
   menu('roomBtn', 'roomGrp');
+  menu('moreBtn', 'moreGrp'); // Settings + How to Play overflow
   // Members management now lives in the Room Info dock (GM-only #memberSection), populated by the
   // memberList push; no popout to open.
   // roomScene opens the Library on its Scenes tab — wired in editor-panel.js (which owns the panel).
@@ -1069,7 +1132,9 @@ function rebuildGrid() {
     const cInp = byId('scaleUnitCustom');
     if (cInp && document.activeElement !== cInp) cInp.value = custom ? u : '';
     const sEl = byId('scaleStep');
-    if (sEl && document.activeElement !== sEl) sEl.value = sc.roundStep;
+    // roundStep arrives as a float32 from the schema (0.1 → 0.10000000149…), which
+    // overflowed the field. Show it at the precision anyone would type.
+    if (sEl && document.activeElement !== sEl) sEl.value = String(+(+sc.roundStep).toFixed(4));
     const su = byId('scaleStepUnit');
     if (su) su.textContent = u;
     const wu = byId('scaleWidthUnit');
@@ -1281,9 +1346,20 @@ function rebuildGrid() {
       if (room) room.send('overlayClear', { scope: 'all' });
     }); // GM: everyone's (server re-checks rank)
     const kinds = document.querySelectorAll('#measureKinds [data-kind]');
+    // 8e: the pane says what the SELECTED shape does — #measureHint was left empty in 7i.
+    const hint = byId('measureHint');
+    const coneDeg = Math.round((MEASURE.coneAngle * 2 * 180) / Math.PI);
+    const w = MEASURE.lineWidth;
+    const HINTS = {
+      ruler: 'Drag A → B — the label reads the distance between them.',
+      circle: 'Drag from the centre outward — the label reads the radius.',
+      cone: `Drag from the origin — a ${coneDeg}° cone opens along the drag.`,
+      line: `Drag a lane ${w} unit${w === 1 ? '' : 's'} wide — the label reads its length.`,
+    };
     const setKind = (k) => {
       measureKind = k;
       kinds.forEach((b) => b.classList.toggle('on', b.dataset.kind === k));
+      if (hint) hint.textContent = HINTS[k] || '';
     };
     kinds.forEach((b) => {
       b.onclick = () => setKind(b.dataset.kind);
@@ -1564,8 +1640,8 @@ function rebuildGrid() {
     const accCust = byId('accentCustom');
     if (accCust) accCust.oninput = () => applyAccent(accCust.value);
     applyAccent(localStorage.getItem('ott-accent') || '#c9a25a');
-    // track picker — click a track to play it (opens over the Sound panel too)
-    const tracksPanel = byId('tracksPanel');
+    // Track list (7i): inline inside the Sound pane now — the pop-out is gone,
+    // so #tracksLink just discloses #tracksBody in place.
     const renderTracks = () => {
       const body = byId('tracksBody');
       if (!body) return;
@@ -1589,11 +1665,12 @@ function rebuildGrid() {
     };
     wire('tracksLink', (e) => {
       if (e && e.preventDefault) e.preventDefault();
-      renderTracks();
-      if (tracksPanel) tracksPanel.hidden = false;
-    });
-    wire('tracksClose', () => {
-      if (tracksPanel) tracksPanel.hidden = true;
+      const body = byId('tracksBody');
+      if (!body) return;
+      const open = body.hidden;
+      if (open) renderTracks();
+      body.hidden = !open;
+      byId('tracksLink')?.classList.toggle('on', open);
     });
   }
   {
@@ -1681,6 +1758,11 @@ function rebuildGrid() {
     const t = room.state.timer;
     const btnLbl = byId('timerBtn') && byId('timerBtn').querySelector('.lbl');
     if (btnLbl) btnLbl.textContent = t && t.running ? fmtTime(timerLive(t, Date.now())) : 'Timer'; // live value in the button
+    const mini = byId('timerMini'); // touch top bar (7e slice 2): the value only, and only while running
+    if (mini) {
+      mini.hidden = !(t && t.running);
+      if (t && t.running) mini.textContent = fmtTime(timerLive(t, Date.now()));
+    }
     const r = byId('regionTR');
     const paneOpen = r && !r.hidden && r.querySelector('.pane[data-pane="timer"].on');
     if (!paneOpen || !t) return; // nothing more to draw unless the timer pane is showing
@@ -1693,114 +1775,133 @@ function rebuildGrid() {
 
   // ---- Members (GM tools): admit / kick / promote — rendered into the dock's #memberSection ----
 
-  // ---- Show cards: pick an audience + scope, then hold the button to reveal ----
-  const showPanel = byId('showPanel'),
-    showAudience = byId('showAudience');
-  const scopeHand = byId('showScopeHand'),
-    scopeSel = byId('showScopeSel'),
-    showHold = byId('showHold');
+  // ---- Show cards (UI_Redesign 7j / mockup 9b): the audience IS the control ----
+    // Latched, matching the server's model: showStart replaces the audience set,
+    // showStop clears it. Tap a face to start showing, tap again to stop.
+    const showStrip = byId('showStrip'),
+      showStripChips = byId('showStripChips'),
+      showStatus = byId('showStatus');
+    const showTo = new Set(); // sids, or the single sentinel 'all'
+    let selOnly = false; // show only the cards selected in hand
 
-  function buildAudienceChips() {
-    // rebuilt each open, so it tracks who's in the room
-    showAudience.replaceChildren();
-    const everyone = document.createElement('button');
-    everyone.className = 'chip';
-    everyone.dataset.sid = 'all';
-    everyone.dataset.icon = 'friends';
-    everyone.innerHTML = '<span class="lbl">Everyone</span>';
-    everyone.onclick = () => {
-      everyone.classList.toggle('on');
-      if (everyone.classList.contains('on'))
-        showAudience.querySelectorAll('.chip').forEach((c) => {
-          if (c !== everyone) c.classList.remove('on');
-        });
-    };
-    showAudience.appendChild(everyone);
-    const others = [];
-    room.state.players.forEach((p, sid) => {
-      if (sid !== mySession) others.push([sid, p]);
-    });
-    others.sort((a, b) => a[1].seat - b[1].seat);
-    for (const [sid, p] of others) {
-      const chip = document.createElement('button');
-      chip.className = 'chip';
-      chip.dataset.sid = sid;
-      chip.textContent = p.name; // textContent = safe from HTML in names
-      chip.style.borderColor = p.color;
-      chip.onclick = () => {
-        everyone.classList.remove('on');
-        chip.classList.toggle('on');
-      };
-      showAudience.appendChild(chip);
-    }
-    applyIcons(showAudience);
-  }
-  const currentAudience = () => {
-    const everyone = showAudience.querySelector('[data-sid="all"]');
-    if (everyone && everyone.classList.contains('on')) return 'all';
-    return [...showAudience.querySelectorAll('.chip.on')].map((c) => c.dataset.sid);
-  };
-  const enterSelectMode = () => {
-    selectMode = true;
-    selected.clear();
-    byId('hand').classList.add('selecting');
-    renderHand(myHand);
-  };
-  const exitSelectMode = () => {
-    if (selectMode) {
-      selectMode = false;
+    // Same two helpers as before, minus the scope-chip resets (those chips are gone).
+    const enterSelectMode = () => {
+      selectMode = true;
       selected.clear();
-      byId('hand').classList.remove('selecting');
+      byId('hand').classList.add('selecting');
       renderHand(myHand);
-    }
-    scopeSel.classList.remove('on');
-    scopeHand.classList.add('on'); // reset to whole-hand
-  };
+    };
+    const exitSelectMode = () => {
+      if (selectMode) {
+        selectMode = false;
+        selected.clear();
+        byId('hand').classList.remove('selecting');
+        renderHand(myHand);
+      }
+    };
 
-  byId('showBtn').onclick = () => {
-    showPanel.hidden = !showPanel.hidden;
-    if (!showPanel.hidden) {
-      buildAudienceChips();
-      placeAbovePanel(showPanel, byId('showBtn'), 'left');
-    } else exitSelectMode();
-  };
-  byId('showClose').onclick = () => {
-    showPanel.hidden = true;
-    exitSelectMode();
-  };
-  scopeHand.onclick = () => {
-    scopeHand.classList.add('on');
-    scopeSel.classList.remove('on');
-    if (selectMode) exitSelectMode();
-  };
-  scopeSel.onclick = () => {
-    scopeHand.classList.remove('on');
-    scopeSel.classList.add('on');
-    enterSelectMode();
-  };
+    const showHids = () => (selOnly && selected.size ? [...selected] : 'all');
+    const pushShow = () => {
+      if (!room) return;
+      if (!showTo.size) {
+        room.send('showStop');
+      } else {
+        const hids = showHids();
+        if (Array.isArray(hids) && !hids.length) return;
+        room.send('showStart', { to: showTo.has('all') ? 'all' : [...showTo], hids });
+      }
+      renderShowStrip();
+    };
+    const toggleShow = (key) => {
+      if (key === 'all') {
+        showTo.has('all') ? showTo.clear() : (showTo.clear(), showTo.add('all'));
+      } else {
+        showTo.delete('all');
+        showTo.has(key) ? showTo.delete(key) : showTo.add(key);
+      }
+      pushShow();
+    };
 
-  let showLive = false;
-  showHold.addEventListener('pointerdown', (e) => {
-    e.preventDefault();
-    const to = currentAudience();
-    if (to !== 'all' && !to.length) return; // no audience picked
-    const hids = scopeSel.classList.contains('on') ? [...selected] : 'all';
-    if (Array.isArray(hids) && !hids.length) return; // "selected" scope with nothing picked
-    showHold.setPointerCapture(e.pointerId);
-    showLive = true;
-    setIcon(showHold, 'eye');
-    room.send('showStart', { to, hids });
-  });
-  const endShow = () => {
-    if (showLive) {
-      showLive = false;
-      room.send('showStop');
-      setIcon(showHold, 'eye-off');
+    function renderShowStrip() {
+      if (!showStripChips) return;
+      showStripChips.replaceChildren();
+      const mk = (key, label, icon, color) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.sid = key;
+        if (icon) b.dataset.icon = icon;
+        else {
+          const av = document.createElement('span');
+          av.className = 'stripAv';
+          if (color) av.style.background = color;
+          b.append(av);
+        }
+        const l = document.createElement('span');
+        l.className = 'lbl';
+        l.textContent = label; // textContent — names are user input
+        b.append(l);
+        b.setAttribute('aria-label', label);
+        b.setAttribute('aria-pressed', showTo.has(key) ? 'true' : 'false');
+        if (showTo.has(key)) b.classList.add('on');
+        b.onclick = () => toggleShow(key);
+        showStripChips.append(b);
+        return b;
+      };
+      const others = [];
+      room.state.players.forEach((p, sid) => {
+        if (sid !== mySession) others.push([sid, p]);
+      });
+      others.sort((a, b) => a[1].seat - b[1].seat);
+      for (const [sid, p] of others) mk(sid, p.name, null, p.color);
+      if (others.length > 1) mk('all', 'Everyone', 'users-group');
+      // Optional scope: only the cards picked in hand (replaces the old scope chips).
+      {
+        const sep = document.createElement('div');
+        sep.className = 'stripSep';
+        showStripChips.append(sep);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.dataset.icon = 'select-all';
+        b.innerHTML = '<span class="lbl">Picked' + (selected.size ? ' · ' + selected.size : '') + '</span>';
+        b.setAttribute('aria-label', 'Show only the cards I pick');
+        if (selOnly) b.classList.add('on');
+        b.onclick = () => {
+          selOnly = !selOnly;
+          selOnly ? enterSelectMode() : exitSelectMode();
+          if (showTo.size) pushShow();
+          else renderShowStrip();
+        };
+        showStripChips.append(b);
+      }
+      applyIcons(showStripChips);
+      // Status line: who is seeing what, in words.
+      const names = [...showTo].map((k) =>
+        k === 'all' ? 'everyone' : room.state.players.get(k)?.name || 'player',
+      );
+      const hids = showHids();
+      const count = Array.isArray(hids) ? hids.length : (hands?.length ?? 0);
+      showStatus.textContent = names.length
+        ? 'showing ' + (Array.isArray(hids) ? count + ' card(s)' : 'your hand') + ' to ' + names.join(', ') + ' · tap to stop'
+        : '';
     }
-  };
-  showHold.addEventListener('pointerup', endShow);
-  showHold.addEventListener('pointercancel', endShow);
-  showHold.addEventListener('lostpointercapture', endShow);
+
+    byId('showBtn').onclick = () => {
+      if (!showStrip) return;
+      showStrip.hidden = !showStrip.hidden;
+      if (showStrip.hidden) {
+        if (showTo.size) {
+          showTo.clear();
+          pushShow();
+        }
+        if (selOnly) {
+          selOnly = false;
+          exitSelectMode();
+        }
+      } else renderShowStrip();
+    };
+    window.onShowRosterChange = () => {
+      if (showStrip && !showStrip.hidden) renderShowStrip();
+    };
 })().catch((err) => {
   // onAuth rejections (not signed in / not a member / awaiting approval / no such
   // room) land here — show the reason and a way back to the lobby.
@@ -1896,43 +1997,27 @@ const pickId = () => {
     };
 } // toggle the closer-look camera (keep the icon; relabel only)
 {
-  // Drop hand: a little menu — lay your whole hand out just in front of your marker, face up or down
-  const dropPanel = byId('dropPanel');
+  // Drop hand (UI_Redesign 7j / mockup 9e): the orientation IS the button — two
+  // taps' worth of dialog for a two-outcome action was the whole problem.
   const dropAt = (faceDown) => {
     if (!room) return;
     const s = seatLayout[mySeat] || seatLayout[0];
+    const n = byId('hand')?.querySelectorAll('.handcard').length || 0;
     room.send('handToTable', {
       faceDown,
       x: s.hand[0] - s.out[0] * 2,
       z: s.hand[2] - s.out[2] * 2,
     }); // just in front of the marker
-    if (dropPanel) dropPanel.hidden = true;
+    toast(
+      (n ? n + ' card' + (n === 1 ? '' : 's') : 'Hand') +
+        ' laid out ' +
+        (faceDown ? 'face-down' : 'face-up'),
+      'check',
+      { label: 'Undo', fn: () => room.send('handFromTable') },
+    );
   };
-  {
-    const b = byId('dropBtn');
-    if (b)
-      b.onclick = () => {
-        if (dropPanel) {
-          dropPanel.hidden = !dropPanel.hidden;
-          if (!dropPanel.hidden) placeAbovePanel(dropPanel, b, 'right');
-        }
-      };
-  }
-  {
-    const b = byId('dropDown');
-    if (b) b.onclick = () => dropAt(true);
-  }
-  {
-    const b = byId('dropUp');
-    if (b) b.onclick = () => dropAt(false);
-  }
-  {
-    const b = byId('dropClose');
-    if (b)
-      b.onclick = () => {
-        if (dropPanel) dropPanel.hidden = true;
-      };
-  }
+  byId('dropDown')?.addEventListener('click', () => dropAt(true));
+  byId('dropUp')?.addEventListener('click', () => dropAt(false));
 }
 
 // ===== Skybox (GM-applied, synced to the room; the picker UI is in editor-panel.js) =====
@@ -3060,9 +3145,13 @@ function renderHand(cards) {
   {
     const has = cards.length > 0;
     const sb = byId('showBtn'),
-      db = byId('dropBtn');
-    if (sb) sb.hidden = !has;
-    if (db) db.hidden = !has;
+          db = byId('dropFlank');
+        if (sb) sb.hidden = !has;
+        if (db) db.hidden = !has;
+        if (!has) {
+          const strip = byId('showStrip');
+          if (strip) strip.hidden = true;
+        }
   } // Show/Drop flank the hand, only when you hold cards
   if (handCollapsed && cards.length && !selectMode) {
     // hidden: show only a peek tab (never while picking cards to show)
@@ -3268,7 +3357,12 @@ function applyRole(role) {
     const el = byId(id);
     if (el) el.hidden = rank < min;
   };
-  gate('roomBtn', 2); // Room Controls menu: GM+
+    { // Room Controls menu: GM+ OR admin — the admin-only items live in this menu now
+      const rb = byId('roomBtn');
+      if (rb) rb.hidden = rank < 2 && !myIsAdmin;
+      if (room) room.send('whoami'); // re-fetch on join/reconnect — onJoin's push doesn't repeat
+    }
+  document.body.classList.toggle('not-gm', rank < 2); // mirrors .not-admin; gates .gm-only
   gate('memberSection', 2); // Members management (dock): GM+
   if (rank >= 2 && room) room.send('members'); // (re)fetch on join/reconnect/promotion — allowReconnection skips onJoin's push, so the dock would otherwise stay blank after a refresh
   gate('lib2Btn', 1); // Library (combined): Helper+
@@ -4187,12 +4281,15 @@ function renderPlayers() {
       if (tb) {
         tb.hidden = !t;
         tb.classList.toggle('myturn', room.state.turn === mySession);
+        tb.setAttribute('aria-label', t ? t + ' — advance the turn' : 'Advance the turn');
+        tb.title = t || 'Advance the turn'; // the label is hidden on touch; the state must still be readable
       } // emphasize + light the chevron when it's yours
     }
   }
   {
     const rt = byId('roomTitle');
     if (rt) {
+      if (!rt.textContent.trim()) rt.textContent = 'Shared Table'; // never let the touch bar read empty
       // dock title: real room name if set, else owner-derived (empty in the ?workshop=1 room)
       const nm = (room.state.roomName || '').trim();
       if (nm) rt.textContent = nm;
@@ -4831,6 +4928,12 @@ function openPieceMenu(id, p) {
   if (!menu) return;
   const entry = meshes.get(id);
   if (!entry) return;
+  // Touch gets the radial (7e slice 7) — same items, arced around the press point.
+  const arc = pieceMenuItems(id, entry.type);
+  if (isSheet() && arc.length <= RADIAL_MAX) {
+    closePieceMenu();
+    if (openRadial(p.x, p.y, arc.map(([label, fn, cls]) => ({ label, fn, cls })))) return;
+  }
   menu.replaceChildren();
   for (const [label, fn, cls] of pieceMenuItems(id, entry.type)) {
     menu.appendChild(
@@ -5040,7 +5143,14 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
           : document.activeElement;
       if (!panel.contains(document.activeElement)) {
         const f = focusables();
-        (f[0] || panel).focus();
+        // Same rule as the sheets: on touch, never open a dialog straight into a text
+        // field — the keyboard would cover the dialog before it has been read.
+        const isText = (el) =>
+          el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(button|checkbox|radio|range|color|file|submit)$/i.test(el.type)));
+        const target = isSheet() ? f.find((el) => !isText(el)) || panel : f[0] || panel;
+        if (isSheet() && target === panel && !panel.hasAttribute('tabindex'))
+          panel.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
       }
       if (esc) {
         if (at >= 0) openEscDialogs.splice(at, 1);
@@ -5071,11 +5181,120 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
     }
   });
 }
-['showPanel', 'dropPanel', 'tracksPanel'].forEach((id) => wireDialog(byId(id)));
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
 ['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
+
+// ---- mobile sheet presentation (7e slice 1; mockups 10b/10d) ---------------------------
+// Below 720px a region stops being an anchored overlay and becomes a bottom sheet with
+// three stops. The stop is a height in px written to --sheet-h; CSS owns the look. Only
+// one sheet may be open at a time on a phone — the deliberate break from desktop.
+const SHEET_MQ = '(max-width: 900px), (pointer: coarse)'; // keep in step with styles.css
+const isSheet = () => matchMedia(SHEET_MQ).matches;
+const PEEK_H = 196; // enough for header + the tail of the body + a pinned footer
+const openSheets = new Set();
+const stopPx = (name) => {
+  const full = Math.max(320, innerHeight - 56); // clear of the top bar
+  if (name === 'peek') return Math.min(PEEK_H, full);
+  if (name === 'full') return full;
+  return Math.min(Math.round(innerHeight * 0.66), full);
+};
+// Nearest stop to a height, with a flick overriding proximity: a fast drag goes one stop
+// the way it was thrown rather than snapping back to where it started.
+const nearestStop = (h, vy) => {
+  const order = ['peek', 'two', 'full'];
+  let best = order[0],
+    bestD = Infinity;
+  for (const s of order) {
+    const d = Math.abs(stopPx(s) - h);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
+    }
+  }
+  if (Math.abs(vy) > 0.6) {
+    const i = order.indexOf(best);
+    const next = vy < 0 ? Math.min(i + 1, 2) : Math.max(i - 1, 0);
+    return order[next];
+  }
+  return best;
+};
+function setStop(region, name, animate = true) {
+  region._stop = name;
+  region.classList.toggle('sheetAnim', !!animate);
+  region.classList.remove('at-peek', 'at-two', 'at-full');
+  region.classList.add('at-' + name);
+  region.style.setProperty('--sheet-h', stopPx(name) + 'px');
+  const log = region.querySelector('#chatLog');
+  if (log) log.scrollTop = log.scrollHeight; // peek should show the newest, not the oldest
+}
+function clearSheet(region) {
+  openSheets.delete(region);
+  region.classList.remove('sheetAnim', 'sheetDrag', 'at-peek', 'at-two', 'at-full');
+  region.style.removeProperty('--sheet-h');
+}
+function initSheet(region) {
+  if (region._sheetReady) return;
+  region._sheetReady = true;
+  const grab = document.createElement('div');
+  grab.className = 'sheetGrab';
+  grab.setAttribute('aria-hidden', 'true'); // decorative: Esc and the ✕ are the accessible paths
+  region.insertBefore(grab, region.firstChild);
+  let startY = 0,
+    startH = 0,
+    lastY = 0,
+    lastT = 0,
+    vy = 0,
+    dragging = false;
+  grab.addEventListener('pointerdown', (e) => {
+    if (!isSheet()) return;
+    dragging = true;
+    startY = lastY = e.clientY;
+    lastT = performance.now();
+    vy = 0;
+    startH = region.getBoundingClientRect().height;
+    region.classList.add('sheetDrag');
+    region.classList.remove('sheetAnim');
+    grab.setPointerCapture(e.pointerId);
+  });
+  grab.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const now = performance.now();
+    if (now > lastT) vy = (lastY - e.clientY) / (now - lastT); // px/ms, up is positive
+    lastY = e.clientY;
+    lastT = now;
+    const h = Math.max(80, Math.min(startH + (startY - e.clientY), stopPx('full')));
+    region.style.setProperty('--sheet-h', h + 'px');
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    region.classList.remove('sheetDrag');
+    const h = region.getBoundingClientRect().height;
+    // Dragged below peek, or flicked down from peek: dismiss rather than snap back.
+    if (h < PEEK_H * 0.6 || (vy < -0.8 && region._stop === 'peek')) {
+      if (region._close) region._close();
+      return;
+    }
+    setStop(region, nearestStop(h, vy));
+  };
+  grab.addEventListener('pointerup', end);
+  grab.addEventListener('pointercancel', end);
+}
+function openAsSheet(region) {
+  for (const other of openSheets) if (other !== region && other._close) other._close();
+  initSheet(region);
+  openSheets.add(region);
+  setStop(region, 'two', false);
+  requestAnimationFrame(() => region.classList.add('sheetAnim'));
+}
+addEventListener('resize', () => {
+  for (const region of [...openSheets]) {
+    if (!isSheet()) clearSheet(region);
+    else setStop(region, region._stop || 'two', false);
+  }
+});
 
 // ---- shared-region cluster primitive (UI_Redesign phase 1) -----------------------------
 // N hamburger buttons share ONE region. Accordion within the cluster: one pane open at a
@@ -5085,7 +5304,7 @@ wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') })
 function wireCluster(region, hams, opts = {}) {
   if (!region || !hams.length) return;
   const anchor = hams[0].btn;
-  const sheet = () => matchMedia('(max-width: 720px)').matches;
+  const sheet = () => isSheet(); // one definition of "this is a sheet, not an overlay"
   const place = (h) => {
     if (sheet()) {
       region.style.left = region.style.top = '';
@@ -5118,6 +5337,7 @@ function wireCluster(region, hams, opts = {}) {
   const close = () => {
     deactivate();
     region.hidden = true;
+    clearSheet(region);
     hams.forEach((h) => h.btn.classList.remove('on'));
   };
   const open = (h) => {
@@ -5128,12 +5348,21 @@ function wireCluster(region, hams, opts = {}) {
       .forEach((p) => p.classList.toggle('on', p.dataset.pane === h.pane));
     h.btn.classList.add('on');
     region.hidden = false;
+    if (sheet()) openAsSheet(region);
+    else clearSheet(region);
     place(h);
     current = h;
-    const f =
-      region.querySelector('.pane.on textarea, .pane.on input:not([type=hidden])') ||
-      region.querySelector('.pane.on button:not(.regionClose), .pane.on [tabindex]');
-    if (f) f.focus();
+    // On a sheet, focusing a text field summons the keyboard over the content you just
+    // opened — so touch gets focus on the pane itself (screen readers still land in it)
+    // and the field waits to be tapped. Precise pointers keep the type-immediately habit.
+    const f = sheet()
+      ? region.querySelector('.pane.on')
+      : region.querySelector('.pane.on textarea, .pane.on input:not([type=hidden])') ||
+        region.querySelector('.pane.on button:not(.regionClose), .pane.on [tabindex]');
+    if (f) {
+      if (sheet() && !f.hasAttribute('tabindex')) f.setAttribute('tabindex', '-1');
+      f.focus({ preventScroll: true });
+    }
     if (h.onOpen) h.onOpen(); // per-pane hook (e.g. chat: clear unread + scroll to bottom)
   };
   region._close = close; // let external code collapse the region (e.g. measure's global-Esc handler)
@@ -5279,4 +5508,527 @@ initTip(); // themed hover-hint (icons.js)
     }
   });
   on('selClear', () => clearSelection());
+}
+
+// Role gating here is by class, not by `hidden`: body.not-gm / body.not-admin hide
+// .gm-only / .admin-only in CSS. A collapsed container (.grp menu, closed #regionBL)
+// is NOT a gate, which is why we can't just ask whether the button is visible.
+function proxyGated(el) {
+  if (!el || el.hidden) return true;
+  const body = document.body.classList;
+  if (body.contains('not-gm') && el.closest('.gm-only')) return true;
+  if (body.contains('not-admin') && el.closest('.admin-only')) return true;
+  return false;
+}
+
+
+// ---- radial menu primitive (7e slice 7; mockup 10j) ------------------------------------
+// One fan for two callers: the ⊕ FAB and long-press on a piece. Items arc away from the
+// nearest edges, so the menu never opens off-screen and never lands under your thumb.
+const RADIAL_ICONS = {
+  Flip: 'eye-up',
+  'Take to hand': 'hand-grab',
+  Roll: 'dice-5',
+  'Draw to hand': 'cards',
+  Shuffle: 'refresh',
+  Split: 'line',
+  'Save…': 'device-floppy',
+  Dispense: 'package-off',
+  'Move (then drag)': 'hand-move',
+  Inspect: 'zoom-in',
+  'Stand / lay flat': 'arrow-big-up-line',
+  'Snap to grid': 'grid-3x3',
+  Delete: 'trash',
+};
+const RADIAL_MAX = 7; // beyond this an arc stops being readable — callers fall back to a list
+function closeRadial() {
+  const el = byId('radial');
+  if (!el) return;
+  el.classList.remove('on');
+  el.hidden = true;
+  el.replaceChildren();
+  const fab = byId('fabBtn');
+  if (fab) fab.classList.remove('on');
+}
+// items: [{ label, icon, fn, cls }]
+function openRadial(x, y, items) {
+  const el = byId('radial');
+  if (!el || !items.length) return false;
+  el.replaceChildren();
+  const scrim = document.createElement('div');
+  scrim.className = 'radialScrim';
+  scrim.addEventListener('pointerdown', closeRadial);
+  el.appendChild(scrim);
+  // Chord between neighbours must clear the 48px dots with air to spare:
+  // chord = 2·R·sin(STEP/2) ≈ 78px at four items, ~100px at seven.
+  const STEP = 0.68; // radians (~39°)
+  const R0 = Math.min(150, Math.max(104, 52 + 16 * items.length));
+  const spread = Math.min(Math.PI * 1.35, (items.length - 1) * STEP);
+  // The fan's centre line points at the middle of the screen, so a press in a corner
+  // opens inward; the search below rotates from here if that still doesn't fit.
+  const dir = Math.atan2(innerHeight / 2 - y, innerWidth / 2 - x);
+  const M = 38; // keep every dot fully on screen
+  const fits = (px, py) => px >= M && px <= innerWidth - M && py >= M && py <= innerHeight - M;
+  const layout = (dir, R) =>
+    items.map((_, i) => {
+      const a = items.length === 1 ? dir : dir - spread / 2 + (spread * i) / (items.length - 1);
+      return [x + Math.cos(a) * R, y + Math.sin(a) * R];
+    });
+  // Clamping each dot independently is what made them pile up near an edge, so rotate
+  // and then shrink the WHOLE fan until it fits — the spacing between dots is preserved.
+  let best = null;
+  for (const R of [R0, R0 * 0.86, R0 * 0.72]) {
+    for (let k = 0; k <= 16 && !best; k++) {
+      for (const s of k ? [1, -1] : [0]) {
+        const pts = layout(dir + s * k * 0.16, R);
+        if (pts.every(([px, py]) => fits(px, py))) {
+          best = pts;
+          break;
+        }
+      }
+    }
+    if (best) break;
+  }
+  if (!best) best = layout(dir, R0 * 0.72).map(([px, py]) => [
+    Math.max(M, Math.min(px, innerWidth - M)),
+    Math.max(M, Math.min(py, innerHeight - M)),
+  ]);
+  items.forEach((it, i) => {
+    const [bx, by] = best[i];
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'radialItem' + (it.cls ? ' ' + it.cls : '');
+    b.style.left = Math.round(bx) + 'px';
+    b.style.top = Math.round(by) + 'px';
+    b.style.transitionDelay = i * 18 + 'ms';
+    const dot = document.createElement('span');
+    dot.className = 'radialDot';
+    const icon = it.icon || RADIAL_ICONS[it.label] || 'circle';
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'ico ico-' + icon);
+    svg.setAttribute('aria-hidden', 'true');
+    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+    use.setAttribute('href', '#i-' + icon);
+    svg.appendChild(use);
+    dot.appendChild(svg);
+    b.setAttribute('aria-label', it.label);
+    b.title = it.label;
+    b.appendChild(dot);
+    b.addEventListener('click', () => {
+      closeRadial();
+      it.fn();
+    });
+    el.appendChild(b);
+  });
+  el.hidden = false;
+  requestAnimationFrame(() => el.classList.add('on'));
+  return true;
+}
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeRadial();
+});
+
+// ---- ⊕ table actions (mockup 10j left) -------------------------------------------------
+{
+  const fab = byId('fabBtn');
+  if (fab) {
+    const proxy = (label, icon, sel) => {
+      const src = typeof sel === 'string' ? document.querySelector(sel) : sel;
+      return src && !proxyGated(src) ? { label, icon, fn: () => src.click() } : null;
+    };
+    fab.addEventListener('click', () => {
+      if (byId('radial') && !byId('radial').hidden) return closeRadial();
+      const items = [
+        proxy('Roll dice', 'dice-5', '#roll'),
+        proxy('Spawn', 'library-plus', '#lib2Btn'),
+        proxy('Select', 'select-all', '#hamBar .selectTool'),
+        proxy('Measure', 'ruler-measure', '#measureBtn'),
+      ].filter(Boolean);
+      const r = fab.getBoundingClientRect();
+      if (openRadial(r.left + r.width / 2, r.top + r.height / 2, items)) fab.classList.add('on');
+    });
+    fab.hidden = false; // every pointer type gets the fan now, not just touch
+  }
+}
+
+// ---- ☰ drawer (7e slice 3; mockup 10b) -------------------------------------------------
+// Both top clusters fold into ONE sheet of grouped rows. The rows are proxies: each one
+// dispatches a click on the real button, so every behaviour, role gate and unread badge
+// keeps working with no duplicated logic. A hidden or missing source button = no row.
+{
+  const DRAWER_GROUPS = [
+    { label: 'Open', ids: ['lib2Btn', 'chatBtn', 'notesBtn', 'scoreBtn'] },
+    { label: 'Room', ids: ['roomInfoBtn', 'roomScene', 'roomSaveState', 'roomSettings', 'addBtn', 'sceneSaveBtn'] },
+    { label: 'Table', ids: ['measureBtn', 'audioBtn', 'timerBtn', 'settingsBtn', 'controlsBtn'] },
+  ];
+  const FOOT = ['roomReset', 'lobbyBtn'];
+  const drawer = byId('drawer'),
+    btn = byId('drawerBtn');
+  if (drawer && btn) {
+    const labelOf = (src) => {
+      const l = src.querySelector('.lbl');
+      return (l && l.textContent.trim()) || src.getAttribute('aria-label') || src.id;
+    };
+    const rowFor = (src) => {
+      if (proxyGated(src)) return null;
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'drawerRow' + (src.classList.contains('danger') ? ' danger' : '');
+      const icon = src.dataset.icon;
+      if (icon) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ico ico-' + icon);
+        svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', '#i-' + icon);
+        svg.appendChild(use);
+        row.appendChild(svg);
+      }
+      const lbl = document.createElement('span');
+      lbl.className = 'drawerLbl';
+      lbl.textContent = labelOf(src);
+      row.appendChild(lbl);
+      if (src.classList.contains('hasUnread')) {
+        const dot = document.createElement('span');
+        dot.className = 'drawerDot';
+        dot.textContent = '•';
+        row.appendChild(dot);
+      }
+      row.addEventListener('click', () => {
+        close();
+        src.click(); // the real handler, including wireCluster's open/close accordion
+      });
+      return row;
+    };
+    const build = () => {
+      drawer.replaceChildren();
+      drawer._sheetReady = false; // rebuilt content: initSheet re-inserts its grabber
+      const head = document.createElement('div');
+      head.className = 'regionHead';
+      const b = document.createElement('b');
+      b.textContent = 'Table';
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'close-x';
+      x.setAttribute('aria-label', 'Close');
+      x.textContent = '✕';
+      x.addEventListener('click', close);
+      head.append(b, x);
+      drawer.appendChild(head);
+      const body = document.createElement('div');
+      body.className = 'drawerBody';
+      for (const g of DRAWER_GROUPS) {
+        const rows = g.ids.map((id) => rowFor(byId(id))).filter(Boolean);
+        if (!rows.length) continue;
+        const wrap = document.createElement('div');
+        wrap.className = 'drawerGroup';
+        const lab = document.createElement('div');
+        lab.className = 'miniLabel';
+        lab.textContent = g.label;
+        wrap.append(lab, ...rows);
+        body.appendChild(wrap);
+      }
+      drawer.appendChild(body);
+      const footRows = FOOT.map((id) => rowFor(byId(id))).filter(Boolean);
+      if (footRows.length) {
+        const foot = document.createElement('div');
+        foot.className = 'drawerFoot';
+        foot.append(...footRows);
+        drawer.appendChild(foot);
+      }
+    };
+    function close() {
+      drawer.hidden = true;
+      clearSheet(drawer);
+      btn.classList.remove('on');
+      btn.setAttribute('aria-expanded', 'false');
+      btn.focus({ preventScroll: true });
+    }
+    const open = () => {
+      build();
+      drawer.hidden = false;
+      openAsSheet(drawer);
+      btn.classList.add('on');
+      btn.setAttribute('aria-expanded', 'true');
+      drawer.setAttribute('tabindex', '-1');
+      drawer.focus({ preventScroll: true });
+    };
+    drawer._close = close; // slice 1's one-sheet-at-a-time rule closes us the same way
+    btn.addEventListener('click', () => (drawer.hidden ? open() : close()));
+    drawer.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }
+    });
+  }
+}
+
+// ---- seat button + popover (7e slice 4; mockup 10e) ------------------------------------
+// One button replaces #hamBar and #hamBarRight. Rows are proxies onto the real controls,
+// and the roster is the LIVE #players node, borrowed while open and returned on close so
+// its renderer keeps writing to the same element. Placement is computed from the button's
+// own rect — never from which cluster the tap came from, because there is only one now.
+{
+  const btn = byId('seatBtn'),
+    pop = byId('seatPop');
+  if (btn && pop) {
+    const SEAT_ROWS = ['mySeatBtn', 'leanBtn'];
+    const proxyRow = (src, label) => {
+      if (proxyGated(src)) return null;
+      const row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'drawerRow';
+      const icon = src.dataset.icon;
+      if (icon) {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ico ico-' + icon);
+        svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', '#i-' + icon);
+        svg.appendChild(use);
+        row.appendChild(svg);
+      }
+      const lbl = document.createElement('span');
+      lbl.className = 'drawerLbl';
+      const own = src.querySelector('.lbl');
+      lbl.textContent = label || (own && own.textContent.trim()) || src.id;
+      row.appendChild(lbl);
+      row.addEventListener('click', () => {
+        close();
+        src.click();
+      });
+      return row;
+    };
+    const label = (text) => {
+      const el = document.createElement('div');
+      el.className = 'miniLabel';
+      el.textContent = text;
+      return el;
+    };
+    const build = () => {
+      pop.replaceChildren();
+      // seatLayout carries geometry, not names — these are the six seats in its order.
+      const SEAT_NAMES = ['Front', 'Back', 'Right', 'Left', 'Front-right', 'Back-left'];
+      const seatName = SEAT_NAMES[mySeat];
+      pop.appendChild(label(seatName ? 'Your seat · ' + seatName : 'Your seat'));
+      for (const id of SEAT_ROWS) {
+        const r = proxyRow(byId(id));
+        if (r) pop.appendChild(r);
+      }
+      const players = byId('players');
+      if (players) {
+        const rule = document.createElement('div');
+        rule.className = 'seatRule';
+        pop.append(rule, label('At the table'), players); // live node, moved not cloned
+      }
+    };
+    // Anchored to the button, flipped by the space actually available around it.
+    const place = () => {
+      const r = btn.getBoundingClientRect();
+      const w = pop.offsetWidth,
+        h = pop.offsetHeight;
+      const pad = 8;
+      let left = r.right - w; // right-aligned to the button by default
+      if (left < pad) left = Math.min(r.left, innerWidth - w - pad); // no room: flip to its left edge
+      left = Math.max(pad, Math.min(left, innerWidth - w - pad));
+      let top = r.top - h - pad; // above by default — the hand tab owns everything below
+      if (top < pad) top = Math.min(r.bottom + pad, innerHeight - h - pad);
+      pop.style.left = Math.round(left) + 'px';
+      pop.style.top = Math.round(Math.max(pad, top)) + 'px';
+    };
+    function close() {
+      if (pop.hidden) return;
+      const players = pop.querySelector('#players');
+      const home = byId('roomInfoBody') && byId('roomInfoBody').querySelector('.dockSection');
+      if (players && home) home.appendChild(players); // give the roster back to the dock
+      pop.hidden = true;
+      btn.classList.remove('on');
+      btn.setAttribute('aria-expanded', 'false');
+    }
+    const open = () => {
+      build();
+      pop.hidden = false;
+      place();
+      btn.classList.add('on');
+      btn.setAttribute('aria-expanded', 'true');
+      pop.setAttribute('tabindex', '-1');
+      pop.focus({ preventScroll: true });
+    };
+    pop._close = close; // other surfaces close us before borrowing #players
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      pop.hidden ? open() : close();
+    });
+    addEventListener('pointerdown', (e) => {
+      if (!pop.hidden && !pop.contains(e.target) && e.target !== btn) close();
+    });
+    addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !pop.hidden) {
+        close();
+        btn.focus({ preventScroll: true });
+      }
+    });
+    addEventListener('resize', () => {
+      if (!pop.hidden) place();
+    });
+    btn.hidden = false; // the seat button is the default at every pointer type
+  }
+}
+
+// ---- Room info sheet (7e slice 5; mockup 10f) ------------------------------------------
+// The top bar stopped carrying the room code and the dock in slice 2; this is where they
+// went. The dock's live #roomInfoBody is borrowed while open (same trick as the roster in
+// slice 4) so Players / Room notes / Members keep their existing renderers.
+{
+  const sheet = byId('roomSheet'),
+    src = byId('roomInfoBtn');
+  if (sheet && src) {
+    const row = (icon, text, fn, cls) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'drawerRow' + (cls ? ' ' + cls : '');
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'ico ico-' + icon);
+      svg.setAttribute('aria-hidden', 'true');
+      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+      use.setAttribute('href', '#i-' + icon);
+      svg.appendChild(use);
+      const lbl = document.createElement('span');
+      lbl.className = 'drawerLbl';
+      lbl.textContent = text;
+      b.append(svg, lbl);
+      b.addEventListener('click', fn);
+      return b;
+    };
+    const roomCode = () => {
+      const rc = byId('roomCode');
+      if (!rc || rc.hidden) return ''; // GM+ only, same gate as the desktop dock
+      return (rc.textContent || '').replace(/^Code:\s*/, '').trim();
+    };
+    const build = () => {
+      sheet.replaceChildren();
+      sheet._sheetReady = false;
+      const head = document.createElement('div');
+      head.className = 'regionHead';
+      const b = document.createElement('b');
+      b.textContent = 'Room info';
+      const x = document.createElement('button');
+      x.type = 'button';
+      x.className = 'close-x';
+      x.setAttribute('aria-label', 'Close');
+      x.textContent = '✕';
+      x.addEventListener('click', close);
+      head.append(b, x);
+      const body = document.createElement('div');
+      body.className = 'drawerBody';
+
+      const card = document.createElement('div');
+      card.className = 'roomCard';
+      const name = document.createElement('div');
+      name.className = 'roomCardName';
+      name.textContent = (byId('roomTitle') && byId('roomTitle').textContent) || 'Shared Table';
+      const meta = document.createElement('div');
+      meta.className = 'roomCardMeta';
+      const seated = room && room.state ? room.state.players.size : 0;
+      meta.textContent = seated + (seated === 1 ? ' player' : ' players') + ' at the table';
+      card.append(name, meta);
+      const code = roomCode();
+      if (code) {
+        const cr = document.createElement('div');
+        cr.className = 'roomCodeRow';
+        const val = document.createElement('span');
+        val.className = 'roomCodeVal';
+        val.textContent = code;
+        cr.appendChild(val);
+        cr.appendChild(
+          row('copy', 'Copy', () => {
+            navigator.clipboard?.writeText(code);
+            toast('Room code copied');
+          }),
+        );
+        const url = location.origin + '/?room=' + encodeURIComponent(code);
+        if (navigator.share)
+          cr.appendChild(
+            row('share', 'Share', () => navigator.share({ title: 'Open Tabletop', url })),
+          );
+        card.appendChild(cr);
+      }
+      body.appendChild(card);
+
+      const dock = byId('roomInfoBody');
+      if (dock) body.appendChild(dock); // live node, returned on close
+      sheet.append(head, body);
+    };
+    function close() {
+      if (sheet.hidden) return;
+      const dock = sheet.querySelector('#roomInfoBody');
+      const home = byId('roomInfo');
+      if (dock && home) home.appendChild(dock);
+      sheet.hidden = true;
+      clearSheet(sheet);
+    }
+    const open = () => {
+      const sp = byId('seatPop'); // it may be holding the live #players node
+      if (sp && !sp.hidden && sp._close) sp._close();
+      build();
+      sheet.hidden = false;
+      openAsSheet(sheet);
+      sheet.setAttribute('tabindex', '-1');
+      sheet.focus({ preventScroll: true });
+    };
+    sheet._close = close;
+    src.addEventListener('click', () => (sheet.hidden ? open() : close()));
+    sheet.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        close();
+      }
+    });
+    // The room name in the touch top bar is the other way in.
+    const title = byId('roomTitle');
+    if (title)
+      title.addEventListener('click', () => {
+        if (isSheet()) sheet.hidden ? open() : close();
+      });
+  }
+}
+
+// ---- hand tray (7e slice 6; mockup 10g) ------------------------------------------------
+// The hand stops being a permanent 96px strip and becomes a tab you pull up. Open, it
+// stacks the pieces the desktop row flanks: show faces on top, cards, drop pair below.
+{
+  const row = byId('handRow'),
+    tab = byId('handTab'),
+    hand = byId('hand');
+  if (row && tab && hand) {
+    const count = () => hand.querySelectorAll('.handcard').length;
+    const sync = () => {
+      const n = count();
+      tab.hidden = !isSheet();
+      const lbl = tab.querySelector('.handCount');
+      if (lbl) lbl.textContent = n;
+      const fan = tab.querySelector('.handFan');
+      if (fan) fan.style.visibility = n ? 'visible' : 'hidden';
+      const text = tab.querySelector('.handTabLbl');
+      if (text) text.textContent = n ? 'Your hand' : 'Your hand is empty';
+      if (!isSheet()) setOpen(false); // leaving touch: the desktop row is always shown
+    };
+    const setOpen = (open) => {
+      // #showBtn is the desktop disclosure for the faces strip and is hidden in the tray,
+      // so opening the tray is what reveals it (10g shows the faces as part of the tray).
+      const strip = byId('showStrip'),
+        showBtn = byId('showBtn');
+      if (open && isSheet() && count() && strip && strip.hidden && showBtn) showBtn.click();
+      row.classList.toggle('trayOpen', open);
+      document.body.classList.toggle('trayOpen', open);
+      tab.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    tab.addEventListener('click', () => setOpen(!row.classList.contains('trayOpen')));
+    new MutationObserver(sync).observe(hand, { childList: true });
+    addEventListener('resize', sync);
+    sync();
+  }
 }

@@ -259,16 +259,87 @@
   width: 100%;
   justify-content: flex-start;
 }
-@media (max-width: 720px) {
-  /* mobile: the region becomes a full-width bottom sheet */
-  .region {
+/* The sheet bound is wider than the old 720px phone breakpoint and includes ANY coarse
+   pointer, so tablets and touch laptops get the touch layout rather than a desktop overlay
+   they cannot place precisely. Keep this query in step with SHEET_MQ in client.js. */
+@media (max-width: 900px), (pointer: coarse) {
+  /* Mobile: the region is a bottom sheet with three stops — peek / two-thirds / full
+     (7e slice 1, mockup 10d). JS owns --sheet-h and the stop class; CSS owns the rest. */
+  .region,
+  .sheet {
     left: 0 !important;
     right: 0;
     top: auto !important;
     bottom: 0;
     width: auto;
-    max-height: 74vh;
+    max-height: none;
+    height: var(--sheet-h, 66vh);
     border-radius: 16px 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    padding: 0 0 env(safe-area-inset-bottom, 0);
+    overscroll-behavior: contain;
+    box-shadow: 0 -18px 44px rgba(0, 0, 0, 0.5);
+  }
+  .region.sheetAnim,
+  .sheet.sheetAnim {
+    transition: height 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .region.sheetDrag,
+  .sheet.sheetDrag {
+    user-select: none;
+  }
+  /* The grabber is the drag surface; it is also the whole affordance that says "pull me". */
+  .sheetGrab {
+    flex: none;
+    display: grid;
+    place-items: center;
+    padding: 9px 0 5px;
+    touch-action: none;
+    cursor: grab;
+  }
+  .sheetGrab::before {
+    content: '';
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+  }
+  .region.sheetDrag .sheetGrab::before,
+  .sheet.sheetDrag .sheetGrab::before,
+  .region.at-peek .sheetGrab::before {
+    background: var(--accent);
+  }
+  /* One pane fills the sheet: header pinned, body scrolls, footer pinned. */
+  .region .pane.on {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .region .pane > .regionHead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: inherit;
+    margin: 0;
+    padding: 2px 12px 8px;
+  }
+  .region .pane > .paneFoot,
+  .region .pane > #chatInputRow {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    background: inherit;
+    padding-block: 8px;
+  }
+  /* At peek only the header, the tail of the body and the footer are meant to be read. */
+  .region.at-peek .pane.on {
+    overflow-y: hidden;
+  }
+  .region.at-peek .pane.on > :not(.regionHead):not(.paneFoot):not(#chatInputRow) {
+    min-height: 0;
   }
 }
 
@@ -950,9 +1021,10 @@ select:focus {
   display: inline-flex;
   align-items: stretch;
   vertical-align: middle;
-  background: var(--field);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: none;
+  border: none;
+  box-shadow: inset 0 0 0 1px var(--border);
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 .stepper input[type='number'] {
@@ -976,21 +1048,20 @@ select:focus {
   border: none;
   background: transparent;
   color: var(--text);
+  opacity: 0.6;
   cursor: pointer;
   padding: 0 11px;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
   user-select: none;
-}
-.stepper .stepBtn:first-child {
-  border-right: 1px solid var(--border);
-}
-.stepper .stepBtn:last-child {
-  border-left: 1px solid var(--border);
+  transition:
+    opacity 0.12s ease,
+    color 0.12s ease;
 }
 .stepBtn:hover {
-  background: var(--accent-soft);
+  opacity: 1;
   color: var(--accent);
+  background: none;
 }
 
 /* Stacked labeled field rows (e.g. table size): "Width  [− field +]" per row */
@@ -1021,7 +1092,6 @@ select:focus {
   display: inline-flex;
   align-items: center;
   padding: 0 6px 0 8px;
-  border-right: 1px solid var(--border);
   white-space: nowrap;
 }
 .swatchRow {
@@ -3144,4 +3214,3452 @@ label:has(.ico) {
   #hand {
     max-width: 94vw;
   }
+}
+/* ============================================================================
+   Phase 7a — chrome polish.  APPEND to the end of public/styles.css.
+   Overrides only: no markup, no JS, no new tokens. Every value comes from the
+   existing token set, so the accent picker and the two --ui-*-scale knobs keep
+   working. Delete this block to revert.
+   Companion: docs/UI_Redesign_Phase7.md · mockups 2a, 3a–3d, 4d
+   ========================================================================= */
+
+/* ---- 1 · Clusters own the glass; the buttons inside go flat ---------------
+   Today every button is its own glass pill (button { background: var(--panel) }),
+   so eleven buttons read as eleven objects. Move the panel treatment up to the
+   container and the group becomes one object with items in it — the single
+   biggest change in perceived density, and it costs no markup.
+   NOTE: #ui holds both rows (nav + .uiRow2), so this makes ONE shell with a
+   hairline between the rows. Splitting them into two shells needs a wrapper —
+   deferred to 7b, which edits #ui anyway. */
+#ui,
+#clusterTR,
+#hamBar,
+#hamBarRight {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  backdrop-filter: var(--blur);
+  padding: calc(4px * var(--ui-elements-scale));
+  gap: calc(2px * var(--ui-elements-scale));
+}
+.uiRow2 {
+  gap: calc(2px * var(--ui-elements-scale));
+  margin-top: calc(4px * var(--ui-elements-scale));
+  padding-top: calc(4px * var(--ui-elements-scale));
+  border-top: 1px solid var(--border);
+}
+#ui > button,
+#ui > .btn,
+#ui .menu > button,
+.grp > button,
+.uiRow2 > button,
+#clusterTR > button,
+#hamBar > button,
+#hamBarRight > button {
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  border-radius: var(--r);
+  padding: calc(7px * var(--ui-elements-scale)) calc(11px * var(--ui-elements-scale));
+}
+/* Hover becomes a tint rather than a border colour change — a border that only
+   appears on hover makes the whole row twitch. */
+#ui > button:hover,
+#ui > .btn:hover,
+#ui .menu > button:hover,
+.grp > button:hover,
+.uiRow2 > button:hover,
+#clusterTR > button:hover,
+#hamBar > button:hover,
+#hamBarRight > button:hover {
+  background: var(--accent-soft);
+  border-color: transparent;
+  color: var(--accent);
+}
+#ui > button:active,
+#ui .menu > button:active,
+.grp > button:active,
+.uiRow2 > button:active,
+#clusterTR > button:active,
+#hamBar > button:active,
+#hamBarRight > button:active {
+  transform: none; /* a 1px nudge inside a fixed shell reads as a glitch */
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+/* Danger keeps red on hover — the accent tint must not overwrite it. */
+#ui .danger:hover,
+.grp > .danger:hover,
+#clusterTR .danger:hover {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+
+/* The GM menu is a popover sitting ON the new shell — give it the solid panel so
+   it doesn't stack blur on blur. */
+.grp {
+  background: var(--panel-solid);
+}
+
+/* ---- 2 · Group separators inside the top-left cluster --------------------
+   .menu is inline-flex, so a border-left divides "app" (Lobby/Settings/How to
+   Play) from "content" (GM Controls, Library, Add, Save Scene) with no wrapper. */
+#ui > .menu {
+  margin-left: calc(4px * var(--ui-elements-scale));
+  padding-left: calc(4px * var(--ui-elements-scale));
+  border-left: 1px solid var(--border);
+}
+
+/* ---- 3 · Icons carry the accent, labels stay neutral --------------------
+   .ico sets stroke: currentColor, so giving .ico its own colour tints the glyph
+   without touching the label. This is the accent rule: accent = interactive and
+   state, neutral = text and surface. */
+.ico {
+  color: var(--accent);
+}
+button:hover .ico,
+.btn:hover .ico {
+  color: var(--accent);
+}
+button.danger .ico,
+.btn.danger .ico,
+.chip.danger .ico {
+  color: var(--danger);
+}
+button:disabled .ico {
+  color: inherit;
+}
+
+/* ---- 4 · Keyboard focus ------------------------------------------------
+   There is currently no :focus-visible rule anywhere in this file, so keyboard
+   focus falls back to the browser default ring over a dark glass panel. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.libCard.sel:focus-visible {
+  outline-offset: -1px; /* keep the existing selected-card inset */
+}
+
+/* ---- 5 · Accent text below 12px ---------------------------------------
+   `b { color: var(--accent) }` and `.dockLabel` put accent on text as small as
+   11px (--fs-sm), where the gold-on-glass pair misses contrast. Accent text is
+   fine at >=12px; below that, use weight and opacity for hierarchy instead. */
+.muted b,
+.note b,
+.da-note b,
+figcaption b,
+.libMeta b,
+.hint b {
+  color: var(--text);
+}
+.dockLabel {
+  color: var(--text);
+  opacity: 0.5;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* ---- 6 · Room Info dock rhythm ----------------------------------------
+   The dock's three sections (Players / Room notes / Members) currently sit at
+   the same spacing as the rows inside them, so the groups don't read as groups. */
+#roomInfoBody {
+  gap: calc(13px * var(--ui-elements-scale));
+  padding: calc(2px * var(--ui-elements-scale)) calc(11px * var(--ui-elements-scale))
+    calc(11px * var(--ui-elements-scale));
+}
+#roomInfoBody .dockSection {
+  display: flex;
+  flex-direction: column;
+  gap: calc(5px * var(--ui-elements-scale));
+}
+
+/* ---- 7 · One chip grammar ---------------------------------------------
+   Chips are the app's second button system (library tabs, measure kinds, drop
+   options, toggles). Same hover tint as the clustered buttons so a chip and a
+   toolbar button don't behave differently. */
+.chip:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.chip.on .ico {
+  color: var(--accent);
+}
+
+/* ---- 8 · Pull .libControls out of the chip soup ------------------------
+   wireControls injects Select + Spawn selected + search directly after the tab
+   strip, where it reads as a fourth row of chips. One rule separates the
+   "acting on this list" row from the "choosing a list" rows. (Mockup 6a.) */
+.libControls {
+  margin: calc(6px * var(--ui-elements-scale)) 0 0;
+  padding-top: calc(6px * var(--ui-elements-scale));
+  border-top: 1px solid var(--border);
+}
+
+/* ---- 9 · Compact mode: separators do the work labels did ---------------
+   With .lbl hidden the buttons in a cluster become a run of identical squares.
+   Squaring them up and keeping the group divider visible is what makes the
+   run scannable. (Mockup 4d.) */
+@media (max-width: 720px), (max-height: 500px), (pointer: coarse) {
+  body:not(.ui-full) :is(#ui, .uiRow2, #clusterTR, #hamBar, #hamBarRight) > button {
+    padding: calc(8px * var(--ui-elements-scale));
+    aspect-ratio: 1;
+    justify-content: center;
+  }
+}
+
+/* ============================================================================
+   Check after applying
+   - Every accent value in #accentPicker (esp. #d14b4b and #5b8ad6): hover tints
+     and the focus ring should still read on the dark glass.
+   - Both --ui-elements-scale extremes: the new cluster padding is scaled, so a
+     large setting shouldn't collide the top-left shell with #inspectHint.
+   - #ui wrapping at narrow widths — it is flex-wrap: wrap inside the new shell.
+   - The GM menu (.grp) opening over the shell: solid panel, no double blur.
+   - Compact mode on a phone: rule 9 squares the buttons; confirm the seat
+     clusters still clear the hand row.
+   - .grp menu items are flattened too (they sit inside .menu, one level deeper
+     than #ui's children) — check Reset still reads red on hover.
+   - Emoji-labelled controls (#wbPen, #wbEraser, .volMute) have no .ico, so rule
+     3 never reaches them: they stay emoji while everything else is Tabler.
+   - #inspectHint / #inspectColorRow are fixed at top: var(--inset), centred —
+     check they clear the now-taller top-left shell at a large elements scale.
+   ========================================================================= */
+
+
+/* ============================================================================
+   Phase 7b — top-left fold.  Applies on top of the 7a block above.
+   Companion: docs/phase7b.md · mockup 2a
+   ========================================================================= */
+
+/* Mirror of the .admin-only rule above (see body.not-admin) for GM-gated items,
+   so each menu item is gated by its own rule rather than by which menu it sits in. */
+body.not-gm .gm-only {
+  display: none;
+}
+
+/* Group label inside a .grp menu — same treatment as .dockLabel after 7a. */
+.grpLabel {
+  padding: calc(6px * var(--ui-elements-scale)) calc(12px * var(--ui-elements-scale))
+    calc(3px * var(--ui-elements-scale));
+  font-size: var(--fs-sm);
+  color: var(--text);
+  opacity: 0.5;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+/* A rule above the label so "Admin" reads as a section, not a stray line.
+   :not(:first-child) keeps it clean when the GM items are hidden for a non-GM admin. */
+.grpLabel:not(:first-child) {
+  margin-top: calc(4px * var(--ui-elements-scale));
+  border-top: 1px solid var(--border);
+}
+/* Reset sits last and needs the same separation. */
+#roomGrp #roomReset {
+  margin-top: calc(4px * var(--ui-elements-scale));
+  border-top: 1px solid var(--border);
+}
+/* The overflow trigger is an icon button, not a labelled one. */
+#moreBtn .lbl {
+  display: none;
+}
+#moreGrp {
+  min-width: calc(150px * var(--ui-elements-scale));
+}
+
+/* ============================================================================
+   Phase 7c (slices 1–2) — source badges + curation overflow.
+   Companion: docs/UI_Redesign_Phase7.md · mockups 6a, 6b, 7b
+   ========================================================================= */
+
+/* ---- source + visibility badges ---------------------------------------- */
+.libBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.libBadge.src {
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.libBadge.src.bi {
+  background: var(--field); /* quiet: built-in is the default case */
+  color: var(--text);
+  opacity: 0.65;
+  border-color: transparent;
+}
+.libBadge.src.cu {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+
+/* ---- curation overflow: desktop popover -------------------------------- */
+.overflowGroup {
+  position: relative;
+  display: inline-flex;
+}
+.overflowMenu {
+  right: 0;
+  left: auto;
+  z-index: 60; /* placed as a fixed layer (see overflowMenu in icons.js) — stay above the card rows */
+  min-width: 176px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px;
+}
+/* Desktop popover rows are a dense menu, not the touch sheet's 44px targets:
+   .sheetItem inherits the app's button padding + .ico at --ico-size (a toolbar
+   size), which made the portaled menu read as a panel. */
+.overflowMenu .sheetItem {
+  padding: 5px 8px;
+  font-size: var(--fs-sm);
+  min-height: 0;
+  min-width: 0;
+  border-radius: var(--r-sm);
+}
+.overflowMenu .sheetItem .ico {
+  --ico-size: 1.1em;
+  width: 1.1em;
+  height: 1.1em;
+  flex: 0 0 auto;
+}
+.overflowMenu .sheetItem {
+  width: 100%;
+  justify-content: flex-start;
+  gap: 8px;
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  text-align: left;
+}
+.overflowMenu .sheetItem:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.overflowMenu .sheetItem.danger:hover {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+}
+.overflowMenu .sheetNote {
+  font-size: 0.9em;
+}
+.sheetNote {
+  margin-left: auto;
+  font-size: var(--fs-sm);
+  opacity: 0.5;
+}
+
+/* ---- curation overflow: touch sheet ------------------------------------
+   Lives inside #libraryModal, so the MutationObserver in client.js (~5216) icons
+   its rows, and closing the modal takes the sheet with it. */
+.sheet-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  background: var(--overlay);
+}
+.sheet {
+  width: 100%;
+  max-height: 80%;
+  overflow: auto;
+  padding: 0 8px 12px;
+  background: var(--panel-solid);
+  border-top: 1px solid var(--border);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: 0 -18px 44px rgba(0, 0, 0, 0.5);
+}
+.sheetGrab {
+  width: 38px;
+  height: 4px;
+  margin: 9px auto 3px;
+  border-radius: 2px;
+  background: var(--border);
+}
+.sheetHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px 12px;
+}
+.sheetHead b {
+  color: var(--text); /* the asset name is not an accent-worthy interactive thing */
+}
+.sheetHead span {
+  font-size: var(--fs-sm);
+  opacity: 0.5;
+}
+.sheet .sheetItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px; /* thumb target floor */
+  justify-content: flex-start;
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  text-align: left;
+}
+.sheet .sheetItem:hover {
+  background: var(--accent-soft);
+}
+.sheetDanger {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.sheetDanger .sheetItem,
+.sheetDanger .sheetItem .ico {
+  color: var(--danger);
+}
+.sheetConfirmNote,
+.sheetConfirmActions {
+  display: none;
+}
+.sheetDanger.confirming {
+  margin: 6px 4px 0;
+  padding: 10px 8px;
+  border: 1px solid var(--danger-border);
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+.sheetDanger.confirming .sheetItem {
+  pointer-events: none; /* it becomes the confirm's heading */
+}
+.sheetDanger.confirming .sheetConfirmNote {
+  display: block;
+  padding: 2px 4px 10px;
+  font-size: var(--fs-sm);
+  opacity: 0.75;
+}
+.sheetDanger.confirming .sheetConfirmActions {
+  display: flex;
+  gap: 8px;
+}
+.sheetConfirmActions button {
+  flex: 1;
+  min-height: 44px;
+  justify-content: center;
+}
+
+/* ============================================================================
+   Phase 7c (slices 3–4) — cross-pane search + Amount stepper.
+   Companion: docs/UI_Redesign_Phase7.md · mockups 7c, 7d
+   ========================================================================= */
+
+/* ---- search field: clear button ---------------------------------------- */
+.libSearchWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.libSearchClear {
+  position: absolute;
+  right: 4px;
+  padding: 4px;
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  opacity: 0.6;
+}
+.libSearchClear:hover {
+  opacity: 1;
+  border-color: transparent;
+  background: var(--accent-soft);
+}
+.libSearch {
+  padding-right: calc(28px * var(--ui-elements-scale)); /* room for the clear button */
+}
+
+/* ---- per-tab hit counts ------------------------------------------------- */
+.tabCount {
+  margin-left: 6px;
+  font-size: var(--fs-sm);
+  color: var(--accent);
+}
+.tabCount:empty {
+  display: none;
+}
+.libTab.noHits {
+  opacity: 0.4;
+} /* a tab with no matches stays in place rather than disappearing */
+
+/* ---- search summary + result group headings ----------------------------- */
+.libSummary {
+  padding: 2px 2px 6px;
+  font-size: var(--fs-sm);
+  opacity: 0.6;
+}
+.paneHead {
+  display: none; /* only a search turns a pane into a named result group */
+}
+.searching .libPane > .paneHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 2px 8px;
+}
+.searching .libPane > .paneHead b {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.55;
+}
+.searching .libPane > .paneHead span {
+  font-size: var(--fs-sm);
+  opacity: 0.4;
+}
+.searching .libPane > .paneHead::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+/* Stack the revealed panes as sections instead of one tall column of one list. */
+.searching .libPane {
+  padding-bottom: calc(4px * var(--ui-elements-scale));
+}
+
+/* ---- Amount stepper (dispensers) ---------------------------------------
+   Two steppers on one card need telling apart: quantity stays bare, Amount keeps a
+   tinted cap label. .stepCap already exists — this gives it the accent treatment. */
+.stepCap {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.stepper:has(.stepCap) {
+  box-shadow: inset 0 0 0 1px var(--accent);
+  overflow: hidden;
+}
+.infiniteNote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: var(--r-sm);
+  background: var(--field);
+  font-size: var(--fs-sm);
+  opacity: 0.7;
+}
+.infiniteNote .ico {
+  color: var(--accent);
+}
+
+/* ============================================================================
+   Phase 7f — lobby + admin.
+   Companion: docs/UI_Redesign_Phase7.md · mockups 4a, 4b, 4c
+   ========================================================================= */
+
+/* ---- lobby: three cards instead of one divider stack -------------------- */
+#landing .lcard {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+#landing .lcard h2 {
+  margin: 0 0 4px;
+} /* the card edge does the separating the h2's margin used to */
+#landing .lcard > form > .row:last-child,
+#landing .lcard > .row:last-child {
+  margin-bottom: 0;
+}
+#landing .lcard label:first-of-type {
+  margin-top: 4px;
+}
+/* The remaining divider (below the signed-in header) is the only one left. */
+#landing .divider {
+  margin: 16px 0;
+}
+
+/* ---- lobby: room rows --------------------------------------------------- */
+#landing .roomRow {
+  gap: 10px;
+}
+#landing .roomInfoCol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+#landing .roomMeta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+}
+#landing .roomMeta code {
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.06em;
+  opacity: 0.85;
+}
+/* Pending: a live pulse, because a lobby socket really is open on this row. */
+#landing .roomWaiting {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: var(--fs-sm);
+  color: var(--accent);
+}
+#landing .roomWaiting i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: roomPulse 1.6s ease-in-out infinite;
+}
+@keyframes roomPulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    box-shadow: 0 0 0 0 var(--accent-soft);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 0 4px var(--accent-soft);
+  }
+}
+#landing .roomRow {
+  align-items: center;
+}
+#landing .roomRow .actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+}
+/* The real cause of the giant room-row buttons: .actions button carries
+   min-width: 4.5em (line ~129) for labelled buttons, which an icon-only button
+   inherits — three of them overflowed the row and pushed Enter over the text.
+   An icon button is sized by its icon, everywhere. */
+.actions button.icon-only,
+.actions .overflowTrigger {
+  min-width: 0;
+  width: calc(30px * var(--ui-elements-scale));
+  height: calc(30px * var(--ui-elements-scale));
+  padding: 0;
+  justify-content: center;
+}
+/* A sheet opened outside a modal host (the lobby) covers the viewport. */
+.sheet-backdrop.fixed {
+  position: fixed;
+}
+
+/* ---- admin: themed tables ---------------------------------------------- */
+#admin table {
+  font-size: var(--fs);
+}
+#admin thead th {
+  font-size: var(--fs-sm);
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.55; /* a column header is not an interactive accent thing */
+}
+#admin tbody tr:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+#admin td .actions {
+  justify-content: flex-end;
+  gap: 4px;
+}
+/* Pending count as a badge rather than muted text in the heading. */
+#pendingBadge:not(:empty) {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 1;
+}
+
+/* ---- admin: storage cleanup as a stated two-step ----------------------- */
+#cleanup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+#cleanupResult {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--fs-sm);
+}
+#cleanup .cleanupNote {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: var(--fs-sm);
+  opacity: 0.55;
+  order: 9; /* the controls read first; the explanation sits under them */
+}
+
+/* ---- 7f follow-up: bring the lobby closer to mockups 4a / 4b ------------ */
+
+/* The signed-in header: an identity line, not a hero. The 74px avatar is the
+   editor's own affordance elsewhere; here it is a 34px chip. */
+#landing .who .avatar {
+  width: calc(30px * var(--ui-elements-scale));
+  height: calc(30px * var(--ui-elements-scale));
+  border-radius: var(--r);
+}
+#landing .row.between {
+  align-items: center;
+  gap: 10px;
+}
+#landing .who {
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+/* Default UI / Log out are secondary — chip-sized, and never wrapping mid-label. */
+#landing .hgroup button {
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+#landing .hgroup .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+
+/* Card internals: tighter label→field rhythm, and the primary action on the
+   field's row rather than floating below it. */
+#landing .lcard label {
+  margin: 10px 0 4px;
+  font-size: var(--fs-sm);
+}
+#landing .lcard label:first-of-type {
+  margin-top: 0;
+}
+#landing .lcard .row {
+  margin-top: 12px;
+  justify-content: flex-end;
+}
+#landing .lcard .check {
+  margin-top: 10px;
+}
+#landing .lcard .check .chip {
+  font-size: var(--fs-sm);
+}
+#landing button.primary {
+  min-width: 0;
+}
+
+/* Quick join (4b): one full-width primary; Log in lives in the top bar. */
+#quickJoinView h1 {
+  font-size: 24px;
+}
+#quickJoinView .tag {
+  margin-bottom: 14px;
+}
+#quickJoinView label {
+  margin: 12px 0 4px;
+  font-size: var(--fs-sm);
+}
+#quickJoinView .row {
+  margin-top: 18px;
+}
+#quickJoinView #qjBtn {
+  flex: 1;
+  justify-content: center;
+  padding: 10px 14px;
+}
+#quickJoinView .hint {
+  margin-top: 14px;
+  text-align: center;
+}
+#topbar .topbarBtn {
+  padding: 6px 10px;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+
+/* The room row's ••• matches Enter exactly: same padding and font metrics, and
+   align-self: stretch pins its height to the row's tallest item (Enter) rather
+   than to an icon-derived square. Library cards keep the compact square. */
+#landing .roomRow .actions .overflowTrigger {
+  align-self: stretch;
+  width: auto;
+  height: auto;
+  padding: 4px 9px;
+  min-width: calc(30px * var(--ui-elements-scale));
+}
+
+/* ============================================================================
+   Library cards → the 6a layout: a horizontal row per asset instead of a tall
+   tile. Preview left, name + badges, controls, actions — so card heights match
+   regardless of name length, and two fit per row at a readable size.
+   ========================================================================= */
+
+/* The old source badge was a ::after, and only in All view — the real .libBadge
+   from 7c covers every view, so retire the pseudo one (it was doubling up). */
+#libraryModal.src-all .lib2-bi > .libCard::after,
+#libraryModal.src-all .lib2-cu > .libCard::after {
+  content: none;
+}
+
+.libList {
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  gap: 10px;
+}
+.libCard {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    'prev meta'
+    'prev ctrls'
+    'prev acts';
+  align-content: start;
+  column-gap: 10px;
+  row-gap: 6px;
+  padding: 10px;
+}
+.libCard .libPreview {
+  grid-area: prev;
+  width: calc(66px * var(--ui-elements-scale));
+  height: calc(66px * var(--ui-elements-scale));
+  align-self: start;
+}
+.libPreview.empty {
+  font-size: 24px;
+}
+.libCard .libMeta {
+  grid-area: meta;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.libCard .libName {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap; /* equal card heights beat showing a 40-character name in full */
+}
+.libCard .cardCtrls {
+  grid-area: ctrls;
+  margin: 0;
+  gap: 5px;
+}
+.libCard .actions {
+  grid-area: acts;
+  gap: 5px;
+}
+.libCard .actions button {
+  min-width: 0;
+  padding: 5px 10px;
+}
+/* Snap / Stand / Own colors: the icon already carries the state with .on — the
+   extra .chk square made three controls read as a form. */
+.cardCtrls .chip.chk::before {
+  display: none;
+}
+.cardCtrls .chip {
+  padding: 4px 8px;
+}
+.cardCtrls .qtyStep input[type='number'] {
+  width: 26px;
+}
+
+/* ============================================================================
+   Library modal → the 6a window, in this app's tokens.
+   Shell, sticky header, source segmented control, chip tabs, card surfaces.
+   ========================================================================= */
+
+/* ---- the window ---------------------------------------------------------- */
+#libraryModal .modalCard.libraryCard.lib2Card {
+  width: min(1180px, calc(100vw - 80px));
+  max-height: min(84vh, 900px);
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 24px 60px rgba(0, 0, 0, 0.65); /* a floating window, not a full-bleed sheet */
+  gap: 0;
+  overflow: hidden; /* the panes scroll, the shell does not */
+}
+#libraryModal .libraryCard:has(.libSticky) .libPane {
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+}
+
+/* ---- sticky header: title row · tabs · controls -------------------------- */
+#libraryModal .libraryCard .libSticky {
+  gap: 11px;
+  padding: 14px 18px 12px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+#libraryModal .libSticky .panel-head {
+  gap: 12px;
+  justify-content: flex-start;
+}
+#libraryModal .libSticky .panel-head b {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+#libraryModal .libSticky .panel-head .close-x {
+  margin-left: auto;
+}
+
+/* ---- source: three chips → one segmented control ------------------------ */
+#lib2Source {
+  display: inline-flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+#lib2Source .chip {
+  border: none;
+  border-radius: 0;
+  background: none;
+  padding: 5px 12px;
+  font-size: var(--fs-sm);
+  opacity: 0.65;
+}
+#lib2Source .chip + .chip {
+  border-left: 1px solid var(--border);
+}
+#lib2Source .chip:hover {
+  background: var(--accent-soft);
+  opacity: 1;
+}
+#lib2Source .chip.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+  opacity: 1;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* ---- tabs: pill chips with counts, no underline rail -------------------- */
+#libraryModal .libTabs {
+  gap: 3px;
+  border-bottom: none;
+  flex-wrap: wrap;
+}
+#libraryModal .libTab {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  margin-bottom: 0;
+  padding: 6px 11px;
+  font-size: var(--fs-sm);
+  opacity: 0.7;
+}
+#libraryModal .libTab:hover {
+  background: var(--accent-soft);
+  opacity: 1;
+}
+#libraryModal .libTab.on {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* ---- controls row ------------------------------------------------------- */
+#libraryModal .libControls {
+  margin: 0;
+  padding-top: 10px;
+}
+#libraryModal .libDivider {
+  flex: 0 0 1px;
+  margin: 2px 8px;
+}
+#libraryModal .libSearch {
+  border-radius: var(--r);
+}
+
+/* ---- card surfaces: quiet fill + hairline, accent ring when selected ---- */
+#libraryModal .libCard {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-color: color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: var(--r-lg);
+}
+#libraryModal .libCard:hover {
+  border-color: color-mix(in srgb, var(--text) 18%, transparent);
+}
+#libraryModal .libCard.sel {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  outline: none; /* the fill + border carry it; the 2px outline doubled up */
+}
+#libraryModal .libPreview {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+/* Both source lists in one visual grid under All — no divider between feeds. */
+#libraryModal .lib2-cu:not(:empty) {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+/* ============================================================================
+   Card controls at mockup scale (6a). The oversized Snap/Stand came from .ico
+   inheriting --ico-size (~22px, tuned for toolbar buttons) inside what is meant
+   to be a dense chip row — so the chips wrapped onto three lines. Icons stay,
+   just at label size.
+   ========================================================================= */
+#libraryModal .cardCtrls {
+  align-items: center;
+  gap: 5px;
+}
+#libraryModal .cardCtrls .chip {
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  line-height: 1.2;
+}
+#libraryModal .cardCtrls .chip .ico,
+#libraryModal .libCard .actions .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+/* Stepper: same height as the chips beside it, tighter than the toolbar default. */
+#libraryModal .cardCtrls .stepper {
+  border-radius: var(--r-sm);
+}
+#libraryModal .cardCtrls .stepBtn {
+  padding: 2px 7px;
+  font-size: var(--fs-sm);
+}
+#libraryModal .cardCtrls .qtyStep input[type='number'] {
+  width: 24px;
+  font-size: var(--fs-sm);
+}
+#libraryModal .cardCtrls .stepCap {
+  font-size: 9px;
+  padding: 0 6px;
+}
+/* Swatches: a compact run, so the whole ctrls row fits one line. */
+#libraryModal .cardCtrls .swatchRow {
+  gap: 3px;
+}
+#libraryModal .cardCtrls .swatch {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+}
+#libraryModal .cardCtrls .swatch.on {
+  outline-width: 1px;
+  outline-offset: 1px;
+}
+/* Spawn / Edit: one compact row, not a stack of full-width buttons. */
+#libraryModal .libCard .actions button {
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+}
+/* Two-up at this window width, so a card's controls have room for one line. */
+#libraryModal .libList {
+  grid-template-columns: repeat(auto-fill, minmax(390px, 1fr));
+}
+
+/* ============================================================================
+   Phase 7h — table HUD to mockup 2a.
+   Two top-left pills, the top-right tools cluster stacked above the identity
+   box in one right column, and a dock dense enough to read as three groups.
+   ========================================================================= */
+
+/* ---- top-left: two pills, each sized to its own content ----------------- */
+#ui {
+  background: none;
+  border: 0;
+  padding: 0;
+  backdrop-filter: none;
+  flex-direction: column;
+  align-items: flex-start;
+  width: max-content;
+  gap: var(--gap);
+}
+#ui .uiRow1,
+#ui .uiRow2 {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  gap: calc(2px * var(--ui-elements-scale));
+  padding: calc(4px * var(--ui-elements-scale));
+  margin: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: 1px solid var(--border); /* undo 7a's inter-row hairline */
+  border-radius: var(--r-xl);
+  backdrop-filter: var(--blur);
+}
+#ui .uiRow1 > button,
+#ui .uiRow1 > .menu > button {
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  border-radius: var(--r);
+  padding: calc(7px * var(--ui-elements-scale)) calc(11px * var(--ui-elements-scale));
+}
+#ui .uiRow1 > button:hover,
+#ui .uiRow1 > .menu > button:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+#ui .uiRow1 > .menu {
+  margin-left: calc(4px * var(--ui-elements-scale));
+  padding-left: calc(4px * var(--ui-elements-scale));
+  border-left: 1px solid var(--border);
+}
+#ui .uiRow1 > .menu + .menu {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0; /* GM Controls and ••• are one group */
+}
+
+/* ---- top-right: one column — tools, identity, dock ---------------------- */
+:root {
+  --tr-cluster-h: calc(42px * var(--ui-elements-scale));
+}
+.cluster-tr {
+  top: var(--inset);
+  right: var(--inset);
+  width: min(270px, 80vw);
+  justify-content: flex-end;
+  gap: calc(2px * var(--ui-elements-scale));
+}
+#rightStack {
+  top: calc(var(--inset) + var(--tr-cluster-h) + var(--gap));
+  max-height: calc(100vh - 2 * var(--inset) - var(--tr-cluster-h) - var(--gap));
+}
+/* Score / Music / Measure go icon-only (their labels live in the #tip); Timer
+   keeps its text because that text is the live value. */
+#scoreBtn .lbl,
+#audioBtn .lbl,
+#measureBtn .lbl {
+  display: none;
+}
+#clusterTR > button {
+  padding: calc(7px * var(--ui-elements-scale));
+}
+#timerBtn {
+  padding-inline: calc(10px * var(--ui-elements-scale));
+}
+
+/* ---- the dock: three legible groups ------------------------------------- */
+/* Players: one line per player — name, score, role tag. */
+#players {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+#players > * {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 5px 7px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+#players > * > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#players .rolebadge {
+  margin-left: auto;
+}
+
+/* Members: the Helper / GM / Kick row was wrapping one button per line —
+   .actions button's 4.5em min-width again, plus toolbar-sized icons. */
+#memberList,
+.unclaimed {
+  gap: 5px;
+}
+#memberList > li,
+.memberRow {
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 7px 8px;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+#memberList button,
+.memberRow button,
+.unclaimed-row button {
+  min-width: 0;
+  padding: 3px 8px;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+#memberList .ico,
+.memberRow .ico,
+.unclaimed-row .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+#memberList .actions,
+.memberRow .actions {
+  gap: 4px;
+  flex-wrap: nowrap;
+  margin-left: auto;
+}
+
+/* ============================================================================
+   Dock interior → 2a: groups inside one glass dock, not boxes inside a box.
+   ========================================================================= */
+#roomInfoBody .dockSection {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  gap: calc(5px * var(--ui-elements-scale));
+}
+/* The label is the group's separator now, so give it a hairline above — except
+   the first, which sits under the dock header. */
+#roomInfoBody .dockSection + .dockSection {
+  padding-top: calc(11px * var(--ui-elements-scale));
+  border-top: 1px solid var(--border);
+}
+
+/* Player rows: only "you" gets a surface; the rest are plain lines. */
+#players > * {
+  background: none;
+  border: 0;
+}
+#players > .me,
+#players > *[class*='self'] {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+
+/* Member rows: name + role, actions right — one line, as in 2a. The wrap came
+   from three chips carrying both a 22px icon and a label in a 270px dock. */
+#memberList > li,
+.memberRow {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-color: color-mix(in srgb, var(--text) 8%, transparent);
+}
+#memberList .actions,
+.memberRow .actions {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  margin-left: auto;
+  gap: 3px;
+}
+/* The labels are explicit (Helper / GM / Kick), so the person-icons are
+   redundant here — dropping them is what buys the single line. */
+#memberList .actions .ico,
+.memberRow .actions .ico {
+  display: none;
+}
+#memberList .actions button,
+.memberRow .actions button {
+  padding: 3px 7px;
+  font-size: var(--fs-sm);
+}
+.memberRow .memberName,
+#memberList > li > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================================
+   2a, last two details: the identity pill stands alone, and the tools cluster
+   is only as wide as its buttons.
+   ========================================================================= */
+
+/* #identityBar is now a sibling of #roomInfo in #rightStack (markup), so it
+   reads as its own pill rather than the dock's header. */
+#rightStack > #identityBar {
+  flex: 0 0 auto;
+  border-radius: var(--r-xl);
+}
+/* The dock starts at its own header again. */
+#roomInfo > #roomInfoHead:first-child {
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+}
+
+/* Shrink-to-fit, pinned right — a cluster shell should hug its items. */
+.cluster-tr {
+  width: max-content;
+  max-width: min(270px, 80vw);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+/* ============================================================================
+   Phase 7i — region panes + Show/Drop, on one anatomy (mockups 8a-8f).
+   Header (title + ✕ on a hairline) · body · pinned footer where the pane has a
+   persistent action. Every pane in #regionTL / #regionTR and both hand popouts.
+   ========================================================================= */
+
+/* ---- shared shell ------------------------------------------------------- */
+.region .pane,
+.panel.popout {
+  padding: 0;
+  gap: 0;
+}
+.regionHead,
+.panel.popout > .panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px;
+  margin: 0;
+  border-bottom: 1px solid var(--border);
+}
+.regionHead b,
+.panel.popout > .panel-head b {
+  flex: 1;
+  color: var(--text);
+  font-size: var(--fs);
+  font-weight: 600;
+}
+.regionHead .close-x,
+.panel.popout > .panel-head .close-x {
+  flex: 0 0 auto;
+}
+/* Every direct child after the head is body padding — except a footer row. */
+.region .pane > :not(.regionHead):not(.paneFoot),
+.panel.popout > :not(.panel-head):not(.paneFoot) {
+  margin-inline: 12px;
+}
+.region .pane > :nth-child(2),
+.panel.popout > :nth-child(2) {
+  margin-top: 11px;
+}
+.region .pane > :last-child:not(.paneFoot),
+.panel.popout > :last-child:not(.paneFoot) {
+  margin-bottom: 12px;
+}
+/* A caveat/hint line under a head (notes, measure): quiet, with an icon. */
+.paneNote {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fs-sm);
+  opacity: 0.55;
+}
+.paneNote .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* ---- chat (8a) ---------------------------------------------------------- */
+#chatLog {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: var(--fs-sm);
+}
+#chatLog b {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+} /* the sender is the only accent in the log */
+#chatInputRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 9px 10px;
+  border-top: 1px solid var(--border);
+}
+#chatInput {
+  flex: 1;
+  min-width: 0;
+}
+#chatSend {
+  flex: 0 0 auto;
+  min-width: 0;
+  width: calc(32px * var(--ui-elements-scale));
+  height: calc(32px * var(--ui-elements-scale));
+  padding: 0;
+  justify-content: center;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: none;
+}
+#chatSend:hover {
+  background: var(--accent-soft);
+}
+
+/* ---- notes (8b) --------------------------------------------------------- */
+#notesText {
+  min-height: 150px;
+  line-height: 1.6;
+}
+
+/* ---- scoreboard (8c): the − / value / + trio becomes one stepper -------- */
+#scoreTable,
+#scoreRows tr {
+  display: flex;
+  flex-direction: column;
+}
+#scoreRows tr {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+}
+#scoreRows tr:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+#scoreRows td {
+  border: 0;
+  padding: 0;
+}
+.scoreName {
+  flex: 1;
+  min-width: 0;
+  order: 1;
+}
+.scoreName input {
+  width: 100%;
+  padding: 3px 6px;
+  background: none;
+  border-color: transparent;
+  font-size: var(--fs-sm);
+}
+.scoreName input:hover,
+.scoreName input:focus-visible {
+  background: var(--field);
+  border-color: var(--border);
+}
+.scoreActs {
+  display: contents;
+} /* lets − / value / + interleave as one control */
+.scoreVal {
+  order: 3;
+  min-width: 26px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--accent);
+}
+.scoreActs button:nth-child(1) {
+  order: 2;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  border-right: 0;
+}
+.scoreActs button:nth-child(2) {
+  order: 4;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  border-left: 0;
+}
+.scoreActs button:nth-child(3) {
+  order: 5;
+  margin-left: 4px;
+  border-radius: var(--r-sm);
+}
+.scoreActs button {
+  min-width: 0;
+  padding: 2px 8px;
+  font-size: var(--fs-sm);
+  background: none;
+}
+.scoreEmpty {
+  opacity: 0.45;
+  font-size: var(--fs-sm);
+  padding: 6px 0;
+}
+#scoreEdit {
+  border-top: 1px solid var(--border);
+  padding: 9px 10px;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.scoreAddRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.scoreAddRow input {
+  flex: 1;
+  min-width: 0;
+}
+#scoreEdit button {
+  min-width: 0;
+  padding: 4px 10px;
+  font-size: var(--fs-sm);
+}
+#scoreClear {
+  align-self: flex-start;
+}
+
+/* ---- music (8d) --------------------------------------------------------- */
+#nowPlaying {
+  font-size: var(--fs-sm);
+  opacity: 0.85;
+}
+#musicBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#musicBody .chipRow {
+  gap: 6px;
+}
+#musicBody .chip {
+  padding: 6px 9px;
+}
+#musicBody .chip .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+
+/* ---- measure (8e): the instructions become one hint block --------------- */
+.pane[data-pane='measure'] #measureKinds {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.pane[data-pane='measure'] #measureKinds .chip {
+  justify-content: center;
+  padding: 8px;
+}
+.pane[data-pane='measure'] p.muted {
+  padding: 9px 10px;
+  border-radius: var(--r);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  opacity: 1;
+}
+.pane[data-pane='measure'] p.muted b {
+  color: var(--text);
+}
+.pane[data-pane='measure'] .chipRow:last-of-type .chip {
+  flex: 1;
+  justify-content: center;
+}
+
+/* ---- timer (8f): the readout is the pane -------------------------------- */
+#timerMode {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+#timerMode .libTab {
+  flex: 1;
+  justify-content: center;
+  border-radius: 0;
+  border: 0;
+  padding: 7px 10px;
+}
+#timerMode .libTab + .libTab {
+  border-left: 1px solid var(--border);
+}
+#timerReadout {
+  text-align: center;
+  font:
+    600 40px/1 ui-monospace,
+    monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.timerRow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.timerRow button {
+  min-width: 0;
+  padding: 8px 12px;
+}
+#timerToggle {
+  flex: 1;
+  justify-content: center;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+#timerDurRow {
+  margin-top: 2px;
+}
+
+/* ---- Show / Drop hand popouts ------------------------------------------ */
+.showLabel,
+#dropPanel .note {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+  opacity: 0.5;
+  margin: 0;
+}
+#dropPanel .note {
+  letter-spacing: 0;
+  text-transform: none;
+  opacity: 0.6;
+}
+#showPanel .chipRow,
+#dropPanel .chipRow {
+  display: flex;
+  gap: 6px;
+}
+#showPanel .chipRow .chip,
+#dropPanel .chipRow .chip {
+  flex: 1;
+  justify-content: center;
+  padding: 8px;
+}
+#showAudience {
+  flex-wrap: wrap;
+}
+#showAudience .chip {
+  flex: 0 1 auto;
+}
+#showHold {
+  width: calc(100% - 24px);
+  justify-content: center;
+  padding: 9px;
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ============================================================================
+   7i fixes — pane overflow and text contrast.
+   The horizontal scrollbars came from margin-inline: 12px on children that are
+   themselves width: 100% (textarea, table, inputs) = 100% + 24px.
+   ========================================================================= */
+.region .pane,
+.panel.popout {
+  overflow-x: hidden;
+}
+.region .pane > *,
+.panel.popout > * {
+  box-sizing: border-box;
+  max-width: calc(100% - 24px);
+}
+.region .pane > .regionHead,
+.region .pane > #chatInputRow,
+.region .pane > #scoreEdit,
+.panel.popout > .panel-head {
+  max-width: 100%;
+}
+#notesText,
+#scoreTable,
+.region #roomNotes {
+  width: auto;
+  min-width: 0;
+}
+
+/* ---- contrast: body text near-full, only the meaningful bits accented ---- */
+.paneNote {
+  opacity: 1;
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+}
+.scoreEmpty {
+  opacity: 1;
+  color: color-mix(in srgb, var(--text) 62%, transparent);
+}
+#nowPlaying {
+  opacity: 1;
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+#nowPlaying b {
+  color: var(--accent);
+}
+.pane[data-pane='measure'] p.muted {
+  color: color-mix(in srgb, var(--text) 92%, transparent);
+  opacity: 1;
+}
+.pane[data-pane='measure'] p.muted b {
+  color: var(--accent); /* the shape names are the highlighted parts */
+  font-weight: 600;
+}
+/* Same rule anywhere else a .muted line is doing real work inside a pane. */
+.region .pane .muted,
+.panel.popout .muted {
+  opacity: 1;
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+}
+
+/* ---- chat: timestamps + your own messages on the right ------------------ */
+.chatMsg {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.chatHead {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.chatFrom {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: var(--fs-sm);
+}
+.chatTime {
+  margin-left: auto;
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: color-mix(in srgb, var(--text) 42%, transparent);
+}
+.chatText {
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--text) 90%, transparent);
+}
+.chatMsg.me {
+  align-items: flex-end;
+}
+.chatMsg.me .chatHead {
+  flex-direction: row-reverse;
+}
+.chatMsg.me .chatTime {
+  margin-left: 0;
+  margin-right: auto;
+}
+.chatMsg.me .chatFrom {
+  color: color-mix(in srgb, var(--text) 55%, transparent);
+}
+.chatMsg.me .chatText {
+  padding: 6px 9px;
+  border-radius: var(--r) var(--r) 3px var(--r);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text);
+}
+
+/* The focus ring is 2px + 2px offset, so a control sitting flush under a line
+   of text eats it. Give the notes field its own breathing room and pull its
+   ring in by a pixel. */
+#notesText {
+  margin-top: 10px;
+}
+.region .pane textarea:focus-visible,
+.panel.popout textarea:focus-visible {
+  outline-offset: 1px;
+}
+
+/* ============================================================================
+   Phase 7j — Show strip (9b) + split Drop flank with a toast (9e).
+   Both popouts are gone: the audience IS the control, and the orientation IS
+   the button. #handRow is already fixed, so it's the containing block.
+   ========================================================================= */
+
+/* ---- show strip: faces above the hand ---------------------------------- */
+#showStrip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  z-index: 9;
+}
+#showStripChips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  backdrop-filter: var(--blur);
+  box-shadow: 0 6px 18px var(--shadow-soft);
+}
+#showStripChips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 11px;
+  border-radius: 18px;
+  border-color: transparent;
+  background: none;
+  backdrop-filter: none;
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+#showStripChips button:hover {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+#showStripChips button.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px -4px var(--accent);
+}
+#showStripChips button .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+#showStripChips .stripAv {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--avatar);
+  flex: 0 0 auto;
+}
+#showStripChips .stripSep {
+  width: 1px;
+  align-self: stretch;
+  margin: 2px 2px;
+  background: var(--border);
+}
+#showStatus {
+  font-size: var(--fs-sm);
+  color: var(--accent);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+#showStatus:empty {
+  display: none;
+}
+
+/* ---- drop: the choice is the button ------------------------------------ */
+.dropSplit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  backdrop-filter: var(--blur);
+}
+.dropSplit button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px 9px;
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.dropSplit button:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: transparent;
+}
+.dropSplit button .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+
+/* ---- toast ------------------------------------------------------------- */
+#toast {
+  position: fixed;
+  top: calc(var(--inset) + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  backdrop-filter: var(--blur);
+  box-shadow: 0 8px 24px var(--shadow-soft);
+  font-size: var(--fs-sm);
+  animation: toastIn 0.16s ease-out;
+}
+.toastAction {
+  min-width: 0;
+  padding: 3px 9px;
+  background: none;
+  border-color: var(--accent);
+  color: var(--accent);
+  font-size: var(--fs-sm);
+}
+.toastAction:hover {
+  background: var(--accent-soft);
+}
+#toast .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+  color: var(--accent);
+}
+@keyframes toastIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+
+/* Compact / touch: the flanks lose their labels like every other cluster. */
+@media (max-width: 720px), (max-height: 500px), (pointer: coarse) {
+  body:not(.ui-full) .dropSplit button .lbl,
+  body:not(.ui-full) #showStripChips button .lbl {
+    display: none;
+  }
+}
+
+/* ---- 7i-b · the track list lives in the Music pane (8d) ----------------- */
+.trackList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 190px;
+  overflow-y: auto;
+}
+.trackList .trackItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 9px;
+  text-align: left;
+  background: none;
+  border-color: transparent;
+  backdrop-filter: none;
+  border-radius: var(--r-sm);
+  font-size: var(--fs-sm);
+}
+.trackList .trackItem:hover {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+.trackList .trackItem.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.trackList .muted {
+  padding: 6px 9px;
+}
+
+
+/* ============================================================================
+   Phase 7e slice 2 — the touch top bar (mockup 10a).
+   The bar was wide because it carried the room CODE, the timer, the turn pill and
+   an avatar at once. On touch it keeps five things: disclosure, room name, timer
+   value, turn state, avatar. The code moves to Room info; the pill reduces to its
+   caret unless the turn is yours.
+   ========================================================================= */
+.timerMini {
+  display: none;
+}
+@media (max-width: 900px), (pointer: coarse) {
+  /* One row, but only as wide as its contents until slice 3 folds the top-left
+     cluster into the drawer — a full-bleed bar would sit on top of it today. */
+  #rightStack {
+    /* top stays at the stacked value (below the top-right cluster) until slice 3
+       folds that cluster into the drawer — at var(--inset) the two collide. */
+    right: var(--inset);
+    left: auto;
+    bottom: auto;
+    width: auto;
+    max-width: calc(100vw - 2 * var(--inset));
+    max-height: none;
+    overflow: visible;
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+  }
+  /* Room name leads and takes the slack; identity trails. */
+  #rightStack > #roomInfo {
+    order: -1;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 40vw;
+    background: none;
+    backdrop-filter: none;
+    border: 0;
+    box-shadow: none;
+  }
+  #roomInfo > #roomInfoHead:first-child {
+    padding: 0;
+    border-radius: 0;
+  }
+  #roomInfoHead #roomTitle {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: var(--fs);
+  }
+  #roomInfoHead #roomCode {
+    display: none;
+  } /* lives in the Room info sheet now */
+  #roomInfoBody {
+    display: none;
+  } /* opened as a sheet, not docked (slice 5) */
+  #rightStack > #identityBar {
+    flex: 0 0 auto;
+    gap: 6px;
+    padding: 3px;
+    padding-inline-start: 8px;
+  }
+  #identityBar #myName {
+    display: none;
+  } /* the avatar is the identity at this width */
+  #identityBar #myAv {
+    margin-left: 0;
+  }
+  .timerMini {
+    display: inline-flex;
+    align-items: center;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--fs-sm);
+    color: var(--text);
+    opacity: 0.75;
+    white-space: nowrap;
+  }
+  .timerMini[hidden] {
+    display: none;
+  }
+  /* Not your turn: the pill is just a state light, so drop the words and keep the caret. */
+  .turnPill:not(.myturn) .lbl {
+    display: none;
+  }
+  .turnPill:not(.myturn) {
+    padding: 6px;
+    border-radius: 50%;
+  }
+}
+
+
+/* ============================================================================
+   Phase 7e slice 3 — the ☰ drawer (mockup 10b).
+   Both top clusters fold into one sheet of grouped rows. A sheet belongs to
+   neither side, so it cannot open on the wrong one.
+   ========================================================================= */
+#drawerBtn,
+.sheet {
+  display: none;
+}
+@media (max-width: 900px), (pointer: coarse) {
+  #ui,
+  #clusterTR {
+    display: none;
+  } /* the drawer is the only way in now */
+  #rightStack {
+    top: var(--inset); /* the corner is free again */
+    left: var(--inset);
+    width: auto;
+  }
+  #rightStack > #roomInfo {
+    flex: 1 1 auto;
+    max-width: none;
+  }
+  #drawerBtn {
+    display: inline-flex;
+    order: -2;
+    flex: 0 0 auto;
+  }
+  .sheet {
+    display: flex;
+    position: fixed;
+    z-index: 9;
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    color: var(--text);
+  }
+  .sheet[hidden] {
+    display: none;
+  }
+  .drawerBody {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 4px 10px 0;
+  }
+  .drawerGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .drawerGroup > .miniLabel {
+    padding: 0 8px 2px;
+  }
+  .drawerRow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 10px;
+    border: 0;
+    border-radius: var(--r);
+    background: none;
+    color: var(--text);
+    font-size: var(--fs);
+    text-align: left;
+  }
+  .drawerRow:hover,
+  .drawerRow:focus-visible {
+    background: var(--accent-soft);
+  }
+  .drawerRow .ico {
+    width: 19px;
+    height: 19px;
+    color: var(--accent);
+    flex: 0 0 auto;
+  }
+  .drawerRow .drawerLbl {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .drawerRow.danger .ico,
+  .drawerRow.danger .drawerLbl {
+    color: var(--danger, #e0a3a3);
+  }
+  .drawerDot {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border-radius: 9px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: var(--fs-sm);
+    display: grid;
+    place-items: center;
+  }
+  .drawerFoot {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--border);
+  }
+}
+
+
+/* ============================================================================
+   Phase 7e slice 4 — one seat button (mockup 10e).
+   Both corner clusters collapse into a single round button above the hand tab.
+   Its popover is anchored to THAT button and flips by available space, so the
+   "opens on the left even from the right cluster" bug has nowhere to live.
+   ========================================================================= */
+#seatBtn,
+.seatPop {
+  display: none;
+}
+@media (max-width: 900px), (pointer: coarse) {
+  #hamBar,
+  #hamBarRight {
+    display: none;
+  }
+  #seatBtn {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    right: var(--inset);
+    bottom: calc(var(--inset) + 108px);
+    z-index: 8;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--panel-solid);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    box-shadow:
+      0 0 26px -8px var(--accent),
+      0 8px 20px var(--shadow-soft);
+  }
+  #seatBtn[hidden] {
+    display: none;
+  }
+  #seatBtn .lbl {
+    display: none;
+  }
+  #seatBtn .ico {
+    width: 25px;
+    height: 25px;
+  }
+  #seatBtn.on {
+    background: var(--accent-soft);
+  }
+  .seatPop {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    position: fixed;
+    z-index: 9;
+    width: min(252px, calc(100vw - 2 * var(--inset)));
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: var(--r-lg);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--accent);
+    box-shadow: 0 18px 40px var(--shadow-soft);
+  }
+  .seatPop[hidden] {
+    display: none;
+  }
+  .seatPop .miniLabel {
+    padding: 6px 8px 3px;
+  }
+  .seatPop .drawerRow {
+    min-height: 44px;
+  }
+  .seatPop .seatRule {
+    height: 1px;
+    margin: 5px 6px;
+    background: var(--border);
+  }
+  /* The live #players node is borrowed while the popover is open. */
+  .seatPop #players {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 2px 4px 4px;
+  }
+}
+
+
+/* A button that exists only to be proxied by the drawer: never rendered itself,
+   but not `hidden`, because `hidden` is how role gating speaks. */
+.proxyOnly {
+  display: none !important;
+}
+
+/* ============================================================================
+   Phase 7e slice 5 — Room info sheet (mockup 10f).
+   The code, the share action and the dock the top bar stopped carrying.
+   ========================================================================= */
+@media (max-width: 900px), (pointer: coarse) {
+
+  .roomCard {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+    border-radius: var(--r-lg);
+    border: 1px solid var(--border);
+    background: var(--field);
+  }
+  .roomCardName {
+    font-size: var(--fs-lg);
+    color: var(--text);
+  }
+  .roomCardMeta {
+    font-size: var(--fs-sm);
+    opacity: 0.6;
+  }
+  .roomCodeRow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--r);
+    border: 1px solid var(--border);
+  }
+  .roomCodeVal {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: var(--fs-lg);
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* The dock's own sections, borrowed into the sheet, sit in the body rhythm. */
+  #roomSheet #roomInfoBody {
+    display: flex;
+    padding: 0;
+  }
+}
+
+
+/* Slice 2 follow-up: the room name is the bar's only text, so give it the slack and
+   drop the dock's collapse chevron — there is no dock to collapse at this width. */
+@media (max-width: 900px), (pointer: coarse) {
+  #roomInfoHead #railToggle {
+    display: none;
+  }
+  #roomInfoHead {
+    gap: 0;
+  }
+  #roomInfoHead #roomTitle {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #drawerBtn .lbl {
+    display: none;
+  } /* the hamburger needs no caption */
+}
+
+
+/* ============================================================================
+   Slice 2 correction — ONE contiguous bar (mockup 10a), not three floating pills.
+   #rightStack itself is the glass; its children are bare.
+   ========================================================================= */
+@media (max-width: 900px), (pointer: coarse) {
+  #rightStack {
+    top: var(--inset);
+    left: var(--inset);
+    right: var(--inset);
+    width: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 8px;
+    border-radius: var(--r-xl);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 18px var(--shadow-soft);
+  }
+  #rightStack > #drawerBtn,
+  #rightStack > #identityBar {
+    background: none;
+    backdrop-filter: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+  #rightStack > #drawerBtn {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+  }
+  #rightStack > #roomInfo {
+    order: -1;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  #rightStack > #identityBar {
+    order: 2;
+    margin-left: auto; /* timer, turn state and avatar hug the right edge */
+    gap: 8px;
+  }
+  #rightStack > #toolsDock {
+    order: 3;
+    flex: 0 0 auto;
+  }
+  #identityBar .turnPill {
+    background: none;
+  }
+}
+
+
+/* Make the bar's three zones structural rather than flex-order dependent: the name
+   column is the only one that grows, so identity can never sit on top of it. */
+@media (max-width: 900px), (pointer: coarse) {
+  #rightStack {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+  }
+  #rightStack > #drawerBtn {
+    grid-column: 1;
+  }
+  #rightStack > #roomInfo {
+    grid-column: 2;
+    overflow: visible;
+  }
+  #rightStack > #identityBar {
+    grid-column: 3;
+    justify-self: end;
+    margin-left: 0;
+  }
+  #rightStack > #toolsDock {
+    grid-column: 4;
+  }
+  #roomInfoHead #roomTitle {
+    display: block;
+    font-size: var(--fs);
+    color: var(--accent);
+  }
+}
+
+
+/* ============================================================================
+   Phase 7e slice 6 — the hand tray (mockup 10g).
+   A peeking tab that pulls up into: show faces (9b), cards, drop pair (9e).
+   Stacked, not flanked — that is what keeps 44px targets at 392px wide.
+   ========================================================================= */
+#handTab {
+  display: none;
+}
+@media (max-width: 900px), (pointer: coarse) {
+  #handRow {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    transform: none;
+    max-width: none;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 0 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    border-top: 1px solid var(--border);
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    box-shadow: 0 -14px 34px var(--shadow-soft);
+  }
+  #handTab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 2px;
+    border: 0;
+    background: none;
+    color: var(--text);
+    font-size: var(--fs);
+  }
+  #handTab[hidden] {
+    display: none;
+  }
+  /* Three card edges, fanned — the tab says "cards" before it says anything else. */
+  .handFan {
+    display: flex;
+    flex: 0 0 auto;
+  }
+  .handFan i {
+    width: 26px;
+    height: 36px;
+    border-radius: 4px;
+    background: var(--card-face, #e8e4dc);
+    box-shadow: 0 4px 10px var(--shadow-soft);
+  }
+  .handFan i + i {
+    margin-left: -16px;
+  }
+  .handTabLbl {
+    flex: 1;
+    min-width: 0;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .handCount {
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: var(--accent-soft);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-size: var(--fs-sm);
+    display: grid;
+    place-items: center;
+  }
+  #handTab .ico-caret {
+    width: 15px;
+    height: 15px;
+    opacity: 0.5;
+    transition: transform 0.18s ease;
+  }
+  #handRow.trayOpen #handTab .ico-caret {
+    transform: rotate(180deg);
+  }
+  /* Collapsed: the tab IS the hand row. */
+  #handRow:not(.trayOpen) #hand,
+  #handRow:not(.trayOpen) #showStrip,
+  #handRow:not(.trayOpen) #dropFlank,
+  #handRow #showBtn {
+    display: none !important;
+  }
+  /* Open: show faces, then cards, then the drop pair — top to bottom. */
+  #handRow.trayOpen #showStrip {
+    position: static;
+    left: auto;
+    transform: none;
+    order: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  #handRow.trayOpen #hand {
+    order: 2;
+    display: flex;
+    justify-content: center;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    max-width: none;
+    padding: 4px 0;
+    --card-w: 52px;
+  }
+  #handRow.trayOpen #dropFlank {
+    order: 3;
+    display: flex;
+    gap: 8px;
+  }
+  #handRow.trayOpen #dropFlank button {
+    flex: 1;
+    justify-content: center;
+    min-height: 44px;
+  }
+  #handRow.trayOpen #dropFlank button .lbl {
+    display: inline;
+  } /* room for words once it is a full-width pair */
+  /* The seat button rides above whichever height the tray currently is. */
+  body.trayOpen #seatBtn {
+    bottom: calc(var(--inset) + 232px);
+  }
+}
+
+
+/* ============================================================================
+   Phase 7e slice 7 — ⊕ and the radial menu (mockup 10j).
+   One fan primitive: the FAB uses it for table actions, and long-press on a piece
+   uses it instead of a vertical list, so touch has one context-menu shape.
+   ========================================================================= */
+#fabBtn,
+#radial {
+  display: none;
+}
+@media (max-width: 900px), (pointer: coarse) {
+  #fabBtn {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    right: var(--inset);
+    bottom: calc(var(--inset) + 42px);
+    z-index: 8;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    border-radius: 50%;
+    background: var(--panel-solid);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    box-shadow:
+      0 0 26px -8px var(--accent),
+      0 8px 20px var(--shadow-soft);
+    transition: transform 0.18s ease;
+  }
+  #fabBtn[hidden] {
+    display: none;
+  }
+  #fabBtn .lbl {
+    display: none;
+  }
+  #fabBtn .ico {
+    width: 25px;
+    height: 25px;
+  }
+  #fabBtn.on {
+    transform: rotate(45deg);
+    background: var(--accent-soft);
+  }
+  body.trayOpen #fabBtn {
+    bottom: calc(var(--inset) + 166px);
+  }
+}
+/* The radial itself works at any pointer type — long-press exists on desktop too. */
+#radial {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+}
+#radial[hidden] {
+  display: none;
+}
+#radial.on {
+  display: block;
+}
+#radial .radialScrim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.28);
+}
+.radialItem {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transform: translate(-50%, -50%) scale(0.7);
+  opacity: 0;
+  transition:
+    transform 0.16s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.16s ease;
+}
+#radial.on .radialItem {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
+}
+.radialItem.flip {
+  flex-direction: row-reverse;
+}
+.radialDot {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  box-shadow: 0 8px 20px var(--shadow-soft);
+}
+.radialItem.danger .radialDot {
+  border-color: var(--danger, #e0a3a3);
+  color: var(--danger, #e0a3a3);
+}
+.radialDot .ico {
+  width: 21px;
+  height: 21px;
+}
+.radialLbl {
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+  background: var(--panel);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--border);
+  font-size: var(--fs-sm);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+
+/* ============================================================================
+   Fix: #rightStack must NOT carry backdrop-filter.
+   #toolsDock — and with it #regionTL / #regionTR — lives inside #rightStack, and a
+   filtered ancestor becomes the containing block for position:fixed descendants, so
+   the region sheets were being positioned against the top bar instead of the viewport
+   (they opened at the top of the screen, cut off). The glass moves to a pseudo-element,
+   which paints the same and contains nothing.
+   ========================================================================= */
+@media (max-width: 900px), (pointer: coarse) {
+  #rightStack {
+    background: none;
+    backdrop-filter: none;
+    border: 0;
+    box-shadow: none;
+    isolation: isolate;
+  }
+  #rightStack::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: var(--r-xl);
+    background: var(--panel);
+    backdrop-filter: var(--blur);
+    border: 1px solid var(--border);
+    box-shadow: 0 6px 18px var(--shadow-soft);
+  }
+  #rightStack > #toolsDock {
+    position: static;
+  }
+}
+
+
+/* The radial item is a bare button — the round dot is the only chrome. Global button
+   styling (background, border, padding, min-width) was drawing a box around each icon. */
+#radial .radialItem {
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+#radial .radialItem:hover,
+#radial .radialItem:focus-visible {
+  background: none;
+}
+#radial .radialItem:focus-visible .radialDot {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+
+/* ============================================================================
+   Phase 7e slice 8 — the library on a phone (mockup 10h).
+   Portrait: the modal fills the screen and the grid goes single-column-ish.
+   Landscape was the reported break — three stacked header rows (title+search,
+   source, kind) over 390px-wide cards left barely one row of assets visible.
+   ========================================================================= */
+@media (max-width: 900px), (pointer: coarse) {
+  #libraryModal .modalCard.libraryCard.lib2Card {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+  #libraryModal .libraryCard:has(.libSticky) .libPane {
+    padding: 10px 12px 14px;
+  }
+  #libraryModal .libraryCard .libSticky {
+    gap: 8px;
+    padding: 10px 12px 8px;
+  }
+  #libraryModal .libList {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+    gap: 8px;
+  }
+}
+/* Landscape phones: one header row, four across. Header 88px → 44px. */
+@media (orientation: landscape) and (max-height: 560px) {
+  #libraryModal .libraryCard .libSticky {
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 6px 10px;
+    overflow-x: auto;
+  }
+  #libraryModal .libSticky .panel-head {
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+  #libraryModal .libSticky .panel-head b {
+    font-size: var(--fs);
+  }
+  #libraryModal .libSticky .panel-head .close-x {
+    order: 9; /* stays last in the row, not pushed by margin-left:auto */
+    margin-left: 0;
+  }
+  /* Search moves up beside the title; source + kind share the remaining width. */
+  #libraryModal .libControls {
+    order: 2;
+    flex: 0 0 auto;
+    margin: 0;
+    padding-top: 0;
+    border-top: 0;
+  }
+  #libraryModal .libSearch {
+    width: 140px;
+  }
+  #libraryModal .libTabs {
+    order: 3;
+    flex: 1 1 auto;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 2px;
+  }
+  #libraryModal .libTab {
+    white-space: nowrap;
+    padding: 4px 8px;
+    font-size: var(--fs-sm);
+  }
+  #libraryModal .modalCard.libraryCard.lib2Card {
+    max-height: calc(100vh - 12px);
+  }
+  #libraryModal .libraryCard:has(.libSticky) .libPane {
+    padding: 8px 10px 10px;
+  }
+  /* List-shaped cards, four across: thumb + name + source, controls on one line. */
+  #libraryModal .libList {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+  }
+  #libraryModal .libCard {
+    padding: 6px;
+    gap: 6px;
+  }
+  #libraryModal .libPreview {
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+  }
+  #libraryModal .libCard .libMeta b {
+    font-size: var(--fs-sm);
+  }
+  #libraryModal .libCard .cardCtrls {
+    gap: 4px;
+  }
+  #libraryModal .libCard .cardCtrls .swatchRow {
+    display: none;
+  } /* colour choice waits for portrait — the row cannot hold it at this height */
+}
+
+
+/* ============================================================================
+   Phase 7g — Add to Library builder (mockup 5b).
+   Same shell as the Library (7c) so the two modals read as one family: sticky
+   header + one tab grammar, drop targets that show what they hold, the
+   conditional geometry rows owned by the Fit-to-image chip, and a stated
+   destination beside Save / Save + Spawn.
+   Every id and the input-inside-.uploadSq nesting are untouched — FILLERS and
+   wireUploadSq read the form by id, so the shell moved and the fields did not.
+   ========================================================================= */
+
+/* ---- shell: header sticks, the pane scrolls (mirrors #libraryModal) ------ */
+#addModal .modalCard.libraryCard.addCard {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  max-height: min(680px, calc(100vh - 56px));
+  overflow: hidden;
+}
+#addModal .libraryCard .libSticky {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 14px 18px 12px;
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+#addModal .libSticky .panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: flex-start;
+}
+#addModal .libSticky .panel-head b#addTitle {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+#addModal .libSticky .panel-head .close-x {
+  margin-left: auto;
+}
+#addModal .libraryCard:has(.libSticky) .libPane {
+  padding: 16px 18px 18px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* ---- captions: the dashed --- label --- decoration goes ----------------- */
+#addModal .addCol > label::before,
+#addModal .addCol > label::after {
+  content: '';
+}
+#addModal .addCol > label,
+#addModal .sqCap {
+  font-size: var(--fs-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  opacity: 0.9;
+  margin: 0;
+}
+#addModal .sqCap {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+#addModal .sqField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+#addModal .sqOpt {
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+  opacity: 0.45;
+}
+#addModal .sqCount {
+  margin-left: auto;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 9.5px;
+  letter-spacing: 0.05em;
+  color: var(--text);
+  opacity: 0.7;
+}
+
+/* ---- fronts tile: a real gallery + count, not the first file's preview --- */
+#addModal .sqFronts {
+  width: 100%;
+  display: block;
+  padding: 8px;
+  min-height: 92px;
+  max-height: 188px;
+  overflow-y: auto;
+  background-image: none !important;
+}
+#addModal .sqFronts:not(.filled) {
+  display: grid;
+  place-items: center;
+}
+#addModal .sqFronts.filled .sqLabel {
+  display: none;
+}
+#addModal .sqGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+#addModal .sqGrid > i {
+  aspect-ratio: 3 / 4;
+  border-radius: 5px;
+  background: var(--field) center/cover no-repeat;
+}
+#addModal .sqGrid > i.more {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  background: none;
+  font: 500 10px/1 var(--font);
+  font-style: normal;
+  color: var(--text);
+  opacity: 0.55;
+}
+
+/* ---- the conditional rows belong to Fit to image ------------------------ */
+#addModal .fitChip {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+}
+#addModal .fitChip .chipNote {
+  font-weight: 400;
+  font-size: var(--fs-sm);
+  color: var(--text);
+  opacity: 0.5;
+}
+#addModal .fitGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 2px 0 0 11px;
+  padding-left: 15px;
+  border-left: 1px solid var(--accent-soft);
+}
+/* nothing shown = the toggle is off; the group leaves with its rows */
+#addModal .fitGroup:not(:has(> :not([hidden]))) {
+  display: none;
+}
+#addModal .fitGroup .addColorRow > span:first-child {
+  flex: 0 0 68px;
+  opacity: 0.65;
+}
+#addModal .fitGroup #adImgThick {
+  flex: 1;
+  max-width: 220px;
+}
+#addModal .fitGroup #adImgThickVal {
+  color: var(--accent);
+  opacity: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the pane's foot: destination, then the action pair ----------------- */
+#addModal .saveFoot {
+  margin-top: auto;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+#addModal .addSplit .addCol .saveFoot .row {
+  margin-top: 0;
+  justify-content: flex-end;
+}
+#addModal .destNote {
+  margin: 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+  color: color-mix(in srgb, var(--text) 48%, transparent);
+}
+#addModal .destNote b {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+}
+#addModal [data-pane='sky'] .destNote {
+  margin-top: 8px;
+}
+
+/* ---- touch: full-viewport card, one column, tabs scroll ----------------- */
+@media (max-width: 900px), (pointer: coarse) {
+  #addModal .modalCard.libraryCard.addCard {
+    width: calc(100vw - 16px);
+    max-width: none;
+    height: calc(100vh - 16px);
+    max-height: calc(100vh - 16px);
+  }
+  #addModal .libraryCard .libSticky {
+    gap: 8px;
+    padding: 10px 12px 8px;
+  }
+  #addModal .libSticky .libTabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  #addModal .libraryCard:has(.libSticky) .libPane {
+    padding: 12px;
+    min-height: 0;
+  }
+  #addModal .libPane > .addSplit,
+  #addModal .libPane > .addDeckCols {
+    flex-direction: column;
+    gap: 14px;
+  }
+  #addModal .addSplit > .addPreview {
+    flex: 0 0 auto;
+    flex-direction: row;
+    align-items: flex-start;
+    align-self: stretch;
+  }
+  #addModal .addSplit > .addPreview > .sqField {
+    flex: 1;
+    min-width: 0;
+  }
+  #addModal [data-pane='imgdecks'] .addPreview .uploadSq,
+  #addModal [data-pane='txtdecks'] .addPreview .cardPrev {
+    width: 100%;
+  }
+  #addModal .addCol input[type='text'],
+  #addModal .addCol textarea {
+    max-width: none;
+  }
+  #addModal .saveFoot .row button {
+    flex: 1;
+  }
+}
+/* Landscape phones: the preview column comes back beside the form — height, not
+   width, is the constraint (same trigger as the library in 7e slice 8). */
+@media (orientation: landscape) and (max-height: 560px) {
+  #addModal .libPane > .addSplit {
+    flex-direction: row;
+  }
+  #addModal .addSplit > .addPreview {
+    flex: 0 0 34%;
+    flex-direction: column;
+  }
+  #addModal .libraryCard .libSticky {
+    padding: 8px 10px 6px;
+    gap: 6px;
+  }
+}
+
+
+/* ============================================================================
+   The 6a window treatment, generalized to the whole modal family.
+   The Library was the only modal wearing it; Add to Library (7g), Room Settings
+   and Settings share the same anatomy (.libraryCard > .libSticky > .libPane), so
+   the treatment moves onto that anatomy instead of onto one id. Per-modal widths
+   and backgrounds are left alone — only the chrome is shared.
+   ========================================================================= */
+
+/* ---- the window --------------------------------------------------------- */
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .modalCard.libraryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 0;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 24px 60px rgba(0, 0, 0, 0.65);
+  max-height: min(84vh, 900px);
+  overflow: hidden; /* the pane scrolls, the shell does not */
+}
+
+/* ---- sticky header: title row over the tab row ------------------------- */
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libraryCard .libSticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  padding: 14px 18px 12px;
+  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
+  border-bottom: 1px solid var(--border);
+}
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libSticky .panel-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-start;
+  padding: 0;
+  border: none;
+}
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libSticky .panel-head > b {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libSticky .panel-head .close-x {
+  margin-left: auto;
+}
+
+/* ---- tabs: pill chips, no underline rail -------------------------------- */
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTabs {
+  gap: 3px;
+  border-bottom: none;
+  flex-wrap: wrap;
+}
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTab {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  margin-bottom: 0;
+  padding: 6px 11px;
+  font-size: var(--fs-sm);
+  opacity: 0.7;
+}
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTab:hover {
+  background: var(--accent-soft);
+  opacity: 1;
+}
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTab.on {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  color: var(--accent);
+  opacity: 1;
+}
+
+/* ---- the pane ----------------------------------------------------------- */
+:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal)
+  .libraryCard:has(.libSticky)
+  .libPane {
+  padding: 14px 18px 18px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1;
+}
+
+/* Settings + Room Settings: the section labels were centred for a narrow pop-out.
+   In the window they read as headings, so they align left like every other pane
+   caption, and the accent-caption grammar is the one the tile captions use. */
+:is(#roomSettingsModal, #settingsModal) .secLabel,
+:is(#roomSettingsModal, #settingsModal) .calibLabel,
+:is(#roomSettingsModal, #settingsModal) .showLabel {
+  text-align: left;
+}
+:is(#roomSettingsModal, #settingsModal) .showLabel > b {
+  color: var(--accent);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+:is(#roomSettingsModal, #settingsModal) .libPane .tableBody {
+  gap: 10px;
+}
+
+/* The Add builder's own pane padding + shell height stay as 7g set them. */
+#addModal .modalCard.libraryCard.addCard {
+  max-height: min(680px, calc(100vh - 56px));
+}
+#addModal .libraryCard:has(.libSticky) .libPane {
+  padding: 16px 18px 18px;
+}
+
+
+/* ============================================================================
+   Post-7e: the seat button and the ⊕ fan are the DEFAULT, not the touch layout.
+   Slices 4 and 7 were gated behind the sheet bound; the two bottom hamburger
+   bars are retired at every pointer type, and the two round buttons carry their
+   contents on the right edge. The bars stay in the DOM — the seat popover and the
+   fan proxy real buttons out of them (proxyGated reads classes, not visibility).
+   ========================================================================= */
+#hamBar,
+#hamBarRight {
+  display: none;
+}
+#seatBtn,
+#fabBtn {
+  display: grid;
+  place-items: center;
+  position: fixed;
+  right: var(--inset);
+  z-index: 8;
+  width: 58px;
+  height: 58px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  box-shadow:
+    0 0 26px -8px var(--accent),
+    0 8px 20px var(--shadow-soft);
+}
+#seatBtn {
+  bottom: calc(var(--inset) + 108px);
+}
+#fabBtn {
+  bottom: calc(var(--inset) + 42px);
+  transition: transform 0.18s ease;
+}
+#seatBtn[hidden],
+#fabBtn[hidden] {
+  display: none;
+}
+#seatBtn .lbl,
+#fabBtn .lbl {
+  display: none;
+}
+#seatBtn .ico,
+#fabBtn .ico {
+  width: 25px;
+  height: 25px;
+}
+#seatBtn.on {
+  background: var(--accent-soft);
+}
+#fabBtn.on {
+  transform: rotate(45deg);
+  background: var(--accent-soft);
+}
+.seatPop {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: fixed;
+  z-index: 9;
+  width: min(252px, calc(100vw - 2 * var(--inset)));
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: var(--r-lg);
+  background: var(--panel);
+  backdrop-filter: var(--blur);
+  border: 1px solid var(--accent);
+  box-shadow: 0 18px 40px var(--shadow-soft);
+  color: var(--text); /* never inherit — the roster is borrowed from the dock */
+}
+.seatPop[hidden] {
+  display: none;
+}
+.seatPop .miniLabel {
+  padding: 6px 8px 3px;
+}
+.seatPop .drawerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--text);
+  text-align: left;
+}
+.seatPop .drawerRow:hover,
+.seatPop .drawerRow:focus-visible {
+  background: var(--accent-soft);
+}
+.seatPop .drawerRow .ico {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.seatPop .drawerRow .drawerLbl {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.seatPop .seatRule {
+  height: 1px;
+  margin: 5px 6px;
+  background: var(--border);
+}
+/* The live #players node is borrowed while the popover is open — it arrives with the
+   dock's rules and nothing else, so state the roster's own colour here. */
+.seatPop #players {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 2px 4px 4px;
+  background: none;
+  color: var(--text);
+}
+.seatPop #players .prow,
+.seatPop #players .prow > span,
+.seatPop #players > * {
+  color: var(--text);
+}
+.seatPop #players .prow .rolebadge {
+  color: var(--accent);
+}
+@media (pointer: coarse) {
+  .seatPop .drawerRow {
+    min-height: 44px;
+  }
+}
+
+/* ============================================================================
+   Mobile modal reach: a centred card taller than the VISUAL viewport (100vh
+   excludes the URL bar) pushed its own header — and the ✕ — above the top of the
+   screen. The overlay pins to the top instead, and the cap is dvh. The library's
+   portrait cards also go list-shaped: a 240px tile column made each card tall
+   enough that a few of them outran the screen.
+   ========================================================================= */
+@media (max-width: 900px), (pointer: coarse) {
+  #libraryModal,
+  #addModal,
+  #roomSettingsModal,
+  #settingsModal,
+  #controlsModal {
+    align-items: flex-start;
+    padding: 8px 0;
+    overflow-y: auto;
+  }
+  #libraryModal .modalCard.libraryCard.lib2Card,
+  #addModal .modalCard.libraryCard.addCard {
+    max-height: calc(100dvh - 16px);
+  }
+  :is(#roomSettingsModal, #settingsModal, #controlsModal) .modalCard {
+    max-height: calc(100dvh - 16px);
+  }
+  #libraryModal .libList {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 172px), 1fr));
+    gap: 8px;
+  }
+  #libraryModal .libCard {
+    padding: 7px;
+    gap: 8px;
+  }
+  #libraryModal .libPreview {
+    width: 46px;
+    height: 46px;
+    flex: 0 0 auto;
+  }
+  #libraryModal .libCard .libMeta b {
+    font-size: var(--fs-sm);
+  }
+  #libraryModal .libCard .cardCtrls {
+    gap: 5px;
+  }
+}
+
+
+/* A data-icon naming a symbol the sprite does not carry used to render an empty box.
+   applyIcons now flags it, so a typo (or a symbol pasted without its id="i-name")
+   shows as a dashed placeholder instead of nothing. */
+.ico-missing {
+  outline: 1px dashed var(--danger);
+  outline-offset: 1px;
+  opacity: 0.6;
+}
+
+
+/* ============================================================================
+   Scale & Grid: the label column was fixed at 78px and nowrap, so "Objects
+   Snap-To?" simply painted over the control beside it. The column now wraps to
+   two lines at a slightly wider fixed width, the rows align to the top of it,
+   and the pane's own controls run tighter than table-wide chrome so a 480px
+   window holds a label + a two-chip row without collision.
+   ========================================================================= */
+:is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow {
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+  flex-wrap: nowrap;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > label {
+  flex: 0 0 88px;
+  width: 88px;
+  white-space: normal;
+  overflow-wrap: break-word;
+  line-height: 1.25;
+  font-size: var(--fs-sm);
+  opacity: 0.8;
+}
+/* Chips inside the pane: label-sized, not toolbar-sized. */
+:is(#roomSettingsModal, #settingsModal) .tableBody .chipRow {
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .chipRow .chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 5px 9px;
+  font-size: var(--fs-sm);
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .chipRow .chip .lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .chip .ico {
+  width: var(--fs-sm-base);
+  height: var(--fs-sm-base);
+}
+/* Number fields: room for a value, not for the whole row. */
+:is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > input[type='number'] {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 110px;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > .stepper {
+  flex: 1 1 0;
+  min-width: 64px;
+  max-width: 128px;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > input[type='text'] {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 130px;
+}
+/* The calibrate prompt wraps under the controls, aligned to the control column. */
+:is(#roomSettingsModal, #settingsModal) .tableBody .calibRow {
+  flex-wrap: wrap;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .calibHint {
+  flex: 1 1 100%;
+  margin-left: 98px;
+  margin-top: 2px;
+  font-size: var(--fs-sm);
+  opacity: 0.6;
+}
+:is(#roomSettingsModal, #settingsModal) .tableBody .dimX,
+:is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > .muted {
+  flex: 0 0 auto;
+  opacity: 0.6;
 }

@@ -1,4 +1,4 @@
-import { applyIcons, setIcon, initTip } from './icons.js';
+import { applyIcons, setIcon, initTip, overflowMenu } from './icons.js';
 // landing.js — quick-join (default) + login/account + lobby. Talks to the /auth
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.
@@ -271,35 +271,54 @@ function renderRoomList(rooms) {
     const li = document.createElement('li');
     li.className = 'roomRow';
     const info = document.createElement('div');
+    info.className = 'roomInfoCol';
     const name = document.createElement('b');
     name.textContent = room.name;
+    // Code + role on their own line under the name (UI_Redesign 7f) — the single run of
+    // middots made the name and its metadata read as one string.
     const meta = document.createElement('span');
-    meta.className = 'muted';
-    meta.textContent = ` \u00b7 ${room.code} \u00b7 ${room.role}${room.status === 'pending' ? ' \u2014 awaiting approval' : ''}`;
+    meta.className = 'muted roomMeta';
+    const code = document.createElement('code');
+    code.textContent = room.code;
+    meta.append(code, document.createTextNode(' \u00b7 ' + room.role));
     info.append(name, meta);
+    if (room.status === 'pending') {
+      // watchLobby() is holding a socket for this room; say so, rather than a static
+      // "awaiting approval" that looks like nothing is happening.
+      const wait = document.createElement('span');
+      wait.className = 'roomWaiting';
+      wait.innerHTML = '<i></i>waiting for a GM to admit you';
+      info.append(wait);
+    }
     const actions = document.createElement('div');
     actions.className = 'actions end';
     const enter = mkBtn('Enter', () => enterRoom(room.code));
     enter.disabled = room.status === 'pending';
     actions.appendChild(enter);
     if (room.role === 'owner') {
-      // owner room management
-      actions.appendChild(mkBtn('Rename', () => renameRoom(room)));
-      {
-        const appr = document.createElement('button');
-        appr.type = 'button';
-        const gated = room.requireApproval;
-        appr.dataset.icon = gated ? 'shield-check' : 'shield-x';
-        appr.innerHTML = '<span class="lbl">' + (gated ? 'Gated' : 'Open') + '</span>';
-        appr.setAttribute('aria-pressed', gated ? 'true' : 'false');
-        appr.setAttribute(
-          'aria-label',
-          gated ? 'Gated \u2014 approval required' : 'Open \u2014 anyone can join',
-        );
-        appr.onclick = () => togglePolicy(room);
-        actions.appendChild(appr);
-      }
-      actions.appendChild(mkBtn('Close', () => closeRoom(room)));
+      // Owner room management behind one trigger (UI_Redesign 7f): Enter stays the only
+      // button on the row, so the row's width never depends on how many owner actions
+      // there are. Popover on desktop, bottom sheet on touch — same items.
+      const gated = room.requireApproval;
+      actions.appendChild(
+        overflowMenu({ name: room.name, meta: room.code + ' \u00b7 owner' }, [
+          { label: 'Rename', icon: 'cursor-text', fn: () => renameRoom(room) },
+          {
+            label: gated ? 'Open to anyone' : 'Require approval',
+            icon: gated ? 'shield-x' : 'shield-check',
+            note: gated ? 'gated now' : 'open now', // state the current state, not just the verb
+            fn: () => togglePolicy(room),
+          },
+          {
+            label: 'Close room',
+            icon: 'trash',
+            cls: 'danger',
+            confirm:
+              'Anyone at the table is sent back to the lobby, and no one can join.',
+            fn: () => closeRoom(room),
+          },
+        ]),
+      );
     }
     li.append(info, actions);
     list.appendChild(li);
@@ -330,7 +349,9 @@ async function togglePolicy(room) {
   }
 }
 async function closeRoom(room) {
+  // The touch sheet confirms inline; the desktop menu still asks here.
   if (
+    !matchMedia('(pointer: coarse)').matches &&
     !confirm(
       `Close "${room.name}"? Anyone at the table is sent back to the lobby, and no one can join.`,
     )

@@ -53,6 +53,7 @@ const ICONS = [
   'armchair',
   'cards',
   'arrow-bar-down',
+  'arrow-bar-up',
   'hand-move',
   'tools',
   // Measure / selection / tray / rail / hold
@@ -70,7 +71,9 @@ const ICONS = [
   'package-off',
   'u-turn-left',
   'square-chevron-left',
+  'chevron-left',
   'square-chevron-right',
+  'chevron-right',
   'color-swatch',
   'rotate-2',
   'rotate-clockwise-2',
@@ -133,7 +136,9 @@ const ICONS = [
   // Rail / hand
   'chevrons-right',
   'square-chevron-down',
+  'chevron-down',
   'square-chevron-up',
+  'chevron-up',
   // Lobby + admin
   'user-shield',
   'login',
@@ -142,6 +147,7 @@ const ICONS = [
   'shield-x',
   'door-enter',
   'cursor-text',
+  'search',
   'door-off',
   'edit',
   'arrow-back-up',
@@ -174,11 +180,19 @@ if (dupes.length) {
 const symbols = await Promise.all(ICONS.map(fetchSymbol));
 const sprite = `<svg class="icon-sprite" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">${symbols.join('')}</svg>`;
 
+// Prettier reformats the pages after a build, so the existing sprite tag arrives as
+// `<svg\n  class="icon-sprite"\n  ...>` — a regex anchored on `<svg class="icon-sprite"`
+// stopped matching, .replace() became a silent no-op, and every icon added here since
+// then never reached a page. Match the tag whatever the formatting, and fail loudly
+// rather than writing the file back unchanged.
+const SPRITE_RE = /<svg[^>]*class="icon-sprite"[^>]*>[\s\S]*?<\/svg>/;
 for (const page of PAGES) {
-  let html = await readFile(page, 'utf8');
-  html = html.includes('class="icon-sprite"')
-    ? html.replace(/<svg class="icon-sprite"[\s\S]*?<\/svg>/, () => sprite)
-    : html.replace(/(<body[^>]*>)/, (m) => `${m}\n${sprite}`);
-  await writeFile(page, html);
+  const html = await readFile(page, 'utf8');
+  let out;
+  if (SPRITE_RE.test(html)) out = html.replace(SPRITE_RE, () => sprite);
+  else if (/<body[^>]*>/.test(html)) out = html.replace(/(<body[^>]*>)/, (m) => `${m}\n${sprite}`);
+  else throw new Error(`${page}: no sprite and no <body> to insert one`);
+  if (out === html) throw new Error(`${page}: sprite unchanged — the page was not updated`);
+  await writeFile(page, out);
 }
 console.log(`Built sprite: ${ICONS.length} icons \u2192 ${PAGES.length} pages`);

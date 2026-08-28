@@ -13,6 +13,10 @@
       aria-hidden="true"
       style="position: absolute; width: 0; height: 0; overflow: hidden"
     >
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0" />
+        <path d="M21 21l-6 -6" />
+      </symbol>
       <symbol id="i-notes" viewBox="0 0 24 24">
         <path
           d="M5 5a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2l0 -14"
@@ -620,6 +624,11 @@
         <path d="M15 18l3 3l3 -3" />
         <path d="M15 6l3 -3l3 3" />
       </symbol>
+      <symbol id="i-menu-2" viewBox="0 0 24 24">
+        <path d="M4 6l16 0" />
+        <path d="M4 12l16 0" />
+        <path d="M4 18l16 0" />
+      </symbol>
       <symbol id="i-dots" viewBox="0 0 24 24">
         <path d="M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
         <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0" />
@@ -771,6 +780,18 @@
         <path d="M9 14l-4 -4l4 -4" />
         <path d="M5 10h11a4 4 0 1 1 0 8h-1" />
       </symbol>
+      <symbol id="i-info-circle" viewBox="0 0 24 24">
+        <path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0" />
+        <path d="M12 9h.01" />
+        <path d="M11 12h1v4h1" />
+      </symbol>
+      <symbol id="i-share" viewBox="0 0 24 24">
+        <path d="M6 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+        <path d="M18 6m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+        <path d="M18 18m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" />
+        <path d="M8.7 10.7l6.6 -3.4" />
+        <path d="M8.7 13.3l6.6 3.4" />
+      </symbol>
       <symbol id="i-copy" viewBox="0 0 24 24">
         <path
           d="M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667l0 -8.666"
@@ -831,34 +852,52 @@
       <button class="heightDown" data-icon="arrow-narrow-down-dashed" title="Lower"></button>
     </div>
     <div id="ui">
+      <div class="uiRow1">
       <button id="lobbyBtn" data-icon="home-move"><span class="lbl">Lobby</span></button>
-      <button id="settingsBtn" data-icon="settings"><span class="lbl">Settings</span></button>
-      <button id="controlsBtn" data-icon="help"><span class="lbl">How to Play</span></button>
+      <button id="lib2Btn" data-icon="books"><span class="lbl">Library</span></button>
       <span class="menu">
         <button id="roomBtn" data-icon="user-cog"><span class="lbl">GM Controls</span></button>
         <div class="grp" id="roomGrp" hidden>
-          <button id="roomScene" data-icon="movie"><span class="lbl">Scenes</span></button>
-          <button id="roomSaveState" data-icon="device-floppy">
+          <button id="roomScene" class="gm-only" data-icon="movie">
+            <span class="lbl">Scenes</span>
+          </button>
+          <button id="roomSaveState" class="gm-only" data-icon="device-floppy">
             <span class="lbl">Save Table</span>
           </button>
-          <button id="roomSettings" data-icon="brand-airtable">
+          <button id="roomSettings" class="gm-only" data-icon="brand-airtable">
             <span class="lbl">Room Settings</span>
           </button>
-          <button id="roomReset" class="danger" data-icon="trash">
+          <div class="grpLabel admin-only">Admin</div>
+          <button id="addBtn" class="admin-only" data-icon="library-plus">
+            <span class="lbl">Add to Library</span>
+          </button>
+          <button id="sceneSaveBtn" class="admin-only" data-icon="movie">
+            <span class="lbl">Save Scene</span>
+          </button>
+          <button id="roomReset" class="gm-only danger" data-icon="trash">
             <span class="lbl">Reset</span>
           </button>
         </div>
       </span>
-      <button id="lib2Btn" data-icon="books"><span class="lbl">Library</span></button>
-      <button id="addBtn" class="admin-only" data-icon="library-plus">
-        <span class="lbl">Add to Library</span>
-      </button>
-      <button id="sceneSaveBtn" class="admin-only" data-icon="movie">
-        <span class="lbl">Save Scene</span>
-      </button>
+      <span class="menu">
+        <button id="moreBtn" data-icon="dots" aria-label="More">
+          <span class="lbl">More</span>
+        </button>
+        <div class="grp" id="moreGrp" hidden>
+          <button id="settingsBtn" data-icon="settings"><span class="lbl">Settings</span></button>
+          <button id="controlsBtn" data-icon="help">
+            <span class="lbl">How to Play</span>
+          </button>
+        </div>
+      </span>
+      </div>
       <div class="uiRow2">
-        <button id="chatBtn" data-icon="message-dots"><span class="lbl">Chat</span></button>
-        <button id="notesBtn" data-icon="notes"><span class="lbl">Notes</span></button>
+        <button id="chatBtn" class="icon-only" data-icon="message-dots">
+          <span class="lbl">Chat</span>
+        </button>
+        <button id="notesBtn" class="icon-only" data-icon="notes">
+          <span class="lbl">Notes</span>
+        </button>
       </div>
     </div>
     <div id="inspectHint" class="panel" hidden>Drag to rotate · click or Esc to close</div>
@@ -984,36 +1023,57 @@
       </div>
     </div>
     <div id="handRow">
+      <button id="handTab" type="button" aria-expanded="false" aria-controls="hand" hidden>
+        <span class="handFan" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="handTabLbl">Your hand</span>
+        <span class="handCount">0</span>
+        <svg class="ico ico-caret" aria-hidden="true"><use href="#i-arrow-up-bar"></use></svg>
+      </button>
+      <div id="showStrip" hidden>
+        <div id="showStripChips"></div>
+        <div id="showStatus"></div>
+      </div>
       <button id="showBtn" class="handFlank" data-icon="cards" title="Show cards to others" hidden>
         <span class="lbl">Show</span>
       </button>
       <div id="hand" class="panel"></div>
-      <button
-        id="dropBtn"
-        class="handFlank"
-        data-icon="arrow-bar-down"
-        title="Drop your hand"
-        hidden
-      >
-        <span class="lbl">Drop</span>
-      </button>
+      <div id="dropFlank" class="handFlank dropSplit" hidden>
+        <button id="dropDown" data-icon="arrow-bar-down" title="Lay your hand face-down">
+          <span class="lbl">Face-down</span>
+        </button>
+        <button id="dropUp" data-icon="arrow-up-bar" title="Lay your hand face-up">
+          <span class="lbl">Face-up</span>
+        </button>
+      </div>
     </div>
+    <div id="toast" hidden></div>
+    <div id="drawer" class="sheet" role="dialog" aria-label="Table menu" hidden></div>
+    <div id="roomSheet" class="sheet" role="dialog" aria-label="Room info" hidden></div>
+    <button id="fabBtn" data-icon="plus" aria-label="Table actions" aria-expanded="false" hidden>
+      <span class="lbl">Actions</span>
+    </button>
+    <div id="radial" hidden></div>
+    <button id="roomInfoBtn" data-icon="info-circle" class="proxyOnly"><span class="lbl">Room info</span></button>
     <div id="rightStack">
+      <button id="drawerBtn" data-icon="menu-2" aria-label="Table menu" aria-expanded="false">
+        <span class="lbl">Menu</span>
+      </button>
+      <div id="identityBar">
+        <button
+          id="turnBtn"
+          class="turnPill"
+          data-icon="chevrons-right"
+          title="Advance the turn"
+          hidden
+        >
+          <span class="lbl" id="turnMini"></span>
+        </button>
+        <span id="timerMini" class="timerMini" hidden></span>
+        <span id="myAv" class="mav editable" title="Change your avatar"></span>
+        <span id="myName" class="myName"></span>
+        <input id="avatarInput" type="file" accept="image/*" hidden />
+      </div>
       <div id="roomInfo">
-        <div id="identityBar">
-          <button
-            id="turnBtn"
-            class="turnPill"
-            data-icon="chevrons-right"
-            title="Advance the turn"
-            hidden
-          >
-            <span class="lbl" id="turnMini"></span>
-          </button>
-          <span id="myAv" class="mav editable" title="Change your avatar"></span>
-          <span id="myName" class="myName"></span>
-          <input id="avatarInput" type="file" accept="image/*" hidden />
-        </div>
         <div id="roomInfoHead">
           <button id="railToggle" title="Collapse"></button><span id="roomTitle"></span
           ><span id="roomCode" title="Click to copy" hidden></span>
@@ -1092,13 +1152,6 @@
             </div>
           </div>
         </div>
-        <div id="tracksPanel" class="panel popout" hidden>
-          <div id="tracksHead" class="panel-head">
-            <b>Pick a Track</b
-            ><button type="button" id="tracksClose" class="close-x" aria-label="Close">✕</button>
-          </div>
-          <div id="tracksBody"></div>
-        </div>
         <div id="regionTL" class="region" hidden>
           <div class="pane" data-pane="chat">
             <div class="regionHead">
@@ -1121,10 +1174,10 @@
               <b>Private Notes</b
               ><button type="button" class="close-x regionClose" aria-label="Close">✕</button>
             </div>
-            <textarea
-              id="notesText"
-              placeholder="Only you can see these. Cleared when you leave the room."
-            ></textarea>
+            <div class="paneNote" data-icon="eye-off">
+              Only you can see these · cleared when you leave
+            </div>
+            <textarea id="notesText" placeholder="Type anything…"></textarea>
           </div>
         </div>
         <div id="clusterTR" class="cluster-tr">
@@ -1175,8 +1228,9 @@
               </div>
               <div id="nowPlaying" class="muted"></div>
               <button id="tracksLink" class="chip" data-icon="movie">
-                <span class="lbl">Pick Track</span>
+                <span class="lbl">Tracks</span>
               </button>
+              <div id="tracksBody" class="trackList" hidden></div>
             </div>
           </div>
           <div class="pane" data-pane="measure">
@@ -1198,11 +1252,7 @@
                 <span class="lbl">Line</span>
               </button>
             </div>
-            <p class="muted">
-              Pick a shape, then drag on the table: <b>ruler</b> spans a distance, <b>circle</b> a
-              radius from where you press, <b>cone</b> a range along the drag, <b>line</b> a lane.
-              Set the unit under <b>🎨 Customize Table → Measurement</b>. Press <b>Esc</b> to exit.
-            </p>
+<p class="muted" id="measureHint"></p>
             <div class="chipRow">
               <button id="measureClear" class="chip" data-icon="eraser">
                 <span class="lbl">Clear mine</span></button
@@ -1238,6 +1288,10 @@
         </div>
       </div>
     </div>
+    <button id="seatBtn" data-icon="armchair" aria-label="Your seat" aria-expanded="false" hidden>
+      <span class="lbl">Seat</span>
+    </button>
+    <div id="seatPop" class="seatPop" role="dialog" aria-label="Your seat" hidden></div>
     <div id="hamBar">
       <button id="interactHam" data-icon="hand-move"><span class="lbl">Interactions</span></button>
       <button class="selectTool" data-icon="select-all">
@@ -1266,39 +1320,6 @@
             </div>
             <button id="mySeatBtn" data-icon="armchair"><span class="lbl">My Seat</span></button>
             <button id="leanBtn" data-icon="zoom-in"><span class="lbl">Lean In</span></button>
-          </div>
-        </div>
-        <div id="showPanel" class="panel popout" hidden>
-          <div id="showHead" class="panel-head">
-            <b>Show Cards</b
-            ><button type="button" id="showClose" class="close-x" aria-label="Close">✕</button>
-          </div>
-          <div class="showLabel">To</div>
-          <div id="showAudience" class="chipRow"></div>
-          <div class="showLabel">What</div>
-          <div class="chipRow">
-            <button id="showScopeHand" class="chip on" data-icon="cards">
-              <span class="lbl">Hand</span>
-            </button>
-            <button id="showScopeSel" class="chip" data-icon="play-card">
-              <span class="lbl">Cards</span>
-            </button>
-          </div>
-          <button id="showHold" data-icon="eye-off"><span class="lbl"></span></button>
-        </div>
-        <div id="dropPanel" class="panel popout" hidden>
-          <div id="dropHead" class="panel-head">
-            <b>Drop Hand</b
-            ><button type="button" id="dropClose" class="close-x" aria-label="Close">✕</button>
-          </div>
-          <div class="note">Lay your hand on the table.</div>
-          <div class="chipRow">
-            <button id="dropDown" class="chip" data-icon="arrow-down-bar">
-              <span class="lbl">Face-Down</span>
-            </button>
-            <button id="dropUp" class="chip" data-icon="arrow-up-bar">
-              <span class="lbl">Face-Up</span>
-            </button>
           </div>
         </div>
       </div>
@@ -1389,7 +1410,7 @@
 
             <div class="secLabel">Grid</div>
             <div class="sizeRow">
-              <label>Cell Shape</label>
+              <label>Cell shape</label>
               <div id="gridStyles" class="chipRow">
                 <button class="chip" data-grid="off" data-icon="cancel">
                   <span class="lbl">Off</span>
@@ -1403,7 +1424,7 @@
               </div>
             </div>
             <div class="sizeRow" id="gridSnapRow" hidden>
-              <label>Objects Snap-To?</label>
+              <label>Snap to</label>
               <div id="gridAnchors" class="chipRow">
                 <button class="chip" data-anchor="center" data-icon="app-window-center">
                   <span class="lbl">Centers</span>
@@ -1414,7 +1435,7 @@
               </div>
             </div>
             <div class="sizeRow" id="gridHideRow" hidden>
-              <label>Grid Visibility</label>
+              <label>Visibility</label>
               <div class="chipRow">
                 <button class="chip" id="gridHideTog" data-icon="eye">
                   <span class="lbl">Hide Grid</span>
@@ -1422,7 +1443,7 @@
               </div>
             </div>
             <div class="sizeRow" id="gridCalibRow" hidden>
-              <label for="gridCells">Fit Grid to Board</label
+              <label for="gridCells">Fit to board</label
               ><input
                 id="gridCells"
                 type="number"
@@ -1434,7 +1455,7 @@
               </button>
             </div>
             <div class="sizeRow" id="gridCellRow" hidden>
-              <label>Cell Size</label
+              <label>Cell size</label
               ><input
                 id="gridCell"
                 aria-label="Cell size width"
@@ -1451,7 +1472,7 @@
               /><span class="muted" id="gridCellUnit"></span>
             </div>
             <div class="sizeRow" id="gridOffRow" hidden>
-              <label>Grid Offset</label
+              <label>Offset</label
               ><input id="gridOffX" aria-label="Grid offset X" type="number" step="0.05" /><span
                 class="dimX"
                 >,</span
@@ -1759,9 +1780,10 @@
       tabindex="-1"
       hidden
     >
-      <div class="modalCard libraryCard">
+      <div class="modalCard libraryCard addCard">
+        <div class="libSticky">
         <div id="addHead" class="panel-head">
-          <b id="addTitle">Add to Library</b
+          <b id="addTitle">Add to Library</b><span class="libBadge src">Admin</span
           ><button type="button" id="addClose" class="close-x" aria-label="Close">✕</button>
         </div>
         <div class="libTabs" role="tablist" aria-label="Asset type">
@@ -1838,6 +1860,7 @@
             Skyboxes
           </button>
         </div>
+        </div>
         <div
           class="libPane"
           role="tabpanel"
@@ -1845,33 +1868,41 @@
           aria-labelledby="addtab-imgdecks"
           data-pane="imgdecks"
         >
-          <h4>Image Decks</h4>
           <div class="addSplit">
             <div class="addCol addPreview">
-              <div class="uploadSq sqCard">
-                <input id="adImgBack" type="file" accept="image/*" hidden /><span class="sqLabel"
-                  >Back Image</span
-                >
+              <div class="sqField">
+                <div class="sqCap">Back image</div>
+                <div class="uploadSq sqCard">
+                  <input id="adImgBack" type="file" accept="image/*" hidden /><span class="sqLabel"
+                    >Drop the card back<br />or click to choose</span
+                  >
+                </div>
               </div>
-              <div class="uploadSq sqCard">
-                <input id="adImgFronts" type="file" accept="image/*" multiple hidden /><span
-                  class="sqLabel"
-                  >Front Images (many)</span
-                >
+              <div class="sqField">
+                <div class="sqCap">
+                  Front images<span id="adFrontsCount" class="sqCount" hidden></span>
+                </div>
+                <div class="uploadSq sqFronts">
+                  <input id="adImgFronts" type="file" accept="image/*" multiple hidden /><span
+                    class="sqLabel"
+                    >Drop every front<br />or click to choose</span
+                  >
+                  <div class="sqGrid" id="adFrontsGrid" hidden></div>
+                </div>
               </div>
             </div>
             <div class="addCol">
-              <label for="adImgName">Enter a Name</label>
+              <label for="adImgName">Deck name</label>
               <input id="adImgName" type="text" placeholder="Name this deck" />
-              <label>Fit Whole Image?</label>
               <button
                 id="adImgNoCrop"
                 type="button"
-                class="chip chk"
+                class="chip chk fitChip"
                 title="Size the cards to the art's shape — no cropping, stretching, or padding"
               >
-                Fit to image
+                Fit to image<span class="chipNote">no crop or padding</span>
               </button>
+              <div class="fitGroup">
               <div
                 class="addColorRow"
                 id="adImgThickRow"
@@ -1898,12 +1929,18 @@
                 >
               </div>
               <div class="addColorRow" id="adImgPadRow" hidden>
-                <span>Padding Color</span
+                <span>Padding</span
                 ><input id="adImgPad" type="color" value="#ffffff" aria-label="Padding color" />
               </div>
-              <div class="row">
-                <button id="adImgSave" type="button">Save</button
-                ><button id="adImgSpawn" type="button" class="primary">Save + Spawn</button>
+              </div>
+              <div class="saveFoot">
+                <p class="destNote">
+                  Saved decks land in <b>Library → Decks → Custom</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adImgSave" type="button">Save</button
+                  ><button id="adImgSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
               </div>
             </div>
           </div>
@@ -1916,14 +1953,19 @@
           data-pane="txtdecks"
           hidden
         >
-          <h4>Text Decks</h4>
           <div class="addSplit">
             <div class="addCol addPreview">
-              <div class="cardPrev" id="adTxtBackPrev"></div>
-              <div class="cardPrev" id="adTxtFrontPrev"></div>
+              <div class="sqField">
+                <div class="sqCap">Back</div>
+                <div class="cardPrev" id="adTxtBackPrev"></div>
+              </div>
+              <div class="sqField">
+                <div class="sqCap">Front</div>
+                <div class="cardPrev" id="adTxtFrontPrev"></div>
+              </div>
             </div>
             <div class="addCol">
-              <label for="adTxtName">Enter a Name</label>
+              <label for="adTxtName">Deck name</label>
               <input id="adTxtName" type="text" placeholder="Name this deck" />
               <label for="adBackText">Back Text (Optional)</label>
               <input id="adBackText" type="text" placeholder="Text on the card back" />
@@ -1986,9 +2028,14 @@
                   aria-label="Front accent color"
                 />
               </div>
-              <div class="row">
-                <button id="adTxtSave" type="button">Save</button
-                ><button id="adTxtSpawn" type="button" class="primary">Save + Spawn</button>
+              <div class="saveFoot">
+                <p class="destNote">
+                  Saved decks land in <b>Library → Decks → Custom</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adTxtSave" type="button">Save</button
+                  ><button id="adTxtSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2001,22 +2048,29 @@
           data-pane="modelboards"
           hidden
         >
-          <h4>Model Boards</h4>
           <div class="addSplit">
             <div class="addCol addPreview">
-              <div class="uploadSq sqBoard">
-                <input id="adBoardGlb" type="file" accept=".glb,model/gltf-binary" hidden /><span
-                  class="sqLabel"
-                  >Board model (.glb)</span
-                >
+              <div class="sqField">
+                <div class="sqCap">Board model</div>
+                <div class="uploadSq sqBoard">
+                  <input id="adBoardGlb" type="file" accept=".glb,model/gltf-binary" hidden /><span
+                    class="sqLabel"
+                    >Drop a .glb<br />or click to choose</span
+                  >
+                </div>
               </div>
             </div>
             <div class="addCol">
-              <label for="adBoardGlbName">Enter a Name</label>
+              <label for="adBoardGlbName">Board name</label>
               <input id="adBoardGlbName" type="text" placeholder="Name this board" />
-              <div class="row">
-                <button id="adBoardGlbSave" type="button">Save</button
-                ><button id="adBoardGlbSpawn" type="button" class="primary">Save + Spawn</button>
+              <div class="saveFoot">
+                <p class="destNote">
+                  Saved boards land in <b>Library → Boards → Custom</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adBoardGlbSave" type="button">Save</button
+                  ><button id="adBoardGlbSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2029,17 +2083,20 @@
           data-pane="imgboards"
           hidden
         >
-          <h4>Image Boards</h4>
           <div class="addSplit">
             <div class="addCol addPreview">
-              <div class="uploadSq sqBoard">
-                <input id="adBoardImg" type="file" accept="image/*" hidden /><span class="sqLabel"
-                  >Board image (optional)</span
-                >
+              <div class="sqField">
+                <div class="sqCap">Board image <span class="sqOpt">optional</span></div>
+                <div class="uploadSq sqBoard">
+                  <input id="adBoardImg" type="file" accept="image/*" hidden /><span
+                    class="sqLabel"
+                    >Drop the artwork<br />or click to choose</span
+                  >
+                </div>
               </div>
             </div>
             <div class="addCol">
-              <label for="adBoardImgName">Enter a Name</label>
+              <label for="adBoardImgName">Board name</label>
               <input id="adBoardImgName" type="text" placeholder="Name this board" />
               <label>Size</label>
               <div class="sizeRow">
@@ -2059,9 +2116,14 @@
                   title="Keep Width×Depth matched to the image's proportions so it isn't stretched"
                 />
               </div>
-              <div class="row">
-                <button id="adBoardImgSave" type="button">Save</button
-                ><button id="adBoardImgSpawn" type="button" class="primary">Save + Spawn</button>
+              <div class="saveFoot">
+                <p class="destNote">
+                  Saved boards land in <b>Library → Boards → Custom</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adBoardImgSave" type="button">Save</button
+                  ><button id="adBoardImgSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2076,18 +2138,19 @@
         >
           <div class="addSplit">
             <div class="addCol addPreview">
-              <h4>Model (.glb)</h4>
-              <div class="uploadSq sqBoard">
-                <input id="adObjGlb" type="file" accept=".glb,model/gltf-binary" hidden /><span
-                  class="sqLabel"
-                  >Object model (.glb)</span
-                >
+              <div class="sqField">
+                <div class="sqCap">Object model</div>
+                <div class="uploadSq sqBoard">
+                  <input id="adObjGlb" type="file" accept=".glb,model/gltf-binary" hidden /><span
+                    class="sqLabel"
+                    >Drop a .glb<br />or click to choose</span
+                  >
+                </div>
               </div>
               <div class="note">Uploaded models keep their own colors.</div>
             </div>
             <div class="addCol">
-              <h4>Options</h4>
-              <label for="adObjName">Enter a Name</label>
+              <label for="adObjName">Object name</label>
               <input id="adObjName" type="text" placeholder="Name this object" />
               <label>Scale &amp; Collider Shape</label>
               <div class="addRow">
@@ -2210,9 +2273,14 @@
                 <button id="adObjRotZ" type="button" title="Rotate 90° about Z">Z</button>
                 <button id="adObjRotReset" type="button" title="Reset orientation">Reset</button>
               </div>
-              <div class="row">
-                <button id="adObjSave" type="button">Save</button
-                ><button id="adObjSpawn" type="button" class="primary">Save + Spawn</button>
+              <div class="saveFoot">
+                <p class="destNote">
+                  Saved objects land in <b>Library → Objects → Custom</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adObjSave" type="button">Save</button
+                  ><button id="adObjSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2233,8 +2301,9 @@
                   >Panorama image (2:1)</span
                 >
               </div>
-              <label for="adSkyEqName">Enter a Name</label>
+              <label for="adSkyEqName">Skybox name</label>
               <input id="adSkyEqName" type="text" placeholder="Name this skybox" />
+              <p class="destNote">Lands in <b>Library → Skyboxes → Custom</b>.</p>
               <div class="row">
                 <button id="adSkyEqSave" type="button">Save</button
                 ><button id="adSkyEqApply" type="button" class="primary">Save + Apply</button>
@@ -2275,9 +2344,10 @@
                 </div>
               </div>
               <div>
-                <label for="adSkyCubeName">Enter a Name</label>
+                <label for="adSkyCubeName">Skybox name</label>
                 <input id="adSkyCubeName" type="text" placeholder="Name this skybox" />
               </div>
+              <p class="destNote">Lands in <b>Library → Skyboxes → Custom</b>.</p>
               <div class="row">
                 <button id="adSkyCubeSave" type="button">Save</button
                 ><button id="adSkyCubeApply" type="button" class="primary">Save + Apply</button>

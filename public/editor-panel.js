@@ -18,6 +18,7 @@ import {
   parseCardFront,
 } from './graphics.js';
 import * as THREE from 'three';
+import { overflowMenu } from './icons.js'; // shared with the lobby (7f); this file's own copy retired in 7k
 
 // Library edit/clone state. openEditModal() sets it; the Add form's Save reads it.
 //   { id }        → Save UPDATES that asset (Edit)
@@ -121,6 +122,23 @@ const btn = (label, fn, cls) => {
   button.onclick = fn;
   return button;
 };
+
+// ---- badges (UI_Redesign 7c slice 1) --------------------------------------
+// Two facts about an asset, in reading order: where it came from, then who can see it.
+// Built-ins are always public and can't be curated, so they carry the source badge only.
+const badgeEl = (cls, text) => {
+  const s = document.createElement('span');
+  s.className = 'libBadge ' + cls;
+  s.textContent = text;
+  return s;
+};
+const badgeGroup = (...els) => {
+  const wrap = document.createElement('span');
+  wrap.className = 'libBadges';
+  wrap.append(...els.filter(Boolean));
+  return wrap;
+};
+
 // ---- Add-to-Library modal: dialog open/close with focus management ----
 let addReturn = null; // the control to restore focus to when the dialog closes
 const focusablesIn = (el) =>
@@ -177,6 +195,7 @@ function wireTabs(root) {
         t.tabIndex = on ? 0 : -1;
       }
     });
+    if (root._clearSearch) root._clearSearch(); // picking a tab jumps INTO that pane, so drop the query
     root.querySelectorAll('.libPane').forEach((pane) => {
       pane.hidden = pane.dataset.pane !== tab.dataset.tab;
     });
@@ -232,8 +251,20 @@ function wireControls(root) {
   inp.className = 'libSearch';
   inp.placeholder = 'Search\u2026';
   wrap.append(inp);
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.className = 'libSearchClear';
+  clear.dataset.icon = 'x';
+  clear.setAttribute('aria-label', 'Clear search');
+  clear.hidden = true;
+  wrap.append(clear);
   row.append(sel, go, divider, wrap);
   tabs.after(row);
+  // Search summary — sits under the controls row while a query is active.
+  const summary = document.createElement('div');
+  summary.className = 'libSummary';
+  summary.hidden = true;
+  row.after(summary);
   // A combined-library pane can hold two lists (built-in + custom); act on all VISIBLE ones (respects the source toggle).
   const activeUls = () => {
     const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden);
@@ -267,14 +298,94 @@ function wireControls(root) {
       ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
     });
   };
+  // A pane's heading while searching — its own tab's label, so a result group is
+  // named the same thing the tab strip calls it.
+  const paneHeadOf = (pane) => {
+    let head = pane.querySelector(':scope > .paneHead');
+    if (head) return head;
+    head = document.createElement('div');
+    head.className = 'paneHead';
+    const tab = root.querySelector('.libTab[data-tab="' + pane.dataset.pane + '"]');
+    head.innerHTML =
+      '<b>' + (tab ? tab.textContent.trim() : pane.dataset.pane) + '</b><span></span>';
+    pane.prepend(head);
+    return head;
+  };
+  const tabCountOf = (tab) => {
+    let c = tab.querySelector(':scope > .tabCount');
+    if (!c) {
+      c = document.createElement('span');
+      c.className = 'tabCount';
+      tab.append(c);
+    }
+    return c;
+  };
+  // Search spans EVERY pane, not just the visible one (UI_Redesign 7c slice 3): panes
+  // with hits are revealed with a heading, panes without are hidden, the tab strip shows
+  // per-tab counts, and clearing restores the pane you were on. Cards are filtered in
+  // place — never moved — so li._spawn, select mode and the ctrls all keep working.
   root._applySearch = () => {
     const q = inp.value.trim().toLowerCase();
-    activeUls().forEach((ul) =>
-      ul.querySelectorAll('.libCard').forEach((card) => {
-        const name = (card.querySelector('.libName')?.textContent || '').toLowerCase();
-        card.style.display = !q || name.includes(q) ? '' : 'none';
-      }),
-    );
+    const panes = [...root.querySelectorAll('.libPane')];
+    clear.hidden = !q;
+    root.classList.toggle('searching', !!q);
+    if (!q) {
+      // Restore: unfilter every card and drop the search chrome. Pane visibility is left
+      // to wireTabs (which has just set it, or never changed it).
+      panes.forEach((pane) => {
+        pane.querySelectorAll('.libCard').forEach((card) => {
+          card.style.display = '';
+        });
+      });
+      root.querySelectorAll('.libTab').forEach((tab) => {
+        tabCountOf(tab).textContent = '';
+        tab.classList.remove('noHits');
+      });
+      summary.hidden = true;
+      return;
+    }
+    let total = 0,
+      sections = 0;
+    for (const pane of panes) {
+      // Only lists the source toggle leaves visible count, same rule as activeUls().
+      const uls = [...pane.querySelectorAll('.libList')];
+      let hits = 0;
+      for (const ul of uls) {
+        const off = getComputedStyle(ul).display === 'none';
+        ul.querySelectorAll('.libCard').forEach((card) => {
+          const name = (card.querySelector('.libName') || {}).textContent || '';
+          const match = !off && name.toLowerCase().includes(q);
+          card.style.display = match ? '' : 'none';
+          if (match) hits++;
+        });
+      }
+      const tab = root.querySelector('.libTab[data-tab="' + pane.dataset.pane + '"]');
+      if (tab) {
+        tabCountOf(tab).textContent = hits ? String(hits) : '';
+        tab.classList.toggle('noHits', !hits);
+      }
+      pane.hidden = !hits;
+      if (hits) {
+        const head = paneHeadOf(pane);
+        head.querySelector('span').textContent = String(hits);
+        total += hits;
+        sections++;
+      }
+    }
+    summary.hidden = false;
+    summary.textContent = total
+      ? total + (total === 1 ? ' match for "' : ' matches for "') + inp.value.trim() + '"' +
+        (sections > 1 ? ' across ' + sections + ' sections' : '')
+      : 'No matches for "' + inp.value.trim() + '"';
+  };
+  root._clearSearch = () => {
+    if (!inp.value) return;
+    inp.value = '';
+    root._applySearch();
+  };
+  clear.onclick = () => {
+    root._clearSearch();
+    inp.focus();
   };
   inp.oninput = root._applySearch;
 }
@@ -302,6 +413,7 @@ function qtyStepper() {
   const wrap = document.createElement('span');
   wrap.className = 'stepper qtyStep';
   const inp = document.createElement('input');
+  inp.setAttribute('aria-label', 'How many to spawn'); // the bare stepper is quantity; Amount carries a visible cap
   inp.type = 'number';
   inp.min = '1';
   inp.max = '99';
@@ -364,6 +476,7 @@ function spawnCard({
   dice = false,
   swatches,
   count,
+  infinite = false,
   snapDefault = false,
   stand = null,
   standOn = false,
@@ -377,7 +490,8 @@ function spawnCard({
   const meta = document.createElement('div');
   meta.className = 'libMeta';
   meta.append(name);
-  if (badge) meta.append(badge);
+  // renderList always passes a badge group; renderBuiltin never does — so no badge means built-in.
+  meta.append(badge || badgeGroup(badgeEl('src bi', 'built-in')));
 
   const ctrls = document.createElement('div');
   ctrls.className = 'cardCtrls';
@@ -385,6 +499,15 @@ function spawnCard({
   ctrls.append(qty);
   const stack = count ? countStepper(count.def, count.max) : null;
   if (stack) ctrls.append(stack); // dispenser stack size
+  else if (infinite) {
+    // An unlimited dispenser has no Amount — say so rather than leaving a gap where
+    // every sibling card has a control (UI_Redesign 7c slice 4).
+    const inf = document.createElement('span');
+    inf.className = 'infiniteNote';
+    inf.dataset.icon = 'infinity';
+    inf.innerHTML = '<span class="lbl">unlimited</span>';
+    ctrls.append(inf);
+  }
 
   let getColor = () => null,
     getTeam = () => null;
@@ -587,34 +710,53 @@ function renderList(kind, list, sink) {
     return;
   }
   for (const it of list) {
-    const badge = document.createElement('span');
-    badge.className = 'libBadge ' + (it.isPublic ? 'pub' : 'priv');
-    badge.textContent = it.isPublic ? 'public' : 'private';
+    const badge = badgeGroup(
+      badgeEl('src cu', 'custom'),
+      badgeEl(it.isPublic ? 'pub' : 'priv', it.isPublic ? 'public' : 'private'),
+    );
     const isEditor = !!byId('addModal'); // Edit/Clone need the editor's Add modal — hidden at the table where clicking them does nothing
     const canEdit = kind === 'prop' || kind === 'board' || kind === 'deck'; // objects, boards, and (limited) decks round-trip through the Add form
+    // Curation is site-admin only; GMs/helpers just spawn/apply. Edit stays inline (it is
+    // how you fix an asset); everything else goes behind the overflow.
     const adminActs = window.OTT_IS_ADMIN
       ? [
-          // curation is site-admin only; GMs/helpers just spawn/apply
-          ...(isEditor && canEdit
-            ? [
-                btn('Edit', () => openEditModal(kind, it, false)),
-                btn('Clone', () => openEditModal(kind, it, true)),
-              ]
-            : []),
-          btn(it.isPublic ? 'Unpublish' : 'Publish', () =>
-            ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic }),
-          ),
-          btn('Rename', () => {
-            const n = prompt('Rename:', it.name);
-            if (n && n.trim()) ROOM.send('assetRename', { kind, id: it.id, name: n.trim() });
-          }),
-          btn(
-            'Delete',
-            () => {
-              if (confirm(`Delete "${it.name}"? This cannot be undone.`))
-                ROOM.send('assetDelete', { kind, id: it.id });
-            },
-            'danger',
+          ...(isEditor && canEdit ? [btn('Edit', () => openEditModal(kind, it, false))] : []),
+          overflowMenu(
+            { name: it.name, meta: (it.isPublic ? 'public' : 'private') + ' · custom ' + kind },
+            [
+              ...(isEditor && canEdit
+                ? [{ label: 'Clone', icon: 'copy', fn: () => openEditModal(kind, it, true) }]
+                : []),
+              {
+                label: it.isPublic ? 'Unpublish' : 'Publish',
+                icon: it.isPublic ? 'flag-cancel' : 'flag-check',
+                note: it.isPublic ? 'public now' : 'private now', // state the current state, not just the verb
+                fn: () => ROOM.send('assetPublic', { kind, id: it.id, isPublic: !it.isPublic }),
+              },
+              {
+                label: 'Rename',
+                icon: 'cursor-text',
+                fn: () => {
+                  const n = prompt('Rename:', it.name);
+                  if (n && n.trim()) ROOM.send('assetRename', { kind, id: it.id, name: n.trim() });
+                },
+              },
+              {
+                label: 'Delete',
+                icon: 'trash',
+                cls: 'danger',
+                confirm: 'Removes it from every room you host. This cannot be undone.',
+                fn: () => {
+                  // the touch sheet confirms inline; the desktop menu still asks
+                  if (
+                    matchMedia('(pointer: coarse)').matches ||
+                    confirm(`Delete "${it.name}"? This cannot be undone.`)
+                  )
+                    ROOM.send('assetDelete', { kind, id: it.id });
+                },
+              },
+            ],
+            { host: byId('libraryModal') || document.body }, // sheet mounts in the modal so client.js icons it
           ),
         ]
       : [];
@@ -696,7 +838,7 @@ function builtinCard(previewNode, title, label, fn) {
   const name = document.createElement('span');
   name.className = 'libName';
   name.textContent = title;
-  meta.append(name);
+  meta.append(name, badgeGroup(badgeEl('src bi', 'built-in'))); // always public, never curatable
   const acts = document.createElement('div');
   acts.className = 'actions';
   acts.append(btn(label, fn));
@@ -900,6 +1042,7 @@ function renderBuiltin(sink) {
         teamName: spec.team,
         swatches: spec.swatches,
         count: spec.infinite ? null : spec.count, // stack size for finite dispensers; a bowl is unlimited
+        infinite: !!spec.infinite,
         send: (cp) => ROOM.send('spawn', { type: 'dispenser', props: { disp: id, ...cp } }),
       }),
     );
@@ -990,6 +1133,35 @@ const clearSq = (inputId) => {
   sq.style.backgroundColor = '';
 };
 
+// 7g: the fronts tile shows what it holds — a 4-across thumbnail grid with a "+N" cell and a
+// count badge on its caption — instead of the first file's preview. Only the shown thumbs are read.
+const MAX_FRONT_THUMBS = 7;
+function paintFronts() {
+  const grid = byId('adFrontsGrid'),
+    cap = byId('adFrontsCount'),
+    files = [...(byId('adImgFronts').files || [])];
+  if (!grid) return;
+  grid.textContent = '';
+  grid.hidden = !files.length;
+  if (cap) {
+    cap.hidden = !files.length;
+    cap.textContent = files.length ? files.length + ' selected' : '';
+  }
+  files.slice(0, MAX_FRONT_THUMBS).forEach((f) => {
+    const t = grid.appendChild(document.createElement('i')),
+      r = new FileReader();
+    r.onload = () => {
+      t.style.backgroundImage = `url("${r.result}")`;
+    };
+    r.readAsDataURL(f);
+  });
+  if (files.length > MAX_FRONT_THUMBS) {
+    const more = grid.appendChild(document.createElement('i'));
+    more.className = 'more';
+    more.textContent = '+' + (files.length - MAX_FRONT_THUMBS);
+  }
+}
+
 function wireAddDeck() {
   // text decks — refs carry four colors: text / fill / accent(border) / content
   const backRef = () =>
@@ -1050,6 +1222,7 @@ function wireAddDeck() {
     byId('adFrontAccent').value = '#dddddd';
     clearSq('adImgBack');
     clearSq('adImgFronts');
+    paintFronts();
     editCtx = null;
     refreshText(); // re-render the text previews to their reset defaults (not blank until next keystroke)
     byId('adImgNoCrop').classList.remove('on');
@@ -1086,7 +1259,10 @@ function wireAddDeck() {
     byId('adImgShapeRow').hidden = !fit;
   };
   wireUploadSq('adImgBack', false, applyImgFit);
-  wireUploadSq('adImgFronts', false, applyImgFit);
+  wireUploadSq('adImgFronts', false, () => {
+    applyImgFit();
+    paintFronts();
+  });
   byId('adImgNoCrop').onclick = () => {
     byId('adImgNoCrop').classList.toggle('on');
     applyImgFit();
