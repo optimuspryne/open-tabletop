@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 See [RELEASING.md](RELEASING.md) for what each version bump means and how releases are cut.
 
+## [Unreleased]
+
 ## [0.12.0] — 2026-08-28
 
 A full pass over the table interface — the HUD, every pop-out pane, both library
@@ -620,6 +622,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.12.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.0
 [0.11.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.11.0
 [0.10.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.10.0
 [0.9.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.9.0
