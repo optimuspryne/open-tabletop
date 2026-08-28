@@ -8,6 +8,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-08-28
+- Fixed missing icon SVGs for whiteboard controls.  Changed icons used for show/hide hand view, 
+  drop face up/down buttons and room info collapse toggle.
+
 ## [0.12.1] — 2026-08-28
 
 ### Added
@@ -627,6 +631,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.12.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.2
 [0.12.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.1
 [0.12.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.0
 [0.11.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.11.0
