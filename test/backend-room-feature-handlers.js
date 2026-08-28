@@ -11,6 +11,7 @@ const MESSAGE_NAMES = [
   'chatLog',
   'skybox',
   'handSync',
+  'whoami',
   'showStart',
   'showStop',
   'ping',
