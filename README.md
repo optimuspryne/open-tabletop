@@ -1,4 +1,10 @@
-# Open Tabletop — Multiplayer (Colyseus)
+<p align="center">
+  <a href="https://open-tabletop.com" target="_blank">
+    <img src="/public/logo-wordmark.svg" width="256">
+  </a>
+</p>
+
+# Open Tabletop
 
 An authoritative-physics virtual tabletop where *any* game can be played,
 because the engine only simulates physical objects and lets people enforce the
