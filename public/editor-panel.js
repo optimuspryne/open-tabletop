@@ -374,7 +374,10 @@ function wireControls(root) {
     }
     summary.hidden = false;
     summary.textContent = total
-      ? total + (total === 1 ? ' match for "' : ' matches for "') + inp.value.trim() + '"' +
+      ? total +
+        (total === 1 ? ' match for "' : ' matches for "') +
+        inp.value.trim() +
+        '"' +
         (sections > 1 ? ' across ' + sections + ' sections' : '')
       : 'No matches for "' + inp.value.trim() + '"';
   };
@@ -498,7 +501,8 @@ function spawnCard({
   const qty = qtyStepper();
   ctrls.append(qty);
   const stack = count ? countStepper(count.def, count.max) : null;
-  if (stack) ctrls.append(stack); // dispenser stack size
+  if (stack)
+    ctrls.append(stack); // dispenser stack size
   else if (infinite) {
     // An unlimited dispenser has no Amount — say so rather than leaving a gap where
     // every sibling card has a control (UI_Redesign 7c slice 4).

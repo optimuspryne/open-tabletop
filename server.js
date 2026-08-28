@@ -754,22 +754,22 @@ class TableRoom extends Room {
       }
     });
     tableMessage('handFromTable', (client) => {
-          const batch = this.lastDrop.get(client.sessionId);
-          this.lastDrop.delete(client.sessionId); // one shot, either way
-          if (!batch || Date.now() - batch.ts > 30000) return; // 30s grace, matching the toast
-          let restored = 0;
-          for (const id of batch.ids) {
-            const piece = this.state.pieces.get(id);
-            if (!piece || piece.type !== 'card') continue; // moved, taken, or table reset
-            const props = readProps(piece);
-            const front = (this.cardData.get(id) || {}).front || props.front;
-            this.addToHand(client, front, props.back || 'back', geoOf(props));
-            this.removePiece(id);
-            restored++;
-          }
-          client.send('dropUndone', { restored });
-          if (restored) this.broadcast('sfx', { type: 'card-take' });
-        });
+      const batch = this.lastDrop.get(client.sessionId);
+      this.lastDrop.delete(client.sessionId); // one shot, either way
+      if (!batch || Date.now() - batch.ts > 30000) return; // 30s grace, matching the toast
+      let restored = 0;
+      for (const id of batch.ids) {
+        const piece = this.state.pieces.get(id);
+        if (!piece || piece.type !== 'card') continue; // moved, taken, or table reset
+        const props = readProps(piece);
+        const front = (this.cardData.get(id) || {}).front || props.front;
+        this.addToHand(client, front, props.back || 'back', geoOf(props));
+        this.removePiece(id);
+        restored++;
+      }
+      client.send('dropUndone', { restored });
+      if (restored) this.broadcast('sfx', { type: 'card-take' });
+    });
     // Wipe the room back to an empty table — pieces and all private state.
     tableMessage('reset', (client) => {
       if (this.rank(client) < RANK.gm) return; // wiping the table is GM+

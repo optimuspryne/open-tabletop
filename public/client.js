@@ -737,7 +737,7 @@ function rebuildGrid() {
     if (window.onLibraryAdmin) window.onLibraryAdmin(); // re-render the library so admin-only buttons appear/hide
     document.body.classList.toggle('not-admin', !myIsAdmin);
     const rb = byId('roomBtn');
-        if (rb && myIsAdmin) rb.hidden = false; // late whoami must not leave the menu hidden for an admin
+    if (rb && myIsAdmin) rb.hidden = false; // late whoami must not leave the menu hidden for an admin
   });
 
   // Forced exits: the GM kicked me, or the owner closed the room. These end the
@@ -1438,7 +1438,7 @@ function rebuildGrid() {
     if (rail && tog) {
       const apply = (c) => {
         rail.classList.toggle('collapsed', c);
-        setIcon(tog, c ? 'square-chevron-right' : 'square-chevron-down');
+        setIcon(tog, c ? 'chevron-right' : 'chevron-down');
         tog.setAttribute('aria-label', c ? 'Show room info' : 'Collapse');
       };
       tog.onclick = () => apply(!rail.classList.contains('collapsed'));
@@ -1776,132 +1776,137 @@ function rebuildGrid() {
   // ---- Members (GM tools): admit / kick / promote — rendered into the dock's #memberSection ----
 
   // ---- Show cards (UI_Redesign 7j / mockup 9b): the audience IS the control ----
-    // Latched, matching the server's model: showStart replaces the audience set,
-    // showStop clears it. Tap a face to start showing, tap again to stop.
-    const showStrip = byId('showStrip'),
-      showStripChips = byId('showStripChips'),
-      showStatus = byId('showStatus');
-    const showTo = new Set(); // sids, or the single sentinel 'all'
-    let selOnly = false; // show only the cards selected in hand
+  // Latched, matching the server's model: showStart replaces the audience set,
+  // showStop clears it. Tap a face to start showing, tap again to stop.
+  const showStrip = byId('showStrip'),
+    showStripChips = byId('showStripChips'),
+    showStatus = byId('showStatus');
+  const showTo = new Set(); // sids, or the single sentinel 'all'
+  let selOnly = false; // show only the cards selected in hand
 
-    // Same two helpers as before, minus the scope-chip resets (those chips are gone).
-    const enterSelectMode = () => {
-      selectMode = true;
+  // Same two helpers as before, minus the scope-chip resets (those chips are gone).
+  const enterSelectMode = () => {
+    selectMode = true;
+    selected.clear();
+    byId('hand').classList.add('selecting');
+    renderHand(myHand);
+  };
+  const exitSelectMode = () => {
+    if (selectMode) {
+      selectMode = false;
       selected.clear();
-      byId('hand').classList.add('selecting');
+      byId('hand').classList.remove('selecting');
       renderHand(myHand);
-    };
-    const exitSelectMode = () => {
-      if (selectMode) {
-        selectMode = false;
-        selected.clear();
-        byId('hand').classList.remove('selecting');
-        renderHand(myHand);
-      }
-    };
-
-    const showHids = () => (selOnly && selected.size ? [...selected] : 'all');
-    const pushShow = () => {
-      if (!room) return;
-      if (!showTo.size) {
-        room.send('showStop');
-      } else {
-        const hids = showHids();
-        if (Array.isArray(hids) && !hids.length) return;
-        room.send('showStart', { to: showTo.has('all') ? 'all' : [...showTo], hids });
-      }
-      renderShowStrip();
-    };
-    const toggleShow = (key) => {
-      if (key === 'all') {
-        showTo.has('all') ? showTo.clear() : (showTo.clear(), showTo.add('all'));
-      } else {
-        showTo.delete('all');
-        showTo.has(key) ? showTo.delete(key) : showTo.add(key);
-      }
-      pushShow();
-    };
-
-    function renderShowStrip() {
-      if (!showStripChips) return;
-      showStripChips.replaceChildren();
-      const mk = (key, label, icon, color) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.dataset.sid = key;
-        if (icon) b.dataset.icon = icon;
-        else {
-          const av = document.createElement('span');
-          av.className = 'stripAv';
-          if (color) av.style.background = color;
-          b.append(av);
-        }
-        const l = document.createElement('span');
-        l.className = 'lbl';
-        l.textContent = label; // textContent — names are user input
-        b.append(l);
-        b.setAttribute('aria-label', label);
-        b.setAttribute('aria-pressed', showTo.has(key) ? 'true' : 'false');
-        if (showTo.has(key)) b.classList.add('on');
-        b.onclick = () => toggleShow(key);
-        showStripChips.append(b);
-        return b;
-      };
-      const others = [];
-      room.state.players.forEach((p, sid) => {
-        if (sid !== mySession) others.push([sid, p]);
-      });
-      others.sort((a, b) => a[1].seat - b[1].seat);
-      for (const [sid, p] of others) mk(sid, p.name, null, p.color);
-      if (others.length > 1) mk('all', 'Everyone', 'users-group');
-      // Optional scope: only the cards picked in hand (replaces the old scope chips).
-      {
-        const sep = document.createElement('div');
-        sep.className = 'stripSep';
-        showStripChips.append(sep);
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.dataset.icon = 'select-all';
-        b.innerHTML = '<span class="lbl">Picked' + (selected.size ? ' · ' + selected.size : '') + '</span>';
-        b.setAttribute('aria-label', 'Show only the cards I pick');
-        if (selOnly) b.classList.add('on');
-        b.onclick = () => {
-          selOnly = !selOnly;
-          selOnly ? enterSelectMode() : exitSelectMode();
-          if (showTo.size) pushShow();
-          else renderShowStrip();
-        };
-        showStripChips.append(b);
-      }
-      applyIcons(showStripChips);
-      // Status line: who is seeing what, in words.
-      const names = [...showTo].map((k) =>
-        k === 'all' ? 'everyone' : room.state.players.get(k)?.name || 'player',
-      );
-      const hids = showHids();
-      const count = Array.isArray(hids) ? hids.length : myHand.length;
-      showStatus.textContent = names.length
-        ? 'showing ' + (Array.isArray(hids) ? count + ' card(s)' : 'your hand') + ' to ' + names.join(', ') + ' · tap to stop'
-        : '';
     }
+  };
 
-    byId('showBtn').onclick = () => {
-      if (!showStrip) return;
-      showStrip.hidden = !showStrip.hidden;
-      if (showStrip.hidden) {
-        if (showTo.size) {
-          showTo.clear();
-          pushShow();
-        }
-        if (selOnly) {
-          selOnly = false;
-          exitSelectMode();
-        }
-      } else renderShowStrip();
+  const showHids = () => (selOnly && selected.size ? [...selected] : 'all');
+  const pushShow = () => {
+    if (!room) return;
+    if (!showTo.size) {
+      room.send('showStop');
+    } else {
+      const hids = showHids();
+      if (Array.isArray(hids) && !hids.length) return;
+      room.send('showStart', { to: showTo.has('all') ? 'all' : [...showTo], hids });
+    }
+    renderShowStrip();
+  };
+  const toggleShow = (key) => {
+    if (key === 'all') {
+      showTo.has('all') ? showTo.clear() : (showTo.clear(), showTo.add('all'));
+    } else {
+      showTo.delete('all');
+      showTo.has(key) ? showTo.delete(key) : showTo.add(key);
+    }
+    pushShow();
+  };
+
+  function renderShowStrip() {
+    if (!showStripChips) return;
+    showStripChips.replaceChildren();
+    const mk = (key, label, icon, color) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.sid = key;
+      if (icon) b.dataset.icon = icon;
+      else {
+        const av = document.createElement('span');
+        av.className = 'stripAv';
+        if (color) av.style.background = color;
+        b.append(av);
+      }
+      const l = document.createElement('span');
+      l.className = 'lbl';
+      l.textContent = label; // textContent — names are user input
+      b.append(l);
+      b.setAttribute('aria-label', label);
+      b.setAttribute('aria-pressed', showTo.has(key) ? 'true' : 'false');
+      if (showTo.has(key)) b.classList.add('on');
+      b.onclick = () => toggleShow(key);
+      showStripChips.append(b);
+      return b;
     };
-    window.onShowRosterChange = () => {
-      if (showStrip && !showStrip.hidden) renderShowStrip();
-    };
+    const others = [];
+    room.state.players.forEach((p, sid) => {
+      if (sid !== mySession) others.push([sid, p]);
+    });
+    others.sort((a, b) => a[1].seat - b[1].seat);
+    for (const [sid, p] of others) mk(sid, p.name, null, p.color);
+    if (others.length > 1) mk('all', 'Everyone', 'users-group');
+    // Optional scope: only the cards picked in hand (replaces the old scope chips).
+    {
+      const sep = document.createElement('div');
+      sep.className = 'stripSep';
+      showStripChips.append(sep);
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.icon = 'select-all';
+      b.innerHTML =
+        '<span class="lbl">Picked' + (selected.size ? ' · ' + selected.size : '') + '</span>';
+      b.setAttribute('aria-label', 'Show only the cards I pick');
+      if (selOnly) b.classList.add('on');
+      b.onclick = () => {
+        selOnly = !selOnly;
+        selOnly ? enterSelectMode() : exitSelectMode();
+        if (showTo.size) pushShow();
+        else renderShowStrip();
+      };
+      showStripChips.append(b);
+    }
+    applyIcons(showStripChips);
+    // Status line: who is seeing what, in words.
+    const names = [...showTo].map((k) =>
+      k === 'all' ? 'everyone' : room.state.players.get(k)?.name || 'player',
+    );
+    const hids = showHids();
+    const count = Array.isArray(hids) ? hids.length : myHand.length;
+    showStatus.textContent = names.length
+      ? 'showing ' +
+        (Array.isArray(hids) ? count + ' card(s)' : 'your hand') +
+        ' to ' +
+        names.join(', ') +
+        ' · tap to stop'
+      : '';
+  }
+
+  byId('showBtn').onclick = () => {
+    if (!showStrip) return;
+    showStrip.hidden = !showStrip.hidden;
+    if (showStrip.hidden) {
+      if (showTo.size) {
+        showTo.clear();
+        pushShow();
+      }
+      if (selOnly) {
+        selOnly = false;
+        exitSelectMode();
+      }
+    } else renderShowStrip();
+  };
+  window.onShowRosterChange = () => {
+    if (showStrip && !showStrip.hidden) renderShowStrip();
+  };
 })().catch((err) => {
   // onAuth rejections (not signed in / not a member / awaiting approval / no such
   // room) land here — show the reason and a way back to the lobby.
@@ -3129,20 +3134,20 @@ function renderHand(cards) {
   {
     const has = cards.length > 0;
     const sb = byId('showBtn'),
-          db = byId('dropFlank');
-        if (sb) sb.hidden = !has;
-        if (db) db.hidden = !has;
-        if (!has) {
-          const strip = byId('showStrip');
-          if (strip) strip.hidden = true;
-        }
+      db = byId('dropFlank');
+    if (sb) sb.hidden = !has;
+    if (db) db.hidden = !has;
+    if (!has) {
+      const strip = byId('showStrip');
+      if (strip) strip.hidden = true;
+    }
   } // Show/Drop flank the hand, only when you hold cards
   if (handCollapsed && cards.length && !selectMode) {
     // hidden: show only a peek tab (never while picking cards to show)
     el.classList.add('collapsed');
     const tab = document.createElement('button');
     tab.className = 'handToggle';
-    tab.dataset.icon = 'cards square-chevron-up';
+    tab.dataset.icon = 'cards eye';
     tab.setAttribute('aria-label', `Show hand (${cards.length})`);
     tab.onclick = () => setHandCollapsed(false);
     el.appendChild(tab);
@@ -3254,7 +3259,7 @@ function renderHand(cards) {
     // a small handle to hide the hand from your view
     const hide = document.createElement('button');
     hide.className = 'handToggle hide';
-    setIcon(hide, 'square-chevron-down');
+    setIcon(hide, 'eye-off');
     hide.setAttribute('aria-label', 'Hide your hand');
     hide.onclick = () => setHandCollapsed(true);
     el.appendChild(hide);
@@ -3341,11 +3346,12 @@ function applyRole(role) {
     const el = byId(id);
     if (el) el.hidden = rank < min;
   };
-    { // Room Controls menu: GM+ OR admin — the admin-only items live in this menu now
-      const rb = byId('roomBtn');
-      if (rb) rb.hidden = rank < 2 && !myIsAdmin;
-      if (room) room.send('whoami'); // re-fetch on join/reconnect — onJoin's push doesn't repeat
-    }
+  {
+    // Room Controls menu: GM+ OR admin — the admin-only items live in this menu now
+    const rb = byId('roomBtn');
+    if (rb) rb.hidden = rank < 2 && !myIsAdmin;
+    if (room) room.send('whoami'); // re-fetch on join/reconnect — onJoin's push doesn't repeat
+  }
   document.body.classList.toggle('not-gm', rank < 2); // mirrors .not-admin; gates .gm-only
   gate('memberSection', 2); // Members management (dock): GM+
   if (rank >= 2 && room) room.send('members'); // (re)fetch on join/reconnect/promotion — allowReconnection skips onJoin's push, so the dock would otherwise stay blank after a refresh
@@ -4916,7 +4922,14 @@ function openPieceMenu(id, p) {
   const arc = pieceMenuItems(id, entry.type);
   if (isSheet() && arc.length <= RADIAL_MAX) {
     closePieceMenu();
-    if (openRadial(p.x, p.y, arc.map(([label, fn, cls]) => ({ label, fn, cls })))) return;
+    if (
+      openRadial(
+        p.x,
+        p.y,
+        arc.map(([label, fn, cls]) => ({ label, fn, cls })),
+      )
+    )
+      return;
   }
   menu.replaceChildren();
   for (const [label, fn, cls] of pieceMenuItems(id, entry.type)) {
@@ -5130,7 +5143,10 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
         // Same rule as the sheets: on touch, never open a dialog straight into a text
         // field — the keyboard would cover the dialog before it has been read.
         const isText = (el) =>
-          el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !/^(button|checkbox|radio|range|color|file|submit)$/i.test(el.type)));
+          el &&
+          (el.tagName === 'TEXTAREA' ||
+            (el.tagName === 'INPUT' &&
+              !/^(button|checkbox|radio|range|color|file|submit)$/i.test(el.type)));
         const target = isSheet() ? f.find((el) => !isText(el)) || panel : f[0] || panel;
         if (isSheet() && target === panel && !panel.hasAttribute('tabindex'))
           panel.setAttribute('tabindex', '-1');
@@ -5505,7 +5521,6 @@ function proxyGated(el) {
   return false;
 }
 
-
 // ---- radial menu primitive (7e slice 7; mockup 10j) ------------------------------------
 // One fan for two callers: the ⊕ FAB and long-press on a piece. Items arc away from the
 // nearest edges, so the menu never opens off-screen and never lands under your thumb.
@@ -5573,10 +5588,11 @@ function openRadial(x, y, items) {
     }
     if (best) break;
   }
-  if (!best) best = layout(dir, R0 * 0.72).map(([px, py]) => [
-    Math.max(M, Math.min(px, innerWidth - M)),
-    Math.max(M, Math.min(py, innerHeight - M)),
-  ]);
+  if (!best)
+    best = layout(dir, R0 * 0.72).map(([px, py]) => [
+      Math.max(M, Math.min(px, innerWidth - M)),
+      Math.max(M, Math.min(py, innerHeight - M)),
+    ]);
   items.forEach((it, i) => {
     const [bx, by] = best[i];
     const b = document.createElement('button');
@@ -5642,7 +5658,10 @@ addEventListener('keydown', (e) => {
 {
   const DRAWER_GROUPS = [
     { label: 'Open', ids: ['lib2Btn', 'chatBtn', 'notesBtn', 'scoreBtn'] },
-    { label: 'Room', ids: ['roomInfoBtn', 'roomScene', 'roomSaveState', 'roomSettings', 'addBtn', 'sceneSaveBtn'] },
+    {
+      label: 'Room',
+      ids: ['roomInfoBtn', 'roomScene', 'roomSaveState', 'roomSettings', 'addBtn', 'sceneSaveBtn'],
+    },
     { label: 'Table', ids: ['measureBtn', 'audioBtn', 'timerBtn', 'settingsBtn', 'controlsBtn'] },
   ];
   const FOOT = ['roomReset', 'lobbyBtn'];

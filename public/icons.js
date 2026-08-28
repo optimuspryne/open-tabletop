@@ -177,8 +177,7 @@ export function overflowMenu(subject, items, opts = {}) {
     let top = r.bottom + 6;
     if (top + m.height > innerHeight - pad)
       top = r.top - m.height - 6 >= pad ? r.top - m.height - 6 : innerHeight - m.height - pad;
-    menu.style.left =
-      Math.max(pad, Math.min(r.right - m.width, innerWidth - m.width - pad)) + 'px';
+    menu.style.left = Math.max(pad, Math.min(r.right - m.width, innerWidth - m.width - pad)) + 'px';
     menu.style.top = Math.max(pad, top) + 'px';
   };
   const onScroll = (e) => {

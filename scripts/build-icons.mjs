@@ -56,6 +56,8 @@ const ICONS = [
   'arrow-bar-up',
   'hand-move',
   'tools',
+  'menu-2',
+  'info-circle',
   // Measure / selection / tray / rail / hold
   'ruler-measure',
   'circle',

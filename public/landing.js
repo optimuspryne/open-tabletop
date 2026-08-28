@@ -313,8 +313,7 @@ function renderRoomList(rooms) {
             label: 'Close room',
             icon: 'trash',
             cls: 'danger',
-            confirm:
-              'Anyone at the table is sent back to the lobby, and no one can join.',
+            confirm: 'Anyone at the table is sent back to the lobby, and no one can join.',
             fn: () => closeRoom(room),
           },
         ]),
