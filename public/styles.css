@@ -2171,8 +2171,38 @@ body.not-admin .admin-only {
   z-index: 10;
 }
 #topbar .brand {
-  font: 600 18px var(--font);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
   color: var(--text);
+}
+#topbar .brand img {
+  display: block;
+  height: 36px;
+  width: auto;
+}
+#topbar .brand .brandMark {
+  display: none;
+  height: 36px;
+}
+#topbar .brand .brandSuffix {
+  font: 600 15px var(--font);
+  color: var(--text);
+  opacity: 0.7;
+}
+#topbar .brand .brandSuffix::before {
+  content: '·';
+  margin-right: 10px;
+  opacity: 0.5;
+}
+@media (max-width: 560px) {
+  #topbar .brand .brandFull {
+    display: none;
+  }
+  #topbar .brand .brandMark {
+    display: block;
+  }
 }
 #topbar a:not(.btn) {
   color: var(--accent);
