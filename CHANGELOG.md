@@ -120,8 +120,6 @@ tablets. No server change: every message the new UI sends already existed.
   `fill` / `stroke` / `stroke-width`.
 - **`overflowMenu` and `openActionSheet` moved into `public/icons.js`**, which the lobby, table
   and admin pages already share.
-- Implementation notes, the slice-by-slice record and the decisions taken (including what was
-  rejected and why) live in `docs/UI_Redesign_Phase7.md`.
 
 ## [0.11.0] — 2026-08-26
 
