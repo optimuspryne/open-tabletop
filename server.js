@@ -586,7 +586,7 @@ class TableRoom extends Room {
     this.cardData = new Map(); // id -> { front }         PRIVATE: a face-down table card's hidden face
     this.hands = new Map(); // sessionId -> [{hid,front,back}]  PRIVATE: each player's hidden hand
     this.lastDrop = new Map(); // sessionId -> { ids:[pieceId], ts }  PRIVATE: undo for handToTable
-    this.notebooks = new Map(); // sessionId -> text               PRIVATE: each player's private notes (ephemeral; dies with the room)
+    this.notebooks = new Map(); // user/session key -> text         PRIVATE: each player's notes (ephemeral; dies with the room)
     this.strokes = []; // whiteboard stroke history (server-held; sent to late-joiners, gone on dispose)
     this.chatLog = []; // recent public chat (server-held; last 80, sent to late-joiners, gone on dispose)
     this.shows = new Map(); // sessionId -> {to:Set,cards:[]}   PRIVATE: an active hold-to-show (who sees which of the shower's cards)
@@ -1978,7 +1978,7 @@ class TableRoom extends Room {
     }
     this.hands.delete(client.sessionId);
     this.lastDrop.delete(client.sessionId);
-    this.notebooks.delete(client.sessionId);
+    this.notebooks.delete(`session:${client.sessionId}`); // account-keyed notes live until the room closes
     this.stopShow(client.sessionId); // clear any hold-to-show they had live
 
     // If they'd drawn a card to inspect but never placed it, return it to its deck.

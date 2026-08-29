@@ -9,6 +9,7 @@ import {
 const MESSAGE_NAMES = [
   'stateSave',
   'notebook',
+  'notebookSync',
   'timer',
   'score',
   'roomNotes',
@@ -71,6 +72,7 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
 
 const client = () => ({
   sessionId: 'client-1',
+  auth: { userId: 42 },
   sent: [],
   send(type, payload) {
     this.sent.push({ type, payload });
@@ -118,10 +120,14 @@ test('manual checkpoints reject oversized state without replacing the saved scen
   assert.equal(user.sent[0].type, 'sceneError');
 });
 
-test('private notebooks stay keyed by session and do not schedule durable saves', async () => {
+test('private notebooks follow an account across sessions without a durable save', async () => {
   const { room, handlers, events } = harness({ rank: 0 });
-  await handlers.get('notebook')(client(), { text: 'private' });
-  assert.equal(room.notebooks.get('client-1'), 'private');
+  const first = client();
+  await handlers.get('notebook')(first, { text: 'private' });
+  const refreshed = { ...client(), sessionId: 'client-2', sent: [] };
+  await handlers.get('notebookSync')(refreshed);
+  assert.equal(room.notebooks.get('user:42'), 'private');
+  assert.deepEqual(refreshed.sent, [{ type: 'notebook', payload: 'private' }]);
   assert.deepEqual(events, []);
 });
 

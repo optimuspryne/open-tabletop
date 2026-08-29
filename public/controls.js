@@ -9,7 +9,8 @@
 // Intent vocabulary (Phase 0 — the mouse + keyboard reference profile):
 //   press / move / release     the pointer lifecycle: grab/deal, marquee, overlay + modal
 //                              drags, and click classification. Carries a logical pointer whose
-//                              primary / secondary / additive flags stand in for button / shift.
+//                              primary / secondary / additive flags stand in for button / shift;
+//                              rotate / fineRotate describe the desktop Alt-drag gesture.
 //   command(key)               a keyboard command: Esc-exits, batch ops, per-piece verbs, ping.
 //   raiseAxis(dir)             raise (+1) / lower (-1) the held piece one step.
 //   doubleClick(pt) -> bool    double-activation on the board (whiteboard claim); true if consumed.
@@ -31,6 +32,8 @@ const logical = (e) => ({
   primary: e.button === 0, // left-click / tap
   secondary: e.button === 2, // right-click / (touch) long-press
   additive: e.shiftKey, // multi-select add/toggle ((touch) the Select tool)
+  rotate: e.altKey, // Alt while dragging a held piece → horizontal rotation
+  fineRotate: e.altKey && e.shiftKey, // Shift+Alt bypasses the normal angle snap
   pointerId: e.pointerId, // for pointer capture on the canvas
   touch: e.pointerType === 'touch', // so client.js can show touch-only affordances (height control)
 });

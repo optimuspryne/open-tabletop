@@ -695,6 +695,11 @@ function rebuildGrid() {
     if (el) el.replaceChildren();
     (log || []).forEach(addChatMsg);
   }); // late-join replay
+  room.send('chatLog'); // refresh/reconnect: fetch room-memory history after the handler is ready
+  room.onMessage('notebook', (text) => {
+    byId('notesText').value = text || '';
+  }); // private room-memory notes for this account
+  room.send('notebookSync');
   room.onMessage('wbClear', () => {
     wbStrokesLocal.length = 0;
     if (wbTex) wbClearCanvas();
@@ -791,9 +796,6 @@ function rebuildGrid() {
     };
   }
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
-  room.onMessage('notebook', (text) => {
-    byId('notesText').value = text || '';
-  }); // your private notes, restored on reconnect
   room.onMessage('shuffled', ({ id }) => {
     startAnim(id, 'shuffle');
     playSfx('shuffle');
@@ -1938,6 +1940,8 @@ const DRAG_MIN = CONFIG.grab.min,
   DRAG_MAX = CONFIG.grab.max,
   DRAG_STEP = CONFIG.grab.step;
 const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
+const DRAG_ROTATE_RAD_PER_PX = 0.01,
+  DRAG_ROTATE_SNAP = Math.PI / 12; // Alt-drag: ~0.57°/px, snapped to 15° unless Shift is held
 let dragHeight = GRAB_HEIGHT;
 let holdSig = -1; // visibility signature for the clustered height/rotate controls (synced each frame)
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
@@ -2540,7 +2544,7 @@ const onPointerDown = (e) => {
   const id = pickId();
   // Multi-select gesture: the additive modifier (Shift) or the Select tool. Click a piece → toggle
   // it in/out; drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
-  if (e.primary && (e.additive || selMode)) {
+  if (e.primary && ((e.additive && !e.rotate) || selMode)) {
     selGesture = true;
     controls.enabled = false;
     renderer.domElement.setPointerCapture(e.pointerId);
@@ -2602,6 +2606,12 @@ const onPointerDown = (e) => {
     grabbed: false,
     snap: pieceSnap(id),
     group,
+    rotateOnPress: e.rotate,
+    rotating: false,
+    rotateX: e.clientX,
+    rotateRaw: 0,
+    rotateSent: 0,
+    lastRotateSent: 0,
   };
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
@@ -2740,6 +2750,35 @@ const onPointerMove = (e) => {
   }
 
   if (down.grabbed) {
+    if (e.rotate) {
+      // Alt turns the held-piece drag into a horizontal rotation dial. Accumulate raw pointer
+      // motion so snapped rotation does not lose sub-step movement; Shift exposes that raw angle.
+      if (!down.rotating) {
+        down.rotating = true;
+        if (!down.rotateOnPress) down.rotateX = e.clientX; // Alt pressed after the grab: anchor here
+      }
+      down.rotateRaw += (e.clientX - down.rotateX) * DRAG_ROTATE_RAD_PER_PX;
+      down.rotateX = e.clientX;
+      const angle = e.fineRotate
+          ? down.rotateRaw
+          : Math.round(down.rotateRaw / DRAG_ROTATE_SNAP) * DRAG_ROTATE_SNAP,
+        delta = angle - down.rotateSent,
+        now = performance.now();
+      // Snapped steps feel best immediately; continuous mode is capped near the move send rate.
+      if (Math.abs(delta) > 1e-4 && (!e.fineRotate || now - down.lastRotateSent > 16)) {
+        room.send('rotateGroup', {
+          ids: down.group ? [...selection] : [down.id],
+          angle: delta,
+        });
+        down.rotateSent = angle;
+        down.lastRotateSent = now;
+      }
+      throwVel.set(0, 0, 0); // rotating in place should never turn into a throw on release
+      prevThrowTime = now;
+      return;
+    }
+    down.rotating = false;
+    down.rotateOnPress = false;
     heldTarget.copy(hit);
     const now = performance.now(),
       dt = (now - prevThrowTime) / 1000;
@@ -3990,7 +4029,6 @@ function buildWhiteboard() {
   wbGroup = g;
   positionWhiteboard();
   if (room) room.send('wbStrokes'); // fetch the current drawing (late-join replay)
-  if (room) room.send('chatLog'); // fetch recent chat (late-join replay)
 }
 function positionWhiteboard() {
   if (!wbGroup || !room) return;

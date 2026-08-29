@@ -17,6 +17,10 @@ export function registerRoomStateHandlers(
   { createScoreRow, tableLimits, gridLiftMax, sceneMaxBytes, now = Date.now, logger = console },
 ) {
   const roomMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  // Accounts are stable across reconnects and fresh browser joins. The session fallback still
+  // supports unauthenticated/editor clients for the lifetime of their connection.
+  const notebookKey = (client) =>
+    client.auth?.userId != null ? `user:${client.auth.userId}` : `session:${client.sessionId}`;
 
   roomMessage('stateSave', (client) => {
     if (room.rank(client) < RANK.gm) return;
@@ -35,8 +39,11 @@ export function registerRoomStateHandlers(
 
   roomMessage('notebook', (client, message) => {
     const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 4000 }));
-    if (parsed) room.notebooks.set(client.sessionId, parsed.text);
+    if (parsed) room.notebooks.set(notebookKey(client), parsed.text);
   });
+  roomMessage('notebookSync', (client) =>
+    client.send('notebook', room.notebooks.get(notebookKey(client)) || ''),
+  );
 
   roomMessage('timer', (client, message) => {
     const msg = timerPayload(message);
