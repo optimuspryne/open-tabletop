@@ -63,9 +63,12 @@ snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 ### 1. Meet people where they play — touch & mobile
 The single biggest audience expansion. "Pull up the iPad at game night" is a core VTT use case,
 and much of what we built recently is mouse-first. This is also the most work.
-- **Audit the gesture surface.** ✅ Done - Marquee/Shift-select, group drag, the tray camera hop,
-  middle-click facing, scroll-to-raise, right-drag-to-move, and now **left-click-a-deck-to-draw** —
-  each assumes a mouse with buttons and a wheel. Catalog every one and its touch story.
+- **Audit the gesture surface.** ✅ Done — the catalog is `docs/GESTURES.md`: every gesture, its
+  touch equivalent, and a status. Marquee/Shift-select, group drag, the tray camera hop,
+  scroll-to-raise, right-drag-to-move and left-click-a-deck-to-draw each assume a mouse with
+  buttons and a wheel; all but the rotation gestures now have a touch path. Three gaps remain
+  open there (rotating a held piece, exact-step formation rotation, single-tap card verbs), plus
+  the fact that the in-app "How to Play" mentions touch zero times.
 - **Touch equivalents.** ✅ Done - Long-press, two-finger, and on-screen affordances for the button/wheel
   gestures; make the Select tool the primary path where modifiers don't exist.
 - **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and
