@@ -173,6 +173,9 @@ async function launch() {
       '--force-device-scale-factor=1',
       '--force-color-profile=srgb',
       '--disable-font-subpixel-positioning',
+      // Headless reports (pointer: none) by default, so (pointer: fine) never matches
+      // and any rule gated on it goes unmeasured. 4 = fine in Blink's pointer enum.
+      '--blink-settings=primaryPointerType=4,availablePointerTypes=4',
       `--user-data-dir=${profile}`,
       '--remote-debugging-port=0',
       'about:blank',
@@ -265,12 +268,15 @@ async function snapshot(outFile) {
         { width, height, deviceScaleFactor: 1, mobile: !!touch },
         sessionId,
       );
-      // (pointer: coarse) only matches with touch emulation on
-      await c.send(
-        'Emulation.setTouchEmulationEnabled',
-        { enabled: !!touch, maxTouchPoints: touch ? 5 : 1 },
-        sessionId,
-      );
+      // (pointer: coarse) only matches with touch emulation on. Calling this with
+      // enabled:false resets the pointer type to none and undoes the blink-settings
+      // flag above, so the fine-pointer regimes must not call it at all.
+      if (touch)
+        await c.send(
+          'Emulation.setTouchEmulationEnabled',
+          { enabled: true, maxTouchPoints: 5 },
+          sessionId,
+        );
       await c.send('Page.enable', {}, sessionId);
       const loaded = new Promise((ok) => {
         c.on((m) => {
