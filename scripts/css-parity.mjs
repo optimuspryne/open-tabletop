@@ -26,7 +26,18 @@ import { join, extname, resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
 const PAGES = ['table.html', 'index.html', 'admin.html'];
-const VIEWPORT = { width: 1440, height: 900 };
+
+// The stylesheet has breakpoints at 560/720/900px plus (pointer: coarse) and a
+// short-landscape query. Snapshot every regime, or a responsive-only regression
+// walks straight past the harness.
+const VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'lap-880', width: 880, height: 900 },
+  { name: 'tab-700', width: 700, height: 900 },
+  { name: 'phone-540', width: 540, height: 900 },
+  { name: 'landscape-short', width: 800, height: 520 },
+  { name: 'coarse-390', width: 390, height: 844, touch: true },
+];
 
 const PROPS = [
   'display',
@@ -245,32 +256,40 @@ async function snapshot(outFile) {
   const c = cdp(ws);
   await c.ready;
   const all = {};
-  for (const page of PAGES) {
-    const { targetId } = await c.send('Target.createTarget', { url: 'about:blank' });
-    const { sessionId } = await c.send('Target.attachToTarget', { targetId, flatten: true });
-    await c.send(
-      'Emulation.setDeviceMetricsOverride',
-      { ...VIEWPORT, deviceScaleFactor: 1, mobile: false },
-      sessionId,
-    );
-    await c.send('Page.enable', {}, sessionId);
-    const loaded = new Promise((ok) => {
-      c.on((m) => {
-        if (m.method === 'Page.loadEventFired' && m.sessionId === sessionId) ok();
+  for (const { name, width, height, touch } of VIEWPORTS)
+    for (const page of PAGES) {
+      const { targetId } = await c.send('Target.createTarget', { url: 'about:blank' });
+      const { sessionId } = await c.send('Target.attachToTarget', { targetId, flatten: true });
+      await c.send(
+        'Emulation.setDeviceMetricsOverride',
+        { width, height, deviceScaleFactor: 1, mobile: !!touch },
+        sessionId,
+      );
+      // (pointer: coarse) only matches with touch emulation on
+      await c.send(
+        'Emulation.setTouchEmulationEnabled',
+        { enabled: !!touch, maxTouchPoints: touch ? 5 : 1 },
+        sessionId,
+      );
+      await c.send('Page.enable', {}, sessionId);
+      const loaded = new Promise((ok) => {
+        c.on((m) => {
+          if (m.method === 'Page.loadEventFired' && m.sessionId === sessionId) ok();
+        });
       });
-    });
-    await c.send('Page.navigate', { url: `${base}/${page}` }, sessionId);
-    await loaded;
-    await new Promise((r) => setTimeout(r, 400));
-    const { result } = await c.send(
-      'Runtime.evaluate',
-      { expression: SNAPSHOT, returnByValue: true },
-      sessionId,
-    );
-    all[page] = JSON.parse(result.value);
-    process.stderr.write(`  ${page}: ${Object.keys(all[page]).length} elements\n`);
-    await c.send('Target.closeTarget', { targetId });
-  }
+      await c.send('Page.navigate', { url: `${base}/${page}` }, sessionId);
+      await loaded;
+      await new Promise((r) => setTimeout(r, 400));
+      const { result } = await c.send(
+        'Runtime.evaluate',
+        { expression: SNAPSHOT, returnByValue: true },
+        sessionId,
+      );
+      const key = `${page} @${name}`;
+      all[key] = JSON.parse(result.value);
+      process.stderr.write(`  ${key}: ${Object.keys(all[key]).length} elements\n`);
+      await c.send('Target.closeTarget', { targetId });
+    }
   c.close();
   proc.kill();
   server.close();
