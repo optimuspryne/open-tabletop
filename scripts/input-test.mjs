@@ -2,35 +2,23 @@
 /**
  * input-test.mjs — behavioural tests for the input seam (public/controls.js).
  *
- * controls.js translates raw DOM input into the intent vocabulary client.js
- * implements. That seam is unusually testable: attach it to a bare <div>, hand it a
- * recording `intents` object, dispatch synthetic events, and assert on the intents
- * raised. No 3D, no server, no room.
+ * controls.js translates raw DOM input into the intent vocabulary client.js implements.
+ * That seam is unusually testable: attach it to a bare <div>, hand it a recording
+ * `intents` object, dispatch synthetic events, and assert on the intents raised. No 3D,
+ * no server, no room.
  *
  * It exists because a whole input path can be missing for one device family and
  * everything still looks fine: claiming the whiteboard hung on the native `dblclick`
- * event, which Chrome synthesizes from a double-tap and WebKit does not, so the
- * gesture was unreachable on iOS/iPadOS with no error anywhere.
+ * event, which Chrome synthesizes from a double-tap and WebKit does not, so the gesture
+ * was unreachable on iOS/iPadOS with no error anywhere.
  *
- * Zero dependencies: a node:http static server plus the Chrome DevTools Protocol over
- * Node's global WebSocket (Node >= 22). Needs a Chromium/Chrome binary — set CHROME_BIN,
- * or it searches the usual names. Deliberately NOT a devDependency, and deliberately not
- * part of `npm run check`, which must keep working on a machine with no browser.
- *
- *   npm run test:input          (or: node scripts/input-test.mjs)
+ * Runs as `npm run test:input`. Deliberately NOT part of `npm run check`, which must
+ * keep working on a machine with no browser. Browser plumbing: scripts/lib/headless.mjs.
  */
-import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
-import { readFile, mkdtemp, rm } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, extname, resolve } from 'node:path';
+import { resolve } from 'node:path';
+import { launch, newPage, serveDir } from './lib/headless.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
-const MIME = {
-  '.js': 'application/javascript; charset=utf-8',
-  '.html': 'text/html; charset=utf-8',
-};
 
 // The fixture: controls.js attached to a bare div, with every intent recorded.
 const FIXTURE = `<!doctype html><meta charset="utf-8">
@@ -212,122 +200,19 @@ const CASES = [
   ],
 ];
 
-function findChrome() {
-  if (process.env.CHROME_BIN) {
-    // Validate rather than trusting it: a wrong path otherwise hangs until the
-    // launch timeout instead of saying what is wrong.
-    if (!existsSync(process.env.CHROME_BIN))
-      throw new Error(`CHROME_BIN is set to ${process.env.CHROME_BIN}, which does not exist.`);
-    return process.env.CHROME_BIN;
-  }
-  const hit = [
-    '/opt/pw-browsers/chromium',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-  ].find((n) => existsSync(n));
-  if (!hit) throw new Error('No Chromium found. Set CHROME_BIN to a Chrome/Chromium binary.');
-  return hit;
-}
-
-const server = await new Promise((ok) => {
-  const s = createServer(async (req, res) => {
-    const path = new URL(req.url, 'http://x').pathname;
-    if (path === '/__fixture.html') {
-      res.writeHead(200, { 'content-type': MIME['.html'] });
-      return res.end(FIXTURE);
-    }
-    try {
-      const body = await readFile(join(ROOT, path));
-      res.writeHead(200, { 'content-type': MIME[extname(path)] ?? 'text/plain' });
-      res.end(body);
-    } catch {
-      res.writeHead(404).end('');
-    }
-  });
-  s.listen(0, '127.0.0.1', () => ok(s));
+const server = await serveDir({
+  root: ROOT,
+  routes: { '/__fixture.html': { body: FIXTURE } },
 });
-
-const profile = await mkdtemp(join(tmpdir(), 'inputtest-'));
-const proc = spawn(
-  findChrome(),
-  [
-    '--headless=new',
-    '--disable-gpu',
-    '--no-sandbox',
-    '--disable-dev-shm-usage', // CI containers give /dev/shm 64MB; Chrome crashes without this
-    `--user-data-dir=${profile}`,
-    '--remote-debugging-port=0',
-    'about:blank',
-  ],
-  { stdio: ['ignore', 'ignore', 'pipe'] },
-);
-const wsUrl = await new Promise((ok, fail) => {
-  let buf = '';
-  const t = setTimeout(() => fail(new Error('browser did not start')), 30000);
-  proc.stderr.on('data', (d) => {
-    buf += d;
-    const m = buf.match(/ws:\/\/[^\s]+/);
-    if (m) {
-      clearTimeout(t);
-      ok(m[0]);
-    }
-  });
-});
-
-const sock = new WebSocket(wsUrl);
-let id = 0;
-const pending = new Map();
-const listeners = [];
-sock.addEventListener('message', (e) => {
-  const msg = JSON.parse(e.data);
-  if (msg.id && pending.has(msg.id)) {
-    const { ok, fail } = pending.get(msg.id);
-    pending.delete(msg.id);
-    msg.error ? fail(new Error(msg.error.message)) : ok(msg.result);
-  } else listeners.forEach((fn) => fn(msg));
-});
-await new Promise((ok) => sock.addEventListener('open', ok));
-const send = (method, params = {}, sessionId) =>
-  new Promise((ok, fail) => {
-    const mid = ++id;
-    pending.set(mid, { ok, fail });
-    sock.send(JSON.stringify({ id: mid, method, params, sessionId }));
-  });
-
-const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
-const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
-await send('Page.enable', {}, sessionId);
-const loaded = new Promise((ok) =>
-  listeners.push((m) => {
-    if (m.method === 'Page.loadEventFired' && m.sessionId === sessionId) ok();
-  }),
-);
-await send(
-  'Page.navigate',
-  { url: `http://127.0.0.1:${server.address().port}/__fixture.html` },
-  sessionId,
-);
-await loaded;
-await new Promise((r) => setTimeout(r, 200));
+const cdp = await launch();
+const page = await newPage(cdp, { url: `${server.origin}/__fixture.html`, settle: 200 });
 
 let failed = 0;
 for (const [name, setup, expr, expected] of CASES) {
   let got,
     err = null;
   try {
-    const { result, exceptionDetails } = await send(
-      'Runtime.evaluate',
-      {
-        expression: `(async () => { ${setup}; return (${expr}); })()`,
-        awaitPromise: true,
-        returnByValue: true,
-      },
-      sessionId,
-    );
-    if (exceptionDetails) err = exceptionDetails.text ?? 'threw';
-    got = result.value;
+    got = await page.evaluate(`(async () => { ${setup}; return (${expr}); })()`);
   } catch (e) {
     err = e.message;
   }
@@ -339,11 +224,13 @@ for (const [name, setup, expr, expected] of CASES) {
       `          expected ${JSON.stringify(expected)}, got ${err ?? JSON.stringify(got)}`,
     );
 }
-console.log(`\n${CASES.length - failed}/${CASES.length} passed`);
+if (page.errors.length) {
+  console.log('\nthe fixture raised uncaught errors — the suite may be testing nothing:');
+  page.errors.slice(0, 5).forEach((e) => console.log('   ' + e));
+  failed++;
+}
+console.log(`\n${CASES.length - failed} of ${CASES.length} passed`);
 
-sock.close();
-proc.kill();
+await cdp.close();
 server.close();
-await new Promise((r) => setTimeout(r, 300));
-await rm(profile, { recursive: true, force: true }).catch(() => {});
 if (failed) process.exitCode = 1;

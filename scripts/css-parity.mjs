@@ -1,35 +1,39 @@
 #!/usr/bin/env node
 /**
- * css-parity.mjs — prove a CSS change is a PURE refactor.
+ * css-parity.mjs — prove a CSS change is a PURE refactor, and lint dead selectors.
  *
- * Snapshots the computed style of every element on every page, then diffs two
- * snapshots. Any visual delta shows up as a property change on a named element.
+ * Two modes for two jobs:
  *
- * Zero dependencies: a node:http static server + the Chrome DevTools Protocol
- * over Node's global WebSocket (Node >= 22). Page JavaScript is not served, so
- * snapshots are deterministic — no sockets, no physics, no random ids.
+ *   --out / --diff   refactor-time proof. Snapshots the computed style of every element
+ *                    on every page at every responsive regime, then diffs two snapshots.
+ *                    Any visual delta shows up as a property change on a named element.
+ *                    Needs a browser.
  *
- * Needs a Chromium/Chrome binary. Set CHROME_BIN, or install one; the script
- * searches the usual names. It is intentionally NOT a devDependency.
+ *   --lint           static gate, no browser, no baseline, sub-second. Fails when a class
+ *                    or id is defined in styles.css and referenced nowhere in the repo.
+ *                    This is the mode wired into `npm run check`; computed styles are
+ *                    SUPPOSED to change when features are built, so gating on "styles
+ *                    identical" would fail every legitimate UI commit.
  *
+ *   node scripts/css-parity.mjs --lint
  *   node scripts/css-parity.mjs --out before.json
- *   # ...edit public/styles.css...
+ *   #  ...edit public/styles.css...
  *   node scripts/css-parity.mjs --out after.json
- *   node scripts/css-parity.mjs --diff before.json after.json
+ *   node scripts/css-parity.mjs --diff before.json after.json    # exit 1 on any delta
+ *
+ * Browser plumbing lives in scripts/lib/headless.mjs, shared with input-test.mjs and
+ * component-parity.mjs.
  */
-import { createServer } from 'node:http';
-import { spawn } from 'node:child_process';
-import { readFile, writeFile, mkdtemp, rm, readdir } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { readFile, writeFile, readdir } from 'node:fs/promises';
 import { join, extname, resolve } from 'node:path';
+import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
 const PAGES = ['table.html', 'index.html', 'admin.html'];
 
 // The stylesheet has breakpoints at 560/720/900px plus (pointer: coarse) and a
-// short-landscape query. Snapshot every regime, or a responsive-only regression
-// walks straight past the harness.
+// short-landscape query. Snapshot every regime, or a responsive-only regression walks
+// straight past the harness.
 const VIEWPORTS = [
   { name: 'desktop', width: 1440, height: 900 },
   { name: 'lap-880', width: 880, height: 900 },
@@ -39,270 +43,30 @@ const VIEWPORTS = [
   { name: 'coarse-390', width: 390, height: 844, touch: true },
 ];
 
-const PROPS = [
-  'display',
-  'position',
-  'top',
-  'right',
-  'bottom',
-  'left',
-  'z-index',
-  'visibility',
-  'width',
-  'height',
-  'min-width',
-  'min-height',
-  'max-width',
-  'max-height',
-  'margin-top',
-  'margin-right',
-  'margin-bottom',
-  'margin-left',
-  'padding-top',
-  'padding-right',
-  'padding-bottom',
-  'padding-left',
-  'border-top-width',
-  'border-right-width',
-  'border-bottom-width',
-  'border-left-width',
-  'border-top-color',
-  'border-right-color',
-  'border-bottom-color',
-  'border-left-color',
-  'border-top-left-radius',
-  'border-top-right-radius',
-  'border-bottom-left-radius',
-  'border-bottom-right-radius',
-  'color',
-  'background-color',
-  'background-image',
-  'opacity',
-  'box-shadow',
-  'font-family',
-  'font-size',
-  'font-weight',
-  'font-style',
-  'line-height',
-  'letter-spacing',
-  'text-align',
-  'text-transform',
-  'text-decoration-line',
-  'flex-direction',
-  'flex-wrap',
-  'flex-grow',
-  'flex-shrink',
-  'flex-basis',
-  'justify-content',
-  'align-items',
-  'align-self',
-  'gap',
-  'order',
-  'grid-template-columns',
-  'grid-template-rows',
-  'grid-column',
-  'grid-row',
-  'overflow-x',
-  'overflow-y',
-  'transform',
-  'transition-property',
-  'cursor',
-  'pointer-events',
-  'white-space',
-  'box-sizing',
-];
-
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.css': 'text/css; charset=utf-8',
-  '.js': 'application/javascript; charset=utf-8',
-  '.svg': 'image/svg+xml',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.webp': 'image/webp',
-  '.woff2': 'font/woff2',
-};
-
-function serve() {
-  const server = createServer(async (req, res) => {
-    const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-    const ext = extname(path);
-    // Serve CSS/HTML/assets, but stub every script: page JS must not run.
-    if (ext === '.js') {
-      res.writeHead(200, { 'content-type': MIME['.js'] });
-      return res.end('');
-    }
-    try {
-      const body = await readFile(join(ROOT, path));
-      res.writeHead(200, { 'content-type': MIME[ext] ?? 'application/octet-stream' });
-      res.end(body);
-    } catch {
-      res.writeHead(404).end('');
-    }
-  });
-  return new Promise((ok) => server.listen(0, '127.0.0.1', () => ok(server)));
-}
-
-function findChrome() {
-  if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
-  const names = [
-    '/opt/pw-browsers/chromium',
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
-    '/usr/bin/brave-browser',
-  ];
-  const hit = names.find((n) => existsSync(n));
-  if (!hit) {
-    throw new Error('No Chromium found. Set CHROME_BIN to a Chrome/Chromium binary.');
-  }
-  return hit;
-}
-
-async function launch() {
-  const profile = await mkdtemp(join(tmpdir(), 'cssparity-'));
-  const proc = spawn(
-    findChrome(),
-    [
-      '--headless=new',
-      '--disable-gpu',
-      '--no-sandbox',
-      '--hide-scrollbars',
-      '--disable-lcd-text',
-      '--force-device-scale-factor=1',
-      '--force-color-profile=srgb',
-      '--disable-font-subpixel-positioning',
-      // Headless reports (pointer: none) by default, so (pointer: fine) never matches
-      // and any rule gated on it goes unmeasured. 4 = fine in Blink's pointer enum.
-      '--blink-settings=primaryPointerType=4,availablePointerTypes=4',
-      `--user-data-dir=${profile}`,
-      '--remote-debugging-port=0',
-      'about:blank',
-    ],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
-  );
-  const ws = await new Promise((ok, fail) => {
-    let buf = '';
-    const t = setTimeout(() => fail(new Error('browser did not start')), 30000);
-    proc.stderr.on('data', (d) => {
-      buf += d;
-      const m = buf.match(/ws:\/\/[^\s]+/);
-      if (m) {
-        clearTimeout(t);
-        ok(m[0]);
-      }
-    });
-  });
-  return { proc, ws, profile };
-}
-
-function cdp(url) {
-  const sock = new WebSocket(url);
-  let id = 0;
-  const pending = new Map();
-  const listeners = [];
-  sock.addEventListener('message', (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.id && pending.has(msg.id)) {
-      const { ok, fail } = pending.get(msg.id);
-      pending.delete(msg.id);
-      msg.error ? fail(new Error(msg.error.message)) : ok(msg.result);
-    } else {
-      listeners.forEach((fn) => fn(msg));
-    }
-  });
-  const ready = new Promise((ok) => sock.addEventListener('open', ok));
-  return {
-    ready,
-    on: (fn) => listeners.push(fn),
-    send: (method, params = {}, sessionId) =>
-      new Promise((ok, fail) => {
-        const mid = ++id;
-        pending.set(mid, { ok, fail });
-        sock.send(JSON.stringify({ id: mid, method, params, sessionId }));
-      }),
-    close: () => sock.close(),
-  };
-}
-
-const SNAPSHOT = `(() => {
-  // Reveal hidden containers so modal/pop-out subtrees are measurable.
-  for (const el of document.querySelectorAll('[hidden]')) el.removeAttribute('hidden');
-  const PROPS = ${JSON.stringify(PROPS)};
-  const pathOf = (el) => {
-    const parts = [];
-    for (let n = el; n && n.nodeType === 1 && n !== document.documentElement; n = n.parentElement) {
-      const i = n.parentElement ? [...n.parentElement.children].indexOf(n) + 1 : 1;
-      parts.unshift(n.id ? n.tagName.toLowerCase() + '#' + n.id : n.tagName.toLowerCase() + ':' + i);
-    }
-    return 'html>' + parts.join('>');
-  };
-  const out = {};
-  for (const el of document.querySelectorAll('*')) {
-    const cs = getComputedStyle(el);
-    const rec = {};
-    for (const p of PROPS) rec[p] = cs.getPropertyValue(p);
-    const r = el.getBoundingClientRect();
-    rec['@rect'] = [Math.round(r.x), Math.round(r.y), Math.round(r.width), Math.round(r.height)];
-    let k = pathOf(el), n = 2;
-    while (k in out) k = pathOf(el) + '~' + n++;
-    out[k] = rec;
-  }
-  return JSON.stringify(out);
-})()`;
-
 async function snapshot(outFile) {
-  const server = await serve();
-  const base = `http://127.0.0.1:${server.address().port}`;
-  const { proc, ws, profile } = await launch();
-  const c = cdp(ws);
-  await c.ready;
+  // Page JavaScript is stubbed, so snapshots are deterministic: no sockets, no physics,
+  // no random ids. The cost is that JS-built DOM is invisible here — that is
+  // component-parity.mjs's job.
+  const server = await serveDir({ root: ROOT, stubJs: true });
+  const cdp = await launch();
   const all = {};
   for (const { name, width, height, touch } of VIEWPORTS)
     for (const page of PAGES) {
-      const { targetId } = await c.send('Target.createTarget', { url: 'about:blank' });
-      const { sessionId } = await c.send('Target.attachToTarget', { targetId, flatten: true });
-      await c.send(
-        'Emulation.setDeviceMetricsOverride',
-        { width, height, deviceScaleFactor: 1, mobile: !!touch },
-        sessionId,
-      );
-      // (pointer: coarse) only matches with touch emulation on. Calling this with
-      // enabled:false resets the pointer type to none and undoes the blink-settings
-      // flag above, so the fine-pointer regimes must not call it at all.
-      if (touch)
-        await c.send(
-          'Emulation.setTouchEmulationEnabled',
-          { enabled: true, maxTouchPoints: 5 },
-          sessionId,
-        );
-      await c.send('Page.enable', {}, sessionId);
-      const loaded = new Promise((ok) => {
-        c.on((m) => {
-          if (m.method === 'Page.loadEventFired' && m.sessionId === sessionId) ok();
-        });
+      const p = await newPage(cdp, {
+        url: `${server.origin}/${page}`,
+        width,
+        height,
+        touch,
+        settle: 400,
       });
-      await c.send('Page.navigate', { url: `${base}/${page}` }, sessionId);
-      await loaded;
-      await new Promise((r) => setTimeout(r, 400));
-      const { result } = await c.send(
-        'Runtime.evaluate',
-        { expression: SNAPSHOT, returnByValue: true },
-        sessionId,
-      );
       const key = `${page} @${name}`;
-      all[key] = JSON.parse(result.value);
+      all[key] = JSON.parse(await p.evaluate(snapshotExpression()));
       process.stderr.write(`  ${key}: ${Object.keys(all[key]).length} elements\n`);
-      await c.send('Target.closeTarget', { targetId });
+      await p.close();
     }
-  c.close();
-  proc.kill();
+  await cdp.close();
   server.close();
   await writeFile(outFile, JSON.stringify(all, null, 0));
-  // Best-effort: the browser may still be flushing its profile dir.
-  await new Promise((r) => setTimeout(r, 500));
-  await rm(profile, { recursive: true, force: true }).catch(() => {});
   console.log(`wrote ${outFile}`);
 }
 
