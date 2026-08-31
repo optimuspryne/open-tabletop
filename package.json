@@ -8,6 +8,7 @@
     "test": "node --test test/*.js",
     "test:integration": "node scripts/test-database.mjs",
     "test:input": "node scripts/input-test.mjs",
+    "test:components": "node scripts/component-parity.mjs",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write \"**/*.{js,mjs}\" package.json",
     "format:check": "prettier --check \"**/*.{js,mjs}\" package.json",

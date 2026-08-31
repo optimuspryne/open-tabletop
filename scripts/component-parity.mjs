@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+/**
+ * component-parity.mjs — snapshot the DOM the app BUILDS, not just the markup it ships.
+ *
+ * css-parity.mjs stubs page JavaScript so its snapshots are deterministic. The cost is a
+ * blind spot: every component assembled at runtime — library cards, their controls, the
+ * colour swatches — is invisible to it. Three changes shipped in one day needed a human
+ * to look at them for exactly this reason.
+ *
+ * This runs the real modules. public/editor-panel.js does not depend on client.js: it
+ * receives the room through window.onOttRoom and nothing else, so a permissive stub room
+ * is enough to reach the whole library UI with no server, no database and no auth.
+ *
+ * Two things the fixture must get right, both learned the hard way:
+ *   - graphics.js builds a WebGLRenderer at import time, so the browser needs software
+ *     GL. --disable-gpu (which css-parity uses) would also disable SwiftShader, and
+ *     editor-panel.js would die before assigning its seams — every global reading
+ *     `undefined` and looking like the module simply did not exist.
+ *   - applyIcons() is called from client.js, which is stubbed here. Without calling it,
+ *     every icon-bearing element measures wrong: the swatch trigger comes out 14x6px
+ *     instead of 26x18, which reads exactly like a real tap-target bug.
+ *
+ * Output uses the same snapshot format as css-parity.mjs, so:
+ *   node scripts/component-parity.mjs --out before.json
+ *   node scripts/css-parity.mjs --diff before.json after.json
+ *
+ * Needs a browser; not part of `npm run check`. Run as `npm run test:components`.
+ */
+import { writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
+
+const ROOT = resolve(import.meta.dirname, '..', 'public');
+const SHARED = resolve(import.meta.dirname, '..', 'shared');
+
+// A permissive stub: editor-panel only needs the handover to wire its UI. Nothing here
+// reaches the network — every method is a no-op and every state read is undefined.
+const STUB_ROOM = `new Proxy({}, {
+  get: (t, k) => k === 'sessionId' ? 'component-parity'
+    : k === 'state' ? new Proxy({}, { get: () => undefined })
+    : () => undefined,
+})`;
+
+// Each scene: drive the real UI, then snapshot a subtree.
+const SCENES = [
+  {
+    name: 'library',
+    root: '#libraryModal',
+    drive: `
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('lib2Btn').click();
+      (await import('/icons.js')).applyIcons();`,
+  },
+  {
+    name: 'library-swatches-open',
+    root: '#libraryModal',
+    drive: `
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('lib2Btn').click();
+      (await import('/icons.js')).applyIcons();
+      document.querySelector('.swatchPop > .pop-trigger').click();`,
+  },
+];
+
+const VIEWPORTS = [
+  { name: 'desktop', width: 1440, height: 900 },
+  { name: 'coarse-390', width: 390, height: 844, touch: true },
+];
+
+const out = {};
+const server = await serveDir({
+  root: ROOT,
+  stubOnly: ['/client.js'], // the engine; editor-panel is what we are exercising
+  mounts: { '/shared/': SHARED },
+});
+const cdp = await launch({ webgl: true });
+
+let bad = 0;
+for (const vp of VIEWPORTS)
+  for (const scene of SCENES) {
+    const page = await newPage(cdp, {
+      url: `${server.origin}/table.html`,
+      width: vp.width,
+      height: vp.height,
+      touch: vp.touch,
+      settle: 900, // module graph + Three + the first render
+    });
+    await page.evaluate(`(async () => { ${scene.drive} })()`);
+    await new Promise((r) => setTimeout(r, 500));
+
+    // A harness that reports green on an empty page is worse than no harness.
+    const cards = await page.evaluate(`document.querySelectorAll('.libCard').length`);
+    if (!cards) {
+      console.error(`  FAIL  ${scene.name} @${vp.name}: no .libCard rendered — fixture broken`);
+      bad++;
+    }
+    if (page.errors.length) {
+      console.error(`  FAIL  ${scene.name} @${vp.name}: page raised ${page.errors[0]}`);
+      bad++;
+    }
+
+    const key = `${scene.name} @${vp.name}`;
+    out[key] = JSON.parse(
+      await page.evaluate(
+        snapshotExpression({ root: scene.root, revealHidden: false, normalizeDataUrls: true }),
+      ),
+    );
+    console.log(`  ${key}: ${cards} cards, ${Object.keys(out[key]).length} elements`);
+    await page.close();
+  }
+
+await cdp.close();
+server.close();
+if (server.missing.length)
+  console.log(
+    `  (${new Set(server.missing).size} asset paths 404'd: ${[...new Set(server.missing)].slice(0, 3).join(' ')}…)`,
+  );
+
+const file = process.argv[2] === '--out' ? process.argv[3] : null;
+if (file) {
+  await writeFile(file, JSON.stringify(out, null, 0));
+  console.log(`wrote ${file}`);
+}
+if (bad) process.exitCode = 1;

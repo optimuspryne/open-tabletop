@@ -25,8 +25,8 @@ jobs:
       - run: npm ci
       - run: npm run check
 
-  input-seam:
-    name: Input seam (headless browser)
+  browser-suites:
+    name: Input seam and components (headless browser)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,6 +48,10 @@ jobs:
           echo "CHROME_BIN=$BIN" >> "$GITHUB_ENV"
           "$BIN" --version
       - run: npm run test:input
+      # Boots the real editor-panel.js and asserts the library UI still renders without
+      # page errors. Without a stored baseline it cannot diff, so here it is a smoke
+      # test -- which is exactly what catches the fixture (or the module) breaking.
+      - run: npm run test:components
 
   dependency-audit:
     name: Production dependency audit
