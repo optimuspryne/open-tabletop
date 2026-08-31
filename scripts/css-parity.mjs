@@ -358,8 +358,8 @@ async function diff(aFile, bFile) {
  * above are refactor-time tools that need two runs and a browser.
  * ------------------------------------------------------------------------ */
 
-// Classes that are intentionally defined without a reference (applied by an
-// external script, kept for a documented reason). Add with a comment saying why.
+// Selectors intentionally defined without a reference (applied by an external script,
+// kept for a documented reason). Entries carry their sigil: '.foo' or '#bar'.
 const LINT_ALLOW = new Set([]);
 
 const SCAN_EXT = ['.js', '.mjs', '.html', '.json', '.md', '.sql'];
@@ -401,16 +401,17 @@ async function lint() {
   const css = await readFile(cssPath, 'utf8');
   const sels = selectorsOf(css);
 
-  // A class used ONLY inside :not() is not dead — :not(.gone) still matches.
-  const defined = new Set(),
-    inNot = new Set();
+  // A selector used ONLY inside :not() is not dead — :not(.gone) still matches.
+  const defined = { class: new Set(), id: new Set() };
+  const inNot = { class: new Set(), id: new Set() };
   for (const sel of sels) {
-    for (const m of sel.matchAll(/\.[A-Za-z_][\w-]*/g)) {
+    for (const m of sel.matchAll(/[.#][A-Za-z_][\w-]*/g)) {
+      const kind = m[0][0] === '.' ? 'class' : 'id';
       const name = m[0].slice(1);
       const before = sel.slice(0, m.index);
       const open = (before.match(/:not\(/g) ?? []).length;
       const close = (before.match(/\)/g) ?? []).length;
-      (open > close ? inNot : defined).add(name);
+      (open > close ? inNot : defined)[kind].add(name);
     }
   }
 
@@ -420,23 +421,30 @@ async function lint() {
     files.filter((f) => f !== cssPath).map((f) => readFile(f, 'utf8').catch(() => '')),
   );
 
-  const dead = [];
-  for (const name of [...defined].sort()) {
-    if (LINT_ALLOW.has(name) || inNot.has(name)) continue;
-    const re = new RegExp(`(?<![\\w-])${name.replace(/[.*+?^$()[\]{}|\\]/g, '\\$&')}(?![\\w-])`);
-    if (!blobs.some((b) => re.test(b))) dead.push(name);
-  }
+  const dead = { class: [], id: [] };
+  for (const kind of ['class', 'id'])
+    for (const name of [...defined[kind]].sort()) {
+      const sigil = kind === 'class' ? '.' : '#';
+      if (LINT_ALLOW.has(sigil + name) || inNot[kind].has(name)) continue;
+      const re = new RegExp(`(?<![\\w-])${name.replace(/[.*+?^$()[\]{}|\\]/g, '\\$&')}(?![\\w-])`);
+      if (!blobs.some((b) => re.test(b))) dead[kind].push(name);
+    }
 
-  if (dead.length === 0) {
-    console.log(`css-lint: ${defined.size} classes defined, all referenced.`);
+  const total = dead.class.length + dead.id.length;
+  if (total === 0) {
+    console.log(
+      `css-lint: ${defined.class.size} classes and ${defined.id.size} ids defined, all referenced.`,
+    );
     return;
   }
   console.error(
-    `css-lint: ${dead.length} class(es) defined in public/styles.css but referenced nowhere:\n`,
+    `css-lint: ${total} selector(s) defined in public/styles.css but referenced nowhere:\n`,
   );
-  for (const d of dead) console.error(`  .${d}`);
+  for (const d of dead.class) console.error(`  .${d}`);
+  for (const d of dead.id) console.error(`  #${d}`);
   console.error(
-    '\nRemove them, or add to LINT_ALLOW in scripts/css-parity.mjs with a reason.' +
+    '\nRemove them, or add to LINT_ALLOW in scripts/css-parity.mjs with a reason' +
+      "\n(entries carry their sigil, e.g. '.foo' or '#bar')." +
       '\nNote: some may share a comma group with live selectors — remove the dead' +
       '\nselector, not the whole rule.',
   );
