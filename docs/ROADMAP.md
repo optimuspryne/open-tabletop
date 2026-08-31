@@ -67,8 +67,9 @@ and much of what we built recently is mouse-first. This is also the most work.
   touch equivalent, and a status. Marquee/Shift-select, group drag, the tray camera hop,
   scroll-to-raise, right-drag-to-move and left-click-a-deck-to-draw each assume a mouse with
   buttons and a wheel; all but the rotation gestures now have a touch path. Three gaps remain
-  open there (rotating a held piece, exact-step formation rotation, single-tap card verbs), plus
-  the fact that the in-app "How to Play" mentions touch zero times.
+  open there — rotating a held piece (middle-click 45°, Alt+drag 15°, Alt+Shift smooth: none
+  reachable by finger), exact-step formation rotation, and single-tap card verbs — plus the fact
+  that the in-app "How to Play" mentions touch zero times.
 - **Touch equivalents.** ✅ Done - Long-press, two-finger, and on-screen affordances for the button/wheel
   gestures; make the Select tool the primary path where modifiers don't exist.
 - **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and

@@ -44,7 +44,7 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 | Wheel while holding | Raise / lower the held piece | `.holdControls` ▲ / ▼ (hold to repeat, `client.js:5451`) | ✅ |
 | Alt + drag while holding | Rotate the held piece in 15° steps | — | ❌ |
 | Alt + Shift + drag | Smooth (unsnapped) rotation | — | ❌ |
-| Middle-click while holding | Snap the held piece to the grid | Radial → **Snap to grid** | ⚠️ |
+| Middle-click while holding | Rotate the held piece's facing to the next 45° step | — | ❌ |
 | Middle-click empty felt | Ping everyone | Long-press empty felt (`client.js:4977`) | ✅ |
 | Double-left-click | Inspect up close | Double-tap | ✅ |
 | Right-click a piece | Context verbs | Long-press → radial menu | ✅ |
@@ -121,12 +121,12 @@ unreachable on iOS and iPadOS.
 
 Three, in rough order of how much they cost a touch player:
 
-1. **Rotating a held piece has no touch path.** Alt+drag (15° steps) and Alt+Shift+drag (smooth)
-   are the only ways to turn a piece you are holding. The ⟲ / ⟳ hold buttons rotate a *selection*
-   via `rotateGroup`, and they do fall back to the held piece when the selection is empty
-   (`client.js:5458`) — but they are ~7.5°/tick and continuous, so there is no touch way to land
-   a piece on an exact 15° or 45° step. This is the gap most likely to be felt: orienting a
-   miniature or a board tile is routine.
+1. **Rotating a held piece has no touch path.** All three ways to turn a piece you are holding
+   are mouse-only: middle-click (next 45° step, `snap`), Alt+drag (15° steps), and Alt+Shift+drag
+   (smooth). The ⟲ / ⟳ hold buttons rotate a *selection* via `rotateGroup`, and they do fall back
+   to the held piece when the selection is empty (`client.js:5458`) — but they are ~7.5°/tick and
+   continuous, so there is no touch way to land a piece on an exact 15° or 45° step. This is the
+   gap most likely to be felt: orienting a miniature or a board tile is routine.
 2. **Exact-step formation rotation.** Same root cause, one level up: `[` / `]` are ∓45° steps and
    the touch buttons are continuous.
 3. **Single-tap parity for card verbs.** Left-click takes a card to hand and left-click deals from
@@ -134,10 +134,12 @@ Three, in rough order of how much they cost a touch player:
    into the radial. The asymmetry is deliberate (a tap has to be able to mean "grab"), but it is
    undocumented, and a new touch player has no way to discover the radial.
 
-Not gaps, but worth recording: **middle-click while holding snaps to grid, it does not rotate
-facing** — `snapHeld` sends `snap` (`client.js:4982`). The in-app "How to Play"
-(`table.html:1599`) still claims *"Middle-click still rotates its facing in 45° steps."* That
-line is wrong and should be corrected.
+Worth recording, because the naming invites exactly one wrong reading: **`snap` and `setSnap`
+are unrelated messages.** `snap` (`server/game/handlers/pieces.js:220`) rounds the held body's
+yaw to `Math.PI / 4` and advances one step — it is the middle-click facing rotate, and it is the
+only exact-45° step available for a held piece. `setSnap` (line 209) toggles the piece's
+grid-snap prop — that is the `G` key and the radial's **Snap to grid**. The client-side intent
+that sends the first is called `snapHeld` (`client.js:4982`), which reads like the second.
 
 ## The documentation gap
 
