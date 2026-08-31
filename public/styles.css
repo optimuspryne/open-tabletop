@@ -45,9 +45,14 @@
   --fs-sm: calc(var(--fs-sm-base) * var(--ui-text-scale));
 
   /* chrome follows --ui-elements-scale (icons decoupled from the font so they track this, not text) */
-  --ico-size: calc(
-    var(--fs-base) * 1.2 * var(--ui-elements-scale)
-  ); /* icon size (was 1.2em on the button font) */
+  --ico-size: calc(var(--fs-base) * 1.2 * var(--ui-elements-scale));
+  /* icon tiers — all derived from --ico-size so they track --ui-elements-scale */
+  --ico-size-sm: calc(var(--ico-size) * 0.6); /* inline / meta icons */
+  --ico-size-md: calc(var(--ico-size) * 0.73);
+  --ico-size-lg: calc(var(--ico-size) * 0.93);
+  --ico-size-xl: calc(
+    var(--ico-size) * 1.22
+  ); /* seat + FAB */ /* icon size (was 1.2em on the button font) */
   --inset: calc(
     clamp(10px, 1.4vw, 20px) * var(--ui-elements-scale)
   ); /* panel distance from screen edges */
@@ -122,8 +127,8 @@
   justify-content: flex-end;
 }
 .actions .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 .actions button {
   min-width: 4.5em;
@@ -3856,8 +3861,8 @@ body.not-gm .gm-only {
   white-space: nowrap;
 }
 #landing .hgroup .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 
 /* Card internals: tighter label→field rhythm, and the primary action on the
@@ -4126,8 +4131,8 @@ body.not-gm .gm-only {
 }
 #libraryModal .cardCtrls .chip .ico,
 #libraryModal .libCard .actions .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 /* Stepper: same height as the chips beside it, tighter than the toolbar default. */
 #libraryModal .cardCtrls .stepper {
@@ -4328,8 +4333,8 @@ body.not-gm .gm-only {
 #memberList .ico,
 .memberRow .ico,
 .unclaimed-row .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 #memberList .actions,
 .memberRow .actions {
@@ -4480,8 +4485,8 @@ body.not-gm .gm-only {
   opacity: 0.55;
 }
 .paneNote .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
   color: var(--accent);
   opacity: 1;
 }
@@ -4649,8 +4654,8 @@ body.not-gm .gm-only {
   padding: 6px 9px;
 }
 #musicBody .chip .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 
 /* ---- measure (8e): the instructions become one hint block --------------- */
@@ -4933,8 +4938,8 @@ body.not-gm .gm-only {
   box-shadow: 0 0 12px -4px var(--accent);
 }
 #showStripChips button .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 #showStripChips .stripAv {
   width: 16px;
@@ -4997,8 +5002,8 @@ body.not-gm .gm-only {
   border-color: transparent;
 }
 .dropSplit button .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 
 /* ---- toast ------------------------------------------------------------- */
@@ -5032,8 +5037,8 @@ body.not-gm .gm-only {
   background: var(--accent-soft);
 }
 #toast .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
   color: var(--accent);
 }
 @keyframes toastIn {
@@ -5250,8 +5255,8 @@ body.not-gm .gm-only {
     background: var(--accent-soft);
   }
   .drawerRow .ico {
-    width: 19px;
-    height: 19px;
+    width: var(--ico-size-lg);
+    height: var(--ico-size-lg);
     color: var(--accent);
     flex: 0 0 auto;
   }
@@ -5328,8 +5333,8 @@ body.not-gm .gm-only {
     display: none;
   }
   #seatBtn .ico {
-    width: 25px;
-    height: 25px;
+    width: var(--ico-size-xl);
+    height: var(--ico-size-xl);
   }
   #seatBtn.on {
     background: var(--accent-soft);
@@ -5604,8 +5609,8 @@ body.not-gm .gm-only {
     place-items: center;
   }
   #handTab .ico-caret {
-    width: 15px;
-    height: 15px;
+    width: var(--ico-size-md);
+    height: var(--ico-size-md);
     opacity: 0.5;
     transition: transform 0.18s ease;
   }
@@ -5709,8 +5714,8 @@ body.not-gm .gm-only {
     display: none;
   }
   #fabBtn .ico {
-    width: 25px;
-    height: 25px;
+    width: var(--ico-size-xl);
+    height: var(--ico-size-xl);
   }
   #fabBtn.on {
     transform: rotate(45deg);
@@ -5772,8 +5777,8 @@ body.not-gm .gm-only {
   color: var(--danger, #e0a3a3);
 }
 .radialDot .ico {
-  width: 21px;
-  height: 21px;
+  width: var(--ico-size);
+  height: var(--ico-size);
 }
 
 /* ============================================================================
@@ -6343,8 +6348,8 @@ body.not-gm .gm-only {
 }
 #seatBtn .ico,
 #fabBtn .ico {
-  width: 25px;
-  height: 25px;
+  width: var(--ico-size-xl);
+  height: var(--ico-size-xl);
 }
 #seatBtn.on {
   background: var(--accent-soft);
@@ -6394,8 +6399,8 @@ body.not-gm .gm-only {
   background: var(--accent-soft);
 }
 .seatPop .drawerRow .ico {
-  width: 19px;
-  height: 19px;
+  width: var(--ico-size-lg);
+  height: var(--ico-size-lg);
   flex: 0 0 auto;
   color: var(--accent);
 }
@@ -6530,8 +6535,8 @@ body.not-gm .gm-only {
   white-space: nowrap;
 }
 :is(#roomSettingsModal, #settingsModal) .tableBody .chip .ico {
-  width: var(--fs-sm-base);
-  height: var(--fs-sm-base);
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
 }
 /* Number fields: room for a value, not for the whole row. */
 :is(#roomSettingsModal, #settingsModal) .tableBody .sizeRow > input[type='number'] {
