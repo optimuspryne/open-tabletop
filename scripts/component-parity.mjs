@@ -41,11 +41,58 @@ const STUB_ROOM = `new Proxy({}, {
     : () => undefined,
 })`;
 
+// A gallery of the extracted row builders, rendered from fixtures. This is the point of
+// pulling them out of client.js: every state a row can be in — pending member, GM seen by
+// an owner, your own message, a message with no timestamp — is one object here, where
+// producing the same set from a live room would mean six accounts and a real game.
+const ROWS_FIXTURE = `<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="/styles.css">
+<body><div id="gallery">
+  <div class="pane" data-pane="chat"><div id="chatLog"></div></div>
+  <ul id="memberList"></ul>
+</div>
+<script type="module">
+import { chatRow, memberRow, emptyRow } from '/rows.js';
+import { applyIcons } from '/icons.js';
+const log = document.getElementById('chatLog');
+const ts = Date.UTC(2026, 0, 2, 15, 4);   // fixed: toLocaleTimeString must not drift
+for (const [m, opt] of [
+  [{ from: 'Ada', text: 'Your turn.', ts }, {}],
+  [{ from: 'Ada', text: 'Your turn.', ts }, { mine: true }],
+  [{ from: 'Grace', text: 'No timestamp on this one' }, {}],
+  [{ from: 'Ada', text: 'A much longer message that has to wrap inside the log column.', ts }, {}],
+  [{ from: '', text: '' }, {}],
+]) log.appendChild(chatRow(m, opt));
+const ul = document.getElementById('memberList');
+const MEMBERS = [
+  { username: 'pending-player', role: 'player', status: 'pending' },
+  { username: 'a-player', role: 'player', status: 'admitted' },
+  { username: 'a-helper', role: 'helper', status: 'admitted' },
+  { username: 'a-gm', role: 'gm', status: 'admitted' },
+  { username: 'the-owner', role: 'owner', status: 'admitted' },
+];
+for (const m of MEMBERS) ul.appendChild(memberRow(m, { myRank: 0, isSelf: false }));
+for (const m of MEMBERS) ul.appendChild(memberRow(m, { myRank: 3, isSelf: false }));
+ul.appendChild(memberRow(MEMBERS[1], { myRank: 3, isSelf: true }));
+ul.appendChild(emptyRow());
+applyIcons(document);
+window.__rowsReady = true;
+</script></body>`;
+
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'rows',
+    page: '/__rows.html',
+    root: '#gallery',
+    expect: { selector: '.memberRow', min: 11 },
+    settle: 250,
+    drive: `void 0;`, // the fixture renders itself on import
+  },
+  {
     name: 'library',
     root: '#libraryModal',
+    expect: { selector: '.libCard', min: 40 },
     drive: `
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
@@ -54,6 +101,7 @@ const SCENES = [
   {
     name: 'library-swatches-open',
     root: '#libraryModal',
+    expect: { selector: '.libCard', min: 40 },
     drive: `
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
@@ -72,6 +120,7 @@ const server = await serveDir({
   root: ROOT,
   stubOnly: ['/client.js'], // the engine; editor-panel is what we are exercising
   mounts: { '/shared/': SHARED },
+  routes: { '/__rows.html': { body: ROWS_FIXTURE } },
 });
 const cdp = await launch({ webgl: true });
 
@@ -79,19 +128,24 @@ let bad = 0;
 for (const vp of VIEWPORTS)
   for (const scene of SCENES) {
     const page = await newPage(cdp, {
-      url: `${server.origin}/table.html`,
+      url: `${server.origin}${scene.page ?? '/table.html'}`,
       width: vp.width,
       height: vp.height,
       touch: vp.touch,
-      settle: 900, // module graph + Three + the first render
+      settle: scene.settle ?? 900, // module graph + Three + the first render
     });
     await page.evaluate(`(async () => { ${scene.drive} })()`);
     await new Promise((r) => setTimeout(r, 500));
 
     // A harness that reports green on an empty page is worse than no harness.
-    const cards = await page.evaluate(`document.querySelectorAll('.libCard').length`);
-    if (!cards) {
-      console.error(`  FAIL  ${scene.name} @${vp.name}: no .libCard rendered — fixture broken`);
+    const found = await page.evaluate(
+      `document.querySelectorAll(${JSON.stringify(scene.expect.selector)}).length`,
+    );
+    if (found < scene.expect.min) {
+      console.error(
+        `  FAIL  ${scene.name} @${vp.name}: ${found} ${scene.expect.selector} rendered, ` +
+          `expected at least ${scene.expect.min} — fixture broken`,
+      );
       bad++;
     }
     if (page.errors.length) {
@@ -105,7 +159,9 @@ for (const vp of VIEWPORTS)
         snapshotExpression({ root: scene.root, revealHidden: false, normalizeDataUrls: true }),
       ),
     );
-    console.log(`  ${key}: ${cards} cards, ${Object.keys(out[key]).length} elements`);
+    console.log(
+      `  ${key}: ${found} ${scene.expect.selector}, ${Object.keys(out[key]).length} elements`,
+    );
     await page.close();
   }
 

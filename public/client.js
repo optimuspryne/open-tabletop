@@ -24,6 +24,7 @@ import {
   gridMesh,
 } from './graphics.js';
 import { applyIcons, setIcon, initTip, wirePopGroups } from './icons.js';
+import { chatRow, emptyRow, makeButton, memberRow, rankOf } from './rows.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -85,9 +86,7 @@ const escapeHtml = (x) =>
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
   );
 // Per-room role → numeric rank (owner > gm > helper > player); used for gating.
-const rankOf = (role) => ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
 // A <button> from label + click handler (+ optional class) — the shared DOM factory.
-const MEMBER_ICON = { Helper: 'user-up', Player: 'user-down', GM: 'user-cog', Kick: 'user-minus' };
 // Preset colors for the felt + grid-line swatch popovers (the custom picker sits beside them).
 const FELT_COLORS = [
   '#2f6b4f',
@@ -120,17 +119,6 @@ const setBtnLabel = (btn, text) => {
     l.textContent = text;
     btn.setAttribute('aria-label', text);
   } else btn.textContent = text;
-};
-const makeButton = (label, fn, cls, icon) => {
-  const button = document.createElement('button');
-  const ic = icon || MEMBER_ICON[label];
-  if (ic) {
-    button.dataset.icon = ic;
-    button.innerHTML = '<span class="lbl">' + label + '</span>';
-  } else button.textContent = label;
-  if (cls) button.className = cls;
-  button.onclick = fn;
-  return button;
 };
 
 // Wrap every number input in a themed − / + stepper (universal number-field style).
@@ -291,29 +279,8 @@ function addChatMsg(m) {
   const log = byId('chatLog');
   if (!log || !m) return;
   const mine = (m.from || '') === (byId('myName')?.textContent || '').trim();
-  const row = document.createElement('div');
-  row.className = 'chatMsg' + (mine ? ' me' : '');
-  const head = document.createElement('div');
-  head.className = 'chatHead';
-  const who = document.createElement('span');
-  who.className = 'chatFrom';
-  who.textContent = mine ? 'you' : m.from || 'Player';
-  head.append(who);
-  if (m.ts) {
-    const t = document.createElement('span');
-    t.className = 'chatTime';
-    t.textContent = new Date(m.ts).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-    head.append(t);
-  }
-  const text = document.createElement('div');
-  text.className = 'chatText';
-  text.textContent = m.text || '';
-  row.append(head, text);
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  log.appendChild(row);
+  log.appendChild(chatRow(m, { mine }));
   if (atBottom) log.scrollTop = log.scrollHeight;
   const chatBtn = byId('chatBtn'),
     reg = byId('regionTL');
@@ -4534,65 +4501,17 @@ function renderMembers(list) {
   const me = room.state.players.get(mySession);
   const myName = me ? me.name : '';
   const myRank = rankOf(me ? me.role : 'player');
-  const btn = makeButton;
   if (!list.length) {
-    const li = document.createElement('li');
-    li.className = 'muted';
-    li.textContent = 'No members.';
-    ul.appendChild(li);
+    ul.appendChild(emptyRow('No members.'));
     return;
   }
-  for (const m of list) {
-    const li = document.createElement('li');
-    li.className = 'memberRow';
-    const info = document.createElement('span');
-    info.textContent = m.username;
-    const tag = document.createElement('span');
-    tag.className = 'muted';
-    tag.textContent = ` \u00b7 ${m.role}${m.status === 'pending' ? ' \u00b7 pending' : ''}`;
-    info.appendChild(tag);
-    li.appendChild(info);
-    const acts = document.createElement('span');
-    acts.className = 'actions';
-    const isSelf = m.username === myName;
-    if (m.status === 'pending') {
-      acts.append(
-        btn('Admit', () => room.send('admit', { userId: m.userId })),
-        btn('Reject', () => room.send('kick', { userId: m.userId })),
-      );
-    } else if (!isSelf && m.role !== 'owner') {
-      if (m.role === 'player')
-        acts.appendChild(
-          btn('Helper', () => room.send('setRole', { userId: m.userId, role: 'helper' })),
-        );
-      if (m.role === 'helper')
-        acts.appendChild(
-          btn('Player', () => room.send('setRole', { userId: m.userId, role: 'player' })),
-        );
-      if (myRank >= 3) {
-        // owner manages co-GMs
-        if (m.role !== 'gm')
-          acts.appendChild(btn('GM', () => room.send('setRole', { userId: m.userId, role: 'gm' })));
-        else {
-          acts.appendChild(
-            btn(
-              'Helper',
-              () => room.send('setRole', { userId: m.userId, role: 'helper' }),
-              null,
-              'user-down',
-            ),
-          ); // demote GM -> Helper (down)
-          acts.appendChild(
-            btn('Player', () => room.send('setRole', { userId: m.userId, role: 'player' })),
-          ); // demote GM -> Player
-        }
-      }
-      if (m.role !== 'gm' || myRank >= 3)
-        acts.appendChild(btn('Kick', () => room.send('kick', { userId: m.userId })));
-    }
-    li.appendChild(acts);
-    ul.appendChild(li);
-  }
+  const on = {
+    admit: (m) => room.send('admit', { userId: m.userId }),
+    reject: (m) => room.send('kick', { userId: m.userId }),
+    setRole: (m, role) => room.send('setRole', { userId: m.userId, role }),
+    kick: (m) => room.send('kick', { userId: m.userId }),
+  };
+  for (const m of list) ul.appendChild(memberRow(m, { isSelf: m.username === myName, myRank, on }));
   applyIcons(ul);
 }
 
