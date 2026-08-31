@@ -24,7 +24,18 @@ import {
   gridMesh,
 } from './graphics.js';
 import { applyIcons, setIcon, initTip, wirePopGroups } from './icons.js';
-import { chatRow, emptyRow, makeButton, memberRow, rankOf } from './rows.js';
+import {
+  chatRow,
+  emptyRow,
+  makeButton,
+  memberRow,
+  rankOf,
+  scoreEmptyRow,
+  scoreRow,
+  toastContent,
+  unclaimedHead,
+  unclaimedRow,
+} from './rows.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -294,27 +305,12 @@ function toast(text, icon = 'check', action = null) {
   const el = byId('toast');
   if (!el) return;
   el.replaceChildren();
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('class', 'ico ico-' + icon);
-  svg.setAttribute('aria-hidden', 'true');
-  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-  use.setAttribute('href', '#i-' + icon);
-  svg.appendChild(use);
-  const span = document.createElement('span');
-  span.textContent = text;
-  el.append(svg, span);
-  if (action) {
-    // An undoable action carries its own way out, rather than a separate history stack.
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'toastAction';
-    b.textContent = action.label;
-    b.onclick = () => {
+  el.append(
+    ...toastContent(text, icon, action, () => {
       action.fn();
       el.hidden = true;
-    };
-    el.append(b);
-  }
+    }),
+  );
   el.hidden = false;
   el.setAttribute('role', 'status');
   clearTimeout(toastTimer);
@@ -3437,45 +3433,15 @@ function applyBoardRole() {
 function renderScores() {
   const tbody = byId('scoreRows');
   if (!tbody || !room || !room.state || !room.state.scores) return;
-  const mk = makeButton;
   const canEdit = myRank >= 1;
+  const on = {
+    label: (id, label) => room.send('score', { action: 'label', id, label }),
+    adjust: (id, delta) => room.send('score', { action: 'adjust', id, delta }),
+    remove: (id) => room.send('score', { action: 'remove', id }),
+  };
   tbody.replaceChildren();
-  room.state.scores.forEach((row, id) => {
-    const tr = document.createElement('tr');
-    const name = document.createElement('td');
-    name.className = 'scoreName';
-    if (canEdit) {
-      const inp = document.createElement('input');
-      inp.value = row.label;
-      inp.maxLength = 40;
-      inp.onchange = () => room.send('score', { action: 'label', id, label: inp.value });
-      name.appendChild(inp);
-    } else {
-      name.textContent = row.label;
-    }
-    const val = document.createElement('td');
-    val.className = 'scoreVal';
-    val.textContent = row.score;
-    const acts = document.createElement('td');
-    acts.className = 'scoreActs';
-    if (canEdit)
-      acts.append(
-        mk('\u2212', () => room.send('score', { action: 'adjust', id, delta: -1 })),
-        mk('+', () => room.send('score', { action: 'adjust', id, delta: 1 })),
-        mk('\u00d7', () => room.send('score', { action: 'remove', id }), 'danger'),
-      );
-    tr.append(name, val, acts);
-    tbody.appendChild(tr);
-  });
-  if (!room.state.scores.size) {
-    const tr = document.createElement('tr');
-    const td = document.createElement('td');
-    td.colSpan = 3;
-    td.className = 'scoreEmpty';
-    td.textContent = 'No scores yet.';
-    tr.appendChild(td);
-    tbody.appendChild(tr);
-  }
+  room.state.scores.forEach((row, id) => tbody.appendChild(scoreRow(row, id, { canEdit, on })));
+  if (!room.state.scores.size) tbody.appendChild(scoreEmptyRow());
 }
 
 function updateRoomNotes() {
@@ -4457,38 +4423,11 @@ function renderUnclaimed() {
   const present = [];
   room.state.players.forEach((p, sid) => present.push([sid, p.name]));
   present.sort((a, b) => (a[1] > b[1] ? 1 : a[1] < b[1] ? -1 : 0));
-  const head = document.createElement('div');
-  head.className = 'unclaimed-head';
-  head.textContent = 'Unclaimed hands';
-  box.appendChild(head);
-  unclaimed.forEach((name, userId) => {
-    const row = document.createElement('div');
-    row.className = 'unclaimed-row';
-    const label = document.createElement('span');
-    label.className = 'unclaimed-name';
-    label.textContent = name || 'A player';
-    row.appendChild(label);
-    const sel = document.createElement('select');
-    sel.className = 'unclaimed-assign';
-    const def = document.createElement('option');
-    def.value = '';
-    def.textContent = 'Give to\u2026';
-    sel.appendChild(def);
-    for (const [sid, pname] of present) {
-      const o = document.createElement('option');
-      o.value = sid;
-      o.textContent = pname;
-      sel.appendChild(o);
-    }
-    sel.onchange = () => {
-      if (sel.value) {
-        room.send('reassignHand', { userId, toSessionId: sel.value });
-        sel.value = '';
-      }
-    };
-    row.appendChild(sel);
-    box.appendChild(row);
-  });
+  const on = {
+    assign: (userId, toSessionId) => room.send('reassignHand', { userId, toSessionId }),
+  };
+  box.appendChild(unclaimedHead());
+  unclaimed.forEach((name, userId) => box.appendChild(unclaimedRow(userId, name, { present, on })));
 }
 
 // The GM-only Members panel: the full membership (incl. offline/pending, from the

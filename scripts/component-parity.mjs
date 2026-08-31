@@ -50,9 +50,12 @@ const ROWS_FIXTURE = `<!doctype html><meta charset="utf-8">
 <body><div id="gallery">
   <div class="pane" data-pane="chat"><div id="chatLog"></div></div>
   <ul id="memberList"></ul>
+  <table><tbody id="scoreRows"></tbody></table>
+  <div id="unclaimedHands"></div>
+  <div id="toast"></div>
 </div>
 <script type="module">
-import { chatRow, memberRow, emptyRow } from '/rows.js';
+import { chatRow, memberRow, emptyRow, scoreRow, scoreEmptyRow, unclaimedHead, unclaimedRow, toastContent } from '/rows.js';
 import { applyIcons } from '/icons.js';
 const log = document.getElementById('chatLog');
 const ts = Date.UTC(2026, 0, 2, 15, 4);   // fixed: toLocaleTimeString must not drift
@@ -75,6 +78,20 @@ for (const m of MEMBERS) ul.appendChild(memberRow(m, { myRank: 0, isSelf: false 
 for (const m of MEMBERS) ul.appendChild(memberRow(m, { myRank: 3, isSelf: false }));
 ul.appendChild(memberRow(MEMBERS[1], { myRank: 3, isSelf: true }));
 ul.appendChild(emptyRow());
+const tb = document.getElementById('scoreRows');
+for (const canEdit of [false, true])
+  for (const r of [{ label: 'Ada', score: 12 }, { label: '', score: 0 }, { label: 'A very long team name', score: -3 }])
+    tb.appendChild(scoreRow(r, 'id', { canEdit }));
+tb.appendChild(scoreEmptyRow());
+const uh = document.getElementById('unclaimedHands');
+uh.appendChild(unclaimedHead());
+const present = [['s1', 'Ada'], ['s2', 'Grace']];
+uh.appendChild(unclaimedRow(7, 'Ada', { present }));
+uh.appendChild(unclaimedRow(8, '', { present }));
+uh.appendChild(unclaimedRow(9, 'Solo', { present: [] }));
+document.getElementById('toast').append(
+  ...toastContent('Hand dropped', 'trash', { label: 'Undo', fn: () => {} }, () => {}),
+);
 applyIcons(document);
 window.__rowsReady = true;
 </script></body>`;

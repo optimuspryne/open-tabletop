@@ -107,3 +107,118 @@ export function emptyRow(text = 'No members.') {
   li.textContent = text;
   return li;
 }
+
+/**
+ * One scoreboard row. `canEdit` decides whether the label is an input and whether the
+ * adjust/remove buttons appear — presentation that follows from the viewer's rank.
+ * `on` = { label, adjust, remove }.
+ */
+export function scoreRow(row, id, { canEdit = false, on = {} } = {}) {
+  const noop = () => {};
+  const { label = noop, adjust = noop, remove = noop } = on;
+  const tr = document.createElement('tr');
+  const name = document.createElement('td');
+  name.className = 'scoreName';
+  if (canEdit) {
+    const inp = document.createElement('input');
+    inp.value = row.label;
+    inp.maxLength = 40;
+    inp.onchange = () => label(id, inp.value);
+    name.appendChild(inp);
+  } else {
+    name.textContent = row.label;
+  }
+  const val = document.createElement('td');
+  val.className = 'scoreVal';
+  val.textContent = row.score;
+  const acts = document.createElement('td');
+  acts.className = 'scoreActs';
+  if (canEdit)
+    acts.append(
+      makeButton('−', () => adjust(id, -1)),
+      makeButton('+', () => adjust(id, 1)),
+      makeButton('×', () => remove(id), 'danger'),
+    );
+  tr.append(name, val, acts);
+  return tr;
+}
+
+/** The scoreboard's empty state — a full-width row, so it lives with the table. */
+export function scoreEmptyRow(text = 'No scores yet.') {
+  const tr = document.createElement('tr');
+  const td = document.createElement('td');
+  td.colSpan = 3;
+  td.className = 'scoreEmpty';
+  td.textContent = text;
+  tr.appendChild(td);
+  return tr;
+}
+
+/** The heading above the unclaimed-hands list. */
+export function unclaimedHead(text = 'Unclaimed hands') {
+  const head = document.createElement('div');
+  head.className = 'unclaimed-head';
+  head.textContent = text;
+  return head;
+}
+
+/**
+ * One unclaimed hand, with its "give to…" picker. `present` is [[sessionId, name], …],
+ * already sorted by the caller; `on.assign(userId, toSessionId)` does the handing over.
+ */
+export function unclaimedRow(userId, name, { present = [], on = {} } = {}) {
+  const assign = on.assign ?? (() => {});
+  const row = document.createElement('div');
+  row.className = 'unclaimed-row';
+  const label = document.createElement('span');
+  label.className = 'unclaimed-name';
+  label.textContent = name || 'A player';
+  row.appendChild(label);
+  const sel = document.createElement('select');
+  sel.className = 'unclaimed-assign';
+  const def = document.createElement('option');
+  def.value = '';
+  def.textContent = 'Give to…';
+  sel.appendChild(def);
+  for (const [sid, pname] of present) {
+    const o = document.createElement('option');
+    o.value = sid;
+    o.textContent = pname;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => {
+    if (sel.value) {
+      assign(userId, sel.value);
+      sel.value = '';
+    }
+  };
+  row.appendChild(sel);
+  return row;
+}
+
+/**
+ * The contents of a toast: icon, text, and optionally an undo button. Returns the nodes;
+ * showing, hiding and the dismiss timer stay with the caller, since they are about the
+ * toast's lifetime rather than its markup.
+ */
+export function toastContent(text, icon = 'check', action = null, onAction = () => {}) {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'ico ico-' + icon);
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', '#i-' + icon);
+  svg.appendChild(use);
+  const span = document.createElement('span');
+  span.textContent = text;
+  const nodes = [svg, span];
+  if (action) {
+    // An undoable action carries its own way out, rather than a separate history stack.
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'toastAction';
+    b.textContent = action.label;
+    b.onclick = onAction;
+    nodes.push(b);
+  }
+  return nodes;
+}
