@@ -91,7 +91,7 @@ test('uploaded props clamp dimensions and retain requested primitive type', () =
 });
 
 test('procedural board colliders use half width and depth', () => {
-  const shape = buildCollider('board', { w: 12, d: 8 }, colliderOptions);
+  const shape = buildCollider('board', { w: 20, d: 14 }, colliderOptions);
   assert.ok(shape instanceof CANNON.Box);
-  assert.deepEqual([shape.halfExtents.x, shape.halfExtents.y, shape.halfExtents.z], [6, 0.05, 4]);
+  assert.deepEqual([shape.halfExtents.x, shape.halfExtents.y, shape.halfExtents.z], [10, 0.05, 7]);
 });

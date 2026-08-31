@@ -3455,7 +3455,6 @@ figcaption b,
      check they clear the now-taller top-left shell at a large elements scale.
    ========================================================================= */
 
-
 /* ============================================================================
    Phase 7b — top-left fold.  Applies on top of the 7a block above.
    Companion: docs/phase7b.md · mockup 2a
@@ -4420,6 +4419,31 @@ body.not-gm .gm-only {
 #players .rolebadge {
   margin-left: auto;
 }
+.prow[draggable='true'] {
+  cursor: grab;
+}
+.prow.dragging {
+  opacity: 0.45;
+}
+.turnOrderControls {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+}
+.rolebadge + .turnOrderControls {
+  margin-left: 0;
+}
+.turnOrderControls button {
+  min-width: 25px;
+  min-height: 25px;
+  padding: 0 5px;
+  background: none;
+  border-color: transparent;
+}
+.turnOrderControls button:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 
 /* Members: the Helper / GM / Kick row was wrapping one button per line —
    .actions button's 4.5em min-width again, plus toolbar-sized icons. */
@@ -5077,8 +5101,17 @@ body.not-gm .gm-only {
   display: none;
 }
 
-/* ---- drop: the choice is the button ------------------------------------ */
+/* ---- drop: disclose the orientation choices from one obvious action ---- */
+.handAction {
+  position: relative;
+}
+.handAction > #dropBtn {
+  height: 100%;
+}
 .dropSplit {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -5195,7 +5228,6 @@ body.not-gm .gm-only {
   padding: 6px 9px;
 }
 
-
 /* ============================================================================
    Phase 7e slice 2 — the touch top bar (mockup 10a).
    The bar was wide because it carried the room CODE, the timer, the turn pill and
@@ -5283,7 +5315,6 @@ body.not-gm .gm-only {
     border-radius: 50%;
   }
 }
-
 
 /* ============================================================================
    Phase 7e slice 3 — the ☰ drawer (mockup 10b).
@@ -5400,7 +5431,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* ============================================================================
    Phase 7e slice 4 — one seat button (mockup 10e).
    Both corner clusters collapse into a single round button above the hand tab.
@@ -5486,7 +5516,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* A button that exists only to be proxied by the drawer: never rendered itself,
    but not `hidden`, because `hidden` is how role gating speaks. */
 .proxyOnly {
@@ -5498,7 +5527,6 @@ body.not-gm .gm-only {
    The code, the share action and the dock the top bar stopped carrying.
    ========================================================================= */
 @media (max-width: 900px), (pointer: coarse) {
-
   .roomCard {
     display: flex;
     flex-direction: column;
@@ -5541,7 +5569,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* Slice 2 follow-up: the room name is the bar's only text, so give it the slack and
    drop the dock's collapse chevron — there is no dock to collapse at this width. */
 @media (max-width: 900px), (pointer: coarse) {
@@ -5559,7 +5586,6 @@ body.not-gm .gm-only {
     display: none;
   } /* the hamburger needs no caption */
 }
-
 
 /* ============================================================================
    Slice 2 correction — ONE contiguous bar (mockup 10a), not three floating pills.
@@ -5615,7 +5641,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* Make the bar's three zones structural rather than flex-order dependent: the name
    column is the only one that grows, so identity can never sit on top of it. */
 @media (max-width: 900px), (pointer: coarse) {
@@ -5645,7 +5670,6 @@ body.not-gm .gm-only {
     color: var(--accent);
   }
 }
-
 
 /* ============================================================================
    Phase 7e slice 6 — the hand tray (mockup 10g).
@@ -5735,22 +5759,28 @@ body.not-gm .gm-only {
   #handRow:not(.trayOpen) #hand,
   #handRow:not(.trayOpen) #showStrip,
   #handRow:not(.trayOpen) #dropFlank,
-  #handRow #showBtn {
+  #handRow:not(.trayOpen) #showBtn {
     display: none !important;
   }
-  /* Open: show faces, then cards, then the drop pair — top to bottom. */
+  /* Open: clear action buttons disclose show/drop choices only when requested. */
+  #handRow.trayOpen #showBtn {
+    order: 1;
+    display: flex;
+    justify-content: center;
+    min-height: 44px;
+  }
   #handRow.trayOpen #showStrip {
     position: static;
     left: auto;
     transform: none;
-    order: 1;
+    order: 2;
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
   }
   #handRow.trayOpen #hand {
-    order: 2;
+    order: 3;
     display: flex;
     justify-content: center;
     flex-wrap: nowrap;
@@ -5760,11 +5790,19 @@ body.not-gm .gm-only {
     --card-w: 52px;
   }
   #handRow.trayOpen #dropFlank {
-    order: 3;
-    display: flex;
-    gap: 8px;
+    order: 4;
+    display: block;
   }
-  #handRow.trayOpen #dropFlank button {
+  #handRow.trayOpen #dropBtn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+  }
+  #handRow.trayOpen #dropChoices {
+    position: static;
+    margin-top: 8px;
+  }
+  #handRow.trayOpen #dropChoices button {
     flex: 1;
     justify-content: center;
     min-height: 44px;
@@ -5777,7 +5815,6 @@ body.not-gm .gm-only {
     bottom: calc(var(--inset) + 232px);
   }
 }
-
 
 /* ============================================================================
    Phase 7e slice 7 — ⊕ and the radial menu (mockup 10j).
@@ -5892,7 +5929,6 @@ body.not-gm .gm-only {
   white-space: nowrap;
 }
 
-
 /* ============================================================================
    Fix: #rightStack must NOT carry backdrop-filter.
    #toolsDock — and with it #regionTL / #regionTR — lives inside #rightStack, and a
@@ -5925,7 +5961,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* The radial item is a bare button — the round dot is the only chrome. Global button
    styling (background, border, padding, min-width) was drawing a box around each icon. */
 #radial .radialItem {
@@ -5947,7 +5982,6 @@ body.not-gm .gm-only {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
 
 /* ============================================================================
    Phase 7e slice 8 — the library on a phone (mockup 10h).
@@ -6046,7 +6080,6 @@ body.not-gm .gm-only {
     display: none;
   } /* colour choice waits for portrait — the row cannot hold it at this height */
 }
-
 
 /* ============================================================================
    Phase 7g — Add to Library builder (mockup 5b).
@@ -6306,7 +6339,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* ============================================================================
    The 6a window treatment, generalized to the whole modal family.
    The Library was the only modal wearing it; Add to Library (7g), Room Settings
@@ -6421,7 +6453,6 @@ body.not-gm .gm-only {
 #addModal .libraryCard:has(.libSticky) .libPane {
   padding: 16px 18px 18px;
 }
-
 
 /* ============================================================================
    Post-7e: the seat button and the ⊕ fan are the DEFAULT, not the touch layout.
@@ -6606,7 +6637,6 @@ body.not-gm .gm-only {
   }
 }
 
-
 /* A data-icon naming a symbol the sprite does not carry used to render an empty box.
    applyIcons now flags it, so a typo (or a symbol pasted without its id="i-name")
    shows as a dashed placeholder instead of nothing. */
@@ -6615,7 +6645,6 @@ body.not-gm .gm-only {
   outline-offset: 1px;
   opacity: 0.6;
 }
-
 
 /* ============================================================================
    Scale & Grid: the label column was fixed at 78px and nowrap, so "Objects

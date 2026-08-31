@@ -74,8 +74,10 @@ export function buildCollider(type, props, { cardColliderThickness }) {
       return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
     }
     if (props.w || props.d) {
-      const width = clamp(props.w || 8, 2, 2 * TABLE.x - 2);
-      const depth = clamp(props.d || 8, 2, 2 * TABLE.z - 2);
+      // `w`/`d` are the rendered board's full dimensions. Keep the physics footprint identical;
+      // shrinking it to the table minus a margin leaves a collider-free rim on large boards.
+      const width = clamp(props.w || 8, 0.1, 100);
+      const depth = clamp(props.d || 8, 0.1, 100);
       return new CANNON.Box(new CANNON.Vec3(width / 2, 0.05, depth / 2));
     }
   }

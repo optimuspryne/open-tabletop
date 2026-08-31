@@ -1,7 +1,7 @@
 # Architecture
 
 A web-based, physics-driven tabletop where any game can be played, because the
-engine only ever simulates *physical objects* and lets humans enforce the rules.
+engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
 ## Two worlds, kept apart
 
@@ -35,11 +35,11 @@ Two things both feel like "objects", but they are fundamentally different:
   they **must** be flat, plain records:
   `{ type, props, owner, x/y/z, quaternion, count }`. A rich class instance
   wouldn't survive serialization.
-- A **kind** is the *concept* "a d20", "the chess king", "the standard deck" —
+- A **kind** is the _concept_ "a d20", "the chess king", "the standard deck" —
   geometry, collider, textures, behavior. One exists per type, created once.
   **This is where object-orientation belongs.**
 
-So: **rich kinds, flat instances** — the *type-object / flyweight* pattern.
+So: **rich kinds, flat instances** — the _type-object / flyweight_ pattern.
 Variation lives in `props`, not in a proliferation of types: one `die` kind
 reads `props.sides`; one `card` kind reads `props.front/back`; one `prop` kind
 reads `props.shape` (or a `.glb` `model`) and `props.scale/color/team`.
@@ -51,7 +51,7 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 
 - **`shared/pieces.js`** — the single source of truth for physics dimensions,
   masses, colors, dice vertices, and the prop/board registries. Imported by
-  *both* sides so a collider and its mesh are built from the same numbers.
+  _both_ sides so a collider and its mesh are built from the same numbers.
 - **`server.js`** — the authority and composition root: the cannon-es world,
   Colyseus room classes, remaining table-message handlers, HTTP/security setup,
   and the private (non-synced) memory that holds secrets. Card, movement, and
@@ -64,7 +64,7 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   These are deliberately dependency-injected so the backend seams can be tested
   without starting a room or listener.
 - **`db.js`** — the Postgres connection pool and **every** query: the saved
-  library (deck / board / prop / scene / skybox *metadata*; image/model files stay
+  library (deck / board / prop / scene / skybox _metadata_; image/model files stay
   on disk) plus users, rooms, membership, and each room's durable settings. Config
   accepts `DATABASE_URL`, `DATABASE_URL_FILE`, or non-secret connection metadata
   paired with `DATABASE_PASSWORD_FILE` (the Compose default).
@@ -91,7 +91,7 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   **background-music** player. Volumes/mutes/shuffle are per-player, in
   `localStorage`; nothing here is synced (see "Sound & music").
 - **`public/credits.js`** — the attribution manifest: the `MUSIC` playlist (which
-  drives *both* the music player and the credits panel) plus `SFX_CREDITS` and
+  drives _both_ the music player and the credits panel) plus `SFX_CREDITS` and
   `LIB_CREDITS`. The CC-BY music makes the in-app credits mandatory, not cosmetic.
 - **`public/icons.js` / `public/equalize.js`** — shared icon/tooltip behavior plus
   early UI-mode restoration and grouped-action sizing across pages.
@@ -145,7 +145,7 @@ exact `TRUST_PROXY_HOPS` deployment setting; Redis alone does not cluster Colyse
 
 The **synced state is public** — anything in it is one devtools-peek from being
 read. It holds: each piece's transform/type/owner/props/count; each player's
-seat, hand *count*, name, color, avatar, `showing` count (how many cards they're
+seat, hand _count_, name, color, avatar, `showing` count (how many cards they're
 revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
 the room dressing (`scores`, `notes`, `tableX/Z`, `whiteboard`, `trays` — which seats'
 personal dice trays are out, `skybox`,
@@ -162,14 +162,14 @@ Secrets live in plain server-only maps that are **never** put in synced state:
 - `pendingInspect` — a card drawn-to-inspect but not yet placed (yours alone)
 - `notebooks` — each player's private notes (ephemeral; resent on reconnect)
 - `shows` — an active hold-to-show: who is showing which of their cards to whom
-  (the card *content* goes only to that audience; the public part is the badge count)
+  (the card _content_ goes only to that audience; the public part is the badge count)
 - `pendingHands` — hands from a loaded/departed game awaiting their owner's return,
   keyed by account (`userId`); the public mirror is the `unclaimed` name map (and
   `turnPending` for the waiting turn), which carry names only, never cards
 
 The invariant: **if it's synced it's public; if it's secret it's server-only.**
 A face-down card's face has never been transmitted to any client, so there is
-nothing to peek at. Revealing it *moves* the data from a secret map into public
+nothing to peek at. Revealing it _moves_ the data from a secret map into public
 props — only then does any client learn it, and the client rebuilds that card's
 mesh from a blank back to a real face. Draw-to-inspect uses the same channel as
 a hand: the drawn front goes to the drawer alone and sits in `pendingInspect`
@@ -177,7 +177,7 @@ until placed on the field / into a hand / back on the deck.
 
 ## The heartbeat
 
-**Server, 60×/sec:** for every held piece, run the *velocity servo* (push the
+**Server, 60×/sec:** for every held piece, run the _velocity servo_ (push the
 body's velocity toward that player's drag target, clamped) so a held piece
 follows the cursor while remaining a real dynamic body that shoves others; step
 the cannon world (fixed timestep, sub-stepped — see `SIM.step`); then copy every
@@ -190,14 +190,14 @@ every piece into a small per-piece buffer. To draw, render each piece as it was
 snapshots bracketing that moment (lerp position, slerp rotation).
 
 That deliberate delay is what makes motion smooth: rendering slightly in the past
-guarantees two real samples to interpolate *between*, so fast pieces glide
+guarantees two real samples to interpolate _between_, so fast pieces glide
 instead of teleporting packet-to-packet. One uniform path for held/thrown/resting
 pieces — no prediction seams.
 
 ## One action end to end: grab & throw
 
-1. Press + move past a small threshold → client distinguishes *drag* from
-   *click*, sends `grab {id}`.
+1. Press + move past a small threshold → client distinguishes _drag_ from
+   _click_, sends `grab {id}`.
 2. Server marks the piece `owner: you`.
 3. On move, client raycasts the cursor onto a horizontal plane (its height is
    the scroll-adjustable grab height) and streams `move {id, x,y,z}`; the servo
@@ -209,7 +209,7 @@ pieces — no prediction seams.
    with real momentum, interpolated onto every screen.
 
 Decoupling throw velocity (measured) from the servo (which only tracks the
-cursor) is what fixed the old rubberband/jitter: the servo tracks tightly *and*
+cursor) is what fixed the old rubberband/jitter: the servo tracks tightly _and_
 throws carry accurate momentum.
 
 **Snap-to-grid** (0.7.0) is a placement concern layered on top of this, not a change
@@ -218,14 +218,14 @@ When a grid is active, a snapped piece's `move`/`release` XZ runs through the sh
 `snapToCell` quantiser — the same function on client (drag preview) and server
 (authority), so they can't drift — and it's dropped **throw-free** (velocity zeroed)
 rather than flung. It's still an ordinary rigid body; it just falls onto a quantised
-point. The one part that *does* touch body state is **pinning**: once a snapped piece
+point. The one part that _does_ touch body state is **pinning**: once a snapped piece
 settles (its body goes to sleep, not merely slows — the old low-speed check pinned
 pieces in mid-air), the server freezes it to a `STATIC` body so a bumped neighbour
 can't slide it off its cell. A grab, or turning the flag or the grid off, unpins it.
 
 ### Multi-select
 
-Selecting a clump and moving it as one *looks* like new physics but isn't. A held piece is never
+Selecting a clump and moving it as one _looks_ like new physics but isn't. A held piece is never
 teleported: the server sets its `owner` and, every tick, servos **each** piece that client owns
 toward its own target — it already supported one client driving many pieces to different points;
 nothing had ever handed it more than one. So a group move is just: claim the selection
@@ -238,14 +238,14 @@ helper the single `release` uses.
 The **selection itself is purely local** — a Set of ids on each client, like a cursor, never in
 synced state, so it adds no schema and no one sees yours. Two gestures feed it (a Shift modifier
 and a discoverable Select tool), both painting a screen-space marquee that tests each piece's
-*projected* centre against the box — no 3D picking — and the highlight rings and marquee wear
+_projected_ centre against the box — no 3D picking — and the highlight rings and marquee wear
 that player's own accent color. Ownership is the conflict guard, so the selection can safely
 auto-drop any piece someone else grabs or that gets removed, and never goes stale.
 
 The **batch ops mirror the singles**: with a selection active a keystroke fans an existing
 per-piece action across the set — **U**/**G** toggle stand / snap as a unit, **R** rolls the
 dice, **F** flips the cards, **H** takes the cards to hand, and **`[`**/**`]`** rotate the whole
-formation ±45° about its centroid (each position *and* each facing; boards skipped). Each handler
+formation ±45° about its centroid (each position _and_ each facing; boards skipped). Each handler
 is `<action>Group {ids}`, ungated exactly like its single form (only `removeGroup` stays helper+,
 like single delete), and a mixed selection is fine because each key touches only its kind. None
 of it is a new subsystem — it's the grab-and-throw servo and the existing per-piece actions,
@@ -259,20 +259,20 @@ Each **kind** is defined in two registries keyed by the same type id:
   `buildCollider(type, props)` reads this; there are no per-type branches in
   `spawn`.
 - client `KIND` (in `graphics.js`): the render + interaction half, `{ mesh,
-  grab, ldrag, lclick, rclick }`. The pointer handler looks up `KIND[type]` and
+grab, ldrag, lclick, rclick }`. The pointer handler looks up `KIND[type]` and
   dispatches, instead of switching on type.
 
 The kinds:
 
 - **die** — parameterized by `props.sides` ∈ {4,6,8,10,12,20}. Numbered
   (below).
-- **card** — a thin box *or a tile*. Faces are texture *references* (`front`,
+- **card** — a thin box _or a tile_. Faces are texture _references_ (`front`,
   `back`); face-down keeps `front` server-side (`cardData`) and shows only the public
   `back`, so uploaded art is hidden exactly like ranks are. Its footprint, thickness,
   corner, and **shape** come from `cardGeom(props)` — a plain card, a named tile
   (`props.tile`: domino/word/mahjong), or an explicit `props.geom` (custom image decks:
   fit-to-art aspect, chosen thickness, and a rounded/square/**hexagon** silhouette). See
-  *Tiles* below.
+  _Tiles_ below.
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
   `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
   and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box) in place of the stack
@@ -301,7 +301,7 @@ are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
   `modelScale` and a **precomputed collider** in `PROPS` (`{ box, type? }` — a box
   by default, or `sphere`/`cylinder`/`cone`/`flat`), so a set keeps its
   real relative sizes and the server never has to load a model. `.glb` files can
-  bake a node scale, so sizes are measured *as loaded*.
+  bake a node scale, so sizes are measured _as loaded_.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
   the table); the client measures the model and sends the collider box with the
   spawn.
@@ -322,7 +322,7 @@ look and its physics footprint can never drift — the same guarantee `dieVerts`
 resolves, in order: an explicit `props.geom` → a named `props.tile` (the `TILES` registry) →
 the standard card.
 
-Because a tile's *shape* is public but its *face* is private, the deck threads only the public
+Because a tile's _shape_ is public but its _face_ is private, the deck threads only the public
 geometry — `tile` / `geom` / `snap`, via `geoOf` — through deck → hand → played tile, so a
 face-down tile still shows its true silhouette while its face stays hidden (the privacy
 invariant, unchanged). A hexagon card carries this all the way into physics: the mesh is a
@@ -332,7 +332,7 @@ already points the same way), so it's ready to drop onto a future hex grid.
 The board and deck sides generalize the same way. A `proc` board paints its top from data
 (`BOARD_PAINTERS`), so a premium word grid — or a later battlemap — is a painter plus a
 `BOARDS` entry riding the existing swapBoard / collider / grid-calibration paths. And a deck
-can swap its *visual* for a `.glb` skin (`DECK_MODELS`) with no change to draw / deal /
+can swap its _visual_ for a `.glb` skin (`DECK_MODELS`) with no change to draw / deal /
 shuffle / hidden order. Building the tile games meant adding data and faces, not a new engine.
 
 ## The dice family
@@ -349,7 +349,7 @@ A die is **one kind** parameterized by `props.sides`.
   the face textures so the two stay independent. Double-click a die (or prop) to
   inspect it and the overlay offers those color pickers; committing sends
   `recolor` and the tint syncs to everyone.
-- **Server** builds a `CANNON.ConvexPolyhedron` from the *same* vertices (hull
+- **Server** builds a `CANNON.ConvexPolyhedron` from the _same_ vertices (hull
   faces from `convex-hull`, windings flipped outward) so the die tumbles and
   settles on a face. Visual and physics can't diverge; adding a size is a
   one-line vertex entry.
@@ -357,14 +357,14 @@ A die is **one kind** parameterized by `props.sides`.
 ### Dice trays
 
 Rolling on the play field scatters everything, so each seat gets its own **dice tray** — a
-walled box on the same circular track as the whiteboard, parked directly *behind* that player at
+walled box on the same circular track as the whiteboard, parked directly _behind_ that player at
 the seat's outward angle (`SEAT_ANGLES`). It is deliberately **personal, not shared**: a single
 communal tray broke down the moment two people rolled at once, so `State.trays` is a
 `MapSchema<boolean>` keyed by seat index and a player toggles only their own (`trayShow`, no rank
 gate). Yet it stays fully **public** — the tray dice are ordinary `die` pieces tagged
 `props.traySeat = N`, so they ride scene save/load and anyone can lean over and read a
 neighbour's roll; there is no hidden per-seat physics world, and thus nothing to distrust. (A
-running dice-roll *log* was considered and dropped on purpose: the physical dice in a public tray
+running dice-roll _log_ was considered and dropped on purpose: the physical dice in a public tray
 are the source of truth, and a ledger would pull the feel away from a real table.)
 
 Two things let it fit the engine without new machinery. First, the tray is a real **physics
@@ -372,9 +372,9 @@ container** — floor + four walls + an invisible lid — built from the shared 
 collider and the client mesh are the same box; `buildTrays()` rebuilds every enabled seat's walls
 at its angle (bodies tagged `__traySeat`) and slides the dice along on a table resize. The one
 real subtlety is the **out-of-bounds net**: it yanks any stray body back to table centre, and a
-tray sits *past* the table edge, so a tray die is contained by *its own* tray bounds (`inTray`,
+tray sits _past_ the table edge, so a tray die is contained by _its own_ tray bounds (`inTray`,
 keyed on `__traySeat`) instead of being teleported home. Second, "out of view" is a **local
-camera** move, not height or a separate scene — the Roll button hops *your* camera over your tray
+camera** move, not height or a separate scene — the Roll button hops _your_ camera over your tray
 (placing it first if it isn't out), Roll-all flings only your seat's dice with the gentler
 `SIM.trayRoll` impulse, and Back tweens home; no one else's view stirs. `onLeave` puts a departing
 player's tray away so it never lingers for the next occupant.
@@ -384,7 +384,7 @@ player's tray away so it never lingers for the next occupant.
 Small shared/private utilities that reuse the existing channels rather than new
 machinery:
 
-- **Timer** (shared) — the synced `timer` holds only an *anchor*
+- **Timer** (shared) — the synced `timer` holds only an _anchor_
   (`running/mode/base/since/duration`), never a ticking number. Each client
   computes the live value locally via `timerLive()` (in `shared/pieces.js`, used
   by both sides), so a running clock produces **zero** per-second patches — the
@@ -399,7 +399,7 @@ machinery:
   isn't you. **Attention ping** (middle-click / `P`) — a table-location marker
   clamped to the table server-side and broadcast to all; public by nature, so no
   routing.
-- **Whiteboard** (shared) — a tilt-up sketch surface. Its *public* state
+- **Whiteboard** (shared) — a tilt-up sketch surface. Its _public_ state
   (`enabled/angle/owner/dark`) is synced schema, but **strokes are not**: each
   stroke is a `wbStroke` message appended to a capped server history and broadcast
   to replay onto every client's canvas texture, with a late joiner pulling the
@@ -427,41 +427,41 @@ machinery:
 ## The non-physics presentation layer
 
 Pieces go through the physics pipeline. Everything else that shows up on or around
-the table but *isn't* a physical object — the timer, the whiteboard, pings, the
+the table but _isn't_ a physical object — the timer, the whiteboard, pings, the
 scoreboard, and the measurement overlays — is presentation-layer, and it all
 shares one instinct: **sync the minimum, compute or render the rest locally.**
 
 It is tempting to fold these into a single shared base — a "non-physics thing" class.
-Resist it. *"Not a piece"* is a negation, not a behaviour: these share the property
+Resist it. _"Not a piece"_ is a negation, not a behaviour: these share the property
 of not being physics bodies and almost nothing else. The timer has no geometry at
 all (it's a DOM HUD widget); the whiteboard is a tilted surface on a polar track; an
 overlay is flat on the felt in cartesian x/z. Their cardinality differs (singleton
-anchor vs. singleton object vs. a collection), and — most of all — their *sync
-mechanisms* differ. A common base would be abstract methods every subclass fully
+anchor vs. singleton object vs. a collection), and — most of all — their _sync
+mechanisms_ differ. A common base would be abstract methods every subclass fully
 overrides, deleting no real duplication while coupling three systems that today
 evolve independently. That's the wrong-abstraction trade: an indirection tax paid
 for a resemblance, not a shared behaviour.
 
-What *is* reusable is the **choice of sync strategy**. There are three in the
+What _is_ reusable is the **choice of sync strategy**. There are three in the
 codebase, and a new presentation-layer feature should pick one deliberately:
 
 1. **Anchor + local compute** — for a value that changes continuously. Sync the
-   *rule*, not the ticks. The **timer** syncs an anchor
+   _rule_, not the ticks. The **timer** syncs an anchor
    (`running/mode/base/since/duration`) and every client derives the live number via
    `timerLive()`; a running clock produces zero per-second patches.
 2. **Public state + replayed buffer** — for heavy or streamed content that won't fit
-   in schema. Keep a small *public* state object in the schema, but stream the actual
+   in schema. Keep a small _public_ state object in the schema, but stream the actual
    content as messages appended to a capped server-side history and replayed onto
    each client, with a late joiner pulling the backlog on request. The **whiteboard**
    does this: `whiteboard` state is synced, but strokes are `wbStroke` messages over
    a capped buffer, replayed via `wbStrokes`.
-3. **Synced collection** — for a set of *static, public* objects that fit directly in
+3. **Synced collection** — for a set of _static, public_ objects that fit directly in
    state. Just put them in a `MapSchema`; Colyseus delta-syncs them and a late joiner
    gets them in the initial state, so there's no replay machinery at all. This is the
    simplest of the three, and it's what the **overlays** use.
 
 The other axis of reuse is a **registry**, but only where a presentation-layer
-concern is a genuine *family* of like things — the same condition that makes the
+concern is a genuine _family_ of like things — the same condition that makes the
 piece `KIND` registry pay off (see "Kinds vs. instances"). Measurement is exactly
 that: rulers and circle/cone/line templates today, fog-of-war shapes and hidden
 zones plausibly later, all flat-on-felt public geometry that differs only in how each
@@ -471,11 +471,11 @@ the place/move/remove/sync plumbing handles it generically — never a new subsy
 This is the reusable framework for "things outside the physics world," scoped to
 where the likeness is concrete instead of stretched across the whole HUD.
 
-So the rule of thumb: reuse the *decision* (which of the three strategies), and —
-within a real family — a *registry*; do not reach for a superclass spanning
+So the rule of thumb: reuse the _decision_ (which of the three strategies), and —
+within a real family — a _registry_; do not reach for a superclass spanning
 unlike systems. If a second feature ever genuinely needs the whiteboard's
-replayed-buffer machinery (fog-of-war reveal history is a candidate), extract *that
-one helper* then, on the second real need — not preemptively across a resemblance.
+replayed-buffer machinery (fog-of-war reveal history is a candidate), extract _that
+one helper_ then, on the second real need — not preemptively across a resemblance.
 The overlay subsystem and its schema/message set are spec'd in the measurement design
 note.
 
@@ -494,7 +494,7 @@ kind string to a mesh builder; adding a kind is one registry entry plus one stri
 the server's `OVERLAY_KINDS` set — nothing else in the place/move/remove/sync path
 changes.
 
-Two things stay deliberately *out* of the synced overlay. The **measure label** (the
+Two things stay deliberately _out_ of the synced overlay. The **measure label** (the
 floating "5 in") is a client-owned sprite, not schema, because it depends on the
 room's `RoomScale` — every kind's label is just `formatMeasure(|A→B|, scale)` at the
 A–B midpoint, so a `scaleSet` re-labels every overlay locally without touching state
@@ -532,7 +532,7 @@ was, not just the live room. `applyScene` re-applies it via `applyScale`.
 Audio is deliberately kept off the schema — no sound state is ever synced. It
 splits into two independent systems, both in `public/audio.js`:
 
-**Sound effects (Web Audio).** Each logical cue in the `SOUNDS` map names a *list*
+**Sound effects (Web Audio).** Each logical cue in the `SOUNDS` map names a _list_
 of files under `/sounds/`; on first use each is fetched and decoded into a pool,
 and `playSfx(name)` picks a random variant so a repeated action doesn't sound
 identical. Loading is tolerant — a 404 or decode error just drops that variant, so
@@ -549,7 +549,7 @@ authority model:
   `_released` for that piece; the body's cannon-es `collide` event fires the cue
   **once**, gated on the arm window (~3 s, else it "never landed" and disarms) and
   on `SIM.impact.minVel` (gentle grazes stay silent). It then `broadcast`s an
-  `sfx` message so *everyone* hears the same landing at the true physics moment,
+  `sfx` message so _everyone_ hears the same landing at the true physics moment,
   not when the dragger let go. Flips, deals, and shuffles broadcast `sfx` the same
   way. `dropSfx(type, props)` maps a piece to its clip base (`card`→`card-drop`,
   and so on) and picks the **tile** variant — `tile-drop` / `tiledeck-drop` (and the
@@ -571,7 +571,7 @@ The saved **library** is split across two stores: **metadata in Postgres**
 (`custom_decks` / `custom_boards` / `custom_objects` for props / `custom_scenes`
 for whole-table snapshots / `custom_skyboxes`, each keyed by a bigint `id`),
 **image/model files on disk** under `ASSETS_DIR`, served from `/assets`. A card
-face or model is stored as a *reference* (a `/assets/…` URL or a procedural
+face or model is stored as a _reference_ (a `/assets/…` URL or a procedural
 string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 `db.js` normalizes a model's URL into the `file_url` column and puts the rest in a
 `props` jsonb bag, splicing them back on read. The running server connects as a
@@ -587,7 +587,7 @@ session and reach the row only through that snapshot.
 
 Because unreferenced `/assets` files pile up as the library and tables churn
 (deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)
-grep-scans every DB row *and* every live table for `/assets/…` references, then
+grep-scans every DB row _and_ every live table for `/assets/…` references, then
 moves anything unreferenced and older than a day to `saved-assets/.trash/`
 (recoverable, never a hard delete).
 
@@ -597,9 +597,9 @@ delete) are admin-only, while listing and spawning are visibility-gated — publ
 assets are spawnable by GMs/helpers, private ones only by admins (who can also
 spawn them into any game room). Admins build and test assets in a dedicated
 **editor room** (`EditorRoom`, with an admin-only `onAuth`) that reuses the whole
-  table engine. The game table and workshop share one combined **Library** modal
-  (built-ins, custom assets, games, and skyboxes), driven by `editor-panel.js` over
-  `window.onOttRoom`; **Add to Library** (creation)
+table engine. The game table and workshop share one combined **Library** modal
+(built-ins, custom assets, games, and skyboxes), driven by `editor-panel.js` over
+`window.onOttRoom`; **Add to Library** (creation)
 is editor-only and the asset handlers refuse non-admin creation/curation.
 See "Accounts, rooms & roles" below.
 
@@ -607,7 +607,7 @@ See "Accounts, rooms & roles" below.
 
 Two serializers, layered on purpose:
 
-- **`serializeScene`** produces the portable *template*: table size + every piece
+- **`serializeScene`** produces the portable _template_: table size + every piece
   (transform, and a deck's private card order / tile geometry / box **skin** / a
   face-down card's hidden front ride along so they rebuild faithfully) + the overlays +
   the room **`scale`** (measurement calibration and grid layout), and **no player
@@ -626,7 +626,7 @@ Two triggers write a snapshot into the room's `scene` jsonb: the GM's **`stateSa
 empty, and only under `SCENE_MAX_BYTES`). Both go through `savedScene` →
 `saveRoomState`, alongside the room's other durable settings.
 
-`applyScene` rebuilds the pieces, then *stages* — never assigns — the private layer:
+`applyScene` rebuilds the pieces, then _stages_ — never assigns — the private layer:
 saved hands land in `pendingHands` (account-keyed) with a public `unclaimed`
 (`userId → name`) map mirrored into synced state for the GM's reassign UI; the saved
 turn lands in `pendingTurn` with a public `turnPending` name, and `state.turn` is
@@ -645,10 +645,11 @@ maps and each hand is delivered privately via `sendHand`, exactly as in a live g
 
 On join the server assigns the lowest free seat, a color, and a name, and
 creates a public `Player` (seat, hand count, name, color, avatar). The client
-parks *your* camera at *your* seat, draws every *other* player's hand as N fanned
+parks _your_ camera at _your_ seat, draws every _other_ player's hand as N fanned
 face-down backs (from the public count — you see how many, never which), and
-stands a marker (avatar or silhouette + name) at each seat. `state.turn` holds a
-session id, highlighted in the panel; "Next turn" walks it around the seats.
+stands a marker (avatar or silhouette + name) at each seat. Each player also has a
+GM-reorderable `order` independent of their physical seat. `state.turn` holds a
+session id, highlighted in the panel; "Next turn" walks that shared order.
 
 ## Identity & reconnection
 
@@ -695,7 +696,7 @@ separate tabs stay distinct.
   overlays, unclaimed hands, and a pending turn) plus direct messages — `hand` (your private
   cards), `dealt` (adopt a dealt card as the dragged piece), `inspectCard` (a drawn
   front for you alone), `notebook` (your private notes), `showFan` (cards someone
-  is showing *you*), `ping` (a broadcast attention marker), `sfx` (a shared sound
+  is showing _you_), `ping` (a broadcast attention marker), `sfx` (a shared sound
   cue — landing/flip/deal), `shuffled` (play the riffle), `chatMsg`/`chatLog`
   (a broadcast chat line / the late-join backlog),
   `wbStroke`/`wbStrokes`/`wbClear` (whiteboard replay), `overlayDrag` (another
@@ -724,7 +725,7 @@ stored only as a hash in an expiring `user_sessions` row), rooms, and per-room m
 on the volume and live table state stays in memory. Credentials come from the
 environment, never code.
 
-**Accounts.** A *player* is passwordless (display name + device token); a *host*
+**Accounts.** A _player_ is passwordless (display name + device token); a _host_
 has a password. Each browser login has its own hashed, expiring row in
 `user_sessions`, so devices coexist and can be revoked independently. `onAuth`
 resolves the token to a user and the room code to a room,
@@ -739,11 +740,11 @@ reshape/reset/board = GM+, member management = GM+. **Admins** are a global flag
 (`is_admin`), threaded through `onAuth` as `client.auth.isAdmin`: they join any
 room as a GM and can act on private library assets anywhere. GMs manage members
 (admit / kick / promote) live from the Members panel; the server pushes
-`memberList` to GMs plus a pending-join pulse. Because `onAuth` turns a *pending*
+`memberList` to GMs plus a pending-join pulse. Because `onAuth` turns a _pending_
 joiner away from the table, they instead hold a socket to a tiny per-code
 **`LobbyRoom`** while waiting; on admit/decline the table room calls into that lobby
 (via the matchmaker) to push `admitted`/`declined` and release them — instant, with a
-15s poll left as a fallback. A **site admin** can also kick a user out of *every*
+15s poll left as a fallback. A **site admin** can also kick a user out of _every_
 live table at once (`kickUserEverywhere`, at `POST /admin/users/:id/kick` and on
 user-delete); the per-room GM kick is separate and scoped to that one table.
 
@@ -779,7 +780,7 @@ provide clustered Colyseus presence, room discovery, or socket routing.
 `/vendor` (no CDN fetches), so the policy locks scripts to `'self'` plus one
 allowlisted inline import-map hash — no `'unsafe-inline'`/`'unsafe-eval'` (Colyseus feature-detects
 eval and falls back to its non-inline decoder). Violations POST to `/csp-report`. This
-also shapes the client: a *new* inline `<script>` would fail the hash allowlist, so the compact/full
+also shapes the client: a _new_ inline `<script>` would fail the hash allowlist, so the compact/full
 labels preference is applied from **`equalize.js`** — a small external file loaded `defer` on every
 page — which reads `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts
 run (an inline version was silently blocked).

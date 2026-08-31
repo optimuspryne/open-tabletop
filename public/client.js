@@ -882,6 +882,7 @@ function rebuildGrid() {
       },
       false,
     );
+    cb(player).listen('order', renderPlayers, false);
     cb(player).listen(
       'avatar',
       () => {
@@ -1432,6 +1433,7 @@ function rebuildGrid() {
     if (b) b.onclick = () => room.send('trayClear');
   } // remove MY dice
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
+  wire('birdsEyeBtn', applyBirdsEye); // fit the whole table into a straight-down view
   byId('turnBtn').onclick = () => room.send('nextTurn'); // the Your Turn pill advances the turn (server enforces who may)
   {
     // Room Info dock: collapse to just the header (name + code). Starts collapsed on mobile/narrow.
@@ -1895,6 +1897,7 @@ function rebuildGrid() {
   byId('showBtn').onclick = () => {
     if (!showStrip) return;
     showStrip.hidden = !showStrip.hidden;
+    byId('showBtn').setAttribute('aria-expanded', showStrip.hidden ? 'false' : 'true');
     if (showStrip.hidden) {
       if (showTo.size) {
         showTo.clear();
@@ -1974,7 +1977,10 @@ const pickId = () => {
   ray.setFromCamera(pointer, camera);
   let obj = ray.intersectObjects([...meshes.values()].map((m) => m.mesh))[0]?.object;
   while (obj && obj.userData.id === undefined) obj = obj.parent;
-  return obj && obj.userData.id;
+  const id = obj && obj.userData.id;
+  // Boards are static play surfaces, not pieces. Treat their visible mesh like empty table space
+  // so clicks can orbit/deselect and never capture a futile grab gesture.
+  return id && meshes.get(id)?.type !== 'board' ? id : null;
 };
 
 // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
@@ -2025,8 +2031,22 @@ const pickId = () => {
       { label: 'Undo', fn: () => room.send('handFromTable') },
     );
   };
-  byId('dropDown')?.addEventListener('click', () => dropAt(true));
-  byId('dropUp')?.addEventListener('click', () => dropAt(false));
+  const dropBtn = byId('dropBtn');
+  const dropChoices = byId('dropChoices');
+  const setDropOpen = (open) => {
+    if (!dropBtn || !dropChoices) return;
+    dropChoices.hidden = !open;
+    dropBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
+  dropBtn?.addEventListener('click', () => setDropOpen(dropChoices.hidden));
+  byId('dropDown')?.addEventListener('click', () => {
+    setDropOpen(false);
+    dropAt(true);
+  });
+  byId('dropUp')?.addEventListener('click', () => {
+    setDropOpen(false);
+    dropAt(false);
+  });
 }
 
 // ===== Skybox (GM-applied, synced to the room; the picker UI is in editor-panel.js) =====
@@ -3179,6 +3199,11 @@ function renderHand(cards) {
     if (!has) {
       const strip = byId('showStrip');
       if (strip) strip.hidden = true;
+      if (sb) sb.setAttribute('aria-expanded', 'false');
+      const choices = byId('dropChoices');
+      if (choices) choices.hidden = true;
+      const dropBtn = byId('dropBtn');
+      if (dropBtn) dropBtn.setAttribute('aria-expanded', 'false');
     }
   } // Show/Drop flank the hand, only when you hold cards
   if (handCollapsed && cards.length && !selectMode) {
@@ -3348,6 +3373,8 @@ function seatLayoutFor(hx, hz) {
     { hand: [-(hx - m), 0.25, 0], out: [-1, 0, 0], cam: seatCam([-1, 0, 0]) }, // left   (-x)
     { hand: [cx, 0.25, cz], out: [1, 0, 1], cam: seatCam(norm([1, 0, 1])) }, // front-right
     { hand: [-cx, 0.25, -cz], out: [-1, 0, -1], cam: seatCam(norm([-1, 0, -1])) }, // back-left
+    { hand: [-cx, 0.25, cz], out: [-1, 0, 1], cam: seatCam(norm([-1, 0, 1])) }, // front-left
+    { hand: [cx, 0.25, -cz], out: [1, 0, -1], cam: seatCam(norm([1, 0, -1])) }, // back-right
   ];
 }
 let seatLayout = seatLayoutFor(10, 7);
@@ -3372,6 +3399,21 @@ function applySeat(seat) {
   if (!layout) return;
   camera.position.set(...layout.cam.pos);
   controls.target.set(...layout.cam.target);
+  controls.update();
+}
+
+// Fit the current table into a true overhead view. Derive the height from both axes and the
+// viewport aspect so resized tables stay fully visible on portrait phones as well as desktops.
+function applyBirdsEye() {
+  const hx = (room && room.state && room.state.tableX) || 10;
+  const hz = (room && room.state && room.state.tableZ) || 7;
+  const halfFov = THREE.MathUtils.degToRad(camera.fov / 2);
+  const fitZ = hz / Math.tan(halfFov);
+  const fitX = hx / (Math.tan(halfFov) * camera.aspect);
+  const height = Math.max(fitX, fitZ) * 1.15;
+  controls.target.set(0, 0, 0);
+  // A tiny Z offset avoids an undefined camera roll when its view and up vectors are parallel.
+  camera.position.set(0, height, 0.001);
   controls.update();
 }
 
@@ -3477,9 +3519,9 @@ function updateRoomNotes() {
   if (el.value !== notes) el.value = notes;
 }
 
-// Rebuild the fanned face-down backs shown at another player's seat.
+// Rebuild the fanned face-down backs shown at a player's seat. This includes our own public
+// fan: private card faces stay in the bottom bar, while the table fan keeps the hand zone visible.
 function refreshFan(sid) {
-  if (sid === mySession) return; // I see my own cards in the bottom bar
   const player = room.state.players.get(sid);
   if (!player) return;
   const seat = seatLayout[player.seat];
@@ -3946,8 +3988,8 @@ function refreshMyChip() {
   if (!seat) return;
   const color = me.color || '#c9a25a';
   const out = new THREE.Vector3(...seat.out).normalize();
-  const px = seat.hand[0] + out.x * 0.3,
-    pz = seat.hand[2] + out.z * 0.3; // on the felt, at your edge
+  const px = seat.hand[0] - out.x * 1.3,
+    pz = seat.hand[2] - out.z * 1.3; // just above the fan, toward the table centre
   const chip = new THREE.Mesh(
     new THREE.PlaneGeometry(1.5, 1.5),
     new THREE.MeshBasicMaterial({
@@ -4334,7 +4376,7 @@ function renderPlayers() {
   if (!el) return;
   const list = [];
   room.state.players.forEach((player, sid) => list.push([sid, player]));
-  list.sort((a, b) => a[1].seat - b[1].seat);
+  list.sort((a, b) => a[1].order - b[1].order || a[1].seat - b[1].seat);
   el.replaceChildren();
   if (room.state.turnPending) {
     // the turn is held by someone who hasn't rejoined the saved game
@@ -4353,6 +4395,31 @@ function renderPlayers() {
   for (const [sid, player] of list) {
     const row = document.createElement('div');
     row.className = 'prow' + (room.state.turn === sid ? ' turn' : '');
+    row.dataset.sid = sid;
+    if (myRank >= 2) {
+      row.draggable = true;
+      row.title = 'Drag to change turn order';
+      row.addEventListener('dragstart', (event) => {
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', sid);
+        row.classList.add('dragging');
+      });
+      row.addEventListener('dragend', () => row.classList.remove('dragging'));
+      row.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+      });
+      row.addEventListener('drop', (event) => {
+        event.preventDefault();
+        const moved = event.dataTransfer.getData('text/plain');
+        const order = list.map(([id]) => id);
+        const from = order.indexOf(moved);
+        const to = order.indexOf(sid);
+        if (from < 0 || to < 0 || from === to) return;
+        order.splice(to, 0, order.splice(from, 1)[0]);
+        room.send('turnOrder', { order });
+      });
+    }
     if (player.avatar) {
       // server enforces a data:image URL
       const img = document.createElement('img');
@@ -4375,6 +4442,28 @@ function renderPlayers() {
       badge.className = 'rolebadge';
       badge.textContent = player.role;
       row.appendChild(badge);
+    }
+    if (myRank >= 2) {
+      const controls = document.createElement('span');
+      controls.className = 'turnOrderControls';
+      const move = (delta, symbol, label) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = symbol;
+        button.setAttribute('aria-label', `${label} ${player.name} in turn order`);
+        button.disabled =
+          (delta < 0 && list[0][0] === sid) || (delta > 0 && list[list.length - 1][0] === sid);
+        button.onclick = () => {
+          const order = list.map(([id]) => id);
+          const at = order.indexOf(sid);
+          [order[at], order[at + delta]] = [order[at + delta], order[at]];
+          room.send('turnOrder', { order });
+        };
+        controls.appendChild(button);
+      };
+      move(-1, '↑', 'Move up');
+      move(1, '↓', 'Move down');
+      row.appendChild(controls);
     }
     el.appendChild(row);
   }
@@ -5815,7 +5904,7 @@ addEventListener('keydown', (e) => {
   const btn = byId('seatBtn'),
     pop = byId('seatPop');
   if (btn && pop) {
-    const SEAT_ROWS = ['mySeatBtn', 'leanBtn'];
+    const SEAT_ROWS = ['mySeatBtn', 'birdsEyeBtn', 'leanBtn'];
     const proxyRow = (src, label) => {
       if (proxyGated(src)) return null;
       const row = document.createElement('button');
@@ -5850,8 +5939,17 @@ addEventListener('keydown', (e) => {
     };
     const build = () => {
       pop.replaceChildren();
-      // seatLayout carries geometry, not names — these are the six seats in its order.
-      const SEAT_NAMES = ['Front', 'Back', 'Right', 'Left', 'Front-right', 'Back-left'];
+      // seatLayout carries geometry, not names — keep these in its order.
+      const SEAT_NAMES = [
+        'Front',
+        'Back',
+        'Right',
+        'Left',
+        'Front-right',
+        'Back-left',
+        'Front-left',
+        'Back-right',
+      ];
       const seatName = SEAT_NAMES[mySeat];
       pop.appendChild(label(seatName ? 'Your seat · ' + seatName : 'Your seat'));
       for (const id of SEAT_ROWS) {
@@ -6039,7 +6137,7 @@ addEventListener('keydown', (e) => {
 
 // ---- hand tray (7e slice 6; mockup 10g) ------------------------------------------------
 // The hand stops being a permanent 96px strip and becomes a tab you pull up. Open, it
-// stacks the pieces the desktop row flanks: show faces on top, cards, drop pair below.
+// stacks the same hand and disclosure actions used by the desktop row.
 {
   const row = byId('handRow'),
     tab = byId('handTab'),
@@ -6058,11 +6156,6 @@ addEventListener('keydown', (e) => {
       if (!isSheet()) setOpen(false); // leaving touch: the desktop row is always shown
     };
     const setOpen = (open) => {
-      // #showBtn is the desktop disclosure for the faces strip and is hidden in the tray,
-      // so opening the tray is what reveals it (10g shows the faces as part of the tray).
-      const strip = byId('showStrip'),
-        showBtn = byId('showBtn');
-      if (open && isSheet() && count() && strip && strip.hidden && showBtn) showBtn.click();
       row.classList.toggle('trayOpen', open);
       document.body.classList.toggle('trayOpen', open);
       tab.setAttribute('aria-expanded', open ? 'true' : 'false');

@@ -213,7 +213,7 @@ Pure constants and helpers imported by both sides.
   `thick` (wall half-thickness), `floorThick` (floor half-height, its top at `y=0`), `lid`
   (half-thickness of the invisible physics-only ceiling), `margin` (gap from the table edge to
   the track the tray centre rides).
-- **`SEAT_ANGLES`** `[6]` + **`seatAngle(seat)`** — each seat's angle on the whiteboard/tray
+- **`SEAT_ANGLES`** `[8]` + **`seatAngle(seat)`** — each seat's angle on the whiteboard/tray
   track (θ = `atan2(outX, outZ)`, matching `seatLayoutFor`), so a seat's tray sits directly
   behind that player.
 

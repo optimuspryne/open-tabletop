@@ -162,10 +162,10 @@ test('physics: a "Roll all" of several tray dice keeps them all in the tray', ()
   }
 });
 
-test('seatAngle: six distinct seat angles, out of range → 0', () => {
-  assert.equal(SEAT_ANGLES.length, 6);
+test('seatAngle: eight distinct seat angles, out of range → 0', () => {
+  assert.equal(SEAT_ANGLES.length, 8);
   assert.equal(seatAngle(0), 0);
-  assert.equal(new Set(SEAT_ANGLES).size, 6, 'every seat faces a different way');
+  assert.equal(new Set(SEAT_ANGLES).size, 8, 'every seat faces a different way');
   assert.equal(seatAngle(99), 0, 'unknown seat falls back to 0');
 });
 

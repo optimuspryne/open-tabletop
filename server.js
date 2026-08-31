@@ -264,9 +264,10 @@ defineTypes(Piece, {
   qz: 'number',
   qw: 'number',
 });
-class Player extends Schema {} // PUBLIC per-player info: seat + how many cards they hold (never which cards)
+class Player extends Schema {} // PUBLIC per-player info: seat/turn order + hand count (never card identities)
 defineTypes(Player, {
   seat: 'number',
+  order: 'number',
   hand: 'number',
   name: 'string',
   color: 'string',
@@ -435,7 +436,16 @@ defineTypes(State, {
   overlays: { map: Overlay },
 });
 
-const PALETTE = ['#4a78c9', '#c94a4a', '#4ac97a', '#c9a24a', '#9a4ac9', '#4ac9c9'];
+const PALETTE = [
+  '#4a78c9',
+  '#c94a4a',
+  '#4ac97a',
+  '#c9a24a',
+  '#9a4ac9',
+  '#4ac9c9',
+  '#e8793a',
+  '#d85ca8',
+];
 
 // --- Physics world (identical setup to the single-player client) ------------
 // GM-resizable table: half-extent bounds (default is TABLE = 10 x 7).
@@ -549,6 +559,7 @@ const geoOf = (o) => {
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
   async onCreate(options) {
+    this.maxClients = SEAT_ANGLES.length;
     this.setState(new State());
     this.world = buildWorld(SIM);
     this.mat = this.world.__mat;
@@ -794,6 +805,22 @@ class TableRoom extends Room {
     registerMemberHandlers(this, { db });
 
     tableMessage('nextTurn', () => this.advanceTurn());
+    tableMessage('turnOrder', (client, message) => {
+      if (this.rank(client) < RANK.gm) return;
+      const parsed = oneField(message, 'order', (value) => {
+        if (!Array.isArray(value) || value.length !== this.state.players.size) return null;
+        const ids = value.every(
+          (sid) => typeof sid === 'string' && sid.length <= 64 && this.state.players.has(sid),
+        )
+          ? [...value]
+          : null;
+        return ids && new Set(ids).size === ids.length ? ids : null;
+      });
+      if (!parsed) return;
+      parsed.order.forEach((sid, order) => {
+        this.state.players.get(sid).order = order;
+      });
+    });
     tableMessage('setName', (client, message) => {
       const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 20 }));
       if (!parsed) return;
@@ -1674,6 +1701,7 @@ class TableRoom extends Room {
 
     const player = new Player();
     player.seat = seat;
+    player.order = this.state.players.size;
     player.hand = 0;
     player.showing = 0;
     player.name = auth.username || 'Player ' + (seat + 1); // identity from the account
@@ -1709,8 +1737,8 @@ class TableRoom extends Room {
     this.pendingTurn = null;
     this.state.turnPending = ''; // advancing clears any absent-player hold
     const order = [];
-    this.state.players.forEach((player, sid) => order.push([sid, player.seat]));
-    order.sort((a, b) => a[1] - b[1]);
+    this.state.players.forEach((player, sid) => order.push([sid, player.order, player.seat]));
+    order.sort((a, b) => a[1] - b[1] || a[2] - b[2]);
     if (!order.length) {
       this.state.turn = '';
       return;
@@ -2060,13 +2088,13 @@ const requireAdmin = createRequireAdmin(requireUser);
 app.use(helmet({ contentSecurityPolicy: false }));
 
 // Content-Security-Policy — ENFORCED. Three + Colyseus are self-hosted under /vendor,
-// so scripts lock to 'self' plus the three known inline-script hashes (accent
-// bootstrap, import map, OTT_EDITOR flag). data:/blob: are allowed in connect-src for
+// so scripts lock to 'self' plus the known inline-script hashes (currently the
+// import map used by both table and editor modes). data:/blob: are allowed in connect-src for
 // Three's loaders (embedded model buffers + object URLs). No 'unsafe-eval': Colyseus
 // feature-detects eval and falls back to its non-inline decoder when it's blocked.
 // Violations still POST to /csp-report so real ones surface in the logs.
 const CSP_INLINE = [
-  "'sha256-GPCT8IS0bOltxV6o5zObSqdYe/Cpv1tKzAj9rjuR+yM='", // import map (table, editor)
+  "'sha256-nAG3xy0rRET2ecuPDHRx6qjQE+p+98x1xfv8G0NqT2c='", // import map (table, editor)
 ];
 app.use(
   helmet.contentSecurityPolicy({

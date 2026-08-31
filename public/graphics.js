@@ -1497,9 +1497,16 @@ function dispenserMesh(props = {}) {
     new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
 
   if (spec.body === 'model') {
-    const teamTint = spec.team ? COLORS.team[spec.team][props.team ? 1 : 0] : null;
+    const tint = spec.team
+      ? COLORS.team[spec.team][props.team ? 1 : 0]
+      : spec.color
+        ? (props.color ?? null)
+        : null;
     const paint = (m) => {
-      if (teamTint != null && isTintSlot(m.name, spec.tintMaterial)) return matte(teamTint, m.side);
+      // A named slot preserves the rest of the model's baked materials (Go bowl); without one,
+      // a colorable model dispenser takes the picked color across the whole model (train stack).
+      if (tint != null && (!spec.tintMaterial || isTintSlot(m.name, spec.tintMaterial)))
+        return matte(tint, m.side);
       m.metalness = 0;
       return m; // shell keeps its baked look
     };

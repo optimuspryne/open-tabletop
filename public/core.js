@@ -20,7 +20,7 @@ const CONFIG = {
   ping: { dur: 1200, inner: 0.35, outer: 0.5, lift: 0.05, grow: 2.4 }, // attention ping: lifetime (ms), ring radii, height above surface, expansion factor
   measure: { fill: 0.14, edge: 0.08 }, // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
   input: { dblMs: 280, clickMs: 300, dragPx: 6, inspectPx: 4, handPx: 8 }, // click/drag feel: double-click window, click-defer (ms), drag thresholds (px)
-  tex: { die: 256, board: 512 }, // canvas texture resolutions (higher = sharper, more GPU memory)
+  tex: { die: 512, board: 1024 }, // canvas texture resolutions (higher = sharper, more GPU memory)
   upload: { cardW: 512, cardH: 716, board: 1024, type: 'image/png', quality: 1.0 }, // uploaded image size + encoding (PNG = lossless; quality only affects lossy types)
   anim: { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
 };
@@ -30,8 +30,8 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
 // The three lighting intensities most worth tweaking to taste.
 const LIGHTING = {
-  hemi: 0.3, // soft sky/ground fill (ambient)
-  sun: 2.5, // main directional light + shadows
+  hemi: 1, // soft sky/ground fill (ambient)
+  sun: 1, // main directional light + shadows
   env: 0.45, // environment-map reflection strength (0 = flat, 1 = full studio)
 };
 
