@@ -386,6 +386,10 @@ html,
 body {
   margin: 0;
   height: 100%;
+  /* Without this every element that never sets a colour inherits the UA default —
+     black — regardless of the dark surface it sits on. That is how the toast, and the
+     region close button's ✕, ended up unreadable. */
+  color: var(--text);
   overflow: hidden;
   overscroll-behavior: none; /* no mobile pull-to-refresh / bounce interfering with touch gestures */
   touch-action: manipulation; /* keep pan + pinch-zoom, but kill iOS double-tap-to-zoom on the UI (canvas + handcards keep their stricter touch-action:none) */
@@ -4810,6 +4814,7 @@ body.not-gm .gm-only {
   backdrop-filter: var(--blur);
   box-shadow: 0 8px 24px var(--shadow-soft);
   font-size: var(--fs-sm);
+  color: var(--text);
   animation: toastIn 0.16s ease-out;
 }
 .toastAction {
