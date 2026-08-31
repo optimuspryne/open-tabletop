@@ -898,28 +898,6 @@ button.danger,
 
 /* ===== show-cards panel (left edge, toggled) ===== */
 /* left-edge toggled pop-outs: show-cards + drop-hand (share one frame) */
-#showPanel,
-#dropPanel {
-  left: var(--inset);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(240px, 88vw);
-  gap: 8px;
-  z-index: 6;
-}
-#interactDock > #showPanel,
-#interactDock > #dropPanel {
-  position: fixed;
-  left: var(--inset);
-  top: calc(
-    var(--inset) + 52px
-  ); /* open below the top-left nav (#ui), clear of the bottom-left hamburgers */
-  transform: none;
-  width: min(240px, 88vw);
-  box-sizing: border-box;
-  margin: 0;
-  max-height: none;
-}
 .showLabel {
   color: var(--accent);
   font-size: var(--fs-sm);
@@ -1303,12 +1281,6 @@ input[type='range']::-moz-range-thumb {
   border: none;
   border-radius: 2px;
 }
-#showHold {
-  margin-top: 4px;
-  font-weight: 600;
-  user-select: none;
-  touch-action: none; /* a press-and-hold shouldn't scroll or select on touch */
-}
 
 /* ===== members panel (GM tools) ===== */
 /* Customize Table — a centered modal (see the modal group above); its body scrolls if it
@@ -1641,12 +1613,9 @@ input[type='range']::-moz-range-thumb {
 [data-pane='sky'] .sqWide {
   width: 100%;
 }
-#libraryHead,
-#builtinHead,
-#addHead,
-#libraryHead b,
-#builtinHead b,
-#addHead b {
+/* The add-modal header's <b> is the modal title (.panel-title), not a mini label —
+   it was only ever this size because a more specific #addModal rule overrode it. */
+#addHead {
   font-size: var(--fs-sm);
   opacity: 0.6;
   margin: 0;
@@ -1900,9 +1869,7 @@ input[type='range']::-moz-range-thumb {
 #skyList {
   max-height: 220px;
 }
-body.not-admin #skyAdmin {
-  display: none;
-} /* only admins curate the skybox library */
+/* only admins curate the skybox library */
 
 /* ===== player panel (top-right) ===== */
 #players {
@@ -1934,8 +1901,7 @@ body.not-admin .admin-only {
 }
 
 /* Room button pulses while a join is pending */
-#roomBtn.pulse,
-#roomMembers.pulse {
+#roomBtn.pulse {
   animation: memberPulse 1.4s ease-in-out infinite;
   border-color: var(--accent);
   color: var(--accent);
@@ -2265,17 +2231,6 @@ body.admin {
 }
 
 /* ===== scoreboard + room notes panel ===== */
-#scorePanel {
-  right: var(--inset);
-  top: 50%;
-  transform: translateY(-50%);
-  width: min(320px, 92vw);
-  max-height: 82vh;
-  overflow: auto;
-  gap: 10px;
-  padding: 12px 14px; /* roomier than the .popout default */
-  font: var(--fs)/1.4 var(--font);
-}
 #scoreTable {
   width: 100%;
   border-collapse: collapse;
@@ -2550,16 +2505,11 @@ body.admin {
     max-height: 70vh;
     overflow-y: auto;
   } /* dropdowns can't run off-screen */
-  #diceGrp {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 4px;
-  } /* dice fit a compact grid, not a tall column */
+  /* dice fit a compact grid, not a tall column */
   #hand {
     --card-w: calc(clamp(50px, 20vw, 80px) * var(--ui-elements-scale));
   } /* smaller hand cards on phones */
-  .panel.popout,
-  #measurePanel {
+  .panel.popout {
     /* every pop-out opens as one centered modal, not scattered */
     position: fixed !important;
     top: 50% !important;
@@ -2575,23 +2525,8 @@ body.admin {
 }
 
 /* ===== sound + credits panels (fixed pop-outs, like Notes/Whiteboard) ===== */
-#audioPanel,
-#creditsPanel,
-#tracksPanel {
-  top: var(--inset); /* aligned with the room code */
-  right: calc(var(--inset) + min(285px, 92vw) + var(--gap)); /* just left of the right dock */
-  width: min(340px, 90vw);
-  gap: 6px;
-}
 @media (max-width: 720px) {
   /* no room beside the rail — center it over the table instead */
-  #audioPanel,
-  #creditsPanel,
-  #tracksPanel {
-    top: 50%;
-    right: var(--inset);
-    transform: translateY(-50%);
-  }
   /* Slimmer player block so the rail is lighter on a phone. */
   .mav {
     width: 36px;
@@ -2602,18 +2537,7 @@ body.admin {
     padding: 6px 8px;
   }
 }
-#creditsPanel,
-#tracksPanel {
-  max-height: 78vh;
-  overflow-y: auto;
-}
-#audioPanel {
-  z-index: 7;
-}
-#creditsPanel,
-#tracksPanel {
-  z-index: 8;
-} /* open on top of the Sound panel, which stays open underneath */
+/* open on top of the Sound panel, which stays open underneath */
 #nowPlaying,
 #creditsBody {
   overflow-wrap: anywhere;
@@ -2664,13 +2588,6 @@ body.admin {
    .floating — popped out of the dock into a free, viewport-fixed position
    .resizable— a native resize grip (every movable panel, once floated)         */
 /* Measure just needs to stack + space its rows; padding comes from the modal base. */
-#measurePanel {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-width: min(400px, 92vw);
-  box-sizing: border-box;
-}
 /* Reactive kind picker: an auto-fit grid reflows the buttons evenly as the panel
    is resized (4-across when wide, 2×2 when narrow) and each button stretches to
    fill its cell — so they stay uniform AND responsive, no equalize pass needed. */
@@ -2718,17 +2635,11 @@ body.admin {
 
 /* List/log panels: clip the panel and let the primary region scroll + grow with it. */
 .panel.resizable#chat,
-.panel.resizable#notes,
-.panel.resizable#creditsPanel,
-.panel.resizable#tracksPanel,
-.panel.resizable#membersPanel {
+.panel.resizable#notes {
   overflow: hidden;
 }
 .panel.resizable#chat #chatLog,
-.panel.resizable#notes #notesText,
-.panel.resizable#creditsPanel #creditsBody,
-.panel.resizable#tracksPanel #tracksBody,
-.panel.resizable#membersPanel #memberList {
+.panel.resizable#notes #notesText {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -2739,9 +2650,6 @@ body.admin {
 } /* the panel grip governs size, not the textarea's own */
 
 @media (pointer: coarse) {
-  #resetPanelsBtn {
-    display: none;
-  }
 } /* nothing to reset on touch (drag is desktop-only) */
 
 /* Landing / lobby: a sticky (in-flow) top bar so the accent swatches scroll with you but never
@@ -2816,8 +2724,7 @@ label:has(.ico) {
   align-items: center;
   justify-content: center;
 }
-.trayDie:has(.ico),
-#diceGrp button:has(.ico) {
+.trayDie:has(.ico) {
   gap: 2px;
 } /* plus+number reads as "+4" */
 
@@ -3933,16 +3840,8 @@ body.not-gm .gm-only {
   gap: 0;
   overflow: hidden; /* the panes scroll, the shell does not */
 }
-#libraryModal .libraryCard:has(.libSticky) .libPane {
-}
 
 /* ---- sticky header: title row · tabs · controls -------------------------- */
-#libraryModal .libraryCard .libSticky {
-}
-#libraryModal .libSticky .panel-head {
-}
-#libraryModal .libSticky .panel-head b {
-}
 
 /* ---- source: three chips → one segmented control ------------------------ */
 #lib2Source {
@@ -4646,43 +4545,13 @@ body.not-gm .gm-only {
 }
 
 /* ---- Show / Drop hand popouts ------------------------------------------ */
-.showLabel,
-#dropPanel .note {
+.showLabel {
   font-size: var(--fs-sm);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text);
   opacity: 0.5;
   margin: 0;
-}
-#dropPanel .note {
-  letter-spacing: 0;
-  text-transform: none;
-  opacity: 0.6;
-}
-#showPanel .chipRow,
-#dropPanel .chipRow {
-  display: flex;
-  gap: 6px;
-}
-#showPanel .chipRow .chip,
-#dropPanel .chipRow .chip {
-  flex: 1;
-  justify-content: center;
-  padding: 8px;
-}
-#showAudience {
-  flex-wrap: wrap;
-}
-#showAudience .chip {
-  flex: 0 1 auto;
-}
-#showHold {
-  width: calc(100% - 24px);
-  justify-content: center;
-  padding: 9px;
-  color: var(--accent);
-  border-color: var(--accent);
 }
 
 /* ============================================================================
@@ -5762,7 +5631,7 @@ body.not-gm .gm-only {
     flex: 0 0 auto;
     gap: 8px;
   }
-  #libraryModal .libSticky .panel-head b {
+  #libraryModal .panel-title {
     font-size: var(--fs);
   }
   #libraryModal .libSticky .panel-head .close-x {
@@ -5838,17 +5707,6 @@ body.not-gm .gm-only {
   flex-direction: column;
   padding: 0;
   overflow: hidden;
-}
-#addModal .libraryCard .libSticky {
-}
-#addModal .libSticky .panel-head {
-}
-#addModal .libSticky .panel-head b#addTitle {
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
-}
-#addModal .libraryCard:has(.libSticky) .libPane {
 }
 
 /* ---- captions: the dashed --- label --- decoration goes ----------------- */
@@ -6102,7 +5960,9 @@ body.not-gm .gm-only {
   padding: 0;
   border: none;
 }
-.libraryCard .libSticky .panel-head > b {
+/* Modal header title. One class on the <b>, rather than three id- and
+   descendant-scoped rules saying the same thing. */
+.panel-title {
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
