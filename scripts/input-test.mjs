@@ -213,7 +213,13 @@ const CASES = [
 ];
 
 function findChrome() {
-  if (process.env.CHROME_BIN) return process.env.CHROME_BIN;
+  if (process.env.CHROME_BIN) {
+    // Validate rather than trusting it: a wrong path otherwise hangs until the
+    // launch timeout instead of saying what is wrong.
+    if (!existsSync(process.env.CHROME_BIN))
+      throw new Error(`CHROME_BIN is set to ${process.env.CHROME_BIN}, which does not exist.`);
+    return process.env.CHROME_BIN;
+  }
   const hit = [
     '/opt/pw-browsers/chromium',
     '/usr/bin/chromium',
@@ -250,6 +256,7 @@ const proc = spawn(
     '--headless=new',
     '--disable-gpu',
     '--no-sandbox',
+    '--disable-dev-shm-usage', // CI containers give /dev/shm 64MB; Chrome crashes without this
     `--user-data-dir=${profile}`,
     '--remote-debugging-port=0',
     'about:blank',

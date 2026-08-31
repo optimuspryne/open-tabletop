@@ -25,6 +25,30 @@ jobs:
       - run: npm ci
       - run: npm run check
 
+  input-seam:
+    name: Input seam (headless browser)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Resolve the browser explicitly and fail if there is none. A skip here would be
+      # worse than no job: it reports green on a suite that never ran.
+      - name: Locate Chrome
+        run: |
+          BIN=$(command -v google-chrome || command -v google-chrome-stable \
+             || command -v chromium-browser || command -v chromium || true)
+          if [ -z "$BIN" ]; then
+            echo "::error::No Chrome/Chromium on the runner — input tests cannot run."
+            exit 1
+          fi
+          echo "CHROME_BIN=$BIN" >> "$GITHUB_ENV"
+          "$BIN" --version
+      - run: npm run test:input
+
   dependency-audit:
     name: Production dependency audit
     runs-on: ubuntu-latest
