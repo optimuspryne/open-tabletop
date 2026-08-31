@@ -3933,25 +3933,14 @@ body.not-gm .gm-only {
   overflow: hidden; /* the panes scroll, the shell does not */
 }
 #libraryModal .libraryCard:has(.libSticky) .libPane {
-  padding: 14px 18px 18px;
-  overflow-y: auto;
 }
 
 /* ---- sticky header: title row · tabs · controls -------------------------- */
 #libraryModal .libraryCard .libSticky {
-  gap: 11px;
-  padding: 14px 18px 12px;
-  background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
-  border-bottom: 1px solid var(--border);
 }
 #libraryModal .libSticky .panel-head {
-  gap: 12px;
-  justify-content: flex-start;
 }
 #libraryModal .libSticky .panel-head b {
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 600;
 }
 
 /* ---- source: three chips → one segmented control ------------------------ */
@@ -5815,21 +5804,8 @@ body.not-gm .gm-only {
   overflow: hidden;
 }
 #addModal .libraryCard .libSticky {
-  display: flex;
-  flex-direction: column;
-  gap: 11px;
-  padding: 14px 18px 12px;
-  background: var(--panel-solid);
-  border-bottom: 1px solid var(--border);
-  position: sticky;
-  top: 0;
-  z-index: 2;
 }
 #addModal .libSticky .panel-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  justify-content: flex-start;
 }
 #addModal .libSticky .panel-head b#addTitle {
   color: var(--text);
@@ -5837,9 +5813,6 @@ body.not-gm .gm-only {
   font-weight: 600;
 }
 #addModal .libraryCard:has(.libSticky) .libPane {
-  overflow-y: auto;
-  min-height: 0;
-  flex: 1;
 }
 
 /* ---- captions: the dashed --- label --- decoration goes ----------------- */
@@ -6059,7 +6032,7 @@ body.not-gm .gm-only {
    ========================================================================= */
 
 /* ---- the window --------------------------------------------------------- */
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .modalCard.libraryCard {
+.modalCard.libraryCard {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -6074,7 +6047,7 @@ body.not-gm .gm-only {
 }
 
 /* ---- sticky header: title row over the tab row ------------------------- */
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libraryCard .libSticky {
+.libraryCard .libSticky {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -6085,7 +6058,7 @@ body.not-gm .gm-only {
   background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
   border-bottom: 1px solid var(--border);
 }
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libSticky .panel-head {
+.libraryCard .libSticky .panel-head {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -6093,22 +6066,22 @@ body.not-gm .gm-only {
   padding: 0;
   border: none;
 }
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libSticky .panel-head > b {
+.libraryCard .libSticky .panel-head > b {
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
 }
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libSticky .panel-head .close-x {
+.libraryCard .libSticky .panel-head .close-x {
   margin-left: auto;
 }
 
 /* ---- tabs: pill chips, no underline rail -------------------------------- */
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTabs {
+.libraryCard .libTabs {
   gap: 3px;
   border-bottom: none;
   flex-wrap: wrap;
 }
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTab {
+.libraryCard .libTab {
   background: none;
   border: 1px solid transparent;
   border-radius: var(--r-sm);
@@ -6117,11 +6090,11 @@ body.not-gm .gm-only {
   font-size: var(--fs-sm);
   opacity: 0.7;
 }
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTab:hover {
+.libraryCard .libTab:hover {
   background: var(--accent-soft);
   opacity: 1;
 }
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal) .libTab.on {
+.libraryCard .libTab.on {
   background: var(--accent-soft);
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
   color: var(--accent);
@@ -6129,9 +6102,7 @@ body.not-gm .gm-only {
 }
 
 /* ---- the pane ----------------------------------------------------------- */
-:is(#libraryModal, #addModal, #roomSettingsModal, #settingsModal)
-  .libraryCard:has(.libSticky)
-  .libPane {
+.libraryCard:has(.libSticky) .libPane {
   padding: 14px 18px 18px;
   overflow-y: auto;
   min-height: 0;
