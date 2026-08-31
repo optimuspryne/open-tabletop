@@ -45,6 +45,14 @@ const logicalKey = (e) => ({
   preventDefault: () => e.preventDefault(),
 });
 
+// Touch double-tap. WebKit does not synthesize a `dblclick` from a double-tap (Chrome
+// does), so on iOS/iPadOS the whiteboard claim was simply unreachable. The touch profile
+// raises the same doubleClick intent itself; the native handler stands down when the last
+// pointer was a finger, so Chrome doesn't fire both.
+const DOUBLE_TAP_MS = 300; // the second tap must land within this
+const DOUBLE_TAP_SLOP = 30; // ...and this close to the first
+const TAP_SLOP = 10; // finger drift that still counts as a tap rather than a drag
+
 const LONG_PRESS_MS = 500; // touch: hold a finger still this long → a secondary press (context menu)
 const LONG_PRESS_SLOP = 6; // px of finger drift before the hold becomes a drag; matches the grab threshold (CONFIG.input.dragPx) so any move that grabs also cancels the hold
 
@@ -73,8 +81,16 @@ export function attachControls(dom, intents) {
     { passive: false },
   );
 
+  let lastPointerType = 'mouse';
+  let tapX = 0,
+    tapY = 0, // where the current finger went down
+    prevTapAt = 0,
+    prevTapX = 0,
+    prevTapY = 0; // the previous completed tap
+
   dom.addEventListener('dblclick', (e) => {
     // double-click the board to claim it
+    if (lastPointerType === 'touch') return; // a finger's double-tap is raised in onUp
     if (intents.doubleClick(pt(e))) e.preventDefault();
   });
 
@@ -92,10 +108,11 @@ export function attachControls(dom, intents) {
     }
   };
   dom.addEventListener('pointerdown', (e) => {
+    lastPointerType = e.pointerType || 'mouse';
     intents.press(logical(e));
     if (e.pointerType === 'touch') {
-      lpX = e.clientX;
-      lpY = e.clientY;
+      tapX = lpX = e.clientX;
+      tapY = lpY = e.clientY;
       cancelLong();
       lpTimer = setTimeout(() => {
         lpTimer = null;
@@ -109,7 +126,22 @@ export function attachControls(dom, intents) {
   });
   const onUp = (e) => {
     cancelLong();
-    intents.release(logical(e));
+    intents.release(logical(e)); // release first, mirroring the native pointerup → dblclick order
+    if (e.type !== 'pointerup' || e.pointerType !== 'touch') return;
+    if (Math.hypot(e.clientX - tapX, e.clientY - tapY) >= TAP_SLOP) {
+      prevTapAt = 0; // that was a drag, not a tap — it cannot open a double
+      return;
+    }
+    const now = e.timeStamp || performance.now();
+    const near = Math.hypot(e.clientX - prevTapX, e.clientY - prevTapY) < DOUBLE_TAP_SLOP;
+    if (now - prevTapAt < DOUBLE_TAP_MS && near) {
+      prevTapAt = 0; // consumed, so a third tap starts a fresh pair
+      intents.doubleClick({ x: e.clientX, y: e.clientY });
+    } else {
+      prevTapAt = now;
+      prevTapX = e.clientX;
+      prevTapY = e.clientY;
+    }
   };
   dom.addEventListener('pointerup', onUp);
   dom.addEventListener('pointercancel', onUp);
