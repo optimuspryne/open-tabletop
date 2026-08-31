@@ -627,6 +627,7 @@ function rebuildGrid() {
       if (buf.length > 24) buf.shift();
     });
     syncWhiteboard(state.whiteboard); // reflect enable / slide / style changes
+    syncWbStatus(); // who currently holds the board (everyone but the holder)
     syncTrays(state.trays); // reflect personal trays appearing / being put away
     syncSkybox(state.skybox); // reflect the room's skybox
   });
@@ -4246,6 +4247,23 @@ function enterWbDraw() {
   if (tb) tb.hidden = false;
   wbSyncToolButtons();
 }
+// Who is holding the whiteboard, for everyone who is not holding it. The holder gets
+// #wbTools instead, so the two panels are mutually exclusive. Named "…is drawing" rather
+// than "locked" because the point is who to ask, not that you are shut out.
+function wbHolderName(sid) {
+  const p = room && room.state && room.state.players && room.state.players.get(sid);
+  return (p && p.name) || 'Someone';
+}
+function syncWbStatus() {
+  const el = byId('wbStatus');
+  if (!el) return;
+  const wb = room && room.state && room.state.whiteboard;
+  const owner = wb && wb.enabled ? wb.owner : '';
+  const show = !!owner && owner !== mySession;
+  el.hidden = !show;
+  if (show) byId('wbStatusWho').textContent = `${wbHolderName(owner)} is drawing`;
+}
+
 function exitWbDraw() {
   if (!wbOwning) return;
   wbOwning = false;
@@ -4979,14 +4997,9 @@ const INPUT = {
   },
   // double-click the board to own it and draw; true if a claim was sent
   doubleClick: (p) => {
-    if (
-      !room ||
-      !room.state.whiteboard ||
-      !room.state.whiteboard.enabled ||
-      wbOwning ||
-      room.state.whiteboard.owner
-    )
-      return false;
+    // The owner check comes AFTER the raycast on purpose: we can only say "X is drawing"
+    // once we know the double-click actually landed on the board.
+    if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled || wbOwning) return false;
     const surf = wbGroup && wbGroup.getObjectByName('wbSurface');
     if (!surf) return false;
     setPointer({ clientX: p.x, clientY: p.y });
@@ -4995,6 +5008,13 @@ const INPUT = {
     if (!bh) return false;
     const ph = ray.intersectObjects([...meshes.values()].map((m) => m.mesh))[0];
     if (ph && ph.distance < bh.distance) return false; // a piece is in front → inspect, not the board
+    const owner = room.state.whiteboard.owner;
+    if (owner) {
+      // Someone holds it. The server would ignore the claim silently, so say so here —
+      // the state is already synced, which is why this needs no round trip.
+      if (owner !== mySession) toast(`${wbHolderName(owner)} is using the whiteboard`, 'writing');
+      return true; // consumed either way: the double-click was meant for the board
+    }
     room.send('wbClaim');
     return true;
   },

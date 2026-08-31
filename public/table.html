@@ -971,6 +971,12 @@
       </button>
       <button id="wbDone" data-icon="u-turn-left"><span class="lbl">Return</span></button>
     </div>
+    <!-- Shown to everyone EXCEPT the holder while the board is claimed; #wbTools is the
+         holder's view, so the two are mutually exclusive. -->
+    <div id="wbStatus" class="panel" hidden>
+      <span class="da-note">Whiteboard</span>
+      <span id="wbStatusWho"></span>
+    </div>
     <div id="trayTools" class="panel" hidden>
       <div class="pop-group">
         <button class="pop-trigger" data-icon="dice-5"><span class="lbl">Add</span></button>
