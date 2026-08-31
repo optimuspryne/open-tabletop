@@ -63,18 +63,18 @@ snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 ### 1. Meet people where they play — touch & mobile
 The single biggest audience expansion. "Pull up the iPad at game night" is a core VTT use case,
 and much of what we built recently is mouse-first. This is also the most work.
-- **Audit the gesture surface.** Marquee/Shift-select, group drag, the tray camera hop,
+- **Audit the gesture surface.** ✅ Done - Marquee/Shift-select, group drag, the tray camera hop,
   middle-click facing, scroll-to-raise, right-drag-to-move, and now **left-click-a-deck-to-draw** —
   each assumes a mouse with buttons and a wheel. Catalog every one and its touch story.
-- **Touch equivalents.** Long-press, two-finger, and on-screen affordances for the button/wheel
+- **Touch equivalents.** ✅ Done - Long-press, two-finger, and on-screen affordances for the button/wheel
   gestures; make the Select tool the primary path where modifiers don't exist.
-- **Responsive HUD.** The rails/pop-outs assume desktop real estate; verify the tablet layout and
+- **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and
   the collapse behavior.
 - **A device test matrix** so "works on my machine" stops being the coverage.
 
 ### 2. A host can stand it up in ten minutes
 If the goal is other people hosting, the setup path *is* the product.
-- **Quickstart polish.** A copy-paste `docker compose up` that just works with sane defaults;
+- **Quickstart polish.** ✅ Done -  A copy-paste `docker compose up` that just works with sane defaults;
   a short "first room" walkthrough; clearer env-var docs.
 - **Release automation.** ✅ Done — `.github/workflows/release.yml` builds + pushes the multi-arch
   images and cuts the GitHub release on a `v*` tag (notes pulled from `CHANGELOG.md`), and
@@ -145,11 +145,12 @@ scoped against the real tree rather than from memory.
 7. **Custom games.** `STARTERS` in `shared/pieces.js` is code-only today — adding a game means
    editing the list. This is the user-facing version: define, save and share a starter from
    inside the app. Overlaps the "user upload path for deck skins" gap in §3.
-8. **Custom dice / dice textures.** `DICE_SETS` gives named colored sets, with per-player
+8.  **Hand Re-organization** Players need the ability to re-organize the cards in the their hands.  
+9. **Custom dice / dice textures.** `DICE_SETS` gives named colored sets, with per-player
    defaults already persisted (`applyDiceSet`, `loadDiceDefaults`, `saveDiceDefault`,
    `clearDiceDefault`, `public/client.js:381–435`). Custom *textures* are the new part and
-   need an upload path plus a `digitTexture`/`dieMesh` route for user art.
-9. **Multi-select composition.** Multi-select exists (`DESIGN_multiselect.md`) but only moves
+   need an upload path plus a `digitTexture`/`dieMesh` route for user art. 
+10. **Multi-select composition.** Multi-select exists (`DESIGN_multiselect.md`) but only moves
    and rotates a selection. These three turn it into a construction tool:
    1. Combine loose like cards into a **new deck** (discard pile → deck).
    2. **Merge two decks** — the inverse of the existing split.
