@@ -128,7 +128,7 @@
 .actions button {
   min-width: 4.5em;
   padding: 4px 9px;
-  font-size: var(--fs-sm-base);
+  font-size: var(--fs-sm);
   white-space: nowrap;
 }
 
@@ -326,7 +326,6 @@
     margin: 0;
     padding: 2px 12px 8px;
   }
-  .region .pane > .paneFoot,
   .region .pane > #chatInputRow {
     position: sticky;
     bottom: 0;
@@ -346,8 +345,6 @@
 /* ---- A small uppercase accent "mini-label" (section headings inside panels).
    Add class="miniLabel" to a new one; the element-scoped headings share it here. ---- */
 .miniLabel,
-.scoreNotesLabel,
-.libSection h4,
 .libPane h4 {
   color: var(--accent);
   font-size: var(--fs-sm);
@@ -372,17 +369,11 @@
 }
 
 /* ---- The "toggled/active" highlight for non-chip buttons (accent border + text). ---- */
-.is-on,
 #wbTools button.on,
 #leanBtn.on,
 #skyList button.on {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-/* ---- Small-text utility (matches --fs-sm); .muted already includes this size. ---- */
-.fs-sm {
-  font-size: var(--fs-sm);
 }
 
 /* ===== base ===== */
@@ -1478,9 +1469,6 @@ input[type='range']::-moz-range-thumb {
   flex-direction: column;
   gap: 8px;
 }
-.libNewBtn {
-  align-self: flex-start;
-}
 /* Add-to-Library builder */
 #addModal .libraryCard {
   width: min(900px, calc(100vw - 80px));
@@ -1588,14 +1576,6 @@ input[type='range']::-moz-range-thumb {
   border: 1px solid var(--border);
   background: var(--panel) center/contain no-repeat;
 }
-.boardPrev {
-  width: 120px;
-  height: 120px;
-  flex: none;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--panel) center/contain no-repeat;
-}
 .colliderRow {
   display: flex;
   gap: 4px;
@@ -1646,7 +1626,7 @@ input[type='range']::-moz-range-thumb {
 .uploadSq .sqLabel {
   width: 100%;
   text-align: center;
-  font-size: 11px;
+  font-size: var(--fs-sm);
   line-height: 1.3;
   padding: 3px 4px;
   margin: 0;
@@ -1702,16 +1682,12 @@ input[type='range']::-moz-range-thumb {
 #addHead,
 #libraryHead b,
 #builtinHead b,
-#addHead b,
-.libHint {
+#addHead b {
   font-size: var(--fs-sm);
   opacity: 0.6;
   margin: 0;
 }
-.libSection h4 {
-  margin: 6px 0 4px;
-  opacity: 0.85;
-} /* shared look via .miniLabel group */
+/* shared look via .miniLabel group */
 .libList {
   list-style: none;
   margin: 0;
@@ -1768,7 +1744,7 @@ input[type='range']::-moz-range-thumb {
   font-weight: 600;
 }
 .libBadge {
-  font-size: 10px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   border-radius: 4px;
@@ -1825,7 +1801,7 @@ input[type='range']::-moz-range-thumb {
 
 /* Room Info dock: Room Notes section (UI_Redesign phase 4a) */
 .dockLabel {
-  font-size: var(--fs-sm-base);
+  font-size: var(--fs-sm);
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -1924,23 +1900,6 @@ input[type='range']::-moz-range-thumb {
 #addModal .addRow .note {
   margin: 0;
 }
-.modalCard .modeRow {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 6px;
-}
-.modalCard .modeRow label {
-  color: var(--text);
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0;
-}
-.modalCard .backRow {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
 .modalCard input[type='color'] {
   width: 40px;
   height: 32px;
@@ -1982,63 +1941,16 @@ input[type='range']::-moz-range-thumb {
   margin-top: 18px;
 }
 .modalCard .note {
-  font-size: 12px;
+  font-size: var(--fs);
   opacity: 0.7;
   margin-top: 6px;
-}
-.savedWrap {
-  margin-top: 12px;
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-}
-.savedList {
-  max-height: 120px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.savedRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fs-sm);
-}
-.savedRow button {
-  padding: 3px 10px;
 }
 #skyList {
   max-height: 220px;
 }
-.skyRow {
-  display: flex;
-  gap: 4px;
-  align-items: stretch;
-}
-.skyRow .skyPick {
-  flex: 1;
-  text-align: left;
-}
-.skyRow .skyDel {
-  flex: 0 0 auto;
-  padding: 3px 9px;
-}
 body.not-admin #skyAdmin {
   display: none;
 } /* only admins curate the skybox library */
-.cubeGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 4px 0;
-}
-.cubeGrid label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--fs-sm);
-}
 
 /* ===== player panel (top-right) ===== */
 #players {
@@ -2055,7 +1967,7 @@ body.not-admin #skyAdmin {
 }
 .rolebadge {
   margin-left: auto;
-  font-size: 10px;
+  font-size: var(--fs-sm);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--accent);
@@ -2066,10 +1978,6 @@ body.not-admin #skyAdmin {
 
 /* Library creation controls: shown to admins, hidden for everyone else.
    admin-wrap uses display:contents so wrapping a block doesn't disturb layout. */
-.admin-wrap {
-  display: contents;
-}
-body.not-admin .admin-wrap,
 body.not-admin .admin-only {
   display: none !important;
 }
@@ -2476,10 +2384,7 @@ body.admin {
   font-size: var(--fs-sm);
   padding: 3px 8px;
 }
-.scoreNotesLabel {
-  opacity: 0.85;
-  margin-top: 4px;
-} /* shared look via .miniLabel group */
+/* shared look via .miniLabel group */
 #roomNotes {
   width: 100%;
   box-sizing: border-box;
@@ -2962,15 +2867,8 @@ body.admin {
   justify-content: center;
   gap: 6px;
 }
-.ico-ampersand {
-  width: calc(var(--ico-size) * 0.7 / 1.2);
-  height: calc(var(--ico-size) * 0.7 / 1.2);
-  opacity: 0.7;
-} /* a small connector between two icons (Scale & Grid) */
-.ico-plus {
-  width: calc(var(--ico-size) * 0.8 / 1.2);
-  height: calc(var(--ico-size) * 0.8 / 1.2);
-} /* the dice "add" mark: small next to the big number */
+/* a small connector between two icons (Scale & Grid) */
+/* the dice "add" mark: small next to the big number */
 [class*='ico-number-'] {
   width: calc(var(--ico-size) * 1.4 / 1.2);
   height: calc(var(--ico-size) * 1.4 / 1.2);
@@ -2985,20 +2883,10 @@ body:not(.ui-full) :is(button, .btn):has(.ico) .lbl {
 } /* icon-only: the label lives in the hover hint + aria-label */
 
 /* UI roles that never show text (even in full mode) — keyed off the icon, plus an .icon-only opt-in. */
-.icon-only .lbl,
-button:has(.ico-trash) .lbl,
-button:has(.ico-player-play) .lbl,
-button:has(.ico-player-pause) .lbl,
-button:has(.ico-restore) .lbl,
-button:has(.ico-check) .lbl,
-button:has(.ico-checks) .lbl,
-button:has(.ico-eye) .lbl,
-button:has(.ico-eye-off) .lbl {
+.icon-only .lbl {
   display: none;
 }
-button:has(.ico-trash) {
-  color: var(--danger);
-} /* every trash button is red */
+/* every trash button is red */
 .memberRow .actions .lbl {
   display: inline !important;
 } /* member role buttons always show text (icons alone are ambiguous) */
@@ -3125,9 +3013,6 @@ label:has(.ico) {
 .tableBody .secLabel:first-of-type {
   margin-top: 2px;
 }
-.tableBody .calibLabel {
-  text-align: center;
-}
 /* Rows are tighter than the old modal, and field labels are small + quiet (matching the
    app's compact panels) instead of full-size bright text. */
 .tableBody .sizeRow {
@@ -3231,7 +3116,7 @@ label:has(.ico) {
 }
 #scaleUnits .chip {
   padding: 4px 4px;
-  font-size: 11px;
+  font-size: var(--fs-sm);
 } /* the unit buttons a touch smaller — four across */
 
 /* Hand width vs. the bottom-corner controls: reserve less when the hamburgers are icon-only. */
@@ -4152,9 +4037,6 @@ body.not-gm .gm-only {
   font-size: 16px;
   font-weight: 600;
 }
-#libraryModal .libSticky .panel-head .close-x {
-  margin-left: auto;
-}
 
 /* ---- source: three chips → one segmented control ------------------------ */
 #lib2Source {
@@ -4187,30 +4069,6 @@ body.not-gm .gm-only {
 }
 
 /* ---- tabs: pill chips with counts, no underline rail -------------------- */
-#libraryModal .libTabs {
-  gap: 3px;
-  border-bottom: none;
-  flex-wrap: wrap;
-}
-#libraryModal .libTab {
-  background: none;
-  border: 1px solid transparent;
-  border-radius: var(--r-sm);
-  margin-bottom: 0;
-  padding: 6px 11px;
-  font-size: var(--fs-sm);
-  opacity: 0.7;
-}
-#libraryModal .libTab:hover {
-  background: var(--accent-soft);
-  opacity: 1;
-}
-#libraryModal .libTab.on {
-  background: var(--accent-soft);
-  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
-  color: var(--accent);
-  opacity: 1;
-}
 
 /* ---- controls row ------------------------------------------------------- */
 #libraryModal .libControls {
@@ -4284,7 +4142,7 @@ body.not-gm .gm-only {
   font-size: var(--fs-sm);
 }
 #libraryModal .cardCtrls .stepCap {
-  font-size: 9px;
+  font-size: var(--fs-sm);
   padding: 0 6px;
 }
 /* Swatches: a compact run, so the whole ctrls row fits one line. */
@@ -4536,7 +4394,6 @@ body.not-gm .gm-only {
   padding: 3px 7px;
   font-size: var(--fs-sm);
 }
-.memberRow .memberName,
 #memberList > li > span:first-child {
   min-width: 0;
   overflow: hidden;
@@ -4985,7 +4842,7 @@ body.not-gm .gm-only {
 .chatTime {
   margin-left: auto;
   font-family: ui-monospace, monospace;
-  font-size: 10px;
+  font-size: var(--fs-sm);
   color: color-mix(in srgb, var(--text) 42%, transparent);
 }
 .chatText {
@@ -5918,16 +5775,6 @@ body.not-gm .gm-only {
   width: 21px;
   height: 21px;
 }
-.radialLbl {
-  padding: 4px 8px;
-  border-radius: var(--r-sm);
-  background: var(--panel);
-  backdrop-filter: var(--blur);
-  border: 1px solid var(--border);
-  font-size: var(--fs-sm);
-  color: var(--text);
-  white-space: nowrap;
-}
 
 /* ============================================================================
    Fix: #rightStack must NOT carry backdrop-filter.
@@ -6121,9 +5968,6 @@ body.not-gm .gm-only {
   font-size: 16px;
   font-weight: 600;
 }
-#addModal .libSticky .panel-head .close-x {
-  margin-left: auto;
-}
 #addModal .libraryCard:has(.libSticky) .libPane {
   padding: 16px 18px 18px;
   overflow-y: auto;
@@ -6166,7 +6010,7 @@ body.not-gm .gm-only {
   padding: 1px 6px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  font-size: 9.5px;
+  font-size: var(--fs-sm);
   letter-spacing: 0.05em;
   color: var(--text);
   opacity: 0.7;
@@ -6431,7 +6275,6 @@ body.not-gm .gm-only {
    In the window they read as headings, so they align left like every other pane
    caption, and the accent-caption grammar is the one the tile captions use. */
 :is(#roomSettingsModal, #settingsModal) .secLabel,
-:is(#roomSettingsModal, #settingsModal) .calibLabel,
 :is(#roomSettingsModal, #settingsModal) .showLabel {
   text-align: left;
 }
