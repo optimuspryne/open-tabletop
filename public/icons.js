@@ -340,3 +340,41 @@ export function initTip() {
   // Any scroll invalidates a placed tip (it is position: fixed against a moved element).
   window.addEventListener('scroll', () => tip.hidden || hide(), true);
 }
+
+// Reusable pop-out groups: a `.pop-group` = a `.pop-trigger` button + a `.pop-menu`. Tapping the
+// trigger toggles its menu (closing any other open one); a click anywhere else closes them. Groups
+// marked `data-close` also close when you pick something inside (e.g. a color swatch); groups without
+// it stay open so you can pick several (e.g. adding multiple dice).
+//
+// Call it again with a root to wire groups added after load (library cards are built per render).
+// The document-level closer registers once however many times this runs.
+let popCloserWired = false;
+export function wirePopGroups(root = document) {
+  root.querySelectorAll('.pop-group').forEach((group) => {
+    if (group.dataset.popWired) return; // idempotent: re-wiring a card must not stack listeners
+    const trigger = group.querySelector(':scope > .pop-trigger');
+    const menu = group.querySelector(':scope > .pop-menu');
+    if (!trigger || !menu) return;
+    group.dataset.popWired = '1';
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = menu.hidden;
+      document.querySelectorAll('.pop-menu').forEach((m) => {
+        m.hidden = true;
+      });
+      menu.hidden = !open;
+    });
+    menu.addEventListener('click', (e) => {
+      e.stopPropagation(); // clicks inside don't reach the document-level closer
+      if (group.hasAttribute('data-close') && e.target.closest('button, .swatch'))
+        menu.hidden = true;
+    });
+  });
+  if (popCloserWired) return;
+  popCloserWired = true;
+  document.addEventListener('click', () =>
+    document.querySelectorAll('.pop-menu').forEach((m) => {
+      m.hidden = true;
+    }),
+  );
+}

@@ -23,7 +23,7 @@ import {
   makeYouChipTexture,
   gridMesh,
 } from './graphics.js';
-import { applyIcons, setIcon, initTip } from './icons.js';
+import { applyIcons, setIcon, initTip, wirePopGroups } from './icons.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -5161,36 +5161,7 @@ function autoIconLabels(root = document) {
 }
 autoIconLabels();
 
-// Reusable pop-out groups: a `.pop-group` = a `.pop-trigger` button + a `.pop-menu`. Tapping the
-// trigger toggles its menu (closing any other open one); a click anywhere else closes them. Groups
-// marked `data-close` also close when you pick something inside (e.g. a color swatch); groups without
-// it stay open so you can pick several (e.g. adding multiple dice).
-function wirePopGroups(root = document) {
-  root.querySelectorAll('.pop-group').forEach((group) => {
-    const trigger = group.querySelector(':scope > .pop-trigger');
-    const menu = group.querySelector(':scope > .pop-menu');
-    if (!trigger || !menu) return;
-    trigger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      const open = menu.hidden;
-      document.querySelectorAll('.pop-menu').forEach((m) => {
-        m.hidden = true;
-      });
-      menu.hidden = !open;
-    });
-    menu.addEventListener('click', (e) => {
-      e.stopPropagation(); // clicks inside don't reach the document-level closer
-      if (group.hasAttribute('data-close') && e.target.closest('button, .swatch'))
-        menu.hidden = true;
-    });
-  });
-  document.addEventListener('click', () =>
-    document.querySelectorAll('.pop-menu').forEach((m) => {
-      m.hidden = true;
-    }),
-  );
-}
-wirePopGroups();
+wirePopGroups(); // shared with editor-panel.js — see icons.js
 
 // applyIcons / setIcon / initTip are imported from icons.js (see top).
 applyIcons();

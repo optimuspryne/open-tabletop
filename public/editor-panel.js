@@ -18,7 +18,7 @@ import {
   parseCardFront,
 } from './graphics.js';
 import * as THREE from 'three';
-import { overflowMenu } from './icons.js'; // shared with the lobby (7f); this file's own copy retired in 7k
+import { overflowMenu, wirePopGroups } from './icons.js'; // shared with the lobby (7f); this file's own copy retired in 7k
 
 // Library edit/clone state. openEditModal() sets it; the Add form's Save reads it.
 //   { id }        → Save UPDATES that asset (Edit)
@@ -515,6 +515,26 @@ function spawnCard({
 
   let getColor = () => null,
     getTeam = () => null;
+  // The swatch run is wrapped in a pop-group: inline on desktop, behind a trigger on
+  // small/touch screens (CSS decides which). Before this it was display:none in short
+  // landscape, so colour choice was simply unavailable there.
+  const popWrap = (row) => {
+    const group = document.createElement('div');
+    group.className = 'pop-group swatchPop';
+    group.setAttribute('data-close', ''); // picking a colour closes the menu
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'pop-trigger chip';
+    trigger.dataset.icon = 'color-swatch';
+    trigger.title = 'Colour';
+    trigger.setAttribute('aria-label', 'Colour');
+    const menu = document.createElement('div');
+    menu.className = 'pop-menu';
+    menu.hidden = true;
+    menu.append(row);
+    group.append(trigger, menu);
+    return group;
+  };
   const pickRow = (items, onPick) => {
     const row = document.createElement('div');
     row.className = 'swatchRow';
@@ -541,11 +561,13 @@ function spawnCard({
     let idx = 0;
     getTeam = () => idx;
     ctrls.append(
-      pickRow(
-        cols.map((c, i) => ({ hex: c, name: 'Set ' + (i + 1) })),
-        (_it, i) => {
-          idx = i;
-        },
+      popWrap(
+        pickRow(
+          cols.map((c, i) => ({ hex: c, name: 'Set ' + (i + 1) })),
+          (_it, i) => {
+            idx = i;
+          },
+        ),
       ),
     );
   } else if (color === 'palette' || color === 'own') {
@@ -554,20 +576,21 @@ function spawnCard({
     const row = pickRow(pal, (it) => {
       col = it.hex;
     });
+    const grp = popWrap(row);
     if (color === 'own') {
-      row.hidden = true;
+      grp.hidden = true;
       const tog = document.createElement('button');
       tog.type = 'button';
       tog.className = 'chip chk on ownTog';
       tog.textContent = 'Own colors';
       tog.onclick = () => {
-        row.hidden = tog.classList.toggle('on');
+        grp.hidden = tog.classList.toggle('on');
       };
       getColor = () => (tog.classList.contains('on') ? null : col);
-      ctrls.append(tog, row);
+      ctrls.append(tog, grp);
     } else {
       getColor = () => col;
-      ctrls.append(row);
+      ctrls.append(grp);
     }
   }
 
@@ -619,6 +642,7 @@ function spawnCard({
     ...extraActs,
   );
   li.append(preview, meta, ctrls, acts);
+  wirePopGroups(li); // the swatch pop-group is built per card, so wire this subtree
   return li;
 }
 // A tab's multi-select bar (Select toggle + "Spawn selected"), injected once

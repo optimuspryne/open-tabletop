@@ -1631,8 +1631,9 @@ input[type='range']::-moz-range-thumb {
   align-items: stretch;
 }
 [data-pane='sky'] .addCol input[type='text'] {
-  flex: 0 0 auto;
-}
+  width: 100%;
+} /* both name fields sit inside a wrapper div now, so they need an explicit width to
+     fill the column rather than falling back to the input's default size */
 [data-pane='sky'] .sqWide + *,
 [data-pane='sky'] .skyCross + * {
   margin-top: auto;
@@ -4063,6 +4064,42 @@ body.not-gm .gm-only {
   outline-width: 1px;
   outline-offset: 1px;
 }
+/* Library card colour swatches — inline where there is room, behind a trigger where
+   there is not. The menu stays in normal flow rather than floating: .libPane scrolls,
+   and an absolutely positioned popover would be clipped at the pane edge. */
+#libraryModal .cardCtrls .swatchPop > .pop-menu {
+  position: static;
+  display: flex;
+  width: auto;
+  max-width: none;
+  max-height: none;
+  overflow: visible;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  backdrop-filter: none;
+}
+/* The trigger owns the row at every size: the swatch run drops onto its own line
+   beneath the controls when opened. display:contents lets the menu become a flex child
+   of .cardCtrls so it can take a full-width line without the group boxing it in. */
+#libraryModal .cardCtrls {
+  flex-wrap: wrap;
+}
+#libraryModal .cardCtrls .swatchPop {
+  display: contents;
+}
+#libraryModal .cardCtrls .swatchPop[hidden] {
+  display: none;
+}
+#libraryModal .cardCtrls .swatchPop > .pop-menu {
+  flex: 1 0 100%;
+  margin-top: 4px;
+}
+#libraryModal .cardCtrls .swatchPop > .pop-trigger {
+  padding: 2px 6px;
+}
+
 /* Spawn / Edit: one compact row, not a stack of full-width buttons. */
 #libraryModal .libCard .actions button {
   padding: 4px 10px;
@@ -5781,9 +5818,8 @@ body.not-gm .gm-only {
   #libraryModal .libCard .cardCtrls {
     gap: 4px;
   }
-  #libraryModal .libCard .cardCtrls .swatchRow {
-    display: none;
-  } /* colour choice waits for portrait — the row cannot hold it at this height */
+  /* colour choice now lives behind the .swatchPop trigger here — see the
+     "Library card colour swatches" block. It used to be display:none. */
 }
 
 /* ============================================================================
