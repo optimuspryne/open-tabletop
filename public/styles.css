@@ -237,11 +237,8 @@
 /* top-right cluster sits left of the right rail (min 270px); on mobile the rail collapses (phase 6) */
 .cluster-tr {
   position: fixed;
-  top: var(--inset);
-  right: calc(var(--inset) + 284px);
   z-index: 7;
   display: flex;
-  gap: var(--gap);
 }
 .region #scoreTable {
   width: 100%;
@@ -525,16 +522,13 @@ a {
 .uiRow2 {
   flex-basis: 100%;
   display: flex;
-  gap: var(--gap);
 } /* Chat + Notes on their own row below the nav */
 #ui {
   position: fixed;
   top: var(--inset);
   left: var(--inset);
   display: flex;
-  gap: var(--gap);
   flex-wrap: wrap;
-  align-items: center;
   font-family: var(--font);
 }
 
@@ -560,7 +554,6 @@ a {
   flex-direction: column;
   padding: 6px;
   width: 100%;
-  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r);
   backdrop-filter: var(--blur);
@@ -868,7 +861,6 @@ button.danger,
 /* (all three share the same frame; positioning skeleton comes from .popout) */
 #notesText {
   width: 100%;
-  min-height: 160px;
   resize: vertical;
   padding: 8px;
   font: var(--fs-sm)/1.5 var(--font);
@@ -882,29 +874,15 @@ button.danger,
   gap: 8px;
 }
 #timerReadout {
-  font:
-    600 34px ui-monospace,
-    'SF Mono',
-    Menlo,
-    monospace;
   color: var(--text);
-  text-align: center;
-  letter-spacing: 1px;
 }
 .timerRow {
-  display: flex;
-  gap: 6px;
-  align-items: center;
   color: var(--text);
   font-size: var(--fs-sm);
-}
-.timerRow button {
-  padding: 6px 10px;
 }
 #timerMode {
   background: none;
   color: var(--text);
-  border: none;
   padding: 5px 6px;
   font: var(--fs-sm) var(--font);
 }
@@ -1085,9 +1063,6 @@ select:focus {
 }
 /* Optional leading caption inside a stepper (e.g. dispenser "Amount"). */
 .stepCap {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 6px 0 8px;
   white-space: nowrap;
 }
 .swatchRow {
@@ -1152,7 +1127,6 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 2px 0;
 }
 .libDivider {
   flex: 0 0 2px;
@@ -1200,29 +1174,14 @@ select:focus {
 
 /* Public chat panel (Tools) — its frame is the shared right-edge pop-out above */
 #chatLog {
-  max-height: 260px;
   min-height: 90px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
   font: var(--fs-sm)/1.35 var(--font);
 }
 .chatMsg {
   word-break: break-word;
 }
-.chatFrom {
-  color: var(--accent);
-  font-weight: 600;
-}
-#chatInputRow {
-  display: flex;
-  gap: 6px;
-}
 #chatInput {
   /* surface + radius via .field group */
-  flex: 1;
-  min-width: 0;
   padding: 6px 8px;
   font: var(--fs)/1 var(--font);
 }
@@ -1346,7 +1305,6 @@ input[type='range']::-moz-range-thumb {
 }
 #showHold {
   margin-top: 4px;
-  padding: 10px;
   font-weight: 600;
   user-select: none;
   touch-action: none; /* a press-and-hold shouldn't scroll or select on touch */
@@ -1698,8 +1656,6 @@ input[type='range']::-moz-range-thumb {
   margin: 0;
   padding: 0;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 12px;
 }
 .libEmpty {
   opacity: 0.45;
@@ -1707,14 +1663,12 @@ input[type='range']::-moz-range-thumb {
   padding: 2px 4px;
 }
 .libCard {
-  display: flex;
   flex-direction: column;
   gap: 8px;
   font-size: var(--fs-sm);
   background: var(--panel-solid);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 10px;
 }
 .libPreview {
   height: 132px;
@@ -1727,7 +1681,6 @@ input[type='range']::-moz-range-thumb {
   overflow: hidden;
 }
 .libPreview.empty {
-  font-size: 42px;
   opacity: 0.5;
 }
 .libThumb {
@@ -1807,9 +1760,6 @@ input[type='range']::-moz-range-thumb {
 /* Room Info dock: Room Notes section (UI_Redesign phase 4a) */
 .dockLabel {
   font-size: var(--fs-sm);
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   margin: 2px 0 4px;
 }
 
@@ -1847,11 +1797,7 @@ input[type='range']::-moz-range-thumb {
 #libraryModal.src-builtin .lib2-cu {
   display: none;
 } /* Built-In → hide custom lists */
-#libraryModal .lib2-cu:not(:empty) {
-  border-top: 1px solid var(--border);
-  margin-top: 6px;
-  padding-top: 6px;
-} /* separate the two sources when both show */
+/* separate the two sources when both show */
 /* little source badge, only in All view */
 #libraryModal.src-all .lib2-bi > .libCard,
 #libraryModal.src-all .lib2-cu > .libCard {
@@ -1959,7 +1905,6 @@ body.not-admin #skyAdmin {
 
 /* ===== player panel (top-right) ===== */
 #players {
-  padding: 8px 10px;
   border-bottom: none;
   border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
@@ -2228,7 +2173,6 @@ body.landing {
 #landing .divider {
   border: none;
   border-top: 1px solid var(--border);
-  margin: 20px 0;
 }
 #landing ul {
   list-style: none;
@@ -2240,9 +2184,7 @@ body.landing {
 }
 #landing .roomRow {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 10px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
@@ -2344,15 +2286,10 @@ body.admin {
   vertical-align: middle;
 }
 .scoreName input {
-  width: 100%;
   box-sizing: border-box;
-  padding: 4px 6px;
   font: var(--fs-sm) var(--font);
 }
 .scoreVal {
-  text-align: center;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
   width: 46px;
 }
 .scoreActs {
@@ -2360,32 +2297,19 @@ body.admin {
   white-space: nowrap;
   width: 1%;
 }
-.scoreActs button {
-  padding: 2px 7px;
-  font-size: var(--fs-sm);
-}
 .scoreEmpty {
-  opacity: 0.45;
-  font-size: var(--fs-sm);
   text-align: center;
-  padding: 8px 0;
 }
 #scoreEdit {
   display: flex;
   flex-direction: column;
   gap: 6px;
 }
-.scoreAddRow {
-  display: flex;
-  gap: 6px;
-}
 .scoreAddRow input {
-  flex: 1;
   padding: 6px 8px;
   font: var(--fs-sm) var(--font);
 }
 #scoreClear {
-  align-self: flex-start;
   font-size: var(--fs-sm);
   padding: 3px 8px;
 }
@@ -2420,11 +2344,9 @@ body.admin {
 /* ===== Right rail — players panel on top, Tools menu + its panels below ===== */
 #rightStack {
   position: fixed;
-  top: var(--inset);
   right: var(--inset);
   z-index: 6;
   width: min(270px, 80vw);
-  max-height: calc(100vh - 2 * var(--inset));
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -2545,8 +2467,6 @@ body.admin {
 #roomInfoBody {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
-  padding: 0 11px 11px;
 }
 .dockSection {
   background: rgba(255, 255, 255, 0.03);
@@ -2715,11 +2635,6 @@ body.admin {
 }
 
 /* Music modal — fixed top-right, just left of the rail; collapses to its "Music" button */
-#musicBody {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
 
 /* Hand wings — Show (left) / Drop (right) tabs perched on the hand's top corners */
 .volMute {
@@ -3290,7 +3205,6 @@ figcaption b,
 #roomInfoBody .dockSection {
   display: flex;
   flex-direction: column;
-  gap: calc(5px * var(--ui-elements-scale));
 }
 
 /* ---- 7 · One chip grammar ---------------------------------------------
@@ -3694,9 +3608,6 @@ body.not-gm .gm-only {
 #landing .lcard > form > .row:last-child,
 #landing .lcard > .row:last-child {
   margin-bottom: 0;
-}
-#landing .lcard label:first-of-type {
-  margin-top: 4px;
 }
 /* The remaining divider (below the signed-in header) is the only one left. */
 #landing .divider {
@@ -4235,8 +4146,6 @@ body.not-gm .gm-only {
 .cluster-tr {
   top: var(--inset);
   right: var(--inset);
-  width: min(270px, 80vw);
-  justify-content: flex-end;
   gap: calc(2px * var(--ui-elements-scale));
 }
 #rightStack {
@@ -4316,9 +4225,6 @@ body.not-gm .gm-only {
 }
 #memberList > li,
 .memberRow {
-  flex-wrap: wrap;
-  gap: 6px;
-  padding: 7px 8px;
   border-radius: var(--r-sm);
   font-size: var(--fs-sm);
 }
@@ -4335,12 +4241,6 @@ body.not-gm .gm-only {
 .unclaimed-row .ico {
   width: var(--ico-size-sm);
   height: var(--ico-size-sm);
-}
-#memberList .actions,
-.memberRow .actions {
-  gap: 4px;
-  flex-wrap: nowrap;
-  margin-left: auto;
 }
 
 /* ============================================================================
@@ -4482,7 +4382,6 @@ body.not-gm .gm-only {
   align-items: center;
   gap: 6px;
   font-size: var(--fs-sm);
-  opacity: 0.55;
 }
 .paneNote .ico {
   width: var(--ico-size-sm);
@@ -4607,7 +4506,6 @@ body.not-gm .gm-only {
   background: none;
 }
 .scoreEmpty {
-  opacity: 0.45;
   font-size: var(--fs-sm);
   padding: 6px 0;
 }
@@ -4638,10 +4536,6 @@ body.not-gm .gm-only {
 }
 
 /* ---- music (8d) --------------------------------------------------------- */
-#nowPlaying {
-  font-size: var(--fs-sm);
-  opacity: 0.85;
-}
 #musicBody {
   display: flex;
   flex-direction: column;
@@ -4675,10 +4569,6 @@ body.not-gm .gm-only {
   border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
   font-size: var(--fs-sm);
   line-height: 1.5;
-  opacity: 1;
-}
-.pane[data-pane='measure'] p.muted b {
-  color: var(--text);
 }
 .pane[data-pane='measure'] .chipRow:last-of-type .chip {
   flex: 1;
@@ -5106,23 +4996,13 @@ body.not-gm .gm-only {
   #rightStack {
     /* top stays at the stacked value (below the top-right cluster) until slice 3
        folds that cluster into the drawer — at var(--inset) the two collide. */
-    right: var(--inset);
-    left: auto;
     bottom: auto;
-    width: auto;
     max-width: calc(100vw - 2 * var(--inset));
     max-height: none;
     overflow: visible;
-    flex-direction: row;
-    align-items: center;
-    gap: 6px;
   }
   /* Room name leads and takes the slack; identity trails. */
   #rightStack > #roomInfo {
-    order: -1;
-    flex: 0 1 auto;
-    min-width: 0;
-    max-width: 40vw;
     background: none;
     backdrop-filter: none;
     border: 0;
@@ -5133,10 +5013,8 @@ body.not-gm .gm-only {
     border-radius: 0;
   }
   #roomInfoHead #roomTitle {
-    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: var(--fs);
   }
   #roomInfoHead #roomCode {
     display: none;
@@ -5146,7 +5024,6 @@ body.not-gm .gm-only {
   } /* opened as a sheet, not docked (slice 5) */
   #rightStack > #identityBar {
     flex: 0 0 auto;
-    gap: 6px;
     padding: 3px;
     padding-inline-start: 8px;
   }
@@ -5193,12 +5070,9 @@ body.not-gm .gm-only {
     display: none;
   } /* the drawer is the only way in now */
   #rightStack {
-    top: var(--inset); /* the corner is free again */
-    left: var(--inset);
-    width: auto;
+    /* the corner is free again */
   }
   #rightStack > #roomInfo {
-    flex: 1 1 auto;
     max-width: none;
   }
   #drawerBtn {
@@ -5459,16 +5333,10 @@ body.not-gm .gm-only {
     left: var(--inset);
     right: var(--inset);
     width: auto;
-    display: flex;
     flex-direction: row;
-    align-items: center;
     gap: 8px;
     padding: 5px 8px;
     border-radius: var(--r-xl);
-    background: var(--panel);
-    backdrop-filter: var(--blur);
-    border: 1px solid var(--border);
-    box-shadow: 0 6px 18px var(--shadow-soft);
   }
   #rightStack > #drawerBtn,
   #rightStack > #identityBar {
@@ -5491,7 +5359,7 @@ body.not-gm .gm-only {
   }
   #rightStack > #identityBar {
     order: 2;
-    margin-left: auto; /* timer, turn state and avatar hug the right edge */
+    /* timer, turn state and avatar hug the right edge */
     gap: 8px;
   }
   #rightStack > #toolsDock {
@@ -5853,10 +5721,6 @@ body.not-gm .gm-only {
     gap: 8px;
     padding: 10px 12px 8px;
   }
-  #libraryModal .libList {
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
-    gap: 8px;
-  }
 }
 /* Landscape phones: one header row, four across. Header 88px → 44px. */
 @media (orientation: landscape) and (max-height: 560px) {
@@ -5948,7 +5812,6 @@ body.not-gm .gm-only {
   display: flex;
   flex-direction: column;
   padding: 0;
-  max-height: min(680px, calc(100vh - 56px));
   overflow: hidden;
 }
 #addModal .libraryCard .libSticky {
@@ -5974,7 +5837,6 @@ body.not-gm .gm-only {
   font-weight: 600;
 }
 #addModal .libraryCard:has(.libSticky) .libPane {
-  padding: 16px 18px 18px;
   overflow-y: auto;
   min-height: 0;
   flex: 1;
