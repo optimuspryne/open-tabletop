@@ -8,3 +8,6 @@
 !.env.example
 /secrets/*
 !/secrets/README.md
+
+# Claude Code local session data
+.claude/
