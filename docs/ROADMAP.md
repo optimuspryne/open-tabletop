@@ -149,7 +149,7 @@ scoped against the real tree rather than from memory.
 7. **Custom games.** `STARTERS` in `shared/pieces.js` is code-only today — adding a game means
    editing the list. This is the user-facing version: define, save and share a starter from
    inside the app. Overlaps the "user upload path for deck skins" gap in §3.
-8.  **Hand Re-organization** Players need the ability to re-organize the cards in the their hands.  
+8.  **Hand Re-organization** Players need the ability to re-organize the cards in their hands.  
 9. **Custom dice / dice textures.** `DICE_SETS` gives named colored sets, with per-player
    defaults already persisted (`applyDiceSet`, `loadDiceDefaults`, `saveDiceDefault`,
    `clearDiceDefault`, `public/client.js:381–435`). Custom *textures* are the new part and
