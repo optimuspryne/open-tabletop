@@ -55,7 +55,7 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 
 **Long-press → radial menu** (`pieceMenuItems`, `client.js:4871`) is the workhorse of the touch
 surface. It is filtered by piece kind and carries: Flip and Take to hand (cards); Roll (dice);
-Draw to hand, Shuffle, Split, Save… (decks); Dispense (dispensers); Move (then drag) for
+Draw to hand, Shuffle, Split (decks); Dispense (dispensers); Move (then drag) for
 grab-2 kinds; Inspect (inspectables); and Stand / lay flat, Snap to grid, Delete for everything.
 On a phone it arcs around the press point (`openRadial`); above `RADIAL_MAX` items, or on a
 non-sheet layout, it falls back to a flat list.
@@ -68,6 +68,11 @@ disabled during a hold, so two fingers here are not pan/dolly. The twist is 1:1 
 fingers 45°, the piece turns 45° — where the mouse's Alt-drag maps horizontal pixels to an angle
 at a tuned 0.57°/px. Rotation snaps to the same 15° the mouse uses, which doubles as the dead
 zone that stops a stray finger nudging a piece.
+
+Because the piece stays put while the fingers travel, the pointer no longer lands on it when the
+transform ends; the drag re-anchors instead of snapping (`public/drag.js`). That is a throw fix as
+much as a position one — the jump would otherwise land inside the throw estimator's window and
+fling the piece at the speed of the jump.
 
 ## Cards & decks
 

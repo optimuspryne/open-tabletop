@@ -36,6 +36,7 @@ import {
   unclaimedHead,
   unclaimedRow,
 } from './rows.js';
+import { reanchorOffset } from './drag.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -1931,6 +1932,12 @@ function applyHeldRotation(raw, fine = false) {
 }
 let dragHeight = GRAB_HEIGHT;
 let holdSig = -1; // visibility signature for the clustered height/rotate controls (synced each frame)
+// XZ correction applied to the drag raycast. A two-finger transform holds the piece still while
+// the fingers travel, so when it ends the finger no longer points at the piece. Without this the
+// piece snaps to the finger — and, because that jump lands inside the throw estimator's window,
+// gets flung at the speed of the jump. Re-anchoring keeps the piece put and preserves the offset
+// for the rest of the drag.
+const dragOffset = new THREE.Vector3();
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
   hit = new THREE.Vector3(); // fixed ground plane (y=0); drag height is applied as a separate Y offset
 const prevTarget = new THREE.Vector3(),
@@ -2616,7 +2623,9 @@ const onPointerDown = (e) => {
     rotateRaw: 0,
     rotateSent: 0,
     lastRotateSent: 0,
+    transformed: false,
   };
+  dragOffset.set(0, 0, 0); // each grab starts anchored to its own finger
   controls.enabled = false; // this gesture belongs to the piece
   dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
@@ -2704,6 +2713,10 @@ const onPointerMove = (e) => {
   ray.setFromCamera(pointer, camera);
   ray.ray.intersectPlane(dragPlane, hit);
   hit.y = dragHeight; // XZ from the fixed ground plane; height is the independent lift offset
+  if (down.grabbed) {
+    hit.x += dragOffset.x; // zero until a two-finger transform re-anchors the drag
+    hit.z += dragOffset.z;
+  }
 
   // First move past the click threshold decides what this drag means.
   if (!down.dragging) {
@@ -2762,6 +2775,7 @@ const onPointerMove = (e) => {
       throwVel.set(0, 0, 0);
       prevTarget.copy(heldTarget);
       prevThrowTime = performance.now();
+      down.transformed = true; // the next plain move must re-anchor rather than snap
       return;
     }
     if (e.rotate) {
@@ -2780,6 +2794,17 @@ const onPointerMove = (e) => {
     }
     down.rotating = false;
     down.rotateOnPress = false;
+    if (down.transformed) {
+      // The transform just ended. The fingers moved while the piece stayed put, so bank that
+      // separation as an offset instead of letting the piece jump to the finger (see drag.js —
+      // the jump is also what flings it, since it lands inside the throw estimator's window).
+      down.transformed = false;
+      const o = reanchorOffset(heldTarget, hit, dragOffset);
+      dragOffset.x = o.x;
+      dragOffset.z = o.z;
+      hit.x = heldTarget.x;
+      hit.z = heldTarget.z;
+    }
     heldTarget.copy(hit);
     const now = performance.now(),
       dt = (now - prevThrowTime) / 1000;
@@ -4891,13 +4916,6 @@ function pieceMenuItems(id, type) {
     items.push(['Draw to hand', () => sendAction('drawToHand', id)]);
     items.push(['Shuffle', () => room.send('shuffle', { deckId: id })]);
     items.push(['Split', () => room.send('splitDeck', { deckId: id })]);
-    items.push([
-      'Save…',
-      () => {
-        const name = prompt('Save this deck as:');
-        if (name && name.trim()) room.send('saveDeck', { deckId: id, name: name.trim() });
-      },
-    ]);
   }
   if (type === 'dispenser') {
     items.push(['Dispense', () => sendAction('dispense', id)]);
