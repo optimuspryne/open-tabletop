@@ -1,5 +1,7 @@
 # Open Tabletop — Roadmap
 
+_Last groomed 2026-09-01, reconciled against v0.12.2 (+41 commits)._
+
 ## North star
 
 A self-hosted, physics-driven virtual tabletop that recreates **sitting at a real table with
@@ -23,7 +25,7 @@ These are why some obvious features are deliberately absent — keep them in min
 
 ---
 
-## Architecture note — the server split (verified 2026-08-31)
+## Architecture note — the server split (verified 2026-09-01, at v0.12.2)
 
 A DRY pass broke the server monolith into 33 files. What moved:
 
@@ -46,10 +48,14 @@ cohesion 0.89) and a fully cohesive query layer (`roomRow` / `publicUserRow` / `
 cohesion 1.0).
 
 **What did NOT move:** `server.js` still carries ~120 symbols, including the whole `TableRoom`
-class (lines 560–2039, ~1,480 lines) plus `EditorRoom`, `LobbyRoom`, the Colyseus schema classes
+class (lines 560–2044, ~1,485 lines) plus `EditorRoom` (2045), `LobbyRoom` (2221), the Colyseus schema classes
 (`Piece`, `Player`, `Overlay`, `State`, `Whiteboard`, `Timer`, `ScoreRow`, `RoomScale`), the
 starter builders (`buildDominoSet`, `buildMahjongWall`, `buildScrabbleBag`, `buildSimpleDeck`)
-and `bootstrap`. See "Finish the server split" under Parked threads.
+and `bootstrap`. See "Finish the server split" under Parked threads. Note: 0.11.0 extracted more
+handler modules (movement, cards, room-state, overlays, physics, scene-persistence), but `TableRoom`
+itself never moved — `server.js` is now **2278 lines**, *larger* than at 0.9.0 (2039). The 0.11.0
+changelog's "substantially reduces `server.js`" is relative to what it would otherwise have been,
+not an absolute shrink.
 
 Where things live now, for the threads below: `BOARD_PAINTERS` is in `public/graphics.js`;
 snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
@@ -61,8 +67,11 @@ snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 ## The distribution push (priority order — reorder freely)
 
 ### 1. Meet people where they play — touch & mobile
-The single biggest audience expansion. "Pull up the iPad at game night" is a core VTT use case,
-and much of what we built recently is mouse-first. This is also the most work.
+The single biggest audience expansion. "Pull up the iPad at game night" is a core VTT use case.
+**The 0.12.0 redesign delivered the bulk of this** — a purpose-built phone/tablet layout (bottom
+sheets with peek/two-thirds/full drag stops, the ⊕ action fan, long-press-piece verbs, a pull-up
+hand tray, icon hints on touch) on top of the existing message protocol (no server change). What
+remains is closing the known gesture gaps and proving it on real devices — not building the interface.
 - **Audit the gesture surface.** ✅ Done — the catalog is `docs/GESTURES.md`: every gesture, its
   touch equivalent, and a status. Marquee/Shift-select, group drag, the tray camera hop,
   scroll-to-raise, right-drag-to-move and left-click-a-deck-to-draw each assume a mouse with
@@ -74,7 +83,7 @@ and much of what we built recently is mouse-first. This is also the most work.
   gestures; make the Select tool the primary path where modifiers don't exist.
 - **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and
   the collapse behavior.
-- **A device test matrix** so "works on my machine" stops being the coverage.
+- **A device test matrix** ✅ Done - so "works on my machine" stops being the coverage.
 
 ### 2. A host can stand it up in ten minutes
 If the goal is other people hosting, the setup path *is* the product.
@@ -82,7 +91,7 @@ If the goal is other people hosting, the setup path *is* the product.
   a short "first room" walkthrough; clearer env-var docs.
 - **Release automation.** ✅ Done — `.github/workflows/release.yml` builds + pushes the multi-arch
   images and cuts the GitHub release on a `v*` tag (notes pulled from `CHANGELOG.md`), and
-  `ci.yml` runs the test suite on every push/PR. Proven through the 0.9.0 release.
+  `ci.yml` runs the test suite on every push/PR. Proven across the 0.10.0–0.12.2 releases.
 - **A public demo / try-it instance** (optional) so a prospective host can feel it before hosting.
 
 ### 3. A fresh room isn't a blank table — built-in content
@@ -97,6 +106,8 @@ Lowers the cold-start for a host who isn't going to model their own assets.
   first used by the word grid), and **deck skins** (`DECK_MODELS`, e.g. the bentwood box). Tiles and
   their boxes also get their own sound cues. See `DESIGN_tiles.md`.
 - ✅ **Dice colors** — named dice sets (`DICE_SETS`).
+- ✅ **Model dispensers** — a colorable `trainStack` dispenser (`train_dispenser.glb`) that pays
+  out `train_piece` tokens: the first built-in model-dispenser beyond the Go bowl (`shared/pieces.js`).
 - Still open: more **tokens/markers**; **RPG battlemaps** (the procedural-board framework is the
   seam — add a `BOARD_PAINTERS` painter); a **user upload path for deck skins** (only the built-in
   bentwood box exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
@@ -171,7 +182,7 @@ scoped against the real tree rather than from memory.
 
 Small, concrete, each completes an existing feature:
 - **Finish the server split** — the DRY pass extracted routes, message handlers, queries,
-  validation, physics and config, but `TableRoom` (`server.js:560–2039`) is still a ~1,480-line
+  validation, physics and config, but `TableRoom` (`server.js:560–2044`) is still a ~1,485-line
   class holding room lifecycle, seating, trays, scenes, hands, turns and starters. `EditorRoom`,
   `LobbyRoom`, the schema classes and the starter builders are also still in `server.js`. The
   remaining seam is `TableRoom` itself; the handler modules it now delegates to are the pattern
@@ -187,13 +198,16 @@ Small, concrete, each completes an existing feature:
   but noted so it's a decision, not an oversight.
 - **Tile shuffle/flip sounds** — tiles got their own drop/pickup cues in 0.9.0, but shuffle and flip
   still use the generic card cues; a box-shake / tile-flip variant is a small finish.
-- **Cross-file util module** — `api()`, the button factory and the auth-token read are duplicated
-  across `public/`. Re-verified 2026-08-31: the real surface is **five** files, not three —
-  `api()` ×2 (`admin.js`, `landing.js`), five button factories under four names across
-  `client.js` (×2), `admin.js`, `editor-panel.js`, `landing.js`, and three token reads. A real
-  extraction, scoped in `UI_backlog.md`.
-- **ASSET_CREDITS for the 0.9.0 assets** — the Mahjong CC0 faces, the bentwood-box `.glb`, and the
-  procedurally-generated tile sounds aren't yet listed in `docs/ASSET_CREDITS.md`.
+- **Cross-file util module** — `api()`, the button factory and the auth-token read are still
+  duplicated across `public/`. Re-verified 2026-09-01: `rows.js` now owns a shared `makeButton`
+  that `client.js` imports (partial progress on the button-factory half), but `api()` is still
+  copied in `admin.js` and `landing.js`, `landing.js` keeps its own `mkBtn`, and the token read
+  (`localStorage.getItem('tabletop.token')`) is still inline in both `client.js` and `graphics.js`.
+  A real extraction, scoped in `UI_backlog.md`.
+- **ASSET_CREDITS — tile/box sound cues** — the Mahjong CC0 faces and the bentwood-box `.glb` are
+  now credited in `docs/ASSET_CREDITS.md`. Still missing: the tile and tile-box drop/pickup cues
+  (`public/sounds/tile-*.ogg`, `tiledeck-*.ogg`) — real audio files, not procedural, so they need a
+  source line like the other sound packs.
 
 ## Deliberately out (for now)
 
