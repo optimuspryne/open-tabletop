@@ -723,7 +723,8 @@ separate tabs stay distinct.
   player's live overlay preview), `whoami` (your
   admin flag — gates the creation UI), `memberList` (the room's members, for GMs),
   `roomClosed`/`kicked` (lifecycle notices), `stateSaved` (the GM's Save Table
-  State went through), and the library listings
+  State went through), `notice` (a transient toast — e.g. the table hit the piece cap), and the
+  library listings
   `deckList`/`boardList`/`propList`/`sceneList`/`skyList` (plus `skyError`/
   `sceneError` on a rejected save).
 

@@ -826,7 +826,7 @@ list and the "Waiting on {name}" turn row). Direct messages: `hand` → `renderH
 their fan), `ping` (spawn an attention marker), **`sfx`** (a shared sound cue →
 `playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
 a chat line) / **`chatLog`** (replay the backlog), **`stateSaved`** (flash the Save
-Table State button), `memberList` → the Members panel (with the pending-join pulse),
+Table State button), `notice` (a server-pushed toast — e.g. the piece cap is full), `memberList` → the Members panel (with the pending-join pulse),
 `whoami` → sets `myIsAdmin` and toggles `body.not-admin` (hides library-creation
 UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList`
 (library listings, keyed by **id**; also fanned out to the editor panel via
