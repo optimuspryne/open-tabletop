@@ -8,6 +8,108 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- **A two-finger transform on touch.** While you hold a piece, a second finger turns the gesture
+  into a photo-editor transform: the **angle** between your fingers rotates the piece, the
+  **distance** between them raises and lowers it. Both are free because the camera is already
+  disabled during a hold, so two fingers there were not pan/dolly. The twist is 1:1 — turn your
+  fingers 45° and the piece turns 45° — where the mouse's Alt-drag maps horizontal pixels to an
+  angle at a tuned rate. It snaps to the same 15° the mouse uses, which doubles as the dead zone
+  that stops a stray finger nudging a piece. This closes the last gesture that had no touch path
+  at all.
+- **Every piece's menu on right-click.** The long-press menu was touch-only; a mouse reached each
+  piece's verbs as one hard-coded action per kind — and *nothing whatsoever* for a prop or a
+  board. Right-click now raises the same list a finger does, for every kind but a card, whose
+  whole vocabulary (take, move, flip) is shorter than the menu that would replace it. Right-drag
+  is untouched, so a deck or dispenser still moves that way.
+- **Move, dragged straight out of the menu.** The menu's Move item used to arm the *next* drag:
+  tap it, dismiss the menu, find the deck again, drag that. Press it now and the piece comes with
+  you in the same gesture. It exists because a plain drag on a deck deals from it rather than
+  moving it.
+- **`W` / `S` / `A` / `D` and the arrow keys** raise, lower and turn whatever you are holding or
+  have selected, repeating while held — a keyboard slider alongside the on-screen ▲▼ and ⟲⟳
+  clusters, at the same rates.
+- **Alt-drag rotation for a held piece.** Alt and a sideways drag turns it in 15° steps; add
+  Shift for smooth, unsnapped turning.
+- **The whiteboard says who has it.** The board's owner was synced state that nothing surfaced,
+  so nobody could see it was in use and a second person double-clicking it got silence. It now
+  shows "*name* is drawing" to everyone but the holder, and tells you who has it when you try to
+  take a board someone else is using.
+- **How to Play, rebuilt.** Four tabs — Mouse & Keyboard, Touch, Table & Tools, Coming Soon —
+  styled like the library modals, with each named control carrying the Tabler icon that control
+  actually shows. The previous panel mentioned touch **zero times**: every instruction was a
+  click, a named mouse button, a wheel or a key, so a player opening the app on an iPad was being
+  told in detail how to use a mouse. The radial menu, the Select tool, the height controls, the
+  selection toolbar and the one-finger/two-finger hand rule were all shipped and all
+  undocumented.
+- **Colour swatches on library cards at every size.** The swatch run was `display: none` in short
+  landscape, so colour choice was simply unavailable there. It sits behind a trigger now, reusing
+  the existing pop-group pattern.
+- **A train dispenser and train pieces** join the built-in props, alongside new lighting and
+  texture-resolution knobs.
+
+### Changed
+- **A finger-held piece starts 15% higher.** A finger sits *on* the piece it is holding where a
+  cursor only points at it, so the float height that reads fine with a mouse left the piece under
+  your fingertip on a tablet. Keyed off the gesture, not the device, so a laptop with a
+  touchscreen gets the right lift for each grab.
+- **The room code sits under the room name**, flush to the same left edge, rather than competing
+  with it for one line.
+- **Room Settings is now Table Settings**, and is where the whiteboard is shown and positioned.
+- **Clearer library labels** — Card Decks/Tiles, Game Boards, 3D Objects, Pre-Built Games, and
+  Image/Text Based Decks.
+- **The mobile ⊕ fan names the buttons it proxies** — Dice Box, Library, Multi-Select.
+- **A deck's right-click shortcuts moved into its menu.** Shuffle was the single right-click and
+  Split the double; both are menu items now, which also means a deck's right-click no longer
+  waits to find out whether a second one is coming.
+- **Private notes follow your account, not your session**, so they survive a reconnect.
+
+### Fixed
+- **The "•••" menu on custom library assets did nothing.** Its group is shaped exactly like what
+  the generic pop-out wiring claims, so two click handlers landed on one button: the first opened
+  and portaled the menu, the second read it as already-open and shut it in the same tick. The
+  button looked completely inert.
+- **A two-finger transform could fling the piece.** The transform holds the piece still while
+  your fingers travel, so lifting the second finger snapped the piece to where the first had
+  drifted — and that jump landed inside the throw estimator's window, so the further you twisted
+  the harder the throw. The drag re-anchors instead.
+- **Double-tap did nothing on iPad and iPhone.** WebKit does not synthesize a `dblclick` from a
+  double-tap the way Chrome does, so claiming the whiteboard — and every other double-click
+  gesture — was silently unreachable on iOS and iPadOS.
+- **Typing `d` in chat with a deck peek open dealt the card face-down.** The peek's F/D/H/R keys
+  were handled above the guard that ignores keystrokes aimed at a text field.
+- **Mobile and landscape modal overrides never applied.** A media query adds no specificity, so a
+  later top-level `:is(#a,#b,#c)` block outweighed them at every viewport.
+- **Toast and body text inherited the browser's default colour**, which was near-black on the
+  dark theme.
+
+### Removed
+- **`S` no longer saves a hovered deck.** It collided with the new W/A/S/D bindings and opened a
+  blocking prompt mid-gesture; saving lives in the Add to Library modal.
+- **Save… is gone from the deck menu**, for the same reason.
+- **Double-right-click no longer splits a deck** — Split is a menu item.
+
+### Internal
+- **`docs/GESTURES.md`** catalogues every gesture, its touch equivalent and a status, so a new
+  gesture is added with its touch story decided rather than discovered on an iPad later. The
+  roadmap had marked this done for a while without it existing.
+- **Three browser harnesses**, none of which need a server or a database: `css-parity` snapshots
+  every element across six viewports and three pages (and its `--lint` mode runs in
+  `npm run check` with no browser at all); `test:input` drives synthetic pointers and keys at the
+  input seam, where a whole path can be missing for one device family with nothing to show for
+  it; `test:components` boots the real modules and snapshots the DOM the app *builds*, which the
+  stubbed snapshots structurally could not see. All three run in CI.
+- **The input seam** (`public/controls.js`) translates raw events into a device-agnostic intent
+  vocabulary that `public/client.js` implements, so adding a device is a new profile rather than
+  edits throughout the client. The touch profile now raises double-tap, the long-press menu, the
+  two-finger transform and the held axis keys through it.
+- **Pure modules pulled out of `client.js` for testability** — `rows.js` (chat, member, score,
+  unclaimed and toast builders), `drag.js` (drag re-anchor maths) and `clicks.js` (what a click
+  means, per kind and button).
+- **A CSS pass**: dead rules and classes swept, every icon size derived from `--ico-size` tiers,
+  declarations shadowed by a later identical selector removed, redundant id selectors replaced by
+  a `.panel-title` class, and `css:lint` extended to catch dead ids as well as dead classes.
+
 ## [0.12.2] — 2026-08-28
 - Fixed missing icon SVGs for whiteboard controls.  Changed icons used for show/hide hand view, 
   drop face up/down buttons and room info collapse toggle.
