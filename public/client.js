@@ -3397,21 +3397,47 @@ function startHandReorder(ev, card, div, scroll) {
     /* capture is best-effort */
   }
 }
-addEventListener('pointermove', (e) => {
-  if (!handReorder || e.pointerId !== handReorder.pointerId) return;
-  e.preventDefault();
-  const { scroll, el } = handReorder;
-  const after = reorderAfter(scroll, e.clientX);
+// Slot the dragged card into the position matching pointer x (DOM insertion, no free-follow).
+function placeDragged(scroll, el, x) {
+  const after = reorderAfter(scroll, x);
   if (after == null) {
     if (el !== scroll.lastElementChild) scroll.appendChild(el);
   } else if (after !== el && after !== el.nextSibling) {
     scroll.insertBefore(el, after);
   }
+}
+let handAutoScroll = 0; // rAF id while auto-scrolling the strip during a reorder drag
+function stopHandAutoScroll() {
+  if (handAutoScroll) cancelAnimationFrame(handAutoScroll);
+  handAutoScroll = 0;
+}
+// While the finger holds near an end of the strip, keep scrolling (and re-slotting) even though
+// no pointermove fires — so you can reorder into cards that start off-screen.
+function autoScrollTick() {
+  handAutoScroll = 0;
+  if (!handReorder || !handReorder.edgeDir) return;
+  const { scroll, el, edgeDir, lastX } = handReorder;
+  scroll.scrollLeft += edgeDir * 12; // px/frame toward the held edge (clamps at the ends)
+  if (lastX != null) placeDragged(scroll, el, lastX);
+  handAutoScroll = requestAnimationFrame(autoScrollTick);
+}
+addEventListener('pointermove', (e) => {
+  if (!handReorder || e.pointerId !== handReorder.pointerId) return;
+  e.preventDefault();
+  const { scroll, el } = handReorder;
+  handReorder.lastX = e.clientX;
+  placeDragged(scroll, el, e.clientX);
+  const r = scroll.getBoundingClientRect();
+  const EDGE = 44; // px hot-zone at each end
+  handReorder.edgeDir = e.clientX < r.left + EDGE ? -1 : e.clientX > r.right - EDGE ? 1 : 0;
+  if (handReorder.edgeDir && !handAutoScroll)
+    handAutoScroll = requestAnimationFrame(autoScrollTick);
 });
 function endHandReorder(e) {
   if (!handReorder || e.pointerId !== handReorder.pointerId) return;
   const { el, scroll } = handReorder;
   handReorder = null;
+  stopHandAutoScroll();
   el.classList.remove('dragging');
   const order = [...scroll.querySelectorAll('.handcard')].map((c) => c.dataset.hid).filter(Boolean);
   commitHandOrder(order);
@@ -3420,6 +3446,7 @@ addEventListener('pointerup', endHandReorder);
 addEventListener('pointercancel', (e) => {
   if (!handReorder || e.pointerId !== handReorder.pointerId) return;
   handReorder = null;
+  stopHandAutoScroll();
   renderHand(myHand); // revert to the confirmed order
 });
 

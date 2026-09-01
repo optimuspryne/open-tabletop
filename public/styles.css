@@ -814,9 +814,10 @@ button.danger,
 }
 #hand.reordering .handcard.dragging {
   cursor: grabbing;
-  opacity: 0.9;
-  transform: scale(1.06);
-  box-shadow: 0 8px 22px var(--shadow-soft);
+  transform: scale(1.03);
+  box-shadow:
+    0 0 0 3px var(--accent),
+    0 8px 20px var(--shadow-soft); /* accent ring = clearly picked up */
   z-index: 3;
 }
 .handcard.img {
