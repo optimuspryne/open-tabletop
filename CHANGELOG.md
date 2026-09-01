@@ -68,10 +68,14 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   cube-map skyboxes, applies instantly, and is saved per device. (The built-in skyboxes are
   2048px, so High and Ultra match on them; Ultra only adds detail for a larger custom upload.)
 - **Graphics quality tiers.** Low / Medium / High presets that trade the fill-rate costs profiling
-  flagged on tablets — pixel ratio, shadow-map size and soft/hard filtering, antialiasing. Coarse-
-  pointer devices default to Medium and desktops to High; the choice is saved per device at
-  Settings → UI → Graphics, with an **Apply & reload** button that commits the parts (antialias,
-  and the pixel ratio on iOS) that need a fresh GL context. On an older iPad, Low holds 60fps.
+  flagged on tablets — pixel ratio, shadow-map size, antialiasing. Defaults by device: phones →
+  Low, tablets → Medium, desktops → High; the choice is saved per device at Settings → UI →
+  Graphics, with an **Apply & reload** button that commits the parts (antialias, and the pixel
+  ratio on iOS) that need a fresh GL context. On an older iPad, Low holds 60fps.
+- **Hand re-organization.** A per-viewer **Rearrange** mode: drag cards to reorder your hand —
+  with auto-scroll when you hold a card near either end of the strip, and an accent-outlined card
+  so it's clear which one you're moving — plus **Sort** by rank or suit. The new order is saved to
+  the server, so it survives a reconnect.
 
 ### Changed
 - **Piece cap raised 80 → 250.** Profiling showed the server shrugs off ~144 physics bodies, so
@@ -97,6 +101,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Private notes follow your account, not your session**, so they survive a reconnect.
 
 ### Fixed
+- **Android phones could black-screen when opening a table.** The graphics tiers used hard-PCF
+  shadows, which crash some Android GPUs — all tiers now use soft shadows — and phones defaulted
+  to a too-heavy tier, so they now default to Low (split from tablets by viewport size).
+- **A lost GPU context or an uncaught error no longer leaves a silent black screen.** The renderer
+  recovers from `webglcontextlost` (previously unhandled, so a dropped context stayed black), and
+  uncaught client errors now surface an on-screen message instead of a half-loaded page.
 - **Memory crept up from previews and skybox switches.** Library preview thumbnails left face
   textures resident in GPU memory, and switching skyboxes leaked the previous ~11 MB image. Both
   are now disposed once no longer shown, and the preview cache is capped.
