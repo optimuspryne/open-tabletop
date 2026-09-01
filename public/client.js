@@ -2191,6 +2191,25 @@ function capTexture(tex, cap) {
   tex.dispose(); // not yet uploaded — this just drops the full-res image reference
   return new THREE.CanvasTexture(canvas);
 }
+// Same idea for a 6-face cube map: downscale each face to `cap` px, rebuild the CubeTexture.
+function capCubeTexture(cube, cap) {
+  const imgs = cube.image; // 6 face images, in the loaded order
+  if (!cap || !Array.isArray(imgs) || !imgs[0] || !imgs[0].width || imgs[0].width <= cap)
+    return cube;
+  const faces = imgs.map((img) => {
+    const nw = cap,
+      nh = Math.max(1, Math.round((img.height * cap) / img.width));
+    const canvas = document.createElement('canvas');
+    canvas.width = nw;
+    canvas.height = nh;
+    canvas.getContext('2d').drawImage(img, 0, 0, nw, nh);
+    return canvas;
+  });
+  cube.dispose();
+  const ct = new THREE.CubeTexture(faces);
+  ct.needsUpdate = true;
+  return ct;
+}
 // A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
 function applySkybox(ref) {
   if (getSkyRes() === 'off') ref = ''; // skybox turned off for this viewer
@@ -2208,7 +2227,7 @@ function applySkybox(ref) {
     if (skyLast === ref) setSkyTexture(null);
   };
   if (ref[0] === '{') {
-    // cubemap (rare; loaded at native resolution — the width cap applies to equirect only)
+    // cubemap — capped per face like the equirect path
     let d;
     try {
       d = JSON.parse(ref);
@@ -2218,7 +2237,8 @@ function applySkybox(ref) {
     if (d && d.t === 'cube' && Array.isArray(d.f) && d.f.length === 6)
       new THREE.CubeTextureLoader().load(
         d.f,
-        (tex) => {
+        (loaded) => {
+          const tex = capCubeTexture(loaded, cap);
           tex.colorSpace = THREE.SRGBColorSpace;
           tex.anisotropy = aniso;
           set(tex);

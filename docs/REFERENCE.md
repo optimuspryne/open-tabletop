@@ -722,8 +722,9 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
   `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
   `window.ottPixelRatio(v)` / `window.ottShadow(v)`.
 - **Skybox resolution** (separate per-viewer control beside the tier; `client.js`): `off` / `low`
-  512 / `medium` 1024 / `high` 2048 / `ultra` native — a max equirect width, downscaled at load
-  (`capTexture`) so only the smaller texture stays resident; built-ins are 2048 so high = ultra on
+  512 / `medium` 1024 / `high` 2048 / `ultra` native — a max width, downscaled at load for an
+  equirect image or each cube-map face (`capTexture` / `capCubeTexture`) so only the smaller
+  texture stays resident; built-ins are 2048 so high = ultra on
   them. Persisted as `tabletop.skyRes`, device-defaulted (coarse → medium), applied live.
 - **`clamp(value, min, max)`**.
 
