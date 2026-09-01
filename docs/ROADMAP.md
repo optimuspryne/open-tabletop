@@ -112,6 +112,20 @@ the many-bodies case is normally bounded at 80.
   limit). Skybox resolution (§11) is a memory lever, not an fps one; a low tier should also shrink
   the shadow map to relieve the library OOM.
 
+**iPad knob A/B (2026-09-01)** — 144 tiles at rest, no skybox, each vs the ~20 fps baseline:
+`&px=1` → **39 fps** (biggest single lever); `&shadow=1024` → 30; `&aa=0` → 31; all three → **60**
+(vsync cap). Read: the frame is dominated by **main-pass fill** — pixel ratio (retina 2× = 4×
+fragments) × per-fragment work (PBR + env map + PCF-*soft* shadow sampling), plus MSAA. Shadow
+map *size* still moved rest fps even though the map isn't regenerated at rest (shadow-on-demand
+verified working), because the cost is the per-fragment shadow *sampling* in the main pass, not
+the regeneration. So shadow-on-demand helps during idle/motion but was not the rest hero — pixel
+ratio is.
+
+*Proposed §12 tier* (device-class default via the same `pointer: coarse` signal the layout uses):
+coarse-pointer → pixelRatio 1 (or test 1.5 for crispness), `PCFShadowMap` (not soft) @ 1024,
+antialias off — proven 60 fps on the iPad, and the smaller map also relieves the library OOM.
+Fine-pointer keeps today's defaults. Manual override (URL/stored, later a settings control) on top.
+
 ### 2. A fresh room isn't a blank table — built-in content
 Lowers the cold-start for a host who isn't going to model their own assets.
 - ✅ **Standard 52 + jokers** deck (a "Standard 54 (with Jokers)" option with a rendered joker face).
