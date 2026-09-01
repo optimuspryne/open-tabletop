@@ -64,6 +64,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   (`TableRoom.update`). Dev-only, off by default, for the "plays well at real scale" work.
 
 ### Changed
+- **Shadows redraw on demand.** `renderer.shadowMap.autoUpdate` is off; the render loop refreshes
+  the shadow map only on frames where a caster actually moved, so an idle table (even while the
+  camera orbits) stops repaying the soft-shadow pass every frame. Groundwork for graphics tiers;
+  dev fill-rate knobs (`?px` / `?shadow` / `?aa`, live `window.ottPixelRatio` / `window.ottShadow`)
+  land with it. No params → unchanged defaults.
 - **A finger-held piece starts 15% higher.** A finger sits *on* the piece it is holding where a
   cursor only points at it, so the float height that reads fine with a mouse left the piece under
   your fingertip on a tablet. Keyed off the gesture, not the device, so a laptop with a
