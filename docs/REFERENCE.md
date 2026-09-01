@@ -445,7 +445,9 @@ caller's seat index, or `null`), **`clearTraySeat(seat)`** (remove that seat's t
 
 Gameplay handlers (authorization varies by operation): `grab`, `move`, `release`, `flip`, `dealToTable`,
 `dealDrag`, **`drawToHand`** (left-click a deck → its top card to your hand),
-`takeCard`, `playCard`, **`handToTable`** (drop the caller's whole hand face-up or
+`takeCard`, `playCard`, **`reorderHand`** (`{order:[hid…]}` — a permutation of the caller's
+hand; drag-to-rearrange / Sort, persisted server-side so it survives reconnect),
+**`handToTable`** (drop the caller's whole hand face-up or
 face-down), `shuffle`, **`splitDeck`** (deal a deck in
 two — original keeps the top half, a new ephemeral deck gets the rest),
 **`drawInspect`/`inspectPlace`** (private draw-to-inspect; the `inspectCard` message carries the

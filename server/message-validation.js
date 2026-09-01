@@ -32,6 +32,21 @@ export function boundedUniqueIds(value, { min = 1, max = 80 } = {}) {
   return ids;
 }
 
+// A hand reorder: { order: [hid, ...] } — hids are 'h<n>'. Must be non-empty, unique, and within a
+// generous cap. The handler additionally checks it is a permutation of the player's actual hand.
+export function reorderHandPayload(message) {
+  if (!exactObject(message, ['order']) || !Array.isArray(message.order)) return null;
+  const { order } = message;
+  if (order.length < 1 || order.length > 300) return null;
+  const seen = new Set();
+  for (const hid of order) {
+    const h = boundedString(hid, { min: 2, max: 12, pattern: /^h\d+$/ });
+    if (h === null || seen.has(h)) return null;
+    seen.add(h);
+  }
+  return { order: [...order] };
+}
+
 const hasOnlyKeys = (value, allowed) => Object.keys(value).every((key) => allowed.has(key));
 const exactObject = (value, keys) => isPlainObject(value) && hasOnlyKeys(value, new Set(keys));
 

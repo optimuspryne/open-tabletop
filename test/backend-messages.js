@@ -28,6 +28,7 @@ import {
   overlayMovePayload,
   propRecordPayload,
   recolorPayload,
+  reorderHandPayload,
   saveBoardPayload,
   savePropPayload,
   saveSkyboxPayload,
@@ -416,4 +417,16 @@ test('drawing rejects missing, empty, and non-deck state without mutation', () =
   assert.deepEqual(cards, ['front']);
   assert.equal(takeTopCard({ type: 'deck', count: 0 }, []), null);
   assert.equal(takeTopCard(null, cards), null);
+});
+
+test('reorderHandPayload: a valid hid permutation passes; malformed input is rejected', () => {
+  assert.deepEqual(reorderHandPayload({ order: ['h0', 'h2', 'h1'] }), {
+    order: ['h0', 'h2', 'h1'],
+  });
+  assert.equal(reorderHandPayload({ order: [] }), null); // empty
+  assert.equal(reorderHandPayload({ order: ['h0', 'h0'] }), null); // duplicate hid
+  assert.equal(reorderHandPayload({ order: ['0'] }), null); // wrong hid format
+  assert.equal(reorderHandPayload({ order: 'h0' }), null); // not an array
+  assert.equal(reorderHandPayload({ order: ['h0'], extra: 1 }), null); // extra key
+  assert.equal(reorderHandPayload({ order: ['h1', 3] }), null); // non-string element
 });

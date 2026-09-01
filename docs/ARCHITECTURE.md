@@ -683,7 +683,7 @@ separate tabs stay distinct.
 ## The message protocol (intent up, state down)
 
 - **Up (client → server):** `grab`, `move`, `release`, `flip`, `dealToTable`,
-  `drawToHand`, `dealDrag`, `takeCard`, `playCard`, `handToTable`, `shuffle`,
+  `drawToHand`, `dealDrag`, `takeCard`, `playCard`, `handToTable`, `reorderHand`, `shuffle`,
   `splitDeck`, `drawInspect`,
   `inspectPlace`, `recolor`, `deckBegin`/`deckAppend`/`deckFinish`,
   `saveDeck`/`listDecks`/`loadDeck`, `saveProp`/`listProps`,

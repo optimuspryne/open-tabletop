@@ -1051,6 +1051,13 @@
         <div id="showStripChips"></div>
         <div id="showStatus"></div>
       </div>
+      <div id="rearrangeBar" hidden>
+        <span class="rearrangeHint">Drag cards to reorder</span>
+        <button type="button" class="chip" data-sort="rank">
+          <span class="lbl">Sort: Rank</span>
+        </button>
+        <button type="button" class="chip" data-sort="suit"><span class="lbl">Suit</span></button>
+      </div>
       <button
         id="showBtn"
         class="handFlank"
@@ -1061,6 +1068,16 @@
         hidden
       >
         <span class="lbl">Show Hand</span>
+      </button>
+      <button
+        id="rearrangeBtn"
+        class="handFlank"
+        data-icon="arrows-sort"
+        title="Rearrange your hand"
+        aria-pressed="false"
+        hidden
+      >
+        <span class="lbl">Rearrange</span>
       </button>
       <div id="hand" class="panel"></div>
       <div id="dropFlank" class="handFlank handAction" hidden>

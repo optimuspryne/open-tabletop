@@ -108,8 +108,11 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 
 | Gesture | What it does | Touch | Status |
 |---|---|---|---|
-| Left-drag (or click) a hand card out | Lands face-down | One-finger drag | ✅ |
-| Right-drag (or click) a hand card out | Lands face-up | Two-finger drag | ✅ |
+| Left-drag (or click) a hand card out (not in Rearrange) | Lands face-down | One-finger drag | ✅ |
+| Right-drag (or click) a hand card out (not in Rearrange) | Lands face-up | Two-finger drag | ✅ |
+| **Rearrange** toggle | Enter/leave reorder mode (play + inspect suppressed while on) | Tap | ✅ |
+| Drag a hand card in Rearrange mode | Slots it to a new position; order saved to the server | One-finger drag | ✅ |
+| Sort · Rank / Suit (in Rearrange) | Auto-arranges the hand | Tap | ✅ |
 | ▾ / 🃏 Show hand | Hide / restore the hand | Same buttons | ✅ |
 
 The finger-count rule lives in `touchIds` (`client.js:3063`) and is read live during the drag

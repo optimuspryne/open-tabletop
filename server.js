@@ -72,6 +72,7 @@ import {
   dispenserDragPayload,
   oneField,
   pieceIdPayload,
+  reorderHandPayload,
 } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
@@ -734,6 +735,26 @@ class TableRoom extends Room {
       if (faceDown) this.cardData.set(id, { front: card.front }); // front private until flipped
       this.sendHand(client);
       this.broadcast('sfx', { type: dropSfx('card', card) }); // played tile clacks
+    });
+
+    // Reorder a player's own hand (drag-to-rearrange / sort). The order must be a permutation of
+    // the current hand — never adds or drops a card — so any drift (e.g. a card played mid-drag)
+    // just resyncs. Private, so it only re-sends to this client.
+    tableMessage('reorderHand', (client, message) => {
+      const parsed = reorderHandPayload(message);
+      if (!parsed) return;
+      const hand = this.hands.get(client.sessionId);
+      if (!hand || !hand.length) return;
+      if (parsed.order.length !== hand.length) return this.sendHand(client); // drift → resync
+      const byHid = new Map(hand.map((card) => [card.hid, card]));
+      const next = [];
+      for (const hid of parsed.order) {
+        const card = byHid.get(hid);
+        if (!card) return this.sendHand(client); // unknown hid → resync
+        next.push(card);
+      }
+      this.hands.set(client.sessionId, next); // length + uniqueness + all-present ⇒ a permutation
+      this.sendHand(client);
     });
 
     // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or

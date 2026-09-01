@@ -1816,6 +1816,7 @@ function rebuildGrid() {
 
   // Same two helpers as before, minus the scope-chip resets (those chips are gone).
   const enterSelectMode = () => {
+    exitReorderMode();
     selectMode = true;
     selected.clear();
     byId('hand').classList.add('selecting');
@@ -3265,7 +3266,9 @@ addEventListener('pointercancel', (e) => touchIds.delete(e.pointerId), true);
 const revealed = new Map(); // sid -> [{front,back}]
 const selected = new Set(); // hids picked to show
 let selectMode = false,
+  reorderMode = false,
   myHand = [];
+let handReorder = null; // an in-progress drag-to-rearrange (reorder mode)
 let handCollapsed = false;
 try {
   handCollapsed = localStorage.getItem('ott.handHidden') === '1';
@@ -3334,17 +3337,150 @@ addEventListener('pointercancel', (e) => {
   document.body.style.userSelect = document.body.style.webkitUserSelect = '';
 });
 
+// ===== Hand re-organization (ROADMAP §8) ====================================
+// A per-viewer "Rearrange" mode: while on, dragging a hand card slots it to a new
+// position instead of playing it, and Sort tidies the whole hand. The order is a
+// permutation sent to the server (reorderHand) so it survives a reconnect. Kept
+// entirely separate from the play-to-table gesture to avoid regressing it.
+function exitReorderMode() {
+  if (!reorderMode) return;
+  reorderMode = false;
+  const bar = byId('rearrangeBar');
+  if (bar) bar.hidden = true;
+  const btn = byId('rearrangeBtn');
+  if (btn) btn.setAttribute('aria-pressed', 'false');
+  renderHand(myHand);
+}
+function setReorderMode(on) {
+  if (on) {
+    if (handCollapsed) setHandCollapsed(false); // reorder needs the hand open
+    if (selectMode) {
+      // reorder and show-picking are mutually exclusive hand modes
+      selectMode = false;
+      selected.clear();
+      byId('hand').classList.remove('selecting');
+    }
+  }
+  reorderMode = !!on;
+  const bar = byId('rearrangeBar');
+  if (bar) bar.hidden = !reorderMode;
+  const btn = byId('rearrangeBtn');
+  if (btn) btn.setAttribute('aria-pressed', reorderMode ? 'true' : 'false');
+  renderHand(myHand);
+}
+
+// Commit the current DOM order (or a computed order) to the server and local state.
+function commitHandOrder(order) {
+  const byHid = new Map(myHand.map((c) => [c.hid, c]));
+  const next = order.map((h) => byHid.get(h)).filter(Boolean);
+  if (next.length === myHand.length) myHand = next; // optimistic; server confirms via 'hand'
+  if (room) room.send('reorderHand', { order });
+}
+
+// Which sibling card should the dragged one land before, for a pointer at clientX?
+function reorderAfter(scroll, x) {
+  const cards = scroll.querySelectorAll('.handcard:not(.dragging)');
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    if (x < r.left + r.width / 2) return c;
+  }
+  return null; // past the last card → append
+}
+function startHandReorder(ev, card, div, scroll) {
+  if (ev.button !== undefined && ev.button !== 0) return; // left button / touch only
+  ev.preventDefault();
+  handReorder = { el: div, scroll, pointerId: ev.pointerId };
+  div.classList.add('dragging');
+  try {
+    div.setPointerCapture(ev.pointerId);
+  } catch {
+    /* capture is best-effort */
+  }
+}
+addEventListener('pointermove', (e) => {
+  if (!handReorder || e.pointerId !== handReorder.pointerId) return;
+  e.preventDefault();
+  const { scroll, el } = handReorder;
+  const after = reorderAfter(scroll, e.clientX);
+  if (after == null) {
+    if (el !== scroll.lastElementChild) scroll.appendChild(el);
+  } else if (after !== el && after !== el.nextSibling) {
+    scroll.insertBefore(el, after);
+  }
+});
+function endHandReorder(e) {
+  if (!handReorder || e.pointerId !== handReorder.pointerId) return;
+  const { el, scroll } = handReorder;
+  handReorder = null;
+  el.classList.remove('dragging');
+  const order = [...scroll.querySelectorAll('.handcard')].map((c) => c.dataset.hid).filter(Boolean);
+  commitHandOrder(order);
+}
+addEventListener('pointerup', endHandReorder);
+addEventListener('pointercancel', (e) => {
+  if (!handReorder || e.pointerId !== handReorder.pointerId) return;
+  handReorder = null;
+  renderHand(myHand); // revert to the confirmed order
+});
+
+// --- Sort ---
+const SUIT_ORDER = { '♠': 0, '♥': 1, '♦': 2, '♣': 3 }; // ♠ ♥ ♦ ♣
+const RANK_ORDER = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
+const KIND_ORDER = { rank: 0, joker: 1, domino: 2, letter: 3, text: 4, image: 5, back: 6 };
+// A comparable key: group by card kind, then by suit/rank (mode picks which leads) for playing
+// cards, or a natural order for tiles/letters/images so mixed hands still tidy up sensibly.
+function cardSortKey(card, mode) {
+  const cf = parseCardFront(card.front);
+  const kg = String(KIND_ORDER[cf.kind] ?? 9);
+  if (cf.kind === 'rank') {
+    const suit = String(SUIT_ORDER[cf.suit] ?? 9);
+    const rank = String(Math.max(0, RANK_ORDER.indexOf(cf.rank))).padStart(2, '0');
+    return mode === 'suit' ? kg + suit + rank : kg + rank + suit;
+  }
+  if (cf.kind === 'letter') return kg + (cf.letter || '');
+  if (cf.kind === 'domino') return kg + Math.max(cf.a, cf.b) + '' + Math.min(cf.a, cf.b);
+  return kg + (card.front || '');
+}
+function sortHand(mode) {
+  if (myHand.length < 2) return;
+  const order = [...myHand]
+    .sort((a, b) => cardSortKey(a, mode).localeCompare(cardSortKey(b, mode)))
+    .map((c) => c.hid);
+  commitHandOrder(order);
+  renderHand(myHand);
+}
+
+// Wire the Rearrange toggle + Sort buttons (present in table.html's hand flank).
+{
+  const rb = byId('rearrangeBtn');
+  if (rb) rb.onclick = () => setReorderMode(!reorderMode);
+  const bar = byId('rearrangeBar');
+  if (bar)
+    bar
+      .querySelectorAll('[data-sort]')
+      .forEach((b) => (b.onclick = () => sortHand(b.dataset.sort)));
+}
+
 function renderHand(cards) {
   const el = byId('hand');
   el.innerHTML = '';
   el.classList.remove('collapsed');
   el.classList.remove('hand-dragging'); // a fresh render (after a play/cancel) reveals the hand
+  el.classList.toggle('reordering', reorderMode); // grab-cursor + touch-action while rearranging
   {
     const has = cards.length > 0;
     const sb = byId('showBtn'),
       db = byId('dropFlank');
     if (sb) sb.hidden = !has;
     if (db) db.hidden = !has;
+    const rb = byId('rearrangeBtn');
+    if (rb) rb.hidden = !has;
+    if (!has && reorderMode) {
+      reorderMode = false; // no cards left to rearrange (inline; we're mid-render)
+      const bar = byId('rearrangeBar');
+      if (bar) bar.hidden = true;
+      if (rb) rb.setAttribute('aria-pressed', 'false');
+    }
     if (!has) {
       const strip = byId('showStrip');
       if (strip) strip.hidden = true;
@@ -3355,7 +3491,7 @@ function renderHand(cards) {
       if (dropBtn) dropBtn.setAttribute('aria-expanded', 'false');
     }
   } // Show/Drop flank the hand, only when you hold cards
-  if (handCollapsed && cards.length && !selectMode) {
+  if (handCollapsed && cards.length && !selectMode && !reorderMode) {
     // hidden: show only a peek tab (never while picking cards to show)
     el.classList.add('collapsed');
     const tab = document.createElement('button');
@@ -3373,6 +3509,7 @@ function renderHand(cards) {
   for (const card of cards) {
     const div = document.createElement('div');
     div.className = 'handcard';
+    div.dataset.hid = card.hid;
     const cf = parseCardFront(card.front);
     if (cf.kind === 'rank') {
       div.textContent = cf.rank + cf.suit;
@@ -3400,6 +3537,7 @@ function renderHand(cards) {
     if (selectMode && selected.has(card.hid)) div.classList.add('sel');
     div.addEventListener('pointerdown', (ev) => {
       if (handDrag) return; // a drag is already in progress (e.g. a second finger) — don't re-arm
+      if (reorderMode) return startHandReorder(ev, card, div, scroll); // rearrange, don't play
       if (selectMode) {
         // picking cards to show — toggle instead of playing
         if (ev.button !== 0) return;
@@ -3432,6 +3570,7 @@ function renderHand(cards) {
       }
     });
     div.ondblclick = () => {
+      if (reorderMode) return;
       clearTimeout(handClickTimer);
       inspectHandCard(card);
     }; // desktop: double-click to inspect

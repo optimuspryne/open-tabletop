@@ -809,6 +809,16 @@ button.danger,
   box-shadow: var(--shadow);
   transition: transform 0.1s;
 }
+#hand.reordering .handcard {
+  cursor: grab;
+}
+#hand.reordering .handcard.dragging {
+  cursor: grabbing;
+  opacity: 0.9;
+  transform: scale(1.06);
+  box-shadow: 0 8px 22px var(--shadow-soft);
+  z-index: 3;
+}
 .handcard.img {
   background-size: cover;
   background-position: center;
@@ -4797,6 +4807,32 @@ body.not-gm .gm-only {
 }
 #showStatus:empty {
   display: none;
+}
+#rearrangeBar {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  backdrop-filter: var(--blur);
+  box-shadow: 0 6px 18px var(--shadow-soft);
+  z-index: 9;
+  white-space: nowrap;
+}
+#rearrangeBar .rearrangeHint {
+  font-size: var(--fs-sm);
+  opacity: 0.7;
+}
+#rearrangeBtn[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 0 12px -4px var(--accent);
 }
 
 /* ---- drop: disclose the orientation choices from one obvious action ---- */

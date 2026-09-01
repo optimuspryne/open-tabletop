@@ -68,7 +68,7 @@ snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 
 ### 1. Plays well at real scale — robustness
 The difference between "demo" and "we play here every week."
-- Performance with **hundreds of pieces** on the table. The body count is lower than it looks —
+- ✅ Performance with **hundreds of pieces** on the table. The body count is lower than it looks —
   a deck is one body, not N (see the piece-model note below) — so reaching true hundreds means
   raising `SIM.maxPieces` first, then profiling.
 - **Scene-save size** behavior (big saves, the cap, graceful failure).
@@ -217,7 +217,9 @@ scoped against the real tree rather than from memory.
 7. **Custom games.** `STARTERS` in `shared/pieces.js` is code-only today — adding a game means
    editing the list. This is the user-facing version: define, save and share a starter from
    inside the app. Overlaps the "user upload path for deck skins" gap in §3.
-8.  **Hand Re-organization** Players need the ability to re-organize the cards in their hands.  
+8.  **Hand Re-organization.** ✅ **shipped 2026-09-01** — a per-viewer Rearrange mode (drag hand
+    cards to reorder, with Sort by rank/suit), sent to the server as a `reorderHand` permutation so
+    the order survives a reconnect. Kept separate from the play-to-table gesture (a mode toggle).
 9. **Custom dice / dice textures.** `DICE_SETS` gives named colored sets, with per-player
    defaults already persisted (`applyDiceSet`, `loadDiceDefaults`, `saveDiceDefault`,
    `clearDiceDefault`, `public/client.js:381–435`). Custom *textures* are the new part and
@@ -227,15 +229,14 @@ scoped against the real tree rather than from memory.
    1. Combine loose like cards into a **new deck** (discard pile → deck).
    2. **Merge two decks** — the inverse of the existing split.
    3. Gather dispenser-type objects into a **single dispenser**.
-11. **More Room Customization.**  Ability to adjust lighting (angles, intensity, color).  
-    Ability to adjust skybox resolution. (✅ **shipped 2026-09-01**: a per-viewer off/low/medium/
-    high/ultra control in Settings → UI → Graphics — a max equirect width, downscaled at load;
-    the skybox is also disposed on switch. Built-ins are 2048, so a genuinely higher 'ultra'
-    would need higher-res source assets. Lighting angle/intensity/color is still open.)
+11. **More Room Customization.** Ability to adjust lighting (angles, intensity, color) — still open.
+    Skybox resolution: ✅ **shipped 2026-09-01** — a per-viewer off/low/medium/high/ultra control in
+    Settings → UI → Graphics (a max equirect / cube-face width, downscaled at load; also disposed
+    on switch). Built-ins are 2048, so a genuinely higher 'ultra' needs higher-res source assets.
 12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
     pixel ratio + shadow size/type + AA), device-defaulted (coarse pointer → medium) with an
     in-app control (Settings → UI → Graphics), a persisted per-device preference, and `?q=` /
-    per-axis dev knobs. Driven by the first profiling pass (see §1). Still open: skybox-resolution
+    per-axis dev knobs. Driven by the first profiling pass (see §1). ✅ **Shipped** skybox-resolution
     (§11) as the remaining memory lever, and possibly an adaptive tier that measures FPS.
 
    All three are "selection → new composite piece" on the server; the natural home is
