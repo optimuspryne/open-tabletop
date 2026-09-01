@@ -62,6 +62,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   calls, triangles, geometry/texture/program counts, JS heap (`public/perf.js`). `PERF_LOG=1` makes
   the server log a per-second `world.step` time, awake-vs-total body count, and tick health
   (`TableRoom.update`). Dev-only, off by default, for the "plays well at real scale" work.
+- **Graphics quality tiers.** Low / Medium / High presets that trade the fill-rate costs profiling
+  flagged on tablets — pixel ratio, shadow-map size and soft/hard filtering, antialiasing. Coarse-
+  pointer devices default to Medium and desktops to High; the choice is saved per device at
+  Settings → UI → Graphics, with an **Apply & reload** button that commits the parts (antialias,
+  and the pixel ratio on iOS) that need a fresh GL context. On an older iPad, Low holds 60fps.
 
 ### Changed
 - **Shadows redraw on demand.** `renderer.shadowMap.autoUpdate` is off; the render loop refreshes
