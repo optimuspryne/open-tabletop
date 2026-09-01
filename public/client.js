@@ -10,6 +10,7 @@ import {
   setTableColor,
   setQuality,
   getQuality,
+  deviceClass,
 } from './core.js';
 import { initPerf } from './perf.js';
 import {
@@ -2186,11 +2187,8 @@ function getSkyRes() {
   } catch {
     /* storage blocked — fall through to the device default */
   }
-  try {
-    return matchMedia('(pointer: coarse)').matches ? 'medium' : 'high';
-  } catch {
-    return 'high';
-  }
+  const cls = deviceClass(); // phone→low, tablet→medium, desktop→high (matches the quality tiers)
+  return cls === 'phone' ? 'low' : cls === 'tablet' ? 'medium' : 'high';
 }
 function setSkyRes(v) {
   if (!(v in SKY_RES)) return;

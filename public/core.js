@@ -85,11 +85,20 @@ function isCoarsePointer() {
     return false; // no matchMedia → treat as a fine pointer
   }
 }
-// URL override, else stored preference, else device class.
+// Rough device class for picking defaults: a fine pointer is a desktop; a coarse pointer splits
+// into phone vs tablet by the SHORTER viewport side (orientation-independent). Phones can't take
+// the tablet defaults — e.g. an Android phone black-screens on the medium tier's 2048 shadow.
+function deviceClass() {
+  if (!isCoarsePointer()) return 'desktop';
+  const small = Math.min(window.innerWidth || 0, window.innerHeight || 0);
+  return small && small <= 600 ? 'phone' : 'tablet';
+}
+// URL override, else stored preference, else device class (phone→low, tablet→medium, desktop→high).
 function resolveQuality() {
   const q = _qp.get('q') || _lsGet(QUALITY_KEY);
   if (q && QUALITY_TIERS[q]) return q;
-  return isCoarsePointer() ? 'medium' : 'high';
+  const cls = deviceClass();
+  return cls === 'phone' ? 'low' : cls === 'tablet' ? 'medium' : 'high';
 }
 // The tier's settings, with any per-axis dev knob overriding it.
 function qualitySettings(tier) {
@@ -267,4 +276,5 @@ export {
   setTableColor,
   setQuality,
   getQuality,
+  deviceClass,
 };
