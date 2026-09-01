@@ -96,6 +96,22 @@ the many-bodies case is normally bounded at 80.
    decide whether 80 is the right number at all: a real Mahjong game's discards + exposed melds
    can cross it mid-game.
 
+**First profiling pass (2026-09-01)** — load: the Mahjong wall spread to all 144 tiles.
+- *Server (cannon-es): not the bottleneck.* 144 settled bodies ≈ 0.13 ms/step; a full scoop
+  (~125 awake) peaks ~3 ms avg / 5.8 ms max against the 16.7 ms tick, never dropping a tick. The
+  80 cap is far below what physics needs — raising it is safe on the server side.
+- *Client (iPad Safari, no skybox): the bottleneck.* ~22 fps at REST with 144 tiles, still ~22 fps
+  while moving them. FPS barely moved as draws went 187→330 and tris 22k→40k, so it is NOT draw or
+  geometry bound — it's fixed per-frame fill-rate: `setPixelRatio(min(dpr,2))` = 2× (4× fragments)
+  on retina, `antialias:true`, and a **4096² PCFSoftShadowMap** sun redrawn each frame
+  (`public/core.js:45-80`). Those are ~constant in piece count — exactly the flat-22-fps signature.
+- *Memory:* opening the library evicts/reloads the Safari tab even with the skybox off — texture
+  pressure (library thumbnails + 144 face textures + the ~64 MB-class shadow map).
+- *So §12's levers are the right ones, ranked:* shadow-map size / soft-shadow quality (likely the
+  biggest), render scale (pixel ratio), antialiasing — NOT instancing/LOD (draws aren't the
+  limit). Skybox resolution (§11) is a memory lever, not an fps one; a low tier should also shrink
+  the shadow map to relieve the library OOM.
+
 ### 2. A fresh room isn't a blank table — built-in content
 Lowers the cold-start for a host who isn't going to model their own assets.
 - ✅ **Standard 52 + jokers** deck (a "Standard 54 (with Jokers)" option with a rendered joker face).
