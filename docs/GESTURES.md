@@ -173,12 +173,19 @@ only exact-45° step available for a held piece. `setSnap` (line 209) toggles th
 grid-snap prop — that is the `G` key and the radial's **Snap to grid**. The client-side intent
 that sends the first is called `snapHeld` (`client.js:4982`), which reads like the second.
 
-## The documentation gap
+## The documentation gap — closed
 
-The in-app **How to Play** modal (`table.html:1564`) mentions touch **zero times**. Every one of
-its instructions is phrased as a click, a drag with a named mouse button, a wheel, or a key.
-A player who opens the app on an iPad is told, in detail, how to use a mouse.
+The in-app **How to Play** modal (`#controlsModal`, `table.html:1566`) now carries a dedicated
+**Touch** tab beside Mouse & Keyboard, and a **Table & Tools** tab that spells out the whiteboard
+and the measure tool for a finger explicitly (the whiteboard entry names both "double-click" and
+"double-tap" to take control). Between them the modal now documents every surface this section
+used to list as shipped-but-unspoken: one-finger orbit / two-finger pan / pinch-zoom,
+touch-hold-drag pick-up with the edge **Raise** / **Lower** controls, the two-finger
+twist-and-pinch transform, the **press-and-hold** radial menu with its per-kind items and the
+**Move** item you drag a deck straight out of, tap / double-tap for cards and decks, the
+one-finger / two-finger hand rule for face-down vs face-up, the **Select** tool with its
+selection button row, and double-tap to claim the whiteboard.
 
-The radial menu, the Select tool, the ▲/▼ height controls, `#selTools`, the one-finger /
-two-finger hand rule, and double-tap-to-claim are all real, all shipped, and all undocumented.
-Closing this is cheaper than any of the three gaps above and probably worth more.
+What no tab spells out is the two exact-angle gaps listed above — there is still no single-action
+45° for a selection you are not holding, and no truly unsnapped rotation off the mouse — but those
+are holes in the gesture surface itself, not in its documentation.
