@@ -700,8 +700,8 @@ lifetime (30 days by default, bounded to 1–365).
 ## `public/core.js` — setup + tunables
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z)`** (rebuild
-the felt + walls at a new half-extent) and **`setTableColor(hex)`** (recolor the
-felt), and the config:
+the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the felt), and
+**`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
@@ -712,9 +712,14 @@ felt), and the config:
 - **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off; the render loop sets
   `needsUpdate` only on frames where a caster's transform changed, so a static table (even while
   the camera orbits) doesn't repay the 4096² soft-shadow pass every frame.
-- **Dev perf knobs** (docs/ROADMAP.md §1/§12): URL params `?px=<ratio>`, `?shadow=off|512|1024|2048|4096`,
-  `?aa=0` tune the fill-rate costs for on-device A/B; `window.ottPixelRatio(v)` and
-  `window.ottShadow(v)` are live toggles (antialias is context-fixed, so `?aa=0` needs a reload).
+- **Graphics quality tiers** (docs/ROADMAP.md §1/§12): the tablet frame is fill-rate bound, so
+  quality is three presets — `low` (px 1, hard PCF @1024, no AA), `medium` (px ≤1.5, PCF @2048,
+  AA), `high` (px ≤2, soft PCF @4096, AA). Active tier = `?q=` › `localStorage 'tabletop.quality'`
+  › device default (coarse pointer → `medium`, else `high`). `setQuality(tier)` applies pixel
+  ratio + shadows live and persists; AA re-applies on reload. The UI control is Settings → UI →
+  Graphics. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
+  `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
+  `window.ottPixelRatio(v)` / `window.ottShadow(v)`.
 - **`clamp(value, min, max)`**.
 
 ---

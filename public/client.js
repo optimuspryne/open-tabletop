@@ -8,6 +8,8 @@ import {
   controls,
   resizeTable,
   setTableColor,
+  setQuality,
+  getQuality,
 } from './core.js';
 import { initPerf } from './perf.js';
 import {
@@ -1428,6 +1430,23 @@ function rebuildGrid() {
   // Private notes: a personal scratchpad. Never synced — the server just holds the
   // text so it survives a reconnect (see the 'notebook' message below).
   const notesText = byId('notesText'); // Notes now opens via the shared-region cluster (see wireCluster below)
+  // Graphics quality (Settings → UI): a client-local render tier, persisted on this device.
+  {
+    const qrow = byId('qualityRow');
+    if (qrow) {
+      const chips = [...qrow.querySelectorAll('[data-quality]')];
+      const sync = () =>
+        chips.forEach((c) => c.classList.toggle('on', c.dataset.quality === getQuality()));
+      chips.forEach(
+        (c) =>
+          (c.onclick = () => {
+            setQuality(c.dataset.quality);
+            sync();
+          }),
+      );
+      sync();
+    }
+  }
   // Audio settings (Tools menu): effects volume + mute, persisted client-side.
   const sfxVol = byId('sfxVol');
   {

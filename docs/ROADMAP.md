@@ -224,7 +224,11 @@ scoped against the real tree rather than from memory.
    3. Gather dispenser-type objects into a **single dispenser**.
 11. **More Room Customization.**  Ability to adjust lighting (angles, intensity, color).  
     Ability to adjust skybox resolution.
-12. **Graphics/Video Settings.** Ability to crank up or lower graphics quality.
+12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
+    pixel ratio + shadow size/type + AA), device-defaulted (coarse pointer → medium) with an
+    in-app control (Settings → UI → Graphics), a persisted per-device preference, and `?q=` /
+    per-axis dev knobs. Driven by the first profiling pass (see §1). Still open: skybox-resolution
+    (§11) as the remaining memory lever, and possibly an adaptive tier that measures FPS.
 
    All three are "selection → new composite piece" on the server; the natural home is
    `server/game/handlers/cards.js` (deck ops) and `pieces.js` (generic composition), with

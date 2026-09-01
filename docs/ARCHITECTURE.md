@@ -210,6 +210,9 @@ frame **fill-rate bound, not draw bound** (FPS flat as draw calls rose), so the 
 redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false`, driven from the
 render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
 tuning on the target device.
+That tuning is now a shipped, client-local **quality tier** (low/med/high, persisted per device,
+defaulting to medium on a coarse pointer) in Settings → UI — a per-viewer render preference, never
+room state, so it stays out of the scene save.
 
 ## One action end to end: grab & throw
 
