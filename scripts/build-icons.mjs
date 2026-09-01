@@ -89,6 +89,7 @@ const ICONS = [
   'arrow-down-bar',
   'arrow-up-bar',
   'x',
+  'arrows-sort',
   // Library card buttons
   'new-section',
   'category-plus',
