@@ -52,9 +52,12 @@ camera.position.set(0, 14, 16);
 const SHADOW_SIZES = [512, 1024, 2048, 4096];
 const SHADOW_TYPES = { pcf: THREE.PCFShadowMap, soft: THREE.PCFSoftShadowMap };
 const QUALITY_KEY = 'tabletop.quality';
+// All tiers use soft shadows (PCFSoftShadowMap): hard PCFShadowMap black-screened an Android
+// phone's GPU, and soft-vs-hard is a minor cost lever next to pixel ratio, shadow size, and AA.
+// Tiers differ by pixel ratio, shadow-map size, and antialiasing.
 const QUALITY_TIERS = {
-  low: { px: 1, shadowType: 'pcf', shadowSize: 1024, aa: false },
-  medium: { px: Math.min(devicePixelRatio, 1.5), shadowType: 'pcf', shadowSize: 2048, aa: true },
+  low: { px: 1, shadowType: 'soft', shadowSize: 1024, aa: false },
+  medium: { px: Math.min(devicePixelRatio, 1.5), shadowType: 'soft', shadowSize: 2048, aa: true },
   high: { px: Math.min(devicePixelRatio, 2), shadowType: 'soft', shadowSize: 4096, aa: true },
 };
 const _qp = (() => {
