@@ -717,7 +717,8 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
   AA), `high` (px ≤2, soft PCF @4096, AA). Active tier = `?q=` › `localStorage 'tabletop.quality'`
   › device default (coarse pointer → `medium`, else `high`). `setQuality(tier)` applies pixel
   ratio + shadows live and persists; AA re-applies on reload. The UI control is Settings → UI →
-  Graphics. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
+  Graphics, with an **Apply & reload** button (shown once the tier changes) that commits AA and the
+  pixel-ratio change, which iOS Safari only picks up on a fresh context. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
   `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
   `window.ottPixelRatio(v)` / `window.ottShadow(v)`.
 - **`clamp(value, min, max)`**.

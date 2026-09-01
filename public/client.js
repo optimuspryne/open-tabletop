@@ -1431,12 +1431,19 @@ function rebuildGrid() {
   // text so it survives a reconnect (see the 'notebook' message below).
   const notesText = byId('notesText'); // Notes now opens via the shared-region cluster (see wireCluster below)
   // Graphics quality (Settings → UI): a client-local render tier, persisted on this device.
+  // Picking a tier persists it and live-applies pixel ratio + shadows; antialias (and, on iOS
+  // Safari, the pixel-ratio change) only take full effect on reload, so an Apply button appears
+  // once the selection differs from the tier the page booted with.
   {
     const qrow = byId('qualityRow');
+    const applyBtn = byId('qualityApply');
     if (qrow) {
+      const bootedTier = getQuality();
       const chips = [...qrow.querySelectorAll('[data-quality]')];
-      const sync = () =>
+      const sync = () => {
         chips.forEach((c) => c.classList.toggle('on', c.dataset.quality === getQuality()));
+        if (applyBtn) applyBtn.hidden = getQuality() === bootedTier;
+      };
       chips.forEach(
         (c) =>
           (c.onclick = () => {
@@ -1444,6 +1451,7 @@ function rebuildGrid() {
             sync();
           }),
       );
+      if (applyBtn) applyBtn.onclick = () => location.reload();
       sync();
     }
   }
