@@ -1917,6 +1917,10 @@ function showExit(msg) {
 const ray = new THREE.Raycaster(),
   pointer = new THREE.Vector2();
 const GRAB_HEIGHT = CONFIG.grab.height; // float height when a piece is first grabbed (scroll to raise/lower)
+// A finger sits ON the piece it is holding, where a cursor only points at it, so a touch grab
+// starts higher — enough to clear the fingertip without changing where anything lands. Keyed off
+// the gesture, not the device: a laptop with a touchscreen gets the right lift for each grab.
+const grabHeightFor = (touch) => GRAB_HEIGHT * (touch ? CONFIG.grab.touchLift : 1);
 const DRAG_MIN = CONFIG.grab.min,
   DRAG_MAX = CONFIG.grab.max,
   DRAG_STEP = CONFIG.grab.step;
@@ -2649,7 +2653,7 @@ const onPointerDown = (e) => {
   };
   dragOffset.set(0, 0, 0); // each grab starts anchored to its own finger
   controls.enabled = false; // this gesture belongs to the piece
-  dragHeight = GRAB_HEIGHT; // the lift offset; XZ tracks the fixed ground plane
+  dragHeight = grabHeightFor(e.touch); // the lift offset; XZ tracks the fixed ground plane
   renderer.domElement.setPointerCapture(e.pointerId);
 };
 
@@ -4972,7 +4976,7 @@ function beginMoveFromMenu(id, e) {
   setPointer(e);
   ray.setFromCamera(pointer, camera);
   if (!ray.ray.intersectPlane(dragPlane, hit)) return false;
-  dragHeight = GRAB_HEIGHT;
+  dragHeight = grabHeightFor(e.pointerType === 'touch');
   hit.y = dragHeight;
   down = {
     id,

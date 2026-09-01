@@ -10,7 +10,7 @@ import { TABLE } from '/shared/pieces.js';
 // ===== CONFIG — client-side tunables (the visual mirror of the server's SIM) =
 // Everything a designer might want to nudge lives here, grouped by concern.
 const CONFIG = {
-  grab: { height: 1, min: 0.3, max: 6, step: 0.35, deckHeight: 1.6 }, // held-piece float height + scroll range/step; deckHeight = how high dealt cards ride
+  grab: { height: 1, min: 0.3, max: 6, step: 0.35, deckHeight: 1.6, touchLift: 1.15 }, // held-piece float height + scroll range/step; deckHeight = how high dealt cards ride; touchLift multiplies the grab height for a finger, which covers the piece a cursor only points at
   model: { size: 1.6 }, // custom .glb props normalize their largest dimension to this
   render: { delay: 60 }, // ms: draw this far behind live state (interpolation buffer)
   ranges: { scale: [0.3, 3], qty: [1, 12], boardW: [2, 18], boardD: [2, 12] }, // spawn-modal input clamps [min, max]
