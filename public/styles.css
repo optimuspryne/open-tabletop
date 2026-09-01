@@ -759,6 +759,12 @@ button.danger,
 .handFlank[hidden] {
   display: none;
 }
+#handFlankStack {
+  display: flex;
+  flex-direction: column; /* Show Hand above Rearrange, stacked on the left flank */
+  gap: 6px;
+  flex: 0 0 auto;
+}
 #hand {
   display: none;
   gap: 6px;
@@ -5472,18 +5478,32 @@ body.not-gm .gm-only {
   /* Collapsed: the tab IS the hand row. */
   #handRow:not(.trayOpen) #hand,
   #handRow:not(.trayOpen) #showStrip,
+  #handRow:not(.trayOpen) #rearrangeBar,
   #handRow:not(.trayOpen) #dropFlank,
-  #handRow:not(.trayOpen) #showBtn {
+  #handRow:not(.trayOpen) #handFlankStack {
     display: none !important;
   }
   /* Open: clear action buttons disclose show/drop choices only when requested. */
-  #handRow.trayOpen #showBtn {
+  #handRow.trayOpen #handFlankStack {
     order: 1;
+    display: flex;
+  }
+  #handRow.trayOpen #handFlankStack button {
     display: flex;
     justify-content: center;
     min-height: 44px;
   }
   #handRow.trayOpen #showStrip {
+    position: static;
+    left: auto;
+    transform: none;
+    order: 2;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  #handRow.trayOpen #rearrangeBar {
     position: static;
     left: auto;
     transform: none;

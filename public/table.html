@@ -477,6 +477,10 @@
         <path d="M18 6l-12 12" />
         <path d="M6 6l12 12" />
       </symbol>
+      <symbol id="i-arrows-sort" viewBox="0 0 24 24">
+        <path d="M3 9l4 -4l4 4m-4 -4v14" />
+        <path d="M21 15l-4 4l-4 -4m4 4v-14" />
+      </symbol>
       <symbol id="i-new-section" viewBox="0 0 24 24">
         <path d="M9 12l6 0" />
         <path d="M12 9l0 6" />
@@ -1058,27 +1062,29 @@
         </button>
         <button type="button" class="chip" data-sort="suit"><span class="lbl">Suit</span></button>
       </div>
-      <button
-        id="showBtn"
-        class="handFlank"
-        data-icon="cards"
-        title="Show cards to others"
-        aria-expanded="false"
-        aria-controls="showStrip"
-        hidden
-      >
-        <span class="lbl">Show Hand</span>
-      </button>
-      <button
-        id="rearrangeBtn"
-        class="handFlank"
-        data-icon="arrows-sort"
-        title="Rearrange your hand"
-        aria-pressed="false"
-        hidden
-      >
-        <span class="lbl">Rearrange</span>
-      </button>
+      <div id="handFlankStack">
+        <button
+          id="showBtn"
+          class="handFlank"
+          data-icon="cards"
+          title="Show cards to others"
+          aria-expanded="false"
+          aria-controls="showStrip"
+          hidden
+        >
+          <span class="lbl">Show Hand</span>
+        </button>
+        <button
+          id="rearrangeBtn"
+          class="handFlank"
+          data-icon="arrows-sort"
+          title="Rearrange your hand"
+          aria-pressed="false"
+          hidden
+        >
+          <span class="lbl">Rearrange</span>
+        </button>
+      </div>
       <div id="hand" class="panel"></div>
       <div id="dropFlank" class="handFlank handAction" hidden>
         <button id="dropBtn" data-icon="cards" aria-expanded="false" aria-controls="dropChoices">
