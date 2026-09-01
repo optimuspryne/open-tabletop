@@ -62,6 +62,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   calls, triangles, geometry/texture/program counts, JS heap (`public/perf.js`). `PERF_LOG=1` makes
   the server log a per-second `world.step` time, awake-vs-total body count, and tick health
   (`TableRoom.update`). Dev-only, off by default, for the "plays well at real scale" work.
+- **Skybox resolution control.** A per-device Off / Low / Medium / High / Ultra setting in
+  Settings → UI → Graphics — each level a max image width (512 / 1024 / 2048 / native), with the
+  skybox downscaled at load so only the smaller texture stays in memory. Works for equirect and
+  cube-map skyboxes, applies instantly, and is saved per device. (The built-in skyboxes are
+  2048px, so High and Ultra match on them; Ultra only adds detail for a larger custom upload.)
 - **Graphics quality tiers.** Low / Medium / High presets that trade the fill-rate costs profiling
   flagged on tablets — pixel ratio, shadow-map size and soft/hard filtering, antialiasing. Coarse-
   pointer devices default to Medium and desktops to High; the choice is saved per device at
