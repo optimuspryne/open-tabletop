@@ -212,6 +212,11 @@ export function overflowMenu(subject, items, opts = {}) {
   document.addEventListener('click', close);
   for (const item of items) menu.append(overflowRow(item, close));
   group.append(trigger, menu);
+  // This group manages its own open/close (it portals the menu to <body>, which the generic
+  // wiring knows nothing about). Claim the idempotence flag so wirePopGroups skips it: the
+  // shapes match — .pop-group > .pop-trigger + .pop-menu — so without this it attaches a SECOND
+  // click handler that reads the menu as already-open and shuts it in the same tick.
+  group.dataset.popWired = '1';
   applyIcons(group);
   return group;
 }
@@ -374,7 +379,9 @@ export function wirePopGroups(root = document) {
   popCloserWired = true;
   document.addEventListener('click', () =>
     document.querySelectorAll('.pop-menu').forEach((m) => {
-      m.hidden = true;
+      // A menu that has been portaled out of its group (see overflowMenu) closes itself, and
+      // needs to be re-parented as it does. Hiding it from here would strand it in <body>.
+      if (m.parentElement?.classList.contains('pop-group')) m.hidden = true;
     }),
   );
 }

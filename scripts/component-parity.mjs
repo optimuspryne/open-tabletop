@@ -116,6 +116,55 @@ const SCENES = [
       (await import('/icons.js')).applyIcons();`,
   },
   {
+    // Regression guard. The overflow menu is a .pop-group whose shape matches what
+    // wirePopGroups claims, so the generic wiring used to attach a SECOND click handler to the
+    // trigger: the first opened and portaled the menu, the second read it as already-open and
+    // shut it in the same tick. The button looked completely inert. Nothing caught it, because
+    // the menu only renders for a custom asset an admin owns — a state no scene reached.
+    name: 'library-overflow-open',
+    root: '#libraryModal',
+    // Desktop opens the portaled popover; a coarse pointer opens the action sheet instead. The
+    // assertion is the thing that regressed either way: the trigger opens SOMETHING.
+    expect: { selector: '.overflowMenu:not([hidden]), .sheet-backdrop', min: 1 },
+    drive: `
+      window.OTT_IS_ADMIN = true;
+      document.body.classList.remove('not-admin');
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="decks"]').click();
+      window.onLibraryList('deck', [
+        { id: 'd1', name: 'Standard 54 - Pixel Red', isPublic: false, count: 54 },
+      ]);
+      (await import('/icons.js')).applyIcons();
+      await new Promise((r) => setTimeout(r, 60));
+      document.querySelector('.overflowTrigger').click();
+      await new Promise((r) => setTimeout(r, 60));`,
+  },
+  {
+    // The other half: dismissing must put the portaled menu BACK in its group. The generic
+    // document closer runs first (wirePopGroups wires itself before any card renders), so if it
+    // hides the menu where it stands, overflowMenu's own close() early-returns on the hidden
+    // flag and never re-parents — leaving a dead menu in <body> for every card ever opened.
+    name: 'library-overflow-dismissed',
+    root: '#libraryModal',
+    expect: { selector: '.pop-group > .overflowMenu', min: 1 },
+    drive: `
+      window.OTT_IS_ADMIN = true;
+      document.body.classList.remove('not-admin');
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="decks"]').click();
+      window.onLibraryList('deck', [
+        { id: 'd1', name: 'Standard 54 - Pixel Red', isPublic: false, count: 54 },
+      ]);
+      (await import('/icons.js')).applyIcons();
+      await new Promise((r) => setTimeout(r, 60));
+      document.querySelector('.overflowTrigger').click();
+      await new Promise((r) => setTimeout(r, 60));
+      document.getElementById('libraryModal').click();   // dismiss by clicking outside the menu
+      await new Promise((r) => setTimeout(r, 60));`,
+  },
+  {
     name: 'library-swatches-open',
     root: '#libraryModal',
     expect: { selector: '.libCard', min: 40 },
