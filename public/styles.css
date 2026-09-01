@@ -690,6 +690,10 @@ button.danger,
   margin: 6px 0 12px;
   padding-right: 4px;
 }
+.helpCard .libPane {
+  min-height: 0; /* without this the pane grows to fit and the CARD scrolls, sticky tabs and all */
+  overflow-y: auto;
+}
 .helpSec {
   margin-bottom: 14px;
 }
@@ -697,6 +701,10 @@ button.danger,
   color: var(--accent-soft);
   margin: 0 0 5px;
   font: 600 var(--fs) var(--font);
+}
+.helpSec h4 ~ h4 {
+  margin-top: 14px; /* a second heading in one section (GM abilities → Room controls) needs the
+                       gap the section margin gives between sections */
 }
 .helpSec ul {
   margin: 0 0 0 18px;
@@ -1356,13 +1364,13 @@ input[type='range']::-moz-range-thumb {
   text-align: left;
 }
 /* Sit just below the create modals it opens (z 10), above the editor chrome. */
-.libraryCard:has(.libSticky) {
+.modalCard:has(.libSticky) {
   padding: 0;
 } /* padding moves onto the sticky + panes (below) so the sticky is a normal full-width flex item with no negative-margin flow deficit */
-.libraryCard:has(.libSticky) .libPane {
+.modalCard:has(.libSticky) .libPane {
   padding: 0 22px 20px;
 }
-.libraryCard .libSticky {
+.modalCard .libSticky {
   position: sticky;
   top: 0;
   z-index: 5;
@@ -5616,17 +5624,17 @@ body.not-gm .gm-only {
     width: calc(100vw - 16px);
     max-height: calc(100vh - 16px);
   }
-  #libraryModal .libraryCard:has(.libSticky) .libPane {
+  #libraryModal .modalCard:has(.libSticky) .libPane {
     padding: 10px 12px 14px;
   }
-  #libraryModal .libraryCard .libSticky {
+  #libraryModal .modalCard .libSticky {
     gap: 8px;
     padding: 10px 12px 8px;
   }
 }
 /* Landscape phones: one header row, four across. Header 88px → 44px. */
 @media (orientation: landscape) and (max-height: 560px) {
-  #libraryModal .libraryCard .libSticky {
+  #libraryModal .modalCard .libSticky {
     flex-direction: row;
     align-items: center;
     flex-wrap: nowrap;
@@ -5671,7 +5679,7 @@ body.not-gm .gm-only {
   #libraryModal .modalCard.libraryCard.lib2Card {
     max-height: calc(100vh - 12px);
   }
-  #libraryModal .libraryCard:has(.libSticky) .libPane {
+  #libraryModal .modalCard:has(.libSticky) .libPane {
     padding: 8px 10px 10px;
   }
   /* List-shaped cards, four across: thumb + name + source, controls on one line. */
@@ -5868,7 +5876,7 @@ body.not-gm .gm-only {
     height: calc(100vh - 16px);
     max-height: calc(100vh - 16px);
   }
-  #addModal .libraryCard .libSticky {
+  #addModal .modalCard .libSticky {
     gap: 8px;
     padding: 10px 12px 8px;
   }
@@ -5877,7 +5885,7 @@ body.not-gm .gm-only {
     overflow-x: auto;
     scrollbar-width: none;
   }
-  #addModal .libraryCard:has(.libSticky) .libPane {
+  #addModal .modalCard:has(.libSticky) .libPane {
     padding: 12px;
     min-height: 0;
   }
@@ -5918,7 +5926,7 @@ body.not-gm .gm-only {
     flex: 0 0 34%;
     flex-direction: column;
   }
-  #addModal .libraryCard .libSticky {
+  #addModal .modalCard .libSticky {
     padding: 8px 10px 6px;
     gap: 6px;
   }
@@ -5948,7 +5956,7 @@ body.not-gm .gm-only {
 }
 
 /* ---- sticky header: title row over the tab row ------------------------- */
-.libraryCard .libSticky {
+.modalCard .libSticky {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -6005,7 +6013,7 @@ body.not-gm .gm-only {
 }
 
 /* ---- the pane ----------------------------------------------------------- */
-.libraryCard:has(.libSticky) .libPane {
+.modalCard:has(.libSticky) .libPane {
   padding: 14px 18px 18px;
   overflow-y: auto;
   min-height: 0;
@@ -6034,7 +6042,7 @@ body.not-gm .gm-only {
 #addModal .modalCard.libraryCard.addCard {
   max-height: min(680px, calc(100vh - 56px));
 }
-#addModal .libraryCard:has(.libSticky) .libPane {
+#addModal .modalCard:has(.libSticky) .libPane {
   padding: 16px 18px 18px;
 }
 

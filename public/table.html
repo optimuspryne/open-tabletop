@@ -1563,194 +1563,360 @@
 
     <div id="controlsModal" hidden>
       <div class="modalCard helpCard">
-        <h3>How to Play</h3>
-        <div class="helpScroll">
+        <div class="libSticky">
+          <div class="panel-head">
+            <b class="panel-title">How to Play</b
+            ><button type="button" id="controlsClose" class="close-x" aria-label="Close">✕</button>
+          </div>
+          <div class="libTabs">
+            <button class="libTab on" data-tab="mkb">Mouse &amp; Keyboard</button>
+            <button class="libTab" data-tab="touch">Touch</button>
+            <button class="libTab" data-tab="table">Table &amp; Tools</button>
+            <button class="libTab" data-tab="soon">Coming Soon</button>
+          </div>
+        </div>
+
+        <div class="libPane helpScroll" data-pane="mkb">
           <div class="helpSec">
-            <h4>-- Getting Around --</h4>
+            <h4>Getting around</h4>
             <ul>
               <li>
-                <b>Left-click-hold + drag</b> in an empty space to rotate your view around;
-                <b>right-click-hold + drag</b> to pan up, down, left, right.
+                <b>Left-drag</b> empty table to orbit your view; <b>right-drag</b> to pan up, down,
+                left and right; <b>scroll</b> to zoom.
               </li>
               <li>
-                <b>Use the mouse scroll wheel</b> to zoom in and out (or raise/lower a piece you're
-                holding).
-              </li>
-              <li>
-                <b>Scroll wheel click </b> anywhere on the table to send a visual ping to all
-                players.
-              </li>
-              <li>
-                <b>Interactions → ↩ My Seat</b> snaps the camera back to your designated seat.
-              </li>
-              <li>
-                <b>Interactions → 🔎 Lean In</b> zooms your view in slightly, to simulate leaning
-                over the table. <b>Interactions → 🔎 Lean Out</b> to return.
+                <b>Middle-click</b> empty table — or press <b>P</b> — to ping a spot for everyone.
               </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>-- Pieces &amp; Objects --</h4>
+            <h4>Picking things up</h4>
             <ul>
               <li>
-                <b>Left-click-hold</b> a piece to pick it up, move, and let go of left-click to drop
-                or throw it. Scroll to change its height. While holding, press <b>Alt</b> and drag
-                horizontally to rotate in 15° steps; add <b>Shift</b> for smooth rotation.
-                <b>Middle-click</b> still rotates its facing in 45° steps.
+                <b>Left-click-hold</b> a piece to pick it up. Move it and let go to drop it — let go
+                while still moving and you throw it.
+              </li>
+              <li><b>Scroll</b> while holding to raise and lower it.</li>
+              <li>
+                <b>W</b> / <b>S</b> (or <b>↑</b> / <b>↓</b>) also raise and lower, and repeat while
+                you hold the key.
               </li>
               <li>
-                <b>Double-left-click</b> a piece to inspect it up close. From here you can change
-                its colors, drag to rotate, or click away to close the view.
-              </li>
-              <li>
-                After left-clicking a piece, press <b>Delete</b> to remove it, <b>U</b> to stand it
-                upright / lay it flat, or <b>G</b> to toggle snap-to-grid (when the table has a
-                grid).
+                <b>Double-left-click</b> a piece to inspect it up close, where you can recolour it
+                or drag to turn it. Click away to close.
               </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>-- Cards &amp; decks --</h4>
+            <h4>Turning a piece</h4>
+            <ul>
+              <li>
+                <b>Alt + drag</b> sideways while holding turns it in 15° steps; add <b>Shift</b> for
+                smooth, unsnapped turning.
+              </li>
+              <li><b>Middle-click</b> while holding snaps its facing to the next 45°.</li>
+              <li>
+                <b>A</b> / <b>D</b> (or <b>←</b> / <b>→</b>) turn it a little at a time, repeating
+                while you hold the key. These work on a selection too.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Piece shortcuts</h4>
+            <ul>
+              <li>
+                With a piece held or under the cursor: <b>Delete</b> removes it, <b>U</b> stands it
+                upright or lays it flat, <b>G</b> toggles snap-to-grid (when the table has a grid).
+              </li>
+              <li><b>Right-click</b> a piece for the same actions as a menu.</li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Cards &amp; decks</h4>
             <ul>
               <li>
                 <b>Left-click</b> a card on the table to take it into your hand;
-                <b>right-click</b> it to flip it face-up.
+                <b>right-click</b> it to flip it over.
               </li>
               <li>
-                <b>Left-click-hold + drag</b> from a deck to draw the top card;
-                <b>left-click</b> the deck to deal it face-down beside the deck.
+                <b>Left-click</b> a deck to take its top card into your hand; <b>left-drag</b> off a
+                deck to draw the top card and carry it out.
               </li>
               <li>
-                <b>Double-click</b> a deck to peek at the top card, then <b>F</b> (face-up),
-                <b>D</b> (face-down), <b>H</b> (to hand), or <b>R</b> (return).
+                <b>Right-click</b> a deck to shuffle it; <b>right-click-hold + drag</b> to pick up
+                and move the whole deck; <b>double-right-click</b> to split it.
               </li>
               <li>
-                <b>Right-click</b> a deck to shuffle it; <b>Right-click-hold</b> to pick up and move
-                the whole deck.
-              </li>
-              <li><b>Double-right-click</b> a deck to split it.</li>
-            </ul>
-          </div>
-          <div class="helpSec">
-            <h4>-- Your Private Hand --</h4>
-            <ul>
-              <li>
-                Your <b>private hand</b> sits at the bottom of the screen, and only you can see it.
-                Other players will see your hand fanned-out face-down at your seat.
-              </li>
-              <li>
-                <b>Drag a card out</b> onto the table: from a left-click-drag (or a single
-                left-click) it lands face-down, from a right-click-drag (or a single right-click) it
-                lands face-up.
-              </li>
-              <li>
-                <b>Click the '▾' button</b> to hide your hand from your view.
-                <b>Click the '🃏 Show hand (1)'</b> button to bring it back into view.
-              </li>
-              <li>
-                <b>Interactions → 🃏 Show Hand</b> briefly reveals chosen cards to players you pick.
-              </li>
-              <li>
-                <b>Interactions → 🂠 Drop Hand</b> drop your entire hand on the table either face-up
-                or face-down.
+                <b>Double-click</b> a deck to peek at the top card, then <b>F</b> to place it
+                face-up, <b>D</b> face-down, <b>H</b> into your hand, or <b>R</b> to put it back.
               </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>-- Tools --</h4>
+            <h4>Your private hand</h4>
             <ul>
-              <li><b>📝 Private Notes</b> is a scratchpad only you see.</li>
               <li>
-                <b>💬 Chat</b> is a public chat. If there are messages you have missed, the icon
-                visually indicate so.
+                Your hand sits at the bottom of the screen and only you can see it. Everyone else
+                sees a face-down fan at your seat.
               </li>
-              <li><b>📊 Scoreboard</b> shows the shared scores.</li>
-              <li><b>⏱️ Timer</b> is a shared stopwatch / countdown.</li>
               <li>
-                <b>🖊️ Whiteboard</b> — when the GM has it out, <b>double-click</b> the board to
-                draw. Pen, eraser, and clear appear while you draw; <b>Esc</b> or <b>Done</b> hands
-                it back.
+                <b>Left-drag</b> (or left-click) a card out onto the table and it lands face-down;
+                <b>right-drag</b> (or right-click) and it lands face-up.
+              </li>
+              <li>
+                <b>▾</b> hides your hand from your own view; <b>🃏 Show hand</b> brings it back.
               </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>-- Interactions --</h4>
+            <h4>Working with several pieces</h4>
             <ul>
               <li>
-                <b>🔎 Lean In</b> zooms your view in slightly, to simulate leaning over the table.
-                Press <b>🔎 Lean Out</b> to return.
+                <b>Shift + drag</b> empty table to box a selection; <b>Shift + click</b> a piece to
+                add or remove it.
               </li>
-              <li><b>↩ My Seat</b> snaps the camera back to your designated seat.</li>
-              <li><b>🔄 Roll Dice</b> rolls all dice currently on the table.</li>
+              <li>Drag any selected piece and the whole group comes with it.</li>
               <li>
-                <b>🃏 Show Hand</b> briefly reveals chosen cards in your hand to players you pick.
-              </li>
-              <li>
-                <b>🂠 Drop Hand</b> drop your entire hand on the table either face-up or face-down.
-              </li>
-            </ul>
-          </div>
-          <div class="helpSec" id="ctrlHelper" hidden>
-            <h4>-- Helper Abilities --</h4>
-            <ul>
-              <li><b>🎲 Dice</b> to quickly spawn dice.</li>
-              <li><b>🧱 Browse Built-Ins</b> add built-in decks and objects to the table.</li>
-              <li><b>📚 Browse Custom Library</b> add custom decks and objects to the table.</li>
-              <li><b>Tools → 📊 Scoreboard</b> add, rename, adjust, and clear score rows.</li>
-            </ul>
-          </div>
-          <div class="helpSec" id="ctrlGM" hidden>
-            <h4>-- GM Abilities --</h4>
-            <ul>
-              <li><b>🎲 Dice</b> to quickly spawn dice.</li>
-              <li>
-                <b>🧱 Browse Built-Ins</b> add built-in decks, boards, objects and skyboxes to the
-                table.
+                On a selection: <b>U</b> stand or lay flat, <b>G</b> snap to grid, <b>F</b> flip
+                every card, <b>R</b> roll every die, <b>H</b> take every card to hand,
+                <b>Delete</b> remove them all.
               </li>
               <li>
-                <b>📚 Browse Custom Library</b> add custom decks, boards, objects and skyboxes to
-                the table.
-              </li>
-              <li>
-                <b>Tools → 📊 Scoreboard</b> add, rename, adjust, and clear score rows. You can also
-                edit the 'Room Notes' section.
-              </li>
-              <li>
-                <b>Tools → 🖊️ Whiteboard</b> show the whiteboard, set its style, and specify its
-                location in real-time.
-              </li>
-              <li><b>Next Turn button</b> proceeds turn-order to the next person.</li>
-            </ul>
-            <h4>-- Room Controls --</h4>
-            <ul>
-              <li>
-                <b>👥 Members List</b> lets you approve entries, promote players to helpers or GMs,
-                and also kick players permanently from the room.
-              </li>
-              <li>
-                <b>📽️ Load a Scene</b> lets you load a published scene. This could be a
-                ready-to-chess game, etc.
-              </li>
-              <li>
-                <b>💾 Save Table State</b> saves the table in its current configuration. As a saftey
-                precaution, the table is automatically saved once the last GM has left the room.
-              </li>
-              <li>
-                <b>🎨 Customize Table</b> lets to change the dimensions of the play area in
-                real-time, and set a custom color for the table felt.
-              </li>
-              <li>
-                <b>🌄 Skybox</b> to browse all public skyboxes. Hit 'apply' on any to change the
-                current skybox.
-              </li>
-              <li>
-                <b>🧹 Reset</b> to clear the table of all objects, boards, decks and also everyone's
-                private hands.
+                <b>[</b> and <b>]</b> turn the whole formation in 45° steps. <b>Esc</b> clears the
+                selection.
               </li>
             </ul>
           </div>
         </div>
-        <div class="row"><button id="controlsClose">Close</button></div>
+
+        <div class="libPane helpScroll" data-pane="touch" hidden>
+          <div class="helpSec">
+            <h4>Getting around</h4>
+            <ul>
+              <li>
+                <b>One finger</b> on empty table orbits your view; <b>two fingers</b> pan;
+                <b>pinch</b> to zoom.
+              </li>
+              <li><b>Press and hold</b> empty table to ping a spot for everyone.</li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Picking things up</h4>
+            <ul>
+              <li>
+                <b>Drag</b> a piece to pick it up and move it. Let go while still moving to throw
+                it.
+              </li>
+              <li>
+                While you hold a piece, <b>▲</b> and <b>▼</b> appear at the edge of the screen —
+                hold either to raise or lower it.
+              </li>
+              <li><b>Double-tap</b> a piece to inspect it up close. Tap away to close.</li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Turning a piece — two fingers</h4>
+            <ul>
+              <li>
+                While holding a piece with one finger, <b>put a second finger down and twist</b>.
+                The piece turns with your fingers, snapping to 15°.
+              </li>
+              <li>
+                <b>Pinch those same two fingers</b> in and out to lower and raise it. Twist and
+                pinch work together, and the piece stays put while you do either.
+              </li>
+              <li>
+                <b>⟲</b> and <b>⟳</b> at the edge of the screen turn a piece or a selection a little
+                at a time — hold to keep turning.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>The press-and-hold menu</h4>
+            <ul>
+              <li>
+                <b>Press and hold</b> any piece for a ring of actions around your finger. What
+                appears depends on the piece: <b>Flip</b> and <b>Take to hand</b> for cards,
+                <b>Roll</b> for dice, <b>Draw to hand</b>, <b>Shuffle</b> and <b>Split</b> for
+                decks, <b>Dispense</b> for dispensers.
+              </li>
+              <li>
+                Every piece also offers <b>Inspect</b>, <b>Stand / lay flat</b>,
+                <b>Snap to grid</b> and <b>Delete</b>.
+              </li>
+              <li>
+                Decks and dispensers offer <b>Move (then drag)</b> — tap it, then drag to carry the
+                whole thing, since a plain drag deals from it instead.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Cards &amp; decks</h4>
+            <ul>
+              <li><b>Tap</b> a card on the table to take it into your hand.</li>
+              <li>
+                <b>Tap</b> a deck to take its top card; <b>drag</b> off a deck to draw the top card
+                and carry it out.
+              </li>
+              <li>
+                <b>Double-tap</b> a deck to peek at the top card, then use the buttons to place it
+                face-up, face-down, into your hand, or back on the deck.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Your private hand</h4>
+            <ul>
+              <li>
+                Your hand sits at the bottom of the screen and only you can see it. Everyone else
+                sees a face-down fan at your seat.
+              </li>
+              <li>
+                <b>Drag a card out with one finger</b> and it lands face-down.
+                <b>Put a second finger down</b> and it lands face-up — you can add or lift that
+                finger mid-drag to change your mind.
+              </li>
+              <li>
+                <b>▾</b> hides your hand from your own view; <b>🃏 Show hand</b> brings it back.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Working with several pieces</h4>
+            <ul>
+              <li>
+                Turn on the <b>Select</b> tool, then <b>drag</b> empty table to box a selection, or
+                <b>tap</b> pieces to add and remove them.
+              </li>
+              <li>Drag any selected piece and the whole group comes with it.</li>
+              <li>
+                A row of buttons appears for the selection: stand or lay flat, snap to grid, flip,
+                roll, take to hand, and delete.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="libPane helpScroll" data-pane="table" hidden>
+          <div class="helpSec">
+            <h4>Interactions</h4>
+            <ul>
+              <li><b>↩ My Seat</b> snaps the camera back to your own seat.</li>
+              <li><b>Bird's Eye View</b> looks straight down at the table.</li>
+              <li>
+                <b>🔎 Lean In</b> zooms in slightly, as if leaning over the table;
+                <b>🔎 Lean Out</b> returns.
+              </li>
+              <li><b>🔄 Roll Dice</b> rolls every die you own on the table.</li>
+              <li><b>🃏 Show Hand</b> briefly reveals cards you choose to players you choose.</li>
+              <li><b>🂠 Drop Hand</b> puts your whole hand on the table, face-up or face-down.</li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Tools</h4>
+            <ul>
+              <li><b>📝 Private Notes</b> is a scratchpad only you can see.</li>
+              <li>
+                <b>💬 Chat</b> is the room's public chat. The icon marks itself when there are
+                messages you have not read.
+              </li>
+              <li><b>📊 Scoreboard</b> shows scores everyone can see.</li>
+              <li><b>⏱️ Timer</b> is a shared stopwatch and countdown.</li>
+              <li>
+                <b>🖊️ Whiteboard</b> — when a GM has it out, <b>double-click</b> (or
+                <b>double-tap</b>) the board to take control and draw. Pen, eraser and clear appear
+                while you have it; <b>Esc</b> or <b>Done</b> hands it back. While someone else is
+                drawing, the board says who — wait for them to finish.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec" id="ctrlHelper" hidden>
+            <h4>Helper abilities</h4>
+            <ul>
+              <li><b>🎲 Dice</b> spawns dice quickly.</li>
+              <li><b>📚 Library</b> adds decks and objects — built-in or custom — to the table.</li>
+              <li><b>Tools → 📊 Scoreboard</b> add, rename, adjust and clear score rows.</li>
+            </ul>
+          </div>
+          <div class="helpSec" id="ctrlGM" hidden>
+            <h4>GM abilities</h4>
+            <ul>
+              <li>
+                <b>📚 Library</b> also gives you boards, skyboxes, scenes and pre-built games.
+              </li>
+              <li>
+                <b>Tools → 📊 Scoreboard</b> add, rename, adjust and clear score rows, and edit Room
+                Notes.
+              </li>
+              <li>
+                <b>Tools → 🖊️ Whiteboard</b> show the whiteboard, set its style and place it on the
+                table live.
+              </li>
+              <li><b>Next Turn</b> moves turn order on to the next person.</li>
+            </ul>
+            <h4>Room controls</h4>
+            <ul>
+              <li>
+                <b>👥 Members</b> approve people waiting to join, promote them to helper or GM, and
+                remove them from the room.
+              </li>
+              <li><b>📽️ Load a Scene</b> loads a published scene — a ready-to-play setup.</li>
+              <li>
+                <b>💾 Save Table State</b> saves the table as it stands. The table also saves itself
+                when the last GM leaves.
+              </li>
+              <li>
+                <b>🎨 Customize Table</b> changes the size of the play area and the colour of the
+                felt, live.
+              </li>
+              <li><b>🌄 Skybox</b> browses skyboxes; <b>Apply</b> swaps the current one.</li>
+              <li>
+                <b>🧹 Reset</b> clears the table of everything, including everyone's private hands.
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="libPane helpScroll" data-pane="soon" hidden>
+          <div class="helpSec">
+            <h4>On the way</h4>
+            <ul>
+              <li>
+                <b>An interactive tutorial</b> — learn the table by using it, instead of reading
+                this panel.
+              </li>
+              <li>
+                <b>Table shapes</b> — round, oval and hex tables, not just a resizable rectangle.
+              </li>
+              <li>
+                <b>Hex grids</b> and pieces that occupy more than one cell, for maps and wargames.
+              </li>
+              <li><b>Fog of war</b> — hide parts of the board until the GM reveals them.</li>
+              <li><b>Spectator mode</b> — watch a game without taking a seat.</li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>More to make your own</h4>
+            <ul>
+              <li><b>Custom games</b> — save a whole setup as a starter anyone can spawn.</li>
+              <li><b>Custom dice</b> — your own faces, colours and textures.</li>
+              <li><b>Custom dispensers</b> — build your own, the way you build decks today.</li>
+              <li>
+                <b>More from a selection</b> — gather loose cards into a deck, stack tiles, and fill
+                a dispenser from what is already on the table.
+              </li>
+            </ul>
+          </div>
+          <div class="helpSec">
+            <h4>Something missing?</h4>
+            <ul>
+              <li>
+                Open Tabletop is built in the open. If something here is wrong, awkward, or absent,
+                say so — that is how most of this list got written.
+              </li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
 

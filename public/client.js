@@ -1559,6 +1559,18 @@ function rebuildGrid() {
           });
         }),
     );
+    // How-to-Play tabs (Mouse & Keyboard / Touch / Table & Tools / Coming Soon).
+    const helpModal = byId('controlsModal');
+    helpModal?.querySelectorAll('.libTab').forEach(
+      (t) =>
+        (t.onclick = () => {
+          helpModal.querySelectorAll('.libTab').forEach((x) => x.classList.toggle('on', x === t));
+          helpModal.querySelectorAll('.libPane').forEach((p) => {
+            p.hidden = p.dataset.pane !== t.dataset.tab;
+          });
+        }),
+    );
+
     // Full / Compact UI toggle (persisted)
     const uiModeToggle = byId('uiModeToggle');
     const syncUiMode = () => {
