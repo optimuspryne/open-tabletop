@@ -1910,6 +1910,7 @@ const DRAG_MIN = CONFIG.grab.min,
 const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
 const DRAG_ROTATE_RAD_PER_PX = 0.01,
   DRAG_ROTATE_SNAP = Math.PI / 12; // Alt-drag: ~0.57°/px, snapped to 15° unless Shift is held
+const ROT_STEP = Math.PI / 24; // ~7.5° per tick for the held ⟲ / ⟳ buttons and the A/D keys
 
 // Turn the held piece (or the whole selection) by `raw` radians. Shared by the mouse's Alt-drag
 // dial and the touch two-finger twist, so both snap identically and neither loses sub-step
@@ -2923,8 +2924,9 @@ const endGesture = (e) => {
 const heldOrHoveredId = () => (down && down.id) || pickId();
 
 // Keyboard shortcuts (ignored while typing in an input). Delete/Backspace removes
-// a piece, U toggles its upright/flat behaviour, G toggles its snap-to-grid, S saves
-// a hovered deck.
+// a piece, U toggles its upright/flat behaviour, G toggles its snap-to-grid.
+// The held rotate/raise keys (A/D/W/S and the arrows) are NOT here — they repeat while
+// held, so the keyboard profile in controls.js owns them and raises rotateAxis / raiseAxis.
 const onKeyDown = (e) => {
   if (!room) return;
   if (e.key === 'Escape' && trayView) {
@@ -2957,18 +2959,20 @@ const onKeyDown = (e) => {
     selectOverlay(null);
     return;
   }
+  const typing =
+    document.activeElement &&
+    (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
+  if (typing) return;
+
   if (inspect && inspect.drawn) {
-    // f/d/h/r place a drawn card
+    // f/d/h/r place a drawn card. This sits BELOW the typing guard: it used to sit above it, so
+    // typing "d" in chat with a peek open dealt the card face-down.
     const where = { f: 'field-up', d: 'field-down', h: 'hand', r: 'deck' }[e.key.toLowerCase()];
     if (where) {
       placeDrawn(where);
       return;
     }
   }
-  const typing =
-    document.activeElement &&
-    (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
-  if (typing) return;
 
   // Multi-select batch ops — act on the whole selection (dice/cards ops hit only the matching kind).
   if (selection.size) {
@@ -5017,7 +5021,15 @@ const INPUT = {
     setPointer({ clientX: p.x, clientY: p.y });
     sendPing();
   },
+  // Turn the selection (or the held piece) one small step. The continuous complement to the
+  // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.
+  rotateAxis: (dir) => {
+    if (!room || inspect) return; // a peek/inspect view owns the keyboard
+    const ids = selection.size ? [...selection] : down && down.grabbed ? [down.id] : [];
+    if (ids.length) room.send('rotateGroup', { ids, angle: dir * ROT_STEP });
+  },
   raiseAxis: (dir) => {
+    if (inspect) return; // ...and must not also nudge a piece behind it
     if (!(down && down.grabbed)) return;
     dragHeight = clamp(dragHeight + dir * DRAG_STEP, DRAG_MIN, DRAG_MAX); // up = raise
     // Raise the piece where it already is, rather than re-deriving XZ from the pointer. Identical
@@ -5485,13 +5497,12 @@ initTip(); // themed hover-hint (icons.js)
   document
     .querySelectorAll('.heightDown')
     .forEach((b) => holdRepeat(b, () => INPUT.raiseAxis(-1), 120));
-  const rotStep = Math.PI / 24; // ~7.5° per tick
-  const rotate = (sign) => () => {
-    const ids = selection.size ? [...selection] : down && down.grabbed ? [down.id] : [];
-    if (ids.length) room.send('rotateGroup', { ids, angle: sign * rotStep });
-  };
-  document.querySelectorAll('.rotLeft').forEach((b) => holdRepeat(b, rotate(-1), 60));
-  document.querySelectorAll('.rotRight').forEach((b) => holdRepeat(b, rotate(1), 60));
+  document
+    .querySelectorAll('.rotLeft')
+    .forEach((b) => holdRepeat(b, () => INPUT.rotateAxis(-1), 60));
+  document
+    .querySelectorAll('.rotRight')
+    .forEach((b) => holdRepeat(b, () => INPUT.rotateAxis(1), 60));
 }
 
 // Selection batch-op bar: touch-accessible equivalents of the U/G/R/F/H/Delete group keys.

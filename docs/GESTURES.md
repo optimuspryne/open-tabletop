@@ -43,6 +43,7 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 |---|---|---|---|
 | Left-hold + drag | Pick up, move, release to drop/throw | Finger drag | ✅ |
 | Wheel while holding | Raise / lower the held piece | Two-finger **pinch** while holding, or `.holdControls` ▲ / ▼ | ✅ |
+| `W` / `S` or ↑ / ↓ | Raise / lower the held piece, repeating while held | ▲ / ▼ (the same intent) | ✅ |
 | Alt + drag while holding | Rotate the held piece in 15° steps | Two-finger **twist** while holding | ✅ |
 | Alt + Shift + drag | Smooth (unsnapped) rotation | ⟲ / ⟳ hold buttons (~7.5°/tick, continuous) | ⚠️ |
 | Middle-click while holding | Rotate the held piece's facing to the next 45° step | Twist (15° steps, not 45°) | ⚠️ |
@@ -73,6 +74,12 @@ Because the piece stays put while the fingers travel, the pointer no longer land
 transform ends; the drag re-anchors instead of snapping (`public/drag.js`). That is a throw fix as
 much as a position one — the jump would otherwise land inside the throw estimator's window and
 fling the piece at the speed of the jump.
+
+**`A` / `D` / `W` / `S` and the arrow keys** are a keyboard slider over the same two intents the
+on-screen buttons drive (`rotateAxis` / `raiseAxis`), ticking at the same rates: one step on
+press, then repeating while held. They are not in client.js's command router, because that bus is
+one-shot; the keyboard profile in `controls.js` owns them and runs its own interval, since the OS
+auto-repeat's delay and rate are per-machine settings and cannot be used as a clock.
 
 ## Cards & decks
 
@@ -110,6 +117,7 @@ lands. That is the one gesture in the app with no mouse analogue — and no on-s
 | `F` / `R` / `H` on a selection | Flip cards / roll dice / take to hand | `#selFlip` / `#selRoll` / `#selTake` | ✅ |
 | `Delete` on a selection | Remove the whole group | `#selDelete` | ✅ |
 | `[` / `]` | Rotate the formation ∓45° | `.rotLeft` / `.rotRight`, hold to repeat at ~7.5°/tick | ⚠️ |
+| `A` / `D` or ← / → | Turn the selection (or held piece) ~7.5°, repeating while held | ⟲ / ⟳ (the same intent) | ✅ |
 
 The Select tool (`.selectTool`, `client.js:1355`) is the touch stand-in for the Shift modifier:
 while it is on, `selMode` forces `additive` true, so a felt drag boxes and a tap toggles.
@@ -136,13 +144,16 @@ unreachable on iOS and iPadOS.
 
 Two, in rough order of how much they cost a touch player:
 
-1. **Exact-step formation rotation.** `[` / `]` turn a selection in ∓45° steps; the ⟲ / ⟳ hold
-   buttons are continuous at ~7.5°/tick, so a finger cannot land a formation on an exact 45°.
-   The two-finger twist covers a *held* piece (and a held selection, since the held-piece path
-   routes to `[...selection]` when `down.group` is set), but a selection you are not holding is
-   still button-only.
-2. **Smooth rotation is coarser on touch.** Alt+Shift gives unsnapped rotation; the twist always
-   snaps to 15°, and the hold buttons quantise to ~7.5°. Nothing on touch is truly free.
+1. **45° in one action is still mouse-only.** `[` / `]` turn a selection ∓45° in a single press.
+   Everything else moves in ~7.5° increments — the ⟲ / ⟳ buttons and the `A`/`D` keys both fire
+   exactly one step per tap before they begin repeating, so an exact 45° *is* reachable, it just
+   takes six taps. (An earlier draft of this file called exact angles unreachable by finger. That
+   was wrong: a tap is one quantised step, and 45 is a multiple of 7.5.) The two-finger twist
+   covers a held piece and a held selection, but a selection you are not holding has no
+   single-action 45°.
+2. **Smooth rotation is coarser off the mouse.** Alt+Shift gives genuinely unsnapped rotation;
+   the twist snaps to 15°, and the buttons and keys quantise to ~7.5°. Nothing but the mouse is
+   truly free.
 
 Worth recording, because the naming invites exactly one wrong reading: **`snap` and `setSnap`
 are unrelated messages.** `snap` (`server/game/handlers/pieces.js:220`) rounds the held body's

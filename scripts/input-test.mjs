@@ -36,6 +36,7 @@ attachControls(document.getElementById('surface'), {
   command:(k) => rec.push(['command', k.key]),
   raiseAxis:(d) => rec.push(['raiseAxis', d]),
   rotateHeld:(r) => rec.push(['rotateHeld', r]),
+  rotateAxis:(d) => rec.push(['rotateAxis', d]),
   doubleClick: () => { rec.push(['doubleClick']); return true; },
   snapHeld: () => rec.push(['snapHeld']),
   ping: () => rec.push(['ping']),
@@ -67,6 +68,13 @@ Object.assign(window, {
   wheel: (dy) => dom.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: dy })),
   ctx: () => dom.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })),
   key: (k) => window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: k })),
+  keyDown: (k, repeat = false) => window.dispatchEvent(
+    new KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: k, repeat })),
+  keyUp: (k) => window.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: k })),
+  blurWin: () => window.dispatchEvent(new Event('blur')),
+  // A real focused field, so the typing guard is exercised rather than mocked.
+  focusField: () => { const i = document.createElement('input'); document.body.append(i); i.focus(); return i; },
+  blurField: () => { document.querySelectorAll('input').forEach((i) => i.remove()); },
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   // Two-finger helpers: finger 1 grabs, finger 2 is the transform partner.
   grab: (x, y) => { setHeld(true); P('pointerdown', { x, y, id: 1 }); },
@@ -317,6 +325,99 @@ const CASES = [
      reset(); moveF(2,100,200);`,
     `only('rotateHeld').length`,
     0,
+  ],
+  // ---- held rotate / raise keys ----------------------------------------------------
+  // A keyboard slider alongside the on-screen hold buttons: same intents, same tick rates.
+  [
+    'A turns left, D turns right',
+    `reset(); keyDown('a'); keyUp('a'); keyDown('d'); keyUp('d');`,
+    `JSON.stringify(only('rotateAxis'))`,
+    '[["rotateAxis",-1],["rotateAxis",1]]',
+  ],
+  [
+    'the arrow keys mirror A and D',
+    `reset(); keyDown('ArrowLeft'); keyUp('ArrowLeft'); keyDown('ArrowRight'); keyUp('ArrowRight');`,
+    `JSON.stringify(only('rotateAxis'))`,
+    '[["rotateAxis",-1],["rotateAxis",1]]',
+  ],
+  [
+    'W raises and S lowers, as do the up and down arrows',
+    `reset(); for (const k of ['w','s','ArrowUp','ArrowDown']) { keyDown(k); keyUp(k); }`,
+    `JSON.stringify(only('raiseAxis'))`,
+    '[["raiseAxis",1],["raiseAxis",-1],["raiseAxis",1],["raiseAxis",-1]]',
+  ],
+  [
+    'the first press acts immediately, without waiting a tick',
+    `reset(); keyDown('a');`,
+    `only('rotateAxis').length`,
+    1,
+  ],
+  [
+    'a held key keeps ticking',
+    `reset(); keyDown('a'); await sleep(200); keyUp('a');`,
+    `only('rotateAxis').length >= 3`,
+    true,
+  ],
+  [
+    'releasing stops the ticking',
+    `reset(); keyDown('a'); keyUp('a'); const n = only('rotateAxis').length; await sleep(200);`,
+    `only('rotateAxis').length === n`,
+    true,
+  ],
+  [
+    // The OS auto-repeat rate is a per-machine setting, so it cannot be the tick. We run our own
+    // interval; if a repeat started a second one the piece would spin at double speed.
+    'the OS auto-repeat does not start a second timer',
+    `reset(); keyDown('a'); keyDown('a', true); keyDown('a', true); await sleep(200); keyUp('a');
+     const ours = only('rotateAxis').length;
+     reset(); keyDown('a'); await sleep(200); keyUp('a');`,
+    `Math.abs(ours - only('rotateAxis').length) <= 1`,
+    true,
+  ],
+  [
+    'two axes can be held at once',
+    `reset(); keyDown('a'); keyDown('w'); await sleep(200); keyUp('a'); keyUp('w');`,
+    `JSON.stringify([only('rotateAxis').length > 1, only('raiseAxis').length > 1])`,
+    '[true,true]',
+  ],
+  [
+    'losing window focus stops a held key',
+    `reset(); keyDown('a'); blurWin(); const n = only('rotateAxis').length; await sleep(200);`,
+    `only('rotateAxis').length === n`,
+    true,
+  ],
+  [
+    'typing in a field does not steer the table',
+    `reset(); focusField(); keyDown('a'); keyDown('w'); await sleep(120); keyUp('a'); keyUp('w'); blurField();`,
+    `only('rotateAxis','raiseAxis').length`,
+    0,
+  ],
+  [
+    'an axis key is not also a command',
+    `reset(); keyDown('a'); keyUp('a');`,
+    `only('command').length`,
+    0,
+  ],
+  [
+    // The auto-repeat sends keydown after keydown while the key is down. Each one has to be
+    // dropped, not just declined as a tick: routing them on would spam the command router for
+    // as long as the key is held.
+    'an OS auto-repeat is not a command either',
+    `reset(); keyDown('a'); keyDown('a', true); keyDown('a', true); keyUp('a');`,
+    `only('command').length`,
+    0,
+  ],
+  [
+    'a non-axis key is still a command',
+    `reset(); keyDown('u'); keyUp('u');`,
+    `JSON.stringify(only('command'))`,
+    '[["command","u"]]',
+  ],
+  [
+    'a typed non-axis key still reaches the command router, which guards itself',
+    `reset(); focusField(); keyDown('u'); keyUp('u'); blurField();`,
+    `only('command').length`,
+    1,
   ],
   [
     'a two-finger transform never arms the long-press menu',

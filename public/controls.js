@@ -13,6 +13,7 @@
 //                              rotate / fineRotate describe the desktop Alt-drag gesture.
 //   command(key)               a keyboard command: Esc-exits, batch ops, per-piece verbs, ping.
 //   raiseAxis(dir)             raise (+1) / lower (-1) the held piece one step.
+//   rotateAxis(dir)            turn the selection (or held piece) one small step, either way.
 //   rotateHeld(radians)        turn the held piece by a raw angle (the profile does not snap).
 //   doubleClick(pt) -> bool    double-activation on the board (whiteboard claim); true if consumed.
 //   snapHeld() / ping(pt)      middle-click's two jobs (snap the held piece / ping the table).
@@ -69,6 +70,26 @@ const LONG_PRESS_SLOP = 6; // px of finger drift before the hold becomes a drag;
 // open-hand pinch across an iPad.
 const PINCH_PX_PER_STEP = 28;
 const TWIST_MIN_SPREAD = 24; // fingers closer than this give a noisy angle — ignore the twist
+
+// Held rotate/raise keys: a keyboard slider alongside the ⟲ / ⟳ and ▲ / ▼ buttons, ticking at the
+// same rates those do, so all three paths feel the same and nothing new reaches the server. Held
+// rather than tapped, so these cannot go through the one-shot `command` bus.
+const AXIS_KEYS = {
+  a: ['rotateAxis', -1, 60],
+  arrowleft: ['rotateAxis', -1, 60],
+  d: ['rotateAxis', 1, 60],
+  arrowright: ['rotateAxis', 1, 60],
+  w: ['raiseAxis', 1, 120],
+  arrowup: ['raiseAxis', 1, 120],
+  s: ['raiseAxis', -1, 120],
+  arrowdown: ['raiseAxis', -1, 120],
+};
+// Keystrokes belong to a focused field, not the table. client.js's command router makes the same
+// check for its own shortcuts; this path never reaches it, so it has to ask too.
+const typingInAField = () => {
+  const el = document.activeElement;
+  return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+};
 
 // The reference profile: mouse + wheel. Reproduces the pre-seam bindings exactly.
 // (Touch and gamepad become sibling profiles that raise the same intents.)
@@ -245,5 +266,38 @@ export function attachControls(dom, intents) {
 
   // keydown → command (keyboard profile). client.js's handler is the command router;
   // touch / gamepad profiles will raise the same commands from menu items / buttons.
-  window.addEventListener('keydown', (e) => intents.command(logicalKey(e)));
+  window.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase(),
+      axis = AXIS_KEYS[key];
+    if (axis) {
+      // An axis key is never also a command, whatever else is true of it — the OS auto-repeat
+      // sends a stream of keydowns while one is held, and every one of them would otherwise
+      // reach the command router.
+      if (typingInAField()) return; // ...and preventDefault here would eat the character
+      e.preventDefault(); // arrows would otherwise scroll whatever pane has focus
+      // The auto-repeat is not usable as a tick either: its delay and rate are per-machine
+      // settings. We run our own interval, so a repeat for a key already held is simply dropped.
+      if (axisTimers.has(key)) return;
+      const [name, dir, ms] = axis;
+      intents[name](dir);
+      axisTimers.set(
+        key,
+        setInterval(() => intents[name](dir), ms),
+      );
+      return;
+    }
+    intents.command(logicalKey(e));
+  });
+  window.addEventListener('keyup', (e) => stopAxis(e.key.toLowerCase()));
+  // A key held while the window loses focus never sees its keyup, and the interval would run
+  // forever. Losing focus stops every axis.
+  addEventListener('blur', () => [...axisTimers.keys()].forEach(stopAxis));
 }
+
+const axisTimers = new Map(); // key → interval id, one per physically held key
+const stopAxis = (key) => {
+  const iv = axisTimers.get(key);
+  if (iv === undefined) return;
+  clearInterval(iv);
+  axisTimers.delete(key);
+};
