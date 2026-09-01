@@ -327,6 +327,29 @@ function toast(text, icon = 'check', action = null) {
   ); // an undoable action gets longer to be undone
 }
 
+// Last-resort visibility for uncaught client errors: always log, and (throttled) surface the
+// message on screen — otherwise a crash mid-init just leaves a half-loaded page with no clue. The
+// render context going away is handled separately (WebGL context-loss listener in core.js).
+let _lastErrToast = 0;
+function surfaceError(what, detail) {
+  console.error('[client]', what, detail);
+  const now = Date.now();
+  if (now - _lastErrToast < 4000) return; // don't storm on a repeating error
+  _lastErrToast = now;
+  try {
+    toast('Error: ' + String(detail || what).slice(0, 140), 'x');
+  } catch {
+    /* toast not ready this early — the console line still landed */
+  }
+}
+addEventListener('error', (e) => {
+  if (!e || (!e.message && !e.error)) return; // ignore resource (img/script) load errors
+  surfaceError('error', e.message || (e.error && e.error.message) || e.error);
+});
+addEventListener('unhandledrejection', (e) =>
+  surfaceError('unhandledrejection', (e && e.reason && (e.reason.message || e.reason)) || e),
+);
+
 // ===== Networking ===========================================================
 const { Client, getStateCallbacks } = Colyseus;
 const meshes = new Map(); // id -> { mesh, type }

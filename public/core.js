@@ -119,6 +119,26 @@ renderer.shadowMap.type = SHADOW_TYPES[_q0.shadowType];
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true; // draw it once at startup
 document.getElementById('app').appendChild(renderer.domElement);
+// WebGL can drop the GPU context — Android under memory pressure, a driver reset, a backgrounded
+// tab. Without preventDefault the browser never restores it and the canvas stays black forever
+// (renders fine for a moment, then goes black). With it, three re-uploads its resources on the next
+// render, so we refresh the (autoUpdate-off) shadow map and let the rAF loop pick back up.
+renderer.domElement.addEventListener(
+  'webglcontextlost',
+  (e) => {
+    e.preventDefault();
+    console.warn('[gl] WebGL context lost — awaiting restore');
+  },
+  false,
+);
+renderer.domElement.addEventListener(
+  'webglcontextrestored',
+  () => {
+    console.warn('[gl] WebGL context restored');
+    renderer.shadowMap.needsUpdate = true;
+  },
+  false,
+);
 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
