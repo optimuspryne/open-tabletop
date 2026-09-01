@@ -713,7 +713,7 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
   `needsUpdate` only on frames where a caster's transform changed, so a static table (even while
   the camera orbits) doesn't repay the 4096² soft-shadow pass every frame.
 - **Graphics quality tiers** (docs/ROADMAP.md §1/§12): the tablet frame is fill-rate bound, so
-  quality is three presets — `low` (px 1, hard PCF @1024, no AA), `medium` (px ≤1.5, PCF @2048,
+  quality is three presets — `low` (px 1, hard PCF @1024, no AA, no skybox), `medium` (px ≤1.5, PCF @2048,
   AA), `high` (px ≤2, soft PCF @4096, AA). Active tier = `?q=` › `localStorage 'tabletop.quality'`
   › device default (coarse pointer → `medium`, else `high`). `setQuality(tier)` applies pixel
   ratio + shadows live and persists; AA re-applies on reload. The UI control is Settings → UI →

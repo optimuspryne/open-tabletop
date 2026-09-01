@@ -2125,18 +2125,27 @@ window.OTT_BUILTIN_SKIES = BUILTIN_SKIES; // the built-in library reads these (e
 
 const skyDefault = scene.background; // the flat color it ships with
 let skyLast = null; // last applied skybox ref (guards against a stale async load)
+let skyTex = null; // the current background texture, so we can dispose it when it changes
+// Swap the background texture, disposing the one it replaces (null → the flat default color).
+function setSkyTexture(tex) {
+  if (skyTex && skyTex !== tex) skyTex.dispose();
+  skyTex = tex || null;
+  scene.background = tex || skyDefault;
+}
 // A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
 function applySkybox(ref) {
+  if (getQuality() === 'low') ref = ''; // Low tier: skip the ~11 MB equirect (re-applies on reload)
   if (!ref) {
-    scene.background = skyDefault;
+    setSkyTexture(null);
     return;
   }
   const aniso = renderer.capabilities.getMaxAnisotropy(); // sharpen grazing angles (esp. the horizon)
   const set = (tex) => {
-    if (skyLast === ref) scene.background = tex;
-  }; // ignore a stale load if it changed
+    if (skyLast === ref) setSkyTexture(tex);
+    else tex.dispose(); // a newer ref won the race — don't leak the texture we just loaded
+  };
   const fail = () => {
-    if (skyLast === ref) scene.background = skyDefault;
+    if (skyLast === ref) setSkyTexture(null);
   };
   if (ref[0] === '{') {
     // cubemap

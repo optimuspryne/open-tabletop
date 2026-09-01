@@ -1406,7 +1406,7 @@ export function procBoardTexURL(key) {
   const tex = painter(b.paint || {});
   const url =
     tex && tex.image && tex.image.toDataURL ? tex.image.toDataURL('image/jpeg', 0.85) : null;
-  if (url) _prevCache.set(ck, url);
+  if (url) rememberPreview(ck, url);
   return url;
 }
 
@@ -1858,16 +1858,31 @@ function snapshot(obj) {
 }
 
 const _prevCache = new Map();
+const PREV_CACHE_CAP = 160; // preview data-URLs (JS strings, ~10-20KB each) — FIFO-evict oldest
+function rememberPreview(key, url) {
+  if (_prevCache.size >= PREV_CACHE_CAP) {
+    const oldest = _prevCache.keys().next().value;
+    if (oldest !== undefined) _prevCache.delete(oldest);
+  }
+  _prevCache.set(key, url);
+}
 // A card ref → preview image URL. Image refs pass straight through; procedural refs
 // (back / rank: / text: / tback:) are drawn to a canvas and returned as a data-URL.
 export function cardPreviewURL(ref) {
   const r = ref || 'back';
   if (r.startsWith('/') || r.startsWith('http') || r.startsWith('data:')) return r;
   if (_prevCache.has(r)) return _prevCache.get(r);
+  const wasCached = _texCache.has(r); // already resident for a placed piece?
   const tex = resolveTexture(r);
   const url =
     tex && tex.image && tex.image.toDataURL ? tex.image.toDataURL('image/jpeg', 0.85) : null;
-  if (url) _prevCache.set(r, url);
+  if (!wasCached && tex) {
+    // Built only to snapshot — don't leave a GPU texture behind. A later placement rebuilds on
+    // demand; if a piece was already using it, wasCached is true and we leave it alone.
+    _texCache.delete(r);
+    tex.dispose();
+  }
+  if (url) rememberPreview(r, url);
   return url;
 }
 // A prop (a .glb in the library, or a built-in shape) → a rendered thumbnail data-URL.
@@ -1886,7 +1901,7 @@ export async function propPreviewURL(props = {}) {
   } catch (e) {
     /* leave null → the card shows a placeholder */
   }
-  if (url) _prevCache.set(key, url);
+  if (url) rememberPreview(key, url);
   return url;
 }
 // A board preview: an image URL passes through; a .glb is rendered; else null.
@@ -1904,7 +1919,7 @@ export async function boardPreviewURL(fileUrl) {
       /* null */
     }
   } else url = fileUrl; // an image URL (jpg/png/webp…)
-  if (url) _prevCache.set(key, url);
+  if (url) rememberPreview(key, url);
   return url;
 }
 
@@ -1918,7 +1933,7 @@ export function diePreviewURL(sides) {
   } catch (e) {
     /* null → placeholder */
   }
-  if (url) _prevCache.set(key, url);
+  if (url) rememberPreview(key, url);
   return url;
 }
 

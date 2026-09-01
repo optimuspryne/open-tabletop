@@ -107,8 +107,11 @@ renders as one stacked mesh, and the many-bodies case is bounded at that cap.
 - *Memory:* opening the library used to evict/reload the Safari tab (texture pressure). **✅
   addressed 2026-09-01:** library thumbnails now load lazily (IntersectionObserver — visible
   cards only, was: every model eagerly) and dispose the loaded model right after snapshotting
-  (was: never freed). Remaining memory levers: skybox resolution (§11), and the ever-growing
-  `_texCache` / `_prevCache` (no eviction) over very long browsing sessions.
+  (was: never freed). **✅ both remaining memory levers addressed 2026-09-01:** `_prevCache` now
+  FIFO-caps and `cardPreviewURL` disposes any face texture it built only for a preview; the
+  skybox (~11 MB equirect) disposes its predecessor on switch and is suppressed entirely on the
+  Low tier. (Deferred: refcount-based eviction of a *placed* piece's face texture when its last
+  user is removed — bounded within a game, so left for later.)
 - *So §12's levers are the right ones, ranked:* shadow-map size / soft-shadow quality (likely the
   biggest), render scale (pixel ratio), antialiasing — NOT instancing/LOD (draws aren't the
   limit). Skybox resolution (§11) is a memory lever, not an fps one; a low tier should also shrink
@@ -225,7 +228,8 @@ scoped against the real tree rather than from memory.
    2. **Merge two decks** — the inverse of the existing split.
    3. Gather dispenser-type objects into a **single dispenser**.
 11. **More Room Customization.**  Ability to adjust lighting (angles, intensity, color).  
-    Ability to adjust skybox resolution.
+    Ability to adjust skybox resolution. (Partial: the skybox is now disposed on switch and
+    dropped on the Low graphics tier — see §1/§12. A true per-skybox resolution control is still open.)
 12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
     pixel ratio + shadow size/type + AA), device-defaulted (coarse pointer → medium) with an
     in-app control (Settings → UI → Graphics), a persisted per-device preference, and `?q=` /
