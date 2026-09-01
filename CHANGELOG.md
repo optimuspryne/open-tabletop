@@ -54,7 +54,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   close staying on-screen. The two switches are on independent axes (viewport width and pointer
   type), so a regression that collapses them passes every phone and breaks every tablet; the
   matrix puts each in both states. Documented in `docs/DEVICE_MATRIX.md`; kept out of
-  `npm run check`, like the input and component suites, since it needs a browser.
+  `npm run check`, like the input and component suites, since it needs a browser. A companion
+  manual checklist, `docs/DEVICE_QA.md`, runs the on-device pass for the *feel* of each gesture
+  that automation can't judge.
 
 ### Changed
 - **A finger-held piece starts 15% higher.** A finger sits *on* the piece it is holding where a
