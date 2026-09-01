@@ -41,6 +41,26 @@ const STUB_ROOM = `new Proxy({}, {
     : () => undefined,
 })`;
 
+// Becoming an admin with custom assets. Two things kept this whole surface unrendered until now:
+// table.html ships `<body class="ui-full not-admin">` and it is client.js — stubbed here — that
+// clears the class, so every .admin-only element was invisible in every scene; and the stub room
+// serves no custom assets, so the Edit button and the "..." overflow (which only exist on a
+// custom asset an admin owns) never rendered at all. That is the exact blind spot that let a
+// dead "..." button ship.
+const CUSTOM_ASSETS = {
+  deck: [{ id: 'd1', name: 'Standard 54 - Pixel Red', isPublic: false, count: 54 }],
+  board: [{ id: 'b1', name: 'Hex Field', isPublic: true }],
+  prop: [{ id: 'p1', name: 'Dragon Mini', isPublic: false }],
+  sky: [{ id: 'k1', name: 'Dusk Panorama', isPublic: true }],
+  scene: [{ id: 'n1', name: 'Act II Setup', isPublic: false }],
+};
+const BE_ADMIN = `
+  window.OTT_IS_ADMIN = true;
+  document.body.classList.remove('not-admin', 'not-gm');`;
+const WITH_ASSETS = `
+  for (const [kind, list] of Object.entries(${JSON.stringify(CUSTOM_ASSETS)}))
+    window.onLibraryList(kind, list);`;
+
 // A gallery of the extracted row builders, rendered from fixtures. This is the point of
 // pulling them out of client.js: every state a row can be in — pending member, GM seen by
 // an owner, your own message, a message with no timestamp — is one object here, where
@@ -127,14 +147,11 @@ const SCENES = [
     // assertion is the thing that regressed either way: the trigger opens SOMETHING.
     expect: { selector: '.overflowMenu:not([hidden]), .sheet-backdrop', min: 1 },
     drive: `
-      window.OTT_IS_ADMIN = true;
-      document.body.classList.remove('not-admin');
+      ${BE_ADMIN}
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
       document.querySelector('.libTab[data-tab="decks"]').click();
-      window.onLibraryList('deck', [
-        { id: 'd1', name: 'Standard 54 - Pixel Red', isPublic: false, count: 54 },
-      ]);
+      ${WITH_ASSETS}
       (await import('/icons.js')).applyIcons();
       await new Promise((r) => setTimeout(r, 60));
       document.querySelector('.overflowTrigger').click();
@@ -149,19 +166,44 @@ const SCENES = [
     root: '#libraryModal',
     expect: { selector: '.pop-group > .overflowMenu', min: 1 },
     drive: `
-      window.OTT_IS_ADMIN = true;
-      document.body.classList.remove('not-admin');
+      ${BE_ADMIN}
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
       document.querySelector('.libTab[data-tab="decks"]').click();
-      window.onLibraryList('deck', [
-        { id: 'd1', name: 'Standard 54 - Pixel Red', isPublic: false, count: 54 },
-      ]);
+      ${WITH_ASSETS}
       (await import('/icons.js')).applyIcons();
       await new Promise((r) => setTimeout(r, 60));
       document.querySelector('.overflowTrigger').click();
       await new Promise((r) => setTimeout(r, 60));
       document.getElementById('libraryModal').click();   // dismiss by clicking outside the menu
+      await new Promise((r) => setTimeout(r, 60));`,
+  },
+  {
+    // The player's view of the library is the default one (body ships with .not-admin), so this
+    // is the admin half: a custom asset in every kind, each carrying Edit and the "..." overflow.
+    // Five kinds means a regression in any one of them shows up as a count, not just a diff.
+    name: 'library-admin',
+    root: '#libraryModal',
+    expect: { selector: '.overflowTrigger', min: 5 },
+    drive: `
+      ${BE_ADMIN}
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('lib2Btn').click();
+      ${WITH_ASSETS}
+      (await import('/icons.js')).applyIcons();
+      await new Promise((r) => setTimeout(r, 60));`,
+  },
+  {
+    // Role-gated table chrome. .gm-only happens to render by default (nothing sets .not-gm until
+    // client.js learns your rank), but .admin-only never did, so its markup went unsnapshotted
+    // entirely — a change to it could not be seen by this suite at all.
+    name: 'table-roles',
+    root: 'body',
+    expect: { selector: '.admin-only, .gm-only', min: 7 },
+    drive: `
+      ${BE_ADMIN}
+      window.onOttRoom(${STUB_ROOM});
+      (await import('/icons.js')).applyIcons();
       await new Promise((r) => setTimeout(r, 60));`,
   },
   {
@@ -200,14 +242,24 @@ for (const vp of VIEWPORTS)
       touch: vp.touch,
       settle: scene.settle ?? 900, // module graph + Three + the first render
     });
-    await page.evaluate(`(async () => { ${scene.drive} })()`);
+    // A drive that throws is a scene failure, not a suite crash. Before this, a missing element
+    // in one scene's setup aborted the whole run with a stack trace, so the scenes after it never
+    // reported at all — and the failure read as a broken harness rather than a broken component.
+    let drove = true;
+    try {
+      await page.evaluate(`(async () => { ${scene.drive} })()`);
+    } catch (err) {
+      console.error(`  FAIL  ${scene.name} @${vp.name}: drive threw — ${err.message}`);
+      bad++;
+      drove = false;
+    }
     await new Promise((r) => setTimeout(r, 500));
 
     // A harness that reports green on an empty page is worse than no harness.
     const found = await page.evaluate(
       `document.querySelectorAll(${JSON.stringify(scene.expect.selector)}).length`,
     );
-    if (found < scene.expect.min) {
+    if (drove && found < scene.expect.min) {
       console.error(
         `  FAIL  ${scene.name} @${vp.name}: ${found} ${scene.expect.selector} rendered, ` +
           `expected at least ${scene.expect.min} — fixture broken`,
