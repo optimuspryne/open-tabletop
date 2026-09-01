@@ -66,35 +66,14 @@ snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 
 ## The distribution push (priority order — reorder freely)
 
-### 1. Meet people where they play — touch & mobile
-The single biggest audience expansion. "Pull up the iPad at game night" is a core VTT use case.
-**The 0.12.0 redesign delivered the bulk of this** — a purpose-built phone/tablet layout (bottom
-sheets with peek/two-thirds/full drag stops, the ⊕ action fan, long-press-piece verbs, a pull-up
-hand tray, icon hints on touch) on top of the existing message protocol (no server change). What
-remains is closing the known gesture gaps and proving it on real devices — not building the interface.
-- **Audit the gesture surface.** ✅ Done — the catalog is `docs/GESTURES.md`: every gesture, its
-  touch equivalent, and a status. Marquee/Shift-select, group drag, the tray camera hop,
-  scroll-to-raise, right-drag-to-move and left-click-a-deck-to-draw each assume a mouse with
-  buttons and a wheel; all but the rotation gestures now have a touch path. Three gaps remain
-  open there — rotating a held piece (middle-click 45°, Alt+drag 15°, Alt+Shift smooth: none
-  reachable by finger), exact-step formation rotation, and single-tap card verbs — plus the fact
-  that the in-app "How to Play" mentions touch zero times.
-- **Touch equivalents.** ✅ Done - Long-press, two-finger, and on-screen affordances for the button/wheel
-  gestures; make the Select tool the primary path where modifiers don't exist.
-- **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and
-  the collapse behavior.
-- **A device test matrix** ✅ Done - so "works on my machine" stops being the coverage.
+### 1. Plays well at real scale — robustness
+The difference between "demo" and "we play here every week."
+- Performance with **hundreds of pieces** on the table (a 144-tile mahjong wall + 4 racks is now a
+  realistic load to profile).
+- **Scene-save size** behavior (big saves, the cap, graceful failure).
+- **Reconnection edges** and connection-quality feedback so a dropped phone rejoins cleanly.
 
-### 2. A host can stand it up in ten minutes
-If the goal is other people hosting, the setup path *is* the product.
-- **Quickstart polish.** ✅ Done -  A copy-paste `docker compose up` that just works with sane defaults;
-  a short "first room" walkthrough; clearer env-var docs.
-- **Release automation.** ✅ Done — `.github/workflows/release.yml` builds + pushes the multi-arch
-  images and cuts the GitHub release on a `v*` tag (notes pulled from `CHANGELOG.md`), and
-  `ci.yml` runs the test suite on every push/PR. Proven across the 0.10.0–0.12.2 releases.
-- **A public demo / try-it instance** (optional) so a prospective host can feel it before hosting.
-
-### 3. A fresh room isn't a blank table — built-in content
+### 2. A fresh room isn't a blank table — built-in content
 Lowers the cold-start for a host who isn't going to model their own assets.
 - ✅ **Standard 52 + jokers** deck (a "Standard 54 (with Jokers)" option with a rendered joker face).
 - ✅ **One-click starter games** — Chess, Checkers, Go, Poker night, and (0.9.0) **Dominoes**,
@@ -113,19 +92,39 @@ Lowers the cold-start for a host who isn't going to model their own assets.
   bentwood box exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
   starter games and tile art.
 
-### 4. Plays well at real scale — robustness
-The difference between "demo" and "we play here every week."
-- Performance with **hundreds of pieces** on the table (a 144-tile mahjong wall + 4 racks is now a
-  realistic load to profile).
-- **Scene-save size** behavior (big saves, the cap, graceful failure).
-- **Reconnection edges** and connection-quality feedback so a dropped phone rejoins cleanly.
-
-### 5. Session tools that stay physical
+### 3. Session tools that stay physical
 Useful for real play *if* they don't drift into app-ledger territory.
 - **Initiative / turn order** (turn passing already exists — this is the ordered-list version).
 - A **GM staging area / screen** — a hidden zone only the GM sees, for prepping the next encounter.
   The design challenge is doing this within the "public state" model without a second hidden sim.
 
+### 4. A host can stand it up in ten minutes
+If the goal is other people hosting, the setup path *is* the product.
+- **Quickstart polish.** ✅ Done -  A copy-paste `docker compose up` that just works with sane defaults;
+  a short "first room" walkthrough; clearer env-var docs.
+- **Release automation.** ✅ Done — `.github/workflows/release.yml` builds + pushes the multi-arch
+  images and cuts the GitHub release on a `v*` tag (notes pulled from `CHANGELOG.md`), and
+  `ci.yml` runs the test suite on every push/PR. Proven across the 0.10.0–0.12.2 releases.
+- **A public demo / try-it instance** (optional) so a prospective host can feel it before hosting.
+
+### 5. Meet people where they play — touch & mobile
+The single biggest audience expansion. "Pull up the iPad at game night" is a core VTT use case.
+**The 0.12.0 redesign delivered the bulk of this** — a purpose-built phone/tablet layout (bottom
+sheets with peek/two-thirds/full drag stops, the ⊕ action fan, long-press-piece verbs, a pull-up
+hand tray, icon hints on touch) on top of the existing message protocol (no server change). What
+remains is closing the known gesture gaps and proving it on real devices — not building the interface.
+- **Audit the gesture surface.** ✅ Done — the catalog is `docs/GESTURES.md`: every gesture, its
+  touch equivalent, and a status. Marquee/Shift-select, group drag, the tray camera hop,
+  scroll-to-raise, right-drag-to-move and left-click-a-deck-to-draw each assume a mouse with
+  buttons and a wheel; all but the rotation gestures now have a touch path. Three gaps remain
+  open there — rotating a held piece (middle-click 45°, Alt+drag 15°, Alt+Shift smooth: none
+  reachable by finger), exact-step formation rotation, and single-tap card verbs — plus the fact
+  that the in-app "How to Play" mentions touch zero times.
+- **Touch equivalents.** ✅ Done - Long-press, two-finger, and on-screen affordances for the button/wheel
+  gestures; make the Select tool the primary path where modifiers don't exist.
+- **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and
+  the collapse behavior.
+- **A device test matrix** ✅ Done - so "works on my machine" stops being the coverage.
 ---
 
 ## Feature backlog (added 2026-08-31)
@@ -170,6 +169,9 @@ scoped against the real tree rather than from memory.
    1. Combine loose like cards into a **new deck** (discard pile → deck).
    2. **Merge two decks** — the inverse of the existing split.
    3. Gather dispenser-type objects into a **single dispenser**.
+11. **More Room Customization.**  Ability to adjust lighting (angles, intensity, color).  
+    Ability to adjust skybox resolution.
+12. **Graphics/Video Settings.** Ability to crank up or lower graphics quality.
 
    All three are "selection → new composite piece" on the server; the natural home is
    `server/game/handlers/cards.js` (deck ops) and `pieces.js` (generic composition), with
