@@ -68,10 +68,33 @@ snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 
 ### 1. Plays well at real scale — robustness
 The difference between "demo" and "we play here every week."
-- Performance with **hundreds of pieces** on the table (a 144-tile mahjong wall + 4 racks is now a
-  realistic load to profile).
+- Performance with **hundreds of pieces** on the table. The body count is lower than it looks —
+  a deck is one body, not N (see the piece-model note below) — so reaching true hundreds means
+  raising `SIM.maxPieces` first, then profiling.
 - **Scene-save size** behavior (big saves, the cap, graceful failure).
 - **Reconnection edges** and connection-quality feedback so a dropped phone rejoins cleanly.
+
+**Instrumentation (2026-09-01).** Both halves are now measurable, off by default. Client:
+`?perf=1` on the table URL (or `window.ottPerf(true)`) draws a `renderer.info` overlay — FPS,
+frame ms, draw calls, triangles, geometry/texture/program counts (`public/perf.js`). Server:
+`PERF_LOG=1` makes `TableRoom.update` log a per-second `world.step` time (avg/max), awake-vs-total
+body count, and tick health. Real-hardware tools — measure on the low-end target, not headless.
+
+**Piece-model note — what "hundreds of pieces" means here.** A deck is a single body with a
+private `deckCards` list, not N bodies; the 144-tile Mahjong wall spawns as one deck piece, and
+dealt tiles live in `this.hands` (also not physics). Only tiles spread onto the table are bodies,
+and `SIM.maxPieces` (80) caps `state.pieces.size`. So a full wall renders as one stacked mesh, and
+the many-bodies case is normally bounded at 80.
+
+**Two cap bugs to fix if the limit stays** (found 2026-09-01):
+1. `dealToTable` / `dealDrag` (`server/game/handlers/cards.js`) spawn a table body per draw with
+   **no `maxPieces` guard** — deal-to-hand, split, `handToTable`, starters and scene-restore all
+   check it; these two don't. That is how all 144 wall tiles can be drawn onto the table past the
+   80 cap. Add the same `state.pieces.size >= maxPieces` check before the spawn.
+2. Every cap check is a silent `break`/`return` — overflow is dropped with no feedback
+   (`handToTable` stops mid-spread; the rest stay in hand). Surface a "table full" signal. And
+   decide whether 80 is the right number at all: a real Mahjong game's discards + exposed melds
+   can cross it mid-game.
 
 ### 2. A fresh room isn't a blank table — built-in content
 Lowers the cold-start for a host who isn't going to model their own assets.
