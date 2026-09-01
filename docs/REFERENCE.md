@@ -413,7 +413,7 @@ Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
 see in-play asset references.
 
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
-out-of-bounds net → write), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
+out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
@@ -890,6 +890,28 @@ between the bracketing snapshots), parks the drop-marker ring under a held piece
 at the current board's surface height, keeps each held-piece **name tag**
 (`heldLabels`) hovering over its mesh, and expands + fades + disposes active
 **pings**. One uniform path for held, thrown, and resting pieces.
+
+With `?perf=1` on the table URL (or `window.ottPerf(true)` at runtime), `public/perf.js`
+draws a small dev overlay sampled from `renderer.info` after each `renderer.render` — FPS, frame
+ms (avg/max), draw calls, triangles, geometry/texture/program counts, JS heap. It is the client
+half of profiling "plays well at real scale" (ROADMAP §1); off by default and a no-op when off.
+
+---
+
+## `public/perf.js` — dev render overlay
+
+A zero-dependency, dev-only overlay for the client half of ROADMAP §1 (does the frame stay
+smooth at real scale, and where does it go). Off unless `?perf=1` is on the table URL — the form
+that works on a phone/tablet with no keyboard — or `window.ottPerf(true)` is called at runtime.
+
+`initPerf()` (called once in `client.js`) returns `{ frame(renderer), setEnabled(on) }`. The
+render loop calls `frame(renderer)` right after `renderer.render`, where three.js's per-frame
+`renderer.info.render` counters are still live. When enabled it flushes ~2×/sec: FPS, frame ms
+(avg + max), draw calls, triangles, geometry/texture/program counts, and — Chrome only —
+`performance.memory` heap. Draw calls and triangles scale with piece count; geometry/texture
+counts with the asset set — the exact levers the graphics-quality tiers (backlog §12) would turn
+down, and the signal a future per-device auto-tier default would read. Not in any automated
+suite: real numbers need a real GPU, not headless SwiftShader.
 
 ---
 

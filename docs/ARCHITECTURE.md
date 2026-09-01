@@ -194,6 +194,19 @@ guarantees two real samples to interpolate _between_, so fast pieces glide
 instead of teleporting packet-to-packet. One uniform path for held/thrown/resting
 pieces — no prediction seams.
 
+### Measuring it
+
+Both halves of the heartbeat are instrumented for the "plays well at real scale" work
+(ROADMAP §1), and the split above is why the measurement is split too. Because resting bodies
+sleep and cost no bandwidth, a table of hundreds of *settled* pieces is nearly free on the
+server step and the network — the cost lives in two different places. **Client render** cost is
+paid every frame for whatever is drawn, moving or not (draw calls, triangles, shadows, skybox);
+`public/perf.js` reads it off `renderer.info` behind `?perf=1`. **Server step + network** cost
+spikes only when many bodies are *awake at once* — a scoop, a shuffle, a dump; `PERF_LOG=1` logs
+the per-tick `world.step` time and the awake-body count that drives it. So the render lever
+(graphics-quality tiers) and the simulation lever are aimed at genuinely different bottlenecks,
+and each is profiled on real hardware, not in the headless suites.
+
 ## One action end to end: grab & throw
 
 1. Press + move past a small threshold → client distinguishes _drag_ from

@@ -10,6 +10,7 @@ import { createServer } from 'http';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { performance } from 'node:perf_hooks';
 import { Server, Room, ServerError, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
@@ -117,6 +118,9 @@ const SIM = {
   },
   maxPieces: 80,
 };
+
+// Dev profiling toggle: PERF_LOG=1 logs a per-second physics/tick summary (docs/ROADMAP.md §1).
+const PERF_LOG = process.env.PERF_LOG === '1';
 
 // --- Saved-asset library -----------------------------------------------------
 // A shared, on-disk library of decks / boards / props that survives restarts
@@ -1748,6 +1752,34 @@ class TableRoom extends Room {
   }
 
   // Copy a physics body's position + orientation into its synced Piece record.
+  // --- Dev profiling (docs/ROADMAP.md §1) ------------------------------------
+  // Gated behind PERF_LOG=1. Fed the just-measured world.step duration and the real
+  // inter-tick delta each tick; logs a rolling ~1s summary. The awake count is the
+  // server-side "real scale" signal: settled bodies sleep (and cost no bandwidth, see the
+  // writeTransform loop in update), so step + net cost spike with how many are awake at once.
+  _perfTick(stepMs, dtMs) {
+    if (!this._perf)
+      this._perf = { n: 0, stepSum: 0, stepMax: 0, dtSum: 0, awakeMax: 0, t: performance.now() };
+    const p = this._perf;
+    let awake = 0;
+    this.bodies.forEach((b) => {
+      if (b.sleepState !== CANNON.Body.SLEEPING) awake++;
+    });
+    p.n++;
+    p.stepSum += stepMs;
+    if (stepMs > p.stepMax) p.stepMax = stepMs;
+    p.dtSum += dtMs;
+    if (awake > p.awakeMax) p.awakeMax = awake;
+    const now = performance.now();
+    if (now - p.t < 1000) return; // one summary line per second
+    console.log(
+      `[perf ${this.roomId}] step ${(p.stepSum / p.n).toFixed(2)}ms avg / ${p.stepMax.toFixed(2)}ms max · ` +
+        `awake ${p.awakeMax}/${this.bodies.size} bodies · tick ${(p.dtSum / p.n).toFixed(1)}ms (target 16.7) · ` +
+        `${p.n} ticks/s`,
+    );
+    this._perf = { n: 0, stepSum: 0, stepMax: 0, dtSum: 0, awakeMax: 0, t: now };
+  }
+
   writeTransform(piece, body) {
     piece.x = body.position.x;
     piece.y = body.position.y;
@@ -1916,7 +1948,10 @@ class TableRoom extends Room {
       }
     }
 
+    let __perfT0 = 0;
+    if (PERF_LOG) __perfT0 = performance.now();
     this.world.step(SIM.step.fixed, dt, SIM.step.maxSub);
+    if (PERF_LOG) this._perfTick(performance.now() - __perfT0, dtMs);
 
     // Safety net: if anything still escaped the walls (rare tunnelling on a very
     // hard throw), drop it back onto the table instead of losing it into the void.

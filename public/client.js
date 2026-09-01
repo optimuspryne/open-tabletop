@@ -9,6 +9,7 @@ import {
   resizeTable,
   setTableColor,
 } from './core.js';
+import { initPerf } from './perf.js';
 import {
   KIND,
   OVERLAY,
@@ -4823,6 +4824,7 @@ function finalizeMarquee(x0, y0, x1, y1, add) {
   }
 }
 
+const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window.ottPerf(true)
 (function animate() {
   const renderTime = performance.now() - DELAY;
   for (const [id, { mesh }] of meshes) {
@@ -4920,6 +4922,7 @@ function finalizeMarquee(x0, y0, x1, y1, add) {
     }
   }
   renderer.render(scene, camera);
+  perf.frame(renderer); // sample renderer.info for the overlay (no-op when disabled)
   requestAnimationFrame(animate);
 })();
 
