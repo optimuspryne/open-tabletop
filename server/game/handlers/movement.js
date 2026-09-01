@@ -11,7 +11,7 @@ import { safeMessage } from '../safe-message.js';
 // Exclusive piece ownership is the authority boundary for dragging. A client may
 // move/release only pieces it successfully claimed; group movement applies the
 // same rule independently to every selected piece.
-export function registerMovementHandlers(room, { isMovable, maxPieces = 80, logger = console }) {
+export function registerMovementHandlers(room, { isMovable, maxPieces = 250, logger = console }) {
   const movementMessage = (type, handler) => safeMessage(room, type, handler, { logger });
 
   movementMessage('grab', (client, message) => {

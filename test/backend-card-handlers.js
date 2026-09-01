@@ -41,6 +41,9 @@ function harness() {
     spawn(type, position, props) {
       events.push({ name: 'spawn', payload: { type, position, props } });
     },
+    notifyFull(c) {
+      events.push({ name: 'full', payload: c.sessionId });
+    },
   };
   registerCardHandlers(room, {
     flipHop: 1.6,
@@ -182,4 +185,32 @@ test('card exceptions are reported without disabling later messages', async () =
   room.broadcast = broadcast;
   await handlers.get('flip')(user, { id: '1' });
   assert.equal(room.cardData.has('1'), false);
+});
+
+test('dealing onto a full table is blocked and notifies the client (piece cap)', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'deck',
+    count: 5,
+    props: JSON.stringify({ back: 'blue' }),
+  });
+  room.deckCards.set('1', ['a', 'b', 'c', 'd', 'e']);
+  room.bodies.set('1', { position: { x: 0, y: 1, z: 0 } });
+  // Fill the rest of the table to the cap (harness injects maxPieces: 80).
+  while (room.state.pieces.size < 80) {
+    room.state.pieces.set(`filler-${room.state.pieces.size}`, { type: 'card' });
+  }
+
+  const c = makeClient();
+  handlers.get('dealToTable')(c, { deckId: '1' });
+  handlers.get('dealDrag')(c, { deckId: '1', x: 0, y: 1, z: 0 });
+
+  assert.equal(room.state.pieces.size, 80, 'no card spawned onto a full table');
+  assert.deepEqual(room.deckCards.get('1'), ['a', 'b', 'c', 'd', 'e'], 'no deck card consumed');
+  assert.equal(room.targets.size, 0, 'dealDrag created no physics target when blocked');
+  assert.equal(
+    events.filter((event) => event.name === 'full').length,
+    2,
+    'each blocked deal told the client the table is full',
+  );
 });

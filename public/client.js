@@ -698,6 +698,9 @@ function rebuildGrid() {
         : 'The table operation could not be completed. Try again.',
     );
   });
+  room.onMessage('notice', ({ text, icon } = {}) => {
+    if (text) toast(text, icon || 'check'); // soft server-side heads-up (e.g. the piece cap)
+  });
   room.onMessage('memberList', (list) => {
     renderMembers(list);
     updateMembersPulse(list);

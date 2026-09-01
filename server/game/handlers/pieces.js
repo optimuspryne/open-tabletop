@@ -166,7 +166,10 @@ export function registerPieceHandlers(
   });
 
   pieceMessage('spawn', (client, message) => {
-    if (room.state.pieces.size >= maxPieces) return;
+    if (room.state.pieces.size >= maxPieces) {
+      room.notifyFull(client);
+      return;
+    }
     const msg = spawnPayload(message, { boardKeys, propKeys, dispenserKeys, colliders });
     if (!msg) return;
     if (msg.type === 'board') {

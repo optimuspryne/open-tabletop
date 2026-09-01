@@ -116,7 +116,7 @@ const SIM = {
     sleepSpeed: 0.5, // a card goes fully static (stops jittering) below this speed...
     sleepTime: 0.2, // ...sustained for this many seconds
   },
-  maxPieces: 80,
+  maxPieces: 250,
 };
 
 // Dev profiling toggle: PERF_LOG=1 logs a per-second physics/tick summary (docs/ROADMAP.md §1).
@@ -761,12 +761,14 @@ class TableRoom extends Room {
         ids.push(id);
         spawned++;
       }
+      const capped = spawned < hand.length; // couldn't place the whole hand — table filled up
       hand.splice(0, spawned);
       this.sendHand(client);
       if (spawned) {
         this.lastDrop.set(client.sessionId, { ids, ts: Date.now() });
         this.broadcast('sfx', { type: 'hand-drop' });
       }
+      if (capped) this.notifyFull(client);
     });
     tableMessage('handFromTable', (client) => {
       const batch = this.lastDrop.get(client.sessionId);
@@ -1778,6 +1780,17 @@ class TableRoom extends Room {
         `${p.n} ticks/s`,
     );
     this._perf = { n: 0, stepSum: 0, stepMax: 0, dtSum: 0, awakeMax: 0, t: now };
+  }
+
+  // Tell one client their action was dropped because the table hit the piece cap (SIM.maxPieces).
+  // The client shows a toast (see onMessage 'notice' in client.js). One #toast slot, so repeats
+  // from a rapid drag just refresh the same notice rather than stacking up.
+  notifyFull(client) {
+    if (!client) return;
+    client.send('notice', {
+      text: `Table is full (${SIM.maxPieces} pieces) — clear some to add more.`,
+      icon: 'x',
+    });
   }
 
   writeTransform(piece, body) {

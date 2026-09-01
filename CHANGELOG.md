@@ -69,6 +69,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   and the pixel ratio on iOS) that need a fresh GL context. On an older iPad, Low holds 60fps.
 
 ### Changed
+- **Piece cap raised 80 → 250.** Profiling showed the server shrugs off ~144 physics bodies, so
+  the old limit was far more conservative than the simulation needs.
 - **Shadows redraw on demand.** `renderer.shadowMap.autoUpdate` is off; the render loop refreshes
   the shadow map only on frames where a caster actually moved, so an idle table (even while the
   camera orbits) stops repaying the soft-shadow pass every frame. Groundwork for graphics tiers;
@@ -90,6 +92,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Private notes follow your account, not your session**, so they survive a reconnect.
 
 ### Fixed
+- **Drawing cards off a deck could exceed the piece cap.** `dealToTable` / `dealDrag` spawned a
+  tile per draw with no cap check — the only paths that skipped it — so a whole deck (e.g. the
+  144-tile Mahjong wall) could be dealt onto the table past the limit. Both now respect it.
+- **A full table now says so instead of failing silently.** Deal, spawn, and hand-to-table were
+  silent `break`/`return` at the cap; they now show a "Table is full" toast.
 - **The "•••" menu on custom library assets did nothing.** Its group is shaped exactly like what
   the generic pop-out wiring claims, so two click handlers landed on one button: the first opened
   and portaled the menu, the second read it as already-open and shut it in the same tick. The

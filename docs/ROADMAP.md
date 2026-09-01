@@ -83,18 +83,17 @@ body count, and tick health. Real-hardware tools — measure on the low-end targ
 **Piece-model note — what "hundreds of pieces" means here.** A deck is a single body with a
 private `deckCards` list, not N bodies; the 144-tile Mahjong wall spawns as one deck piece, and
 dealt tiles live in `this.hands` (also not physics). Only tiles spread onto the table are bodies,
-and `SIM.maxPieces` (80) caps `state.pieces.size`. So a full wall renders as one stacked mesh, and
-the many-bodies case is normally bounded at 80.
+and `SIM.maxPieces` (raised 80 → **250** on 2026-09-01) caps `state.pieces.size`. So a full wall
+renders as one stacked mesh, and the many-bodies case is bounded at that cap.
 
-**Two cap bugs to fix if the limit stays** (found 2026-09-01):
-1. `dealToTable` / `dealDrag` (`server/game/handlers/cards.js`) spawn a table body per draw with
-   **no `maxPieces` guard** — deal-to-hand, split, `handToTable`, starters and scene-restore all
-   check it; these two don't. That is how all 144 wall tiles can be drawn onto the table past the
-   80 cap. Add the same `state.pieces.size >= maxPieces` check before the spawn.
-2. Every cap check is a silent `break`/`return` — overflow is dropped with no feedback
-   (`handToTable` stops mid-spread; the rest stay in hand). Surface a "table full" signal. And
-   decide whether 80 is the right number at all: a real Mahjong game's discards + exposed melds
-   can cross it mid-game.
+**Two cap bugs — ✅ fixed 2026-09-01** (cap also raised 80 → 250):
+1. `dealToTable` / `dealDrag` (`server/game/handlers/cards.js`) spawned a table body per draw
+   with **no `maxPieces` guard** — the other spawn paths checked it, these two didn't, so a deck
+   could be drawn out past the cap. Both now check `state.pieces.size >= maxPieces` before pulling
+   a card.
+2. Cap checks were silent `break`/`return`. A blocked deal / spawn / hand-drop now sends a
+   `notice` toast ("Table is full …") via `TableRoom.notifyFull`; `handToTable` fires it when the
+   cap cut a hand-spread short. Regression-tested in `test/backend-card-handlers.js`.
 
 **First profiling pass (2026-09-01)** — load: the Mahjong wall spread to all 144 tiles.
 - *Server (cannon-es): not the bottleneck.* 144 settled bodies ≈ 0.13 ms/step; a full scoop

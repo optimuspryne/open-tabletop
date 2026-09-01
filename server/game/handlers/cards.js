@@ -42,6 +42,10 @@ export function registerCardHandlers(
     if (!parsed) return;
     const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
+    if (room.state.pieces.size >= maxPieces) {
+      room.notifyFull(client); // check before takeTopCard so we never pull a card we can't place
+      return;
+    }
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
@@ -75,6 +79,10 @@ export function registerCardHandlers(
     const deck = room.state.pieces.get(deckId);
     const deckBody = room.bodies.get(deckId);
     if (!deckBody) return;
+    if (room.state.pieces.size >= maxPieces) {
+      room.notifyFull(client); // check before takeTopCard so we never pull a card we can't place
+      return;
+    }
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
@@ -171,14 +179,11 @@ export function registerCardHandlers(
     const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
     const cards = room.deckCards.get(deckId);
-    if (
-      !deck ||
-      deck.type !== 'deck' ||
-      !cards ||
-      cards.length < 2 ||
-      room.state.pieces.size >= maxPieces
-    )
+    if (!deck || deck.type !== 'deck' || !cards || cards.length < 2) return;
+    if (room.state.pieces.size >= maxPieces) {
+      room.notifyFull(client);
       return;
+    }
     const props = readProps(deck);
     const bottom = cards.splice(Math.floor(cards.length / 2));
     deck.count = cards.length;
