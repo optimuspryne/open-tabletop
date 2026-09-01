@@ -41,12 +41,20 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   click, a named mouse button, a wheel or a key, so a player opening the app on an iPad was being
   told in detail how to use a mouse. The radial menu, the Select tool, the height controls, the
   selection toolbar and the one-finger/two-finger hand rule were all shipped and all
-  undocumented.
+  undocumented. The developer gesture ledger
+  (`docs/GESTURES.md`) has been reconciled to match the rebuilt panel.
 - **Colour swatches on library cards at every size.** The swatch run was `display: none` in short
   landscape, so colour choice was simply unavailable there. It sits behind a trigger now, reusing
   the existing pop-group pattern.
 - **A train dispenser and train pieces** join the built-in props, alongside new lighting and
   texture-resolution knobs.
+- **A device-layout test matrix.** `npm run test:devices` renders the table at seven device
+  profiles in headless Chromium and asserts each lands in the right layout branch — bottom-sheet
+  vs floating panels, the movable-panel pointer gate, the compact vs full logo, and the modal
+  close staying on-screen. The two switches are on independent axes (viewport width and pointer
+  type), so a regression that collapses them passes every phone and breaks every tablet; the
+  matrix puts each in both states. Documented in `docs/DEVICE_MATRIX.md`; kept out of
+  `npm run check`, like the input and component suites, since it needs a browser.
 
 ### Changed
 - **A finger-held piece starts 15% higher.** A finger sits *on* the piece it is holding where a
