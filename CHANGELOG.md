@@ -8,6 +8,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+
+## [0.13.0] — 2026-09-01
+    
 ### Added
 - **A two-finger transform on touch.** While you hold a piece, a second finger turns the gesture
   into a photo-editor transform: the **angle** between your fingers rotates the piece, the
@@ -787,6 +790,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.13.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.13.0
 [0.12.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.2
 [0.12.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.1
 [0.12.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.0
