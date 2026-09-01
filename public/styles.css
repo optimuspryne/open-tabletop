@@ -431,6 +431,18 @@ canvas.selecting {
 #pieceMenu button.danger {
   color: var(--danger);
 }
+/* Right-click raises this menu on desktop now, where 40px rows read as a panel rather than a
+   menu — the same call already made for .overflowMenu .sheetItem. The query is the inverse of
+   SHEET_MQ in client.js, which is what decides flat-list vs radial in the first place: keep the
+   two in step. */
+@media not all and (max-width: 900px) {
+  @media (pointer: fine) {
+    #pieceMenu button {
+      min-height: 0;
+      padding: 5px 8px;
+    }
+  }
+}
 
 /* Touch controls clustered on each edge: rotate ⟲/⟳ and raise/lower ▲/▼ of the held piece or
    selection. One cluster per edge so either hand can reach it. Buttons hide individually. */

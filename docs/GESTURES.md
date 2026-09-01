@@ -49,17 +49,22 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 | Middle-click while holding | Rotate the held piece's facing to the next 45° step | Twist (15° steps, not 45°) | ⚠️ |
 | Middle-click empty felt | Ping everyone | Long-press empty felt (`client.js:4977`) | ✅ |
 | Double-left-click | Inspect up close | Double-tap | ✅ |
-| Right-click a piece | A per-kind verb: roll a die, flip a card, shuffle a deck | Long-press → radial menu (a superset) | ⚠️ |
+| Right-click a piece | Its menu — every kind but a card, which flips instead | Long-press → the same menu, arced | ✅ |
 | `Delete` / `Backspace` | Remove held-or-hovered piece | Radial → **Delete** | ✅ |
 | `U` | Stand upright / lay flat | Radial → **Stand / lay flat** | ✅ |
 | `G` | Toggle snap-to-grid | Radial → **Snap to grid** | ✅ |
 
-**Long-press → radial menu** (`pieceMenuItems`, `client.js:4871`) is the workhorse of the touch
-surface — and it is touch-ONLY. `secondaryPress` is raised inside `if (e.pointerType === 'touch')`
-in `controls.js`, and `openPieceMenu` has exactly one caller, so a mouse right-click never opens
-it. Right-click is instead a single per-kind verb from the `KIND` table (`graphics.js:1591`):
-`rclick` is `roll` for a die, `flip` for a card, `shuffle` for a deck, and nothing at all for a
-prop or a board. The radial is a superset of what one mouse gesture can reach. It is filtered by piece kind and carries: Flip and Take to hand (cards); Roll (dice);
+**The piece menu** (`pieceMenuItems`, `client.js:4871`) is now the main verb surface on BOTH
+devices. Touch raises it by long-press (`secondaryPress`, arced around the finger on a sheet
+layout); the mouse raises the same list, as a flat menu at the cursor, by right-clicking any kind
+but a card — the one piece whose whole vocabulary (take / move / flip) is shorter than the menu
+that would replace it. `handleClick` routes it, so a right-DRAG is untouched and a deck or
+dispenser still moves that way.
+
+It replaced a thin and partly invisible set of mouse shortcuts. `KIND.rclick`
+(`graphics.js:1591`) gave a single verb per kind — `roll`, `flip`, `shuffle` — and nothing at all
+for a prop or a board, so right-clicking those two did literally nothing. The deck's
+double-right-click-to-split is gone as a separate gesture; Split is a menu item. It is filtered by piece kind and carries: Flip and Take to hand (cards); Roll (dice);
 Draw to hand, Shuffle, Split (decks); Dispense (dispensers); Move (then drag) for
 grab-2 kinds; Inspect (inspectables); and Stand / lay flat, Snap to grid, Delete for everything.
 On a phone it arcs around the press point (`openRadial`); above `RADIAL_MAX` items, or on a
@@ -93,9 +98,9 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 | Right-click a table card | Flip it                                      | Radial → **Flip**                                                      | ✅     |
 | Left-drag from a deck | Draw the top card                            | Finger drag                                                            | ✅     |
 | Left-click a deck | Take top card into hand                      | Tap                                                                    | ✅     |
-| Right-click a deck | Shuffle                                      | Radial → **Shuffle**                                                   | ✅     |
+| Right-click a deck → **Shuffle** | Shuffle                                      | Radial → **Shuffle**                                                   | ✅     |
 | Right-drag a deck | Pick up and move the whole deck              | Radial → **Move (then drag)**, then drag                               | ⚠️     |
-| Double-right-click a deck | Split the deck                               | Radial → **Split**                                                     | ✅     |
+| Right-click a deck → **Split** | Split the deck                               | Radial → **Split**                                                     | ✅     |
 | Double-click a deck | Peek at the top card                         | Double-tap                                                             | ✅     |
 | `F` / `D` / `H` / `R` in the peek | Place face-up / face-down / to hand / return | The four `[data-place]` buttons in the peek overlay (`table.html:954`) | ✅     |
 
@@ -146,7 +151,7 @@ unreachable on iOS and iPadOS.
 
 ## Gaps
 
-Three, in rough order of cost — the last one costs a *mouse* player, not a touch one:
+Two, both about exact angles:
 
 1. **45° in one action is still mouse-only.** `[` / `]` turn a selection ∓45° in a single press.
    Everything else moves in ~7.5° increments — the ⟲ / ⟳ buttons and the `A`/`D` keys both fire
@@ -158,11 +163,8 @@ Three, in rough order of cost — the last one costs a *mouse* player, not a tou
 2. **Smooth rotation is coarser off the mouse.** Alt+Shift gives genuinely unsnapped rotation;
    the twist snaps to 15°, and the buttons and keys quantise to ~7.5°. Nothing but the mouse is
    truly free.
-3. **The mouse has no piece menu.** This one runs the other way. The long-press radial gathers
-   every verb a piece has in one place; a mouse right-click fires one hard-coded verb per kind
-   and nothing else, so Stand / lay flat, Snap to grid, Inspect, Delete and the deck verbs are
-   reachable from a mouse only as keys or separate click gestures you have to already know.
-   Touch is ahead of the mouse here.
+(The mouse-has-no-piece-menu gap that stood here is closed: right-click now raises the same
+menu, for every kind but a card.)
 
 Worth recording, because the naming invites exactly one wrong reading: **`snap` and `setSnap`
 are unrelated messages.** `snap` (`server/game/handlers/pieces.js:220`) rounds the held body's

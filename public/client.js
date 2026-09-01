@@ -37,6 +37,7 @@ import {
   unclaimedRow,
 } from './rows.js';
 import { reanchorOffset } from './drag.js';
+import { clickRoute } from './clicks.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -2486,34 +2487,42 @@ function placeDrawn(where) {
 // briefly for a possible double-click (inspect / draw); everything else fires now.
 function handleClick(gesture) {
   const { id, type } = gesture;
-  const wantsDouble =
-    (gesture.primary && (INSPECTABLE(type) || type === 'deck')) ||
-    (gesture.secondary && type === 'deck');
 
-  if (!wantsDouble) {
-    sendAction(gesture.primary ? gesture.kind.lclick : gesture.kind.rclick, id); // secondary / non-inspectable
+  // Right-click raises the piece's menu — the same list the touch long-press builds — for every
+  // kind BUT a card. A card's whole vocabulary is take / move / flip, so a menu is more work than
+  // the gesture it replaces. Everything else has verbs that were otherwise keys-only or
+  // undiscoverable, and a prop or a board had no right-click action at all (KIND gives them no
+  // `rclick`), so the menu is what right-click means there now.
+  //
+  // A right-DRAG is unaffected: handleClick only runs when the gesture never became a drag, so a
+  // deck or dispenser still moves on right-drag. The menu also absorbs the two deck shortcuts it
+  // replaces — Shuffle was the single right-click, Split the double — which is why secondary no
+  // longer takes part in the deferred double-click below.
+  const route = clickRoute(type, gesture.secondary, INSPECTABLE(type));
+  if (route === 'menu') {
+    openPieceMenu(id, { x: gesture.sx, y: gesture.sy });
+    return;
+  }
+  if (route === 'verb') {
+    sendAction(gesture.primary ? gesture.kind.lclick : gesture.kind.rclick, id);
     return;
   }
 
   const isSecondClick =
     pendingClick &&
     pendingClick.id === id &&
-    pendingClick.secondary === gesture.secondary &&
     performance.now() - pendingClick.t < CONFIG.input.dblMs;
   if (isSecondClick) {
     clearTimeout(pendingClick.timer);
     pendingClick = null;
-    if (gesture.secondary)
-      room.send('splitDeck', { deckId: id }); // double secondary on a deck = split it
-    else if (type === 'deck')
-      room.send('drawInspect', { deckId: id }); // double primary on a deck = draw to inspect
-    else enterInspect(id); // double primary on a piece = inspect it
+    if (type === 'deck')
+      room.send('drawInspect', { deckId: id }); // double-click a deck = draw to inspect
+    else enterInspect(id); // double-click a piece = inspect it
   } else {
     if (pendingClick) clearTimeout(pendingClick.timer);
-    const single = gesture.primary ? gesture.kind.lclick : gesture.kind.rclick; // deferred single (shuffle for secondary on a deck)
+    const single = gesture.kind.lclick; // deferred, so a double can pre-empt it
     pendingClick = {
       id,
-      secondary: gesture.secondary,
       t: performance.now(),
       timer: setTimeout(() => {
         pendingClick = null;
