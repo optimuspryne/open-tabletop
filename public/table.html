@@ -951,10 +951,10 @@
     </div>
     <div id="drawActions" class="panel" hidden>
       <span class="da-note">Drag to Rotate</span>
-      <button data-place="field-up" data-icon="arrow-bar-down">
+      <button data-place="field-up" data-icon="arrow-bar-up">
         <span class="lbl">Drop Face-up</span>
       </button>
-      <button data-place="field-down" data-icon="arrow-bar-up">
+      <button data-place="field-down" data-icon="arrow-bar-down">
         <span class="lbl">Drop Face-down</span>
       </button>
       <button data-place="hand" data-icon="cards"><span class="lbl">To Hand</span></button>
@@ -1108,8 +1108,10 @@
       </div>
       <div id="roomInfo">
         <div id="roomInfoHead">
-          <button id="railToggle" title="Collapse"></button><span id="roomTitle"></span
-          ><span id="roomCode" title="Click to copy" hidden></span>
+          <button id="railToggle" title="Collapse"></button>
+          <div id="roomInfoNames">
+            <span id="roomTitle"></span><span id="roomCode" title="Click to copy" hidden></span>
+          </div>
         </div>
         <div id="roomInfoBody">
           <div class="dockSection">
@@ -1817,7 +1819,10 @@
                 <b data-icon="zoom-in">Lean In</b> zooms in slightly, as if leaning over the table;
                 <b data-icon="zoom-in">Lean Out</b> returns.
               </li>
-              <li><b data-icon="dice-5">Roll Dice</b> rolls every die you own on the table.</li>
+              <li>
+                <b data-icon="dice-5">Dice Box</b> Shows you your personal Dice box where you can
+                load and roll dice.
+              </li>
               <li>
                 <b data-icon="cards">Show Hand</b> briefly reveals cards you choose to players you
                 choose.

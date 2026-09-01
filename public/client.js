@@ -5749,9 +5749,9 @@ addEventListener('keydown', (e) => {
     fab.addEventListener('click', () => {
       if (byId('radial') && !byId('radial').hidden) return closeRadial();
       const items = [
-        proxy('Roll dice', 'dice-5', '#roll'),
-        proxy('Spawn', 'library-plus', '#lib2Btn'),
-        proxy('Select', 'select-all', '#hamBar .selectTool'),
+        proxy('Dice Box', 'dice-5', '#roll'),
+        proxy('Library', 'library-plus', '#lib2Btn'),
+        proxy('Multi-Select', 'select-all', '#hamBar .selectTool'),
         proxy('Measure', 'ruler-measure', '#measureBtn'),
       ].filter(Boolean);
       const r = fab.getBoundingClientRect();

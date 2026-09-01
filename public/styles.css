@@ -2443,15 +2443,30 @@ body.admin {
 #roomInfoHead #railToggle:hover {
   color: var(--accent);
 }
+/* Name over code, both flush to the same left edge. The column takes the row's slack so a long
+   room name ellipsises instead of shoving the code out of the panel. On the sheet layout the code
+   is display:none here (it lives in the Room info sheet), so this is the desktop shape only. */
+#roomInfoNames {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+}
 #roomInfoHead #roomTitle {
   color: var(--accent);
   cursor: pointer;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 #roomInfoHead #roomCode {
-  color: var(--text);
+  color: var(--muted);
   cursor: pointer;
   white-space: nowrap;
+  font-size: var(--fs-sm);
+  padding: 2px 0; /* no side padding: the code's text has to start where the name's does */
 }
 #roomInfoHead #roomCode:hover {
   color: var(--accent);
