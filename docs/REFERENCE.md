@@ -713,7 +713,7 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
   `needsUpdate` only on frames where a caster's transform changed, so a static table (even while
   the camera orbits) doesn't repay the 4096² soft-shadow pass every frame.
 - **Graphics quality tiers** (docs/ROADMAP.md §1/§12): the tablet frame is fill-rate bound, so
-  quality is three presets — `low` (px 1, hard PCF @1024, no AA, no skybox), `medium` (px ≤1.5, PCF @2048,
+  quality is three presets — `low` (px 1, hard PCF @1024, no AA), `medium` (px ≤1.5, PCF @2048,
   AA), `high` (px ≤2, soft PCF @4096, AA). Active tier = `?q=` › `localStorage 'tabletop.quality'`
   › device default (coarse pointer → `medium`, else `high`). `setQuality(tier)` applies pixel
   ratio + shadows live and persists; AA re-applies on reload. The UI control is Settings → UI →
@@ -721,6 +721,10 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
   pixel-ratio change, which iOS Safari only picks up on a fresh context. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
   `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
   `window.ottPixelRatio(v)` / `window.ottShadow(v)`.
+- **Skybox resolution** (separate per-viewer control beside the tier; `client.js`): `off` / `low`
+  512 / `medium` 1024 / `high` 2048 / `ultra` native — a max equirect width, downscaled at load
+  (`capTexture`) so only the smaller texture stays resident; built-ins are 2048 so high = ultra on
+  them. Persisted as `tabletop.skyRes`, device-defaulted (coarse → medium), applied live.
 - **`clamp(value, min, max)`**.
 
 ---

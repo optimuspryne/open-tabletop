@@ -1458,6 +1458,23 @@ function rebuildGrid() {
       sync();
     }
   }
+  // Skybox resolution (Settings → UI): per-viewer, applies live (no reload needed).
+  {
+    const srow = byId('skyResRow');
+    if (srow) {
+      const chips = [...srow.querySelectorAll('[data-skyres]')];
+      const sync = () =>
+        chips.forEach((c) => c.classList.toggle('on', c.dataset.skyres === getSkyRes()));
+      chips.forEach(
+        (c) =>
+          (c.onclick = () => {
+            setSkyRes(c.dataset.skyres);
+            sync();
+          }),
+      );
+      sync();
+    }
+  }
   // Audio settings (Tools menu): effects volume + mute, persisted client-side.
   const sfxVol = byId('sfxVol');
   {
@@ -2132,13 +2149,56 @@ function setSkyTexture(tex) {
   skyTex = tex || null;
   scene.background = tex || skyDefault;
 }
+
+// Per-viewer skybox resolution (Settings → UI → Graphics). Each level is a MAX equirect width; a
+// source wider than the cap is downscaled at load so only the smaller texture stays resident. The
+// built-ins are 2048, so 'high' and 'ultra' match on them; a larger custom upload uses 'ultra'.
+const SKY_RES = { off: 0, low: 512, medium: 1024, high: 2048, ultra: Infinity };
+const SKY_RES_KEY = 'tabletop.skyRes';
+function getSkyRes() {
+  try {
+    const v = localStorage.getItem(SKY_RES_KEY);
+    if (v && v in SKY_RES) return v;
+  } catch {
+    /* storage blocked — fall through to the device default */
+  }
+  try {
+    return matchMedia('(pointer: coarse)').matches ? 'medium' : 'high';
+  } catch {
+    return 'high';
+  }
+}
+function setSkyRes(v) {
+  if (!(v in SKY_RES)) return;
+  try {
+    localStorage.setItem(SKY_RES_KEY, v);
+  } catch {
+    /* not remembered, but still applied for this session */
+  }
+  applySkybox(skyLast || ''); // re-apply the current skybox at the new resolution (live, no reload)
+}
+// Draw a loaded texture's image down to `cap` px wide (equirect stays 2:1), returning a smaller
+// CanvasTexture and disposing the original. Returns it unchanged if already within the cap.
+function capTexture(tex, cap) {
+  const img = tex.image;
+  if (!cap || !img || !img.width || img.width <= cap) return tex;
+  const nw = cap,
+    nh = Math.max(1, Math.round((img.height * cap) / img.width));
+  const canvas = document.createElement('canvas');
+  canvas.width = nw;
+  canvas.height = nh;
+  canvas.getContext('2d').drawImage(img, 0, 0, nw, nh);
+  tex.dispose(); // not yet uploaded — this just drops the full-res image reference
+  return new THREE.CanvasTexture(canvas);
+}
 // A skybox "ref" is '' (default), an equirect URL, or a cube descriptor {"t":"cube","f":[6]}.
 function applySkybox(ref) {
-  if (getQuality() === 'low') ref = ''; // Low tier: skip the ~11 MB equirect (re-applies on reload)
+  if (getSkyRes() === 'off') ref = ''; // skybox turned off for this viewer
   if (!ref) {
     setSkyTexture(null);
     return;
   }
+  const cap = SKY_RES[getSkyRes()];
   const aniso = renderer.capabilities.getMaxAnisotropy(); // sharpen grazing angles (esp. the horizon)
   const set = (tex) => {
     if (skyLast === ref) setSkyTexture(tex);
@@ -2148,7 +2208,7 @@ function applySkybox(ref) {
     if (skyLast === ref) setSkyTexture(null);
   };
   if (ref[0] === '{') {
-    // cubemap
+    // cubemap (rare; loaded at native resolution — the width cap applies to equirect only)
     let d;
     try {
       d = JSON.parse(ref);
@@ -2171,7 +2231,8 @@ function applySkybox(ref) {
     // equirectangular
     new THREE.TextureLoader().load(
       ref,
-      (tex) => {
+      (loaded) => {
+        const tex = capTexture(loaded, cap);
         tex.mapping = THREE.EquirectangularReflectionMapping;
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.anisotropy = aniso;

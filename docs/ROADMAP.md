@@ -228,8 +228,10 @@ scoped against the real tree rather than from memory.
    2. **Merge two decks** — the inverse of the existing split.
    3. Gather dispenser-type objects into a **single dispenser**.
 11. **More Room Customization.**  Ability to adjust lighting (angles, intensity, color).  
-    Ability to adjust skybox resolution. (Partial: the skybox is now disposed on switch and
-    dropped on the Low graphics tier — see §1/§12. A true per-skybox resolution control is still open.)
+    Ability to adjust skybox resolution. (✅ **shipped 2026-09-01**: a per-viewer off/low/medium/
+    high/ultra control in Settings → UI → Graphics — a max equirect width, downscaled at load;
+    the skybox is also disposed on switch. Built-ins are 2048, so a genuinely higher 'ultra'
+    would need higher-res source assets. Lighting angle/intensity/color is still open.)
 12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
     pixel ratio + shadow size/type + AA), device-defaulted (coarse pointer → medium) with an
     in-app control (Settings → UI → Graphics), a persisted per-device preference, and `?q=` /

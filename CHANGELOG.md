@@ -71,8 +71,6 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ### Changed
 - **Piece cap raised 80 → 250.** Profiling showed the server shrugs off ~144 physics bodies, so
   the old limit was far more conservative than the simulation needs.
-- **The Low graphics tier now also omits the skybox** — the largest single texture — alongside
-  its lower pixel ratio, hard shadows, and no antialiasing.
 - **Shadows redraw on demand.** `renderer.shadowMap.autoUpdate` is off; the render loop refreshes
   the shadow map only on frames where a caster actually moved, so an idle table (even while the
   camera orbits) stops repaying the soft-shadow pass every frame. Groundwork for graphics tiers;
