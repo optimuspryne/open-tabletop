@@ -1820,6 +1820,22 @@ function thumbRig() {
   _thumb = { renderer, scene, cam };
   return _thumb;
 }
+// Free a loaded model's GPU resources once it's been snapshotted for a library thumbnail. The
+// gltfLoader is uncached, so each preview owns its scene outright — disposing it can't affect a
+// piece placed on the table (those do their own load). Only the 220px data-URL is retained.
+function disposeHierarchy(root) {
+  root.traverse((n) => {
+    if (n.geometry) n.geometry.dispose();
+    const mats = Array.isArray(n.material) ? n.material : n.material ? [n.material] : [];
+    for (const m of mats) {
+      for (const key in m) {
+        const val = m[key];
+        if (val && val.isTexture) val.dispose();
+      }
+      m.dispose();
+    }
+  });
+}
 function snapshot(obj) {
   const { renderer, scene, cam } = thumbRig();
   const box = new THREE.Box3().setFromObject(obj);
@@ -1865,6 +1881,7 @@ export async function propPreviewURL(props = {}) {
     if (modelUrl) {
       const gltf = await gltfLoader.loadAsync(modelUrl);
       url = snapshot(gltf.scene);
+      disposeHierarchy(gltf.scene);
     } else url = snapshot(propShapeMesh(props));
   } catch (e) {
     /* leave null → the card shows a placeholder */
@@ -1882,6 +1899,7 @@ export async function boardPreviewURL(fileUrl) {
     try {
       const gltf = await gltfLoader.loadAsync(fileUrl);
       url = snapshot(gltf.scene);
+      disposeHierarchy(gltf.scene);
     } catch (e) {
       /* null */
     }
@@ -1910,7 +1928,9 @@ export async function glbFilePreviewURL(file, rot) {
   try {
     const gltf = await gltfLoader.loadAsync(url);
     if (rot) gltf.scene.rotation.set(rot[0], rot[1], rot[2]);
-    return snapshot(gltf.scene);
+    const out = snapshot(gltf.scene);
+    disposeHierarchy(gltf.scene);
+    return out;
   } catch (e) {
     return null;
   } finally {

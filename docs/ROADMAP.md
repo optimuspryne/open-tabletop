@@ -104,8 +104,11 @@ renders as one stacked mesh, and the many-bodies case is bounded at that cap.
   geometry bound — it's fixed per-frame fill-rate: `setPixelRatio(min(dpr,2))` = 2× (4× fragments)
   on retina, `antialias:true`, and a **4096² PCFSoftShadowMap** sun redrawn each frame
   (`public/core.js:45-80`). Those are ~constant in piece count — exactly the flat-22-fps signature.
-- *Memory:* opening the library evicts/reloads the Safari tab even with the skybox off — texture
-  pressure (library thumbnails + 144 face textures + the ~64 MB-class shadow map).
+- *Memory:* opening the library used to evict/reload the Safari tab (texture pressure). **✅
+  addressed 2026-09-01:** library thumbnails now load lazily (IntersectionObserver — visible
+  cards only, was: every model eagerly) and dispose the loaded model right after snapshotting
+  (was: never freed). Remaining memory levers: skybox resolution (§11), and the ever-growing
+  `_texCache` / `_prevCache` (no eviction) over very long browsing sessions.
 - *So §12's levers are the right ones, ranked:* shadow-map size / soft-shadow quality (likely the
   biggest), render scale (pixel ratio), antialiasing — NOT instancing/LOD (draws aren't the
   limit). Skybox resolution (§11) is a memory lever, not an fps one; a low tier should also shrink

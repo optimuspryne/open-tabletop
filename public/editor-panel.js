@@ -681,15 +681,40 @@ const thumbImg = (src, cls) => {
   if (src) im.src = src;
   return im;
 };
-const fillAsync = (box, promise) => {
+// Defer a thumbnail until its card scrolls near the viewport, so opening a big library tab does
+// not load every model at once (the expensive part is the gltf load inside makePromise, not the
+// <img loading=lazy>). Each box loads once, then unobserves. No IntersectionObserver → eager.
+const _thumbObserver =
+  typeof IntersectionObserver === 'function'
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (!e.isIntersecting || !e.target._loadThumb) continue;
+            const load = e.target._loadThumb;
+            e.target._loadThumb = null; // once
+            _thumbObserver.unobserve(e.target);
+            load();
+          }
+        },
+        { rootMargin: '300px' },
+      )
+    : null;
+const fillAsync = (box, makePromise) => {
   const im = thumbImg();
   box.append(im);
-  promise
-    .then((u) => {
-      if (u) im.src = u;
-      else box.classList.add('empty');
-    })
-    .catch(() => box.classList.add('empty'));
+  const run = () =>
+    makePromise()
+      .then((u) => {
+        if (u) im.src = u;
+        else box.classList.add('empty');
+      })
+      .catch(() => box.classList.add('empty'));
+  if (_thumbObserver) {
+    box._loadThumb = run;
+    _thumbObserver.observe(box);
+  } else {
+    run();
+  }
 };
 
 // Build the preview image(s) for a card. Decks show back + first-front; skyboxes,
@@ -714,9 +739,9 @@ function previewEl(kind, it) {
     } // cubemap → first face
     wrap.append(thumbImg(src));
   } else if (kind === 'board') {
-    fillAsync(wrap, boardPreviewURL(it.preview));
+    fillAsync(wrap, () => boardPreviewURL(it.preview));
   } else if (kind === 'prop') {
-    fillAsync(wrap, propPreviewURL(it.props || {}));
+    fillAsync(wrap, () => propPreviewURL(it.props || {}));
   } else {
     // scene — no single image
     wrap.classList.add('empty');
@@ -983,8 +1008,7 @@ function renderBuiltin(sink) {
   boards.replaceChildren();
   for (const key of Object.keys(BOARDS)) {
     const box = previewBox();
-    fillAsync(
-      box,
+    fillAsync(box, () =>
       BOARDS[key].proc ? Promise.resolve(procBoardTexURL(key)) : boardPreviewURL(BOARDS[key].model),
     ); // proc boards paint their own preview
     boards.append(
@@ -1005,7 +1029,7 @@ function renderBuiltin(sink) {
     };
     for (const g of STARTER_LIST) {
       const box = previewBox();
-      if (gamePreview[g.id]) fillAsync(box, boardPreviewURL(gamePreview[g.id]));
+      if (gamePreview[g.id]) fillAsync(box, () => boardPreviewURL(gamePreview[g.id]));
       else if (g.id === 'dominoes')
         box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
       else if (g.id === 'wordy')
@@ -1034,7 +1058,7 @@ function renderBuiltin(sink) {
   spawnBar(objs);
   for (const p of PROP_LIST) {
     const box = previewBox();
-    fillAsync(box, propPreviewURL({ shape: p.id }));
+    fillAsync(box, () => propPreviewURL({ shape: p.id }));
     const teamName = p.team ? PROPS[p.id].team : null; // checker/go/chess → their 2 set colors
     objs.append(
       spawnCard({
@@ -1058,8 +1082,7 @@ function renderBuiltin(sink) {
     const spec = DISPENSERS[id];
     if (!spec) continue;
     const box = previewBox();
-    fillAsync(
-      box,
+    fillAsync(box, () =>
       spec.body === 'stack' ? propPreviewURL({ shape: spec.item }) : boardPreviewURL(spec.model),
     );
     disp.append(
