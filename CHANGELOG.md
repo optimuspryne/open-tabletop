@@ -57,6 +57,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   `npm run check`, like the input and component suites, since it needs a browser. A companion
   manual checklist, `docs/DEVICE_QA.md`, runs the on-device pass for the *feel* of each gesture
   that automation can't judge.
+- **Physics/render profiling instrumentation.** `?perf=1` on the table URL (or
+  `window.ottPerf(true)`) shows a client overlay read from `renderer.info` — FPS, frame ms, draw
+  calls, triangles, geometry/texture/program counts, JS heap (`public/perf.js`). `PERF_LOG=1` makes
+  the server log a per-second `world.step` time, awake-vs-total body count, and tick health
+  (`TableRoom.update`). Dev-only, off by default, for the "plays well at real scale" work.
 
 ### Changed
 - **A finger-held piece starts 15% higher.** A finger sits *on* the piece it is holding where a
