@@ -718,6 +718,16 @@ button.danger,
 .helpSec b {
   font-weight: 600;
 }
+/* A control named in the help text carries its own icon, so the reader is looking for the same
+   glyph the toolbar shows. Inline rather than flex: these sit mid-sentence. */
+.helpSec b[data-icon] .ico,
+.helpSec li > .ico {
+  display: inline-block;
+  vertical-align: -0.18em;
+  margin-right: 4px;
+  width: var(--ico-size-sm, 1em);
+  height: var(--ico-size-sm, 1em);
+}
 
 /* ===== hand bar (bottom-center) ===== */
 #handRow {

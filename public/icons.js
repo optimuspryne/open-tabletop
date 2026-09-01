@@ -38,22 +38,27 @@ function iconSvg(name) {
 // Inject a Tabler icon (or several, space-separated in data-icon) into every button[data-icon],
 // and copy its .lbl text into an aria-label so icon-only buttons stay screen-reader legible.
 export function applyIcons(root = document) {
-  root.querySelectorAll('button[data-icon], a.btn[data-icon]').forEach((btn) => {
-    if (btn.querySelector('.ico')) return;
-    btn.dataset.icon
+  // Any element may carry data-icon, not just buttons: the How-to-Play panel names a control and
+  // shows its icon inline, and a few labels/notes did too — those had been silently icon-less for
+  // as long as this only looked at buttons. The aria-label/title fix-up below still applies only
+  // to controls, where a missing accessible name actually costs something.
+  root.querySelectorAll('[data-icon]').forEach((el) => {
+    if (el.querySelector('.ico')) return;
+    el.dataset.icon
       .trim()
       .split(/\s+/)
       .reverse()
-      .forEach((name) => btn.prepend(iconSvg(name)));
-    const lbl = btn.querySelector('.lbl');
+      .forEach((name) => el.prepend(iconSvg(name)));
+    if (!el.matches('button, a, [role="button"]')) return;
+    const lbl = el.querySelector('.lbl');
     const txt = (
-      btn.getAttribute('aria-label') ||
+      el.getAttribute('aria-label') ||
       (lbl ? lbl.textContent : '') ||
-      btn.getAttribute('title') ||
+      el.getAttribute('title') ||
       ''
     ).trim();
-    if (txt) btn.setAttribute('aria-label', txt);
-    if (btn.hasAttribute('title')) btn.removeAttribute('title');
+    if (txt) el.setAttribute('aria-label', txt);
+    if (el.hasAttribute('title')) el.removeAttribute('title');
   });
 }
 
