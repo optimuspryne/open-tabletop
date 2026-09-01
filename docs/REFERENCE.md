@@ -709,6 +709,12 @@ felt), and the config:
   (die/board resolution).
 - **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
   scales the baked `RoomEnvironment` for the env-map strength.
+- **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off; the render loop sets
+  `needsUpdate` only on frames where a caster's transform changed, so a static table (even while
+  the camera orbits) doesn't repay the 4096² soft-shadow pass every frame.
+- **Dev perf knobs** (docs/ROADMAP.md §1/§12): URL params `?px=<ratio>`, `?shadow=off|512|1024|2048|4096`,
+  `?aa=0` tune the fill-rate costs for on-device A/B; `window.ottPixelRatio(v)` and
+  `window.ottShadow(v)` are live toggles (antialias is context-fixed, so `?aa=0` needs a reload).
 - **`clamp(value, min, max)`**.
 
 ---

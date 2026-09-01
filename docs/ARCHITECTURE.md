@@ -205,7 +205,11 @@ paid every frame for whatever is drawn, moving or not (draw calls, triangles, sh
 spikes only when many bodies are *awake at once* — a scoop, a shuffle, a dump; `PERF_LOG=1` logs
 the per-tick `world.step` time and the awake-body count that drives it. So the render lever
 (graphics-quality tiers) and the simulation lever are aimed at genuinely different bottlenecks,
-and each is profiled on real hardware, not in the headless suites.
+and each is profiled on real hardware, not in the headless suites. A first pass found the client
+frame **fill-rate bound, not draw bound** (FPS flat as draw calls rose), so the shadow map now
+redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false`, driven from the
+render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
+tuning on the target device.
 
 ## One action end to end: grab & throw
 

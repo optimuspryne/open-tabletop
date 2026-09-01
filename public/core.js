@@ -42,11 +42,35 @@ scene.background = new THREE.Color(0x14181d);
 const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.1, 200);
 camera.position.set(0, 14, 16);
 
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+// --- Dev perf knobs (docs/ROADMAP.md §1/§12) -------------------------------
+// The iPad frame is fill-rate bound, not draw bound, so these expose the three fixed per-frame
+// costs for on-device A/B, e.g. ?px=1&shadow=1024&aa=0. px and shadow also have live toggles
+// (window.ottPixelRatio / window.ottShadow, below); antialias is fixed at context creation, so
+// ?aa=0 needs a reload. No params → the previous defaults, unchanged.
+const _qp = (() => {
+  try {
+    return new URLSearchParams(location.search);
+  } catch {
+    return new URLSearchParams();
+  }
+})();
+const SHADOW_SIZES = [512, 1024, 2048, 4096];
+const _pxParam = parseFloat(_qp.get('px'));
+const _aa = _qp.get('aa') !== '0';
+const _shadowParam = _qp.get('shadow'); // 'off' | one of SHADOW_SIZES | null
+const _shadowsOn = _shadowParam !== 'off';
+const _shadowSize = SHADOW_SIZES.includes(+_shadowParam) ? +_shadowParam : 4096;
+
+const renderer = new THREE.WebGLRenderer({ antialias: _aa });
 renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
+renderer.setPixelRatio(Number.isFinite(_pxParam) ? _pxParam : Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = _shadowsOn;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Only redraw the (expensive 4096² soft) shadow map when scene geometry actually moved — the
+// render loop (client.js animate) sets needsUpdate on frames where a mesh changed. At rest,
+// orbiting the camera no longer repays the full shadow pass every frame.
+renderer.shadowMap.autoUpdate = false;
+renderer.shadowMap.needsUpdate = true; // draw it once at startup
 document.getElementById('app').appendChild(renderer.domElement);
 
 const controls = new OrbitControls(camera, renderer.domElement);
@@ -76,8 +100,8 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, LIGHTING.hemi));
 
 const sun = new THREE.DirectionalLight(0xffffff, LIGHTING.sun);
 sun.position.set(10, 18, 8);
-sun.castShadow = true;
-sun.shadow.mapSize.set(4096, 4096);
+sun.castShadow = _shadowsOn;
+sun.shadow.mapSize.set(_shadowSize, _shadowSize);
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 55; // tight depth range = far more precision, so bias can stay tiny
 sun.shadow.normalBias = 0.001; // tiny (tight depth range gives the precision) — no peter-panning, still no .glb acne
@@ -96,6 +120,31 @@ function fitShadow(hx, hz) {
 }
 fitShadow(TABLE.x, TABLE.z); // initial frustum from the default table size
 scene.add(sun);
+
+// Live perf knobs for on-device A/B (see the URL-param note above). Both force one shadow redraw.
+if (typeof window !== 'undefined') {
+  window.ottPixelRatio = (v) => {
+    renderer.setPixelRatio(+v || 1);
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.shadowMap.needsUpdate = true;
+  };
+  window.ottShadow = (v) => {
+    const off = v === 'off' || v === 0 || v === '0';
+    renderer.shadowMap.enabled = !off;
+    sun.castShadow = !off;
+    if (!off && SHADOW_SIZES.includes(+v)) {
+      if (sun.shadow.map) {
+        sun.shadow.map.dispose(); // drop the old map so it re-allocates at the new size
+        sun.shadow.map = null;
+      }
+      sun.shadow.mapSize.set(+v, +v);
+    }
+    scene.traverse((o) => {
+      if (o.material) o.material.needsUpdate = true; // recompile shaders for shadow on/off
+    });
+    renderer.shadowMap.needsUpdate = true;
+  };
+}
 
 // ===== Table ================================================================
 const tableMesh = new THREE.Mesh(
