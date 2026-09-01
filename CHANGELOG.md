@@ -71,6 +71,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ### Changed
 - **Piece cap raised 80 → 250.** Profiling showed the server shrugs off ~144 physics bodies, so
   the old limit was far more conservative than the simulation needs.
+- **The Low graphics tier now also omits the skybox** — the largest single texture — alongside
+  its lower pixel ratio, hard shadows, and no antialiasing.
 - **Shadows redraw on demand.** `renderer.shadowMap.autoUpdate` is off; the render loop refreshes
   the shadow map only on frames where a caster actually moved, so an idle table (even while the
   camera orbits) stops repaying the soft-shadow pass every frame. Groundwork for graphics tiers;
@@ -92,6 +94,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - **Private notes follow your account, not your session**, so they survive a reconnect.
 
 ### Fixed
+- **Memory crept up from previews and skybox switches.** Library preview thumbnails left face
+  textures resident in GPU memory, and switching skyboxes leaked the previous ~11 MB image. Both
+  are now disposed once no longer shown, and the preview cache is capped.
+- **The asset library could crash the tab on low-memory devices (older iPads).** Opening a
+  library tab rendered every model thumbnail at once and never freed the loaded models, so GPU
+  memory climbed until iOS Safari reloaded the page. Thumbnails now load lazily as cards scroll
+  into view, and each loaded model is disposed once its thumbnail is captured.
 - **Drawing cards off a deck could exceed the piece cap.** `dealToTable` / `dealDrag` spawned a
   tile per draw with no cap check — the only paths that skipped it — so a whole deck (e.g. the
   144-tile Mahjong wall) could be dealt onto the table past the limit. Both now respect it.
