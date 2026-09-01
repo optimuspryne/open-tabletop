@@ -65,7 +65,7 @@ It replaced a thin and partly invisible set of mouse shortcuts. `KIND.rclick`
 (`graphics.js:1591`) gave a single verb per kind — `roll`, `flip`, `shuffle` — and nothing at all
 for a prop or a board, so right-clicking those two did literally nothing. The deck's
 double-right-click-to-split is gone as a separate gesture; Split is a menu item. It is filtered by piece kind and carries: Flip and Take to hand (cards); Roll (dice);
-Draw to hand, Shuffle, Split (decks); Dispense (dispensers); Move (then drag) for
+Draw to hand, Shuffle, Split (decks); Dispense (dispensers); Move for
 grab-2 kinds; Inspect (inspectables); and Stand / lay flat, Snap to grid, Delete for everything.
 On a phone it arcs around the press point (`openRadial`); above `RADIAL_MAX` items, or on a
 non-sheet layout, it falls back to a flat list.
@@ -99,7 +99,7 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 | Left-drag from a deck | Draw the top card                            | Finger drag                                                            | ✅     |
 | Left-click a deck | Take top card into hand                      | Tap                                                                    | ✅     |
 | Right-click a deck → **Shuffle** | Shuffle                                      | Radial → **Shuffle**                                                   | ✅     |
-| Right-drag a deck | Pick up and move the whole deck              | Radial → **Move (then drag)**, then drag                               | ⚠️     |
+| Right-drag a deck | Pick up and move the whole deck              | Menu → **Move**, pressed and dragged in one gesture                     | ✅     |
 | Right-click a deck → **Split** | Split the deck                               | Radial → **Split**                                                     | ✅     |
 | Double-click a deck | Peek at the top card                         | Double-tap                                                             | ✅     |
 | `F` / `D` / `H` / `R` in the peek | Place face-up / face-down / to hand / return | The four `[data-place]` buttons in the peek overlay (`table.html:954`) | ✅     |

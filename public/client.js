@@ -4947,10 +4947,12 @@ function pieceMenuItems(id, type) {
   }
   if (KIND[type] && KIND[type].grab === 2)
     items.push([
-      'Move (then drag)',
+      'Move',
       () => {
         armedMove = id;
-      },
+      }, // fallback: a plain click arms the next drag, as it always did
+      null,
+      (e) => beginMoveFromMenu(id, e), // press and keep dragging — the piece comes with you
     ]); // deck/dispenser: reposition instead of deal
   if (INSPECTABLE(type)) {
     items.push(['Inspect', () => enterInspect(id)]);
@@ -4960,6 +4962,58 @@ function pieceMenuItems(id, type) {
   items.push(['Delete', () => room.send('remove', { id }), 'danger']);
   return items;
 }
+// Pick a piece up NOW, at the pointer, as though a move-drag had just crossed the grab threshold.
+// The menu's Move item uses this on POINTERDOWN, so you press Move and keep dragging in one
+// gesture instead of tapping Move, then finding the deck again and dragging that. The piece jumps
+// to the pointer, which is the point: you already aimed at where the menu is.
+function beginMoveFromMenu(id, e) {
+  const entry = meshes.get(id);
+  if (!entry || !room) return false;
+  setPointer(e);
+  ray.setFromCamera(pointer, camera);
+  if (!ray.ray.intersectPlane(dragPlane, hit)) return false;
+  dragHeight = GRAB_HEIGHT;
+  hit.y = dragHeight;
+  down = {
+    id,
+    type: entry.type,
+    kind: KIND[entry.type],
+    touch: e.pointerType === 'touch',
+    forceMove: true,
+    primary: true,
+    secondary: false,
+    sx: e.clientX,
+    sy: e.clientY,
+    dragging: true, // already past the threshold: this gesture can never be read as a click
+    grabbed: true,
+    snap: pieceSnap(id),
+    group: false,
+    rotateOnPress: false,
+    rotating: false,
+    rotateX: e.clientX,
+    rotateRaw: 0,
+    rotateSent: 0,
+    lastRotateSent: 0,
+    transformed: false,
+  };
+  dragOffset.set(0, 0, 0);
+  controls.enabled = false;
+  heldTarget.copy(hit);
+  prevTarget.copy(hit);
+  prevThrowTime = performance.now();
+  throwVel.set(0, 0, 0);
+  room.send('grab', { id });
+  playSfx(pieceIsTile(id) ? 'tiledeck-pickup' : sfxKind(entry.type) + '-pickup');
+  const t = snapXZ(hit.x, hit.z);
+  room.send('move', { id, x: t.x, y: hit.y, z: t.z });
+  // Capture on the CANVAS even though the press landed on a menu button, so the rest of the drag
+  // reaches the canvas handlers.
+  try {
+    renderer.domElement.setPointerCapture(e.pointerId);
+  } catch {}
+  return true;
+}
+
 let pieceMenuAway = null; // outside-tap dismiss handler installed while the menu is open
 function closePieceMenu() {
   const menu = byId('pieceMenu');
@@ -4982,23 +5036,29 @@ function openPieceMenu(id, p) {
       openRadial(
         p.x,
         p.y,
-        arc.map(([label, fn, cls]) => ({ label, fn, cls })),
+        arc.map(([label, fn, cls, press]) => ({ label, fn, cls, press })),
       )
     )
       return;
   }
   menu.replaceChildren();
-  for (const [label, fn, cls] of pieceMenuItems(id, entry.type)) {
-    menu.appendChild(
-      makeButton(
-        label,
-        () => {
-          closePieceMenu();
-          fn();
-        },
-        cls,
-      ),
+  for (const [label, fn, cls, press] of pieceMenuItems(id, entry.type)) {
+    const b = makeButton(
+      label,
+      () => {
+        closePieceMenu();
+        fn();
+      },
+      cls,
     );
+    if (press)
+      b.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closePieceMenu();
+        if (press(ev)) b.onclick = null; // the drag owns the gesture; don't also arm on click
+      });
+    menu.appendChild(b);
   }
   menu.hidden = false; // show first so it can be measured
   const w = menu.offsetWidth || 180,
@@ -5571,9 +5631,8 @@ const RADIAL_ICONS = {
   'Draw to hand': 'cards',
   Shuffle: 'refresh',
   Split: 'line',
-  'Save…': 'device-floppy',
   Dispense: 'package-off',
-  'Move (then drag)': 'hand-move',
+  Move: 'hand-move',
   Inspect: 'zoom-in',
   'Stand / lay flat': 'arrow-big-up-line',
   'Snap to grid': 'grid-3x3',
@@ -5658,6 +5717,13 @@ function openRadial(x, y, items) {
       closeRadial();
       it.fn();
     });
+    if (it.press)
+      b.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation(); // the scrim's pointerdown would otherwise close the radial first
+        closeRadial();
+        if (it.press(ev)) b.onclick = null;
+      });
     el.appendChild(b);
   });
   el.hidden = false;
