@@ -13,6 +13,7 @@
 //                              rotate / fineRotate describe the desktop Alt-drag gesture.
 //   command(key)               a keyboard command: Esc-exits, batch ops, per-piece verbs, ping.
 //   raiseAxis(dir)             raise (+1) / lower (-1) the held piece one step.
+//   rotateHeld(radians)        turn the held piece by a raw angle (the profile does not snap).
 //   doubleClick(pt) -> bool    double-activation on the board (whiteboard claim); true if consumed.
 //   snapHeld() / ping(pt)      middle-click's two jobs (snap the held piece / ping the table).
 //   hasHeld() -> bool          is a piece held? (a profile uses this to disambiguate a control).
@@ -36,6 +37,7 @@ const logical = (e) => ({
   fineRotate: e.altKey && e.shiftKey, // Shift+Alt bypasses the normal angle snap
   pointerId: e.pointerId, // for pointer capture on the canvas
   touch: e.pointerType === 'touch', // so client.js can show touch-only affordances (height control)
+  transforming: false, // set true while a two-finger twist/pinch owns the held piece
 });
 
 // A device-agnostic key command: exactly the fields client.js's command router reads.
@@ -55,6 +57,18 @@ const TAP_SLOP = 10; // finger drift that still counts as a tap rather than a dr
 
 const LONG_PRESS_MS = 500; // touch: hold a finger still this long → a secondary press (context menu)
 const LONG_PRESS_SLOP = 6; // px of finger drift before the hold becomes a drag; matches the grab threshold (CONFIG.input.dragPx) so any move that grabs also cancels the hold
+
+// Two-finger transform (iPad is the target device). While a piece is held, a second finger turns
+// the gesture into a photo-editor style transform: the ANGLE between the fingers rotates the
+// piece, the DISTANCE between them raises and lowers it. Both are free because the camera is
+// already disabled while a piece is held, so two fingers are not pan/dolly here.
+//
+// No dead zone is needed on the twist: client.js snaps to 15°, so a stray finger has to turn
+// more than 7.5° before anything is sent. The pinch quantises here instead, one height step per
+// PINCH_PX_PER_STEP of spread — ~16 steps over the grab range, which is roughly a full
+// open-hand pinch across an iPad.
+const PINCH_PX_PER_STEP = 28;
+const TWIST_MIN_SPREAD = 24; // fingers closer than this give a noisy angle — ignore the twist
 
 // The reference profile: mouse + wheel. Reproduces the pre-seam bindings exactly.
 // (Touch and gamepad become sibling profiles that raise the same intents.)
@@ -107,8 +121,72 @@ export function attachControls(dom, intents) {
       lpTimer = null;
     }
   };
+
+  // Live fingers on the canvas, and the transform (if any) that two of them own.
+  const touches = new Map(); // pointerId → { x, y }
+  let xf = null; // { a, b, angle, dist, pinch } while a two-finger transform runs
+
+  const beginTransform = () => {
+    const [a, b] = [...touches.keys()];
+    const pa = touches.get(a),
+      pb = touches.get(b);
+    xf = {
+      a,
+      b,
+      angle: Math.atan2(pb.y - pa.y, pb.x - pa.x),
+      dist: Math.hypot(pb.x - pa.x, pb.y - pa.y),
+      pinch: 0, // px of spread banked toward the next height step
+    };
+  };
+
+  const updateTransform = () => {
+    const pa = touches.get(xf.a),
+      pb = touches.get(xf.b);
+    if (!pa || !pb) return;
+    const dx = pb.x - pa.x,
+      dy = pb.y - pa.y,
+      dist = Math.hypot(dx, dy),
+      angle = Math.atan2(dy, dx);
+
+    // Twist → rotation. Screen y grows downward, so atan2 increases CLOCKWISE on screen, while a
+    // positive server angle turns the piece counter-clockwise from above — hence the negation, so
+    // the piece follows the fingers. (If it ever reads backwards, this sign is the whole fix.)
+    if (dist >= TWIST_MIN_SPREAD) {
+      let d = angle - xf.angle;
+      while (d > Math.PI) d -= 2 * Math.PI; // unwrap across ±π so a twist through the
+      while (d < -Math.PI) d += 2 * Math.PI; // seam doesn't spin the long way round
+      if (d) intents.rotateHeld(-d);
+    }
+    xf.angle = angle;
+
+    // Pinch → height, one step per PINCH_PX_PER_STEP of spread. Banking the remainder means a
+    // slow pinch still accumulates instead of being rounded away.
+    xf.pinch += dist - xf.dist;
+    xf.dist = dist;
+    while (xf.pinch >= PINCH_PX_PER_STEP) {
+      intents.raiseAxis(1);
+      xf.pinch -= PINCH_PX_PER_STEP;
+    }
+    while (xf.pinch <= -PINCH_PX_PER_STEP) {
+      intents.raiseAxis(-1);
+      xf.pinch += PINCH_PX_PER_STEP;
+    }
+  };
+
   dom.addEventListener('pointerdown', (e) => {
     lastPointerType = e.pointerType || 'mouse';
+    if (e.pointerType === 'touch') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // A second finger arriving while a piece is held is a transform, not a press: it must not
+      // grab a second piece, open a marquee, or arm a long-press. Third and later fingers are
+      // inert for the same reason.
+      if (xf) return;
+      if (touches.size === 2 && intents.hasHeld()) {
+        cancelLong();
+        beginTransform();
+        return;
+      }
+    }
     intents.press(logical(e));
     if (e.pointerType === 'touch') {
       tapX = lpX = e.clientX;
@@ -121,11 +199,30 @@ export function attachControls(dom, intents) {
     }
   });
   dom.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch' && touches.has(e.pointerId))
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (xf) {
+      cancelLong();
+      updateTransform();
+      // Only the grabbing finger still reports; `transforming` tells client.js to hold the piece
+      // where it is, so a twist turns it instead of dragging it across the felt.
+      if (e.pointerId === xf.a) intents.move({ ...logical(e), transforming: true });
+      return;
+    }
     if (lpTimer && Math.hypot(e.clientX - lpX, e.clientY - lpY) >= LONG_PRESS_SLOP) cancelLong();
     intents.move(logical(e));
   });
   const onUp = (e) => {
     cancelLong();
+    if (e.pointerType === 'touch') touches.delete(e.pointerId);
+    if (xf) {
+      // Lifting either finger ends the transform. The partner's lift is swallowed entirely —
+      // releasing on it would drop the piece the other finger is still holding — while the
+      // grabbing finger falls through to the normal release.
+      const wasPartner = e.pointerId === xf.b;
+      xf = null;
+      if (wasPartner) return;
+    }
     intents.release(logical(e)); // release first, mirroring the native pointerup → dblclick order
     if (e.type !== 'pointerup' || e.pointerType !== 'touch') return;
     if (Math.hypot(e.clientX - tapX, e.clientY - tapY) >= TAP_SLOP) {

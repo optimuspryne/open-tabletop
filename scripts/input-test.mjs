@@ -28,13 +28,14 @@ import { attachControls } from '/controls.js';
 const rec = [];
 let held = false;
 const flags = (p) =>
-  ['primary','secondary','additive','rotate','fineRotate','touch'].filter((k) => p[k]).join('+') || '-';
+  ['primary','secondary','additive','rotate','fineRotate','touch','transforming'].filter((k) => p[k]).join('+') || '-';
 attachControls(document.getElementById('surface'), {
   press:  (p) => rec.push(['press', flags(p)]),
   move:   (p) => rec.push(['move', flags(p)]),
   release:(p) => rec.push(['release', flags(p)]),
   command:(k) => rec.push(['command', k.key]),
   raiseAxis:(d) => rec.push(['raiseAxis', d]),
+  rotateHeld:(r) => rec.push(['rotateHeld', r]),
   doubleClick: () => { rec.push(['doubleClick']); return true; },
   snapHeld: () => rec.push(['snapHeld']),
   ping: () => rec.push(['ping']),
@@ -43,7 +44,7 @@ attachControls(document.getElementById('surface'), {
 });
 const dom = document.getElementById('surface');
 const P = (type, o = {}) => dom.dispatchEvent(new PointerEvent(type, {
-  bubbles: true, cancelable: true, pointerId: 1, pointerType: o.t ?? 'touch',
+  bubbles: true, cancelable: true, pointerId: o.id ?? 1, pointerType: o.t ?? 'touch',
   clientX: o.x ?? 0, clientY: o.y ?? 0, button: o.button ?? 0,
   shiftKey: !!o.shift, altKey: !!o.alt,
 }));
@@ -53,13 +54,25 @@ const M = (type, o = {}) => dom.dispatchEvent(new MouseEvent(type, {
 Object.assign(window, {
   rec, P, M,
   setHeld: (v) => { held = v; },
-  reset: () => { rec.length = 0; },
+  // Every case starts from a clean profile: lift any fingers the previous case left down
+  // (controls.js keeps live-pointer and transform state that a bare rec.length=0 would not
+  // clear), drop the held piece, then clear the recording.
+  reset: () => {
+    for (const id of [1, 2, 3]) P('pointercancel', { x: 0, y: 0, id });
+    held = false;
+    rec.length = 0;
+  },
   only: (...names) => rec.filter((r) => names.includes(r[0])),
   tap: (x, y, t = 'touch') => { P('pointerdown', { x, y, t }); P('pointerup', { x, y, t }); },
   wheel: (dy) => dom.dispatchEvent(new WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY: dy })),
   ctx: () => dom.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })),
   key: (k) => window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: k })),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+  // Two-finger helpers: finger 1 grabs, finger 2 is the transform partner.
+  grab: (x, y) => { setHeld(true); P('pointerdown', { x, y, id: 1 }); },
+  second: (x, y) => P('pointerdown', { x, y, id: 2 }),
+  moveF: (id, x, y) => P('pointermove', { x, y, id }),
+  sum: (name) => rec.filter((r) => r[0] === name).reduce((t, r) => t + r[1], 0),
 });
 window.__ready = true;
 </script>`;
@@ -197,6 +210,119 @@ const CASES = [
     `reset(); key('Escape');`,
     `JSON.stringify(only('command'))`,
     '[["command","Escape"]]',
+  ],
+
+  // ---- two-finger transform (twist → rotate, pinch → height) ------------------------
+  // The gesture only exists while a piece is held; with nothing held, two fingers must
+  // stay available to the camera.
+  [
+    'a second finger while holding does not raise a press',
+    `reset(); setHeld(true); P('pointerdown',{x:100,y:100,id:1}); second(200,100);`,
+    `only('press').length`,
+    1,
+  ],
+  [
+    'a second finger with nothing held is a normal press (camera keeps two-finger pan)',
+    `reset(); setHeld(false); P('pointerdown',{x:100,y:100,id:1}); second(200,100);`,
+    `only('press').length`,
+    2,
+  ],
+  [
+    'a clockwise twist rotates the held piece the same way',
+    // b swings from right-of-a to below-a: clockwise on screen, so the sent angle is negative.
+    `reset(); grab(100,100); second(200,100); moveF(2,100,200);`,
+    `sum('rotateHeld') < 0`,
+    true,
+  ],
+  [
+    'a counter-clockwise twist rotates the other way',
+    `reset(); grab(100,100); second(200,100); moveF(2,100,0);`,
+    `sum('rotateHeld') > 0`,
+    true,
+  ],
+  [
+    'a quarter turn sends about a quarter turn',
+    `reset(); grab(100,100); second(200,100); moveF(2,100,200);`,
+    `Math.abs(Math.abs(sum('rotateHeld')) - Math.PI/2) < 1e-6`,
+    true,
+  ],
+  [
+    'spreading the fingers raises, without rotating',
+    // dist 100 → 200 along the same axis: 100px / 28px per step = 3 steps, angle unchanged.
+    `reset(); grab(100,100); second(200,100); moveF(2,300,100);`,
+    `JSON.stringify([sum('raiseAxis'), only('rotateHeld').length])`,
+    '[3,0]',
+  ],
+  [
+    'closing the fingers lowers',
+    `reset(); grab(100,100); second(300,100); moveF(2,200,100);`,
+    `sum('raiseAxis')`,
+    -3,
+  ],
+  [
+    'a twist at constant spread does not change height',
+    `reset(); grab(100,100); second(200,100); moveF(2,100,200);`,
+    `only('raiseAxis').length`,
+    0,
+  ],
+  [
+    // b sits just above the -x axis and crosses to just below it: atan2 jumps from ~-pi to ~+pi,
+    // a raw delta of nearly a full turn for a couple of degrees of real motion. Without the
+    // unwrap the piece spins the long way round.
+    'a twist across the +/-pi seam is a small turn, not a full spin',
+    `reset(); grab(100,100); second(0,99); moveF(2,0,101);`,
+    `Math.abs(sum('rotateHeld')) < 0.1`,
+    true,
+  ],
+  [
+    'fingers pinched closer than the noise floor do not rotate',
+    `reset(); grab(100,100); second(110,100); moveF(2,100,110);`,
+    `only('rotateHeld').length`,
+    0,
+  ],
+  [
+    'the grabbing finger keeps moving, flagged as transforming',
+    `reset(); grab(100,100); second(200,100); moveF(1,105,105);`,
+    `JSON.stringify(only('move'))`,
+    '[["move","primary+touch+transforming"]]',
+  ],
+  [
+    'the partner finger raises no move of its own',
+    `reset(); grab(100,100); second(200,100); moveF(2,200,150);`,
+    `only('move').length`,
+    0,
+  ],
+  [
+    'lifting the partner does not drop the piece',
+    `reset(); grab(100,100); second(200,100); P('pointerup',{x:200,y:100,id:2});`,
+    `only('release').length`,
+    0,
+  ],
+  [
+    'lifting the grabbing finger still releases',
+    `reset(); grab(100,100); second(200,100); P('pointerup',{x:100,y:100,id:1});`,
+    `only('release').length`,
+    1,
+  ],
+  [
+    'a third finger is inert',
+    // The grabbing finger's own press is the only one that may appear.
+    `reset(); grab(100,100); second(200,100); P('pointerdown',{x:50,y:50,id:3});`,
+    `JSON.stringify(only('press'))`,
+    '[["press","primary+touch"]]',
+  ],
+  [
+    'the transform ends with the partner, so a later twist does nothing',
+    `reset(); grab(100,100); second(200,100); P('pointerup',{x:200,y:100,id:2});
+     reset(); moveF(2,100,200);`,
+    `only('rotateHeld').length`,
+    0,
+  ],
+  [
+    'a two-finger transform never arms the long-press menu',
+    `reset(); grab(100,100); second(200,100); await sleep(560);`,
+    `only('secondaryPress').length`,
+    0,
   ],
 ];
 

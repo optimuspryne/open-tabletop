@@ -25,13 +25,14 @@ does; the tables below are the ledger of how far that has gotten.
 Empty felt only — a press that hits a piece is consumed by the piece dispatcher
 (`client.js:2572`) before OrbitControls sees it.
 
-| Gesture | What it does | Touch | Status |
-|---|---|---|---|
-| Left-drag empty felt | Orbit | One-finger drag | ✅ |
-| Right-drag empty felt | Pan | Two-finger drag | ✅ |
-| Wheel (nothing held) | Zoom | Two-finger pinch | ✅ |
-| Interactions → ↩ My Seat | Camera back to your seat | Same button | ✅ |
-| Interactions → 🔎 Lean In / Out | Nudge the view in/out | Same buttons | ✅ |
+| Gesture                         | What it does                    | Touch | Status |
+|---------------------------------|---------------------------------|---|---|
+| Left-drag empty felt            | Orbit                           | One-finger drag | ✅ |
+| Right-drag empty felt           | Pan                             | Two-finger drag | ✅ |
+| Wheel (nothing held)            | Zoom                            | Two-finger pinch | ✅ |
+| Interactions → ↩ My Seat        | Camera back to your seat        | Same button | ✅ |
+| Interactions → Bird's Eye View  | Camera directly above the table | Same button | ✅ |
+| Interactions → 🔎 Lean In / Out | Nudge the view in/out           | Same buttons | ✅ |
 
 OrbitControls is constructed with defaults (`core.js:52`) apart from `maxPolarAngle` and damping,
 so the touch bindings above are three.js's own: one finger rotates, two dolly and pan.
@@ -41,10 +42,10 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 | Gesture | What it does | Touch | Status |
 |---|---|---|---|
 | Left-hold + drag | Pick up, move, release to drop/throw | Finger drag | ✅ |
-| Wheel while holding | Raise / lower the held piece | `.holdControls` ▲ / ▼ (hold to repeat, `client.js:5451`) | ✅ |
-| Alt + drag while holding | Rotate the held piece in 15° steps | — | ❌ |
-| Alt + Shift + drag | Smooth (unsnapped) rotation | — | ❌ |
-| Middle-click while holding | Rotate the held piece's facing to the next 45° step | — | ❌ |
+| Wheel while holding | Raise / lower the held piece | Two-finger **pinch** while holding, or `.holdControls` ▲ / ▼ | ✅ |
+| Alt + drag while holding | Rotate the held piece in 15° steps | Two-finger **twist** while holding | ✅ |
+| Alt + Shift + drag | Smooth (unsnapped) rotation | ⟲ / ⟳ hold buttons (~7.5°/tick, continuous) | ⚠️ |
+| Middle-click while holding | Rotate the held piece's facing to the next 45° step | Twist (15° steps, not 45°) | ⚠️ |
 | Middle-click empty felt | Ping everyone | Long-press empty felt (`client.js:4977`) | ✅ |
 | Double-left-click | Inspect up close | Double-tap | ✅ |
 | Right-click a piece | Context verbs | Long-press → radial menu | ✅ |
@@ -59,19 +60,28 @@ grab-2 kinds; Inspect (inspectables); and Stand / lay flat, Snap to grid, Delete
 On a phone it arcs around the press point (`openRadial`); above `RADIAL_MAX` items, or on a
 non-sheet layout, it falls back to a flat list.
 
+**Two-finger twist and pinch** (`controls.js`) is the other half of the touch surface, and the
+one gesture that is *better* than its mouse counterpart. While a piece is held, a second finger
+turns the gesture into a photo-editor transform: the angle between the fingers rotates the piece,
+the distance between them raises and lowers it. Both are free because the camera is already
+disabled during a hold, so two fingers here are not pan/dolly. The twist is 1:1 — turn the
+fingers 45°, the piece turns 45° — where the mouse's Alt-drag maps horizontal pixels to an angle
+at a tuned 0.57°/px. Rotation snaps to the same 15° the mouse uses, which doubles as the dead
+zone that stops a stray finger nudging a piece.
+
 ## Cards & decks
 
-| Gesture | What it does | Touch | Status |
-|---|---|---|---|
-| Left-click a table card | Take it into your hand | Radial → **Take to hand** | ⚠️ |
-| Right-click a table card | Flip it | Radial → **Flip** | ✅ |
-| Left-drag from a deck | Draw the top card | Finger drag | ✅ |
-| Left-click a deck | Deal one face-down beside it | Tap | ✅ |
-| Right-click a deck | Shuffle | Radial → **Shuffle** | ✅ |
-| Right-drag a deck | Pick up and move the whole deck | Radial → **Move (then drag)**, then drag | ⚠️ |
-| Double-right-click a deck | Split the deck | Radial → **Split** | ✅ |
-| Double-click a deck | Peek at the top card | Double-tap | ✅ |
-| `F` / `D` / `H` / `R` in the peek | Place face-up / face-down / to hand / return | The four `[data-place]` buttons in the peek overlay (`table.html:954`) | ✅ |
+| Gesture | What it does                                 | Touch                                                                  | Status |
+|---|----------------------------------------------|------------------------------------------------------------------------|--------|
+| Left-click a table card | Take it into your hand                       | Tap or Radial → **Take to hand**                                       | ✅     |
+| Right-click a table card | Flip it                                      | Radial → **Flip**                                                      | ✅     |
+| Left-drag from a deck | Draw the top card                            | Finger drag                                                            | ✅     |
+| Left-click a deck | Take top card into hand                      | Tap                                                                    | ✅     |
+| Right-click a deck | Shuffle                                      | Radial → **Shuffle**                                                   | ✅     |
+| Right-drag a deck | Pick up and move the whole deck              | Radial → **Move (then drag)**, then drag                               | ⚠️     |
+| Double-right-click a deck | Split the deck                               | Radial → **Split**                                                     | ✅     |
+| Double-click a deck | Peek at the top card                         | Double-tap                                                             | ✅     |
+| `F` / `D` / `H` / `R` in the peek | Place face-up / face-down / to hand / return | The four `[data-place]` buttons in the peek overlay (`table.html:954`) | ✅     |
 
 ## Your private hand
 
@@ -119,20 +129,15 @@ unreachable on iOS and iPadOS.
 
 ## Gaps
 
-Three, in rough order of how much they cost a touch player:
+Two, in rough order of how much they cost a touch player:
 
-1. **Rotating a held piece has no touch path.** All three ways to turn a piece you are holding
-   are mouse-only: middle-click (next 45° step, `snap`), Alt+drag (15° steps), and Alt+Shift+drag
-   (smooth). The ⟲ / ⟳ hold buttons rotate a *selection* via `rotateGroup`, and they do fall back
-   to the held piece when the selection is empty (`client.js:5458`) — but they are ~7.5°/tick and
-   continuous, so there is no touch way to land a piece on an exact 15° or 45° step. This is the
-   gap most likely to be felt: orienting a miniature or a board tile is routine.
-2. **Exact-step formation rotation.** Same root cause, one level up: `[` / `]` are ∓45° steps and
-   the touch buttons are continuous.
-3. **Single-tap parity for card verbs.** Left-click takes a card to hand and left-click deals from
-   a deck; on touch, tap-to-deal works but tap-to-take does not — taking a card is a long-press
-   into the radial. The asymmetry is deliberate (a tap has to be able to mean "grab"), but it is
-   undocumented, and a new touch player has no way to discover the radial.
+1. **Exact-step formation rotation.** `[` / `]` turn a selection in ∓45° steps; the ⟲ / ⟳ hold
+   buttons are continuous at ~7.5°/tick, so a finger cannot land a formation on an exact 45°.
+   The two-finger twist covers a *held* piece (and a held selection, since the held-piece path
+   routes to `[...selection]` when `down.group` is set), but a selection you are not holding is
+   still button-only.
+2. **Smooth rotation is coarser on touch.** Alt+Shift gives unsnapped rotation; the twist always
+   snaps to 15°, and the hold buttons quantise to ~7.5°. Nothing on touch is truly free.
 
 Worth recording, because the naming invites exactly one wrong reading: **`snap` and `setSnap`
 are unrelated messages.** `snap` (`server/game/handlers/pieces.js:220`) rounds the held body's

@@ -1909,6 +1909,26 @@ const DRAG_MIN = CONFIG.grab.min,
 const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
 const DRAG_ROTATE_RAD_PER_PX = 0.01,
   DRAG_ROTATE_SNAP = Math.PI / 12; // Alt-drag: ~0.57°/px, snapped to 15° unless Shift is held
+
+// Turn the held piece (or the whole selection) by `raw` radians. Shared by the mouse's Alt-drag
+// dial and the touch two-finger twist, so both snap identically and neither loses sub-step
+// motion: the raw angle accumulates, and only the *applied* delta goes to the server.
+// Unsnapped mode is capped near the move send rate; snapped steps send the moment they land,
+// and the 15° quantum doubles as the dead zone that keeps a stray finger from nudging a piece.
+function applyHeldRotation(raw, fine = false) {
+  if (!(down && down.grabbed) || !room) return;
+  down.rotateRaw += raw;
+  const angle = fine
+      ? down.rotateRaw
+      : Math.round(down.rotateRaw / DRAG_ROTATE_SNAP) * DRAG_ROTATE_SNAP,
+    delta = angle - down.rotateSent,
+    now = performance.now();
+  if (Math.abs(delta) > 1e-4 && (!fine || now - down.lastRotateSent > 16)) {
+    room.send('rotateGroup', { ids: down.group ? [...selection] : [down.id], angle: delta });
+    down.rotateSent = angle;
+    down.lastRotateSent = now;
+  }
+}
 let dragHeight = GRAB_HEIGHT;
 let holdSig = -1; // visibility signature for the clustered height/rotate controls (synced each frame)
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
@@ -2734,6 +2754,16 @@ const onPointerMove = (e) => {
   }
 
   if (down.grabbed) {
+    if (e.transforming) {
+      // A two-finger transform owns this gesture: the twist/pinch arrive as their own intents
+      // (rotateHeld / raiseAxis), so the moving finger must not also drag the piece across the
+      // felt. Freeze XZ the way the Alt-drag dial does, and keep the throw estimator anchored to
+      // where the piece actually is, so lifting a finger can never fling it.
+      throwVel.set(0, 0, 0);
+      prevTarget.copy(heldTarget);
+      prevThrowTime = performance.now();
+      return;
+    }
     if (e.rotate) {
       // Alt turns the held-piece drag into a horizontal rotation dial. Accumulate raw pointer
       // motion so snapped rotation does not lose sub-step movement; Shift exposes that raw angle.
@@ -2741,24 +2771,11 @@ const onPointerMove = (e) => {
         down.rotating = true;
         if (!down.rotateOnPress) down.rotateX = e.clientX; // Alt pressed after the grab: anchor here
       }
-      down.rotateRaw += (e.clientX - down.rotateX) * DRAG_ROTATE_RAD_PER_PX;
+      const raw = (e.clientX - down.rotateX) * DRAG_ROTATE_RAD_PER_PX;
       down.rotateX = e.clientX;
-      const angle = e.fineRotate
-          ? down.rotateRaw
-          : Math.round(down.rotateRaw / DRAG_ROTATE_SNAP) * DRAG_ROTATE_SNAP,
-        delta = angle - down.rotateSent,
-        now = performance.now();
-      // Snapped steps feel best immediately; continuous mode is capped near the move send rate.
-      if (Math.abs(delta) > 1e-4 && (!e.fineRotate || now - down.lastRotateSent > 16)) {
-        room.send('rotateGroup', {
-          ids: down.group ? [...selection] : [down.id],
-          angle: delta,
-        });
-        down.rotateSent = angle;
-        down.lastRotateSent = now;
-      }
+      applyHeldRotation(raw, e.fineRotate);
       throwVel.set(0, 0, 0); // rotating in place should never turn into a throw on release
-      prevThrowTime = now;
+      prevThrowTime = performance.now();
       return;
     }
     down.rotating = false;
@@ -2990,13 +3007,6 @@ const onKeyDown = (e) => {
     // toggle snap-to-grid for this piece
     const id = heldOrHoveredId();
     if (id) room.send('setSnap', { id });
-  } else if (e.key === 's' || e.key === 'S') {
-    // save a hovered deck to the shared library
-    const id = heldOrHoveredId();
-    if (id && meshes.get(id).type === 'deck') {
-      const name = prompt('Save this deck as:');
-      if (name && name.trim()) room.send('saveDeck', { deckId: id, name: name.trim() });
-    }
   } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
     // ping the table at the cursor
     sendPing();
@@ -4979,6 +4989,9 @@ const INPUT = {
     } // long-press empty felt → ping
   },
   hasHeld: () => !!(down && down.grabbed),
+  // Turn the held piece by a raw angle — the device-agnostic form of the Alt-drag dial.
+  // The touch profile raises it from a two-finger twist; a gamepad stick would too.
+  rotateHeld: (radians) => applyHeldRotation(radians),
   snapHeld: () => {
     if (down && down.grabbed) room.send('snap', { id: down.id });
   },
@@ -4989,9 +5002,10 @@ const INPUT = {
   raiseAxis: (dir) => {
     if (!(down && down.grabbed)) return;
     dragHeight = clamp(dragHeight + dir * DRAG_STEP, DRAG_MIN, DRAG_MAX); // up = raise
-    ray.setFromCamera(pointer, camera);
-    ray.ray.intersectPlane(dragPlane, hit); // fixed ground plane → XZ under the cursor
-    const t = snapXZ(hit.x, hit.z);
+    // Raise the piece where it already is, rather than re-deriving XZ from the pointer. Identical
+    // for the wheel (the cursor is still while scrolling), and necessary for the two-finger pinch,
+    // where the fingers travel but the piece is meant to stay put and only change height.
+    const t = snapXZ(heldTarget.x, heldTarget.z);
     if (down.group) room.send('moveGroup', { x: t.x, y: dragHeight, z: t.z });
     else room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z });
   },
