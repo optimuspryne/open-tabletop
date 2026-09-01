@@ -3474,6 +3474,7 @@ function applyRole(role) {
   gmTabs('libraryModal', ['boards', 'sky', 'scenes', 'games']); // GM-only tabs within the combined library
   gate('roomCode', 2); // room code display: GM+/owner/admin only
   gate('ctrlHelper', 1);
+  gate('ablGM', 2); // How-to-Play sections revealed by role
   gate('ctrlGM', 2); // How-to-Play sections revealed by role
   gate('reset', 2);
   gate('scenesBtn', 2);

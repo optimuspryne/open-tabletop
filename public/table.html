@@ -875,7 +875,7 @@
               <span class="lbl">Save Table</span>
             </button>
             <button id="roomSettings" class="gm-only" data-icon="brand-airtable">
-              <span class="lbl">Room Settings</span>
+              <span class="lbl">Table Settings</span>
             </button>
             <div class="grpLabel admin-only">Admin</div>
             <button id="addBtn" class="admin-only" data-icon="library-plus">
@@ -1580,51 +1580,50 @@
 
         <div class="libPane helpScroll" data-pane="mkb">
           <div class="helpSec">
-            <h4>Getting around</h4>
+            <h4>Getting Around</h4>
             <ul>
               <li>
                 <b>Left-drag</b> empty table to orbit your view; <b>right-drag</b> to pan up, down,
-                left and right; <b>scroll</b> to zoom.
+                left and right; <b>scroll with the mouse scroll-wheel</b> to zoom.
               </li>
               <li>
-                <b>Middle-click</b> empty table — or press <b>P</b> — to ping a spot for everyone.
+                <b>Middle-click</b> an empty spot on the table — or press <b>P</b> — to send a visual ping that everyone can see.
               </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>Picking things up</h4>
+            <h4>Picking Things Up</h4>
             <ul>
               <li>
                 <b>Left-click-hold</b> a piece to pick it up. Move it and let go to drop it — let go
-                while still moving and you throw it.
+                while still moving, and you throw it.
               </li>
-              <li><b>Scroll</b> while holding to raise and lower it.</li>
+              <li><b>Use the mouse scroll-wheel</b> while holding something to raise and lower it.</li>
               <li>
-                <b>W</b> / <b>S</b> (or <b>↑</b> / <b>↓</b>) also raise and lower, and repeat while
-                you hold the key.
+                <b>W</b> / <b>S</b> (or <b>↑</b> / <b>↓</b>) also raise and lower.
               </li>
               <li>
-                <b>Double-left-click</b> a piece to inspect it up close, where you can recolour it
+                <b>Double-left-click</b> a piece to inspect it up close, where you can re-color it
                 or drag to turn it. Click away to close.
               </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>Turning a piece</h4>
+            <h4>Turning a Piece</h4>
             <ul>
               <li>
-                <b>Alt + drag</b> sideways while holding turns it in 15° steps; add <b>Shift</b> for
+                Holding <b>Alt</b> and then moving your mouse left and right while holding anything turns it in 15° steps; hold <b>Shift</b> as well for
                 smooth, unsnapped turning.
               </li>
-              <li><b>Middle-click</b> while holding snaps its facing to the next 45°.</li>
+              <li>Pressing the <b>middle-mouse button</b> while holding anything rotates it in 45° increments.</li>
               <li>
-                <b>A</b> / <b>D</b> (or <b>←</b> / <b>→</b>) turn it a little at a time, repeating
-                while you hold the key. These work on a selection too.
+                Pressing <b>A</b> / <b>D</b> (or <b>←</b> / <b>→</b>) while holding anything also rotates it.
               </li>
+              <li>All of the above work on a multi-selection of objects as well.</li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>Piece shortcuts</h4>
+            <h4>Piece Shortcuts</h4>
             <ul>
               <li>
                 With a piece held or under the cursor: <b>Delete</b> removes it, <b>U</b> stands it
@@ -1637,15 +1636,14 @@
             </ul>
           </div>
           <div class="helpSec">
-            <h4>Cards &amp; decks</h4>
+            <h4>Cards &amp; Decks</h4>
             <ul>
               <li>
                 <b>Left-click</b> a card on the table to take it into your hand;
-                <b>right-click</b> it to flip it over. A card is the one piece with no menu — its
-                whole vocabulary is take, move and flip.
+                <b>Right-click</b> a card it to flip it over. A card is the one piece with no menu.
               </li>
               <li>
-                <b>Left-click</b> a deck to take its top card into your hand; <b>left-drag</b> off a
+                <b>Left-click</b> a deck to take its top card into your hand; <b>left-click + drag</b> off a
                 deck to draw the top card and carry it out.
               </li>
               <li>
@@ -1654,7 +1652,7 @@
                 the menu. <b>Right-click-hold + drag</b> still moves it too.
               </li>
               <li>
-                <b>Double-click</b> a deck to peek at the top card, then <b>F</b> to place it
+                <b>Double-left-click</b> a deck to peek at the top card, then <b>F</b> to place it
                 face-up, <b>D</b> face-down, <b>H</b> into your hand, or <b>R</b> to put it back.
               </li>
             </ul>
@@ -1671,8 +1669,8 @@
                 <b>right-drag</b> (or right-click) and it lands face-up.
               </li>
               <li>
-                <b data-icon="chevron-down">Hide hand</b> tucks it away;
-                <b data-icon="cards">Show hand</b> brings it back.
+                <b data-icon="eye-off">Hide Hand</b> tucks it away;
+                <b data-icon="cards eye">Show Hand</b> brings it back.
               </li>
             </ul>
           </div>
@@ -1680,10 +1678,10 @@
             <h4>Working with several pieces</h4>
             <ul>
               <li>
-                <b>Shift + drag</b> empty table to box a selection; <b>Shift + click</b> a piece to
-                add or remove it.
+                Hold <b>Shift + left-click + drag </b> empty table box select multiple objects; Hold <b>Shift + left-click</b> an object to
+                add or remove it from a multi-selection.
               </li>
-              <li>Drag any selected piece and the whole group comes with it.</li>
+              <li>Left-click + drag any selected piece in a group, and the whole group comes with it.</li>
               <li>
                 On a selection: <b>U</b> stand or lay flat, <b>G</b> snap to grid, <b>F</b> flip
                 every card, <b>R</b> roll every die, <b>H</b> take every card to hand,
@@ -1699,7 +1697,7 @@
 
         <div class="libPane helpScroll" data-pane="touch" hidden>
           <div class="helpSec">
-            <h4>Getting around</h4>
+            <h4>Getting Around</h4>
             <ul>
               <li>
                 <b>One finger</b> on empty table orbits your view; <b>two fingers</b> pan;
@@ -1709,10 +1707,10 @@
             </ul>
           </div>
           <div class="helpSec">
-            <h4>Picking things up</h4>
+            <h4>Picking Things Up</h4>
             <ul>
               <li>
-                <b>Drag</b> a piece to pick it up and move it. Let go while still moving to throw
+                <b>Touch + hold + drag</b> a piece to pick it up and move it. Let go while still moving to throw
                 it.
               </li>
               <li>
@@ -1784,12 +1782,12 @@
               </li>
               <li>
                 <b>Drag a card out with one finger</b> and it lands face-down.
-                <b>Put a second finger down</b> and it lands face-up — you can add or lift that
+                <b>Drag a card out with two fingers</b> and it lands face-up — you can add or lift that
                 finger mid-drag to change your mind.
               </li>
               <li>
-                <b data-icon="chevron-down">Hide hand</b> tucks it away;
-                <b data-icon="cards">Show hand</b> brings it back.
+                <b data-icon="eye-off">Hide hand</b> tucks it away;
+                <b data-icon="eye">Show hand</b> brings it back.
               </li>
             </ul>
           </div>
@@ -1811,7 +1809,7 @@
 
         <div class="libPane helpScroll" data-pane="table" hidden>
           <div class="helpSec">
-            <h4>Interactions</h4>
+            <h4>Your Seat Button</h4>
             <ul>
               <li><b data-icon="armchair">My Seat</b> snaps the camera back to your own seat.</li>
               <li><b data-icon="eye-up">Bird's Eye View</b> looks straight down at the table.</li>
@@ -1819,93 +1817,95 @@
                 <b data-icon="zoom-in">Lean In</b> zooms in slightly, as if leaning over the table;
                 <b data-icon="zoom-in">Lean Out</b> returns.
               </li>
-              <li>
-                <b data-icon="dice-5">Dice Box</b> Shows you your personal Dice box where you can
-                load and roll dice.
-              </li>
-              <li>
-                <b data-icon="cards">Show Hand</b> briefly reveals cards you choose to players you
-                choose.
-              </li>
-              <li>
-                <b data-icon="cards">Drop Hand</b> puts your whole hand on the table, face-up or
-                face-down.
-              </li>
             </ul>
           </div>
           <div class="helpSec">
-            <h4>Tools</h4>
+            <h4>Table Actions</h4>
             <ul>
-              <li><b data-icon="notes">Private Notes</b> is a scratchpad only you can see.</li>
               <li>
-                <b data-icon="message-dots">Chat</b> is the room's public chat. The icon marks
-                itself when there are messages you have not read.
+                <b data-icon="dice-5">Dice Box.</b> Shows you your personal dice box, where you can
+                spawn and roll dice.  You can also customize the colors of your dice and save them as your default.
               </li>
-              <li><b data-icon="scoreboard">Scoreboard</b> shows scores everyone can see.</li>
-              <li><b data-icon="clock">Timer</b> is a shared stopwatch and countdown.</li>
               <li>
-                <b data-icon="writing">Whiteboard</b> — when a GM has it out,
-                <b>double-click</b> (or <b>double-tap</b>) the board to take control and draw. Pen,
-                eraser and clear appear while you have it; <b>Esc</b> or <b>Done</b> hands it back.
-                While someone else is drawing, the board says who — wait for them to finish.
+                <b data-icon="library-plus">Library.</b> A quick way to access the library so you can spawn objects.
               </li>
-            </ul>
-          </div>
+              <li>
+                <b data-icon="select-all">Multi-Select.</b> Enable multi-select mode.
+              </li>
+              <li>
+                <b data-icon="ruler-measure">Measure.</b> Access measurement tools.
+              </li>
+              </ul>
+            </div>
+            <div class="helpSec">
+              <h4>Other Tools</h4>
+              <ul>
+                <li><b data-icon="notes">Private Notes.</b> A scratchpad only you can see.</li>
+                <li>
+                  <b data-icon="message-dots">Chat.</b>The room's public chat. The icon marks
+                  itself when there are messages you have not read.
+                </li>
+                <li><b data-icon="scoreboard">Scoreboard.</b> Shows everyone's scores. (GM-controlled)</li>
+                <li><b data-icon="clock">Timer.</b> A shared stopwatch and countdown.</li>
+                <li><b data-icon="music">Music.</b> Use this to listen to built-in music.</li>
+                <li><b data-icon="ruler-measure">Measure.</b> Access measurement tools.</li>
+                <li>
+                  <b data-icon="writing">Whiteboard.</b> When a GM has it out,
+                  <b>double-click</b> (or <b>double-tap</b>) the board to take control and draw. Pen,
+                  eraser and clear appear while you have it; <b>Esc</b> or <b>Done</b> hands it back.
+                  While someone else is drawing, the board says who — wait for them to finish.
+                </li>
+                <li><b data-icon="dots"> > </b><b data-icon="settings">Settings.</b> Go here to change UI and Volume settings.</li>
+              </ul>
+            </div>
           <div class="helpSec" id="ctrlHelper" hidden>
             <h4>Helper abilities</h4>
             <ul>
-              <li><b data-icon="dice-5">Dice</b> spawns dice quickly.</li>
               <li>
-                <b data-icon="books">Library</b> adds decks and objects — built-in or custom — to
+                <b data-icon="books">Library.</b> Use this to add dice, decks and objects — built-in or custom — to
                 the table.
               </li>
               <li>
-                <b>Tools → </b><b data-icon="scoreboard">Scoreboard</b> add, rename, adjust and
+                <b data-icon="scoreboard">Scoreboard.</b> Helpers can add, rename, adjust and
                 clear score rows.
               </li>
             </ul>
           </div>
-          <div class="helpSec" id="ctrlGM" hidden>
+          <div class="helpSec" id="ablGM" hidden>
             <h4>GM abilities</h4>
             <ul>
               <li>
-                <b data-icon="books">Library</b> also gives you boards, skyboxes, scenes and
+                <b data-icon="books">Library.</b> Use this to add dice, decks, objects.  GM status gives you access to boards, skyboxes, scenes and
                 pre-built games.
               </li>
               <li>
-                <b>Tools → </b><b data-icon="scoreboard">Scoreboard</b> add, rename, adjust and
-                clear score rows, and edit Room Notes.
+                <b data-icon="scoreboard">Scoreboard.</b> GMs can add, rename, adjust and
+                clear score rows.
               </li>
               <li>
-                <b>Tools → </b><b data-icon="writing">Whiteboard</b> show the whiteboard, set its
-                style and place it on the table live.
+                <b>Room info > Players</b>.  The list of players can be re-organized manually to suit whatever turn order you desire.
               </li>
               <li>
-                <b data-icon="player-track-next">Next Turn</b> moves turn order on to the next
-                person.
+                <b>Room info > Room Notes</b>.  Only GMs can modify this text field, but everyone can see them. Put info like 'house rules' etc here.
+              </li>
+              <li>
+                <b>Room info > Members</b>.  Click the buttons here to admit, promote/demote, or kick players.
               </li>
             </ul>
-            <h4>Room controls</h4>
+          </div>
+          <div class="helpSec" id="ctrlGM" hidden>
+            <h4>GM Room Controls</h4>
             <ul>
               <li>
-                <b data-icon="users">Members</b> approve people waiting to join, promote them to
-                helper or GM, and remove them from the room.
+                <b data-icon="movie">Scenes.</b> View and load custom Scenes.
               </li>
               <li>
-                <b data-icon="movie">Load a Scene</b> loads a published scene — a ready-to-play
-                setup.
+                <b data-icon="device-floppy">Save Table.</b> Click this to save the table in it's current state.
               </li>
               <li>
-                <b data-icon="device-floppy">Save Table State</b> saves the table as it stands. The
-                table also saves itself when the last GM leaves.
-              </li>
-              <li>
-                <b data-icon="color-swatch">Customize Table</b> changes the size of the play area
-                and the colour of the felt, live.
-              </li>
-              <li>
-                <b data-icon="sunset-2">Skybox</b> browses skyboxes; <b>Apply</b> swaps the current
-                one.
+                <b data-icon="brand-airtable">Table Settings</b> This opens a menu where you can change
+                table dimensions, set scale options, enable and modify grids.  This is also where you can show
+                and position the <b data-icon="writing">Whiteboard</b>
               </li>
               <li>
                 <b data-icon="trash">Reset</b> clears the table of everything, including everyone's
@@ -1914,7 +1914,6 @@
             </ul>
           </div>
         </div>
-
         <div class="libPane helpScroll" data-pane="soon" hidden>
           <div class="helpSec">
             <h4>On the way</h4>
