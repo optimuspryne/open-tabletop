@@ -8,6 +8,25 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- **Dice finishes.** A die is no longer just a color — it now carries a surface finish laid over
+  that color, chosen from the new **Finish** button in the dice tray (for every die you own at
+  once) or a single die's inspector. **Matte**, **Satin** and **Glossy** walk from flat to a hard
+  specular highlight; **Metallic** turns the die to tinted metal that picks up the room around it,
+  keeping the die's own hue in the reflection rather than going chrome. **Pearl** adds a soft
+  clearcoat sheen, and **Marbled** is a procedural D&D-resin look — domain-warped veins of varying
+  thickness whose color adapts to the die, dark veins on a light body and light veins on a dark
+  one, so no two faces read the same. **Translucent** lets a little light through, **Glow** makes
+  the die emit its own color in a dim scene, and **Brushed** is directional metal. The finish
+  rides along with the die everywhere — spawns, recolors and the roll all carry it, and it is
+  saved as your per-die default.
+- **Finishes degrade instead of crashing on low-end phones.** The physical, transparent and
+  roughness-map shaders behind Brushed, Translucent and Pearl black-screen some Android GPUs, so
+  on a phone the renderer quietly substitutes a safe look — Brushed becomes Metallic, Translucent
+  becomes Satin, Pearl becomes Glossy — and the picker hides those three options entirely. The
+  swap happens at mesh-build time no matter who set the finish, so a die another player made
+  Brushed still renders on the phone. Tablets and desktops show the real thing.
+
 
 ## [0.13.0] — 2026-09-01
     
