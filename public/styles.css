@@ -1516,6 +1516,14 @@ input[type='range']::-moz-range-thumb {
 [data-pane='imgboards'] .addCol input[type='text'] {
   max-width: 50%;
 }
+/* Dice-texture pane: a square upload/preview tile + a non-full-width name field */
+[data-pane='dice'] .uploadSq {
+  width: 200px;
+  aspect-ratio: 1;
+}
+[data-pane='dice'] .addCol input[type='text'] {
+  max-width: 340px;
+}
 /* Add-modal: hold every tab at the tallest tab's height (Text Decks) so switching doesn't resize the modal; Save row pinned bottom-right */
 #addModal .libPane {
   display: flex;

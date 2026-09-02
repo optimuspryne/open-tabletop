@@ -95,6 +95,14 @@
           <div id="propSwatches" class="swatchRow" hidden></div>
         </div>
       </div>
+      <div class="pop-group" id="dieCustomGroup" data-close hidden>
+        <button type="button" class="pop-trigger" data-icon="sparkles">
+          <span class="lbl">Custom</span>
+        </button>
+        <div class="pop-menu" hidden>
+          <div id="dieTextures" class="chipRow"></div>
+        </div>
+      </div>
       <button
         type="button"
         id="inspectDefaultBtn"
@@ -175,11 +183,19 @@
         </div>
       </div>
       <div class="pop-group" data-close>
-        <button class="pop-trigger" data-icon="sparkles">
+        <button class="pop-trigger" data-icon="highlight">
           <span class="lbl">Finish</span>
         </button>
         <div class="pop-menu" hidden>
           <div id="trayFinishes" class="chipRow"></div>
+        </div>
+      </div>
+      <div class="pop-group" id="trayCustomGroup" data-close hidden>
+        <button class="pop-trigger" data-icon="sparkles">
+          <span class="lbl">Custom</span>
+        </button>
+        <div class="pop-menu" hidden>
+          <div id="trayTextures" class="chipRow"></div>
         </div>
       </div>
       <button id="trayRoll" data-icon="dice-5"><span class="lbl">Roll</span></button>

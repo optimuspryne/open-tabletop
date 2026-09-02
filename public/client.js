@@ -460,26 +460,30 @@ let diceTextures = [];
 let finishDieRef = null;
 function buildTextureChips(row, apply) {
   if (!row) return;
-  for (const el of [...row.querySelectorAll('[data-tex]')]) el.remove(); // clear stale texture chips
+  row.replaceChildren(); // dedicated texture row → just the thumbnails
   for (const t of diceTextures) {
     const chip = document.createElement('button');
     chip.type = 'button';
-    chip.className = 'chip';
+    chip.className = 'chip texChip'; // thumbnail-only: the image IS the chip, name is the tooltip
     chip.dataset.tex = t.id;
-    chip.innerHTML = '<span class="thumb"></span><span class="lbl"></span>';
-    const thumb = chip.querySelector('.thumb');
-    thumb.style.cssText =
-      'display:inline-block;width:16px;height:16px;border-radius:3px;background-size:cover;background-position:center;vertical-align:middle;margin-right:5px';
-    thumb.style.backgroundImage = `url("${t.url}")`;
-    chip.querySelector('.lbl').textContent = t.name;
-    chip.title = t.name + ' — custom texture';
+    chip.title = t.name;
+    chip.style.cssText =
+      'width:34px;height:34px;padding:0;background-size:cover;background-position:center;border-radius:6px';
+    chip.style.backgroundImage = `url("${t.url}")`;
     chip.onclick = () => apply(t.url);
     row.appendChild(chip);
   }
 }
+// Rebuild the Custom texture pickers and gate their menu buttons: no textures → no Custom button
+// in the dice box; the inspector's Custom button is also gated on the piece being a die (on inspect).
 function refreshTextureChips() {
-  buildTextureChips(byId('trayFinishes'), (url) => applyDiceFinish('custom', url));
-  if (finishDieRef) buildTextureChips(byId('dieFinishes'), (url) => finishDieRef('custom', url));
+  buildTextureChips(byId('trayTextures'), (url) => applyDiceFinish('custom', url));
+  if (finishDieRef) buildTextureChips(byId('dieTextures'), (url) => finishDieRef('custom', url));
+  const has = diceTextures.length > 0;
+  const tg = byId('trayCustomGroup');
+  if (tg) tg.hidden = !has;
+  const dg = byId('dieCustomGroup');
+  if (dg && !has) dg.hidden = true;
 }
 
 // Mesh-build props for a piece. Dispensers stack their body to the live `count`,
@@ -1493,7 +1497,7 @@ function rebuildGrid() {
         chip.onclick = () => applyDiceFinish(f.key);
         finRow.appendChild(chip);
       }
-      buildTextureChips(finRow, (url) => applyDiceFinish('custom', url));
+      refreshTextureChips(); // Custom textures live in their own #trayTextures menu
     }
   }
   {
@@ -2474,7 +2478,7 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       chip.onclick = () => finishDie(f.key);
       dieFinRow.appendChild(chip);
     }
-    buildTextureChips(dieFinRow, (url) => finishDie('custom', url));
+    refreshTextureChips(); // Custom textures live in their own #dieTextures menu
   }
   const defBtn = byId('inspectDefaultBtn'); // remember this die's color as my default for its type
   if (defBtn)
@@ -2660,6 +2664,8 @@ function inspectMesh(mesh, opts = {}) {
       }
       const swRow = byId('dieSwatches');
       if (swRow) swRow.hidden = !isDie; // dice sets (dice only)
+      const dcg = byId('dieCustomGroup');
+      if (dcg) dcg.hidden = !isDie || !diceTextures.length; // Custom textures: dice only, when any exist
       const dfRow = byId('dieFinishes');
       if (dfRow) {
         dfRow.hidden = !isDie; // finishes (dice only)
