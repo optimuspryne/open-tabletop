@@ -197,6 +197,7 @@ export const PROPS = {
     model: '/models/pieces/misc/coin.glb',
     modelScale: 0.3,
     ownMaterial: false,
+    metal: true,
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
@@ -204,6 +205,7 @@ export const PROPS = {
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.18,
     tintMaterial: 'c1',
+    glossy: true, // the tinted body gets a glossy sheen; the white rim stays matte
   }, // color picker tints only the body; white rim kept
   token: {
     mass: 0.4,

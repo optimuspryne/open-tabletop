@@ -1348,6 +1348,18 @@ function loadModelGroup(url, fitOpts, onMesh, beforeFit) {
   return group;
 }
 
+// The surface for a tinted prop/stack slot, honoring the spec's finish flag: `metal` renders
+// metallic and `glossy` a clear-gloss sheen (both catch the scene env map, like the Metallic /
+// Glossy dice finishes); everything else stays matte. One place, so a spawned prop and its
+// dispenser stack always match.
+function itemSurface(spec, color, side) {
+  if (spec && spec.metal)
+    return new THREE.MeshStandardMaterial({ color, metalness: 0.95, roughness: 0.35, side });
+  if (spec && spec.glossy)
+    return new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.1, side });
+  return new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+}
+
 // Build a prop's visual mesh. A prop is either a bundled/custom .glb MODEL or a
 // simple built-in SHAPE (box/sphere/cone/…). Models load asynchronously into a
 // placeholder group and color themselves in when ready; shapes build instantly.
@@ -1361,8 +1373,7 @@ function propMesh(props = {}) {
     // Work out how the model gets colored (used by paint below):
     const teamTint = builtin && spec.team ? propColor(props) : null; // a team set → recolor every slot
     const pick = !builtin || !spec.ownMaterial || spec.tintMaterial ? (props.color ?? null) : null; // the player's picked color
-    const matte = (color, side) =>
-      new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+    const matte = (color, side) => itemSurface(spec, color, side); // metal/glossy per spec, else matte
 
     // Decide the fate of one material slot on the loaded model.
     const paint = (material) => {
@@ -1814,7 +1825,8 @@ function dispenserMesh(props = {}) {
   const tint = props.color ?? null;
   const paint = (m) => {
     if (item.tintMaterial) {
-      if (tint != null && isTintSlot(m.name, item.tintMaterial)) return matte(tint, m.side);
+      if (tint != null && isTintSlot(m.name, item.tintMaterial))
+        return itemSurface(item, tint, m.side);
       m.metalness = 0;
       return m;
     }
@@ -1822,7 +1834,7 @@ function dispenserMesh(props = {}) {
       m.metalness = 0;
       return m;
     }
-    return tint != null ? matte(tint, m.side) : m;
+    return tint != null ? itemSurface(item, tint, m.side) : m;
   };
   // Per-disc facing jitter so a chip stack looks tumbled, not machine-aligned.
   // Deterministic in (index, seed): a given disc keeps its angle as the stack grows or
