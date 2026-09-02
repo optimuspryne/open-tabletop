@@ -5114,6 +5114,59 @@ function selColorDesc(piece) {
   const sig = opt.team ? 'team:' + key : opt.free ? 'free' : 'pal:' + key;
   return { sig, team: opt.team, swatches: opt.swatches };
 }
+// --- Compose (multi-select -> one composite piece) -------------------------------------------
+// Eligibility mirrors selectionPalette: a signature fn maps each piece to a compatibility key (or
+// null if the op can't touch it), and the selection is 'ok' when 2+ agree, 'mixed' when 2+
+// disagree, or hidden when fewer than 2 apply. The server re-checks authoritatively.
+// A card-family key = what makes two pieces stack into one deck: same back + geometry.
+function cardFamilySig(piece) {
+  if (piece.type !== 'card' && piece.type !== 'deck') return null;
+  let props;
+  try {
+    props = JSON.parse(piece.props || '{}');
+  } catch {
+    props = {};
+  }
+  return JSON.stringify([props.back || 'back', props.tile ?? null, props.geom ?? null]);
+}
+// A dispenser key = same kind + tint/team; infinite bowls are excluded (nothing to pour).
+function dispenserSig(piece) {
+  if (piece.type !== 'dispenser') return null;
+  let props;
+  try {
+    props = JSON.parse(piece.props || '{}');
+  } catch {
+    props = {};
+  }
+  const def = DISPENSERS[props.disp];
+  if (!def || def.infinite) return null;
+  return JSON.stringify([props.disp, props.color ?? null, props.team ?? null]);
+}
+// Fold the selection through a signature fn: 'ok' | 'mixed' | null.
+function composeState(sigOf) {
+  let sig = null;
+  let n = 0;
+  for (const id of selection) {
+    const piece = room?.state.pieces.get(id);
+    if (!piece) continue;
+    const s = sigOf(piece);
+    if (s == null) continue;
+    n++;
+    if (sig == null) sig = s;
+    else if (s !== sig) return 'mixed';
+  }
+  return n >= 2 ? 'ok' : null;
+}
+// Reflect a compose state onto its button: hidden when it doesn't apply, greyed when the
+// selection is mixed, enabled when it agrees.
+function setComposeBtn(el, state, okTitle, mixedTitle) {
+  if (!el) return;
+  el.hidden = state == null;
+  const mixed = state === 'mixed';
+  el.disabled = mixed;
+  el.classList.toggle('disabled', mixed);
+  el.title = mixed ? mixedTitle : okTitle;
+}
 // The palette shared by the WHOLE selection, for the recolor bar:
 //   null            → nothing recolorable is selected (all cards) → hide the bar
 //   { mixed:true }  → recolorable pieces disagree (e.g. a coin + a token) → show the bar disabled
@@ -5148,6 +5201,18 @@ let selBarSig = null; // last-rendered state, to avoid rebuilding every frame
 function refreshSelTools() {
   const abar = byId('selActions');
   if (abar) abar.hidden = !selection.size; // batch-op bar shows for any selection (also in the editor, which has no recolor bar)
+  setComposeBtn(
+    byId('selCombine'),
+    composeState(cardFamilySig),
+    'Combine into one deck',
+    'Cards and decks must share a back to combine',
+  );
+  setComposeBtn(
+    byId('selGather'),
+    composeState(dispenserSig),
+    'Gather into one dispenser',
+    'Dispensers must match to gather',
+  );
   const bar = byId('selRecolor');
   if (!bar) return;
   const desc = selection.size ? selectionPalette() : null;
@@ -6078,6 +6143,14 @@ initTip(); // themed hover-hint (icons.js)
   on('selFlip', send('flipGroup'));
   on('selRoll', send('rollGroup'));
   on('selTake', send('takeGroup'));
+  const compose = (msg) => () => {
+    if (room && selection.size) {
+      room.send(msg, { ids: [...selection] });
+      clearSelection();
+    }
+  };
+  on('selCombine', compose('combineIntoDeck'));
+  on('selGather', compose('gatherDispensers'));
   on('selDelete', () => {
     if (room && selection.size) {
       room.send('removeGroup', { ids: [...selection] });

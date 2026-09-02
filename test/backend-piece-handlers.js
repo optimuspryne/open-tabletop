@@ -18,6 +18,7 @@ const MESSAGE_NAMES = [
   'snap',
   'remove',
   'removeGroup',
+  'gatherDispensers',
 ];
 
 function vector(initial = {}) {
@@ -89,6 +90,9 @@ function harness({ rank = 3 } = {}) {
     spawn(type, position, props) {
       events.push({ name: 'spawn', payload: { type, position, props } });
     },
+    updateStackCollider(id) {
+      events.push({ name: 'stackCollider', payload: id });
+    },
     swapBoard(props) {
       events.push({ name: 'board', payload: props });
     },
@@ -110,6 +114,7 @@ function harness({ rank = 3 } = {}) {
     colliders: ['flat'],
     geoOf: (props) => (props.tile ? { tile: props.tile } : {}),
     randomPosition: () => [1, 4, 2],
+    spawnY: 4,
     random: () => 0.5,
     logger: { error() {} },
   });
@@ -196,4 +201,82 @@ test('malformed group messages do not mutate pieces', async () => {
   }
   assert.equal(room.state.pieces.has('1'), true);
   assert.deepEqual(events, []);
+});
+
+const dispenser = (disp, count, extra = {}) => ({
+  type: 'dispenser',
+  count,
+  props: JSON.stringify({ disp, ...extra }),
+});
+
+test('gathering like dispensers sums their stacks into one at the centre', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', dispenser('pokerStack', 20, { color: 0xd14b4b }));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', dispenser('pokerStack', 30, { color: 0xd14b4b }));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+
+  await handlers.get('gatherDispensers')(client, { ids: ['1', '2'] });
+
+  const spawn = events.find((e) => e.name === 'spawn');
+  assert.equal(spawn.payload.type, 'dispenser');
+  assert.deepEqual(spawn.payload.props, { disp: 'pokerStack', count: 50, color: 0xd14b4b });
+  assert.deepEqual(spawn.payload.position, [1, 4, 0]); // centroid x/z, spawnY
+  assert.equal(room.state.pieces.has('1'), false);
+  assert.equal(room.state.pieces.has('2'), false);
+  assert.deepEqual(events.at(-1), { name: 'sfx', payload: { type: 'object-drop' } });
+});
+
+test('gathering preserves the true token total past the per-stack spawn cap', async () => {
+  const { room, handlers } = harness();
+  // Simulate the real spawn clamping the stack to its max on the way in.
+  room.spawn = (type, position, props) => {
+    room.state.pieces.set('merged', {
+      type,
+      count: Math.min(props.count, 100),
+      props: JSON.stringify(props),
+    });
+    return 'merged';
+  };
+  room.state.pieces.set('1', dispenser('pokerStack', 100));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', dispenser('pokerStack', 100));
+  room.bodies.set('2', body({ x: 0, z: 0 }));
+
+  await handlers.get('gatherDispensers')(client, { ids: ['1', '2'] });
+
+  assert.equal(room.state.pieces.get('merged').count, 200); // restored past the clamp
+});
+
+test('gathering refuses a mix of dispenser kinds', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', dispenser('pokerStack', 20, { color: 0xd14b4b }));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', dispenser('coinStack', 20, { color: 0xd4af37 }));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+
+  await handlers.get('gatherDispensers')(client, { ids: ['1', '2'] });
+
+  assert.equal(room.state.pieces.has('1'), true);
+  assert.equal(room.state.pieces.has('2'), true);
+  assert.equal(
+    events.some((e) => e.name === 'spawn'),
+    false,
+  );
+});
+
+test('gathering excludes infinite bowls (nothing to pour)', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', dispenser('goBowl', 0, { team: 0 }));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', dispenser('goBowl', 0, { team: 0 }));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+
+  await handlers.get('gatherDispensers')(client, { ids: ['1', '2'] });
+
+  assert.equal(room.state.pieces.has('1'), true);
+  assert.equal(
+    events.some((e) => e.name === 'spawn'),
+    false,
+  );
 });

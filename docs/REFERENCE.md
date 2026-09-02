@@ -497,6 +497,16 @@ helper+), **`setStandGroup`** / **`setSnapGroup`** (`{ids}` — **U** / **G**, t
 **`[`** / **`]`**, rotate the whole formation ±45° about its centroid — each position _and_ each
 body's facing; skips boards).
 
+Composition ops turn a selection into a construction tool (still **not rank-gated**, like
+`splitDeck`): **`combineIntoDeck`** (`{ids}` — consolidate the selected card-family pieces —
+loose cards _and_ whole decks — into one face-down deck at their centroid, the top-of-table card
+on top; homogeneous back + geometry only, a mixed selection is refused rather than partly
+combined; registered with the card handlers) and **`gatherDispensers`** (`{ids}` — pour like
+dispensers, same kind + tint/team, into one stack at their centroid carrying the summed count;
+infinite bowls are skipped, and the true total is preserved past the per-stack spawn cap). Together
+they are the inverse-and-more of `splitDeck`: `combineIntoDeck` also scoops a discard pile back
+onto its deck.
+
 All payload-bearing handlers treat the socket as an untrusted boundary and normalize
 their input through `server/message-validation.js` before lookup or mutation. The
 normalizers accept plain objects with only the documented keys, require finite values

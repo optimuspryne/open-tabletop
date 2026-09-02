@@ -2,6 +2,7 @@ import { takeTopCard } from '../../deck-state.js';
 import {
   deckDragPayload,
   deckIdPayload,
+  groupIds,
   inspectPlacementPayload,
   pieceIdPayload,
 } from '../../message-validation.js';
@@ -194,6 +195,52 @@ export function registerCardHandlers(
       cards: bottom,
       ...geoOf(props),
     });
+  });
+
+  // Consolidate a multi-selection of card-family pieces (loose cards + whole decks) into one
+  // face-down deck at their centre. The inverse-and-then-some of splitDeck: it also scoops a
+  // deck's discard pile back in. Homogeneous back + geometry only — a mixed selection is refused
+  // outright (no partial combine); non-card pieces in the selection are ignored. Open to anyone
+  // who can touch decks, like splitDeck.
+  cardMessage('combineIntoDeck', (client, message) => {
+    const ids = groupIds(message, { max: maxPieces });
+    if (!ids) return;
+    const members = [];
+    for (const id of ids) {
+      const piece = room.state.pieces.get(id);
+      const body = room.bodies.get(id);
+      if (!piece || !body || (piece.type !== 'card' && piece.type !== 'deck')) continue;
+      members.push({ id, piece, body, props: readProps(piece) });
+    }
+    if (members.length < 2) return; // need at least two card-family pieces to consolidate
+    const sig = (pr) => JSON.stringify([pr.back || 'back', pr.tile ?? null, pr.geom ?? null]);
+    const target = sig(members[0].props);
+    if (members.some((m) => sig(m.props) !== target)) return; // mixed back/geom → refuse
+    members.sort((a, b) => b.body.position.y - a.body.position.y); // top of the table → top of deck
+    const cards = [];
+    let cx = 0;
+    let cz = 0;
+    for (const m of members) {
+      cx += m.body.position.x;
+      cz += m.body.position.z;
+      if (m.piece.type === 'deck') {
+        cards.push(...(room.deckCards.get(m.id) || [])); // whole stack, top-first
+      } else {
+        const front = room.cardData.get(m.id)?.front ?? m.props.front;
+        if (front != null) cards.push(front);
+      }
+    }
+    if (cards.length < 2) return; // e.g. only empty decks were selected
+    cx /= members.length;
+    cz /= members.length;
+    const props = members[0].props;
+    for (const m of members) room.removePiece(m.id); // remove first → the new deck always fits
+    room.spawn('deck', [cx, spawnY, cz], {
+      back: props.back || 'back',
+      cards,
+      ...geoOf(props),
+    });
+    room.broadcast('sfx', { type: dropSfx('deck', props) });
   });
 }
 

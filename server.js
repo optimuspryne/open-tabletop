@@ -647,6 +647,7 @@ class TableRoom extends Room {
       colliders: COLLIDER_TYPES,
       geoOf,
       randomPosition: rnd,
+      spawnY: SIM.spawnY,
     });
 
     // --- Cards: flip, deal, take, inspect, shuffle, split ----------------------

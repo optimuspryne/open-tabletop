@@ -1,5 +1,11 @@
 import * as CANNON from 'cannon-es';
-import { KINDS, dieSpawnProps, gridActive, snapToCell } from '../../../shared/pieces.js';
+import {
+  DISPENSERS,
+  KINDS,
+  dieSpawnProps,
+  gridActive,
+  snapToCell,
+} from '../../../shared/pieces.js';
 import { RANK } from '../../permissions.js';
 import {
   groupIds,
@@ -28,6 +34,7 @@ export function registerPieceHandlers(
     colliders,
     geoOf,
     randomPosition,
+    spawnY,
     random = Math.random,
     logger = console,
   },
@@ -247,6 +254,53 @@ export function registerPieceHandlers(
     const ids = idsFrom(message);
     if (!ids) return;
     for (const id of ids) if (room.state.pieces.has(id)) room.removePiece(id);
+  });
+
+  // Gather a multi-selection of like dispensers into one at their centre, summing their stacks.
+  // Same kind + same tint/team only; a mixed selection is refused. Infinite bowls are skipped —
+  // they are already unlimited, so there is nothing to pour together. Token total is conserved
+  // even past the per-stack spawn cap (the collider height is clamped separately). Open, like the
+  // deck ops.
+  pieceMessage('gatherDispensers', (client, message) => {
+    const ids = idsFrom(message);
+    if (!ids) return;
+    const members = [];
+    for (const id of ids) {
+      const piece = room.state.pieces.get(id);
+      const body = room.bodies.get(id);
+      if (!piece || !body || piece.type !== 'dispenser') continue;
+      const props = readProps(piece);
+      const def = DISPENSERS[props.disp];
+      if (!def || def.infinite) continue; // an unlimited bowl has nothing to pour
+      members.push({ id, piece, body, props });
+    }
+    if (members.length < 2) return;
+    const sig = (m) => JSON.stringify([m.props.disp, m.props.color ?? null, m.props.team ?? null]);
+    const target = sig(members[0]);
+    if (members.some((m) => sig(m) !== target)) return; // mixed kind/tint → refuse
+    let total = 0;
+    let cx = 0;
+    let cz = 0;
+    for (const m of members) {
+      total += m.piece.count | 0;
+      cx += m.body.position.x;
+      cz += m.body.position.z;
+    }
+    if (total <= 0) return;
+    cx /= members.length;
+    cz /= members.length;
+    const { disp, color, team } = members[0].props;
+    for (const m of members) room.removePiece(m.id); // remove first → the merged stack always fits
+    const spawnProps = { disp, count: total };
+    if (color != null) spawnProps.color = color;
+    if (team != null) spawnProps.team = team;
+    const id = room.spawn('dispenser', [cx, spawnY, cz], spawnProps);
+    const merged = room.state.pieces.get(id);
+    if (merged && merged.count !== total) {
+      merged.count = total; // preserve the true total past the per-stack spawn clamp
+      room.updateStackCollider(id);
+    }
+    room.broadcast('sfx', { type: 'object-drop' });
   });
 }
 

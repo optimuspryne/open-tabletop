@@ -81,6 +81,7 @@ test('card handler module registers the complete card/deck message family', () =
       'inspectPlace',
       'shuffle',
       'splitDeck',
+      'combineIntoDeck',
     ],
   );
 });
@@ -213,4 +214,71 @@ test('dealing onto a full table is blocked and notifies the client (piece cap)',
     2,
     'each blocked deal told the client the table is full',
   );
+});
+
+test('combining loose cards and a deck consolidates them top-first into one deck', () => {
+  const { room, handlers, events } = harness();
+  // A loose face-up card sitting above a two-card deck (higher y = on top of the table).
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ back: 'blue', front: 'ace' }),
+  });
+  room.bodies.set('1', { position: { x: 2, y: 3, z: 0 } });
+  room.state.pieces.set('2', { type: 'deck', props: JSON.stringify({ back: 'blue' }) });
+  room.bodies.set('2', { position: { x: 0, y: 1, z: 4 } });
+  room.deckCards.set('2', ['king', 'queen']);
+
+  handlers.get('combineIntoDeck')(client, { ids: ['1', '2'] });
+
+  const spawn = events.find((e) => e.name === 'spawn');
+  assert.equal(spawn.payload.type, 'deck');
+  assert.deepEqual(spawn.payload.props.cards, ['ace', 'king', 'queen']); // top card first
+  assert.equal(spawn.payload.props.back, 'blue');
+  assert.deepEqual(spawn.payload.position, [1, 4, 2]); // centroid x/z, spawnY
+  assert.equal(room.state.pieces.has('1'), false);
+  assert.equal(room.state.pieces.has('2'), false);
+  // the harness dropSfx mock is arg-insensitive; the point is a drop cue fired
+  assert.equal(events.at(-1).name, 'sfx');
+});
+
+test('combining refuses a selection whose backs disagree (no partial combine)', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ back: 'blue', front: 'ace' }),
+  });
+  room.bodies.set('1', { position: { x: 0, y: 1, z: 0 } });
+  room.state.pieces.set('2', {
+    type: 'card',
+    props: JSON.stringify({ back: 'red', front: 'two' }),
+  });
+  room.bodies.set('2', { position: { x: 1, y: 1, z: 0 } });
+
+  handlers.get('combineIntoDeck')(client, { ids: ['1', '2'] });
+
+  assert.equal(room.state.pieces.has('1'), true, 'both cards left on the table');
+  assert.equal(room.state.pieces.has('2'), true);
+  assert.equal(
+    events.some((e) => e.name === 'spawn'),
+    false,
+  );
+});
+
+test('combining ignores non-card pieces and needs two card-family members', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ back: 'blue', front: 'ace' }),
+  });
+  room.bodies.set('1', { position: { x: 0, y: 1, z: 0 } });
+  room.state.pieces.set('2', { type: 'die', props: '{}' });
+  room.bodies.set('2', { position: { x: 1, y: 1, z: 0 } });
+
+  handlers.get('combineIntoDeck')(client, { ids: ['1', '2'] });
+
+  assert.equal(room.state.pieces.has('1'), true);
+  assert.equal(
+    events.some((e) => e.name === 'spawn'),
+    false,
+  ); // only one card-family piece
 });

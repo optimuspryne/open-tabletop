@@ -271,6 +271,15 @@ like single delete), and a mixed selection is fine because each key touches only
 of it is a new subsystem — it's the grab-and-throw servo and the existing per-piece actions,
 addressed to a list instead of one id.
 
+**Composition** goes one step past mirroring the singles: two batch ops with no single-piece form
+turn a selection into a construction tool. `combineIntoDeck` consolidates the selected card-family
+pieces — loose cards and whole decks alike — into one face-down deck (the top of the table becomes
+the top of the deck), and `gatherDispensers` pours like dispensers into one summed stack. Both stay
+"selection → one server-side piece": read the members, remove them, spawn the composite at the
+centroid — no new state, the same ownership and validation path as every other handler. Each refuses
+a heterogeneous selection (mismatched card backs, or unlike dispensers) rather than combining part
+of it, and the client greys the offer to match.
+
 ## Pieces today
 
 Each **kind** is defined in two registries keyed by the same type id:
