@@ -161,6 +161,7 @@ const ICONS = [
   // UI-mode toggle (Default / Compact)
   'arrows-maximize',
   'arrows-minimize',
+  'sparkles',
 ];
 
 async function fetchSymbol(name) {
