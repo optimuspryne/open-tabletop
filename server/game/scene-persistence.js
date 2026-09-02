@@ -10,13 +10,19 @@ export function serializeScene(room, { geoOf }) {
     if (piece.type === 'deck') {
       const cards = (room.deckCards.get(id) || []).slice();
       for (const pending of room.pendingInspect.values()) {
-        if (pending.deckId === id) cards.unshift(pending.front);
+        if (pending.deckId === id)
+          cards.unshift(
+            pending.cardBack != null
+              ? { front: pending.front, back: pending.cardBack }
+              : pending.front,
+          );
       }
       props = {
         back: props.back || 'back',
         cards,
         ...geoOf(props),
         ...(props.model ? { deckModel: props.model } : {}),
+        ...(props.open ? { open: true } : {}),
       };
     } else if (piece.type === 'card') {
       const card = room.cardData.get(id);

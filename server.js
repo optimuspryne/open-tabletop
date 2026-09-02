@@ -952,6 +952,7 @@ class TableRoom extends Room {
       const deckProps = { back: deckData.back, ...geoOf(deckData) }; // deck-level tile/geom rides to its cards
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
         deckProps.model = deckData.deckModel; // an optional 3D box/bag skin (server-set only)
+      if (props.open) deckProps.open = true; // a deck of double-sided tiles → dealt tiles turn over
       writeProps(piece, deckProps);
     } else if (type === 'dispenser') {
       const d = DISPENSERS[props.disp] || {};

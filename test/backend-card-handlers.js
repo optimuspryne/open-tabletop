@@ -282,3 +282,51 @@ test('combining ignores non-card pieces and needs two card-family members', () =
     false,
   ); // only one card-family piece
 });
+
+test('flipping a double-sided (open) tile turns it over — both faces stay public', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ open: true, front: 'A', back: 'B' }),
+  });
+  room.bodies.set('1', { wakeUp() {}, velocity: {} });
+
+  handlers.get('flip')(client, { id: '1' });
+
+  const cp = JSON.parse(room.state.pieces.get('1').props);
+  assert.equal(cp.front, 'B');
+  assert.equal(cp.back, 'A');
+  assert.equal(room.cardData.has('1'), false); // nothing concealed
+  assert.deepEqual(events.at(-1), { name: 'sfx', payload: { type: 'card-flip' } });
+});
+
+test('dealing from an open deck yields a face-up double-sided tile', () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('9', {
+    type: 'deck',
+    props: JSON.stringify({ back: 'cover', open: true }),
+  });
+  room.deckCards.set('9', ['a-front']);
+
+  handlers.get('dealToTable')(client, { deckId: '9' });
+
+  const cardId = [...room.state.pieces.keys()].find((k) => k.startsWith('card-'));
+  const cp = JSON.parse(room.state.pieces.get(cardId).props);
+  assert.equal(cp.open, true);
+  assert.equal(cp.front, 'a-front');
+  assert.equal(cp.back, 'cover');
+  assert.equal(room.cardData.has(cardId), false); // face-up, nothing hidden
+});
+
+test('a per-tile back rides to the dealt card and wins over the shared back', () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('9', { type: 'deck', props: JSON.stringify({ back: 'sharedBack' }) });
+  room.deckCards.set('9', [{ front: 'treeFront', back: 'treeBack' }]);
+
+  handlers.get('dealToTable')(client, { deckId: '9' });
+
+  const cardId = [...room.state.pieces.keys()].find((k) => k.startsWith('card-'));
+  const cp = JSON.parse(room.state.pieces.get(cardId).props);
+  assert.equal(cp.back, 'treeBack'); // per-tile back, not 'sharedBack'
+  assert.equal(room.cardData.get(cardId).front, 'treeFront'); // secret deck → front hidden
+});

@@ -310,7 +310,16 @@ The kinds:
   corner, and **shape** come from `cardGeom(props)` — a plain card, a named tile
   (`props.tile`: domino/word/mahjong), or an explicit `props.geom` (custom image decks:
   fit-to-art aspect, chosen thickness, and a rounded/square/**hexagon** silhouette). See
-  _Tiles_ below.
+  _Tiles_ below. A **double-sided tile** sets `props.open`: both faces are public art and
+  flip _turns it over_ (swaps `front`↔`back`) instead of concealing — no `cardData`. The mesh
+  already renders `front` on top and `back` beneath, so open flip is a pure prop swap, not a
+  graphics change.
+- **double-sided / per-tile back** — the two axes that turn cards into game tiles. A deck card
+  entry is a bare front ref _or_ a `{front, back}` pair (`cardFrontRef`/`cardBackRef`,
+  `server/deck-state.js`), so one stack can hold tiles with different backs (a tree-back among
+  forageable-backs). `props.open` makes a card/deck's tiles turn over rather than conceal. Both
+  ride the existing draw/deal/inspect/split/combine and scene-save paths, and both fall back to
+  today's behavior (string entry → shared `back`; no `open` → secret flip).
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
   `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
   and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box) in place of the stack

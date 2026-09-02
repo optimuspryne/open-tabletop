@@ -17,6 +17,16 @@ export function registerCardHandlers(
 ) {
   const cardMessage = (type, handler) => safeMessage(room, type, handler, { logger });
 
+  // Place a drawn card on the table. An OPEN deck yields a face-up double-sided tile (both faces
+  // public — flip turns it over); a normal deck deals face-down with the front hidden. `back` is the
+  // card's own per-tile back or the deck's shared back.
+  const dealCard = (pos, { front, back, open, geo }) => {
+    if (open) return room.spawnCardFlat(pos, { front, back, open: true, ...geo });
+    const id = room.spawnCardFlat(pos, { back, ...geo });
+    room.cardData.set(id, { front });
+    return id;
+  };
+
   cardMessage('flip', (client, message) => {
     const parsed = pieceIdPayload(message);
     if (!parsed) return;
@@ -25,7 +35,11 @@ export function registerCardHandlers(
     const body = room.bodies.get(id);
     if (!piece || !body || piece.type !== 'card') return;
     const props = readProps(piece);
-    if (props.front) {
+    if (props.open) {
+      const f = props.front; // a double-sided tile: turn it over — both faces stay public
+      props.front = props.back;
+      props.back = f;
+    } else if (props.front) {
       room.cardData.set(id, { front: props.front });
       delete props.front;
     } else if (room.cardData.has(id)) {
@@ -50,11 +64,12 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    const id = room.spawnCardFlat(room.besideDeck(room.bodies.get(deckId)), {
-      back: props.back || 'back',
-      ...geoOf(props),
+    dealCard(room.besideDeck(room.bodies.get(deckId)), {
+      front: draw.front,
+      back: draw.back || props.back || 'back',
+      open: props.open,
+      geo: geoOf(props),
     });
-    room.cardData.set(id, { front: draw.front });
     finishDraw(room, deckId, draw.empty);
     room.broadcast('sfx', { type: dropSfx('card', props) });
   });
@@ -67,7 +82,7 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    room.addToHand(client, draw.front, props.back || 'back', geoOf(props));
+    room.addToHand(client, draw.front, draw.back || props.back || 'back', geoOf(props));
     finishDraw(room, deckId, draw.empty);
     room.broadcast('sfx', { type: dropSfx('card', props) });
   });
@@ -87,11 +102,12 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    const id = room.spawnCardFlat([deckBody.position.x, 2.5, deckBody.position.z], {
-      back: props.back || 'back',
-      ...geoOf(props),
+    const id = dealCard([deckBody.position.x, 2.5, deckBody.position.z], {
+      front: draw.front,
+      back: draw.back || props.back || 'back',
+      open: props.open,
+      geo: geoOf(props),
     });
-    room.cardData.set(id, { front: draw.front });
     finishDraw(room, deckId, draw.empty);
     room.state.pieces.get(id).owner = client.sessionId;
     room.targets.set(id, target);
@@ -121,13 +137,16 @@ export function registerCardHandlers(
     const props = readProps(deck);
     const geo = geoOf(props);
     room.updateDeckCollider(deckId);
+    const back = draw.back || props.back || 'back';
     room.pendingInspect.set(client.sessionId, {
       deckId,
       front: draw.front,
-      back: props.back || 'back',
+      back,
+      cardBack: draw.back, // the per-tile back (undefined → shares the deck's back)
+      open: props.open,
       geo,
     });
-    client.send('inspectCard', { front: draw.front, back: props.back || 'back', ...geo });
+    client.send('inspectCard', { front: draw.front, back, ...geo });
   });
 
   cardMessage('inspectPlace', (client, message) => {
@@ -136,12 +155,12 @@ export function registerCardHandlers(
     const pending = room.pendingInspect.get(client.sessionId);
     if (!pending) return;
     room.pendingInspect.delete(client.sessionId);
-    const { deckId, front, back, geo = {} } = pending;
+    const { deckId, front, back, cardBack, open, geo = {} } = pending;
     const { where } = parsed;
     if (where === 'deck') {
       const cards = room.deckCards.get(deckId);
       if (cards) {
-        cards.push(front);
+        cards.push(cardBack != null ? { front, back: cardBack } : front); // keep the per-tile back
         const deck = room.state.pieces.get(deckId);
         if (deck) deck.count = cards.length;
         room.updateDeckCollider(deckId);
@@ -151,14 +170,18 @@ export function registerCardHandlers(
     if (where === 'hand') {
       room.addToHand(client, front, back, geo);
     } else {
-      const faceDown = where === 'field-down';
       const deckBody = room.bodies.get(deckId);
       const position = deckBody ? room.besideDeck(deckBody) : randomPosition();
-      const id = room.spawnCardFlat(
-        position,
-        faceDown ? { back, ...geo } : { front, back, ...geo },
-      );
-      if (faceDown) room.cardData.set(id, { front });
+      if (open) {
+        room.spawnCardFlat(position, { front, back, open: true, ...geo }); // double-sided → face-up
+      } else {
+        const faceDown = where === 'field-down';
+        const id = room.spawnCardFlat(
+          position,
+          faceDown ? { back, ...geo } : { front, back, ...geo },
+        );
+        if (faceDown) room.cardData.set(id, { front });
+      }
     }
     const cards = room.deckCards.get(deckId);
     if (cards && cards.length === 0) room.removePiece(deckId);
@@ -193,6 +216,7 @@ export function registerCardHandlers(
     room.spawn('deck', [position.x + 2.2, spawnY, position.z], {
       back: props.back || 'back',
       cards: bottom,
+      ...(props.open ? { open: true } : {}),
       ...geoOf(props),
     });
   });

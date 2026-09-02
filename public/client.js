@@ -6189,6 +6189,7 @@ initTip(); // themed hover-hint (icons.js)
   on('selStand', send('setStandGroup'));
   on('selSnap', send('setSnapGroup'));
   on('selFlip', send('flipGroup'));
+  on('sel2Sided', send('setOpenGroup'));
   on('selRoll', send('rollGroup'));
   on('selTake', send('takeGroup'));
   const compose = (msg) => () => {

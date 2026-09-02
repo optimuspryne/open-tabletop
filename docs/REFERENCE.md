@@ -493,7 +493,9 @@ message/frame), **`releaseGroup`** (`{v}` — release each via the shared **`rel
 factored out of single `release`). Batch ops: **`removeGroup`** (`{ids}` — delete the selection,
 helper+), **`setStandGroup`** / **`setSnapGroup`** (`{ids}` — **U** / **G**, toggled as a unit),
 **`rollGroup`** (`{ids}` — **R**, dice only), **`flipGroup`** (`{ids}` — **F**, cards only),
-**`takeGroup`** (`{ids}` — **H**, cards to the caller's hand), **`rotateGroup`** (`{ids,dir}` —
+**`takeGroup`** (`{ids}` — **H**, cards to the caller's hand), **`setOpenGroup`** (`{ids}` — toggle
+**double-sided / open** flip on the selected cards & decks; enabling it on a face-down card reveals
+its hidden front so both faces are public), **`rotateGroup`** (`{ids,dir}` —
 **`[`** / **`]`**, rotate the whole formation ±45° about its centroid — each position _and_ each
 body's facing; skips boards).
 

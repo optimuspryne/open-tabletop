@@ -405,10 +405,21 @@ test('skybox saves accept only exact local panorama or six-face cube payloads', 
 test('drawing mutates deck count and returns cards in stack order', () => {
   const deck = { type: 'deck', count: 2 };
   const cards = ['bottom', 'top'];
-  assert.deepEqual(takeTopCard(deck, cards), { front: 'top', empty: false });
+  assert.deepEqual(takeTopCard(deck, cards), { front: 'top', back: undefined, empty: false });
   assert.equal(deck.count, 1);
-  assert.deepEqual(takeTopCard(deck, cards), { front: 'bottom', empty: true });
+  assert.deepEqual(takeTopCard(deck, cards), { front: 'bottom', back: undefined, empty: true });
   assert.equal(deck.count, 0);
+});
+
+test('drawing an object entry returns its per-tile back', () => {
+  const deck = { type: 'deck', count: 2 };
+  const cards = ['plainFront', { front: 'treeFront', back: 'treeBack' }];
+  assert.deepEqual(takeTopCard(deck, cards), {
+    front: 'treeFront',
+    back: 'treeBack',
+    empty: false,
+  });
+  assert.deepEqual(takeTopCard(deck, cards), { front: 'plainFront', back: undefined, empty: true });
 });
 
 test('drawing rejects missing, empty, and non-deck state without mutation', () => {

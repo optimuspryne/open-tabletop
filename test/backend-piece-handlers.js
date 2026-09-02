@@ -7,6 +7,7 @@ const MESSAGE_NAMES = [
   'setSnapGroup',
   'rollGroup',
   'flipGroup',
+  'setOpenGroup',
   'takeGroup',
   'rotateGroup',
   'recolor',
@@ -389,4 +390,37 @@ test('minting refuses mixed pieces and refuses when a dispenser is present', asy
     events.some((e) => e.name === 'spawn'),
     false,
   ); // a dispenser present → not mint
+});
+
+test('setOpenGroup turns cards double-sided, revealing a hidden front, and toggles back off', async () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('1', { type: 'card', props: JSON.stringify({ back: 'cover' }) });
+  room.bodies.set('1', body());
+  room.cardData.set('1', { front: 'secretFace' });
+
+  await handlers.get('setOpenGroup')(client, { ids: ['1'] });
+  let cp = JSON.parse(room.state.pieces.get('1').props);
+  assert.equal(cp.open, true);
+  assert.equal(cp.front, 'secretFace'); // hidden face revealed → both public
+  assert.equal(cp.back, 'cover');
+  assert.equal(room.cardData.has('1'), false);
+
+  await handlers.get('setOpenGroup')(client, { ids: ['1'] }); // toggle off
+  assert.equal(JSON.parse(room.state.pieces.get('1').props).open, undefined);
+});
+
+test('group flip turns over open tiles without concealing', async () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ open: true, front: 'A', back: 'B' }),
+  });
+  room.bodies.set('1', body());
+
+  await handlers.get('flipGroup')(client, { ids: ['1'] });
+
+  const cp = JSON.parse(room.state.pieces.get('1').props);
+  assert.equal(cp.front, 'B');
+  assert.equal(cp.back, 'A');
+  assert.equal(room.cardData.has('1'), false);
 });

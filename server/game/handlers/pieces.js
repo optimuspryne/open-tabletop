@@ -99,7 +99,11 @@ export function registerPieceHandlers(
       const body = room.bodies.get(id);
       if (!piece || piece.type !== 'card' || !body) continue;
       const props = readProps(piece);
-      if (props.front) {
+      if (props.open) {
+        const f = props.front; // double-sided tile: turn over, both faces public
+        props.front = props.back;
+        props.back = f;
+      } else if (props.front) {
         room.cardData.set(id, { front: props.front });
         delete props.front;
       } else if (room.cardData.has(id)) {
@@ -112,6 +116,35 @@ export function registerPieceHandlers(
       count++;
     }
     if (count) room.broadcast('sfx', { type: 'card-flip' });
+  });
+
+  // Toggle double-sided (open / turn-over) flip on the selected cards & decks. On a card, turning
+  // it on reveals any hidden front so BOTH faces are public — flip then turns the tile over instead
+  // of concealing it. On a deck, it marks the tiles the deck deals as double-sided. Toggled as a
+  // unit, like stand/snap.
+  pieceMessage('setOpenGroup', (client, message) => {
+    const ids = idsFrom(message);
+    if (!ids) return;
+    const anyOpen = ids.some((id) => {
+      const piece = room.state.pieces.get(id);
+      return piece && readProps(piece).open;
+    });
+    for (const id of ids) {
+      const piece = room.state.pieces.get(id);
+      if (!piece || (piece.type !== 'card' && piece.type !== 'deck')) continue;
+      const props = readProps(piece);
+      if (anyOpen) {
+        delete props.open;
+      } else {
+        props.open = true;
+        if (piece.type === 'card' && !props.front && room.cardData.has(id)) {
+          props.front = room.cardData.get(id).front; // reveal the hidden face so both are public
+          room.cardData.delete(id);
+        }
+      }
+      writeProps(piece, props);
+      room.bodies.get(id)?.wakeUp();
+    }
   });
 
   pieceMessage('takeGroup', (client, message) => {
