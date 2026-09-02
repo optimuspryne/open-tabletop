@@ -54,6 +54,7 @@ import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
+import { cardBackRef, cardFrontRef } from './server/deck-state.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
@@ -734,13 +735,7 @@ class TableRoom extends Room {
         typeof x === 'number' && typeof z === 'number'
           ? [x, 3, z] // where the client dropped it
           : [(Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 3]; // or scattered
-      const id = this.spawnCardFlat(
-        pos,
-        faceDown
-          ? { back: card.back, ...geoOf(card) }
-          : { front: card.front, back: card.back, ...geoOf(card) },
-      );
-      if (faceDown) this.cardData.set(id, { front: card.front }); // front private until flipped
+      this.spawnHandCard(pos, card, faceDown);
       this.sendHand(client);
       this.broadcast('sfx', { type: dropSfx('card', card) }); // played tile clacks
     });
@@ -780,13 +775,7 @@ class TableRoom extends Room {
       for (const card of hand) {
         if (this.state.pieces.size >= SIM.maxPieces) break; // respect the piece cap
         const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6];
-        const id = this.spawnCardFlat(
-          pos,
-          faceDown
-            ? { back: card.back, ...geoOf(card) }
-            : { front: card.front, back: card.back, ...geoOf(card) },
-        );
-        if (faceDown) this.cardData.set(id, { front: card.front });
+        const id = this.spawnHandCard(pos, card, faceDown);
         ids.push(id);
         spawned++;
       }
@@ -809,7 +798,7 @@ class TableRoom extends Room {
         if (!piece || piece.type !== 'card') continue; // moved, taken, or table reset
         const props = readProps(piece);
         const front = (this.cardData.get(id) || {}).front || props.front;
-        this.addToHand(client, front, props.back || 'back', geoOf(props));
+        this.addToHand(client, front, props.back || 'back', geoOf(props), props.open);
         this.removePiece(id);
         restored++;
       }
@@ -1009,11 +998,35 @@ class TableRoom extends Room {
   }
 
   // Add a card to a player's private hand and push the update to them alone.
-  addToHand(client, front, back, geo = {}) {
+  addToHand(client, front, back, geo = {}, open = false) {
     const hand = this.hands.get(client.sessionId) || [];
-    hand.push({ hid: 'h' + this.nextHid++, front, back, ...geo }); // geo = {tile}/{geom} for tile cards; nothing for plain cards
+    const entry = { hid: 'h' + this.nextHid++, front, back, ...geo }; // geo = {tile}/{geom} for tile cards; nothing for plain cards
+    if (open) entry.open = true; // a double-sided tile: both faces are real, flip turns it over
+    hand.push(entry);
     this.hands.set(client.sessionId, hand);
     this.sendHand(client);
+  }
+
+  // Place a hand card on the table, honoring double-sided (open) cards. An open card keeps BOTH
+  // faces public and lands with the chosen side up (face-down = the back face up); a normal card
+  // lands face-up (front+back) or face-down (back shown, front hidden in cardData until flipped).
+  spawnHandCard(pos, card, faceDown) {
+    if (card.open) {
+      return this.spawnCardFlat(
+        pos,
+        faceDown
+          ? { front: card.back, back: card.front, open: true, ...geoOf(card) }
+          : { front: card.front, back: card.back, open: true, ...geoOf(card) },
+      );
+    }
+    const id = this.spawnCardFlat(
+      pos,
+      faceDown
+        ? { back: card.back, ...geoOf(card) }
+        : { front: card.front, back: card.back, ...geoOf(card) },
+    );
+    if (faceDown) this.cardData.set(id, { front: card.front });
+    return id;
   }
 
   // Replace the current board with a new one (there's only ever one). The board
@@ -1086,7 +1099,10 @@ class TableRoom extends Room {
       geo = geoOf(dp);
     for (const client of this.clients) {
       if (this.seatOf(client) == null) continue; // seated players only
-      for (let i = 0; i < n && cards.length; i++) this.addToHand(client, cards.pop(), back, geo);
+      for (let i = 0; i < n && cards.length; i++) {
+        const entry = cards.pop();
+        this.addToHand(client, cardFrontRef(entry), cardBackRef(entry) || back, geo, dp.open);
+      }
     }
     deck.count = cards.length;
     if (!cards.length) this.removePiece(deckId);

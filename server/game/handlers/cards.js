@@ -86,7 +86,7 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    room.addToHand(client, draw.front, draw.back || props.back || 'back', geoOf(props));
+    room.addToHand(client, draw.front, draw.back || props.back || 'back', geoOf(props), props.open);
     finishDraw(room, deckId, draw.empty);
     room.broadcast('sfx', { type: dropSfx('card', props) });
   });
@@ -126,7 +126,7 @@ export function registerCardHandlers(
     if (!piece || piece.type !== 'card') return;
     const props = readProps(piece);
     const front = (room.cardData.get(id) || {}).front || props.front;
-    room.addToHand(client, front, props.back || 'back', geoOf(props));
+    room.addToHand(client, front, props.back || 'back', geoOf(props), props.open);
     room.removePiece(id);
   });
 
@@ -172,7 +172,7 @@ export function registerCardHandlers(
       return;
     }
     if (where === 'hand') {
-      room.addToHand(client, front, back, geo);
+      room.addToHand(client, front, back, geo, open);
     } else {
       const deckBody = room.bodies.get(deckId);
       const position = deckBody ? room.besideDeck(deckBody) : randomPosition();

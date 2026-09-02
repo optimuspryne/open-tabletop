@@ -18,8 +18,11 @@ function harness() {
     broadcast(name, payload) {
       events.push({ name, payload });
     },
-    addToHand(client, front, back, geo) {
-      events.push({ name: 'hand', payload: { client, front, back, geo } });
+    addToHand(client, front, back, geo, open) {
+      events.push({
+        name: 'hand',
+        payload: { client, front, back, geo, ...(open ? { open: true } : {}) },
+      });
     },
     removePiece(id) {
       this.state.pieces.delete(id);
@@ -329,4 +332,32 @@ test('a per-tile back rides to the dealt card and wins over the shared back', ()
   const cp = JSON.parse(room.state.pieces.get(cardId).props);
   assert.equal(cp.back, 'treeBack'); // per-tile back, not 'sharedBack'
   assert.equal(room.cardData.get(cardId).front, 'treeFront'); // secret deck → front hidden
+});
+
+test('taking a double-sided card to hand carries its open flag and both faces', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({ open: true, front: 'A', back: 'B' }),
+  });
+
+  handlers.get('takeCard')(client, { id: '1' });
+
+  const hand = events.find((e) => e.name === 'hand').payload;
+  assert.equal(hand.open, true);
+  assert.equal(hand.front, 'A');
+  assert.equal(hand.back, 'B');
+});
+
+test('drawing to hand from an open deck carries the open flag', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'deck',
+    props: JSON.stringify({ back: 'cover', open: true }),
+  });
+  room.deckCards.set('1', ['x-front']);
+
+  handlers.get('drawToHand')(client, { deckId: '1' });
+
+  assert.equal(events.find((e) => e.name === 'hand').payload.open, true);
 });
