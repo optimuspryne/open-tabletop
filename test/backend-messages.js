@@ -32,6 +32,7 @@ import {
   saveBoardPayload,
   savePropPayload,
   saveSkyboxPayload,
+  saveDicePayload,
   scalePayload,
   scorePayload,
   showPayload,
@@ -437,4 +438,60 @@ test('spawnPayload accepts a die finish (regression: non-matte finish blocked sp
   const plain = spawnPayload({ type: 'die', props: { sides: 6 } });
   assert.equal(plain && plain.props && plain.props.finish, undefined); // matte omits it
   assert.equal(spawnPayload({ type: 'die', props: { sides: 6, bogus: 1 } }), null); // still strict
+});
+
+test('dice-texture saves accept only a local /assets/dice image', () => {
+  const urlOk = (u) =>
+    typeof u === 'string' && !u.includes('..') && u.length < 300 && u.startsWith('/assets/dice/');
+  assert.deepEqual(
+    saveDicePayload({ name: ' Galaxy ', url: '/assets/dice/g.jpg', isPublic: false }, { urlOk }),
+    { name: 'Galaxy', url: '/assets/dice/g.jpg', isPublic: false },
+  );
+  assert.equal(
+    saveDicePayload({ name: 'Remote', url: 'https://evil.test/x.jpg', isPublic: false }, { urlOk }),
+    null,
+  );
+  assert.equal(
+    saveDicePayload(
+      { name: 'Trav', url: '/assets/dice/../secret.jpg', isPublic: false },
+      { urlOk },
+    ),
+    null,
+  );
+  assert.equal(
+    saveDicePayload({ name: 'WrongDir', url: '/assets/sky/x.jpg', isPublic: false }, { urlOk }),
+    null,
+  );
+  assert.equal(
+    saveDicePayload({ name: '', url: '/assets/dice/g.jpg', isPublic: false }, { urlOk }),
+    null,
+  );
+});
+
+test('spawn + recolor carry a custom finish texture (local /assets/dice only)', () => {
+  const spawned = spawnPayload({
+    type: 'die',
+    props: { sides: 20, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
+  });
+  assert.equal(spawned.props.finish, 'custom');
+  assert.equal(spawned.props.finishImg, '/assets/dice/a.jpg');
+  assert.equal(
+    spawnPayload({
+      type: 'die',
+      props: { sides: 6, finish: 'custom', finishImg: 'https://evil/x.jpg' },
+    }),
+    null,
+  ); // off-origin texture rejected at the transport gate
+  assert.deepEqual(
+    groupRecolor({ ids: ['1'], finish: 'custom', finishImg: '/assets/dice/a.jpg' }),
+    {
+      ids: ['1'],
+      finish: 'custom',
+      finishImg: '/assets/dice/a.jpg',
+    },
+  );
+  assert.equal(
+    groupRecolor({ ids: ['1'], finish: 'custom', finishImg: '/assets/uploads/x.jpg' }),
+    null,
+  ); // texture must live under /assets/dice/
 });

@@ -338,6 +338,14 @@ const localAssetRef = (value, { extension = null } = {}) => {
   return extension && !value.toLowerCase().endsWith(extension) ? null : value;
 };
 
+// A custom dice-texture URL: a local /assets/dice/ image path (no traversal). Shape only —
+// the texture's existence isn't security-critical (a bad path just fails to load), but the
+// prefix pins it to the uploaded-texture directory so it can never point off-origin.
+const localDiceImg = (value) => {
+  const ref = localAssetRef(value);
+  return ref && ref.startsWith('/assets/dice/') ? ref : null;
+};
+
 export function boardRecordPayload(value, { boardKeys = [] } = {}) {
   if (!isPlainObject(value)) return null;
   if (value.board !== undefined) {
@@ -475,7 +483,12 @@ export function spawnPayload(
   if (!exactObject(message, ['type', 'props']) || !isPlainObject(message.props)) return null;
   const { type, props } = message;
   if (type === 'die') {
-    if (!hasOnlyKeys(props, new Set(['sides', 'color', 'textColor', 'tray', 'snap', 'finish'])))
+    if (
+      !hasOnlyKeys(
+        props,
+        new Set(['sides', 'color', 'textColor', 'tray', 'snap', 'finish', 'finishImg']),
+      )
+    )
       return null;
     const sides = finiteNumber(props.sides, { min: 4, max: 20 });
     if (sides === null || ![4, 6, 8, 10, 12, 20].includes(sides)) return null;
@@ -496,6 +509,11 @@ export function spawnPayload(
       const finish = boundedString(props.finish, { min: 1, max: 16, pattern: /^[a-z]+$/ });
       if (finish === null) return null;
       out.finish = finish;
+    }
+    if (props.finishImg !== undefined) {
+      const img = localDiceImg(props.finishImg); // custom-finish texture; colorProps pairs it with finish
+      if (img === null) return null;
+      out.finishImg = img;
     }
     return { type, props: out };
   }
@@ -652,6 +670,23 @@ export function saveSkyboxPayload(message, { urlOk }) {
   return { name: name.trim(), type: 'equirect', url: message.url, isPublic: message.isPublic };
 }
 
+// A saved dice texture: a name + a local /assets/dice/ image URL. urlOk confirms the file
+// exists on disk (the upload just landed), the same guard the skybox library uses.
+export function saveDicePayload(message, { urlOk }) {
+  if (!isPlainObject(message)) return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  if (name === null || !name.trim() || typeof message.isPublic !== 'boolean') return null;
+  if (
+    !exactObject(message, ['name', 'url', 'isPublic']) ||
+    typeof message.url !== 'string' ||
+    !message.url.startsWith('/assets/dice/') ||
+    message.url.includes('..') ||
+    !urlOk(message.url)
+  )
+    return null;
+  return { name: name.trim(), url: message.url, isPublic: message.isPublic };
+}
+
 export function pieceMovePayload(message) {
   if (!exactObject(message, ['id', 'x', 'y', 'z'])) return null;
   const id = boundedString(message.id, { min: 1, max: 20, pattern: /^\d+$/ });
@@ -712,7 +747,7 @@ export function groupRotation(message, { max = 80 } = {}) {
 export function groupRecolor(message, { max = 80 } = {}) {
   if (
     !isPlainObject(message) ||
-    !hasOnlyKeys(message, new Set(['ids', 'color', 'textColor', 'team', 'finish']))
+    !hasOnlyKeys(message, new Set(['ids', 'color', 'textColor', 'team', 'finish', 'finishImg']))
   )
     return null;
   const ids = boundedUniqueIds(message.ids, { max });
@@ -722,7 +757,8 @@ export function groupRecolor(message, { max = 80 } = {}) {
       (message.team !== 0 && message.team !== 1) ||
       message.color !== undefined ||
       message.textColor !== undefined ||
-      message.finish !== undefined
+      message.finish !== undefined ||
+      message.finishImg !== undefined
     )
       return null;
     return { ids, team: message.team };
@@ -745,7 +781,17 @@ export function groupRecolor(message, { max = 80 } = {}) {
     if (finish === null) return null;
     out.finish = finish;
   }
-  if (out.color === undefined && out.textColor === undefined && out.finish === undefined)
+  if (message.finishImg !== undefined) {
+    const img = localDiceImg(message.finishImg); // custom-finish texture URL
+    if (img === null) return null;
+    out.finishImg = img;
+  }
+  if (
+    out.color === undefined &&
+    out.textColor === undefined &&
+    out.finish === undefined &&
+    out.finishImg === undefined
+  )
     return null;
   return out;
 }

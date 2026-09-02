@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–011, meant for a FRESH
+-- This is the flattened end state of migrations 001–012, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -146,8 +146,20 @@ CREATE TABLE custom_skyboxes (
 );
 CREATE INDEX custom_skyboxes_owner_idx ON custom_skyboxes (owner_id);
 
+-- Custom dice finishes: a host-uploaded seamless texture used as a die's surface
+-- material (ROADMAP §9 phase 2). file_url is served from /assets/dice/.
+CREATE TABLE custom_dice (
+  id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  owner_id    bigint      CONSTRAINT fk_dice_owner REFERENCES users(id),
+  name        text        NOT NULL,
+  file_url    text        NOT NULL,  -- the uploaded texture, served from /assets/dice/
+  is_public   boolean     NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX custom_dice_owner_idx ON custom_dice (owner_id);
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–011, so record them as
+-- This baseline IS the flattened result of migrations 001–012, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -160,6 +172,7 @@ INSERT INTO schema_migrations (version) VALUES
   ('001_custom_assets.sql'), ('002_auth.sql'), ('003_asset_visibility.sql'),
   ('004_host_status.sql'),   ('005_room_board.sql'), ('006_room_table.sql'),
   ('007_scenes.sql'),        ('008_room_skybox.sql'), ('009_room_state.sql'),
-  ('010_room_scale.sql'),       ('011_user_sessions.sql');
+  ('010_room_scale.sql'),       ('011_user_sessions.sql'),
+  ('012_custom_dice.sql');
 
 COMMIT;

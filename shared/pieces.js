@@ -721,6 +721,7 @@ export const DICE_FINISHES = [
   { key: 'translucent', name: 'Translucent' },
   { key: 'glow', name: 'Glow' },
   { key: 'marbled', name: 'Marbled' },
+  { key: 'custom', name: 'Custom' }, // needs a finishImg (an uploaded /assets/dice/ texture)
 ];
 export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
 // Finishes whose shaders a low-end mobile GPU (some Android phones) black-screens on — physical
@@ -734,8 +735,21 @@ export function dieSpawnProps(raw = {}) {
   if (b != null) p.color = b;
   const t = clampColor(raw.textColor);
   if (t != null) p.textColor = t;
-  if (typeof raw.finish === 'string' && DICE_FINISH_KEYS.has(raw.finish) && raw.finish !== 'matte')
-    p.finish = raw.finish; // matte is the default look → left out of props
+  if (
+    typeof raw.finish === 'string' &&
+    DICE_FINISH_KEYS.has(raw.finish) &&
+    raw.finish !== 'matte'
+  ) {
+    if (raw.finish === 'custom') {
+      // 'custom' is only meaningful with an uploaded texture; drop it if the image is missing/bad.
+      if (typeof raw.finishImg === 'string' && raw.finishImg.startsWith('/assets/dice/')) {
+        p.finish = 'custom';
+        p.finishImg = raw.finishImg;
+      }
+    } else {
+      p.finish = raw.finish; // matte is the default look → left out of props
+    }
+  }
   return p;
 }
 
@@ -743,7 +757,12 @@ export function dieSpawnProps(raw = {}) {
 // message and the `recolorGroup` batch trust. Returns a NEW props object, or null if the change
 // doesn't fit this piece (wrong type, missing/out-of-range color, a team bowl without a team flag).
 // `dispDef` is the piece's DISPENSERS entry (dispensers only); pass null otherwise.
-export function colorProps(type, props, { color, textColor, team, finish } = {}, dispDef = null) {
+export function colorProps(
+  type,
+  props,
+  { color, textColor, team, finish, finishImg } = {},
+  dispDef = null,
+) {
   const out = { ...props };
   if (type === 'die') {
     // dice are unconstrained (any color)
@@ -759,8 +778,16 @@ export function colorProps(type, props, { color, textColor, team, finish } = {},
     } // die number color
     if (finish != null) {
       if (!DICE_FINISH_KEYS.has(finish)) return null;
-      if (finish === 'matte') delete out.finish;
-      else out.finish = finish;
+      if (finish === 'custom') {
+        // custom needs its uploaded texture; without a valid one the change is rejected
+        if (typeof finishImg !== 'string' || !finishImg.startsWith('/assets/dice/')) return null;
+        out.finish = 'custom';
+        out.finishImg = finishImg;
+      } else {
+        delete out.finishImg; // leaving custom → drop the texture
+        if (finish === 'matte') delete out.finish;
+        else out.finish = finish;
+      }
     }
     return out;
   }

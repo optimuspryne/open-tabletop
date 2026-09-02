@@ -220,3 +220,44 @@ test('recolorPalette: non-colorable pieces and unknown dispensers → null', () 
   assert.equal(recolorPalette('board', {}), null);
   assert.equal(recolorPalette('dispenser', { disp: 'nope' }, null), null);
 });
+
+test('dieSpawnProps: a custom finish keeps its texture; a bad or missing one drops to matte', () => {
+  assert.deepEqual(dieSpawnProps({ sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' }), {
+    sides: 6,
+    finish: 'custom',
+    finishImg: '/assets/dice/a.jpg',
+  });
+  assert.equal('finish' in dieSpawnProps({ sides: 6, finish: 'custom' }), false); // no texture → matte
+  assert.equal(
+    'finish' in dieSpawnProps({ sides: 6, finish: 'custom', finishImg: 'https://x/y.jpg' }),
+    false,
+  ); // off-origin texture dropped
+  assert.equal(
+    'finishImg' in dieSpawnProps({ sides: 6, finish: 'metallic', finishImg: '/assets/dice/a.jpg' }),
+    false,
+  ); // a non-custom finish never carries a texture
+});
+
+test('colorProps: custom finish requires a texture and clears it when leaving', () => {
+  assert.deepEqual(
+    colorProps('die', { sides: 6 }, { finish: 'custom', finishImg: '/assets/dice/a.jpg' }),
+    { sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
+  );
+  assert.equal(colorProps('die', { sides: 6 }, { finish: 'custom' }), null); // no texture → rejected
+  assert.deepEqual(
+    colorProps(
+      'die',
+      { sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
+      { finish: 'glossy' },
+    ),
+    { sides: 6, finish: 'glossy' },
+  ); // leaving custom drops the texture
+  assert.deepEqual(
+    colorProps(
+      'die',
+      { sides: 6, finish: 'custom', finishImg: '/assets/dice/a.jpg' },
+      { finish: 'matte' },
+    ),
+    { sides: 6 },
+  ); // matte clears both
+});

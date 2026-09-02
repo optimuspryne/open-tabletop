@@ -9,6 +9,7 @@ import {
   namedIdPayload,
   oneField,
   saveBoardPayload,
+  saveDicePayload,
   savePropPayload,
   saveSkyboxPayload,
 } from '../../message-validation.js';
@@ -34,6 +35,7 @@ export function registerLibraryHandlers(
     randomPosition,
     sceneMaxBytes,
     skyUrlOk,
+    diceUrlOk,
     logger = console,
   },
 ) {
@@ -217,5 +219,19 @@ export function registerLibraryHandlers(
       isPublic: msg.isPublic,
     });
     await room.sendAssetList(client, 'sky');
+  });
+
+  assetMessage('listDice', (client) => room.sendAssetList(client, 'dice'));
+  assetMessage('saveDice', async (client, message) => {
+    if (!room.isAdmin(client)) return;
+    const msg = saveDicePayload(message, { urlOk: diceUrlOk });
+    if (!msg) return;
+    await db.insertDice({
+      name: msg.name,
+      url: msg.url,
+      ownerId: client.auth.userId,
+      isPublic: msg.isPublic,
+    });
+    await room.sendAssetList(client, 'dice');
   });
 }

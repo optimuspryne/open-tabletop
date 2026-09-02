@@ -134,8 +134,8 @@ const PERF_LOG = process.env.PERF_LOG === '1';
 // Because filenames are random and the .json metadata is never served, a card
 // front that's meant to stay hidden can't be discovered by poking at /assets.
 const ASSETS_DIR = process.env.ASSETS_DIR || './saved-assets';
-const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props', 'sky'];
-const LIBRARY_KINDS = ['deck', 'board', 'prop', 'scene', 'sky'];
+const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props', 'sky', 'dice'];
+const LIBRARY_KINDS = ['deck', 'board', 'prop', 'scene', 'sky', 'dice'];
 for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recursive: true });
 
 // Clamp a number into [min, max].
@@ -153,6 +153,10 @@ const skyUrlOk = (u) =>
   u.length < 300 &&
   !u.includes('..') &&
   (u.startsWith('/assets/sky/') || u.startsWith('/sky/'));
+// A custom dice-texture URL — a local /assets/dice/ image, no traversal. Format guard for the
+// dice library (mirrors skyUrlOk); the file just landed via /upload?kind=dice.
+const diceUrlOk = (u) =>
+  typeof u === 'string' && u.length < 300 && !u.includes('..') && u.startsWith('/assets/dice/');
 const validSky = (v) => {
   if (v === '') return true;
   if (typeof v !== 'string' || v.length > 2000) return false;
@@ -202,7 +206,7 @@ function saveImageRef(dataURL, kind = 'decks') {
 // every LIVE table's state), and we skip anything newer than a day so an
 // in-progress upload can't be swept. public/ is never touched (built-ins live there).
 const LIVE_ROOMS = new Set(); // in-process TableRoom instances (see onCreate/onDispose)
-const ASSET_PATH_RE = /\/assets\/(?:uploads|decks|boards|props|sky)\/[A-Za-z0-9._-]+/g;
+const ASSET_PATH_RE = /\/assets\/(?:uploads|decks|boards|props|sky|dice)\/[A-Za-z0-9._-]+/g;
 const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const extractAssetPaths = (str, set) => {
   const m = String(str).match(ASSET_PATH_RE);
@@ -702,6 +706,7 @@ class TableRoom extends Room {
       randomPosition: rnd,
       sceneMaxBytes: SCENE_MAX_BYTES,
       skyUrlOk,
+      diceUrlOk,
     });
 
     registerRoomStateHandlers(this, {
@@ -1623,6 +1628,7 @@ class TableRoom extends Room {
       prop: ['propList', () => db.listProps({ includePrivate })],
       scene: ['sceneList', () => db.listScenes({ includePrivate })],
       sky: ['skyList', () => db.listSkyboxes({ includePrivate })],
+      dice: ['diceList', () => db.listDice({ includePrivate })],
     }[kind];
     if (!config) return false;
     const list = await config[1]();

@@ -138,5 +138,34 @@ export function createLibraryQueries(query) {
         ownerId: idOrNull(row.owner_id),
       }));
     },
+
+    async listDice({ includePrivate = false } = {}) {
+      const { rows } = await query(
+        `SELECT id, name, file_url, is_public, owner_id FROM custom_dice
+         ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`,
+      );
+      return rows.map((row) => ({
+        id: String(row.id),
+        name: row.name,
+        url: row.file_url,
+        isPublic: row.is_public,
+        ownerId: idOrNull(row.owner_id),
+      }));
+    },
+
+    async getDice(id) {
+      const { rows } = await query(
+        'SELECT name, file_url, is_public, owner_id FROM custom_dice WHERE id = $1',
+        [id],
+      );
+      if (!rows[0]) return null;
+      const row = rows[0];
+      return {
+        name: row.name,
+        url: row.file_url,
+        isPublic: row.is_public,
+        ownerId: idOrNull(row.owner_id),
+      };
+    },
   };
 }

@@ -23,6 +23,8 @@ const MESSAGE_NAMES = [
   'loadBoard',
   'listSkyboxes',
   'saveSkybox',
+  'listDice',
+  'saveDice',
 ];
 
 function harness({ admin = true, rank = 3 } = {}) {

@@ -145,6 +145,24 @@ export function createDatabase(pool) {
       .then((r) => String(r.rows[0].id));
   }
 
+  // ===== Dice textures (host-uploaded die surface images) =====================
+  // A dice texture is just a named image URL (file_url), applied to a die via its
+  // finish='custom' + finishImg prop. Mirrors the skybox library.
+  async function listDice({ includePrivate = false } = {}) {
+    return library.listDice({ includePrivate });
+  }
+  async function getDice(id) {
+    return library.getDice(id);
+  }
+  function insertDice({ name, url, ownerId = null, isPublic = false }) {
+    return pool
+      .query(
+        'INSERT INTO custom_dice (name, file_url, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
+        [name, url, ownerId, isPublic],
+      )
+      .then((r) => String(r.rows[0].id));
+  }
+
   // Every stored blob that could name an asset file — the reference set for orphan
   // cleanup. SELECT * (not named columns) so a newly-added column can never silently
   // un-protect a file. Throws on any error, so the caller aborts rather than over-delete.
@@ -159,6 +177,7 @@ export function createDatabase(pool) {
     await dump('SELECT * FROM custom_objects');
     await dump('SELECT * FROM custom_scenes');
     await dump('SELECT * FROM custom_skyboxes');
+    await dump('SELECT * FROM custom_dice');
     await dump("SELECT skybox FROM rooms WHERE skybox <> ''");
     return out;
   }
@@ -173,6 +192,7 @@ export function createDatabase(pool) {
     prop: 'custom_objects',
     scene: 'custom_scenes',
     sky: 'custom_skyboxes',
+    dice: 'custom_dice',
   };
   function setAssetPublic(kind, id, isPublic) {
     const table = ASSET_TABLE[kind];
@@ -538,6 +558,9 @@ export function createDatabase(pool) {
     insertScene,
     listSkyboxes,
     insertSkybox,
+    listDice,
+    getDice,
+    insertDice,
     allAssetRefBlobs,
     setAssetPublic,
     renameAsset,
