@@ -5261,6 +5261,29 @@ function refreshSelTools() {
   );
   const gplan = gatherPlan();
   setComposeBtn(byId('selGather'), gplan.state, gplan.okTitle, 'This selection can’t be gathered');
+  // The 2-Sided toggle reflects the selection's current mode: it reads "Secret" once anything in the
+  // selection is already double-sided (pressing it then makes them secret again), else "2-Sided".
+  const twoBtn = byId('sel2Sided');
+  if (twoBtn) {
+    let anyOpen = false;
+    for (const id of selection) {
+      const piece = room?.state.pieces.get(id);
+      if (!piece || (piece.type !== 'card' && piece.type !== 'deck')) continue;
+      try {
+        if (JSON.parse(piece.props || '{}').open) {
+          anyOpen = true;
+          break;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    const lbl = twoBtn.querySelector('.lbl');
+    if (lbl) lbl.textContent = anyOpen ? 'Secret' : '2-Sided';
+    twoBtn.title = anyOpen
+      ? 'Make secret (flip conceals the front)'
+      : 'Make double-sided (flip turns it over)';
+  }
   const bar = byId('selRecolor');
   if (!bar) return;
   const desc = selection.size ? selectionPalette() : null;

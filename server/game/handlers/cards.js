@@ -21,7 +21,11 @@ export function registerCardHandlers(
   // public — flip turns it over); a normal deck deals face-down with the front hidden. `back` is the
   // card's own per-tile back or the deck's shared back.
   const dealCard = (pos, { front, back, open, geo }) => {
-    if (open) return room.spawnCardFlat(pos, { front, back, open: true, ...geo });
+    if (open) {
+      // Deal face-down like a normal deck (the back face shows), but both faces are public art —
+      // flip turns it over to the front. `front` (the up face in props) is the back the deck shows.
+      return room.spawnCardFlat(pos, { front: back, back: front, open: true, ...geo });
+    }
     const id = room.spawnCardFlat(pos, { back, ...geo });
     room.cardData.set(id, { front });
     return id;
@@ -173,7 +177,13 @@ export function registerCardHandlers(
       const deckBody = room.bodies.get(deckId);
       const position = deckBody ? room.besideDeck(deckBody) : randomPosition();
       if (open) {
-        room.spawnCardFlat(position, { front, back, open: true, ...geo }); // double-sided → face-up
+        const faceDown = where === 'field-down';
+        room.spawnCardFlat(
+          position,
+          faceDown
+            ? { front: back, back: front, open: true, ...geo } // back face up, both public
+            : { front, back, open: true, ...geo },
+        );
       } else {
         const faceDown = where === 'field-down';
         const id = room.spawnCardFlat(
