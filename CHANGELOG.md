@@ -8,6 +8,23 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- **Multi-select composition — build one thing out of many.** With a clump selected, two new
+  buttons turn the selection into a construction tool. **Combine** consolidates loose cards and
+  whole decks together into a single face-down deck at the group's centre — the card sitting on
+  top of the table ends up on top of the deck — so you can sweep a discard pile back onto its
+  deck, merge two decks, or gather scattered cards into one, all in a click. It only combines
+  cards and decks that share a back and shape; a mismatched selection greys the button out rather
+  than half-doing it. **Gather** is the same idea for dispensers and their pieces, and reads what
+  you've selected: pick two or more like stacks and it **merges** them into one (the counts add
+  up, even past a single stack's normal cap); pick a stack plus a handful of the loose pieces it
+  hands out and it **pours them back in**; pick just the loose pieces — poker chips, coins, trains,
+  go stones — with no stack among them and it **mints a new dispenser** from them. Both buttons
+  appear only when the selection can actually be composed, so they stay out of the way until
+  they're useful, and they work the same by touch. All of it is one physical move on the server —
+  read the pieces, remove them, drop the new combined piece in their place — so it stays in sync
+  for everyone with no new bookkeeping.
+
 ## [0.14.0] — 2026-09-02
 
 ### Added
