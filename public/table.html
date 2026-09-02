@@ -1228,7 +1228,10 @@
             <button class="libTab" data-tab="scenes">Scenes</button>
           </div>
         </div>
-        <div class="libPane" data-pane="dice"><ul id="nlb_dice" class="libList lib2-bi"></ul></div>
+        <div class="libPane" data-pane="dice">
+          <ul id="nlb_dice" class="libList lib2-bi"></ul>
+          <ul id="nlc_dice" class="libList lib2-cu"></ul>
+        </div>
         <div class="libPane" data-pane="decks" hidden>
           <ul id="nlb_decks" class="libList lib2-bi"></ul>
           <ul id="nlc_deck" class="libList lib2-cu"></ul>
@@ -1347,6 +1350,18 @@
               data-tab="sky"
             >
               Skyboxes
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="addtab-dice"
+              aria-controls="addpane-dice"
+              aria-selected="false"
+              tabindex="-1"
+              class="libTab"
+              data-tab="dice"
+            >
+              Dice Textures
             </button>
           </div>
         </div>
@@ -1841,6 +1856,35 @@
               <div class="row">
                 <button id="adSkyCubeSave" type="button">Save</button
                 ><button id="adSkyCubeApply" type="button" class="primary">Save + Apply</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          role="tabpanel"
+          id="addpane-dice"
+          aria-labelledby="addtab-dice"
+          data-pane="dice"
+          hidden
+        >
+          <div class="addDeckCols">
+            <div class="addCol">
+              <h4>Dice texture</h4>
+              <div class="uploadSq">
+                <input id="adDiceImg" type="file" accept="image/*" hidden /><span class="sqLabel"
+                  >Texture image</span
+                >
+              </div>
+              <div>
+                <label for="adDiceName">Texture name</label>
+                <input id="adDiceName" type="text" placeholder="Name this texture" />
+              </div>
+              <p class="destNote">
+                Lands in <b>Library &rarr; Dice &rarr; Custom</b>. Apply it to dice from the
+                <b>Custom</b> chips in a die's Finish picker.
+              </p>
+              <div class="row">
+                <button id="adDiceSave" type="button" class="primary">Save</button>
               </div>
             </div>
           </div>

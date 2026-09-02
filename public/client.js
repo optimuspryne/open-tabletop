@@ -379,15 +379,22 @@ function loadDiceDefaults() {
     return {};
   }
 }
-function saveDiceDefault(sides, color, textColor, finish) {
+function saveDiceDefault(sides, color, textColor, finish, finishImg) {
   const all = loadDiceDefaults();
   const d = { ...(all[String(sides)] || {}) }; // merge, so setting a finish doesn't wipe the color
   if (Number.isInteger(color)) d.color = color;
   if (Number.isInteger(textColor)) d.textColor = textColor;
   if (typeof finish === 'string') {
-    if (finish === 'matte')
+    if (finish === 'matte') {
       delete d.finish; // matte is the default look
-    else d.finish = finish;
+      delete d.finishImg;
+    } else if (finish === 'custom') {
+      d.finish = 'custom';
+      if (typeof finishImg === 'string') d.finishImg = finishImg; // the uploaded texture URL
+    } else {
+      d.finish = finish;
+      delete d.finishImg; // a non-custom finish drops any stored texture
+    }
   }
   all[String(sides)] = d;
   try {
@@ -401,7 +408,10 @@ function myDieProps(sides) {
   if (d) {
     if (Number.isInteger(d.color)) p.color = d.color;
     if (Number.isInteger(d.textColor)) p.textColor = d.textColor;
-    if (typeof d.finish === 'string') p.finish = d.finish;
+    if (typeof d.finish === 'string') {
+      p.finish = d.finish;
+      if (d.finish === 'custom' && typeof d.finishImg === 'string') p.finishImg = d.finishImg;
+    }
   }
   return p;
 }
@@ -436,9 +446,40 @@ function applyDiceSet(color) {
 
 // Apply a finish as my default across EVERY die type, and live-apply it to the dice already in my
 // tray (synced, so everyone sees them). Colors are untouched.
-function applyDiceFinish(finish) {
-  for (const s of DIE_SIDES) saveDiceDefault(s, undefined, undefined, finish);
-  for (const id of myTrayDieIds()) room.send('recolor', { id, finish });
+function applyDiceFinish(finish, finishImg) {
+  for (const s of DIE_SIDES) saveDiceDefault(s, undefined, undefined, finish, finishImg);
+  const extra = finish === 'custom' ? { finish, finishImg } : { finish };
+  for (const id of myTrayDieIds()) room.send('recolor', { id, ...extra });
+}
+
+// Custom dice textures (host-uploaded, ROADMAP §9 phase 2). The library list arrives via the
+// 'diceList' message; each becomes an image chip appended to a finish picker. Clicking one applies
+// the 'custom' finish with that texture URL. finishDieRef is the inspector's per-die applier,
+// captured when the inspector wires up (module scope so a late diceList can rebuild its chips).
+let diceTextures = [];
+let finishDieRef = null;
+function buildTextureChips(row, apply) {
+  if (!row) return;
+  for (const el of [...row.querySelectorAll('[data-tex]')]) el.remove(); // clear stale texture chips
+  for (const t of diceTextures) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.dataset.tex = t.id;
+    chip.innerHTML = '<span class="thumb"></span><span class="lbl"></span>';
+    const thumb = chip.querySelector('.thumb');
+    thumb.style.cssText =
+      'display:inline-block;width:16px;height:16px;border-radius:3px;background-size:cover;background-position:center;vertical-align:middle;margin-right:5px';
+    thumb.style.backgroundImage = `url("${t.url}")`;
+    chip.querySelector('.lbl').textContent = t.name;
+    chip.title = t.name + ' — custom texture';
+    chip.onclick = () => apply(t.url);
+    row.appendChild(chip);
+  }
+}
+function refreshTextureChips() {
+  buildTextureChips(byId('trayFinishes'), (url) => applyDiceFinish('custom', url));
+  if (finishDieRef) buildTextureChips(byId('dieFinishes'), (url) => finishDieRef('custom', url));
 }
 
 // Mesh-build props for a piece. Dispensers stack their body to the live `count`,
@@ -681,6 +722,12 @@ function rebuildGrid() {
     renderHand(cards);
   }); // your private hand — never seen by other clients
   room.send('handSync'); // re-fetch our hand now the handler is ready (onJoin's send is missed on reconnect)
+  room.onMessage('diceList', (list) => {
+    diceTextures = Array.isArray(list) ? list : []; // the custom dice-texture library
+    refreshTextureChips();
+    if (window.onLibraryList) window.onLibraryList('dice', diceTextures); // editor library list
+  });
+  room.send('listDice'); // load the finish pickers' custom-texture chips (also refreshed on saves)
   room.onMessage('showFan', ({ sid, cards }) => {
     // cards another player is showing you, face-up in their fan
     if (cards && cards.length) revealed.set(sid, cards);
@@ -1433,8 +1480,9 @@ function rebuildGrid() {
   }
   {
     const finRow = byId('trayFinishes'); // finishes: one click = that look for all my dice
-    if (finRow)
+    if (finRow) {
       for (const f of DICE_FINISHES) {
+        if (f.key === 'custom') continue; // custom = the uploaded-texture chips appended below
         if (DICE_FINISH_FALLBACK[f.key] && deviceClass() === 'phone') continue; // GPU-heavy on phones
         const chip = document.createElement('button');
         chip.type = 'button';
@@ -1445,6 +1493,8 @@ function rebuildGrid() {
         chip.onclick = () => applyDiceFinish(f.key);
         finRow.appendChild(chip);
       }
+      buildTextureChips(finRow, (url) => applyDiceFinish('custom', url));
+    }
   }
   {
     const b = byId('trayRoll');
@@ -2353,15 +2403,27 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
     if (text) text.value = toHex(readableInk(color));
     commit();
   };
-  const finishDie = (key) => {
+  const finishDie = (key, finishImg) => {
     if (!inspect || inspect.type !== 'die') return;
     const props = { ...(inspect.props || {}) };
-    if (key === 'matte') delete props.finish;
-    else props.finish = key;
+    if (key === 'matte') {
+      delete props.finish;
+      delete props.finishImg;
+    } else if (key === 'custom') {
+      props.finish = 'custom';
+      if (finishImg) props.finishImg = finishImg;
+    } else {
+      props.finish = key;
+      delete props.finishImg;
+    }
     inspect.props = props;
     swapInspect(props); // rebuild the inspect preview with the new look
-    if (inspect.origId) room.send('recolor', { id: inspect.origId, finish: key });
+    if (inspect.origId) {
+      const extra = key === 'custom' ? { finish: key, finishImg } : { finish: key };
+      room.send('recolor', { id: inspect.origId, ...extra });
+    }
   };
+  finishDieRef = finishDie; // let a late diceList rebuild the inspector's texture chips
   if (body) {
     // live preview while dragging: props tint blunt; stacks reclone (cached, cheap)
     body.oninput = () => {
@@ -2399,8 +2461,9 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       swatchRow.appendChild(chip);
     }
   const dieFinRow = byId('dieFinishes'); // per-die finish picker (inspector)
-  if (dieFinRow)
+  if (dieFinRow) {
     for (const f of DICE_FINISHES) {
+      if (f.key === 'custom') continue; // custom = the uploaded-texture chips appended below
       if (DICE_FINISH_FALLBACK[f.key] && deviceClass() === 'phone') continue; // GPU-heavy on phones
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -2411,6 +2474,8 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       chip.onclick = () => finishDie(f.key);
       dieFinRow.appendChild(chip);
     }
+    buildTextureChips(dieFinRow, (url) => finishDie('custom', url));
+  }
   const defBtn = byId('inspectDefaultBtn'); // remember this die's color as my default for its type
   if (defBtn)
     defBtn.onclick = () => {

@@ -742,6 +742,8 @@ function previewEl(kind, it) {
     fillAsync(wrap, () => boardPreviewURL(it.preview));
   } else if (kind === 'prop') {
     fillAsync(wrap, () => propPreviewURL(it.props || {}));
+  } else if (kind === 'dice') {
+    wrap.append(thumbImg(it.url)); // the uploaded dice texture
   } else {
     // scene — no single image
     wrap.classList.add('empty');
@@ -858,8 +860,10 @@ function renderList(kind, list, sink) {
             })
           : kind === 'sky'
             ? btn('Apply', () => ROOM.send('skybox', { url: it.url }))
-            : btn('Spawn', () => spawnOf[kind](it));
-      acts.append(primary, ...adminActs);
+            : kind === 'dice'
+              ? null // a texture is applied to dice from the finish picker, not spawned
+              : btn('Spawn', () => spawnOf[kind](it));
+      acts.append(...(primary ? [primary] : []), ...adminActs);
       li.append(previewEl(kind, it), meta, acts);
       ul.appendChild(li);
     }
@@ -1617,6 +1621,27 @@ function wireAddObject() {
   };
 }
 
+// ---- Add-to-Library: dice texture (a seamless image used as a custom die finish) ----------
+const DICE_TEX = 512; // dice texture upload size (square; kept modest so phones can load it)
+function wireAddDice() {
+  wireUploadSq('adDiceImg', false);
+  byId('adDiceSave').onclick = async () => {
+    const name = byId('adDiceName').value.trim();
+    if (!name) return alert('Name the texture first.');
+    const f = byId('adDiceImg').files[0];
+    if (!f) return alert('Choose a texture image.');
+    try {
+      const url = await uploadImage(f, DICE_TEX, DICE_TEX, 'stretch', 'dice');
+      ROOM.send('saveDice', { name, url, isPublic: false }); // private by default; publish from the library
+      byId('adDiceName').value = '';
+      clearSq('adDiceImg');
+      closeAddModal();
+    } catch (e) {
+      alert('Upload failed.');
+    }
+  };
+}
+
 // ---- Add-to-Library: skybox tab (equirect panorama or 6-face cubemap) -------
 const CUBE_IDS = ['adSkyPX', 'adSkyNX', 'adSkyPY', 'adSkyNY', 'adSkyPZ', 'adSkyNZ'];
 function wireAddSky() {
@@ -1704,6 +1729,7 @@ window.onOttRoom = (room) => {
     room.send('listProps');
     room.send('listScenes');
     room.send('listSkyboxes');
+    room.send('listDice');
   };
   // Old #libraryPanel + #builtinModal removed — one combined #libraryModal below.
 
@@ -1775,6 +1801,7 @@ window.onOttRoom = (room) => {
     wireAddBoard();
     wireAddObject();
     wireAddSky();
+    wireAddDice();
   }
   const saveScene = byId('sceneSaveBtn');
   if (saveScene)

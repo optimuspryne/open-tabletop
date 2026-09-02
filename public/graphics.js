@@ -359,7 +359,8 @@ function digitTexture(value, text) {
 }
 
 const hexOf = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
-function numberFaceTexture(value, body, text, finishKey) {
+function numberFaceTexture(value, body, text, finishKey, finishImg) {
+  if (FINISHES[finishKey]?.image && finishImg) return customFaceTexture(value, text, finishImg);
   const marble = FINISHES[finishKey]?.marble;
   const def = body == null && text == null && !marble; // the shared, cached ivory face
   if (def && _faceTex.has(value)) return _faceTex.get(value);
@@ -399,6 +400,7 @@ const FINISHES = {
     metalness: 0,
     opacity: 0.75,
   }, // plain transparent MeshStandard — no clearcoat, so Android GPUs don't choke on it
+  custom: { roughness: 0.45, metalness: 0.0, image: true }, // an uploaded texture as the die surface (needs finishImg)
 };
 const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
 
@@ -511,6 +513,52 @@ function marbleTexture(colorInt) {
   return tex;
 }
 
+// --- Custom dice texture (ROADMAP §9 phase 2): a host-uploaded seamless image used as the die
+// surface. On a convex/d4 body it's a repeat-wrapped map over triplanar UVs (like marble). On a
+// d6 the image is composited under each number on a per-face canvas — the image loads async, so
+// the face texture starts as the number on ivory and fills in the image on load. ---
+const _customTex = new Map();
+function customTexture(url) {
+  if (_customTex.has(url)) return _customTex.get(url);
+  const tex = loadImageTexture(url); // sRGB + anisotropy
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  _customTex.set(url, tex);
+  return tex;
+}
+
+// Draw an image to fill a size×size canvas, cropping to cover (CSS background-size: cover).
+function drawImageCover(ctx, img, size) {
+  const iw = img.naturalWidth || img.width,
+    ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+  const scale = Math.max(size / iw, size / ih);
+  const w = iw * scale,
+    h = ih * scale;
+  ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
+}
+
+const _customFaceTex = new Map();
+function customFaceTexture(value, text, url) {
+  const key = value + '|' + (text ?? '') + '|' + url;
+  if (_customFaceTex.has(key)) return _customFaceTex.get(key);
+  const size = CONFIG.tex.die;
+  const { canvas, ctx } = makeCanvas(size, size);
+  ctx.fillStyle = COLORS.ivory;
+  ctx.fillRect(0, 0, size, size);
+  drawNumber(ctx, size, value, text != null ? hexOf(text) : null); // legible before the image loads
+  const texture = cTex(canvas);
+  const img = new Image();
+  img.onload = () => {
+    ctx.clearRect(0, 0, size, size);
+    drawImageCover(ctx, img, size);
+    drawNumber(ctx, size, value, text != null ? hexOf(text) : null); // number stays on top of the art
+    texture.needsUpdate = true;
+  };
+  img.src = url;
+  _customFaceTex.set(key, texture);
+  return texture;
+}
+
 // Give a ConvexGeometry per-face triplanar UVs so a marble map maps without stretching (it ships
 // with none). Non-indexed, so each triangle's 3 verts share the projection of its dominant axis.
 function addTriplanarUV(geo, scale) {
@@ -552,16 +600,17 @@ function addTriplanarUV(geo, scale) {
 
 // The body material for a die, given its color + finish. Convex dice + d4 use this directly; the
 // d6 uses dieFaceMaterial (its faces bake the number into the map).
-function dieBodyMaterial(color, finishKey) {
+function dieBodyMaterial(color, finishKey, finishImg) {
   const f = FINISHES[finishKey] || FINISHES.matte;
   const c = Number.isInteger(color) ? color : 0xf4f1ea;
   const params = {
-    color: f.marble ? 0xffffff : (color ?? COLORS.ivory),
+    color: f.marble || (f.image && finishImg) ? 0xffffff : (color ?? COLORS.ivory),
     roughness: f.roughness,
     metalness: f.metalness || 0,
     flatShading: true,
   };
   if (f.marble) params.map = marbleTexture(c);
+  if (f.image && finishImg) params.map = customTexture(finishImg);
   if (f.brushed) params.roughnessMap = brushedTexture();
   if (f.emissive) {
     params.emissive = c; // convex body glows the die color; the number planes sit on top
@@ -576,9 +625,9 @@ function dieBodyMaterial(color, finishKey) {
     : new THREE.MeshStandardMaterial(params);
 }
 // A d6 face material: the composited (solid or marble) number face as the map, plus the finish params.
-function dieFaceMaterial(value, color, textColor, finishKey) {
+function dieFaceMaterial(value, color, textColor, finishKey, finishImg) {
   const f = FINISHES[finishKey] || FINISHES.matte;
-  const map = numberFaceTexture(value, color, textColor, finishKey);
+  const map = numberFaceTexture(value, color, textColor, finishKey, finishImg);
   const params = { map, roughness: f.roughness, metalness: f.metalness || 0 };
   if (f.brushed) params.roughnessMap = brushedTexture();
   if (f.emissive) {
@@ -611,11 +660,12 @@ function numberLabel(value, size, text) {
 // each face. ConvexGeometry gives us triangles, so we recover the real polygon
 // faces by grouping triangles that share a normal (same trick as the server's
 // collider), then drop a numbered label at each face's centre.
-function convexDie(sides, color, textColor, finish) {
+function convexDie(sides, color, textColor, finish, finishImg) {
   const points = dieVerts(sides).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(points);
-  if (FINISHES[finish]?.marble || FINISHES[finish]?.brushed) addTriplanarUV(geo, DIE_MARBLE_UV);
-  const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish));
+  if (FINISHES[finish]?.marble || FINISHES[finish]?.brushed || FINISHES[finish]?.image)
+    addTriplanarUV(geo, DIE_MARBLE_UV);
+  const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish, finishImg));
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -672,11 +722,12 @@ function convexDie(sides, color, textColor, finish) {
 
 // A d4 is read by its top vertex, not a top face — so each of the 4 vertices
 // carries a number, printed at that corner on all three faces touching it.
-function numberedD4(color, textColor, finish) {
+function numberedD4(color, textColor, finish, finishImg) {
   const verts = dieVerts(4).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(verts);
-  if (FINISHES[finish]?.marble || FINISHES[finish]?.brushed) addTriplanarUV(geo, DIE_MARBLE_UV);
-  const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish));
+  if (FINISHES[finish]?.marble || FINISHES[finish]?.brushed || FINISHES[finish]?.image)
+    addTriplanarUV(geo, DIE_MARBLE_UV);
+  const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish, finishImg));
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -1126,15 +1177,16 @@ function dieMesh(props = {}) {
   let finish = props.finish;
   if (finish && DICE_FINISH_FALLBACK[finish] && deviceClass() === 'phone')
     finish = DICE_FINISH_FALLBACK[finish];
+  const finishImg = finish === 'custom' ? props.finishImg : null; // only the custom finish uses it
   if (sides === 6) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
       new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
-      faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, finish)),
+      faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, finish, finishImg)),
     );
   }
-  if (sides === 4) return numberedD4(props.color, props.textColor, finish);
-  return convexDie(sides, props.color, props.textColor, finish);
+  if (sides === 4) return numberedD4(props.color, props.textColor, finish, finishImg);
+  return convexDie(sides, props.color, props.textColor, finish, finishImg);
 }
 
 // A rounded-rectangle alpha mask (white card shape on black), so cards render
