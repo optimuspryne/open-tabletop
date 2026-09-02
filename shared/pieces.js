@@ -716,7 +716,10 @@ export const DICE_FINISHES = [
   { key: 'satin', name: 'Satin' },
   { key: 'glossy', name: 'Glossy' },
   { key: 'metallic', name: 'Metallic' },
+  { key: 'brushed', name: 'Brushed' },
   { key: 'pearl', name: 'Pearl' },
+  { key: 'translucent', name: 'Translucent' },
+  { key: 'glow', name: 'Glow' },
   { key: 'marbled', name: 'Marbled' },
 ];
 export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));

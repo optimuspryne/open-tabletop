@@ -391,6 +391,14 @@ const FINISHES = {
     physical: { clearcoat: 0.8, clearcoatRoughness: 0.3, sheen: 0.5, sheenRoughness: 0.5 },
   },
   marbled: { roughness: 0.3, metalness: 0.05, marble: true },
+  brushed: { roughness: 1, metalness: 1, brushed: true }, // metallic + directional roughness map
+  glow: { roughness: 0.5, metalness: 0, emissive: true, emissiveIntensity: 0.55 }, // glows its color
+  translucent: {
+    roughness: 0.15,
+    metalness: 0,
+    opacity: 0.55,
+    physical: { clearcoat: 0.6, clearcoatRoughness: 0.2 },
+  },
 };
 const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
 
@@ -469,6 +477,30 @@ function marbleCanvas(colorInt) {
   _marbleCanvas.set(key, canvas);
   return canvas;
 }
+let _brushedTex = null;
+// A grayscale roughness map of fine horizontal streaks — metal + this reads as brushed. Color-
+// independent, so one cached texture serves every brushed die (tiled via RepeatWrapping).
+function brushedTexture() {
+  if (_brushedTex) return _brushedTex;
+  const size = 256;
+  const { canvas, ctx } = makeCanvas(size, size);
+  const img = ctx.createImageData(size, size);
+  const px = img.data;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const s = _turb(x * 0.04, y * 22, 2); // slow in x, fast in y → fine horizontal streaks
+      const g = Math.round((0.25 + 0.5 * s) * 255); // roughness ~0.25..0.75 along the grain
+      const i = (y * size + x) * 4;
+      px[i] = px[i + 1] = px[i + 2] = g;
+      px[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = cTex(canvas, false); // data map, not sRGB
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  _brushedTex = tex;
+  return _brushedTex;
+}
 const _marbleTex = new Map();
 function marbleTexture(colorInt) {
   const key = colorInt >>> 0;
@@ -522,13 +554,23 @@ function addTriplanarUV(geo, scale) {
 // d6 uses dieFaceMaterial (its faces bake the number into the map).
 function dieBodyMaterial(color, finishKey) {
   const f = FINISHES[finishKey] || FINISHES.matte;
+  const c = Number.isInteger(color) ? color : 0xf4f1ea;
   const params = {
     color: f.marble ? 0xffffff : (color ?? COLORS.ivory),
     roughness: f.roughness,
     metalness: f.metalness || 0,
     flatShading: true,
   };
-  if (f.marble) params.map = marbleTexture(Number.isInteger(color) ? color : 0xf4f1ea);
+  if (f.marble) params.map = marbleTexture(c);
+  if (f.brushed) params.roughnessMap = brushedTexture();
+  if (f.emissive) {
+    params.emissive = c; // convex body glows the die color; the number planes sit on top
+    params.emissiveIntensity = f.emissiveIntensity;
+  }
+  if (f.opacity != null) {
+    params.transparent = true;
+    params.opacity = f.opacity;
+  }
   return f.physical
     ? new THREE.MeshPhysicalMaterial({ ...params, ...f.physical })
     : new THREE.MeshStandardMaterial(params);
@@ -536,11 +578,18 @@ function dieBodyMaterial(color, finishKey) {
 // A d6 face material: the composited (solid or marble) number face as the map, plus the finish params.
 function dieFaceMaterial(value, color, textColor, finishKey) {
   const f = FINISHES[finishKey] || FINISHES.matte;
-  const params = {
-    map: numberFaceTexture(value, color, textColor, finishKey),
-    roughness: f.roughness,
-    metalness: f.metalness || 0,
-  };
+  const map = numberFaceTexture(value, color, textColor, finishKey);
+  const params = { map, roughness: f.roughness, metalness: f.metalness || 0 };
+  if (f.brushed) params.roughnessMap = brushedTexture();
+  if (f.emissive) {
+    params.emissive = 0xffffff; // glow the face art itself → numbers stay legible as dark glow
+    params.emissiveMap = map;
+    params.emissiveIntensity = f.emissiveIntensity;
+  }
+  if (f.opacity != null) {
+    params.transparent = true;
+    params.opacity = f.opacity;
+  }
   return f.physical
     ? new THREE.MeshPhysicalMaterial({ ...params, ...f.physical })
     : new THREE.MeshStandardMaterial(params);
@@ -565,7 +614,7 @@ function numberLabel(value, size, text) {
 function convexDie(sides, color, textColor, finish) {
   const points = dieVerts(sides).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(points);
-  if (FINISHES[finish]?.marble) addTriplanarUV(geo, DIE_MARBLE_UV);
+  if (FINISHES[finish]?.marble || FINISHES[finish]?.brushed) addTriplanarUV(geo, DIE_MARBLE_UV);
   const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish));
   die.castShadow = true;
   die.receiveShadow = true;
@@ -626,7 +675,7 @@ function convexDie(sides, color, textColor, finish) {
 function numberedD4(color, textColor, finish) {
   const verts = dieVerts(4).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(verts);
-  if (FINISHES[finish]?.marble) addTriplanarUV(geo, DIE_MARBLE_UV);
+  if (FINISHES[finish]?.marble || FINISHES[finish]?.brushed) addTriplanarUV(geo, DIE_MARBLE_UV);
   const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish));
   die.castShadow = true;
   die.receiveShadow = true;
