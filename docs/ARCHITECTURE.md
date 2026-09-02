@@ -280,6 +280,15 @@ centroid — no new state, the same ownership and validation path as every other
 a heterogeneous selection (mismatched card backs, or unlike dispensers) rather than combining part
 of it, and the client greys the offer to match.
 
+Dispenser consolidation is the same idea widened to loose tokens. The absorb rule was already
+there — dropping a chip on its stack rejoins it — so `absorbIntoDispenser` (pour the selected loose
+pieces into the one selected dispenser) and `dispenseFromPieces` (mint a new dispenser from loose
+pieces that have one) are that rule run over a selection instead of waiting for a physical drop. The
+match predicate now lives once in `shared/pieces.js` (`dispensedSpec` / `itemMatchesDispenser` /
+`dispenserForItem`), used by the drop-back path, both new handlers, and the client's eligibility
+check, so the three can't drift. All of it — merge, absorb, mint — is one **Gather** button that
+picks the handler from what's selected, the same way **Combine** unified loose cards and decks.
+
 ## Pieces today
 
 Each **kind** is defined in two registries keyed by the same type id:

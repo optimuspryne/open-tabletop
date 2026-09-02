@@ -507,6 +507,16 @@ infinite bowls are skipped, and the true total is preserved past the per-stack s
 they are the inverse-and-more of `splitDeck`: `combineIntoDeck` also scoops a discard pile back
 onto its deck.
 
+Two more consolidate loose dispenser-items, sharing the same match rule the drop-back absorb uses
+(shape + tint/team, centralized as `dispensedSpec` / `itemMatchesDispenser` / `dispenserForItem`
+in `shared/pieces.js`): **`absorbIntoDispenser`** (`{ids}` — the one dispenser in the selection
+swallows every matching loose piece; a finite stack's count climbs by one each, an infinite bowl
+just takes them) and **`dispenseFromPieces`** (`{ids}` — with no dispenser selected, mint a fresh
+dispenser from 2+ homogeneous loose pieces that have one — poker chips → a chip stack, go stones →
+a bowl — a finite stack starting one-per-piece, an infinite bowl ignoring the count). On the client
+these three plus `gatherDispensers` are one **Gather** button that routes by the selection: 2+
+dispensers merge, one dispenser + loose items absorbs, loose items alone mint.
+
 All payload-bearing handlers treat the socket as an untrusted boundary and normalize
 their input through `server/message-validation.js` before lookup or mutation. The
 normalizers accept plain objects with only the documented keys, require finite values

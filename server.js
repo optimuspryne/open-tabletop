@@ -24,6 +24,8 @@ import {
   deckHeight,
   MEASURE,
   DISPENSERS,
+  dispensedSpec,
+  itemMatchesDispenser,
   stackVisible,
   gridActive,
   snapToCell,
@@ -1206,15 +1208,7 @@ class TableRoom extends Room {
   // The spawn spec a dispenser hands out: an existing PROP, tinted (poker/coin) or
   // team-colored (go bowl) from the dispenser's own config.
   dispenserItem(piece) {
-    const props = readProps(piece);
-    const d = DISPENSERS[props.disp];
-    if (!d) return null;
-    const itemProps = { shape: d.item };
-    if (d.team)
-      itemProps.team = props.team ? 1 : 0; // go bowl → a team stone
-    else if (props.color != null) itemProps.color = props.color | 0; // poker/coin → tint
-    if (PROPS[d.item] && PROPS[d.item].team) itemProps.snap = true; // grid-game items (go stones) snap by default
-    return { type: 'prop', props: itemProps };
+    return dispensedSpec(readProps(piece)); // shape + tint/team the stack hands out (shared rule)
   }
 
   // After a dispense: a finite dispenser shrinks and is removed when empty; an
@@ -1466,9 +1460,7 @@ class TableRoom extends Room {
       for (const [dispId, disp] of this.state.pieces) {
         if (disp.type !== 'dispenser') continue;
         const want = this.dispenserItem(disp);
-        if (!want || want.props.shape !== pp.shape) continue;
-        if (want.props.color != null && (pp.color | 0) !== (want.props.color | 0)) continue;
-        if (want.props.team != null && (pp.team ? 1 : 0) !== want.props.team) continue;
+        if (!itemMatchesDispenser(want, pp)) continue;
         const dispBody = this.bodies.get(dispId);
         if (!dispBody) continue;
         const d = DISPENSERS[readProps(disp).disp];

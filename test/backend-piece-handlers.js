@@ -19,6 +19,8 @@ const MESSAGE_NAMES = [
   'remove',
   'removeGroup',
   'gatherDispensers',
+  'absorbIntoDispenser',
+  'dispenseFromPieces',
 ];
 
 function vector(initial = {}) {
@@ -279,4 +281,112 @@ test('gathering excludes infinite bowls (nothing to pour)', async () => {
     events.some((e) => e.name === 'spawn'),
     false,
   );
+});
+
+const chip = (color) => ({ type: 'prop', props: JSON.stringify({ shape: 'poker_chip', color }) });
+const stone = (team) => ({ type: 'prop', props: JSON.stringify({ shape: 'go', team }) });
+
+test('absorbing loose pieces pours matching ones back into the one dispenser', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('9', dispenser('pokerStack', 20, { color: 0xd14b4b }));
+  room.bodies.set('9', body({ x: 0, z: 0 }));
+  room.state.pieces.set('1', chip(0xd14b4b));
+  room.bodies.set('1', body({ x: 1, z: 0 }));
+  room.state.pieces.set('2', chip(0xd14b4b));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+  room.state.pieces.set('3', chip(0x5b8ad6)); // a blue chip — does not match
+  room.bodies.set('3', body({ x: 3, z: 0 }));
+
+  await handlers.get('absorbIntoDispenser')(client, { ids: ['9', '1', '2', '3'] });
+
+  assert.equal(room.state.pieces.get('9').count, 22); // two red chips absorbed
+  assert.equal(room.state.pieces.has('1'), false);
+  assert.equal(room.state.pieces.has('2'), false);
+  assert.equal(room.state.pieces.has('3'), true, 'the mismatched chip is left');
+  assert.deepEqual(events.at(-1), { name: 'sfx', payload: { type: 'object-drop' } });
+});
+
+test('absorbing an infinite bowl swallows stones without touching a count', async () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('9', dispenser('goBowl', 0, { team: 0 }));
+  room.bodies.set('9', body({ x: 0, z: 0 }));
+  room.state.pieces.set('1', stone(0));
+  room.bodies.set('1', body({ x: 1, z: 0 }));
+
+  await handlers.get('absorbIntoDispenser')(client, { ids: ['9', '1'] });
+
+  assert.equal(room.state.pieces.has('1'), false);
+  assert.equal(room.state.pieces.get('9').count, 0); // infinite → unchanged
+});
+
+test('absorbing refuses when more than one dispenser is selected', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('8', dispenser('pokerStack', 20, { color: 0xd14b4b }));
+  room.bodies.set('8', body({ x: 0, z: 0 }));
+  room.state.pieces.set('9', dispenser('pokerStack', 20, { color: 0xd14b4b }));
+  room.bodies.set('9', body({ x: 2, z: 0 }));
+  room.state.pieces.set('1', chip(0xd14b4b));
+  room.bodies.set('1', body({ x: 1, z: 0 }));
+
+  await handlers.get('absorbIntoDispenser')(client, { ids: ['8', '9', '1'] });
+
+  assert.equal(room.state.pieces.has('1'), true);
+  assert.equal(
+    events.some((e) => e.name === 'stackCollider'),
+    false,
+  );
+});
+
+test('minting a dispenser from loose pieces sums them into a new stack', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', chip(0xd14b4b));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', chip(0xd14b4b));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+  room.state.pieces.set('3', chip(0xd14b4b));
+  room.bodies.set('3', body({ x: 4, z: 0 }));
+
+  await handlers.get('dispenseFromPieces')(client, { ids: ['1', '2', '3'] });
+
+  const spawn = events.find((e) => e.name === 'spawn');
+  assert.equal(spawn.payload.type, 'dispenser');
+  assert.deepEqual(spawn.payload.props, { disp: 'pokerStack', color: 0xd14b4b, count: 3 });
+  assert.deepEqual(spawn.payload.position, [2, 4, 0]); // centroid x/z, spawnY
+  assert.equal(room.state.pieces.size, 0);
+});
+
+test('minting from go stones makes an infinite bowl with no count', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', stone(0));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', stone(0));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+
+  await handlers.get('dispenseFromPieces')(client, { ids: ['1', '2'] });
+
+  const spawn = events.find((e) => e.name === 'spawn');
+  assert.deepEqual(spawn.payload.props, { disp: 'goBowl', team: 0 }); // no count on an infinite bowl
+});
+
+test('minting refuses mixed pieces and refuses when a dispenser is present', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', chip(0xd14b4b));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', chip(0x5b8ad6)); // different color → mixed
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+  await handlers.get('dispenseFromPieces')(client, { ids: ['1', '2'] });
+  assert.equal(
+    events.some((e) => e.name === 'spawn'),
+    false,
+  );
+
+  room.state.pieces.set('9', dispenser('pokerStack', 20, { color: 0xd14b4b }));
+  room.bodies.set('9', body({ x: 1, z: 0 }));
+  room.state.pieces.set('4', chip(0xd14b4b));
+  room.bodies.set('4', body({ x: 3, z: 0 }));
+  await handlers.get('dispenseFromPieces')(client, { ids: ['1', '4', '9'] });
+  assert.equal(
+    events.some((e) => e.name === 'spawn'),
+    false,
+  ); // a dispenser present → not mint
 });

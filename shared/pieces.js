@@ -517,6 +517,33 @@ export const DISPENSER_LIST = [
   { id: 'goBowl' },
 ];
 
+// The prop a dispenser hands out: its item shape plus the stack's own tint (poker/coin) or team
+// (go bowl). Shared by the server (spawn spec, absorb-on-drop) and the client (compose
+// eligibility) so the match rule can't drift between them.
+export const dispensedSpec = (dispProps = {}) => {
+  const d = DISPENSERS[dispProps.disp];
+  if (!d) return null;
+  const props = { shape: d.item };
+  if (d.team) props.team = dispProps.team ? 1 : 0;
+  else if (dispProps.color != null) props.color = dispProps.color | 0;
+  if (PROPS[d.item] && PROPS[d.item].team) props.snap = true;
+  return { type: 'prop', props };
+};
+
+// Does a loose piece's props match what a dispenser hands out? `want` is a dispensedSpec() result.
+export const itemMatchesDispenser = (want, props = {}) =>
+  !!want &&
+  want.props.shape === props.shape &&
+  (want.props.color == null || (props.color | 0) === (want.props.color | 0)) &&
+  (want.props.team == null || (props.team ? 1 : 0) === want.props.team);
+
+// The dispenser kind whose item is this prop shape (poker_chip -> pokerStack, go -> goBowl), or
+// null when a loose piece has no dispenser to pour into or mint from.
+export const dispenserForItem = (shape) => {
+  for (const key of Object.keys(DISPENSERS)) if (DISPENSERS[key].item === shape) return key;
+  return null;
+};
+
 // One-click starter games. The server's setupStarter() clears the table, then builds one of
 // these: a `board` + placed `pieces()`, and/or a `deck` and `bowls`/`stacks` of dispensers.
 // `pieces()` returns { shape, team, col, row } placements on a `cells`×`cells` grid whose (0,0)

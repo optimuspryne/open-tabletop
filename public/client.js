@@ -58,6 +58,9 @@ import {
   MEASURE,
   formatMeasure,
   DISPENSERS,
+  dispensedSpec,
+  dispenserForItem,
+  itemMatchesDispenser,
   gridActive,
   snapToCell,
   trayCenter,
@@ -5167,6 +5170,55 @@ function setComposeBtn(el, state, okTitle, mixedTitle) {
   el.classList.toggle('disabled', mixed);
   el.title = mixed ? mixedTitle : okTitle;
 }
+// The Gather button is one verb over three dispenser cases, chosen by what's selected:
+//   2+ dispensers                       -> merge them           (gatherDispensers)
+//   1 dispenser + matching loose pieces -> pour the pieces in   (absorbIntoDispenser)
+//   2+ matching loose pieces, no disp   -> mint a new dispenser (dispenseFromPieces)
+// Returns { state:'ok'|'mixed'|null, msg, okTitle }; the server re-checks authoritatively.
+function gatherPlan() {
+  const disps = [];
+  const items = [];
+  for (const id of selection) {
+    const piece = room?.state.pieces.get(id);
+    if (!piece) continue;
+    if (piece.type === 'dispenser') disps.push(piece);
+    else if (piece.type === 'prop') {
+      let props;
+      try {
+        props = JSON.parse(piece.props || '{}');
+      } catch {
+        props = {};
+      }
+      if (dispenserForItem(props.shape)) items.push(props);
+    }
+  }
+  if (disps.length >= 2)
+    return {
+      state: composeState(dispenserSig),
+      msg: 'gatherDispensers',
+      okTitle: 'Merge into one dispenser',
+    };
+  if (disps.length === 1) {
+    let dp;
+    try {
+      dp = JSON.parse(disps[0].props || '{}');
+    } catch {
+      dp = {};
+    }
+    const want = dispensedSpec(dp);
+    if (items.some((p) => itemMatchesDispenser(want, p)))
+      return { state: 'ok', msg: 'absorbIntoDispenser', okTitle: 'Add the loose pieces to it' };
+    return { state: null };
+  }
+  if (items.length >= 2) {
+    const sig = (p) => JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
+    const s0 = sig(items[0]);
+    if (items.some((p) => sig(p) !== s0))
+      return { state: 'mixed', msg: 'dispenseFromPieces', okTitle: '' };
+    return { state: 'ok', msg: 'dispenseFromPieces', okTitle: 'Gather into a new dispenser' };
+  }
+  return { state: null };
+}
 // The palette shared by the WHOLE selection, for the recolor bar:
 //   null            → nothing recolorable is selected (all cards) → hide the bar
 //   { mixed:true }  → recolorable pieces disagree (e.g. a coin + a token) → show the bar disabled
@@ -5207,12 +5259,8 @@ function refreshSelTools() {
     'Combine into one deck',
     'Cards and decks must share a back to combine',
   );
-  setComposeBtn(
-    byId('selGather'),
-    composeState(dispenserSig),
-    'Gather into one dispenser',
-    'Dispensers must match to gather',
-  );
+  const gplan = gatherPlan();
+  setComposeBtn(byId('selGather'), gplan.state, gplan.okTitle, 'This selection can’t be gathered');
   const bar = byId('selRecolor');
   if (!bar) return;
   const desc = selection.size ? selectionPalette() : null;
@@ -6150,7 +6198,13 @@ initTip(); // themed hover-hint (icons.js)
     }
   };
   on('selCombine', compose('combineIntoDeck'));
-  on('selGather', compose('gatherDispensers'));
+  on('selGather', () => {
+    const plan = gatherPlan();
+    if (room && selection.size && plan.state === 'ok' && plan.msg) {
+      room.send(plan.msg, { ids: [...selection] });
+      clearSelection();
+    }
+  });
   on('selDelete', () => {
     if (room && selection.size) {
       room.send('removeGroup', { ids: [...selection] });

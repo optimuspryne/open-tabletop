@@ -3,7 +3,10 @@ import {
   DISPENSERS,
   KINDS,
   dieSpawnProps,
+  dispensedSpec,
+  dispenserForItem,
   gridActive,
+  itemMatchesDispenser,
   snapToCell,
 } from '../../../shared/pieces.js';
 import { RANK } from '../../permissions.js';
@@ -300,6 +303,84 @@ export function registerPieceHandlers(
       merged.count = total; // preserve the true total past the per-stack spawn clamp
       room.updateStackCollider(id);
     }
+    room.broadcast('sfx', { type: 'object-drop' });
+  });
+
+  // Pour a multi-selection of loose pieces back into the one dispenser also selected. Each piece
+  // matching what the stack hands out (shape + tint/team) is removed and, for a finite stack, adds
+  // one to its count; an infinite bowl just swallows them. Same match rule as the drop-back absorb
+  // in releasePiece, with the selection standing in for the proximity check.
+  pieceMessage('absorbIntoDispenser', (client, message) => {
+    const ids = idsFrom(message);
+    if (!ids) return;
+    let dispId = null;
+    let disp = null;
+    let extraDispenser = false;
+    const items = [];
+    for (const id of ids) {
+      const piece = room.state.pieces.get(id);
+      if (!piece || !room.bodies.get(id)) continue;
+      if (piece.type === 'dispenser') {
+        if (disp) extraDispenser = true;
+        dispId = id;
+        disp = piece;
+      } else if (piece.type === 'prop') {
+        items.push({ id, props: readProps(piece) });
+      }
+    }
+    if (!disp || extraDispenser) return; // exactly one dispenser to pour into
+    const want = dispensedSpec(readProps(disp));
+    const def = DISPENSERS[readProps(disp).disp];
+    let absorbed = 0;
+    for (const it of items) {
+      if (!itemMatchesDispenser(want, it.props)) continue;
+      room.removePiece(it.id);
+      if (def && !def.infinite) disp.count = (disp.count | 0) + 1;
+      absorbed++;
+    }
+    if (!absorbed) return;
+    if (def && !def.infinite) room.updateStackCollider(dispId);
+    room.broadcast('sfx', { type: 'object-drop' });
+  });
+
+  // Mint a fresh dispenser from a multi-selection of loose pieces that have one (poker chips -> a
+  // chip stack, go stones -> a bowl). Homogeneous shape + tint/team only, and only when no
+  // dispenser is selected (that is absorbIntoDispenser's job). A finite stack starts with one item
+  // per piece; an infinite bowl ignores the count.
+  pieceMessage('dispenseFromPieces', (client, message) => {
+    const ids = idsFrom(message);
+    if (!ids) return;
+    const items = [];
+    for (const id of ids) {
+      const piece = room.state.pieces.get(id);
+      const body = room.bodies.get(id);
+      if (!piece || !body) continue;
+      if (piece.type === 'dispenser') return; // a dispenser present -> absorb, not mint
+      if (piece.type !== 'prop') continue;
+      const props = readProps(piece);
+      if (!dispenserForItem(props.shape)) continue; // only pieces that have a dispenser
+      items.push({ id, props, body });
+    }
+    if (items.length < 2) return;
+    const sig = (p) => JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
+    const target = sig(items[0].props);
+    if (items.some((it) => sig(it.props) !== target)) return; // mixed -> refuse
+    const kind = dispenserForItem(items[0].props.shape);
+    const def = DISPENSERS[kind];
+    let cx = 0;
+    let cz = 0;
+    for (const it of items) {
+      cx += it.body.position.x;
+      cz += it.body.position.z;
+    }
+    cx /= items.length;
+    cz /= items.length;
+    const spawnProps = { disp: kind };
+    if (def.team) spawnProps.team = items[0].props.team ? 1 : 0;
+    else if (items[0].props.color != null) spawnProps.color = items[0].props.color | 0;
+    if (!def.infinite) spawnProps.count = items.length;
+    for (const it of items) room.removePiece(it.id);
+    room.spawn('dispenser', [cx, spawnY, cz], spawnProps);
     room.broadcast('sfx', { type: 'object-drop' });
   });
 }
