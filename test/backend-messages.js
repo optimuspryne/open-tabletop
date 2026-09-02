@@ -430,3 +430,11 @@ test('reorderHandPayload: a valid hid permutation passes; malformed input is rej
   assert.equal(reorderHandPayload({ order: ['h0'], extra: 1 }), null); // extra key
   assert.equal(reorderHandPayload({ order: ['h1', 3] }), null); // non-string element
 });
+
+test('spawnPayload accepts a die finish (regression: non-matte finish blocked spawns)', () => {
+  const ok = spawnPayload({ type: 'die', props: { sides: 20, finish: 'metallic' } });
+  assert.equal(ok && ok.props && ok.props.finish, 'metallic');
+  const plain = spawnPayload({ type: 'die', props: { sides: 6 } });
+  assert.equal(plain && plain.props && plain.props.finish, undefined); // matte omits it
+  assert.equal(spawnPayload({ type: 'die', props: { sides: 6, bogus: 1 } }), null); // still strict
+});

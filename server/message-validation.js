@@ -475,7 +475,8 @@ export function spawnPayload(
   if (!exactObject(message, ['type', 'props']) || !isPlainObject(message.props)) return null;
   const { type, props } = message;
   if (type === 'die') {
-    if (!hasOnlyKeys(props, new Set(['sides', 'color', 'textColor', 'tray', 'snap']))) return null;
+    if (!hasOnlyKeys(props, new Set(['sides', 'color', 'textColor', 'tray', 'snap', 'finish'])))
+      return null;
     const sides = finiteNumber(props.sides, { min: 4, max: 20 });
     if (sides === null || ![4, 6, 8, 10, 12, 20].includes(sides)) return null;
     const out = { sides };
@@ -490,6 +491,12 @@ export function spawnPayload(
         if (typeof props[key] !== 'boolean') return null;
         out[key] = props[key];
       }
+    if (props.finish !== undefined) {
+      // shape only; the renderer maps unknown keys to matte and colorProps is the enum gate
+      const finish = boundedString(props.finish, { min: 1, max: 16, pattern: /^[a-z]+$/ });
+      if (finish === null) return null;
+      out.finish = finish;
+    }
     return { type, props: out };
   }
   if (type === 'deck') {

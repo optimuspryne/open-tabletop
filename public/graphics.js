@@ -390,7 +390,6 @@ const FINISHES = {
     metalness: 0.1,
     physical: { clearcoat: 0.8, clearcoatRoughness: 0.3, sheen: 0.5, sheenRoughness: 0.5 },
   },
-  marbled: { roughness: 0.3, metalness: 0.05, marble: true },
 };
 const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
 
