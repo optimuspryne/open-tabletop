@@ -82,7 +82,6 @@ test('card handler module registers the complete card/deck message family', () =
       'shuffle',
       'splitDeck',
       'combineIntoDeck',
-      'peekTop',
     ],
   );
 });
@@ -330,19 +329,4 @@ test('a per-tile back rides to the dealt card and wins over the shared back', ()
   const cp = JSON.parse(room.state.pieces.get(cardId).props);
   assert.equal(cp.back, 'treeBack'); // per-tile back, not 'sharedBack'
   assert.equal(room.cardData.get(cardId).front, 'treeFront'); // secret deck → front hidden
-});
-
-test('peekTop privately previews the top card and leaves the deck untouched', () => {
-  const { room, handlers } = harness();
-  room.state.pieces.set('9', { type: 'deck', props: JSON.stringify({ back: 'cover' }) });
-  const deck = ['bottom', { front: 'topFront', back: 'topBack' }];
-  room.deckCards.set('9', deck);
-  const c = makeClient();
-
-  handlers.get('peekTop')(c, { deckId: '9' });
-
-  assert.deepEqual(room.deckCards.get('9'), ['bottom', { front: 'topFront', back: 'topBack' }]); // not drawn
-  const sent = c.sent.find((m) => m.type === 'peekCard');
-  assert.equal(sent.payload.front, 'topFront');
-  assert.equal(sent.payload.back, 'topBack'); // per-tile back wins for the peek preview
 });
