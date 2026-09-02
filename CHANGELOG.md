@@ -36,6 +36,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   like Marbled, and on a d6 the number stays legible on top of the art; because it is a plain
   image map it renders on phones too. The chosen texture rides with the die everywhere and saves
   as your per-die default.
+- **Pipped d6 dice.** Two built-in dice join the numbered set — **Rounded Pips** and **Square
+  Pips** — real 3D models with recessed dots instead of printed numbers. Add them from the dice
+  box's Add menu or the library's built-in Dice tab. They colour exactly like the other dice: the
+  body takes your die colour and the pips take your number colour, so a dice set or the inspector
+  recolours both at once. Under the hood they are a normal d6 — same size, same physics, read by
+  eye like any die — just a different mesh, so they roll in the tray and tumble on the table like
+  the rest.
 
 
 ## [0.13.0] — 2026-09-01

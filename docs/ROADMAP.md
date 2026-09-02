@@ -236,7 +236,11 @@ scoped against the real tree rather than from memory.
      in the fallback set). Applied from a dedicated **Custom** picker (sparkle) in the inspector
      and dice box; per-player default carries the texture. Later, add: publish `brushed`/`glow`
      to phones if wanted, tune the upload size / UV scale, a seamless-tiling toggle.
-   - A pip d6 (dots) is likely better handled as a custom `.glb`, a separate mechanism.
+   - *Pipped d6: ✅ shipped 2026-09-02.* Two built-in dice — Rounded Pips + Square Pips — as
+     bundled `.glb` models (`DICE_MODELS`, `public/models/pieces/dice/`), carried in `props.model`.
+     A normal d6 for physics/value/collider; only the mesh differs. Body (`Ivory`) + pips (`Dots`)
+     materials tinted by `color`/`textColor`, so they recolour like any die. Spawn from the dice
+     box Add menu + the library built-in Dice tab (`dieModelPreviewURL`).
 10. **Multi-select composition.** Multi-select exists (`DESIGN_multiselect.md`) but only moves
    and rotates a selection. These three turn it into a construction tool:
    1. Combine loose like cards into a **new deck** (discard pile → deck).
