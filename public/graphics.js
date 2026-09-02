@@ -390,6 +390,7 @@ const FINISHES = {
     metalness: 0.1,
     physical: { clearcoat: 0.8, clearcoatRoughness: 0.3, sheen: 0.5, sheenRoughness: 0.5 },
   },
+  marbled: { roughness: 0.3, metalness: 0.05, marble: true },
 };
 const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
 
@@ -426,6 +427,10 @@ function _turb(x, y, oct) {
   return sum / norm;
 }
 const _marbleCanvas = new Map();
+// Procedural marble tinted from the die color. Domain-warped coordinates (so veins meander instead
+// of running in even bands) feed two ridged vein layers at different scales/orientations — a thin
+// sharp set and a thicker soft set — combined for varied thickness. Vein color contrasts the base:
+// dark veins on a light die, light veins on a dark one.
 function marbleCanvas(colorInt) {
   const key = colorInt >>> 0;
   if (_marbleCanvas.has(key)) return _marbleCanvas.get(key);
@@ -436,19 +441,23 @@ function marbleCanvas(colorInt) {
   const br = (colorInt >> 16) & 255,
     bg = (colorInt >> 8) & 255,
     bb = colorInt & 255;
-  const mix = 0.72; // veins = base lightened toward white (resin swirl)
-  const vr = br + (255 - br) * mix,
-    vg = bg + (255 - bg) * mix,
-    vb = bb + (255 - bb) * mix;
-  const freq = 4,
-    warp = 2.2;
+  const lum = (0.299 * br + 0.587 * bg + 0.114 * bb) / 255;
+  const toward = lum > 0.5 ? 0 : 255; // dark veins on a light die, light on a dark one
+  const mixV = 0.62;
+  const vr = br + (toward - br) * mixV,
+    vg = bg + (toward - bg) * mixV,
+    vb = bb + (toward - bb) * mixV;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const nx = x / size,
         ny = y / size;
-      const t = _turb(nx * 3, ny * 3, 5);
-      let m = 0.5 + 0.5 * Math.sin((nx * freq + t * warp) * Math.PI * 2);
-      m = Math.pow(m, 1.6); // sharpen the veins
+      const wx = nx + 0.6 * _turb(nx * 2 + 11, ny * 2 + 3, 4); // domain warp → meandering veins
+      const wy = ny + 0.6 * _turb(nx * 2 + 7, ny * 2 + 19, 4);
+      const t1 = _turb(wx * 3, wy * 3, 5);
+      const v1 = Math.pow(1 - Math.abs(Math.sin((wx * 5 + t1 * 4) * Math.PI)), 3.0); // thin, sharp
+      const t2 = _turb(wy * 2 + 5, wx * 2 + 2, 4);
+      const v2 = Math.pow(1 - Math.abs(Math.sin((wy * 2.3 + t2 * 3) * Math.PI)), 1.6); // thicker, soft
+      const m = Math.min(1, Math.max(v1 * 0.95, v2 * 0.55));
       const i = (y * size + x) * 4;
       px[i] = br + (vr - br) * m;
       px[i + 1] = bg + (vg - bg) * m;
