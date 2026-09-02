@@ -1884,24 +1884,30 @@
           data-pane="dice"
           hidden
         >
-          <div class="addDeckCols">
+          <div class="addSplit">
+            <div class="addCol addPreview">
+              <div class="sqField">
+                <div class="sqCap">Texture image</div>
+                <div class="uploadSq sqBoard">
+                  <input id="adDiceImg" type="file" accept="image/*" hidden /><span
+                    class="sqLabel"
+                    >Drop an image<br />or click to choose</span
+                  >
+                </div>
+              </div>
+              <div class="note">A seamless, square image tiles best across the die.</div>
+            </div>
             <div class="addCol">
-              <h4>Dice texture</h4>
-              <div class="uploadSq">
-                <input id="adDiceImg" type="file" accept="image/*" hidden /><span class="sqLabel"
-                  >Texture image</span
-                >
-              </div>
-              <div>
-                <label for="adDiceName">Texture name</label>
-                <input id="adDiceName" type="text" placeholder="Name this texture" />
-              </div>
-              <p class="destNote">
-                Lands in <b>Library &rarr; Dice &rarr; Custom</b>. Apply it to dice from the
-                <b>Custom</b> chips in a die's Finish picker.
-              </p>
-              <div class="row">
-                <button id="adDiceSave" type="button" class="primary">Save</button>
+              <label for="adDiceName">Texture name</label>
+              <input id="adDiceName" type="text" placeholder="Name this texture" />
+              <div class="saveFoot">
+                <p class="destNote">
+                  Lands in <b>Library &rarr; Dice &rarr; Custom</b>. Apply it from the
+                  <b>Custom</b> menu on a die or in the dice box.
+                </p>
+                <div class="row">
+                  <button id="adDiceSave" type="button" class="primary">Save</button>
+                </div>
               </div>
             </div>
           </div>

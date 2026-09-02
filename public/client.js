@@ -2488,7 +2488,9 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       if (!DIE_SIDES.includes(sides)) return;
       const b = parseInt(byId('inspectColorBody').value.slice(1), 16); // read what's on screen now
       const t = parseInt(byId('inspectColorText').value.slice(1), 16);
-      saveDiceDefault(sides, b, t); // local only — never synced
+      const finish = inspect.props.finish || 'matte'; // save the die's WHOLE look, not just color
+      const finishImg = inspect.props.finishImg; // the custom texture, if this die wears one
+      saveDiceDefault(sides, b, t, finish, finishImg); // local only — never synced
       setBtnLabel(defBtn, `Saved · d${sides}`);
       defBtn.disabled = true; // brief confirmation
       setTimeout(() => {
