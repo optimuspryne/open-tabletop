@@ -22,9 +22,9 @@ export function registerCardHandlers(
   // card's own per-tile back or the deck's shared back.
   const dealCard = (pos, { front, back, open, geo }) => {
     if (open) {
-      // Deal face-down like a normal deck (the back face shows), but both faces are public art —
-      // flip turns it over to the front. `front` (the up face in props) is the back the deck shows.
-      return room.spawnCardFlat(pos, { front: back, back: front, open: true, ...geo });
+      // Deal face-down like a normal deck (the back shows), but both faces are public — `down` is the
+      // orientation; the content stays in `front`. Flip turns it over.
+      return room.spawnCardFlat(pos, { front, back, open: true, down: true, ...geo });
     }
     const id = room.spawnCardFlat(pos, { back, ...geo });
     room.cardData.set(id, { front });
@@ -40,9 +40,9 @@ export function registerCardHandlers(
     if (!piece || !body || piece.type !== 'card') return;
     const props = readProps(piece);
     if (props.open) {
-      const f = props.front; // a double-sided tile: turn it over — both faces stay public
-      props.front = props.back;
-      props.back = f;
+      if (props.down)
+        delete props.down; // a double-sided tile: turn it over (which face is up), both public
+      else props.down = true;
     } else if (props.front) {
       room.cardData.set(id, { front: props.front });
       delete props.front;
@@ -181,7 +181,7 @@ export function registerCardHandlers(
         room.spawnCardFlat(
           position,
           faceDown
-            ? { front: back, back: front, open: true, ...geo } // back face up, both public
+            ? { front, back, open: true, down: true, ...geo } // back face up; content stays front
             : { front, back, open: true, ...geo },
         );
       } else {

@@ -100,9 +100,8 @@ export function registerPieceHandlers(
       if (!piece || piece.type !== 'card' || !body) continue;
       const props = readProps(piece);
       if (props.open) {
-        const f = props.front; // double-sided tile: turn over, both faces public
-        props.front = props.back;
-        props.back = f;
+        if (props.down) delete props.down;
+        else props.down = true; // double-sided tile: turn it over, both faces public
       } else if (props.front) {
         room.cardData.set(id, { front: props.front });
         delete props.front;
@@ -135,11 +134,17 @@ export function registerPieceHandlers(
       const props = readProps(piece);
       if (anyOpen) {
         delete props.open;
+        if (piece.type === 'card' && props.down && props.front) {
+          room.cardData.set(id, { front: props.front }); // was showing its back → face-down secret again
+          delete props.front;
+        }
+        delete props.down;
       } else {
         props.open = true;
         if (piece.type === 'card' && !props.front && room.cardData.has(id)) {
           props.front = room.cardData.get(id).front; // reveal the hidden face so both are public
           room.cardData.delete(id);
+          props.down = true; // it was face-down — keep showing the back, now both public
         }
       }
       writeProps(piece, props);

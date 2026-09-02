@@ -1243,6 +1243,11 @@ function roundMask(hw = TILES.card.w, hh = TILES.card.h, round = CARD_ROUND) {
 // so its hidden face can never even be rendered client-side.
 function cardMesh(props = {}) {
   const { hw, hh, th, round, shape } = cardGeom(props); // footprint/thickness/shape (standard card, a tile, or explicit geom)
+  // Which face renders up vs down. A double-sided (open) tile shows its BACK when face-down (`down`);
+  // otherwise the top is the front and the bottom is the back. A secret face-down card has no
+  // `front`, so the top falls back to the back — the existing behavior.
+  const up = props.open && props.down ? props.back : props.front;
+  const dn = props.open && props.down ? props.front : props.back;
 
   // A HEXAGON card/tile: a regular flat-top hex prism — the GEOMETRY is the silhouette (no alpha mask),
   // and it matches the 6-gon collider exactly, so it's ready for hex grids. Thin → invisible edges;
@@ -1255,9 +1260,9 @@ function cardMesh(props = {}) {
         : new THREE.MeshBasicMaterial({ visible: false });
     const faceMat = (ref) =>
       new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 });
-    const backMat = faceMat(props.back);
-    const frontMat = props.front ? faceMat(props.front) : backMat;
-    return new THREE.Mesh(geo, [frontMat, backMat, edge]); // groups: 0=top(front), 1=bottom(back), 2=sides
+    const dnMat = faceMat(dn);
+    const upMat = up ? faceMat(up) : dnMat;
+    return new THREE.Mesh(geo, [upMat, dnMat, edge]); // groups: 0=top(up face), 1=bottom(down face), 2=sides
   }
 
   // A chunky TILE (domino) is a rounded SOLID — real rounded side walls and opaque procedural faces,
@@ -1277,9 +1282,9 @@ function cardMesh(props = {}) {
       }
       return new THREE.MeshStandardMaterial(m);
     };
-    const backMat = capMat(props.back);
-    if (!props.front) return new THREE.Mesh(geo, [backMat, backMat, edge]);
-    return new THREE.Mesh(geo, [capMat(props.front), backMat, edge]);
+    const dnMat = capMat(dn);
+    if (!up) return new THREE.Mesh(geo, [dnMat, dnMat, edge]);
+    return new THREE.Mesh(geo, [capMat(up), dnMat, edge]);
   }
 
   // A THIN card: a thin box whose top/bottom faces carry the front/back art and whose four edges are
@@ -1296,15 +1301,15 @@ function cardMesh(props = {}) {
       alphaTest: 0.5,
       roughness: 0.6,
     });
-  const backMat = faceMat(props.back);
-  const frontMat = props.front ? faceMat(props.front) : backMat; // face-down: both faces show the back
+  const dnMat = faceMat(dn);
+  const upMat = up ? faceMat(up) : dnMat; // secret face-down (no front): both faces show the back
   const geo = new THREE.BoxGeometry(hw * 2, th * 2, hh * 2);
-  // Box material order: +X, -X, +Y(top), -Y(bottom), +Z, -Z → front on top, back beneath, edges hidden.
-  const mesh = new THREE.Mesh(geo, [invisible, invisible, frontMat, backMat, invisible, invisible]);
+  // Box material order: +X, -X, +Y(top), -Y(bottom), +Z, -Z → up face on top, down face beneath, edges hidden.
+  const mesh = new THREE.Mesh(geo, [invisible, invisible, upMat, dnMat, invisible, invisible]);
   // Cast a shadow that follows the alpha silhouette, not the square box — no dark sliver at the corners.
   mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
     depthPacking: THREE.RGBADepthPacking,
-    map: resolveTexture(props.front || props.back),
+    map: resolveTexture(up || dn),
     alphaMap: mask,
     alphaTest: 0.5,
   });

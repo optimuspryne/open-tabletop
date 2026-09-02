@@ -403,10 +403,15 @@ test('setOpenGroup turns cards double-sided, revealing a hidden front, and toggl
   assert.equal(cp.open, true);
   assert.equal(cp.front, 'secretFace'); // hidden face revealed → both public
   assert.equal(cp.back, 'cover');
+  assert.equal(cp.down, true); // was face-down — still shows the back, now both public
   assert.equal(room.cardData.has('1'), false);
 
   await handlers.get('setOpenGroup')(client, { ids: ['1'] }); // toggle off
-  assert.equal(JSON.parse(room.state.pieces.get('1').props).open, undefined);
+  cp = JSON.parse(room.state.pieces.get('1').props);
+  assert.equal(cp.open, undefined);
+  assert.equal(cp.down, undefined);
+  assert.equal(cp.front, undefined); // showing its back → back to a face-down secret card
+  assert.equal(room.cardData.get('1').front, 'secretFace'); // front hidden again
 });
 
 test('group flip turns over open tiles without concealing', async () => {
@@ -420,7 +425,8 @@ test('group flip turns over open tiles without concealing', async () => {
   await handlers.get('flipGroup')(client, { ids: ['1'] });
 
   const cp = JSON.parse(room.state.pieces.get('1').props);
-  assert.equal(cp.front, 'B');
-  assert.equal(cp.back, 'A');
+  assert.equal(cp.front, 'A'); // faces stable
+  assert.equal(cp.back, 'B');
+  assert.equal(cp.down, true); // turned over via the orientation flag
   assert.equal(room.cardData.has('1'), false);
 });

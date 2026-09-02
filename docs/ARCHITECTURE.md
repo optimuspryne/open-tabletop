@@ -310,16 +310,20 @@ The kinds:
   corner, and **shape** come from `cardGeom(props)` — a plain card, a named tile
   (`props.tile`: domino/word/mahjong), or an explicit `props.geom` (custom image decks:
   fit-to-art aspect, chosen thickness, and a rounded/square/**hexagon** silhouette). See
-  _Tiles_ below. A **double-sided tile** sets `props.open`: both faces are public art and
-  flip _turns it over_ (swaps `front`↔`back`) instead of concealing — no `cardData`. The mesh
-  already renders `front` on top and `back` beneath, so open flip is a pure prop swap, not a
-  graphics change.
+  _Tiles_ below. A **double-sided tile** sets `props.open`: both `front` and `back` are public art
+  that stay STABLE, and orientation is a separate `props.down` flag (set = the back face is up).
+  Flip _turns it over_ by toggling `down` — no concealment, no `cardData` — and `cardMesh` renders
+  the up/down face from (`open` && `down`). Keeping the faces stable (rather than swapping them) is
+  what lets the hand and the fan always find the content face; a secret card has no `front` when
+  face-down (it lives in `cardData`), which is the distinct, unchanged path.
 - **double-sided / per-tile back** — the two axes that turn cards into game tiles. A deck card
   entry is a bare front ref _or_ a `{front, back}` pair (`cardFrontRef`/`cardBackRef`,
   `server/deck-state.js`), so one stack can hold tiles with different backs (a tree-back among
-  forageable-backs). `props.open` makes a card/deck's tiles turn over rather than conceal. Both
-  ride the existing draw/deal/inspect/split/combine and scene-save paths, and both fall back to
-  today's behavior (string entry → shared `back`; no `open` → secret flip).
+  forageable-backs). `props.open` (+ the `down` orientation flag) makes a card/deck's tiles turn over rather than
+  conceal, and it rides through hands too (`spawnHandCard`; the public seat-fan shows a generic
+  cover for an open card via `handBack`). Both axes ride the existing draw/deal/inspect/split/
+  combine/hand and scene-save paths, and both fall back to today's behavior (string entry → shared
+  `back`; no `open` → secret flip).
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
   `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
   and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box) in place of the stack

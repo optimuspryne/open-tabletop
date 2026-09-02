@@ -1015,7 +1015,7 @@ class TableRoom extends Room {
       return this.spawnCardFlat(
         pos,
         faceDown
-          ? { front: card.back, back: card.front, open: true, ...geoOf(card) }
+          ? { front: card.front, back: card.back, open: true, down: true, ...geoOf(card) }
           : { front: card.front, back: card.back, open: true, ...geoOf(card) },
       );
     }
@@ -1313,7 +1313,7 @@ class TableRoom extends Room {
     const player = this.state.players.get(client.sessionId);
     if (player) {
       player.hand = hand.length; // public count only
-      player.handBack = hand.length ? hand[0].back || '' : ''; // public back image (the front stays private)
+      player.handBack = hand.length ? (hand[0].open ? 'back' : hand[0].back || '') : ''; // public back image; a double-sided card shows a generic cover (its faces are public elsewhere)
     }
     client.send('hand', hand); // private contents, to this client alone
   }

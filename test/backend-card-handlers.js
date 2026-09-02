@@ -296,10 +296,15 @@ test('flipping a double-sided (open) tile turns it over — both faces stay publ
 
   handlers.get('flip')(client, { id: '1' });
 
-  const cp = JSON.parse(room.state.pieces.get('1').props);
-  assert.equal(cp.front, 'B');
-  assert.equal(cp.back, 'A');
+  let cp = JSON.parse(room.state.pieces.get('1').props);
+  assert.equal(cp.front, 'A'); // faces stay stable — orientation is the `down` flag
+  assert.equal(cp.back, 'B');
+  assert.equal(cp.down, true); // now showing the back
   assert.equal(room.cardData.has('1'), false); // nothing concealed
+
+  handlers.get('flip')(client, { id: '1' }); // flip back
+  cp = JSON.parse(room.state.pieces.get('1').props);
+  assert.equal(cp.down, undefined);
   assert.deepEqual(events.at(-1), { name: 'sfx', payload: { type: 'card-flip' } });
 });
 
@@ -316,8 +321,9 @@ test('dealing from an open deck yields a face-down double-sided tile (both faces
   const cardId = [...room.state.pieces.keys()].find((k) => k.startsWith('card-'));
   const cp = JSON.parse(room.state.pieces.get(cardId).props);
   assert.equal(cp.open, true);
-  assert.equal(cp.front, 'cover'); // dealt face-down: the back face shows, like a normal deck deal
-  assert.equal(cp.back, 'a-front'); // the front content is the down face — public, revealed by flip
+  assert.equal(cp.down, true); // dealt face-down (the back shows), but the content stays in `front`
+  assert.equal(cp.front, 'a-front');
+  assert.equal(cp.back, 'cover');
   assert.equal(room.cardData.has(cardId), false); // nothing concealed
 });
 
