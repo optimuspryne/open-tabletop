@@ -213,6 +213,7 @@ export const PROPS = {
     model: '/models/pieces/misc/token.glb',
     modelScale: 0.84,
     stand: true,
+    glossy: true,
   }, //Generic token to represent a player, for use in various games.
   go: {
     mass: 0.2,
@@ -220,6 +221,7 @@ export const PROPS = {
     render: { prim: 'lens', r: 0.2, sy: 0.375 },
     team: 'go',
     stand: 'flat',
+    glossy: true,
   }, // ~0.4 wide, fits the go board grid
   train_piece: {
     mass: 0.4,
@@ -228,6 +230,7 @@ export const PROPS = {
     modelScale: 0.12,
     ownMaterial: false,
     stand: true,
+    glossy: true,
   },
   // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
   // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
@@ -239,6 +242,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
+    glossy: true,
   },
   'chess-rook': {
     mass: 0.5,
@@ -247,6 +251,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
+    glossy: true,
   },
   'chess-knight': {
     mass: 0.5,
@@ -255,6 +260,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
+    glossy: true,
   },
   'chess-bishop': {
     mass: 0.5,
@@ -263,6 +269,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
+    glossy: true,
   },
   'chess-queen': {
     mass: 0.6,
@@ -271,6 +278,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
+    glossy: true,
   },
   'chess-king': {
     mass: 0.6,
@@ -279,6 +287,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
+    glossy: true,
   },
 };
 // Ordered list for the spawn UI. team:true = fixed two-color set; else color picker.
