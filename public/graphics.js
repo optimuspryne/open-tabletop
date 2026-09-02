@@ -392,13 +392,12 @@ const FINISHES = {
   },
   marbled: { roughness: 0.3, metalness: 0.05, marble: true },
   brushed: { roughness: 1, metalness: 1, brushed: true }, // metallic + directional roughness map
-  glow: { roughness: 0.5, metalness: 0, emissive: true, emissiveIntensity: 0.55 }, // glows its color
+  glow: { roughness: 0.5, metalness: 0, emissive: true, emissiveIntensity: 0.75 }, // glows its color
   translucent: {
-    roughness: 0.15,
+    roughness: 0.5,
     metalness: 0,
-    opacity: 0.55,
-    physical: { clearcoat: 0.6, clearcoatRoughness: 0.2 },
-  },
+    opacity: 0.75,
+  }, // plain transparent MeshStandard — no clearcoat, so Android GPUs don't choke on it
 };
 const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
 
