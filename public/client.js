@@ -48,6 +48,7 @@ import {
   DIE_SIDES,
   DICE_SETS,
   DICE_FINISHES,
+  DICE_FINISH_FALLBACK,
   PALETTE,
   COLORS,
   readableInk,
@@ -1434,6 +1435,7 @@ function rebuildGrid() {
     const finRow = byId('trayFinishes'); // finishes: one click = that look for all my dice
     if (finRow)
       for (const f of DICE_FINISHES) {
+        if (DICE_FINISH_FALLBACK[f.key] && deviceClass() === 'phone') continue; // GPU-heavy on phones
         const chip = document.createElement('button');
         chip.type = 'button';
         chip.className = 'chip';
@@ -2399,6 +2401,7 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
   const dieFinRow = byId('dieFinishes'); // per-die finish picker (inspector)
   if (dieFinRow)
     for (const f of DICE_FINISHES) {
+      if (DICE_FINISH_FALLBACK[f.key] && deviceClass() === 'phone') continue; // GPU-heavy on phones
       const chip = document.createElement('button');
       chip.type = 'button';
       chip.className = 'chip';

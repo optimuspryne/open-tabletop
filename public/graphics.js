@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CONFIG, renderer } from './core.js';
+import { CONFIG, renderer, deviceClass } from './core.js';
 import {
   PROPS,
   COLORS,
@@ -18,6 +18,7 @@ import {
   TABLE,
   MEASURE,
   DISPENSERS,
+  DICE_FINISH_FALLBACK,
   stackDiscH,
   stackVisible,
   gridActive,
@@ -1120,15 +1121,20 @@ function cornerRadiusFrac(img) {
 // uses the special vertex-numbered build; everything else is a convex polyhedron.
 function dieMesh(props = {}) {
   const sides = props.sides || 6;
+  // Phones fall back from GPU-heavy finishes to a safe look (regardless of who set the finish) —
+  // this Android class black-screens on the physical / transparent / roughness-map shaders.
+  let finish = props.finish;
+  if (finish && DICE_FINISH_FALLBACK[finish] && deviceClass() === 'phone')
+    finish = DICE_FINISH_FALLBACK[finish];
   if (sides === 6) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
       new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
-      faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, props.finish)),
+      faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, finish)),
     );
   }
-  if (sides === 4) return numberedD4(props.color, props.textColor, props.finish);
-  return convexDie(sides, props.color, props.textColor, props.finish);
+  if (sides === 4) return numberedD4(props.color, props.textColor, finish);
+  return convexDie(sides, props.color, props.textColor, finish);
 }
 
 // A rounded-rectangle alpha mask (white card shape on black), so cards render

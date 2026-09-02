@@ -723,6 +723,10 @@ export const DICE_FINISHES = [
   { key: 'marbled', name: 'Marbled' },
 ];
 export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
+// Finishes whose shaders a low-end mobile GPU (some Android phones) black-screens on — physical
+// materials, transparency, extra sampler maps. On a phone the renderer substitutes the safe value
+// and the picker hides these; capable devices show the real thing.
+export const DICE_FINISH_FALLBACK = { brushed: 'metallic', translucent: 'satin', pearl: 'glossy' };
 
 export function dieSpawnProps(raw = {}) {
   const p = { sides: DIE_SIDES.includes(+raw.sides) ? +raw.sides : 6 };
