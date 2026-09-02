@@ -1,4 +1,4 @@
-import { takeTopCard } from '../../deck-state.js';
+import { cardBackRef, cardFrontRef, takeTopCard } from '../../deck-state.js';
 import {
   deckDragPayload,
   deckIdPayload,
@@ -275,6 +275,25 @@ export function registerCardHandlers(
       ...geoOf(props),
     });
     room.broadcast('sfx', { type: dropSfx('deck', props) });
+  });
+
+  // Privately peek at the deck's top card WITHOUT drawing it — a look, not a draw. Sends a dedicated
+  // `peekCard` so the client shows a plain preview (no draw/place panel); the deck is untouched.
+  // Open to anyone, like drawInspect.
+  cardMessage('peekTop', (client, message) => {
+    const parsed = deckIdPayload(message);
+    if (!parsed) return;
+    const { deckId } = parsed;
+    const deck = room.state.pieces.get(deckId);
+    const cards = room.deckCards.get(deckId);
+    if (!deck || deck.type !== 'deck' || !cards || !cards.length) return;
+    const entry = cards[cards.length - 1]; // the top, left in place
+    const props = readProps(deck);
+    client.send('peekCard', {
+      front: cardFrontRef(entry),
+      back: cardBackRef(entry) || props.back || 'back',
+      ...geoOf(props),
+    });
   });
 }
 

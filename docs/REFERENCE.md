@@ -453,7 +453,9 @@ hand; drag-to-rearrange / Sort, persisted server-side so it survives reconnect),
 face-down), `shuffle`, **`splitDeck`** (deal a deck in
 two — original keeps the top half, a new ephemeral deck gets the rest),
 **`drawInspect`/`inspectPlace`** (private draw-to-inspect; the `inspectCard` message carries the
-deck's `geo` so the preview shows the tile's real proportions), **`loadStarter`** →
+deck's `geo` so the preview shows the tile's real proportions), **`peekTop`** (a private,
+NON-destructive look at the deck's top card — replies `peekCard`, a plain inspect preview; the deck
+is untouched), **`loadStarter`** →
 **`setupStarter(game)`** (one-click Games: board + pieces/bowls/deck + deal), **`recolor`**
 (`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+;
 a `props.tray:true` die is placed in the caller's tray via `trayDropPos`, any player),

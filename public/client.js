@@ -875,6 +875,9 @@ function rebuildGrid() {
   room.onMessage('inspectCard', ({ front, back, tile, geom }) =>
     inspectMesh(cardMesh({ front, back, tile, geom }), { drawn: true, type: 'card' }),
   ); // drawn card — front is ours alone; tile/geom → correct proportions
+  room.onMessage('peekCard', ({ front, back, tile, geom }) =>
+    inspectMesh(cardMesh({ front, back, tile, geom }), { type: 'card' }),
+  ); // a private look at a deck's top card — plain inspect, no draw/place panel, deck untouched
   room.onMessage('dealt', ({ id }) => {
     // a card you dragged off a deck — adopt it as the dragged piece
     if (down && down.pendingDeal) {
@@ -5551,9 +5554,21 @@ function pieceMenuItems(id, type) {
     items.push(['Roll', () => room.send('rollOne', { id })]);
   }
   if (type === 'deck') {
+    items.push(['Peek at top card', () => room.send('peekTop', { deckId: id })]);
     items.push(['Draw to hand', () => sendAction('drawToHand', id)]);
     items.push(['Shuffle', () => room.send('shuffle', { deckId: id })]);
     items.push(['Split', () => room.send('splitDeck', { deckId: id })]);
+    const deckOpen = (() => {
+      try {
+        return !!JSON.parse(room.state.pieces.get(id)?.props || '{}').open;
+      } catch {
+        return false;
+      }
+    })();
+    items.push([
+      deckOpen ? 'Make secret' : 'Make 2-sided',
+      () => room.send('setOpenGroup', { ids: [id] }),
+    ]);
   }
   if (type === 'dispenser') {
     items.push(['Dispense', () => sendAction('dispense', id)]);
