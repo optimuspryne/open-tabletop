@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-09-02
+
 ### Added
 - **Dice finishes.** A die is no longer just a color — it now carries a surface finish laid over
   that color, chosen from the new **Finish** button in the dice tray (for every die you own at
@@ -826,6 +828,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.13.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.14.0
 [0.13.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.13.0
 [0.12.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.2
 [0.12.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.1
