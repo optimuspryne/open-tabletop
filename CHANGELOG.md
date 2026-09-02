@@ -24,6 +24,16 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   they're useful, and they work the same by touch. All of it is one physical move on the server —
   read the pieces, remove them, drop the new combined piece in their place — so it stays in sync
   for everyone with no new bookkeeping.
+- **Double-sided tiles.** A card or deck can be made **2-sided** — both faces are real art, and
+  flipping *turns the tile over* between them instead of hiding one. Select a card (or open a
+  deck's right-click menu) and hit **2-Sided**; the button reads **Secret** once it's on, to turn
+  it back into an ordinary hidden-face card. A 2-sided deck deals its tiles face-down like any
+  deck — you see the back, and a flip reveals the front — and the tile keeps both faces the whole
+  time, so picking one up shows its front in your hand and playing it back down lands it the way
+  you meant. Under the hood a deck's cards can now each carry their **own** back image (not just
+  one shared back for the whole stack), which is what will let a single pile mix tiles with
+  different backs. Also on the deck menu: **Peek at top card**, the same private draw-to-inspect
+  you already get by double-clicking a deck.
 
 ## [0.14.0] — 2026-09-02
 
