@@ -1466,7 +1466,11 @@ function rebuildGrid() {
       (b.onclick = () =>
         room.send('spawn', {
           type: 'die',
-          props: { ...myDieProps(+b.dataset.sides), tray: true },
+          props: {
+            ...myDieProps(+b.dataset.sides),
+            ...(b.dataset.model ? { model: b.dataset.model } : {}), // a pipped built-in d6
+            tray: true,
+          },
         })),
   ); // add a die to MY tray (in my saved color)
   {
@@ -2666,11 +2670,12 @@ function inspectMesh(mesh, opts = {}) {
       }
       const swRow = byId('dieSwatches');
       if (swRow) swRow.hidden = !isDie; // dice sets (dice only)
+      const isModelDie = isDie && !!inspect.props.model; // a pipped .glb die: no finish/texture system
       const dcg = byId('dieCustomGroup');
-      if (dcg) dcg.hidden = !isDie || !diceTextures.length; // Custom textures: dice only, when any exist
+      if (dcg) dcg.hidden = !isDie || isModelDie || !diceTextures.length; // Custom textures: dice only, when any exist
       const dfRow = byId('dieFinishes');
       if (dfRow) {
-        dfRow.hidden = !isDie; // finishes (dice only)
+        dfRow.hidden = !isDie || isModelDie; // finishes (dice only; not modeled dice)
         const cur = (isDie && inspect.props && inspect.props.finish) || 'matte';
         dfRow
           .querySelectorAll('[data-finish]')

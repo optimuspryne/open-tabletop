@@ -486,7 +486,7 @@ export function spawnPayload(
     if (
       !hasOnlyKeys(
         props,
-        new Set(['sides', 'color', 'textColor', 'tray', 'snap', 'finish', 'finishImg']),
+        new Set(['sides', 'color', 'textColor', 'tray', 'snap', 'finish', 'finishImg', 'model']),
       )
     )
       return null;
@@ -514,6 +514,12 @@ export function spawnPayload(
       const img = localDiceImg(props.finishImg); // custom-finish texture; colorProps pairs it with finish
       if (img === null) return null;
       out.finishImg = img;
+    }
+    if (props.model !== undefined) {
+      // shape only; dieSpawnProps is the enum gate (DICE_MODEL_KEYS) for a pipped built-in die
+      const model = boundedString(props.model, { min: 1, max: 16, pattern: /^[a-z0-9-]+$/ });
+      if (model === null) return null;
+      out.model = model;
     }
     return { type, props: out };
   }

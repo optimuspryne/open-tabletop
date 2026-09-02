@@ -495,3 +495,9 @@ test('spawn + recolor carry a custom finish texture (local /assets/dice only)', 
     null,
   ); // texture must live under /assets/dice/
 });
+
+test('spawnPayload accepts a pipped die model, rejects a malformed one', () => {
+  const ok = spawnPayload({ type: 'die', props: { sides: 6, model: 'pip-round' } });
+  assert.equal(ok && ok.props.model, 'pip-round');
+  assert.equal(spawnPayload({ type: 'die', props: { sides: 6, model: 'Bad Model!' } }), null);
+});

@@ -9,6 +9,7 @@ import {
   boardPreviewURL,
   procBoardTexURL,
   diePreviewURL,
+  dieModelPreviewURL,
   uploadImage,
   uploadModel,
   measureImage,
@@ -54,6 +55,7 @@ function openDeckEdit(it, clone) {
 }
 import {
   DIE_SIDES,
+  DICE_MODELS,
   PROP_LIST,
   BOARDS,
   COLORS,
@@ -934,6 +936,19 @@ function renderBuiltin(sink) {
         color: 'palette',
         dice: true,
         send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides, ...cp } }),
+      }),
+    );
+  }
+  for (const key of Object.keys(DICE_MODELS)) {
+    const box = previewBox();
+    fillAsync(box, () => dieModelPreviewURL(key)); // model preview loads async
+    dice.append(
+      spawnCard({
+        preview: box,
+        title: DICE_MODELS[key].name,
+        color: 'palette',
+        dice: true,
+        send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides: 6, model: key, ...cp } }),
       }),
     );
   }

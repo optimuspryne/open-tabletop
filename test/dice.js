@@ -261,3 +261,15 @@ test('colorProps: custom finish requires a texture and clears it when leaving', 
     { sides: 6 },
   ); // matte clears both
 });
+
+test('dieSpawnProps: a valid pipped model is kept (forced to d6, drops the finish)', () => {
+  assert.deepEqual(dieSpawnProps({ sides: 6, model: 'pip-round' }), {
+    sides: 6,
+    model: 'pip-round',
+  });
+  assert.equal('model' in dieSpawnProps({ sides: 6, model: 'bogus' }), false); // unknown model dropped
+  const d = dieSpawnProps({ sides: 20, model: 'pip-square', finish: 'metallic' });
+  assert.equal(d.sides, 6); // a model forces d6
+  assert.equal(d.model, 'pip-square');
+  assert.equal('finish' in d, false); // and drops the finish system
+});

@@ -729,6 +729,15 @@ export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
 // and the picker hides these; capable devices show the real thing.
 export const DICE_FINISH_FALLBACK = { brushed: 'metallic', translucent: 'satin', pearl: 'glossy' };
 
+// Built-in pipped d6 dice — bundled .glb models whose two materials (body `Ivory`, pips `Dots`)
+// are tinted by the die's `color` and `textColor`. Physics and value are a normal d6 (unit cube,
+// same box collider), so only the mesh differs; carried in `props.model`.
+export const DICE_MODELS = {
+  'pip-round': { model: '/models/pieces/dice/pip-round.glb', name: 'Rounded Pips' },
+  'pip-square': { model: '/models/pieces/dice/pip-square.glb', name: 'Square Pips' },
+};
+export const DICE_MODEL_KEYS = new Set(Object.keys(DICE_MODELS));
+
 export function dieSpawnProps(raw = {}) {
   const p = { sides: DIE_SIDES.includes(+raw.sides) ? +raw.sides : 6 };
   const b = clampColor(raw.color);
@@ -749,6 +758,12 @@ export function dieSpawnProps(raw = {}) {
     } else {
       p.finish = raw.finish; // matte is the default look → left out of props
     }
+  }
+  if (typeof raw.model === 'string' && DICE_MODEL_KEYS.has(raw.model)) {
+    p.sides = 6; // pipped models are d6 only
+    p.model = raw.model;
+    delete p.finish; // a modeled die is coloured by body + pips, not the finish system
+    delete p.finishImg;
   }
   return p;
 }

@@ -19,6 +19,7 @@ import {
   MEASURE,
   DISPENSERS,
   DICE_FINISH_FALLBACK,
+  DICE_MODELS,
   stackDiscH,
   stackVisible,
   gridActive,
@@ -1169,9 +1170,32 @@ function cornerRadiusFrac(img) {
 // --- Die, card, and mask meshes ---------------------------------------------
 
 // The visual mesh for a die. A d6 is a textured box (a number per face); a d4
+// A bundled pipped d6 (DICE_MODELS): the .glb scaled to the d6 box size, its body material
+// (`Ivory`) tinted with the die color and its pips (`Dots`) with the number color — matte, like
+// the numbered dice. Physics/value are a normal d6, so only the mesh differs.
+function pippedDieMesh(url, color, textColor) {
+  const body = Number.isInteger(color) ? color : 0xf4f1ea;
+  const pip = Number.isInteger(textColor) ? textColor : 0x141414;
+  const paint = (material) =>
+    new THREE.MeshStandardMaterial({
+      color: material.name === 'Dots' ? pip : body,
+      metalness: 0,
+      roughness: 0.5,
+    });
+  return loadModelGroup(url, { target: dieR(6) * 2 }, (node) => {
+    node.castShadow = true;
+    node.receiveShadow = true;
+    if (!node.material) return;
+    node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+  });
+}
+
 // uses the special vertex-numbered build; everything else is a convex polyhedron.
 function dieMesh(props = {}) {
   const sides = props.sides || 6;
+  const dm = props.model && DICE_MODELS[props.model];
+  if (dm) return pippedDieMesh(dm.model, props.color, props.textColor); // a bundled pipped d6
+
   // Phones fall back from GPU-heavy finishes to a safe look (regardless of who set the finish) —
   // this Android class black-screens on the physical / transparent / roughness-map shaders.
   let finish = props.finish;
@@ -2187,6 +2211,35 @@ export async function boardPreviewURL(fileUrl) {
 }
 
 // A built-in die (d4…d20) → a rendered thumbnail data-URL. Synchronous (no load).
+// A pipped-die model preview (async): load the .glb, tint with the default die colors, snapshot.
+// Cached like the other previews. Returns null on failure (the card shows a placeholder).
+export async function dieModelPreviewURL(key) {
+  const dm = DICE_MODELS[key];
+  if (!dm) return null;
+  const cacheKey = 'diemodel:' + key;
+  if (_prevCache.has(cacheKey)) return _prevCache.get(cacheKey);
+  let url = null;
+  try {
+    const gltf = await gltfLoader.loadAsync(dm.model);
+    gltf.scene.traverse((n) => {
+      if (!n.isMesh || !n.material) return;
+      const paint = (m) =>
+        new THREE.MeshStandardMaterial({
+          color: m.name === 'Dots' ? 0x141414 : 0xf4f1ea,
+          metalness: 0,
+          roughness: 0.5,
+        });
+      n.material = Array.isArray(n.material) ? n.material.map(paint) : paint(n.material);
+    });
+    url = snapshot(gltf.scene);
+    disposeHierarchy(gltf.scene);
+  } catch (e) {
+    /* leave null → placeholder */
+  }
+  if (url) rememberPreview(cacheKey, url);
+  return url;
+}
+
 export function diePreviewURL(sides, finish) {
   const key = 'd:' + sides + (finish ? ':' + finish : '');
   if (_prevCache.has(key)) return _prevCache.get(key);
