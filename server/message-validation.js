@@ -705,7 +705,7 @@ export function groupRotation(message, { max = 80 } = {}) {
 export function groupRecolor(message, { max = 80 } = {}) {
   if (
     !isPlainObject(message) ||
-    !hasOnlyKeys(message, new Set(['ids', 'color', 'textColor', 'team']))
+    !hasOnlyKeys(message, new Set(['ids', 'color', 'textColor', 'team', 'finish']))
   )
     return null;
   const ids = boundedUniqueIds(message.ids, { max });
@@ -714,19 +714,32 @@ export function groupRecolor(message, { max = 80 } = {}) {
     if (
       (message.team !== 0 && message.team !== 1) ||
       message.color !== undefined ||
-      message.textColor !== undefined
+      message.textColor !== undefined ||
+      message.finish !== undefined
     )
       return null;
     return { ids, team: message.team };
   }
-  const color = finiteNumber(message.color, { min: 0, max: 0xffffff });
-  if (color === null || !Number.isInteger(color)) return null;
-  const out = { ids, color };
+  const out = { ids };
+  if (message.color !== undefined) {
+    const color = finiteNumber(message.color, { min: 0, max: 0xffffff });
+    if (color === null || !Number.isInteger(color)) return null;
+    out.color = color;
+  }
   if (message.textColor !== undefined) {
     const textColor = finiteNumber(message.textColor, { min: 0, max: 0xffffff });
     if (textColor === null || !Number.isInteger(textColor)) return null;
     out.textColor = textColor;
   }
+  if (message.finish !== undefined) {
+    // A die finish key. colorProps() is the real gate (rejects unknown keys, dice-only); here we
+    // only bound the shape: a short lowercase token.
+    const finish = boundedString(message.finish, { min: 1, max: 16, pattern: /^[a-z]+$/ });
+    if (finish === null) return null;
+    out.finish = finish;
+  }
+  if (out.color === undefined && out.textColor === undefined && out.finish === undefined)
+    return null;
   return out;
 }
 

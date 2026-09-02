@@ -47,6 +47,7 @@ import {
   BOARDS,
   DIE_SIDES,
   DICE_SETS,
+  DICE_FINISHES,
   PALETTE,
   COLORS,
   readableInk,
@@ -377,11 +378,16 @@ function loadDiceDefaults() {
     return {};
   }
 }
-function saveDiceDefault(sides, color, textColor) {
+function saveDiceDefault(sides, color, textColor, finish) {
   const all = loadDiceDefaults();
-  const d = {};
+  const d = { ...(all[String(sides)] || {}) }; // merge, so setting a finish doesn't wipe the color
   if (Number.isInteger(color)) d.color = color;
   if (Number.isInteger(textColor)) d.textColor = textColor;
+  if (typeof finish === 'string') {
+    if (finish === 'matte')
+      delete d.finish; // matte is the default look
+    else d.finish = finish;
+  }
   all[String(sides)] = d;
   try {
     localStorage.setItem('ott-dice', JSON.stringify(all));
@@ -394,6 +400,7 @@ function myDieProps(sides) {
   if (d) {
     if (Number.isInteger(d.color)) p.color = d.color;
     if (Number.isInteger(d.textColor)) p.textColor = d.textColor;
+    if (typeof d.finish === 'string') p.finish = d.finish;
   }
   return p;
 }
@@ -424,6 +431,13 @@ function applyDiceSet(color) {
   const textColor = readableInk(color);
   for (const s of DIE_SIDES) saveDiceDefault(s, color, textColor);
   for (const id of myTrayDieIds()) room.send('recolor', { id, color, textColor });
+}
+
+// Apply a finish as my default across EVERY die type, and live-apply it to the dice already in my
+// tray (synced, so everyone sees them). Colors are untouched.
+function applyDiceFinish(finish) {
+  for (const s of DIE_SIDES) saveDiceDefault(s, undefined, undefined, finish);
+  for (const id of myTrayDieIds()) room.send('recolor', { id, finish });
 }
 
 // Mesh-build props for a piece. Dispensers stack their body to the live `count`,
@@ -1417,6 +1431,20 @@ function rebuildGrid() {
       }
   }
   {
+    const finRow = byId('trayFinishes'); // finishes: one click = that look for all my dice
+    if (finRow)
+      for (const f of DICE_FINISHES) {
+        const chip = document.createElement('button');
+        chip.type = 'button';
+        chip.className = 'chip';
+        chip.innerHTML = '<span class="lbl"></span>';
+        chip.querySelector('.lbl').textContent = f.name;
+        chip.title = f.name + ' — finish for all my dice';
+        chip.onclick = () => applyDiceFinish(f.key);
+        finRow.appendChild(chip);
+      }
+  }
+  {
     const b = byId('trayRoll');
     if (b) b.onclick = () => room.send('roll');
   } // fling every die in MY tray
@@ -2323,6 +2351,15 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
     if (text) text.value = toHex(readableInk(color));
     commit();
   };
+  const finishDie = (key) => {
+    if (!inspect || inspect.type !== 'die') return;
+    const props = { ...(inspect.props || {}) };
+    if (key === 'matte') delete props.finish;
+    else props.finish = key;
+    inspect.props = props;
+    swapInspect(props); // rebuild the inspect preview with the new look
+    if (inspect.origId) room.send('recolor', { id: inspect.origId, finish: key });
+  };
   if (body) {
     // live preview while dragging: props tint blunt; stacks reclone (cached, cheap)
     body.oninput = () => {
@@ -2358,6 +2395,18 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       chip.style.background = toHex(s.color);
       chip.onclick = () => paintDie(s.color);
       swatchRow.appendChild(chip);
+    }
+  const dieFinRow = byId('dieFinishes'); // per-die finish picker (inspector)
+  if (dieFinRow)
+    for (const f of DICE_FINISHES) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'chip';
+      chip.dataset.finish = f.key;
+      chip.innerHTML = '<span class="lbl"></span>';
+      chip.querySelector('.lbl').textContent = f.name;
+      chip.onclick = () => finishDie(f.key);
+      dieFinRow.appendChild(chip);
     }
   const defBtn = byId('inspectDefaultBtn'); // remember this die's color as my default for its type
   if (defBtn)
@@ -2543,6 +2592,14 @@ function inspectMesh(mesh, opts = {}) {
       }
       const swRow = byId('dieSwatches');
       if (swRow) swRow.hidden = !isDie; // dice sets (dice only)
+      const dfRow = byId('dieFinishes');
+      if (dfRow) {
+        dfRow.hidden = !isDie; // finishes (dice only)
+        const cur = (isDie && inspect.props && inspect.props.finish) || 'matte';
+        dfRow
+          .querySelectorAll('[data-finish]')
+          .forEach((c) => c.classList.toggle('on', c.dataset.finish === cur));
+      }
       const propRow = byId('propSwatches');
       if (propRow) propRow.hidden = !(opt && opt.swatches.length); // per-object palette
       const resetBtn = byId('inspectResetBtn');

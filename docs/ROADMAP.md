@@ -220,10 +220,16 @@ scoped against the real tree rather than from memory.
 8.  **Hand Re-organization.** ✅ **shipped 2026-09-01** — a per-viewer Rearrange mode (drag hand
     cards to reorder, with Sort by rank/suit), sent to the server as a `reorderHand` permutation so
     the order survives a reconnect. Kept separate from the play-to-table gesture (a mode toggle).
-9. **Custom dice / dice textures.** `DICE_SETS` gives named colored sets, with per-player
-   defaults already persisted (`applyDiceSet`, `loadDiceDefaults`, `saveDiceDefault`,
-   `clearDiceDefault`, `public/client.js:381–435`). Custom *textures* are the new part and
-   need an upload path plus a `digitTexture`/`dieMesh` route for user art. 
+9. **Custom dice / dice textures.**
+   - *Phase 1 — finishes: ✅ shipped 2026-09-01.* A material look layered on the die color:
+     Matte / Satin / Glossy / Metallic (tinted from color) / Pearl (clearcoat+sheen) / Marbled
+     (procedural swirl, tinted from color; triplanar-UV'd so it reads on the polyhedra too).
+     Rides in `props.finish` (`DICE_FINISHES` in shared/pieces.js), per-player default in
+     `ott-dice`, live-applied to tray dice via the `recolor` message (now carries `finish`).
+     Pickers: per-die in the inspector, and all-my-dice in the tray controls.
+   - *Phase 2 — custom material upload: still open.* Let a player upload a seamless image used
+     as the die's material map (reuse the `/assets/` upload + a small dice-materials library).
+   - A pip d6 (dots) is likely better handled as a custom `.glb`, a separate mechanism.
 10. **Multi-select composition.** Multi-select exists (`DESIGN_multiselect.md`) but only moves
    and rotates a selection. These three turn it into a construction tool:
    1. Combine loose like cards into a **new deck** (discard pile → deck).

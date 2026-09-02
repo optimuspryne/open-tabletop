@@ -709,12 +709,26 @@ export const clampColor = (c) => {
 // Sanitize the props for a spawned die: a valid `sides` (defaulting to d6), plus optional
 // body/number colors clamped to real colors. This is what lets a client spawn a die already
 // in the player's saved default color without being able to inject arbitrary props.
+// Dice finishes (ROADMAP §9): a material look layered on the die color. 'matte' is the default
+// (omitted from props). The client UI reads this list; the renderer maps each key to material params.
+export const DICE_FINISHES = [
+  { key: 'matte', name: 'Matte' },
+  { key: 'satin', name: 'Satin' },
+  { key: 'glossy', name: 'Glossy' },
+  { key: 'metallic', name: 'Metallic' },
+  { key: 'pearl', name: 'Pearl' },
+  { key: 'marbled', name: 'Marbled' },
+];
+export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
+
 export function dieSpawnProps(raw = {}) {
   const p = { sides: DIE_SIDES.includes(+raw.sides) ? +raw.sides : 6 };
   const b = clampColor(raw.color);
   if (b != null) p.color = b;
   const t = clampColor(raw.textColor);
   if (t != null) p.textColor = t;
+  if (typeof raw.finish === 'string' && DICE_FINISH_KEYS.has(raw.finish) && raw.finish !== 'matte')
+    p.finish = raw.finish; // matte is the default look → left out of props
   return p;
 }
 
@@ -722,7 +736,7 @@ export function dieSpawnProps(raw = {}) {
 // message and the `recolorGroup` batch trust. Returns a NEW props object, or null if the change
 // doesn't fit this piece (wrong type, missing/out-of-range color, a team bowl without a team flag).
 // `dispDef` is the piece's DISPENSERS entry (dispensers only); pass null otherwise.
-export function colorProps(type, props, { color, textColor, team } = {}, dispDef = null) {
+export function colorProps(type, props, { color, textColor, team, finish } = {}, dispDef = null) {
   const out = { ...props };
   if (type === 'die') {
     // dice are unconstrained (any color)
@@ -736,6 +750,11 @@ export function colorProps(type, props, { color, textColor, team } = {}, dispDef
       if (t == null) return null;
       out.textColor = t;
     } // die number color
+    if (finish != null) {
+      if (!DICE_FINISH_KEYS.has(finish)) return null;
+      if (finish === 'matte') delete out.finish;
+      else out.finish = finish;
+    }
     return out;
   }
   // Props & dispensers share one rule: the object's allowed palette (recolorPalette) decides

@@ -358,17 +358,184 @@ function digitTexture(value, text) {
 }
 
 const hexOf = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
-function numberFaceTexture(value, body, text) {
-  const def = body == null && text == null; // the shared, cached ivory face
+function numberFaceTexture(value, body, text, finishKey) {
+  const marble = FINISHES[finishKey]?.marble;
+  const def = body == null && text == null && !marble; // the shared, cached ivory face
   if (def && _faceTex.has(value)) return _faceTex.get(value);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
-  ctx.fillStyle = body != null ? hexOf(body) : COLORS.ivory;
-  ctx.fillRect(0, 0, size, size);
+  if (marble)
+    ctx.drawImage(marbleCanvas(Number.isInteger(body) ? body : 0xf4f1ea), 0, 0, size, size);
+  else {
+    ctx.fillStyle = body != null ? hexOf(body) : COLORS.ivory;
+    ctx.fillRect(0, 0, size, size);
+  }
   drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
   const texture = cTex(canvas);
   if (def) _faceTex.set(value, texture); // only the default is cached (custom faces are per-die)
   return texture;
+}
+
+// ===== Dice finishes (ROADMAP §9) ===========================================
+// A finish is a material look layered on top of the die's color. Param-only ones (matte/satin/
+// glossy/metallic/pearl) just tune roughness/metalness (and read the scene env map for real
+// reflections); 'marbled' generates a procedural swirl texture tinted from the die's color.
+const FINISHES = {
+  matte: { roughness: 0.5, metalness: 0.0 },
+  satin: { roughness: 0.3, metalness: 0.0 },
+  glossy: { roughness: 0.1, metalness: 0.05 },
+  metallic: { roughness: 0.35, metalness: 0.95 }, // material.color = the die color → tinted metal
+  pearl: {
+    roughness: 0.3,
+    metalness: 0.1,
+    physical: { clearcoat: 0.8, clearcoatRoughness: 0.3, sheen: 0.5, sheenRoughness: 0.5 },
+  },
+  marbled: { roughness: 0.3, metalness: 0.05, marble: true },
+};
+const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
+
+// --- Procedural marble: value-noise turbulence, base↔vein by a warped sine (classic marble). ---
+function _hash2(ix, iy) {
+  let h = (ix * 374761393 + iy * 668265263) | 0;
+  h = Math.imul(h ^ (h >> 13), 1274126177);
+  return ((h ^ (h >> 16)) >>> 0) / 4294967295;
+}
+function _vnoise(x, y) {
+  const ix = Math.floor(x),
+    iy = Math.floor(y),
+    fx = x - ix,
+    fy = y - iy;
+  const ux = fx * fx * (3 - 2 * fx),
+    uy = fy * fy * (3 - 2 * fy);
+  const a = _hash2(ix, iy),
+    b = _hash2(ix + 1, iy),
+    c = _hash2(ix, iy + 1),
+    d = _hash2(ix + 1, iy + 1);
+  return a * (1 - ux) * (1 - uy) + b * ux * (1 - uy) + c * (1 - ux) * uy + d * ux * uy;
+}
+function _turb(x, y, oct) {
+  let sum = 0,
+    amp = 1,
+    freq = 1,
+    norm = 0;
+  for (let i = 0; i < oct; i++) {
+    sum += amp * _vnoise(x * freq, y * freq);
+    norm += amp;
+    amp *= 0.5;
+    freq *= 2;
+  }
+  return sum / norm;
+}
+const _marbleCanvas = new Map();
+function marbleCanvas(colorInt) {
+  const key = colorInt >>> 0;
+  if (_marbleCanvas.has(key)) return _marbleCanvas.get(key);
+  const size = 256;
+  const { canvas, ctx } = makeCanvas(size, size);
+  const img = ctx.createImageData(size, size);
+  const px = img.data;
+  const br = (colorInt >> 16) & 255,
+    bg = (colorInt >> 8) & 255,
+    bb = colorInt & 255;
+  const mix = 0.72; // veins = base lightened toward white (resin swirl)
+  const vr = br + (255 - br) * mix,
+    vg = bg + (255 - bg) * mix,
+    vb = bb + (255 - bb) * mix;
+  const freq = 4,
+    warp = 2.2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const nx = x / size,
+        ny = y / size;
+      const t = _turb(nx * 3, ny * 3, 5);
+      let m = 0.5 + 0.5 * Math.sin((nx * freq + t * warp) * Math.PI * 2);
+      m = Math.pow(m, 1.6); // sharpen the veins
+      const i = (y * size + x) * 4;
+      px[i] = br + (vr - br) * m;
+      px[i + 1] = bg + (vg - bg) * m;
+      px[i + 2] = bb + (vb - bb) * m;
+      px[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  _marbleCanvas.set(key, canvas);
+  return canvas;
+}
+const _marbleTex = new Map();
+function marbleTexture(colorInt) {
+  const key = colorInt >>> 0;
+  if (_marbleTex.has(key)) return _marbleTex.get(key);
+  const tex = cTex(marbleCanvas(colorInt));
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  _marbleTex.set(key, tex);
+  return tex;
+}
+
+// Give a ConvexGeometry per-face triplanar UVs so a marble map maps without stretching (it ships
+// with none). Non-indexed, so each triangle's 3 verts share the projection of its dominant axis.
+function addTriplanarUV(geo, scale) {
+  const pos = geo.getAttribute('position');
+  const uv = new Float32Array(pos.count * 2);
+  const a = new THREE.Vector3(),
+    b = new THREE.Vector3(),
+    c = new THREE.Vector3(),
+    e1 = new THREE.Vector3(),
+    e2 = new THREE.Vector3(),
+    n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i += 3) {
+    a.fromBufferAttribute(pos, i);
+    b.fromBufferAttribute(pos, i + 1);
+    c.fromBufferAttribute(pos, i + 2);
+    n.crossVectors(e1.subVectors(b, a), e2.subVectors(c, a)).normalize();
+    const ax = Math.abs(n.x),
+      ay = Math.abs(n.y),
+      az = Math.abs(n.z);
+    for (let k = 0; k < 3; k++) {
+      const v = k === 0 ? a : k === 1 ? b : c;
+      let u, w;
+      if (ax >= ay && ax >= az) {
+        u = v.z;
+        w = v.y;
+      } else if (ay >= az) {
+        u = v.x;
+        w = v.z;
+      } else {
+        u = v.x;
+        w = v.y;
+      }
+      uv[(i + k) * 2] = u * scale + 0.5;
+      uv[(i + k) * 2 + 1] = w * scale + 0.5;
+    }
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+}
+
+// The body material for a die, given its color + finish. Convex dice + d4 use this directly; the
+// d6 uses dieFaceMaterial (its faces bake the number into the map).
+function dieBodyMaterial(color, finishKey) {
+  const f = FINISHES[finishKey] || FINISHES.matte;
+  const params = {
+    color: f.marble ? 0xffffff : (color ?? COLORS.ivory),
+    roughness: f.roughness,
+    metalness: f.metalness || 0,
+    flatShading: true,
+  };
+  if (f.marble) params.map = marbleTexture(Number.isInteger(color) ? color : 0xf4f1ea);
+  return f.physical
+    ? new THREE.MeshPhysicalMaterial({ ...params, ...f.physical })
+    : new THREE.MeshStandardMaterial(params);
+}
+// A d6 face material: the composited (solid or marble) number face as the map, plus the finish params.
+function dieFaceMaterial(value, color, textColor, finishKey) {
+  const f = FINISHES[finishKey] || FINISHES.matte;
+  const params = {
+    map: numberFaceTexture(value, color, textColor, finishKey),
+    roughness: f.roughness,
+    metalness: f.metalness || 0,
+  };
+  return f.physical
+    ? new THREE.MeshPhysicalMaterial({ ...params, ...f.physical })
+    : new THREE.MeshStandardMaterial(params);
 }
 
 // A flat plane showing one die number, for laying onto a polyhedron's face.
@@ -387,17 +554,11 @@ function numberLabel(value, size, text) {
 // each face. ConvexGeometry gives us triangles, so we recover the real polygon
 // faces by grouping triangles that share a normal (same trick as the server's
 // collider), then drop a numbered label at each face's centre.
-function convexDie(sides, color, textColor) {
+function convexDie(sides, color, textColor, finish) {
   const points = dieVerts(sides).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(points);
-  const die = new THREE.Mesh(
-    geo,
-    new THREE.MeshStandardMaterial({
-      color: color ?? COLORS.ivory,
-      roughness: 0.45,
-      flatShading: true,
-    }),
-  );
+  if (FINISHES[finish]?.marble) addTriplanarUV(geo, DIE_MARBLE_UV);
+  const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish));
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -454,17 +615,11 @@ function convexDie(sides, color, textColor) {
 
 // A d4 is read by its top vertex, not a top face — so each of the 4 vertices
 // carries a number, printed at that corner on all three faces touching it.
-function numberedD4(color, textColor) {
+function numberedD4(color, textColor, finish) {
   const verts = dieVerts(4).map((v) => new THREE.Vector3(v[0], v[1], v[2]));
   const geo = new ConvexGeometry(verts);
-  const die = new THREE.Mesh(
-    geo,
-    new THREE.MeshStandardMaterial({
-      color: color ?? COLORS.ivory,
-      roughness: 0.45,
-      flatShading: true,
-    }),
-  );
+  if (FINISHES[finish]?.marble) addTriplanarUV(geo, DIE_MARBLE_UV);
+  const die = new THREE.Mesh(geo, dieBodyMaterial(color, finish));
   die.castShadow = true;
   die.receiveShadow = true;
 
@@ -913,17 +1068,11 @@ function dieMesh(props = {}) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
       new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
-      faceOrder.map(
-        (n) =>
-          new THREE.MeshStandardMaterial({
-            map: numberFaceTexture(n, props.color, props.textColor),
-            roughness: 0.5,
-          }),
-      ),
+      faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, props.finish)),
     );
   }
-  if (sides === 4) return numberedD4(props.color, props.textColor);
-  return convexDie(sides, props.color, props.textColor);
+  if (sides === 4) return numberedD4(props.color, props.textColor, props.finish);
+  return convexDie(sides, props.color, props.textColor, props.finish);
 }
 
 // A rounded-rectangle alpha mask (white card shape on black), so cards render
@@ -1924,12 +2073,12 @@ export async function boardPreviewURL(fileUrl) {
 }
 
 // A built-in die (d4…d20) → a rendered thumbnail data-URL. Synchronous (no load).
-export function diePreviewURL(sides) {
-  const key = 'd:' + sides;
+export function diePreviewURL(sides, finish) {
+  const key = 'd:' + sides + (finish ? ':' + finish : '');
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
   try {
-    url = snapshot(dieMesh({ sides }));
+    url = snapshot(dieMesh({ sides, finish }));
   } catch (e) {
     /* null → placeholder */
   }

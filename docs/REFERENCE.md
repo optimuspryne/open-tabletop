@@ -1,40 +1,40 @@
 # Code Reference
 
-A map of every module, data structure, and key function. For the *why*, see
-`ARCHITECTURE.md`; this is the *what* — the API surface.
+A map of every module, data structure, and key function. For the _why_, see
+`ARCHITECTURE.md`; this is the _what_ — the API surface.
 
 The codebase:
 
-| File | Runtime | Role |
-|------|---------|------|
-| `shared/pieces.js` | both | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries |
-| `server.js` | Node | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup |
-| `server/physics.js` | Node | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers |
-| `server/game/scene-persistence.js` | Node | Portable scene/game snapshot serialization and validated restoration |
-| `db.js` | Node | Production Postgres pool composition and compatibility exports |
-| `server/database.js` | Node | Pool-injected database factory: library, users, rooms, membership |
-| `scripts/test-database.mjs` | Node | Guarded disposable-PostgreSQL lifecycle and integration-test runner |
-| `auth.js` | Node | Password hashing (scrypt) + device-token hashing |
-| `migrate.js` | Node | Owner-role startup migration runner for `postgres/NNN_*.sql` |
-| `server/game/handlers/*.js` | Node | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers |
-| `server/http/*.js` + `server/http/routes/*.js` | Node | HTTP auth/error seams and auth/room/admin/upload routers |
-| `server/{auth-validation,permissions,message-validation,deck-state}.js` + `server/game/props-codec.js` | Node | Shared validation/rules, state helpers, canonical piece-props codec |
-| `server/{database-config,session-config,bootstrap-admin}.js` | Node | DB config, session lifetime, and first-boot admin provisioning |
-| `server/assets/upload-validation.js` | Node | Image magic-byte and self-contained GLB validation |
-| `server/{rate-limit,redis-config}.js` | Node | Redis/memory token-bucket stores, fail-closed HTTP middleware, Redis URL and trusted-proxy configuration |
-| `server/library-queries.js` | Node | Testable saved-library read queries; successful empty/not-found results stay distinct from PostgreSQL rejection |
-| `server/user-queries.js` | Node | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection |
-| `server/room-queries.js` | Node | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection |
-| `server/game/safe-message.js` | Node | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
-| `public/core.js` | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables |
-| `public/graphics.js` | browser | Texture & mesh builders, model loading, `KIND` registry |
-| `public/client.js` | browser | Game-table runtime: networking, interaction, seats, render loop |
-| `public/controls.js` | browser | Mouse/touch profiles translated into device-neutral intents |
-| `public/audio.js` | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced) |
-| `public/credits.js` | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player *and* credits panel) |
-| `public/icons.js` / `public/equalize.js` | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing |
-| `public/{landing,admin,editor-panel}.js` | browser | Lobby, admin console, library-editor UI (HTTP + room) |
-| `public/*.html` + `styles.css` | browser | Page shells (table/editor/index/admin) + UI styling |
+| File                                                                                                   | Runtime | Role                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries                                                                                                            |
+| `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
+| `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
+| `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
+| `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
+| `server/database.js`                                                                                   | Node    | Pool-injected database factory: library, users, rooms, membership                                                                                                                                |
+| `scripts/test-database.mjs`                                                                            | Node    | Guarded disposable-PostgreSQL lifecycle and integration-test runner                                                                                                                              |
+| `auth.js`                                                                                              | Node    | Password hashing (scrypt) + device-token hashing                                                                                                                                                 |
+| `migrate.js`                                                                                           | Node    | Owner-role startup migration runner for `postgres/NNN_*.sql`                                                                                                                                     |
+| `server/game/handlers/*.js`                                                                            | Node    | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers                                             |
+| `server/http/*.js` + `server/http/routes/*.js`                                                         | Node    | HTTP auth/error seams and auth/room/admin/upload routers                                                                                                                                         |
+| `server/{auth-validation,permissions,message-validation,deck-state}.js` + `server/game/props-codec.js` | Node    | Shared validation/rules, state helpers, canonical piece-props codec                                                                                                                              |
+| `server/{database-config,session-config,bootstrap-admin}.js`                                           | Node    | DB config, session lifetime, and first-boot admin provisioning                                                                                                                                   |
+| `server/assets/upload-validation.js`                                                                   | Node    | Image magic-byte and self-contained GLB validation                                                                                                                                               |
+| `server/{rate-limit,redis-config}.js`                                                                  | Node    | Redis/memory token-bucket stores, fail-closed HTTP middleware, Redis URL and trusted-proxy configuration                                                                                         |
+| `server/library-queries.js`                                                                            | Node    | Testable saved-library read queries; successful empty/not-found results stay distinct from PostgreSQL rejection                                                                                  |
+| `server/user-queries.js`                                                                               | Node    | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection                                                                                                      |
+| `server/room-queries.js`                                                                               | Node    | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection                                                                       |
+| `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
+| `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables                                                                                                                                  |
+| `public/graphics.js`                                                                                   | browser | Texture & mesh builders, model loading, `KIND` registry                                                                                                                                          |
+| `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, render loop                                                                                                                                  |
+| `public/controls.js`                                                                                   | browser | Mouse/touch profiles translated into device-neutral intents                                                                                                                                      |
+| `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
+| `public/credits.js`                                                                                    | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player _and_ credits panel)                                                                                                  |
+| `public/icons.js` / `public/equalize.js`                                                               | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing                                                                                                                                  |
+| `public/{landing,admin,editor-panel}.js`                                                               | browser | Lobby, admin console, library-editor UI (HTTP + room)                                                                                                                                            |
+| `public/*.html` + `styles.css`                                                                         | browser | Page shells (table/editor/index/admin) + UI styling                                                                                                                                              |
 
 The main client import chain has no cycles: `shared ← core ← graphics ← client`,
 with `client` also importing `controls` and `audio ← credits`.
@@ -179,7 +179,7 @@ Pure constants and helpers imported by both sides.
 - **`TABLE`** `{ x, z }` — half-extents of the play surface.
 - **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
   `boardEdge`, `ivory`, `ink`, `felt[dark,light]`, and `team {checker, go,
-  chess}` each `[color0, color1]`.
+chess}` each `[color0, color1]`.
 - **`KINDS`** `{ die, card, prop, deck, board }` — physics half `{ mass, shape }`.
   `shape` is `'die'`, `'prop'`, or `{ box:[hx,hy,hz] }`. `mass:0` ⇒ static.
 - **`DECK_VISUAL`** / **`CARD_ROUND`** — deck box unit + card corner radius.
@@ -205,7 +205,7 @@ Pure constants and helpers imported by both sides.
 - **`LETTER_DIST`** `{ letter → [count, value] }` — the 100-tile word-game bag (blank = `''`).
 - **`MAHJONG`** `{ base, suits, honors, bonus }` — the 144-tile wall's face lists (faces are
   bundled images under `base`).
-- **`DECK_MODELS`** `{ key → { name, model, modelScale, box } }` — 3D deck *skins* (a bag/box
+- **`DECK_MODELS`** `{ key → { name, model, modelScale, box } }` — 3D deck _skins_ (a bag/box
   `.glb` a deck wears instead of the card stack); a deck opts in via `props.model`.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
 - **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
@@ -220,7 +220,7 @@ Pure constants and helpers imported by both sides.
 ### Functions
 
 - **`deckHeight(count) → number`** — clamps deck thickness; used by client visual
-  *and* server collider so a flipped deck is solid.
+  _and_ server collider so a flipped deck is solid.
 - **`cardGeom(props) → { hw, hh, th, round, shape }`** — the single card/tile geometry
   resolver both the client mesh and the server collider read (so they can't drift).
   Resolves, in order: an explicit `props.geom` (`{w,h,t?,round?,shape?}`, custom image
@@ -237,10 +237,10 @@ Pure constants and helpers imported by both sides.
   to `radius`; `null` for d6. One input for mesh (client) and collider (server).
 - **`timerLive(t, now) → ms`** — the shared timer's current value from its synced
   anchor (`running/mode/base/since`): counts up from `base`, or down toward 0.
-  Used by the server handler *and* every client, so the number is never synced tick
+  Used by the server handler _and_ every client, so the number is never synced tick
   by tick.
 - **`roundToStep(value, step) → number`** — rounds `value` to the nearest multiple
-  of `step` (a *size*, so "nearest 0.5" works where a digit count can't); `step ≤ 0`
+  of `step` (a _size_, so "nearest 0.5" works where a digit count can't); `step ≤ 0`
   returns `value` unchanged. Clears binary-float dust. The primitive behind
   measurement display and grid snapping.
 - **`gridActive(scale) → bool`** — `scale.gridStyle !== 'off' && cellWorld > 0`; the
@@ -260,7 +260,7 @@ Pure constants and helpers imported by both sides.
   angle and table size (radius `max(tableX,tableZ) + TRAY.margin`, the whiteboard formula), so
   the tray hugs the edge at any size.
 - **`trayParts(T?) → [{hx,hy,hz,x,y,z, noMesh?}]`** — the floor + four walls + an invisible
-  physics-only lid, as *tray-local* box specs (centred at origin, floor top at `y=0`,
+  physics-only lid, as _tray-local_ box specs (centred at origin, floor top at `y=0`,
   unrotated); the lid carries `noMesh:true` so the mesh builder skips it. Both the collider and
   the mesh build from this list.
 - **`trayPlace(local, center, angle) → {x, y, z}`** — rotate a tray-local point by `angle`
@@ -297,8 +297,8 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   file into a validated category folder (`assetKind`).
 - **`saveImageRef(dataURL, kind)`** — an inline `data:` image → a disk file → URL.
 - **`isDataURL`**, **`deckRefOk`** — ref validators (kept for the save paths).
-  *(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
-  gone — that logic now lives in `db.js`.)*
+  _(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
+  gone — that logic now lives in `db.js`.)_
 
 ### `server/physics.js` — physics construction
 
@@ -354,7 +354,8 @@ Postgres write remain in `server/game/handlers/room-state.js`.
 
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
   `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the `props` JSON, not the schema:
-  `color` (die body / prop tint) and `textColor` (die numbers).
+  `color` (die body / prop tint), `textColor` (die numbers), and a die `finish`
+  (`matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled` — a material look).
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
   image), **`role`** (the per-room owner/gm/helper/player rank).
@@ -362,11 +363,11 @@ Postgres write remain in `server/game/handlers/room-state.js`.
   synced anchor (`timerLive()` computes the live value).
 - **`ScoreRow`** — `label, score`; one scoreboard entry (in the `scores` map).
 - **`Whiteboard`** — `enabled, angle, owner, dark`; the shared tilt-up sketch
-  surface's *public* state. Strokes themselves are **not** synced — they're sent
+  surface's _public_ state. Strokes themselves are **not** synced — they're sent
   as messages and replayed onto a texture (see the protocol below).
 - **`RoomScale`** — the per-room measurement + grid layer over the fixed world scale
   (a display/snap layer, never a rescale). Measurement half: `worldPerUnit, unitLabel,
-  roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square`), `cellWorld` (cell
+roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square`), `cellWorld` (cell
   width in world units), `cellZ` (cell depth; `0` = square, falls back to `cellWorld`),
   `gridX`/`gridZ` (lattice offset), `snapAnchor` (`center|cross`), `gridColor`, `gridLift`
   (height above the felt). Durable (persisted via `saveRoomState`, **and** carried in the
@@ -382,7 +383,7 @@ Postgres write remain in `server/game/handlers/room-state.js`.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
   **`whiteboard`**, **`trays`** (a `MapSchema<boolean>` keyed by seat index `"0".."5"` —
-  presence = that seat's *personal* dice tray is out; the tray dice are ordinary `die` pieces
+  presence = that seat's _personal_ dice tray is out; the tray dice are ordinary `die` pieces
   tagged `props.traySeat`, not schema here), **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
   color), **`roomName`** (synced table-header label; empty in the workshop),
@@ -395,7 +396,7 @@ Postgres write remain in `server/game/handlers/room-state.js`.
 ### `TableRoom extends Room`
 
 **`onAuth(client, options)`** resolves the device token → user and the room code →
-room (via `db`), admits only *admitted* members (an admin gets `gm` in any room),
+room (via `db`), admits only _admitted_ members (an admin gets `gm` in any room),
 and returns `{ userId, username, avatar, role, isAdmin }` onto `client.auth`.
 Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** and
 **`isAdmin(client)`** back the gates.
@@ -419,9 +420,9 @@ out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / aw
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
 deck order + face-down fronts + overlays + the room **`scale`** (measurement + grid),
-no player identity), **`serializeGame`** (a scene *plus* account-keyed `hands` + `turn`,
+no player identity), **`serializeGame`** (a scene _plus_ account-keyed `hands` + `turn`,
 session→`userId` resolved), **`applyScene`** (delegates validated restore; rebuild pieces + overlays, **apply the
-scene's `scale`** via `applyScale`, then *stage* the private layer into
+scene's `scale`** via `applyScale`, then _stage_ the private layer into
 `pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
 member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
@@ -455,7 +456,7 @@ deck's `geo` so the preview shows the tile's real proportions), **`loadStarter`*
 **`setupStarter(game)`** (one-click Games: board + pieces/bowls/deck + deal), **`recolor`**
 (`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+;
 a `props.tray:true` die is placed in the caller's tray via `trayDropPos`, any player),
-**`roll`** (now flings only the *caller's* tray dice, gentle `SIM.trayRoll` impulse) /
+**`roll`** (now flings only the _caller's_ tray dice, gentle `SIM.trayRoll` impulse) /
 **`rollOne`** (`{id}` — right-click one die; `SIM.trayRoll` in a tray, `SIM.roll` on the
 table), `reset` (gm+ — full clear), `nextTurn`, `remove`, `setName`, `setAvatar`,
 **`notebook`**, **`handSync`** (re-send my private hand after a reconnect),
@@ -478,21 +479,21 @@ stacks decrement and disappear at zero; infinite bowls remain, and compatible
 pieces dropped back onto a dispenser are absorbed by the shared release path.
 
 Dice-tray handlers (personal, keyed on the caller's seat — **no rank gate**):
-**`trayShow`** (`{on}` — toggle *your* seat's tray in `State.trays`; on off it also clears the
+**`trayShow`** (`{on}` — toggle _your_ seat's tray in `State.trays`; on off it also clears the
 tray dice; both call `buildTrays`), **`trayScoop`** (re-rack your tray's dice to its centre),
 **`trayClear`** (remove just your tray's dice). Stocking and rolling reuse `spawn`/`roll`/
 `rollOne` above.
 
 Multi-select group handlers (act on a client-supplied `ids` list, mirroring the singles;
 **not rank-gated** except `removeGroup`): move reuses the servo — **`grabGroup`**
-(`{ids, anchor}` — claim every *free* piece and store each one's offset from the anchor body in
+(`{ids, anchor}` — claim every _free_ piece and store each one's offset from the anchor body in
 `groups`), **`moveGroup`** (`{x,y,z}` — set each owned piece's target to `point + offset`, one
 message/frame), **`releaseGroup`** (`{v}` — release each via the shared **`releasePiece(id,v)`**,
 factored out of single `release`). Batch ops: **`removeGroup`** (`{ids}` — delete the selection,
 helper+), **`setStandGroup`** / **`setSnapGroup`** (`{ids}` — **U** / **G**, toggled as a unit),
 **`rollGroup`** (`{ids}` — **R**, dice only), **`flipGroup`** (`{ids}` — **F**, cards only),
 **`takeGroup`** (`{ids}` — **H**, cards to the caller's hand), **`rotateGroup`** (`{ids,dir}` —
-**`[`** / **`]`**, rotate the whole formation ±45° about its centroid — each position *and* each
+**`[`** / **`]`**, rotate the whole formation ±45° about its centroid — each position _and_ each
 body's facing; skips boards).
 
 All payload-bearing handlers treat the socket as an untrusted boundary and normalize
@@ -579,13 +580,13 @@ admin sandbox for building and testing library assets live. Registered as the
 - **Rooms:** `GET /rooms` (your rooms), `POST /rooms` (create — approved-host or
   admin only, with a pending-aware 403), `POST /rooms/join` (join or waitlist by
   code), `PATCH /rooms/:id` (rename / approval — owner or admin), `DELETE
-  /rooms/:id` (soft-delete + dispose the live room).
+/rooms/:id` (soft-delete + dispose the live room).
 - **Profile:** `POST /me/avatar` (bounded image data URL for the authenticated user).
 - **Host:** `POST /host/request` (request host access; sets a password first if
   the account is passwordless → `pending`).
 - **Admin** (`requireAdmin`): `GET /admin/rooms`, `GET /admin/users`,
   `GET /admin/pending-count`, `POST /admin/rooms/:id/restore`, `DELETE
-  /admin/rooms/:id` (purge), `POST /admin/users/:id/admin` (grant/revoke — can't
+/admin/rooms/:id` (purge), `POST /admin/users/:id/admin` (grant/revoke — can't
   revoke your own), `POST /admin/users/:id/host` (approve/reject/revoke),
   `DELETE /admin/users/:id` (purge, cascades owned rooms + memberships),
   `POST /admin/users/:id/kick` (disconnect that account from every live table),
@@ -660,7 +661,7 @@ hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admi
 
 - `createUser({username,email,passwordHash,loginTokenHash,sessionExpiresAt,isAdmin}) → user` (a
   password ⇒ `host_status='pending'`; throws with `err.conflict = 'username' |
-  'email'` on a taken field; normal signup never infers admin), `bootstrapAdmin`
+'email'` on a taken field; normal signup never infers admin), `bootstrapAdmin`
   (advisory-locked, empty-table-only first-boot provisioning),
   `changeAdminByLogin` (CLI recovery with final-admin protection), `findUserByLogin`, `findUserByToken`,
   `findUserById`, `createSession`, `revokeSession`, `revokeUserSessions`,
@@ -766,15 +767,17 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
 - **`uploadImage(file,…,kind)`** → POST `/upload`; **`uploadModel(file)`** → POST
   `/upload-model`.
 - **`measureGlb(url)`** → `{ size, center }` (true loaded bounds). **`fitModel(obj,
-  {scale|target})`** — centre at origin + scale (fixed or normalize). **`measureModel`**
+{scale|target})`** — centre at origin + scale (fixed or normalize). **`measureModel`**
   / **`measureBoard`** build on `measureGlb` to return collider boxes.
 - The two model-mesh builders (`propMesh`, `boardMesh`) share a single
   **`loadModelGroup`** loader, and image-backed textures a **`loadImageTexture`**.
 
 ### Mesh builders + `KIND`
 
-- **`dieMesh` / `convexDie` / `numberedD4`** — numbered dice.
-- **`cardMesh`** — a card *or tile*, from `cardGeom(props)`: a thin card (a box with
+- **`dieMesh` / `convexDie` / `numberedD4`** — numbered dice. `props.finish` sets the material
+  look (`FINISHES` table); `marbled` uses a procedural swirl (`marbleTexture`) with triplanar
+  UVs on the convex dice. `DICE_FINISHES` (shared) is the picker list.
+- **`cardMesh`** — a card _or tile_, from `cardGeom(props)`: a thin card (a box with
   alpha-cut faces, so the art's own rounded/transparent corners define the silhouette), a
   **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with
   real sides, e.g. dominoes). **`deckMesh`** — the matching stack (rounded/hex extrude), **or
@@ -787,13 +790,13 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
   custom normalize) with the tint logic (team / full / `tintMaterial` one-slot /
   `ownMaterial`), else builds a shape and applies `props.scale`.
 - **`KIND`** `{ die, card, prop, deck, board }` — each `{ mesh, grab, ldrag,
-  lclick, rclick }`; the interaction layer dispatches off this, no type switches.
+lclick, rclick }`; the interaction layer dispatches off this, no type switches.
 - **`OVERLAY`** `{ ruler, circle, cone, line }` — the overlay registry, parallel to
   `KIND`: each `{ build(o) }` returns a flat `THREE.Group` in table space from an
   `Overlay`'s two points (+ `w`/`ang`). `rulerMesh` (bar + end dots), `circleTemplate`
   (disc + ring, radius `|A→B|`), `coneTemplate` (a flat `sectorGeometry` sector, apex
   A, half-angle `ang`), `lineTemplate` (a width-`w` band + centre line). Fill opacity
-  and edge weight come from `CONFIG.measure`. The measure *label* is not built here —
+  and edge weight come from `CONFIG.measure`. The measure _label_ is not built here —
   it's a client sprite (needs the room scale). Adding a kind = one entry here + one
   string in the server's `OVERLAY_KINDS`.
 - **`gridMesh(scale, tableX, tableZ) → THREE.LineSegments | null`** — the table grid: a
@@ -851,7 +854,7 @@ a mesh), shared by the add, card-rebuild, and render paths.
   the scroll-adjustable grab height, and a translucent ring previews the landing.
   **Middle-click** steps a held piece's facing by 45°, or — with nothing held — drops a
   ping (`sendPing` → raycast to the table). A grid piece being dragged tracks cell-to-cell
-  (`snapXZ` snaps the `move` target sent to the server). A left-drag on a piece that's *in*
+  (`snapXZ` snaps the `move` target sent to the server). A left-drag on a piece that's _in_
   the selection sends `grabGroup`/`moveGroup`/`releaseGroup` (moves the whole clump); a drag on
   an unselected piece clears the selection first.
 - **Multi-select** (local; see below) — `selection` (Set of ids), the `selMode` Select tool,
@@ -861,7 +864,7 @@ a mesh), shared by the add, card-rebuild, and render paths.
   clears. `selectable(id)` excludes static (mass 0) boards. Highlight rings and the marquee are
   tinted with **my** `--accent` via `selColor()`.
 - **Dice tray** (local camera) — **`openTray()`** (bound to the Roll button) hops your camera to
-  *your* seat's tray (placing it via `trayShow` first if it isn't out), an over-the-shoulder
+  _your_ seat's tray (placing it via `trayShow` first if it isn't out), an over-the-shoulder
   pose from `seatAngle(mySeat)` via `trayCamPose`/`TRAY_CAM`; the **`#trayTools`** toolbar
   (d4–d20 palette → `spawn {tray:true}`, Roll all → `roll`, Scoop → `trayScoop`, Clear →
   `trayClear`, Put away → `trayShow {on:false}`, Back → restore camera).
@@ -942,7 +945,7 @@ per-player in `localStorage` (`tabletop.sfxVolume`, `tabletop.sfxMuted`,
 
 ### Sound effects (Web Audio)
 
-- **`SOUNDS`** — a map of logical cue → *list* of files under `/sounds/`. A bare
+- **`SOUNDS`** — a map of logical cue → _list_ of files under `/sounds/`. A bare
   string is treated as a one-item list. On first use each file is fetched and
   decoded into a per-cue pool; a 404/decode error just drops that variant. Cues
   include the card/die/deck/object drop+pickup families plus **`tile-*`** and
@@ -973,7 +976,7 @@ A separate streaming player (long tracks, not buffers), fed by `MUSIC`.
 
 ## `public/credits.js` — attribution manifest
 
-One place for all baked-in-asset credits; drives *both* the music player and the
+One place for all baked-in-asset credits; drives _both_ the music player and the
 credits panel.
 
 - **`MUSIC`** `[{ title, file }]` — the playlist (files under `/music/`).
@@ -993,7 +996,7 @@ Colyseus table client. API helpers attach the Bearer token and unwrap errors; th
 device token lives in `localStorage`.
 
 - **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
-  'home')` switches between quick-join (passwordless signup + join), login/
+'home')` switches between quick-join (passwordless signup + join), login/
   password signup, and the signed-in home. `showHome(user)` renders the room list
   and picks one of three host states from `canOwnRooms` / `hostStatus` (create
   form · pending note · **Request host access** button → `onRequestHost`, which
