@@ -355,7 +355,8 @@ Postgres write remain in `server/game/handlers/room-state.js`.
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
   `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the `props` JSON, not the schema:
   `color` (die body / prop tint), `textColor` (die numbers), and a die `finish`
-  (`matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled` — a material look).
+  (`matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled`/`brushed`/`glow`/`translucent`, or
+  `custom` — a host-uploaded texture named by a companion `finishImg` `/assets/dice/` URL).
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
   image), **`role`** (the per-room owner/gm/helper/player rank).
@@ -775,8 +776,11 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
 ### Mesh builders + `KIND`
 
 - **`dieMesh` / `convexDie` / `numberedD4`** — numbered dice. `props.finish` sets the material
-  look (`FINISHES` table); `marbled` uses a procedural swirl (`marbleTexture`) with triplanar
-  UVs on the convex dice. `DICE_FINISHES` (shared) is the picker list.
+  look (`FINISHES` table); `marbled` uses a procedural swirl (`marbleTexture`) and `custom` an
+  uploaded image (`props.finishImg`, via `customTexture` / async `customFaceTexture`), both over
+  triplanar UVs on the convex dice. On a phone a GPU-heavy finish is swapped for a safe one
+  (`DICE_FINISH_FALLBACK`); `custom` is a plain map and renders as-is. `DICE_FINISHES` (shared)
+  is the picker list; host-uploaded textures come from the `custom_dice` library.
 - **`cardMesh`** — a card _or tile_, from `cardGeom(props)`: a thin card (a box with
   alpha-cut faces, so the art's own rounded/transparent corners define the silhouette), a
   **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with

@@ -227,8 +227,15 @@ scoped against the real tree rather than from memory.
      Rides in `props.finish` (`DICE_FINISHES` in shared/pieces.js), per-player default in
      `ott-dice`, live-applied to tray dice via the `recolor` message (now carries `finish`).
      Pickers: per-die in the inspector, and all-my-dice in the tray controls.
-   - *Phase 2 — custom material upload: still open.* Let a player upload a seamless image used
-     as the die's material map (reuse the `/assets/` upload + a small dice-materials library).
+   - *Phase 2 — custom textures: ✅ shipped 2026-09-02.* A host uploads a seamless image
+     (editor → Add to Library → Dice Textures → `/upload?kind=dice`) into the reusable
+     `custom_dice` library (migration 012, mirrors `custom_skyboxes`; host-only `saveDice`,
+     public `listDice`). A die wears it via `finish:'custom'` + `finishImg` (a local
+     `/assets/dice/` URL), synced on spawn/recolor and validated by `colorProps`/`dieSpawnProps`.
+     Rendered as a triplanar map (async per-face composite on the d6), phone-safe (plain map, not
+     in the fallback set). Applied from a dedicated **Custom** picker (sparkle) in the inspector
+     and dice box; per-player default carries the texture. Later, add: publish `brushed`/`glow`
+     to phones if wanted, tune the upload size / UV scale, a seamless-tiling toggle.
    - A pip d6 (dots) is likely better handled as a custom `.glb`, a separate mechanism.
 10. **Multi-select composition.** Multi-select exists (`DESIGN_multiselect.md`) but only moves
    and rotates a selection. These three turn it into a construction tool:

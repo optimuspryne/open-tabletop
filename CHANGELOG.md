@@ -26,6 +26,16 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   becomes Satin, Pearl becomes Glossy — and the picker hides those three options entirely. The
   swap happens at mesh-build time no matter who set the finish, so a die another player made
   Brushed still renders on the phone. Tablets and desktops show the real thing.
+- **Custom dice textures.** Beyond the built-in finishes, a host can upload their own seamless
+  image and wear it as a die's surface. Add it under the editor's **Add to Library → Dice
+  Textures**, where it lands in a reusable library alongside decks and skyboxes — so it carries
+  across rooms and can be published to the whole table — then reach it from the new **Custom**
+  button, a sparkle-marked menu of its own next to the finishes, on a single die in the inspector
+  or across every die in the dice box. The picker shows textures as bare thumbnails (the name is
+  the tooltip) so a large collection stays readable. The image wraps the die over triplanar UVs
+  like Marbled, and on a d6 the number stays legible on top of the art; because it is a plain
+  image map it renders on phones too. The chosen texture rides with the die everywhere and saves
+  as your per-die default.
 
 
 ## [0.13.0] — 2026-09-01
