@@ -1559,35 +1559,48 @@ function hexGeo(r, depth) {
 function deckMesh(props = {}) {
   const skin = props.model && DECK_MODELS[props.model];
   if (skin) {
-    // a modeled deck skin (bag/box/pile): the .glb replaces the card stack
-    return loadModelGroup(skin.model, { scale: skin.modelScale }, (node) => {
-      node.castShadow = true;
-      node.receiveShadow = true;
-      // De-metal so the model reads under the table lights; tint any named slot the skin maps
-      // (e.g. the pouch's 'bag' → color, 'string' → textColor), falling back to the skin defaults.
-      const paint = (m) => {
-        if (!m) return m;
-        m.metalness = 0;
-        if (skin.tints) {
-          for (const slot in skin.tints) {
-            if (isTintSlot(m.name, slot)) {
-              const c = props[skin.tints[slot]] ?? skin[skin.tints[slot]];
-              if (c != null)
-                return new THREE.MeshStandardMaterial({
-                  color: c,
-                  metalness: 0,
-                  roughness: 0.6,
-                  side: m.side,
-                });
+    // a modeled deck skin (bag/box/pile): the .glb replaces the card stack. `modelRot` reorients
+    // the raw model (before fitting/centering) so it rests the way we want — e.g. the pouch tips
+    // onto a flat face.
+    const reorient = skin.modelRot
+      ? (obj) => {
+          obj.rotation.set(skin.modelRot[0], skin.modelRot[1], skin.modelRot[2]);
+          obj.updateMatrixWorld(true);
+        }
+      : undefined;
+    return loadModelGroup(
+      skin.model,
+      { scale: skin.modelScale },
+      (node) => {
+        node.castShadow = true;
+        node.receiveShadow = true;
+        // De-metal so the model reads under the table lights; tint any named slot the skin maps
+        // (e.g. the pouch's 'bag' → color, 'string' → textColor), falling back to the skin defaults.
+        const paint = (m) => {
+          if (!m) return m;
+          m.metalness = 0;
+          if (skin.tints) {
+            for (const slot in skin.tints) {
+              if (isTintSlot(m.name, slot)) {
+                const c = props[skin.tints[slot]] ?? skin[skin.tints[slot]];
+                if (c != null)
+                  return new THREE.MeshStandardMaterial({
+                    color: c,
+                    metalness: 0,
+                    roughness: 0.6,
+                    side: m.side,
+                  });
+              }
             }
           }
-        }
-        return m;
-      };
-      node.material = Array.isArray(node.material)
-        ? node.material.map(paint)
-        : paint(node.material);
-    });
+          return m;
+        };
+        node.material = Array.isArray(node.material)
+          ? node.material.map(paint)
+          : paint(node.material);
+      },
+      reorient,
+    );
   }
 
   const g = cardGeom(props); // a deck of tiles (dominoes) is shaped like its tiles

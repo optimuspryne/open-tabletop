@@ -1346,7 +1346,14 @@ function wireAddTiles() {
       let cover;
       if (byId('adTileCover').files[0])
         cover = await uploadImage(byId('adTileCover').files[0], uw, uh, 'cover', 'decks');
-      else cover = editing ? editCtx.back : 'back';
+      else {
+        // No cover chosen: default to the top tile's OWN back, so per-tile-back sets (e.g. the fish
+        // tiles, each with a unique back) show a real card rather than a generic placeholder. Falls
+        // back to the set's existing cover when editing, else a plain back. (Top = last, drawn first.)
+        const top = cards[cards.length - 1];
+        const topBack = top && typeof top === 'object' && top.back ? top.back : null;
+        cover = topBack || (editing ? editCtx.back : 'back');
+      }
       const skin =
         skinOf() === 'bag'
           ? {

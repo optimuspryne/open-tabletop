@@ -419,7 +419,10 @@ export const DECK_MODELS = {
     name: 'Pouch',
     model: '/models/decks/bag.glb',
     modelScale: 0.85,
-    box: [0.81, 0.67, 0.85],
+    // The pouch is modeled upright (drawstring at +y, flattened along z); tip it a quarter-turn
+    // about X so it rests on a flat face. box = the reoriented collider half-extents (y/z swapped).
+    modelRot: [Math.PI / 2, 0, 0],
+    box: [0.45, 0.2, 0.46],
     tints: { bag: 'color', string: 'textColor' },
     color: 0x7a5a3a, // sack: warm leather brown
     textColor: 0xc8b06a, // drawstring: tan
