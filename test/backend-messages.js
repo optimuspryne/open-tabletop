@@ -313,18 +313,58 @@ test('custom prop records validate model, collider, transforms, and colors', () 
 test('deck draft boundaries validate geometry, finish flags, names, and edit ids', () => {
   const refOk = (value) => typeof value === 'string' && value.length < 100;
   const sanitizeGeom = (value) => (value && value.w === 2 ? { w: 2, h: 3 } : null);
-  assert.deepEqual(deckBeginPayload({ back: '/back', geom: { w: 2 } }, { refOk, sanitizeGeom }), {
-    back: '/back',
-    geom: { w: 2, h: 3 },
-    open: false,
-  });
-  assert.deepEqual(deckBeginPayload({ back: '/back', open: true }, { refOk, sanitizeGeom }), {
-    back: '/back',
-    geom: null,
-    open: true,
-  });
-  assert.equal(deckBeginPayload({ back: '/back', open: 'yes' }, { refOk, sanitizeGeom }), null);
-  assert.equal(deckBeginPayload({ back: 2 }, { refOk, sanitizeGeom }), null);
+  const deckModels = ['bentwood', 'bag'];
+  assert.deepEqual(
+    deckBeginPayload({ back: '/back', geom: { w: 2 } }, { refOk, sanitizeGeom, deckModels }),
+    {
+      back: '/back',
+      geom: { w: 2, h: 3 },
+      open: false,
+      deckModel: null,
+      color: null,
+      textColor: null,
+    },
+  );
+  assert.deepEqual(
+    deckBeginPayload({ back: '/back', open: true }, { refOk, sanitizeGeom, deckModels }),
+    {
+      back: '/back',
+      geom: null,
+      open: true,
+      deckModel: null,
+      color: null,
+      textColor: null,
+    },
+  );
+  // A pouch skin with two slot tints rides along on the draft.
+  assert.deepEqual(
+    deckBeginPayload(
+      { back: '/back', open: true, deckModel: 'bag', color: '#7a5a3a', textColor: '#c8b06a' },
+      { refOk, sanitizeGeom, deckModels },
+    ),
+    {
+      back: '/back',
+      geom: null,
+      open: true,
+      deckModel: 'bag',
+      color: '#7a5a3a',
+      textColor: '#c8b06a',
+    },
+  );
+  // An unknown skin id or a malformed hex color rejects the whole payload.
+  assert.equal(
+    deckBeginPayload({ back: '/back', deckModel: 'nope' }, { refOk, sanitizeGeom, deckModels }),
+    null,
+  );
+  assert.equal(
+    deckBeginPayload({ back: '/back', color: 'red' }, { refOk, sanitizeGeom, deckModels }),
+    null,
+  );
+  assert.equal(
+    deckBeginPayload({ back: '/back', open: 'yes' }, { refOk, sanitizeGeom, deckModels }),
+    null,
+  );
+  assert.equal(deckBeginPayload({ back: 2 }, { refOk, sanitizeGeom, deckModels }), null);
   assert.deepEqual(deckFinishPayload({ name: ' Deck ', spawn: false, editId: '4' }), {
     name: 'Deck',
     spawn: false,

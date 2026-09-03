@@ -1170,8 +1170,8 @@ function sendDeck(back, fronts, name, spawn, editId, geom) {
 
 // Build a double-sided TILE SET on the server: it's an `open` deck whose cards may carry per-tile
 // backs. `cards` entries are a bare front ref (shares the stack cover) or a { front, back } pair.
-function sendTileSet(back, cards, name, spawn, editId, geom) {
-  ROOM.send('deckBegin', { back, geom, open: true });
+function sendTileSet(back, cards, name, spawn, editId, geom, skin) {
+  ROOM.send('deckBegin', { back, geom, open: true, ...(skin || {}) });
   for (let i = 0; i < cards.length; i += 50)
     ROOM.send('deckAppend', { fronts: cards.slice(i, i + 50) });
   ROOM.send('deckFinish', { name, spawn, editId });
@@ -1208,6 +1208,11 @@ function paintTileGrid(inputId, gridId, capId) {
 // stack cover, choose a physical size / thickness / shape, and Save/Spawn a double-sided tile set.
 function wireAddTiles() {
   const shapeOf = () => byId('adTileShape').querySelector('.seg.on')?.dataset.shape || 'rounded';
+  const skinOf = () => byId('adTileSkin').querySelector('.seg.on')?.dataset.skin || '';
+  // A tinted skin (the pouch) reveals its two color pickers; Open hides them.
+  const syncSkinTints = () => {
+    byId('adTileSkinTints').hidden = skinOf() !== 'bag';
+  };
   const applyShape = (geom) => {
     const sh = shapeOf();
     if (sh === 'square') return { ...geom, shape: 'rect', round: 0 };
@@ -1239,6 +1244,17 @@ function wireAddTiles() {
             .querySelectorAll('.seg')
             .forEach((x) => x.classList.toggle('on', x === b))),
     );
+  byId('adTileSkin')
+    .querySelectorAll('.seg')
+    .forEach(
+      (b) =>
+        (b.onclick = () => {
+          byId('adTileSkin')
+            .querySelectorAll('.seg')
+            .forEach((x) => x.classList.toggle('on', x === b));
+          syncSkinTints();
+        }),
+    );
 
   const clearTileForm = () => {
     byId('adTileName').value = '';
@@ -1254,6 +1270,12 @@ function wireAddTiles() {
     byId('adTileShape')
       .querySelectorAll('.seg')
       .forEach((x) => x.classList.toggle('on', x.dataset.shape === 'rounded'));
+    byId('adTileSkin')
+      .querySelectorAll('.seg')
+      .forEach((x) => x.classList.toggle('on', x.dataset.skin === ''));
+    byId('adTileBagColor').value = '#7a5a3a';
+    byId('adTileStringColor').value = '#c8b06a';
+    syncSkinTints();
     editCtx = null;
   };
 
@@ -1277,6 +1299,13 @@ function wireAddTiles() {
         .querySelectorAll('.seg')
         .forEach((x) => x.classList.toggle('on', x.dataset.shape === sh));
     }
+    const sk = d.deckModel === 'bag' ? 'bag' : '';
+    byId('adTileSkin')
+      .querySelectorAll('.seg')
+      .forEach((x) => x.classList.toggle('on', x.dataset.skin === sk));
+    if (d.color) byId('adTileBagColor').value = d.color;
+    if (d.textColor) byId('adTileStringColor').value = d.textColor;
+    syncSkinTints();
   };
 
   const saveTiles = async (spawn) => {
@@ -1318,7 +1347,15 @@ function wireAddTiles() {
       if (byId('adTileCover').files[0])
         cover = await uploadImage(byId('adTileCover').files[0], uw, uh, 'cover', 'decks');
       else cover = editing ? editCtx.back : 'back';
-      sendTileSet(cover, cards, name, spawn, editCtx && editCtx.id, geom);
+      const skin =
+        skinOf() === 'bag'
+          ? {
+              deckModel: 'bag',
+              color: byId('adTileBagColor').value,
+              textColor: byId('adTileStringColor').value,
+            }
+          : undefined;
+      sendTileSet(cover, cards, name, spawn, editCtx && editCtx.id, geom, skin);
       clearTileForm();
       closeAddModal();
     } catch (e) {

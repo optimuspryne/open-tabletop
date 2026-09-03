@@ -32,6 +32,7 @@ export function registerLibraryHandlers(
     libraryKinds,
     refOk,
     sanitizeGeom,
+    deckModels,
     randomPosition,
     sceneMaxBytes,
     skyUrlOk,
@@ -48,13 +49,16 @@ export function registerLibraryHandlers(
 
   tableMessage('deckBegin', (client, message) => {
     if (!room.isAdmin(client)) return;
-    const msg = deckBeginPayload(message, { refOk, sanitizeGeom });
+    const msg = deckBeginPayload(message, { refOk, sanitizeGeom, deckModels });
     if (!msg) return;
     room.drafts.set(client.sessionId, {
       back: msg.back,
       cards: [],
       geom: msg.geom,
       open: msg.open,
+      deckModel: msg.deckModel,
+      color: msg.color,
+      textColor: msg.textColor,
     });
   });
 
@@ -75,18 +79,32 @@ export function registerLibraryHandlers(
     if (!draft || !draft.cards.length) return;
     const geo = draft.geom ? { geom: draft.geom } : {};
     const openProp = draft.open ? { open: true } : {};
+    const skin = {}; // optional 3D skin + its slot tints (pouch: bag / string)
+    if (draft.deckModel) skin.deckModel = draft.deckModel;
+    if (draft.color != null) skin.color = draft.color;
+    if (draft.textColor != null) skin.textColor = draft.textColor;
     if (msg.spawn)
       room.spawn('deck', randomPosition(), {
         back: draft.back,
         cards: draft.cards,
         ...geo,
         ...openProp,
+        ...skin,
       });
     if (!msg.name) return;
     if (msg.editId) {
-      await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom, draft.open);
+      await db.updateDeck(
+        msg.editId,
+        msg.name,
+        draft.back,
+        draft.cards,
+        draft.geom,
+        draft.open,
+        skin,
+      );
     } else {
       await db.insertDeck({
+        ...skin,
         name: msg.name,
         back: draft.back,
         fronts: draft.cards,
@@ -119,6 +137,9 @@ export function registerLibraryHandlers(
       cards: deck.fronts,
       ...(deck.geom ? { geom: deck.geom } : {}),
       ...(deck.open ? { open: true } : {}),
+      ...(deck.deckModel ? { deckModel: deck.deckModel } : {}),
+      ...(deck.color != null ? { color: deck.color } : {}),
+      ...(deck.textColor != null ? { textColor: deck.textColor } : {}),
     });
   });
 
@@ -169,6 +190,9 @@ export function registerLibraryHandlers(
         fronts: deck.fronts,
         geom: deck.geom,
         open: deck.open,
+        deckModel: deck.deckModel,
+        color: deck.color,
+        textColor: deck.textColor,
       });
   });
   assetMessage('assetDelete', async (client, message) => {

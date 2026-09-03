@@ -412,6 +412,18 @@ export const DECK_MODELS = {
     modelScale: 1.5,
     box: [0.88, 0.544, 1.3],
   },
+  // A drawstring pouch — a concealing "bag" skin for a shuffled tile set. Two tintable material
+  // slots: the sack ('bag' → the deck's `color`) and the drawstring ('string' → `textColor`), each
+  // defaulting to the values here when the deck carries no color.
+  bag: {
+    name: 'Pouch',
+    model: '/models/decks/bag.glb',
+    modelScale: 0.85,
+    box: [0.81, 0.67, 0.85],
+    tints: { bag: 'color', string: 'textColor' },
+    color: 0x7a5a3a, // sack: warm leather brown
+    textColor: 0xc8b06a, // drawstring: tan
+  },
 };
 
 // --- Word tiles (Wordy McWordface — a legally-distinct Scrabble) -------------

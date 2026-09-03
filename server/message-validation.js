@@ -457,14 +457,21 @@ export function savePropPayload(message, options) {
   return out;
 }
 
-export function deckBeginPayload(message, { refOk, sanitizeGeom }) {
+export function deckBeginPayload(message, { refOk, sanitizeGeom, deckModels = [] }) {
   if (
     !isPlainObject(message) ||
-    !hasOnlyKeys(message, new Set(['back', 'geom', 'open'])) ||
+    !hasOnlyKeys(message, new Set(['back', 'geom', 'open', 'deckModel', 'color', 'textColor'])) ||
     !refOk(message.back)
   )
     return null;
-  const out = { back: message.back, geom: null, open: false };
+  const out = {
+    back: message.back,
+    geom: null,
+    open: false,
+    deckModel: null,
+    color: null,
+    textColor: null,
+  };
   if (message.geom !== undefined && message.geom !== null) {
     const geom = sanitizeGeom(message.geom);
     if (!geom) return null;
@@ -473,6 +480,18 @@ export function deckBeginPayload(message, { refOk, sanitizeGeom }) {
   if (message.open !== undefined) {
     if (typeof message.open !== 'boolean') return null;
     out.open = message.open; // a double-sided tile set → its tiles turn over
+  }
+  if (message.deckModel !== undefined && message.deckModel !== null) {
+    if (typeof message.deckModel !== 'string' || !deckModels.includes(message.deckModel))
+      return null;
+    out.deckModel = message.deckModel; // an optional 3D skin (pouch / box) for the stack
+  }
+  for (const key of ['color', 'textColor']) {
+    if (message[key] !== undefined && message[key] !== null) {
+      const c = hexColor(message[key]); // a #rrggbb tint for a skin's slot (bag / string)
+      if (c === null) return null;
+      out[key] = c;
+    }
   }
   return out;
 }

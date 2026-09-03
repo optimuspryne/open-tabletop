@@ -707,6 +707,7 @@ class TableRoom extends Room {
       libraryKinds: LIBRARY_KINDS,
       refOk: deckRefOk,
       sanitizeGeom,
+      deckModels: Object.keys(DECK_MODELS),
       randomPosition: rnd,
       sceneMaxBytes: SCENE_MAX_BYTES,
       skyUrlOk,
@@ -940,7 +941,9 @@ class TableRoom extends Room {
       piece.count = deckData.cards.length;
       const deckProps = { back: deckData.back, ...geoOf(deckData) }; // deck-level tile/geom rides to its cards
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
-        deckProps.model = deckData.deckModel; // an optional 3D box/bag skin (server-set only)
+        deckProps.model = deckData.deckModel; // an optional 3D box/bag/pouch skin
+      if (props.color != null) deckProps.color = props.color; // skin tints (pouch: bag / string)
+      if (props.textColor != null) deckProps.textColor = props.textColor;
       if (props.open) deckProps.open = true; // a deck of double-sided tiles → dealt tiles turn over
       writeProps(piece, deckProps);
     } else if (type === 'dispenser') {

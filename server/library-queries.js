@@ -45,6 +45,9 @@ export function createLibraryQueries(query) {
         back: (row.props || {}).back || 'back',
         geom: (row.props || {}).geom || null,
         open: !!(row.props || {}).open,
+        deckModel: (row.props || {}).deckModel || null,
+        color: (row.props || {}).color ?? null,
+        textColor: (row.props || {}).textColor ?? null,
         isPublic: row.is_public,
         ownerId: idOrNull(row.owner_id),
       };

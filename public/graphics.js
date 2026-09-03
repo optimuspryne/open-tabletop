@@ -1563,10 +1563,30 @@ function deckMesh(props = {}) {
     return loadModelGroup(skin.model, { scale: skin.modelScale }, (node) => {
       node.castShadow = true;
       node.receiveShadow = true;
-      const mats = Array.isArray(node.material) ? node.material : [node.material];
-      mats.forEach((m) => {
-        if (m) m.metalness = 0;
-      }); // de-metal so the wood reads under the table lights
+      // De-metal so the model reads under the table lights; tint any named slot the skin maps
+      // (e.g. the pouch's 'bag' → color, 'string' → textColor), falling back to the skin defaults.
+      const paint = (m) => {
+        if (!m) return m;
+        m.metalness = 0;
+        if (skin.tints) {
+          for (const slot in skin.tints) {
+            if (isTintSlot(m.name, slot)) {
+              const c = props[skin.tints[slot]] ?? skin[skin.tints[slot]];
+              if (c != null)
+                return new THREE.MeshStandardMaterial({
+                  color: c,
+                  metalness: 0,
+                  roughness: 0.6,
+                  side: m.side,
+                });
+            }
+          }
+        }
+        return m;
+      };
+      node.material = Array.isArray(node.material)
+        ? node.material.map(paint)
+        : paint(node.material);
     });
   }
 
