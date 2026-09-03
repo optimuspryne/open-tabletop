@@ -168,6 +168,7 @@ export function registerLibraryHandlers(
         back: deck.back,
         fronts: deck.fronts,
         geom: deck.geom,
+        open: deck.open,
       });
   });
   assetMessage('assetDelete', async (client, message) => {

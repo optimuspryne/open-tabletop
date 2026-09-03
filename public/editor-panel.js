@@ -1170,11 +1170,11 @@ function sendDeck(back, fronts, name, spawn, editId, geom) {
 
 // Build a double-sided TILE SET on the server: it's an `open` deck whose cards may carry per-tile
 // backs. `cards` entries are a bare front ref (shares the stack cover) or a { front, back } pair.
-function sendTileSet(back, cards, name, spawn, geom) {
+function sendTileSet(back, cards, name, spawn, editId, geom) {
   ROOM.send('deckBegin', { back, geom, open: true });
   for (let i = 0; i < cards.length; i += 50)
     ROOM.send('deckAppend', { fronts: cards.slice(i, i + 50) });
-  ROOM.send('deckFinish', { name, spawn });
+  ROOM.send('deckFinish', { name, spawn, editId });
 }
 
 // Fill a thumbnail grid from a file input (fronts / backs preview in the Tiles tab).
@@ -1254,40 +1254,71 @@ function wireAddTiles() {
     byId('adTileShape')
       .querySelectorAll('.seg')
       .forEach((x) => x.classList.toggle('on', x.dataset.shape === 'rounded'));
+    editCtx = null;
+  };
+
+  // Pre-fill the Tiles form from a saved tile set (Edit / Clone). The tiles themselves are kept as
+  // editCtx.fronts unless you upload new ones; here we restore the name, cover, thickness, and shape.
+  FILLERS.tiles = (d, clone) => {
+    byId('adTileName').value = clone ? '' : d.name;
+    clearSq('adTileFronts');
+    clearSq('adTileBacks');
+    clearSq('adTileCover');
+    paintTileGrid('adTileFronts', 'adTileFrontsGrid', 'adTileFrontsCount');
+    paintTileGrid('adTileBacks', 'adTileBacksGrid', 'adTileBacksCount');
+    if (d.back && d.back !== 'back')
+      byId('adTileCover').parentElement.style.backgroundImage = `url("${d.back}")`;
+    if (d.geom) {
+      const m = Math.max(1, Math.min(8, Math.round((d.geom.t / TILES.card.t) * 2) / 2)) || 1;
+      byId('adTileThick').value = m;
+      byId('adTileThickVal').textContent = m + '×';
+      const sh = shapeOfGeom(d.geom);
+      byId('adTileShape')
+        .querySelectorAll('.seg')
+        .forEach((x) => x.classList.toggle('on', x.dataset.shape === sh));
+    }
   };
 
   const saveTiles = async (spawn) => {
     const name = byId('adTileName').value.trim();
     if (!name) return alert('Name the tile set first.');
+    const editing = !!(editCtx && editCtx.kind === 'deck' && editCtx.open); // editing a saved set
     const frontFiles = [...byId('adTileFronts').files];
-    if (!frontFiles.length) return alert('Choose at least one front image.');
+    if (!frontFiles.length && !editing) return alert('Choose at least one front image.');
     const backFiles = [...byId('adTileBacks').files];
     if (backFiles.length && backFiles.length !== frontFiles.length)
       return alert('Add one back per front (same order), or no backs at all.');
     try {
-      const dim = await measureImage(frontFiles[0]);
-      const size = +byId('adTileSize').value || 0.6; // physical size multiplier for small tiles
-      const t = +(TILES.card.t * (+byId('adTileThick').value || 1)).toFixed(4);
-      let geom = geomFromImage(dim.w, dim.h, dim.round); // fit the tile to the art's aspect
-      geom = applyShape({
-        ...geom,
-        w: +(geom.w * size).toFixed(4),
-        h: +(geom.h * size).toFixed(4),
-        t,
-      });
-      const MAX = 1200,
-        sc = Math.min(1, MAX / Math.max(dim.w, dim.h));
-      const uw = Math.max(1, Math.round(dim.w * sc)),
+      let geom = editing ? editCtx.geom : undefined; // keep the set's geometry unless re-uploading
+      let uw, uh, cards;
+      if (frontFiles.length) {
+        const dim = await measureImage(frontFiles[0]);
+        const size = +byId('adTileSize').value || 0.6; // physical size multiplier for small tiles
+        const t = +(TILES.card.t * (+byId('adTileThick').value || 1)).toFixed(4);
+        const fitted = geomFromImage(dim.w, dim.h, dim.round); // fit the tile to the art's aspect
+        geom = applyShape({
+          ...fitted,
+          w: +(fitted.w * size).toFixed(4),
+          h: +(fitted.h * size).toFixed(4),
+          t,
+        });
+        const MAX = 1200,
+          sc = Math.min(1, MAX / Math.max(dim.w, dim.h));
+        uw = Math.max(1, Math.round(dim.w * sc));
         uh = Math.max(1, Math.round(dim.h * sc));
-      let cover = 'back';
+        const fronts = [];
+        for (const f of frontFiles) fronts.push(await uploadImage(f, uw, uh, 'cover', 'decks'));
+        const backs = [];
+        for (const f of backFiles) backs.push(await uploadImage(f, uw, uh, 'cover', 'decks'));
+        cards = fronts.map((front, i) => (backs[i] ? { front, back: backs[i] } : front));
+      } else {
+        cards = editCtx.fronts; // keep the existing tiles
+      }
+      let cover;
       if (byId('adTileCover').files[0])
         cover = await uploadImage(byId('adTileCover').files[0], uw, uh, 'cover', 'decks');
-      const fronts = [];
-      for (const f of frontFiles) fronts.push(await uploadImage(f, uw, uh, 'cover', 'decks'));
-      const backs = [];
-      for (const f of backFiles) backs.push(await uploadImage(f, uw, uh, 'cover', 'decks'));
-      const cards = fronts.map((front, i) => (backs[i] ? { front, back: backs[i] } : front));
-      sendTileSet(cover, cards, name, spawn, geom);
+      else cover = editing ? editCtx.back : 'back';
+      sendTileSet(cover, cards, name, spawn, editCtx && editCtx.id, geom);
       clearTileForm();
       closeAddModal();
     } catch (e) {
@@ -1847,6 +1878,20 @@ window.onOttRoom = (room) => {
     if (!pendingDeck) return;
     const { it, clone } = pendingDeck;
     pendingDeck = null;
+    if (d.open) {
+      // a double-sided tile set → edit it in the Tiles tab (tiles kept as-is unless re-uploaded)
+      byId('addModal').querySelector('.libTab[data-tab="tiles"]')?.click();
+      editCtx = {
+        kind: 'deck',
+        id: clone ? null : it.id,
+        back: d.back,
+        fronts: d.fronts,
+        geom: d.geom || undefined,
+        open: true,
+      };
+      FILLERS.tiles?.(d, clone);
+      return;
+    }
     const isText = ((d.fronts && d.fronts[0]) || '').startsWith('text:');
     byId('addModal')
       .querySelector(`.libTab[data-tab="${isText ? 'txtdecks' : 'imgdecks'}"]`)
