@@ -34,6 +34,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   one shared back for the whole stack), which is what will let a single pile mix tiles with
   different backs. Also on the deck menu: **Peek at top card**, the same private draw-to-inspect
   you already get by double-clicking a deck.
+- **Upload your own double-sided tile sets.** A new **Double-Sided Tiles** tab under *Add to
+  Library* builds a set from your images: drop in the **fronts** (face 1) and, optionally, the
+  **backs** (face 2, one per front in the same order — or leave them off to share one back), an
+  optional stack cover, and choose a physical **size**, thickness, and shape. Save it to your
+  library and it spawns as a face-down draw pile of double-sided tiles you flip to turn over — each
+  tile keeping its own back, so one pile can mix different backs (a tree back among forageable
+  backs). Tuned for small tiles out of the box.
 
 ## [0.14.0] — 2026-09-02
 
