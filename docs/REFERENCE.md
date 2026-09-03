@@ -566,7 +566,10 @@ table snapshot — pieces + settings — as an admin-curated library asset) and
 
 Library handlers (all async, via `db`; keyed on a row **id**): creation —
 `deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp` — is
-**admin-only** and stamps `owner_id` + private; `loadDeck`/
+**admin-only** and stamps `owner_id` + private. `deckBegin` takes an `open` flag and
+`deckAppend` accepts card entries that are a bare front ref OR a `{front, back}` pair, so the
+editor's **Double-Sided Tiles** tab saves a tile set as an `open` deck with per-tile backs
+(stored in `custom_decks`, jsonb `cards` + `props` — no schema change); `loadDeck`/
 `loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
 **visibility-gated** (public for GMs/helpers, everything for admins); the admin
 curation verbs are `assetPublic`/`assetRename`/`assetDelete`.

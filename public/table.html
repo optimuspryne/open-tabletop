@@ -1333,6 +1333,18 @@
             <button
               type="button"
               role="tab"
+              id="addtab-tiles"
+              aria-controls="addpane-tiles"
+              aria-selected="false"
+              tabindex="-1"
+              class="libTab"
+              data-tab="tiles"
+            >
+              Double-Sided Tiles
+            </button>
+            <button
+              type="button"
+              role="tab"
               id="addtab-modelboards"
               aria-controls="addpane-modelboards"
               aria-selected="false"
@@ -1471,6 +1483,97 @@
                 <div class="row">
                   <button id="adImgSave" type="button">Save</button
                   ><button id="adImgSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="libPane"
+          role="tabpanel"
+          id="addpane-tiles"
+          aria-labelledby="addtab-tiles"
+          data-pane="tiles"
+          hidden
+        >
+          <div class="addSplit">
+            <div class="addCol addPreview">
+              <div class="sqField">
+                <div class="sqCap">
+                  Front images (face 1)<span id="adTileFrontsCount" class="sqCount" hidden></span>
+                </div>
+                <div class="uploadSq sqFronts">
+                  <input id="adTileFronts" type="file" accept="image/*" multiple hidden /><span
+                    class="sqLabel"
+                    >Drop every front<br />or click to choose</span
+                  >
+                  <div class="sqGrid" id="adTileFrontsGrid" hidden></div>
+                </div>
+              </div>
+              <div class="sqField">
+                <div class="sqCap">
+                  Back images (face 2, optional)<span id="adTileBacksCount" class="sqCount" hidden></span>
+                </div>
+                <div class="uploadSq sqFronts">
+                  <input id="adTileBacks" type="file" accept="image/*" multiple hidden /><span
+                    class="sqLabel"
+                    >Optional — one per front,<br />same order</span
+                  >
+                  <div class="sqGrid" id="adTileBacksGrid" hidden></div>
+                </div>
+              </div>
+            </div>
+            <div class="addCol">
+              <label for="adTileName">Tile set name</label>
+              <input id="adTileName" type="text" placeholder="Name this tile set" />
+              <div class="sqField">
+                <div class="sqCap">Stack cover (optional)</div>
+                <div class="uploadSq sqCard">
+                  <input id="adTileCover" type="file" accept="image/*" hidden /><span class="sqLabel"
+                    >Shown while stacked<br />(defaults to a plain back)</span
+                  >
+                </div>
+              </div>
+              <div class="addColorRow" title="Physical size of each tile on the table">
+                <span>Size</span
+                ><input
+                  id="adTileSize"
+                  type="range"
+                  min="0.3"
+                  max="1.5"
+                  step="0.05"
+                  value="0.6"
+                  aria-label="Tile size"
+                /><span id="adTileSizeVal">0.6×</span>
+              </div>
+              <div class="addColorRow" title="How thick each tile is">
+                <span>Thickness</span
+                ><input
+                  id="adTileThick"
+                  type="range"
+                  min="1"
+                  max="8"
+                  step="0.5"
+                  value="1"
+                  aria-label="Tile thickness"
+                /><span id="adTileThickVal">1×</span>
+              </div>
+              <div class="addColorRow" title="The tile silhouette">
+                <span>Shape</span
+                ><span id="adTileShape" class="segRow"
+                  ><button type="button" class="chip seg on" data-shape="rounded">Rounded</button
+                  ><button type="button" class="chip seg" data-shape="square">Square</button
+                  ><button type="button" class="chip seg" data-shape="hex">Hexagon</button></span
+                >
+              </div>
+              <div class="saveFoot">
+                <p class="destNote">
+                  Double-sided tiles — flip turns them over. Saved to
+                  <b>Library → Decks → Custom</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adTileSave" type="button">Save</button
+                  ><button id="adTileSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
               </div>
             </div>

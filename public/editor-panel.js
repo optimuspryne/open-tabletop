@@ -1167,6 +1167,136 @@ function sendDeck(back, fronts, name, spawn, editId, geom) {
     ROOM.send('deckAppend', { fronts: fronts.slice(i, i + 50) });
   ROOM.send('deckFinish', { name, spawn, editId });
 }
+
+// Build a double-sided TILE SET on the server: it's an `open` deck whose cards may carry per-tile
+// backs. `cards` entries are a bare front ref (shares the stack cover) or a { front, back } pair.
+function sendTileSet(back, cards, name, spawn, geom) {
+  ROOM.send('deckBegin', { back, geom, open: true });
+  for (let i = 0; i < cards.length; i += 50)
+    ROOM.send('deckAppend', { fronts: cards.slice(i, i + 50) });
+  ROOM.send('deckFinish', { name, spawn });
+}
+
+// Fill a thumbnail grid from a file input (fronts / backs preview in the Tiles tab).
+function paintTileGrid(inputId, gridId, capId) {
+  const grid = byId(gridId),
+    cap = byId(capId),
+    files = [...(byId(inputId).files || [])];
+  if (!grid) return;
+  grid.textContent = '';
+  grid.hidden = !files.length;
+  if (cap) {
+    cap.hidden = !files.length;
+    cap.textContent = files.length ? files.length + ' selected' : '';
+  }
+  files.slice(0, MAX_FRONT_THUMBS).forEach((f) => {
+    const t = grid.appendChild(document.createElement('i')),
+      r = new FileReader();
+    r.onload = () => {
+      t.style.backgroundImage = `url("${r.result}")`;
+    };
+    r.readAsDataURL(f);
+  });
+  if (files.length > MAX_FRONT_THUMBS) {
+    const more = grid.appendChild(document.createElement('i'));
+    more.className = 'more';
+    more.textContent = '+' + (files.length - MAX_FRONT_THUMBS);
+  }
+}
+
+// The Tiles tab: upload fronts (face 1) + optional backs (face 2, paired by position) + an optional
+// stack cover, choose a physical size / thickness / shape, and Save/Spawn a double-sided tile set.
+function wireAddTiles() {
+  const shapeOf = () => byId('adTileShape').querySelector('.seg.on')?.dataset.shape || 'rounded';
+  const applyShape = (geom) => {
+    const sh = shapeOf();
+    if (sh === 'square') return { ...geom, shape: 'rect', round: 0 };
+    if (sh === 'hex') {
+      const R = geom.w;
+      return { ...geom, shape: 'hex', round: 0, w: +(R * HEX_HH).toFixed(4), h: R };
+    }
+    return { ...geom, shape: 'rect' };
+  };
+  wireUploadSq('adTileFronts', false, () =>
+    paintTileGrid('adTileFronts', 'adTileFrontsGrid', 'adTileFrontsCount'),
+  );
+  wireUploadSq('adTileBacks', false, () =>
+    paintTileGrid('adTileBacks', 'adTileBacksGrid', 'adTileBacksCount'),
+  );
+  wireUploadSq('adTileCover', false, () => {});
+  byId('adTileSize').oninput = () => {
+    byId('adTileSizeVal').textContent = (+byId('adTileSize').value || 0.6) + '×';
+  };
+  byId('adTileThick').oninput = () => {
+    byId('adTileThickVal').textContent = (+byId('adTileThick').value || 1) + '×';
+  };
+  byId('adTileShape')
+    .querySelectorAll('.seg')
+    .forEach(
+      (b) =>
+        (b.onclick = () =>
+          byId('adTileShape')
+            .querySelectorAll('.seg')
+            .forEach((x) => x.classList.toggle('on', x === b))),
+    );
+
+  const clearTileForm = () => {
+    byId('adTileName').value = '';
+    clearSq('adTileFronts');
+    clearSq('adTileBacks');
+    clearSq('adTileCover');
+    paintTileGrid('adTileFronts', 'adTileFrontsGrid', 'adTileFrontsCount');
+    paintTileGrid('adTileBacks', 'adTileBacksGrid', 'adTileBacksCount');
+    byId('adTileSize').value = 0.6;
+    byId('adTileSizeVal').textContent = '0.6×';
+    byId('adTileThick').value = 1;
+    byId('adTileThickVal').textContent = '1×';
+    byId('adTileShape')
+      .querySelectorAll('.seg')
+      .forEach((x) => x.classList.toggle('on', x.dataset.shape === 'rounded'));
+  };
+
+  const saveTiles = async (spawn) => {
+    const name = byId('adTileName').value.trim();
+    if (!name) return alert('Name the tile set first.');
+    const frontFiles = [...byId('adTileFronts').files];
+    if (!frontFiles.length) return alert('Choose at least one front image.');
+    const backFiles = [...byId('adTileBacks').files];
+    if (backFiles.length && backFiles.length !== frontFiles.length)
+      return alert('Add one back per front (same order), or no backs at all.');
+    try {
+      const dim = await measureImage(frontFiles[0]);
+      const size = +byId('adTileSize').value || 0.6; // physical size multiplier for small tiles
+      const t = +(TILES.card.t * (+byId('adTileThick').value || 1)).toFixed(4);
+      let geom = geomFromImage(dim.w, dim.h, dim.round); // fit the tile to the art's aspect
+      geom = applyShape({
+        ...geom,
+        w: +(geom.w * size).toFixed(4),
+        h: +(geom.h * size).toFixed(4),
+        t,
+      });
+      const MAX = 1200,
+        sc = Math.min(1, MAX / Math.max(dim.w, dim.h));
+      const uw = Math.max(1, Math.round(dim.w * sc)),
+        uh = Math.max(1, Math.round(dim.h * sc));
+      let cover = 'back';
+      if (byId('adTileCover').files[0])
+        cover = await uploadImage(byId('adTileCover').files[0], uw, uh, 'cover', 'decks');
+      const fronts = [];
+      for (const f of frontFiles) fronts.push(await uploadImage(f, uw, uh, 'cover', 'decks'));
+      const backs = [];
+      for (const f of backFiles) backs.push(await uploadImage(f, uw, uh, 'cover', 'decks'));
+      const cards = fronts.map((front, i) => (backs[i] ? { front, back: backs[i] } : front));
+      sendTileSet(cover, cards, name, spawn, geom);
+      clearTileForm();
+      closeAddModal();
+    } catch (e) {
+      alert('Image upload failed.');
+    }
+  };
+  byId('adTileSave').onclick = () => saveTiles(false);
+  byId('adTileSpawn').onclick = () => saveTiles(true);
+}
 const showCardPrev = (el, ref) => {
   const u = cardPreviewURL(ref);
   el.style.backgroundImage = u ? `url("${u}")` : 'none';
@@ -1813,6 +1943,7 @@ window.onOttRoom = (room) => {
     });
     wireTabs(addModal);
     wireAddDeck();
+    wireAddTiles();
     wireAddBoard();
     wireAddObject();
     wireAddSky();
