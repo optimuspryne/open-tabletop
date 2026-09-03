@@ -1346,7 +1346,15 @@ function wireAddTiles() {
       let cover;
       if (byId('adTileCover').files[0])
         cover = await uploadImage(byId('adTileCover').files[0], uw, uh, 'cover', 'decks');
-      else cover = editing ? editCtx.back : 'back';
+      else {
+        // No cover chosen: default the set's SHARED back to the top tile's own back, so any tile that
+        // lacks its own back (and the stack itself) shows a real card rather than a generic
+        // placeholder. Per-tile backs still win per card; the live stack cover is tracked separately
+        // server-side. (Top = last, drawn first.)
+        const top = cards[cards.length - 1];
+        const topBack = top && typeof top === 'object' && top.back ? top.back : null;
+        cover = topBack || (editing ? editCtx.back : 'back');
+      }
       const skin =
         skinOf() === 'bag'
           ? {

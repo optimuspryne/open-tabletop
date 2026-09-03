@@ -627,6 +627,9 @@ function rebuildGrid() {
         setDeckHeight(piece.count);
         cb(piece).listen('count', setDeckHeight);
       }
+      // Re-render when props change: an open tile set's cover follows its top tile, and a skin's
+      // tints can be edited. (The height scale is re-applied inside rebuildDeck.)
+      cb(piece).listen('props', () => rebuildDeck(id, piece), false);
     }
     if (piece.type === 'card') {
       // Rebuild the card mesh when its props change (front revealed/hidden on flip).
@@ -3388,6 +3391,31 @@ function rebuildPiece(id, piece) {
   scene.add(mesh);
   entry.mesh = mesh;
   if (inspect && inspect.origId === id) entry.mesh.visible = false; // keep it hidden behind the inspect view
+}
+
+// Rebuild a deck mesh from its current props (the open-tile-set cover follows the top tile; a skin's
+// tints can change). Unlike a die/prop, a non-modeled deck also carries a count-based height scale,
+// so re-apply it — otherwise the rebuilt stack would snap back to a single card's thickness.
+function rebuildDeck(id, piece) {
+  const entry = meshes.get(id);
+  if (!entry) return;
+  scene.remove(entry.mesh);
+  const props = JSON.parse(piece.props || '{}');
+  const mesh = KIND.deck.mesh(props);
+  const casts = PHYS.deck.mass > 0;
+  mesh.traverse((node) => {
+    node.userData.id = id;
+    if (node.isMesh) {
+      node.castShadow = casts;
+      node.receiveShadow = true;
+    }
+  });
+  if (!props.model) mesh.scale.y = deckHeight(piece.count); // a modeled skin is a fixed shape
+  const buf = buffers.get(id),
+    last = buf && buf[buf.length - 1];
+  if (last) applyTransform(mesh, last);
+  scene.add(mesh);
+  entry.mesh = mesh;
 }
 
 // hidden hand: a private bottom bar only this client ever sees
