@@ -41,6 +41,18 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   library and it spawns as a face-down draw pile of double-sided tiles you flip to turn over — each
   tile keeping its own back, so one pile can mix different backs (a tree back among forageable
   backs). Tuned for small tiles out of the box.
+- **Conceal a tile set in a drawstring pouch.** The Double-Sided Tiles tab has a new
+  **Concealment** choice: leave the stack **Open**, or drop it into a **Pouch** — a low-poly
+  drawstring bag that hides the stack, so shuffling and drawing off the top plays like reaching
+  into a bag. The sack body and the drawstring recolor **independently** (two color pickers appear
+  when you pick Pouch), and both come back when you edit the set later. The pouch rests on its flat
+  side on the table.
+- **A tile set's stack cover follows its top tile.** An open set no longer shows one frozen cover
+  image forever. Its visible top face now tracks the **current top tile's own back** and repaints
+  as the top changes — every draw, shuffle and split — so a pile of tiles that each have a
+  different back (the Stardew fish tiles) shows a real card on top instead of a generic
+  placeholder. Concealed (non-open) decks never reveal a top this way, and a pouch hides the top
+  entirely.
 
 ## [0.14.0] — 2026-09-02
 

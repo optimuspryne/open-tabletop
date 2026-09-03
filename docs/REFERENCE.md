@@ -205,8 +205,12 @@ chess}` each `[color0, color1]`.
 - **`LETTER_DIST`** `{ letter → [count, value] }` — the 100-tile word-game bag (blank = `''`).
 - **`MAHJONG`** `{ base, suits, honors, bonus }` — the 144-tile wall's face lists (faces are
   bundled images under `base`).
-- **`DECK_MODELS`** `{ key → { name, model, modelScale, box } }` — 3D deck _skins_ (a bag/box
-  `.glb` a deck wears instead of the card stack); a deck opts in via `props.model`.
+- **`DECK_MODELS`** `{ key → { name, model, modelScale, box, modelRot?, tints?, color?, textColor? } }`
+  — 3D deck _skins_ (a bag/box/pouch `.glb` a deck wears instead of the card stack); a deck opts in
+  via `props.model`. Optional `modelRot` `[x,y,z]` reorients the raw model before it is fit/centred
+  (the pouch tips onto a flat face); `tints` `{ slot → propKey }` maps a named material slot to a
+  deck prop (the pouch: `bag → color`, `string → textColor`), each falling back to the skin's own
+  `color`/`textColor` default, so the sack and drawstring recolor independently.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
 - **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
   the client mesh, and the tests: `hx`/`hz` (floor half-extents), `wall` (wall half-height),
@@ -569,7 +573,11 @@ Library handlers (all async, via `db`; keyed on a row **id**): creation —
 **admin-only** and stamps `owner_id` + private. `deckBegin` takes an `open` flag and
 `deckAppend` accepts card entries that are a bare front ref OR a `{front, back}` pair, so the
 editor's **Double-Sided Tiles** tab saves a tile set as an `open` deck with per-tile backs
-(stored in `custom_decks`, jsonb `cards` + `props` — no schema change); `loadDeck`/
+(stored in `custom_decks`, jsonb `cards` + `props` — no schema change). `deckBegin` also carries a
+`deckModel` (a `DECK_MODELS` skin — the concealing **pouch**) and `color`/`textColor` skin tints,
+persisted in `props` and validated against `DECK_MODELS`/`#rrggbb`. An open set's visible top is a
+runtime-only `cover` prop the server keeps pointed at the **current top tile's own back** (repainted
+on spawn/draw/shuffle/split; never persisted, never set for a secret deck); `loadDeck`/
 `loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
 **visibility-gated** (public for GMs/helpers, everything for admins); the admin
 curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
@@ -809,8 +817,9 @@ the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the fe
 - **`cardMesh`** — a card _or tile_, from `cardGeom(props)`: a thin card (a box with
   alpha-cut faces, so the art's own rounded/transparent corners define the silhouette), a
   **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with
-  real sides, e.g. dominoes). **`deckMesh`** — the matching stack (rounded/hex extrude), **or
-  a `DECK_MODELS` skin** (a `.glb` bag/box) when `props.model` is set. **`boardMesh`** — a
+  real sides, e.g. dominoes). **`deckMesh`** — the matching stack (rounded/hex extrude, top cap textured from
+  `props.cover ?? props.back`), **or a `DECK_MODELS` skin** (a `.glb` bag/box/pouch, `modelRot`-
+  reoriented and its `tints` slots painted from the deck's props) when `props.model` is set. **`boardMesh`** — a
   loaded model, a **procedural** painter (`BOARDS[·].proc`), or a plain textured box. Shared
   extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**
   (true circular-arc corners; the hex matches its 6-gon collider).

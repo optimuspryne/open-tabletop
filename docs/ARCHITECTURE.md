@@ -326,8 +326,12 @@ The kinds:
   `back`; no `open` → secret flip).
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
   `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
-  and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box) in place of the stack
-  while still working as an ordinary draw pile.
+  and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box or a concealing **pouch**
+  whose sack + drawstring recolor independently via slot `tints`) in place of the stack
+  while still working as an ordinary draw pile. An `open` set also carries a runtime-only
+  `cover` prop the server keeps pointed at the current top tile's back (repainted on every
+  draw/shuffle/split), so a mixed-back stack shows a real card on top rather than a placeholder;
+  the client rebuilds the deck mesh on any prop change to reflect it.
 - **dispenser** — a reusable source for an existing prop: finite poker/coin stacks
   shrink as they hand out copies, while Go bowls are unlimited. Left-click drops one
   beside the source, left-drag adopts the new item into the drag, and dropping a
