@@ -316,10 +316,28 @@ export function deckAppendPayload(message, { max = 50, maxBytes = 1024 * 1024, r
     message.fronts.length > max
   )
     return null;
-  return message.fronts.every(refOk) &&
-    message.fronts.reduce((total, ref) => total + ref.length, 0) <= maxBytes
-    ? { fronts: message.fronts.slice() }
-    : null;
+  // A card entry is a bare front ref (shares the deck's back) OR a { front, back } pair (a
+  // double-sided tile with its own second face). Bytes are summed across both refs.
+  const cards = [];
+  let bytes = 0;
+  for (const entry of message.fronts) {
+    if (typeof entry === 'string') {
+      if (!refOk(entry)) return null;
+      bytes += entry.length;
+      cards.push(entry);
+    } else if (
+      isPlainObject(entry) &&
+      hasOnlyKeys(entry, new Set(['front', 'back'])) &&
+      refOk(entry.front) &&
+      refOk(entry.back)
+    ) {
+      bytes += entry.front.length + entry.back.length;
+      cards.push({ front: entry.front, back: entry.back });
+    } else {
+      return null;
+    }
+  }
+  return bytes <= maxBytes ? { fronts: cards } : null;
 }
 
 const finiteTuple = (value, { length = 3, min = -Infinity, max = Infinity } = {}) => {
@@ -442,15 +460,19 @@ export function savePropPayload(message, options) {
 export function deckBeginPayload(message, { refOk, sanitizeGeom }) {
   if (
     !isPlainObject(message) ||
-    !hasOnlyKeys(message, new Set(['back', 'geom'])) ||
+    !hasOnlyKeys(message, new Set(['back', 'geom', 'open'])) ||
     !refOk(message.back)
   )
     return null;
-  const out = { back: message.back, geom: null };
+  const out = { back: message.back, geom: null, open: false };
   if (message.geom !== undefined && message.geom !== null) {
     const geom = sanitizeGeom(message.geom);
     if (!geom) return null;
     out.geom = geom;
+  }
+  if (message.open !== undefined) {
+    if (typeof message.open !== 'boolean') return null;
+    out.open = message.open; // a double-sided tile set → its tiles turn over
   }
   return out;
 }

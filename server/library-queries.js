@@ -44,6 +44,7 @@ export function createLibraryQueries(query) {
         fronts: row.cards || [],
         back: (row.props || {}).back || 'back',
         geom: (row.props || {}).geom || null,
+        open: !!(row.props || {}).open,
         isPublic: row.is_public,
         ownerId: idOrNull(row.owner_id),
       };

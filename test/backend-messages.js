@@ -255,6 +255,16 @@ test('deck append batches are bounded and copied after validating every referenc
   assert.equal(deckAppendPayload({ fronts: ['/one', 'bad'] }, { max: 2, refOk }), null);
   assert.equal(deckAppendPayload({ fronts: ['/one', '/two', '/three'] }, { max: 2, refOk }), null);
   assert.equal(deckAppendPayload({ fronts: ['/one', '/two'] }, { maxBytes: 5, refOk }), null);
+  // per-tile back pairs: a { front, back } entry rides alongside bare fronts
+  assert.deepEqual(
+    deckAppendPayload({ fronts: ['/a', { front: '/b', back: '/bb' }] }, { max: 2, refOk }),
+    { fronts: ['/a', { front: '/b', back: '/bb' }] },
+  );
+  assert.equal(
+    deckAppendPayload({ fronts: [{ front: '/b', back: 'bad' }] }, { max: 2, refOk }),
+    null,
+  );
+  assert.equal(deckAppendPayload({ fronts: [{ front: '/b', extra: 1 }] }, { max: 2, refOk }), null);
 });
 
 test('board records accept only known built-ins or bounded local asset geometry', () => {
@@ -306,7 +316,14 @@ test('deck draft boundaries validate geometry, finish flags, names, and edit ids
   assert.deepEqual(deckBeginPayload({ back: '/back', geom: { w: 2 } }, { refOk, sanitizeGeom }), {
     back: '/back',
     geom: { w: 2, h: 3 },
+    open: false,
   });
+  assert.deepEqual(deckBeginPayload({ back: '/back', open: true }, { refOk, sanitizeGeom }), {
+    back: '/back',
+    geom: null,
+    open: true,
+  });
+  assert.equal(deckBeginPayload({ back: '/back', open: 'yes' }, { refOk, sanitizeGeom }), null);
   assert.equal(deckBeginPayload({ back: 2 }, { refOk, sanitizeGeom }), null);
   assert.deepEqual(deckFinishPayload({ name: ' Deck ', spawn: false, editId: '4' }), {
     name: 'Deck',

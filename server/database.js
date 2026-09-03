@@ -30,28 +30,38 @@ export function createDatabase(pool) {
   async function getDeck(id) {
     return library.getDeck(id);
   }
-  function insertDeck({ name, back, fronts, geom = null, ownerId = null, isPublic = false }) {
+  // The deck's props JSON: shared back, optional card geometry, and `open` for a double-sided
+  // (turn-over) tile set. `cards` may hold bare front refs or { front, back } pairs (per-tile backs).
+  function deckProps(back, geom, open) {
+    const props = { back };
+    if (geom) props.geom = geom;
+    if (open) props.open = true;
+    return JSON.stringify(props);
+  }
+  function insertDeck({
+    name,
+    back,
+    fronts,
+    geom = null,
+    open = false,
+    ownerId = null,
+    isPublic = false,
+  }) {
     return pool
       .query(
         "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
-        [
-          name,
-          JSON.stringify(fronts),
-          JSON.stringify(geom ? { back, geom } : { back }),
-          ownerId,
-          isPublic,
-        ],
+        [name, JSON.stringify(fronts), deckProps(back, geom, open), ownerId, isPublic],
       )
       .then((r) => String(r.rows[0].id));
   }
-  // Update an existing deck in place (name + cards + back + optional card geometry), keeping owner + public flag.
-  function updateDeck(id, name, back, fronts, geom = null) {
+  // Update an existing deck in place (name + cards + back + optional geometry/open), keeping owner + public flag.
+  function updateDeck(id, name, back, fronts, geom = null, open = false) {
     return pool
       .query('UPDATE custom_decks SET name = $2, cards = $3, props = $4 WHERE id = $1', [
         id,
         name,
         JSON.stringify(fronts),
-        JSON.stringify(geom ? { back, geom } : { back }),
+        deckProps(back, geom, open),
       ])
       .then((r) => r.rowCount > 0);
   }

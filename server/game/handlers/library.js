@@ -50,7 +50,12 @@ export function registerLibraryHandlers(
     if (!room.isAdmin(client)) return;
     const msg = deckBeginPayload(message, { refOk, sanitizeGeom });
     if (!msg) return;
-    room.drafts.set(client.sessionId, { back: msg.back, cards: [], geom: msg.geom });
+    room.drafts.set(client.sessionId, {
+      back: msg.back,
+      cards: [],
+      geom: msg.geom,
+      open: msg.open,
+    });
   });
 
   tableMessage('deckAppend', (client, message) => {
@@ -69,17 +74,24 @@ export function registerLibraryHandlers(
     room.drafts.delete(client.sessionId);
     if (!draft || !draft.cards.length) return;
     const geo = draft.geom ? { geom: draft.geom } : {};
+    const openProp = draft.open ? { open: true } : {};
     if (msg.spawn)
-      room.spawn('deck', randomPosition(), { back: draft.back, cards: draft.cards, ...geo });
+      room.spawn('deck', randomPosition(), {
+        back: draft.back,
+        cards: draft.cards,
+        ...geo,
+        ...openProp,
+      });
     if (!msg.name) return;
     if (msg.editId) {
-      await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom);
+      await db.updateDeck(msg.editId, msg.name, draft.back, draft.cards, draft.geom, draft.open);
     } else {
       await db.insertDeck({
         name: msg.name,
         back: draft.back,
         fronts: draft.cards,
         geom: draft.geom,
+        open: draft.open,
         ownerId: client.auth.userId,
         isPublic: false,
       });
@@ -106,6 +118,7 @@ export function registerLibraryHandlers(
       back: deck.back,
       cards: deck.fronts,
       ...(deck.geom ? { geom: deck.geom } : {}),
+      ...(deck.open ? { open: true } : {}),
     });
   });
 

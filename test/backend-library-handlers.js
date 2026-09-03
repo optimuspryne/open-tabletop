@@ -120,10 +120,30 @@ test('deck drafts are assembled in chunks and persisted by the finish handler', 
     back: '/back',
     fronts: ['/one', '/two'],
     geom: null,
+    open: false,
     ownerId: 'user-1',
     isPublic: false,
   });
   assert.equal(calls.at(-1).name, 'sendAssetList');
+});
+
+test('a double-sided tile set carries open + per-tile backs through begin/append/finish', async () => {
+  const { handlers, calls } = harness();
+  const user = client();
+  await handlers.get('deckBegin')(user, { back: '/cover', open: true });
+  await handlers.get('deckAppend')(user, {
+    fronts: ['/plain', { front: '/treeFront', back: '/treeBack' }],
+  });
+  await handlers.get('deckFinish')(user, { name: 'Forageables', spawn: true });
+
+  assert.deepEqual(calls.find(({ name }) => name === 'spawn').args, [
+    'deck',
+    [1, 2, 3],
+    { back: '/cover', cards: ['/plain', { front: '/treeFront', back: '/treeBack' }], open: true },
+  ]);
+  const insert = calls.find(({ name }) => name === 'insertDeck').args[0];
+  assert.equal(insert.open, true);
+  assert.deepEqual(insert.fronts, ['/plain', { front: '/treeFront', back: '/treeBack' }]);
 });
 
 test('non-admin clients cannot curate or inspect private library records', async () => {
