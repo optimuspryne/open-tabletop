@@ -1,4 +1,4 @@
-import { takeTopCard } from '../../deck-state.js';
+import { cardBackRef, takeTopCard } from '../../deck-state.js';
 import {
   deckDragPayload,
   deckIdPayload,
@@ -195,6 +195,7 @@ export function registerCardHandlers(
     }
     const cards = room.deckCards.get(deckId);
     if (cards && cards.length === 0) room.removePiece(deckId);
+    else syncOpenCover(room, deckId); // the peeked tile left the top → repaint an open set's cover
   });
 
   cardMessage('shuffle', (client, message) => {
@@ -204,6 +205,7 @@ export function registerCardHandlers(
     const cards = room.deckCards.get(deckId);
     if (!cards) return;
     shuffle(cards);
+    syncOpenCover(room, deckId); // a new tile is on top → repaint an open set's cover
     room.broadcast('shuffled', { id: deckId });
   });
 
@@ -222,6 +224,7 @@ export function registerCardHandlers(
     const bottom = cards.splice(Math.floor(cards.length / 2));
     deck.count = cards.length;
     room.updateDeckCollider(deckId);
+    syncOpenCover(room, deckId); // the source stack lost its top half → repaint its cover
     const position = room.bodies.get(deckId)?.position || { x: 0, z: 0 };
     room.spawn('deck', [position.x + 2.2, spawnY, position.z], {
       back: props.back || 'back',
@@ -280,5 +283,26 @@ export function registerCardHandlers(
 
 function finishDraw(room, deckId, empty) {
   if (empty) room.removePiece(deckId);
-  else room.updateDeckCollider(deckId);
+  else {
+    room.updateDeckCollider(deckId);
+    syncOpenCover(room, deckId); // the top tile changed → repaint the stack's visible cover
+  }
+}
+
+// An OPEN tile set shows its current top tile's back as the stack cover; keep that in sync as the
+// top changes (draw / shuffle / combine). Writes props (→ every client rebuilds the deck) only when
+// the cover actually changes, and only for open decks. No-op for secret decks and bare-back stacks.
+function syncOpenCover(room, deckId) {
+  const piece = room.state.pieces.get(deckId);
+  if (!piece) return;
+  const props = readProps(piece);
+  if (!props.open) return;
+  const cards = room.deckCards.get(deckId);
+  if (!cards || !cards.length) return;
+  const cover = cardBackRef(cards[cards.length - 1]); // the top tile's own back (undefined → shared)
+  const next = cover ?? props.back;
+  if ((props.cover ?? props.back) === next) return; // nothing to repaint
+  if (cover) props.cover = cover;
+  else delete props.cover;
+  writeProps(piece, props);
 }

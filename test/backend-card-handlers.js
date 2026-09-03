@@ -367,3 +367,39 @@ test('drawing to hand from an open deck carries the open flag', () => {
 
   assert.equal(events.find((e) => e.name === 'hand').payload.open, true);
 });
+
+test("an open tile set's cover follows the new top tile as tiles are drawn", () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('9', {
+    type: 'deck',
+    props: JSON.stringify({ back: 'plain', open: true, cover: 'b2' }),
+  });
+  room.deckCards.set('9', [
+    { front: 'f1', back: 'b1' },
+    { front: 'f2', back: 'b2' }, // the current top (drawn first)
+  ]);
+
+  handlers.get('dealToTable')(client, { deckId: '9' });
+
+  const dp = JSON.parse(room.state.pieces.get('9').props);
+  assert.equal(dp.cover, 'b1'); // the newly-exposed top tile's back
+});
+
+test("shuffling repaints an open set's cover to the new top; a secret deck stays coverless", () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('9', {
+    type: 'deck',
+    props: JSON.stringify({ back: 'plain', open: true, cover: 'b2' }),
+  });
+  room.deckCards.set('9', [
+    { front: 'f1', back: 'b1' },
+    { front: 'f2', back: 'b2' },
+  ]);
+  handlers.get('shuffle')(client, { deckId: '9' }); // mock shuffle reverses → top becomes b1
+  assert.equal(JSON.parse(room.state.pieces.get('9').props).cover, 'b1');
+
+  room.state.pieces.set('s', { type: 'deck', props: JSON.stringify({ back: 'secret' }) });
+  room.deckCards.set('s', ['x', 'y']);
+  handlers.get('shuffle')(client, { deckId: 's' });
+  assert.equal('cover' in JSON.parse(room.state.pieces.get('s').props), false); // never revealed
+});

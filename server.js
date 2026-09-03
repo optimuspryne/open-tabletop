@@ -944,7 +944,11 @@ class TableRoom extends Room {
         deckProps.model = deckData.deckModel; // an optional 3D box/bag/pouch skin
       if (props.color != null) deckProps.color = props.color; // skin tints (pouch: bag / string)
       if (props.textColor != null) deckProps.textColor = props.textColor;
-      if (props.open) deckProps.open = true; // a deck of double-sided tiles → dealt tiles turn over
+      if (props.open) {
+        deckProps.open = true; // a deck of double-sided tiles → dealt tiles turn over
+        const topBack = cardBackRef(deckData.cards[deckData.cards.length - 1]);
+        if (topBack) deckProps.cover = topBack; // its visible top face follows the current top tile
+      }
       writeProps(piece, deckProps);
     } else if (type === 'dispenser') {
       const d = DISPENSERS[props.disp] || {};

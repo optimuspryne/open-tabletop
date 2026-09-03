@@ -1640,14 +1640,17 @@ function deckMesh(props = {}) {
   // The top/bottom caps carry the back art. For a rect deck, alpha-cut to the same rounded corner as
   // the card mesh (footprint matches, so radius/W == g.round) so a transparent corner is discarded, not
   // rendered as a dark chunk. For a hex deck the GEOMETRY is the silhouette, so just alpha-test the art.
+  // `cover` is the stack's visible top face; for an open tile set the server keeps it pointed at the
+  // CURRENT top tile's back (so it changes as tiles are drawn), falling back to the shared back.
+  const coverRef = props.cover ?? props.back;
   const back = hex
     ? new THREE.MeshStandardMaterial({
-        map: resolveTexture(props.back),
+        map: resolveTexture(coverRef),
         alphaTest: 0.5,
         roughness: 0.6,
       })
     : new THREE.MeshStandardMaterial({
-        map: resolveTexture(props.back),
+        map: resolveTexture(coverRef),
         alphaMap: roundMask(g.hw, g.hh, g.round),
         alphaTest: 0.4,
         roughness: 0.6,
