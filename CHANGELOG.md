@@ -53,6 +53,14 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   different back (the Stardew fish tiles) shows a real card on top instead of a generic
   placeholder. Concealed (non-open) decks never reveal a top this way, and a pouch hides the top
   entirely.
+- **Player mats — a surface your pieces sit on.** A new **Player Mats** tab under *Add to Library*
+  turns an image into a large, flat, single-faced board that tiles and pieces physically **rest
+  on** — the per-player profession mats a game like Stardew Valley hands out. Upload the art, name
+  it, pick a **size**, and Save (or Save + Spawn); it lands as a big slab you drag in front of
+  whichever player you like, and saves to your library to reuse in every room. A mat drags to
+  reposition but is otherwise inert — no flip, no take-to-hand, no flinging it across the table —
+  and it's heavy and lies flat, so a stack dropped on it settles on top instead of shoving it
+  around. It's its own piece (not the table board), so every seat can have one at once.
 
 ## [0.14.0] — 2026-09-02
 

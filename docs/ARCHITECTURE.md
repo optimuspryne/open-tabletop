@@ -344,6 +344,12 @@ The kinds:
   registry), an uploaded `.glb`, a **procedural** board drawn from data (a
   `BOARD_PAINTERS` painter, e.g. the word grid), or a plain flat box with an optional
   image. One board at a time; it's sat on the table by its half-height.
+- **mat** — a player mat: a large, single-faced, **movable** SURFACE that tiles and pieces rest on
+  (per-player profession boards). Unlike the singleton `board`, every seat can have one. It reuses
+  the tile image/geometry pipeline — `cardGeom`/`cardMesh`'s solid-slab path + the card box collider
+  (a real flat top) — at a far larger size (`sanitizeMatGeom`), with heavier mass, high damping, no
+  fling, and no card verbs, always lying flat. Stored in its own `custom_mats` library table
+  (image + geom); spawned via `loadMat`/`saveMat`.
 
 Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
 card faces, checkerboard, player markers), created through a helper that applies

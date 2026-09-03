@@ -180,8 +180,10 @@ Pure constants and helpers imported by both sides.
 - **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
   `boardEdge`, `ivory`, `ink`, `felt[dark,light]`, and `team {checker, go,
 chess}` each `[color0, color1]`.
-- **`KINDS`** `{ die, card, prop, deck, board }` — physics half `{ mass, shape }`.
-  `shape` is `'die'`, `'prop'`, or `{ box:[hx,hy,hz] }`. `mass:0` ⇒ static.
+- **`KINDS`** `{ die, card, prop, deck, board, dispenser, mat }` — physics half `{ mass, shape }`.
+  `shape` is `'die'`, `'prop'`, `'dispenser'`, `'mat'`, or `{ box:[hx,hy,hz] }`. `mass:0` ⇒ static.
+  `mat` is a large single-faced SURFACE others rest on (a player mat) — heavy + movable + inert; its
+  collider reuses the card branch (a solid box from `props.geom`).
 - **`DECK_VISUAL`** / **`CARD_ROUND`** — deck box unit + card corner radius.
 - **`PROPS`** `{ shapeId → spec }`. A spec has `mass`, `collider`
   (`{ box:[hx,hy,hz], type? }` — `type` is `sphere`/`cylinder`/`cone`/`flat`,
@@ -234,9 +236,10 @@ chess}` each `[color0, color1]`.
 - **`geomFromImage(pw, ph, round?) → geom`** — size a fit-to-image card to its art's pixel
   aspect (longer side = the card's length), keeping card thickness and the corner radius
   measured from the art's alpha.
-- **`sanitizeGeom(g) → geom | null`** — clamp/validate an uploaded `geom` (bounds on
-  `w,h,t,round`, carries `shape`); `null` if unusable. Applied server-side before a deck's
-  geometry is trusted.
+- **`sanitizeGeom(g, { maxWH, maxT }?) → geom | null`** — clamp/validate an uploaded `geom` (bounds
+  on `w,h,t,round`, carries `shape`); `null` if unusable. Applied server-side before a deck's
+  geometry is trusted. **`sanitizeMatGeom(g)`** is the same with a raised cap (`MAT_MAX_HALF` = 9
+  half-extents vs a card's 3) for a player mat's much larger footprint.
 - **`dieVerts(sides, radius?) → number[][] | null`** — polyhedron vertices scaled
   to `radius`; `null` for d6. One input for mesh (client) and collider (server).
 - **`timerLive(t, now) → ms`** — the shared timer's current value from its synced
