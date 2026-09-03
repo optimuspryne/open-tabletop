@@ -16,3 +16,11 @@ export function takeTopCard(deck, cards) {
   deck.count = cards.length;
   return { front: cardFrontRef(entry), back: cardBackRef(entry), empty: cards.length === 0 };
 }
+
+// The deck entry a dropped/absorbed card should rejoin as. A per-tile back that DIFFERS from the
+// deck's shared back (a double-sided tile's own face, or a mixed-back stack) is preserved as a
+// { front, back } pair so re-drawing shows the same face; otherwise a bare front (it shares the
+// deck's back anyway). `sharedBack` is the deck's own `back` prop.
+export function absorbedEntry(front, cardBack, sharedBack) {
+  return cardBack && cardBack !== sharedBack ? { front, back: cardBack } : front;
+}

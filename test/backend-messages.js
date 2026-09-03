@@ -42,7 +42,7 @@ import {
   timerPayload,
   whiteboardStroke,
 } from '../server/message-validation.js';
-import { takeTopCard } from '../server/deck-state.js';
+import { absorbedEntry, takeTopCard } from '../server/deck-state.js';
 
 test('movement accepts finite numeric coordinates without coercion', () => {
   assert.deepEqual(finitePosition({ x: 1, y: -2.5, z: 0 }), { x: 1, y: -2.5, z: 0 });
@@ -522,6 +522,20 @@ test('drawing an object entry returns its per-tile back', () => {
     empty: false,
   });
   assert.deepEqual(takeTopCard(deck, cards), { front: 'plainFront', back: undefined, empty: true });
+});
+
+test('absorbedEntry preserves a per-tile back but not one that just repeats the shared back', () => {
+  // A double-sided tile / mixed-back stack: back differs from the deck's shared back → keep it.
+  assert.deepEqual(absorbedEntry('treeFront', 'treeBack', 'seasonBack'), {
+    front: 'treeFront',
+    back: 'treeBack',
+  });
+  // A card whose back is just the deck's shared back rejoins as a bare front.
+  assert.equal(absorbedEntry('f', 'seasonBack', 'seasonBack'), 'f');
+  // No per-tile back at all → bare front.
+  assert.equal(absorbedEntry('f', undefined, 'seasonBack'), 'f');
+  // A per-tile back on a deck with no shared back is still preserved.
+  assert.deepEqual(absorbedEntry('f', 'myBack', undefined), { front: 'f', back: 'myBack' });
 });
 
 test('drawing rejects missing, empty, and non-deck state without mutation', () => {

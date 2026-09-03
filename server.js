@@ -55,7 +55,7 @@ import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
-import { cardBackRef, cardFrontRef } from './server/deck-state.js';
+import { absorbedEntry, cardBackRef, cardFrontRef } from './server/deck-state.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
@@ -1472,9 +1472,25 @@ class TableRoom extends Room {
           Math.abs(body.position.x - deckBody.position.x) < SIM.absorb.x &&
           Math.abs(body.position.z - deckBody.position.z) < SIM.absorb.z;
         if (onDeck) {
-          const front = (this.cardData.get(id) || {}).front || readProps(piece).front;
-          if (front) cards.push(front);
-          this.state.pieces.get(deckId).count = cards.length;
+          const cp = readProps(piece);
+          const deckPiece = this.state.pieces.get(deckId);
+          const deckProps = readProps(deckPiece);
+          const front = (this.cardData.get(id) || {}).front || cp.front;
+          // Preserve a per-tile back (a double-sided tile's own face, or a mixed-back stack) so
+          // re-drawing shows the SAME back, not the deck's shared cover; a card whose back is just
+          // the deck's shared back rejoins as a bare front.
+          if (front) cards.push(absorbedEntry(front, cp.back, deckProps.back));
+          deckPiece.count = cards.length;
+          // The absorbed tile is the new top → repaint an open set's cover (mirrors syncOpenCover).
+          if (deckProps.open) {
+            const topBack = cardBackRef(cards[cards.length - 1]);
+            const next = topBack ?? deckProps.back;
+            if ((deckProps.cover ?? deckProps.back) !== next) {
+              if (topBack) deckProps.cover = topBack;
+              else delete deckProps.cover;
+              writeProps(deckPiece, deckProps);
+            }
+          }
           this.updateDeckCollider(deckId);
           this.removePiece(id);
           break;
