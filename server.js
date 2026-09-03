@@ -38,6 +38,7 @@ import {
   STARTERS,
   cardGeom,
   sanitizeGeom,
+  sanitizeMatGeom,
   seatAngle,
   SEAT_ANGLES,
   LETTER_DIST,
@@ -137,8 +138,8 @@ const PERF_LOG = process.env.PERF_LOG === '1';
 // Because filenames are random and the .json metadata is never served, a card
 // front that's meant to stay hidden can't be discovered by poking at /assets.
 const ASSETS_DIR = process.env.ASSETS_DIR || './saved-assets';
-const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props', 'sky', 'dice'];
-const LIBRARY_KINDS = ['deck', 'board', 'prop', 'scene', 'sky', 'dice'];
+const ASSET_KINDS = ['uploads', 'decks', 'boards', 'props', 'sky', 'dice', 'mats'];
+const LIBRARY_KINDS = ['deck', 'board', 'prop', 'scene', 'sky', 'dice', 'mat'];
 for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recursive: true });
 
 // Clamp a number into [min, max].
@@ -707,6 +708,7 @@ class TableRoom extends Room {
       libraryKinds: LIBRARY_KINDS,
       refOk: deckRefOk,
       sanitizeGeom,
+      sanitizeMatGeom,
       deckModels: Object.keys(DECK_MODELS),
       randomPosition: rnd,
       sceneMaxBytes: SCENE_MAX_BYTES,
@@ -897,7 +899,7 @@ class TableRoom extends Room {
     // An exact orientation (scene load) wins; otherwise dice/props tumble, boards/decks stay flat.
     if (quat && quat.length === 4) {
       body.quaternion.set(quat[0], quat[1], quat[2], quat[3]);
-    } else if (KINDS[type].mass > 0 && type !== 'deck' && type !== 'dispenser') {
+    } else if (KINDS[type].mass > 0 && type !== 'deck' && type !== 'dispenser' && type !== 'mat') {
       body.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
     }
     // Cards get their own damping/sleep tuning so stacks settle nicely.
@@ -906,6 +908,9 @@ class TableRoom extends Room {
       body.linearDamping = SIM.cards.linDamp;
       body.sleepSpeedLimit = SIM.cards.sleepSpeed;
       body.sleepTimeLimit = SIM.cards.sleepTime;
+    } else if (type === 'mat') {
+      body.angularDamping = SIM.damp.flat; // stays level
+      body.linearDamping = 0.6; // a heavy surface — resting pieces / bumps don't shove it
     } else {
       body.angularDamping = type === 'deck' ? SIM.damp.flat : SIM.damp.solid;
     }
@@ -1271,14 +1276,14 @@ class TableRoom extends Room {
   standOf(piece) {
     const props = readProps(piece);
     if (props.stand !== undefined) return props.stand; // per-instance override (the U-key toggle)
-    if (piece.type === 'deck' || piece.type === 'dispenser') return 'flat'; // stacks/bowls settle flat
+    if (piece.type === 'deck' || piece.type === 'dispenser' || piece.type === 'mat') return 'flat'; // stacks/bowls/mats settle flat
     return (PROPS[props.shape] || {}).stand; // else the prop shape's default
   }
   // Which mode to switch a piece INTO when the toggle turns self-right on. Uses
   // the shape's declared default, or infers "flat" when the collider is thin on Y
   // (so a coin/checker lies down) and "stand tall" otherwise.
   naturalStand(piece) {
-    if (piece.type === 'deck' || piece.type === 'dispenser') return 'flat';
+    if (piece.type === 'deck' || piece.type === 'dispenser' || piece.type === 'mat') return 'flat';
     const props = readProps(piece),
       spec = PROPS[props.shape] || {};
     if (spec.stand) return spec.stand;
@@ -1646,6 +1651,7 @@ class TableRoom extends Room {
       scene: ['sceneList', () => db.listScenes({ includePrivate })],
       sky: ['skyList', () => db.listSkyboxes({ includePrivate })],
       dice: ['diceList', () => db.listDice({ includePrivate })],
+      mat: ['matList', () => db.listMats({ includePrivate })],
     }[kind];
     if (!config) return false;
     const list = await config[1]();

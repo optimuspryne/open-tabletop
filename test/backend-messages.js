@@ -30,6 +30,7 @@ import {
   recolorPayload,
   reorderHandPayload,
   saveBoardPayload,
+  saveMatPayload,
   savePropPayload,
   saveSkyboxPayload,
   saveDicePayload,
@@ -372,6 +373,50 @@ test('deck draft boundaries validate geometry, finish flags, names, and edit ids
   });
   assert.equal(deckFinishPayload({ name: 'Deck', spawn: 'no' }), null);
   assert.equal(deckFinishPayload({ spawn: false, editId: '4' }), null);
+});
+
+test('saveMatPayload validates the image, geometry, name, spawn flag, and editId', () => {
+  const sanitizeGeom = (g) =>
+    g && g.w === 5 ? { w: 5, h: 3, t: 0.06, round: 0.04, shape: 'rect' } : null;
+  const geom = { w: 5, h: 3 };
+  assert.deepEqual(
+    saveMatPayload({ name: ' Mining ', tex: '/assets/mats/a.jpg', geom }, { sanitizeGeom }),
+    {
+      name: 'Mining',
+      tex: '/assets/mats/a.jpg',
+      geom: { w: 5, h: 3, t: 0.06, round: 0.04, shape: 'rect' },
+      spawn: true,
+      editId: null,
+    },
+  );
+  // spawn:false + editId round-trip (an in-place update)
+  assert.deepEqual(
+    saveMatPayload(
+      { name: 'M', tex: '/assets/mats/a.jpg', geom, spawn: false, editId: '7' },
+      { sanitizeGeom },
+    ),
+    {
+      name: 'M',
+      tex: '/assets/mats/a.jpg',
+      geom: { w: 5, h: 3, t: 0.06, round: 0.04, shape: 'rect' },
+      spawn: false,
+      editId: '7',
+    },
+  );
+  // rejections: off-origin image, unusable geom, empty name, unknown key
+  assert.equal(saveMatPayload({ name: 'M', tex: 'http://x/a.jpg', geom }, { sanitizeGeom }), null);
+  assert.equal(
+    saveMatPayload({ name: 'M', tex: '/assets/mats/a.jpg', geom: { w: 1 } }, { sanitizeGeom }),
+    null,
+  );
+  assert.equal(
+    saveMatPayload({ name: '  ', tex: '/assets/mats/a.jpg', geom }, { sanitizeGeom }),
+    null,
+  );
+  assert.equal(
+    saveMatPayload({ name: 'M', tex: '/assets/mats/a.jpg', geom, huh: 1 }, { sanitizeGeom }),
+    null,
+  );
 });
 
 test('save and spawn payloads reject unknown nested fields and unsupported types', () => {

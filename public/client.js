@@ -1456,6 +1456,9 @@ function rebuildGrid() {
   room.onMessage('boardList', (boards) => {
     if (window.onLibraryList) window.onLibraryList('board', boards);
   });
+  room.onMessage('matList', (mats) => {
+    if (window.onLibraryList) window.onLibraryList('mat', mats);
+  });
   document.querySelectorAll('.selectTool').forEach((b) => (b.onclick = () => setSelMode(!selMode))); // Select tool: felt-drag boxes a selection
   // (the #selSwatches row is built per-selection by refreshSelTools — it depends on what's selected)
   document.querySelectorAll('.rollBtn').forEach((b) => (b.onclick = () => openTray())); // Dice Box (both corners): hops to YOUR tray (placing it if it isn't out)
@@ -3216,7 +3219,8 @@ const endGesture = (e) => {
   }
   if (!down) return;
   if (down.grabbed) {
-    const throwVector = down.kind.grab === 2 ? [0, 0, 0] : [throwVel.x, throwVel.y, throwVel.z]; // decks don't fly
+    const throwVector =
+      down.kind.grab === 2 || down.kind.heavy ? [0, 0, 0] : [throwVel.x, throwVel.y, throwVel.z]; // decks & mats don't fly
     if (down.group) room.send('releaseGroup', { v: throwVector });
     else room.send('release', { id: down.id, v: throwVector });
   } else if (!down.dragging) {
@@ -5610,7 +5614,7 @@ function pieceMenuItems(id, type) {
   if (INSPECTABLE(type)) {
     items.push(['Inspect', () => enterInspect(id)]);
   }
-  items.push(['Stand / lay flat', () => room.send('setStand', { id })]);
+  if (type !== 'mat') items.push(['Stand / lay flat', () => room.send('setStand', { id })]); // a mat is always flat
   items.push(['Snap to grid', () => room.send('setSnap', { id })]);
   items.push(['Delete', () => room.send('remove', { id }), 'danger']);
   return items;

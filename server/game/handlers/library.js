@@ -10,6 +10,7 @@ import {
   oneField,
   saveBoardPayload,
   saveDicePayload,
+  saveMatPayload,
   savePropPayload,
   saveSkyboxPayload,
 } from '../../message-validation.js';
@@ -32,6 +33,7 @@ export function registerLibraryHandlers(
     libraryKinds,
     refOk,
     sanitizeGeom,
+    sanitizeMatGeom,
     deckModels,
     randomPosition,
     sceneMaxBytes,
@@ -152,6 +154,26 @@ export function registerLibraryHandlers(
     await room.sendAssetList(client, 'board');
   });
   assetMessage('listBoards', (client) => room.sendAssetList(client, 'board'));
+
+  assetMessage('saveMat', async (client, message) => {
+    if (!room.isAdmin(client)) return;
+    const msg = saveMatPayload(message, { sanitizeGeom: sanitizeMatGeom });
+    if (!msg) return;
+    const rec = { tex: msg.tex, geom: msg.geom };
+    if (msg.editId) await db.updateMat(msg.editId, msg.name, rec);
+    else await db.insertMat(msg.name, rec, { ownerId: client.auth.userId });
+    if (msg.spawn) room.spawn('mat', randomPosition(), { geom: msg.geom, front: msg.tex });
+    await room.sendAssetList(client, 'mat');
+  });
+  assetMessage('listMats', (client) => room.sendAssetList(client, 'mat'));
+  assetMessage('loadMat', async (client, message) => {
+    if (room.rank(client) < RANK.helper) return;
+    const msg = assetIdPayload(message);
+    if (!msg) return;
+    const mat = await db.getMat(msg.id);
+    if (!mat || (!mat.isPublic && !room.isAdmin(client)) || !mat.geom || !mat.tex) return;
+    room.spawn('mat', randomPosition(), { geom: mat.geom, front: mat.tex });
+  });
 
   assetMessage('saveProp', async (client, message) => {
     if (!room.isAdmin(client)) return;

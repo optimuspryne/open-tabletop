@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 12); // 001–012 (012 = custom_dice)
+  assert.equal(migrations.rows.length, 13); // 001–013 (013 = player mats)
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -92,6 +92,32 @@ test('library writes, reads, updates, and deletes use real constraints and JSON'
   assert.equal((await database.getDeck(id)).name, 'Updated Deck');
   await database.deleteAsset('deck', id);
   assert.equal(await database.getDeck(id), null);
+
+  // Player mats: image + geom round-trip through custom_mats.
+  const matGeom = { w: 5, h: 3, t: 0.06, round: 0.04, shape: 'rect' };
+  const matId = await database.insertMat(
+    'Integration Mat',
+    { tex: '/assets/mats/m.jpg', geom: matGeom },
+    { isPublic: true },
+  );
+  const mat = await database.getMat(matId);
+  assert.equal(mat.name, 'Integration Mat');
+  assert.equal(mat.tex, '/assets/mats/m.jpg');
+  assert.deepEqual(mat.geom, matGeom);
+  assert.equal(mat.isPublic, true);
+  assert.equal(
+    await database.updateMat(matId, 'Updated Mat', {
+      tex: '/assets/mats/m2.jpg',
+      geom: { ...matGeom, w: 6 },
+    }),
+    true,
+  );
+  const updatedMat = await database.getMat(matId);
+  assert.equal(updatedMat.name, 'Updated Mat');
+  assert.equal(updatedMat.geom.w, 6);
+  assert.ok((await database.listMats({ includePrivate: true })).some((m) => m.id === matId));
+  await database.deleteAsset('mat', matId);
+  assert.equal(await database.getMat(matId), null);
 });
 
 test('case-insensitive user uniqueness is enforced by PostgreSQL', async () => {

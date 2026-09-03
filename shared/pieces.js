@@ -37,6 +37,7 @@ export const KINDS = {
   deck: { mass: 0.5, shape: { box: [0.78, 0.04, 1.08] } }, // thin puck; grows via updateDeckCollider
   board: { mass: 0, shape: { box: [4.0, 0.05, 4.0] } },
   dispenser: { mass: 0.5, shape: 'dispenser' }, // hands out copies of a child piece; collider from DISPENSERS
+  mat: { mass: 4, shape: 'mat' }, // a large single-faced surface others rest on; collider from cardGeom (props.geom)
 };
 
 // --- Deck -------------------------------------------------------------------
@@ -106,20 +107,23 @@ export function geomFromImage(pw, ph, round) {
 }
 // Bound a client-supplied card geometry to sane table sizes, or null if unusable. Trusted before a
 // geom is stored on a deck/card.
-export function sanitizeGeom(g) {
+export function sanitizeGeom(g, { maxWH = 3, maxT = 0.4 } = {}) {
   if (!g || typeof g !== 'object') return null;
   const clampNum = (v, lo, hi) => {
     v = +v;
     return Number.isFinite(v) && v >= lo && v <= hi ? v : null;
   };
-  const w = clampNum(g.w, 0.1, 3),
-    h = clampNum(g.h, 0.1, 3);
+  const w = clampNum(g.w, 0.1, maxWH),
+    h = clampNum(g.h, 0.1, maxWH);
   if (w == null || h == null) return null;
-  const t = clampNum(g.t, 0.005, 0.4) ?? TILES.card.t;
+  const t = clampNum(g.t, 0.005, maxT) ?? TILES.card.t;
   const round = clampNum(g.round, 0, 0.5) ?? TILES.card.round;
   const shape = g.shape === 'hex' ? 'hex' : 'rect';
   return { w, h, t, round, shape };
 }
+// A player MAT's geometry cap — a large flat surface others rest on, so far bigger than a card.
+export const MAT_MAX_HALF = 9; // half-extent cap — covers the 8x size slider (8 x 1.05 card-length = 8.4)
+export const sanitizeMatGeom = (g) => sanitizeGeom(g, { maxWH: MAT_MAX_HALF, maxT: 0.4 });
 // Deck stack height from card count — used by BOTH the client visual and the
 // server collider, so a flipped deck has a solid body where it's drawn.
 export const deckHeight = (c) => Math.max(0.06, Math.min(1.2, c * 0.02));

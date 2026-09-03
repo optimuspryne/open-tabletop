@@ -110,6 +110,34 @@ export function createDatabase(pool) {
       .then((r) => r.rowCount > 0);
   }
 
+  // ===== Player mats ==========================================================
+  // A mat is a single reusable image + its sized geometry. file_url = the mat image;
+  // props = { geom }. Spawned as a `mat` piece (a large surface, NOT the singleton board).
+  async function listMats({ includePrivate = false } = {}) {
+    return library.listMats({ includePrivate });
+  }
+  async function getMat(id) {
+    return library.getMat(id);
+  }
+  function insertMat(name, { tex, geom }, { ownerId = null, isPublic = false } = {}) {
+    return pool
+      .query(
+        'INSERT INTO custom_mats (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [name, tex, JSON.stringify({ geom }), ownerId, isPublic],
+      )
+      .then((r) => String(r.rows[0].id));
+  }
+  function updateMat(id, name, { tex, geom }) {
+    return pool
+      .query('UPDATE custom_mats SET name = $2, file_url = $3, props = $4 WHERE id = $1', [
+        id,
+        name,
+        tex,
+        JSON.stringify({ geom }),
+      ])
+      .then((r) => r.rowCount > 0);
+  }
+
   // ===== Props (custom model objects) ==========================================
   // A prop is always a .glb model: file_url = the model URL; props = the rest
   // ({ box, stand, scale, color? }). Reads splice model back in for spawning.
@@ -215,6 +243,7 @@ export function createDatabase(pool) {
     scene: 'custom_scenes',
     sky: 'custom_skyboxes',
     dice: 'custom_dice',
+    mat: 'custom_mats',
   };
   function setAssetPublic(kind, id, isPublic) {
     const table = ASSET_TABLE[kind];
@@ -572,6 +601,10 @@ export function createDatabase(pool) {
     getBoard,
     insertBoard,
     updateBoard,
+    listMats,
+    getMat,
+    insertMat,
+    updateMat,
     listProps,
     insertProp,
     updateProp,

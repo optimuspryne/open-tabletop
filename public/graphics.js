@@ -1315,6 +1315,13 @@ function cardMesh(props = {}) {
   });
   return mesh;
 }
+// A player MAT — a large flat surface others rest on. It's a single-faced tile, so reuse cardMesh's
+// solid-slab path (its geom carries a mat-sized footprint + a slab thickness) with the image mirrored
+// onto both caps, so the mat reads the same whether it's flat or lifted.
+function matMesh(props = {}) {
+  return cardMesh({ ...props, back: props.back ?? props.front });
+}
+
 // --- Props: models (async .glb) and built-in shapes -------------------------
 
 // The color a built-in prop should render in: a fixed team color for two-sided
@@ -1935,6 +1942,7 @@ const KIND = {
   deck: { mesh: deckMesh, grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
   board: { mesh: boardMesh },
   dispenser: { mesh: dispenserMesh, grab: 2, ldrag: 'dispense', lclick: 'dispense' }, // right-drag moves; left dispenses one
+  mat: { mesh: matMesh, grab: 0, heavy: true }, // a player surface: left-drag to reposition, no click verbs, no fling
 };
 
 // ---- Table grid: a flat line grid on the felt (snap-to-grid, Phase 2) --------

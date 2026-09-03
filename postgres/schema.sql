@@ -158,8 +158,21 @@ CREATE TABLE custom_dice (
 );
 CREATE INDEX custom_dice_owner_idx ON custom_dice (owner_id);
 
+-- Player mats: a large single-faced movable SURFACE others rest on (not the singleton
+-- table board). file_url is the uploaded mat image (/assets/mats/); props carries its geom.
+CREATE TABLE custom_mats (
+  id          bigint      GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  owner_id    bigint      CONSTRAINT fk_mat_owner REFERENCES users(id),
+  name        text        NOT NULL,
+  file_url    text        NOT NULL,  -- the uploaded mat image, served from /assets/mats/
+  props       jsonb       NOT NULL DEFAULT '{}'::jsonb,  -- { geom: {w,h,t,round,shape} }
+  is_public   boolean     NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX custom_mats_owner_idx ON custom_mats (owner_id);
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–012, so record them as
+-- This baseline IS the flattened result of migrations 001–013, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -173,6 +186,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('004_host_status.sql'),   ('005_room_board.sql'), ('006_room_table.sql'),
   ('007_scenes.sql'),        ('008_room_skybox.sql'), ('009_room_state.sql'),
   ('010_room_scale.sql'),       ('011_user_sessions.sql'),
-  ('012_custom_dice.sql');
+  ('012_custom_dice.sql'), ('013_player_mats.sql');
 
 COMMIT;

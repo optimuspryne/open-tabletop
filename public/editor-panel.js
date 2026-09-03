@@ -33,11 +33,13 @@ function openEditModal(kind, it, clone) {
     id: clone ? null : it.id,
     model: kind === 'prop' ? it.props && it.props.model : it.model,
     tex: it.tex,
+    geom: it.geom,
   };
   const modal = byId('addModal');
   if (!modal) return;
   openAddModal();
-  const tab = kind === 'prop' ? 'objects' : it.model ? 'modelboards' : 'imgboards'; // boards split into two tabs
+  const tab =
+    kind === 'mat' ? 'mats' : kind === 'prop' ? 'objects' : it.model ? 'modelboards' : 'imgboards'; // boards split into two tabs
   const tb = modal.querySelector(`.libTab[data-tab="${tab}"]`);
   if (tb) tb.click(); // switch to the right tab via wireTabs
   const fill = FILLERS[kind];
@@ -671,6 +673,7 @@ const LIST_UL = {
 const spawnOf = {
   deck: (it) => ROOM.send('loadDeck', { id: it.id }),
   board: (it) => ROOM.send('loadBoard', { id: it.id }),
+  mat: (it) => ROOM.send('loadMat', { id: it.id }),
   prop: (it) => ROOM.send('spawn', { type: 'prop', props: it.props }),
 };
 
@@ -740,7 +743,7 @@ function previewEl(kind, it) {
       }
     } // cubemap → first face
     wrap.append(thumbImg(src));
-  } else if (kind === 'board') {
+  } else if (kind === 'board' || kind === 'mat') {
     fillAsync(wrap, () => boardPreviewURL(it.preview));
   } else if (kind === 'prop') {
     fillAsync(wrap, () => propPreviewURL(it.props || {}));
@@ -772,7 +775,7 @@ function renderList(kind, list, sink) {
       badgeEl(it.isPublic ? 'pub' : 'priv', it.isPublic ? 'public' : 'private'),
     );
     const isEditor = !!byId('addModal'); // Edit/Clone need the editor's Add modal — hidden at the table where clicking them does nothing
-    const canEdit = kind === 'prop' || kind === 'board' || kind === 'deck'; // objects, boards, and (limited) decks round-trip through the Add form
+    const canEdit = kind === 'prop' || kind === 'board' || kind === 'deck' || kind === 'mat'; // objects, boards, decks, mats round-trip through the Add form
     // Curation is site-admin only; GMs/helpers just spawn/apply. Edit stays inline (it is
     // how you fix an asset); everything else goes behind the overflow.
     const adminActs = window.OTT_IS_ADMIN
@@ -1133,7 +1136,7 @@ function renderBuiltin(sink) {
 // Combined library (parallel test): built-in + custom into one modal, filtered by the source toggle.
 function renderLibrary() {
   renderBuiltin((k) => byId('nlb_' + k)); // built-in kinds → nlb_* lists
-  for (const kind of ['deck', 'board', 'prop', 'sky', 'scene'])
+  for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene'])
     // custom kinds → nlc_* lists
     renderList(kind, listCache[kind] || [], (k) => byId('nlc_' + k));
 }
@@ -1744,6 +1747,88 @@ function wireAddBoard() {
   };
 }
 
+// ---- Add-to-Library: Player Mats tab (a large single-faced surface others rest on) --------------
+// A mat reuses the tile image/geometry pipeline at a much larger size + a slab thickness, saved to
+// its own reusable library and spawned as a `mat` piece (heavy, movable, inert).
+function wireAddMat() {
+  const MAT_TEX_MAX = 1600; // cap the uploaded mat image's longer side
+  const MAT_THICK = 0.06; // half-thickness: a low slab with a real top surface + a thin visible edge
+  const L = TILES.card.h; // geomFromImage maps the art's LONGER half-extent to the card length
+  const readSize = () => Math.max(2, Math.min(8, +byId('adMatSize').value || 4));
+  // Base half-extents fitted to an aspect (w:h), longer side = the card length — same as geomFromImage.
+  const fitAspect = (aspect) => (aspect >= 1 ? [L, L / aspect] : [L * aspect, L]);
+
+  byId('adMatSize').oninput = () => {
+    byId('adMatSizeVal').textContent = readSize() + '×';
+  };
+  wireUploadSq('adMatImg', false, () => {});
+
+  const clearMat = () => {
+    byId('adMatName').value = '';
+    clearSq('adMatImg');
+    byId('adMatSize').value = 4;
+    byId('adMatSizeVal').textContent = '4×';
+    editCtx = null;
+  };
+
+  const saveMat = async (spawn) => {
+    const name = byId('adMatName').value.trim();
+    if (!name) return alert('Name the mat first.');
+    const editing = !!(editCtx && editCtx.kind === 'mat');
+    const f = byId('adMatImg').files[0];
+    if (!f && !(editing && editCtx.tex)) return alert('Choose a mat image.');
+    try {
+      const size = readSize();
+      let tex, aspect;
+      if (f) {
+        const dim = await measureImage(f);
+        aspect = dim.w > 0 && dim.h > 0 ? dim.w / dim.h : 1;
+        const sc = Math.min(1, MAT_TEX_MAX / Math.max(dim.w, dim.h));
+        const uw = Math.max(1, Math.round(dim.w * sc)),
+          uh = Math.max(1, Math.round(dim.h * sc));
+        tex = await uploadImage(f, uw, uh, 'cover', 'mats');
+      } else {
+        tex = editCtx.tex; // keep the existing image; re-derive its aspect from the saved geom
+        const g = editCtx.geom || {};
+        aspect = g.w > 0 && g.h > 0 ? g.w / g.h : 1;
+      }
+      const [fw, fh] = fitAspect(aspect);
+      const geom = {
+        w: +(fw * size).toFixed(4),
+        h: +(fh * size).toFixed(4),
+        t: MAT_THICK,
+        round: 0.04,
+        shape: 'rect',
+      };
+      ROOM.send('saveMat', { name, tex, geom, spawn, editId: editCtx && editCtx.id });
+      clearMat();
+      closeAddModal();
+    } catch (e) {
+      alert('Image upload failed.');
+    }
+  };
+  byId('adMatSave').onclick = () => saveMat(false);
+  byId('adMatSpawn').onclick = () => saveMat(true);
+
+  // Pre-fill from a saved mat (Edit / Clone): name, image thumbnail, and the size slider recovered
+  // from the stored geometry (geom's longer half-extent = card length × size).
+  FILLERS.mat = (d, clone) => {
+    byId('adMatName').value = clone ? '' : d.name;
+    clearSq('adMatImg');
+    const ref = d.preview || d.tex;
+    if (ref)
+      boardPreviewURL(ref).then((u) => {
+        if (u) byId('adMatImg').parentElement.style.backgroundImage = `url("${u}")`;
+      });
+    if (d.geom) {
+      const longer = Math.max(d.geom.w || 0, d.geom.h || 0);
+      const size = longer > 0 ? Math.max(2, Math.min(8, +(longer / L).toFixed(2))) : 4;
+      byId('adMatSize').value = size;
+      byId('adMatSizeVal').textContent = size + '×';
+    }
+  };
+}
+
 // ---- Add-to-Library: object tab (uploaded .glb models) ---------------------
 function wireAddObject() {
   // saveProp inserts to the library (no spawn); Save + Spawn also drops one on the table.
@@ -1961,6 +2046,7 @@ window.onOttRoom = (room) => {
   const refresh = () => {
     room.send('listDecks');
     room.send('listBoards');
+    room.send('listMats');
     room.send('listProps');
     room.send('listScenes');
     room.send('listSkyboxes');
@@ -2035,6 +2121,7 @@ window.onOttRoom = (room) => {
     wireAddDeck();
     wireAddTiles();
     wireAddBoard();
+    wireAddMat();
     wireAddObject();
     wireAddSky();
     wireAddDice();

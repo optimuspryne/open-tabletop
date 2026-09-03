@@ -1248,6 +1248,7 @@
             <button class="libTab on" data-tab="dice">Dice</button>
             <button class="libTab" data-tab="decks">Card Decks/Tiles</button>
             <button class="libTab" data-tab="boards">Game Boards</button>
+            <button class="libTab" data-tab="mats">Player Mats</button>
             <button class="libTab" data-tab="objects">3D Objects</button>
             <button class="libTab" data-tab="games">Pre-Built Games</button>
             <button class="libTab" data-tab="dispensers">Dispensers</button>
@@ -1266,6 +1267,9 @@
         <div class="libPane" data-pane="boards" hidden>
           <ul id="nlb_boards" class="libList lib2-bi"></ul>
           <ul id="nlc_board" class="libList lib2-cu"></ul>
+        </div>
+        <div class="libPane" data-pane="mats" hidden>
+          <ul id="nlc_mat" class="libList lib2-cu"></ul>
         </div>
         <div class="libPane" data-pane="objects" hidden>
           <ul id="nlb_objects" class="libList lib2-bi"></ul>
@@ -1365,6 +1369,18 @@
               data-tab="imgboards"
             >
               2D Game Boards
+            </button>
+            <button
+              type="button"
+              role="tab"
+              id="addtab-mats"
+              aria-controls="addpane-mats"
+              aria-selected="false"
+              tabindex="-1"
+              class="libTab"
+              data-tab="mats"
+            >
+              Player Mats
             </button>
             <button
               type="button"
@@ -1781,6 +1797,53 @@
                 <div class="row">
                   <button id="adBoardImgSave" type="button">Save</button
                   ><button id="adBoardImgSpawn" type="button" class="primary">Save + Spawn</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="libPane"
+          role="tabpanel"
+          id="addpane-mats"
+          aria-labelledby="addtab-mats"
+          data-pane="mats"
+          hidden
+        >
+          <div class="addSplit">
+            <div class="addCol addPreview">
+              <div class="sqField">
+                <div class="sqCap">Mat image</div>
+                <div class="uploadSq sqBoard">
+                  <input id="adMatImg" type="file" accept="image/*" hidden /><span class="sqLabel"
+                    >Drop the mat art<br />or click to choose</span
+                  >
+                </div>
+              </div>
+            </div>
+            <div class="addCol">
+              <label for="adMatName">Mat name</label>
+              <input id="adMatName" type="text" placeholder="Name this mat" />
+              <div class="addColorRow" title="How big the mat is on the table">
+                <span>Size</span
+                ><input
+                  id="adMatSize"
+                  type="range"
+                  min="2"
+                  max="8"
+                  step="0.25"
+                  value="4"
+                  aria-label="Mat size"
+                /><span id="adMatSizeVal">4×</span>
+              </div>
+              <div class="saveFoot">
+                <p class="destNote">
+                  A large flat surface other tiles rest on — drag it in front of a player. Saved to
+                  <b>Library → Player Mats</b> for every room you host.
+                </p>
+                <div class="row">
+                  <button id="adMatSave" type="button">Save</button
+                  ><button id="adMatSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
               </div>
             </div>

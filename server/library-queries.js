@@ -87,6 +87,41 @@ export function createLibraryQueries(query) {
       };
     },
 
+    // Player mats: a single reusable mat image + its sized geometry. file_url is the image,
+    // props.geom the mat's footprint/thickness. Spawned as a `mat` piece (not a board).
+    async listMats({ includePrivate = false } = {}) {
+      const { rows } = await query(
+        `SELECT id, name, file_url, props, is_public, owner_id FROM custom_mats
+         ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`,
+      );
+      return rows.map((row) => ({
+        id: String(row.id),
+        name: row.name,
+        tex: row.file_url,
+        geom: (row.props && row.props.geom) || null,
+        kind: 'mat',
+        preview: row.file_url || null,
+        isPublic: row.is_public,
+        ownerId: idOrNull(row.owner_id),
+      }));
+    },
+
+    async getMat(id) {
+      const { rows } = await query(
+        'SELECT name, file_url, props, is_public, owner_id FROM custom_mats WHERE id = $1',
+        [id],
+      );
+      if (!rows[0]) return null;
+      const row = rows[0];
+      return {
+        name: row.name,
+        tex: row.file_url,
+        geom: (row.props && row.props.geom) || null,
+        isPublic: row.is_public,
+        ownerId: idOrNull(row.owner_id),
+      };
+    },
+
     async listProps({ includePrivate = false } = {}) {
       const { rows } = await query(
         `SELECT id, name, file_url, props, is_public, owner_id FROM custom_objects

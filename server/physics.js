@@ -96,7 +96,9 @@ export function buildCollider(type, props, { cardColliderThickness }) {
     return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
   }
 
-  if (type === 'card') {
+  if (type === 'card' || type === 'mat') {
+    // A mat is a big single-faced tile: same solid box, sized from its `geom` — its real top face is
+    // the surface pieces rest on. (A mat's own thickness already exceeds cardColliderThickness.)
     const geometry = cardGeom(props);
     const halfThickness = Math.max(geometry.th, cardColliderThickness);
     return geometry.shape === 'hex'

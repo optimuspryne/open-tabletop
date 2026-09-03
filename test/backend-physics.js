@@ -76,6 +76,19 @@ test('card colliders preserve footprint while enforcing stability thickness', ()
   assert.equal(hexagon.height, 0.08);
 });
 
+test('mat colliders are a large solid box sized from geom (a real resting surface)', () => {
+  const shape = buildCollider(
+    'mat',
+    { geom: { w: 5, h: 3.2, t: 0.06, round: 0.04, shape: 'rect' } },
+    colliderOptions,
+  );
+  assert.ok(shape instanceof CANNON.Box);
+  assert.deepEqual(
+    [shape.halfExtents.x, shape.halfExtents.y, shape.halfExtents.z],
+    [5, 0.06, 3.2], // its own 0.06 slab thickness exceeds the card collider floor → a real top face
+  );
+});
+
 test('uploaded props clamp dimensions and retain requested primitive type', () => {
   const shape = buildCollider(
     'prop',

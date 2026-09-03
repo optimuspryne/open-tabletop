@@ -11,6 +11,9 @@ const MESSAGE_NAMES = [
   'loadDeck',
   'saveBoard',
   'listBoards',
+  'saveMat',
+  'listMats',
+  'loadMat',
   'saveProp',
   'listProps',
   'assetPublic',
@@ -81,6 +84,7 @@ function harness({ admin = true, rank = 3 } = {}) {
     libraryKinds: ['deck', 'board', 'prop', 'scene', 'sky'],
     refOk: (value) => typeof value === 'string' && value.length < 200000,
     sanitizeGeom: (value) => value,
+    sanitizeMatGeom: (value) => value,
     randomPosition: () => [1, 2, 3],
     sceneMaxBytes: 1000,
     skyUrlOk: (value) => typeof value === 'string' && value.startsWith('/sky/'),
@@ -154,6 +158,40 @@ test('non-admin clients cannot curate or inspect private library records', async
   await handlers.get('getDeck')(user, { id: '1' });
   assert.deepEqual(calls, []);
   assert.deepEqual(user.sent, []);
+});
+
+test('saveMat persists a player mat and Save+Spawn drops one on the table', async () => {
+  const { handlers, calls } = harness();
+  const user = client();
+  const geom = { w: 5, h: 3, t: 0.06, round: 0.04, shape: 'rect' };
+  await handlers.get('saveMat')(user, {
+    name: 'Mining',
+    tex: '/assets/mats/m.jpg',
+    geom,
+    spawn: true,
+  });
+  const insert = calls.find(({ name }) => name === 'insertMat');
+  assert.ok(insert, 'insertMat called');
+  assert.deepEqual(insert.args[0], 'Mining');
+  assert.deepEqual(insert.args[1], { tex: '/assets/mats/m.jpg', geom });
+  const spawn = calls.find(({ name }) => name === 'spawn');
+  assert.deepEqual(spawn.args, ['mat', [1, 2, 3], { geom, front: '/assets/mats/m.jpg' }]);
+  assert.ok(calls.some((c) => c.name === 'sendAssetList' && c.args[1] === 'mat'));
+});
+
+test('loadMat spawns a saved public mat; a bad or off-origin record is refused', async () => {
+  const { db, handlers, calls } = harness();
+  const user = client();
+  db.getMat = async () => ({
+    name: 'Farming',
+    tex: '/assets/mats/f.jpg',
+    geom: { w: 4, h: 3, t: 0.06, round: 0.04, shape: 'rect' },
+    isPublic: true,
+  });
+  await handlers.get('loadMat')(user, { id: '3' });
+  const spawn = calls.find(({ name }) => name === 'spawn');
+  assert.deepEqual(spawn.args[0], 'mat');
+  assert.deepEqual(spawn.args[2].front, '/assets/mats/f.jpg');
 });
 
 test('database failures use the sanitized asset error boundary', async () => {

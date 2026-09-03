@@ -442,6 +442,31 @@ export function saveBoardPayload(message, options) {
   return out;
 }
 
+// A player-mat save: a name, the uploaded mat image (tex), its sanitized geometry, and whether to
+// also spawn it now. `sanitizeGeom` is injected (the mat-sized clamp). editId → update in place.
+export function saveMatPayload(message, { sanitizeGeom }) {
+  if (
+    !isPlainObject(message) ||
+    !hasOnlyKeys(message, new Set(['name', 'tex', 'geom', 'spawn', 'editId']))
+  )
+    return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  const tex = localAssetRef(message.tex);
+  const geom = sanitizeGeom(message.geom);
+  if (name === null || !name.trim() || !tex || !geom) return null;
+  const out = { name: name.trim(), tex, geom, spawn: true, editId: null };
+  if (message.spawn !== undefined) {
+    if (typeof message.spawn !== 'boolean') return null;
+    out.spawn = message.spawn;
+  }
+  if (message.editId != null) {
+    const id = databaseId(message.editId);
+    if (id === null) return null;
+    out.editId = id;
+  }
+  return out;
+}
+
 export function savePropPayload(message, options) {
   if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['name', 'props', 'editId'])))
     return null;

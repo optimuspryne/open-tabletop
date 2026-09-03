@@ -6,6 +6,8 @@ import {
   cardGeom,
   geomFromImage,
   sanitizeGeom,
+  sanitizeMatGeom,
+  MAT_MAX_HALF,
   TILES,
   KINDS,
   CARD_ROUND,
@@ -89,4 +91,23 @@ test('sanitizeGeom: accepts sane geoms, rejects junk and out-of-range', () => {
     shape: 'rect',
   });
   assert.equal(sanitizeGeom({ w: 1, h: 2, t: 0.02, round: 0.1 }).t, 0.02);
+});
+
+test('sanitizeMatGeom: a player mat allows a far larger footprint than a card', () => {
+  const big = { w: 5, h: 3.2 }; // rejected by the card clamp (> 3 half-extent)
+  assert.equal(sanitizeGeom(big), null);
+  const mat = sanitizeMatGeom(big);
+  assert.equal(mat.w, 5);
+  assert.equal(mat.h, 3.2);
+  // still bounded — beyond the mat cap is rejected
+  assert.equal(sanitizeMatGeom({ w: MAT_MAX_HALF + 1, h: 2 }), null);
+  // a mat's geom is renderable/collidable via the shared cardGeom
+  const g = cardGeom({ geom: mat });
+  assert.equal(g.hw, 5);
+  assert.equal(g.hh, 3.2);
+});
+
+test('KINDS.mat is a heavy, movable surface (mass > 0)', () => {
+  assert.ok(KINDS.mat, 'mat kind exists');
+  assert.ok(KINDS.mat.mass > 0, 'movable + selectable + casts shadow');
 });
