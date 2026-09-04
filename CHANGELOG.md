@@ -40,7 +40,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   optional stack cover, and choose a physical **size**, thickness, and shape. Save it to your
   library and it spawns as a face-down draw pile of double-sided tiles you flip to turn over — each
   tile keeping its own back, so one pile can mix different backs (a tree back among forageable
-  backs). Tuned for small tiles out of the box.
+  backs) — including when you draw a tile part-way out and drop it back onto the pile. Tuned for
+  small tiles out of the box.
 - **Conceal a tile set in a drawstring pouch.** The Double-Sided Tiles tab has a new
   **Concealment** choice: leave the stack **Open**, or drop it into a **Pouch** — a low-poly
   drawstring bag that hides the stack, so shuffling and drawing off the top plays like reaching
