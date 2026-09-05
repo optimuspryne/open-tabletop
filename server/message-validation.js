@@ -118,6 +118,7 @@ export function scalePayload(message, { gridLiftMax = 3 } = {}) {
     gridColor: hexColor,
     gridLift: (v) => finiteNumber(v, { min: 0, max: gridLiftMax }),
     snapAnchor: (v) => (['center', 'cross'].includes(v) ? v : null),
+    hexOrient: (v) => (['pointy', 'flat'].includes(v) ? v : null),
   };
   const keys = Object.keys(message);
   if (!keys.length || keys.some((key) => !rules[key])) return null;

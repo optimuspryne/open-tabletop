@@ -361,6 +361,7 @@ class RoomScale extends Schema {
     this.gridColor = '#ffffff';
     this.gridLift = 0.05;
     this.snapAnchor = 'center';
+    this.hexOrient = 'pointy'; // hex grids: 'pointy' | 'flat' (unused for square/off)
     this.gridHidden = false;
   }
 }
@@ -376,6 +377,7 @@ defineTypes(RoomScale, {
   gridColor: 'string',
   gridLift: 'number',
   snapAnchor: 'string',
+  hexOrient: 'string',
   gridHidden: 'boolean',
 });
 // PUBLIC measurement/template overlay — a flat, non-physics annotation on the felt
@@ -1574,6 +1576,7 @@ class TableRoom extends Room {
       gridColor: sc.gridColor,
       gridLift: sc.gridLift,
       snapAnchor: sc.snapAnchor,
+      hexOrient: sc.hexOrient,
       gridHidden: sc.gridHidden,
     };
   }
@@ -1597,6 +1600,7 @@ class TableRoom extends Room {
     if (s.snapAnchor === 'center' || s.snapAnchor === 'cross') sc.snapAnchor = s.snapAnchor;
     if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off')
       sc.gridStyle = s.gridStyle;
+    if (s.hexOrient === 'pointy' || s.hexOrient === 'flat') sc.hexOrient = s.hexOrient;
     if (typeof s.gridHidden === 'boolean') sc.gridHidden = s.gridHidden;
   }
 
