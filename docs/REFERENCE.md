@@ -177,6 +177,10 @@ Pure constants and helpers imported by both sides.
 ### Constants
 
 - **`TABLE`** `{ x, z }` — half-extents of the play surface.
+- **`TABLE_SHAPES`** / **`tableOutline(shape, hx, hz)`** — the shape list
+  (`rect`/`round`/`oval`/`hex`/`roundedRect`) and the closed perimeter polygon for a shape +
+  half-extents. One source of truth read by the physics wall ring (`buildBounds`), the felt mesh
+  (`resizeTable`) and the grid clip (`gridMesh`). round/hex use `hx`; hex is flat-top.
 - **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
   `boardEdge`, `ivory`, `ink`, `felt[dark,light]`, and `team {checker, go,
 chess}` each `[color0, color1]`.
@@ -392,7 +396,8 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
   as table-owned `owner:''`). Capped `OVERLAY_MAX` per room / `OVERLAY_MAX_PER_PLAYER`
   per creator. Rendered via the client's `OVERLAY` registry.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
-  **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents),
+  **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents), **`tableShape`**
+  (surface shape: `rect`/`round`/`oval`/`hex`/`roundedRect`),
   **`whiteboard`**, **`trays`** (a `MapSchema<boolean>` keyed by seat index `"0".."5"` —
   presence = that seat's _personal_ dice tray is out; the tray dice are ordinary `die` pieces
   tagged `props.traySeat`, not schema here), **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
@@ -477,7 +482,7 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 (gm+ — checkpoint the live game via `serializeGame` into the room's `scene`; replies
 `stateSaved`). Room settings (gm+, persisted via `scheduleSave`): **`score`**
 (scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
-**`tableColor`** (felt color), **`scaleSet`** (measurement + grid — a partial update
+**`table`** also carries an optional `{shape}` (reshape). **`tableColor`** (felt color), **`scaleSet`** (measurement + grid — a partial update
 of any `RoomScale` field: `worldPerUnit`/`unitLabel`/`roundStep`/`gridStyle`/
 `cellWorld`/`cellZ`/`hexOrient`/`gridX`/`gridZ`/`snapAnchor`/`gridColor`/`gridLift`, each
 clamped), **`calibrateGrid`** (fit the grid to the board on the table — square: sets
@@ -691,7 +696,7 @@ return the flag:
   greps for `/assets/…` paths.
 
 **Per-room durable state.** A room's non-piece settings survive restarts:
-`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, skybox, feltColor,
+`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, tableShape, skybox, feltColor,
 scene, scale}` (where `scene` is the GM/auto-save game snapshot and `scale` the
 per-room measurement scale) and
 `saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
@@ -743,8 +748,9 @@ lifetime (30 days by default, bounded to 1–365).
 
 ## `public/core.js` — setup + tunables
 
-Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z)`** (rebuild
-the felt + walls at a new half-extent), **`setTableColor(hex)`** (recolor the felt), and
+Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
+felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`; the
+physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor the felt), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
@@ -844,11 +850,12 @@ lclick, rclick }`; the interaction layer dispatches off this, no type switches.
   and edge weight come from `CONFIG.measure`. The measure _label_ is not built here —
   it's a client sprite (needs the room scale). Adding a kind = one entry here + one
   string in the server's `OVERLAY_KINDS`.
-- **`gridMesh(scale, tableX, tableZ) → THREE.LineSegments | null`** — the table grid: a
+- **`gridMesh(scale, tableX, tableZ, shape) → THREE.LineSegments | null`** — the table grid: a
   single line mesh drawn from the same lattice `snapToCell` quantises to (per-axis
   `cellWorld`/`cellZ`, `gridX`/`gridZ` offset), tinted `scale.gridColor`, `depthWrite:false`
   so pieces occlude it. Draws **square** lines or a **hex** lattice (`hexOrient` pointy/flat,
-  edges de-duped and clipped to the felt); `null` for `off`/zero-cell, and skips a hair-fine
+  edges de-duped), both styles clipped to the table outline — the rectangle for `rect`, else the
+  shape's perimeter (`clipSegConvex`), so the grid stops at a round/hex edge; `null` for `off`/zero-cell, and skips a hair-fine
   grid (>300 lines/axis square, or a hex-count cap). The client's **`rebuildGrid`** builds/replaces it at `gridLift` above
   the felt and re-runs on the relevant `scale`/table-size changes.
 - **`trayMesh(feltColor) → THREE.Group`** — a felt-lined open box built from the shared
@@ -867,7 +874,7 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 `window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
 marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
-(→ `resizeTable` + `rebuildGrid`), the `scale` grid fields (→ `rebuildGrid` /
+(→ `resizeTable` + `rebuildGrid`), **`tableShape`** (→ the same, plus the shape-picker UI), the `scale` grid fields (→ `rebuildGrid` /
 `syncScalePanel`), `trays` (→ `syncTrays` — one tray mesh per enabled seat), and
 `roomName` (→ the Room Info header), plus
 `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"

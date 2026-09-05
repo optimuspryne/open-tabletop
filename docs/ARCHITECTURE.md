@@ -147,7 +147,7 @@ The **synced state is public** — anything in it is one devtools-peek from bein
 read. It holds: each piece's transform/type/owner/props/count; each player's
 seat, hand _count_, name, color, avatar, `showing` count (how many cards they're
 revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
-the room dressing (`scores`, `notes`, `tableX/Z`, `whiteboard`, `trays` — which seats'
+the room dressing (`scores`, `notes`, `tableX/Z`, `tableShape`, `whiteboard`, `trays` — which seats'
 personal dice trays are out, `skybox`,
 `feltColor`, `roomName`); and whose turn it is — including, after a resumed game, the public
 `turnPending` name and the `unclaimed` (`userId → name`) map that the GM's
@@ -441,6 +441,16 @@ camera** move, not height or a separate scene — the Roll button hops _your_ ca
 `SIM.trayRoll` impulse, and Back tweens home; no one else's view stirs. `onLeave` puts a departing
 player's tray away so it never lingers for the next occupant.
 
+**Table shape.** The play surface is rectangular by default but can be **round, oval, hex
+(flat-top) or a rounded rectangle** (`state.tableShape`, GM-set and durable). One shared
+`tableOutline(shape, hx, hz)` — a closed perimeter polygon over the existing `tableX/tableZ`
+half-extents — is the single source the three consumers agree on: the physics rim (`buildBounds`
+emits one box wall per outline edge for a non-rect shape; the floor stays a box), the felt mesh
+(`resizeTable` extrudes the same outline), and the grid (which clips to it via `clipSegConvex`).
+round and hex are single-size (depth follows width). Seats, personal trays and cameras are left
+as they were — trays already ride a circular track — so the first cut keeps seating unchanged on
+the new shapes.
+
 ## Live table tools
 
 Small shared/private utilities that reuse the existing channels rather than new
@@ -669,7 +679,7 @@ See "Accounts, rooms & roles" below.
 
 Two serializers, layered on purpose:
 
-- **`serializeScene`** produces the portable _template_: table size + every piece
+- **`serializeScene`** produces the portable _template_: table size + shape + every piece
   (transform, and a deck's private card order / tile geometry / box **skin** / a
   face-down card's hidden front ride along so they rebuild faithfully) + the overlays +
   the room **`scale`** (measurement calibration and grid layout), and **no player
