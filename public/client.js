@@ -546,9 +546,10 @@ function syncTableShapeUI() {
     ds = byId('tableDimSep'),
     di = byId('tableD'),
     wl = byId('tableWLabel');
+  const diWrap = (di && di.closest('.stepper')) || di; // hide the whole − / + stepper, not just the input
   if (dl) dl.hidden = locked;
   if (ds) ds.hidden = locked;
-  if (di) di.hidden = locked;
+  if (diWrap) diWrap.hidden = locked;
   if (wl) wl.textContent = locked ? 'Size' : 'Width';
 }
 
@@ -1277,7 +1278,8 @@ function rebuildGrid() {
     const gczSep = byId('gridCellZSep');
     if (gczSep) gczSep.hidden = isHex; // hex is a single size — no separate depth
     const gczIn = byId('gridCellZ');
-    if (gczIn) gczIn.hidden = isHex;
+    const gczWrap = (gczIn && gczIn.closest('.stepper')) || gczIn; // hide the whole stepper, not just the input
+    if (gczWrap) gczWrap.hidden = isHex;
     const gcr = byId('gridCellRow');
     if (gcr) gcr.hidden = !gridOn;
     const gor = byId('gridOffRow');
