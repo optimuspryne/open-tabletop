@@ -9,6 +9,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- **Hex grids.** The table grid can now be **hexagonal**, not just square. In *Customize
+  Table → Grid*, set the cell shape to **Hex**, pick **pointy-top or flat-top**, and choose a
+  hex size — or place a board and use **Fit to board** to size the hexes to how many go across
+  it. Pieces with snap turned on (**G**) snap to hex **centres**, and the drawn grid matches;
+  switching pointy↔flat reorients both at once. Offset, line colour, height and hide-the-lines
+  all work exactly as they do for the square grid. Snapping and the rendered grid run the same
+  hex math on client and server, so a piece lands where the grid shows it.
 - **Multi-select composition — build one thing out of many.** With a clump selected, two new
   buttons turn the selection into a construction tool. **Combine** consolidates loose cards and
   whole decks together into a single face-down deck at the group's centre — the card sitting on
