@@ -541,7 +541,7 @@ function rebuildGrid() {
     gridLines = null;
   }
   if (!room) return;
-  const g = gridMesh(room.state.scale, room.state.tableX, room.state.tableZ);
+  const g = gridMesh(room.state.scale, room.state.tableX, room.state.tableZ, room.state.tableShape);
   if (g) {
     g.position.y = gridY();
     scene.add(g);

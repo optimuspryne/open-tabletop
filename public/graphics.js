@@ -23,6 +23,7 @@ import {
   stackDiscH,
   stackVisible,
   gridActive,
+  tableOutline,
   trayParts,
 } from '/shared/pieces.js';
 
@@ -1978,12 +1979,44 @@ function clipSegRect(x1, z1, x2, z2, hx, hz) {
   return [x1 + t0 * dx, z1 + t0 * dz, x1 + t1 * dx, z1 + t1 * dz];
 }
 
+// Clip a segment to a convex polygon whose interior contains the origin (every table shape is
+// centred there) — used to trim the grid to a round/oval/hex/rounded-rect felt. Parametric
+// half-plane clip, one edge at a time. Returns [x1,z1,x2,z2] of the inside part, or null.
+function clipSegConvex(x1, z1, x2, z2, poly) {
+  const dx = x2 - x1,
+    dz = z2 - z1;
+  let t0 = 0,
+    t1 = 1;
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i],
+      b = poly[(i + 1) % poly.length];
+    let nx = b.z - a.z,
+      nz = -(b.x - a.x); // a normal to edge a→b
+    if (nx * -a.x + nz * -a.z > 0) {
+      nx = -nx;
+      nz = -nz;
+    } // flip so the origin is inside: n·(0 − a) ≤ 0
+    const f0 = nx * (x1 - a.x) + nz * (z1 - a.z), // signed distance of P0 to the edge line
+      num = nx * dx + nz * dz; // df/dt along the segment
+    if (num === 0) {
+      if (f0 > 1e-9) return null; // parallel and outside this edge
+      continue;
+    }
+    const t = -f0 / num; // f(t) = 0
+    if (num > 0) {
+      if (t < t1) t1 = t; // inside for t ≤ t*
+    } else if (t > t0) t0 = t; // inside for t ≥ t*
+    if (t0 > t1) return null;
+  }
+  return [x1 + t0 * dx, z1 + t0 * dz, x1 + t1 * dx, z1 + t1 * dz];
+}
+
 // Line-segment endpoints (y=0 triples) for a hex lattice of size `s` (centre-to-vertex),
 // offset by (ox,oz), clipped to the table. `flat` = flat-top, else pointy-top (matching
 // snapToCell). Centres are enumerated in axial (q,r) space over the table + one hex of
 // margin; each hex's 6 edges are de-duped so a shared edge is drawn once. Returns null
 // past a perf cap (a hair-fine grid) so a bad size never floods the scene.
-function hexGridPts(s, hx, hz, ox, oz, flat) {
+function hexGridPts(s, hx, hz, ox, oz, flat, clip) {
   if (!(s > 0)) return null;
   const S3 = 2 * HEX_HH; // √3
   const colDX = flat ? 1.5 * s : S3 * s, // horizontal centre spacing
@@ -2008,7 +2041,7 @@ function hexGridPts(s, hx, hz, ox, oz, flat) {
     const k = ka < kb ? ka + '|' + kb : kb + '|' + ka; // order-independent
     if (seen.has(k)) return;
     seen.add(k);
-    const c = clipSegRect(ax, az, bx, bz, hx, hz);
+    const c = clip(ax, az, bx, bz);
     if (c) pts.push(c[0], 0, c[1], c[2], 0, c[3]);
   };
   for (let r = -rMax; r <= rMax; r++) {
@@ -2027,13 +2060,19 @@ function hexGridPts(s, hx, hz, ox, oz, flat) {
   return pts;
 }
 
-export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
+export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z, shape = 'rect') {
   if (!gridActive(scale) || scale.gridHidden) return null; // hidden: still snaps, just not drawn
   const hx = +tableX,
     hz = +tableZ;
   if (!(hx > 0) || !(hz > 0)) return null;
   const ox = +scale.gridX || 0,
     oz = +scale.gridZ || 0; // lattice offset (align to a printed map)
+  // Trim grid lines to the table edge: the rectangle for 'rect' (unchanged), the shape's
+  // outline otherwise — so a square or hex grid stops cleanly at a round/oval/hex/rounded rim.
+  const outline = shape && shape !== 'rect' ? tableOutline(shape, hx, hz) : null;
+  const clip = outline
+    ? (x1, z1, x2, z2) => clipSegConvex(x1, z1, x2, z2, outline)
+    : (x1, z1, x2, z2) => clipSegRect(x1, z1, x2, z2, hx, hz);
   let pts;
   if (scale.gridStyle === 'square') {
     const cell = +scale.cellWorld;
@@ -2041,16 +2080,20 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
     if (!(cell > 0)) return null;
     if ((hx / cell) * 2 > 300 || (hz / cz) * 2 > 300) return null; // sanity cap: skip a hair-fine grid (perf)
     pts = [];
+    const push = (x1, z1, x2, z2) => {
+      const c = clip(x1, z1, x2, z2);
+      if (c) pts.push(c[0], 0, c[1], c[2], 0, c[3]);
+    };
     for (let m = Math.ceil((-hx - ox) / cell); m <= Math.floor((hx - ox) / cell); m++) {
       const x = ox + m * cell; // constant-x lines, spaced by cell
-      pts.push(x, 0, -hz, x, 0, hz);
+      push(x, -hz, x, hz);
     }
     for (let m = Math.ceil((-hz - oz) / cz); m <= Math.floor((hz - oz) / cz); m++) {
       const z = oz + m * cz; // constant-z lines, spaced by cz
-      pts.push(-hx, 0, z, hx, 0, z);
+      push(-hx, z, hx, z);
     }
   } else if (scale.gridStyle === 'hex') {
-    pts = hexGridPts(+scale.cellWorld, hx, hz, ox, oz, scale.hexOrient === 'flat');
+    pts = hexGridPts(+scale.cellWorld, hx, hz, ox, oz, scale.hexOrient === 'flat', clip);
     if (!pts) return null;
   } else return null;
   if (!pts.length) return null;
