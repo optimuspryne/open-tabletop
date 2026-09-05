@@ -1058,14 +1058,34 @@ class TableRoom extends Room {
   }
 
   // Set the room's square grid from the current board's real size: cell = board width ÷ gaps.
-  // Built-in boards store the gap count + anchor; a custom board takes them from `msg`. Returns
-  // { cellX, cellZ, gaps, anchor } (or null) so a starter setup can place pieces on the squares.
+  // Built-in boards store the gap count + anchor; a custom board takes them from `msg`. For a hex
+  // grid we derive the hex size from the board width ÷ the hex count instead. Returns a small
+  // result object (or null) so a starter setup can react.
   calibrateGrid(msg = {}) {
     let boardId = null;
     this.state.pieces.forEach((p, id) => {
       if (!boardId && p.type === 'board') boardId = id;
     }); // the single table board
     if (!boardId) return null;
+    const sc = this.state.scale;
+    const body = this.bodies.get(boardId),
+      shape = body && body.shapes[0];
+    const he = shape && shape.halfExtents;
+    const wx = he ? he.x * 2 : 0,
+      wz = he ? he.z * 2 : 0;
+    // Hex: fit N hexes across the board width. Pointy columns step √3·s, flat columns step 1.5·s
+    // (s = centre-to-vertex), so s = width ÷ (N · step). Orientation + hex style are left as set.
+    if (sc.gridStyle === 'hex') {
+      const gaps = Math.round(+msg.cells);
+      if (!(gaps > 0) || !(wx > 0)) return null;
+      const step = sc.hexOrient === 'flat' ? 1.5 : Math.sqrt(3);
+      sc.cellWorld = clamp(wx / (gaps * step), 1e-3, 1e3);
+      sc.cellZ = 0;
+      sc.gridX = 0;
+      sc.gridZ = 0; // the board is centred at the origin, so no offset
+      this.scheduleSave();
+      return { hexSize: sc.cellWorld, gaps, orient: sc.hexOrient };
+    }
     const spec = BOARDS[readProps(this.state.pieces.get(boardId)).board];
     let gaps, anchor;
     if (spec && spec.grid) {
@@ -1077,18 +1097,12 @@ class TableRoom extends Room {
       gaps = anchor === 'cross' ? count - 1 : count;
     }
     if (!(gaps > 0)) return null;
-    const sc = this.state.scale;
     // A board can pin its exact printed-line spacing (cellX/cellZ) — needed when a wide border
     // means the lines don't fill the collider (go). Otherwise derive cell = board width ÷ gaps.
     if (spec && spec.grid && spec.grid.cellX > 0) {
       sc.cellWorld = clamp(spec.grid.cellX, 1e-3, 1e3);
       sc.cellZ = clamp(spec.grid.cellZ > 0 ? spec.grid.cellZ : spec.grid.cellX, 1e-3, 1e3);
     } else {
-      const body = this.bodies.get(boardId),
-        shape = body && body.shapes[0];
-      const he = shape && shape.halfExtents;
-      const wx = he ? he.x * 2 : 0,
-        wz = he ? he.z * 2 : 0;
       if (!(wx > 0) || !(wz > 0)) return null;
       sc.cellWorld = clamp(wx / gaps, 1e-3, 1e3);
       sc.cellZ = clamp(wz / gaps, 1e-3, 1e3);

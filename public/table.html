@@ -725,6 +725,17 @@
                 </button>
               </div>
             </div>
+            <div class="sizeRow" id="gridOrientRow" hidden>
+              <label>Orientation</label>
+              <div id="gridOrients" class="chipRow">
+                <button class="chip" data-orient="pointy" data-icon="hexagon">
+                  <span class="lbl">Pointy-top</span>
+                </button>
+                <button class="chip" data-orient="flat" data-icon="hexagon">
+                  <span class="lbl">Flat-top</span>
+                </button>
+              </div>
+            </div>
             <div class="sizeRow" id="gridSnapRow" hidden>
               <label>Snap to</label>
               <div id="gridAnchors" class="chipRow">
@@ -757,14 +768,14 @@
               </button>
             </div>
             <div class="sizeRow" id="gridCellRow" hidden>
-              <label>Cell size</label
+              <label id="gridCellLabel">Cell size</label
               ><input
                 id="gridCell"
                 aria-label="Cell size width"
                 type="number"
                 min="0.01"
                 step="0.01"
-              /><span class="dimX">×</span
+              /><span class="dimX" id="gridCellZSep">×</span
               ><input
                 id="gridCellZ"
                 aria-label="Cell size depth"

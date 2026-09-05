@@ -1028,6 +1028,7 @@ function rebuildGrid() {
     cb(room.state).scale.listen('gridX', onGrid, false); // grid: lattice offset X
     cb(room.state).scale.listen('gridZ', onGrid, false); // grid: lattice offset Z
     cb(room.state).scale.listen('gridStyle', onGrid, false); // grid: off / square / hex
+    cb(room.state).scale.listen('hexOrient', onGrid, false); // hex: pointy / flat orientation
     cb(room.state).scale.listen('gridHidden', onGrid, false); // grid: shown / hidden (still snaps)
     cb(room.state).scale.listen('gridColor', onGrid, false); // grid: line colour
     cb(room.state).scale.listen(
@@ -1218,10 +1219,23 @@ function rebuildGrid() {
     // Grid controls: light the active style, reveal cell/color rows when a grid is on,
     // show the cell size in display units, and mirror the line color.
     const gStyle = sc.gridStyle || 'off',
-      gridOn = gStyle !== 'off';
+      gridOn = gStyle !== 'off',
+      isHex = gStyle === 'hex';
     document
       .querySelectorAll('#gridStyles [data-grid]')
       .forEach((b) => b.classList.toggle('on', b.dataset.grid === gStyle));
+    const gorow = byId('gridOrientRow');
+    if (gorow) gorow.hidden = !isHex; // orientation (pointy/flat) is hex-only
+    const orient = sc.hexOrient === 'flat' ? 'flat' : 'pointy';
+    document
+      .querySelectorAll('#gridOrients [data-orient]')
+      .forEach((b) => b.classList.toggle('on', b.dataset.orient === orient));
+    const gclbl = byId('gridCellLabel');
+    if (gclbl) gclbl.textContent = isHex ? 'Hex size' : 'Cell size';
+    const gczSep = byId('gridCellZSep');
+    if (gczSep) gczSep.hidden = isHex; // hex is a single size — no separate depth
+    const gczIn = byId('gridCellZ');
+    if (gczIn) gczIn.hidden = isHex;
     const gcr = byId('gridCellRow');
     if (gcr) gcr.hidden = !gridOn;
     const gor = byId('gridOffRow');
@@ -1260,7 +1274,7 @@ function rebuildGrid() {
     if (gk && document.activeElement !== gk && /^#[0-9a-f]{6}$/i.test(sc.gridColor || ''))
       gk.value = sc.gridColor;
     const gsr = byId('gridSnapRow');
-    if (gsr) gsr.hidden = !gridOn; // snap-anchor toggle (centers vs crossings)
+    if (gsr) gsr.hidden = !gridOn || isHex; // snap anchor (centres vs crossings); hex is centres-only
     const ghr = byId('gridHideRow');
     if (ghr) ghr.hidden = !gridOn; // hide-grid toggle (snaps, not drawn)
     const ght = byId('gridHideTog');
@@ -1378,6 +1392,10 @@ function rebuildGrid() {
     document.querySelectorAll('#gridAnchors [data-anchor]').forEach((b) => {
       b.onclick = () => room.send('scaleSet', { snapAnchor: b.dataset.anchor });
     });
+    // Hex orientation: pointy-top vs flat-top (hex grids only).
+    document.querySelectorAll('#gridOrients [data-orient]').forEach((b) => {
+      b.onclick = () => room.send('scaleSet', { hexOrient: b.dataset.orient });
+    });
     {
       const b = byId('gridHideTog');
       if (b) b.onclick = () => room.send('scaleSet', { gridHidden: !room.state.scale.gridHidden });
@@ -1398,6 +1416,11 @@ function rebuildGrid() {
         }
         const spec = BOARDS[JSON.parse(boardPiece.props || '{}').board];
         const n = parseInt(byId('gridCells').value, 10);
+        if (room.state.scale.gridStyle === 'hex') {
+          if (n > 0) room.send('calibrateGrid', { cells: n });
+          else alert('Enter how many hexes go across the board.');
+          return;
+        }
         const anchor = room.state.scale.snapAnchor === 'cross' ? 'cross' : 'center';
         if (n > 0) room.send('calibrateGrid', { cells: n, anchor });
         else if (spec && spec.grid)
