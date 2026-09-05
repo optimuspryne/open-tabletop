@@ -9,6 +9,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- **Table shapes.** The play surface is no longer only a rectangle. In *Customize Table* pick a
+  **Shape** — Rectangle, **Round**, **Oval**, **Hex**, or **Rounded** — and the felt, the physics
+  rim your pieces bump against, and the grid all take the new outline; round and hex are a single
+  **Size** (depth follows width). It's GM-set and durable: the shape survives a reload and rides
+  along in saved scenes. Seats, hand-fans and personal dice trays all carry over to the new shapes
+  as-is.
 - **Hex grids.** The table grid can now be **hexagonal**, not just square. In *Customize
   Table → Grid*, set the cell shape to **Hex**, pick **pointy-top or flat-top**, and choose a
   hex size — or place a board and use **Fit to board** to size the hexes to how many go across
