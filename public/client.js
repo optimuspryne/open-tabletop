@@ -533,6 +533,25 @@ const pieceIsTile = (id) => {
 // on an active grid (so it tracks cell-to-cell as you drag), else the raw cursor point.
 const snapXZ = (x, z) =>
   down && down.snap && gridActive(room.state.scale) ? snapToCell(x, z, room.state.scale) : { x, z };
+// Reflect the current table shape in Customize Table: light the active chip, and for the
+// single-size shapes (round/hex) hide the depth field and relabel width as \"Size\".
+function syncTableShapeUI() {
+  if (!room) return;
+  const shape = room.state.tableShape || 'rect';
+  document
+    .querySelectorAll('#tableShapes [data-tshape]')
+    .forEach((b) => b.classList.toggle('on', b.dataset.tshape === shape));
+  const locked = shape === 'round' || shape === 'hex';
+  const dl = byId('tableDLabel'),
+    ds = byId('tableDimSep'),
+    di = byId('tableD'),
+    wl = byId('tableWLabel');
+  if (dl) dl.hidden = locked;
+  if (ds) ds.hidden = locked;
+  if (di) di.hidden = locked;
+  if (wl) wl.textContent = locked ? 'Size' : 'Width';
+}
+
 function rebuildGrid() {
   if (gridLines) {
     scene.remove(gridLines);
@@ -1012,6 +1031,15 @@ function rebuildGrid() {
       },
       false,
     );
+    cb(room.state).listen(
+      'tableShape',
+      () => {
+        resizeTable(room.state.tableX, room.state.tableZ, room.state.tableShape);
+        rebuildGrid();
+        syncTableShapeUI();
+      },
+      false,
+    );
     cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
     cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
     cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
@@ -1087,6 +1115,7 @@ function rebuildGrid() {
     const syncRoomSettings = () => {
       byId('tableW').value = Math.round(room.state.tableX * 2);
       byId('tableD').value = Math.round(room.state.tableZ * 2);
+      syncTableShapeUI();
       byId('tableFelt').value = room.state.feltColor || '#2f6b4f';
       syncScalePanel();
       const wb = room.state.whiteboard;
@@ -1165,15 +1194,28 @@ function rebuildGrid() {
   });
   // Live table resize: each ± (or a typed change) on width/depth applies immediately.
   {
-    const send = () =>
-      room.send('table', {
-        x: (+byId('tableW').value || 20) / 2,
-        z: (+byId('tableD').value || 14) / 2,
-      });
+    const send = () => {
+      const shape = room.state.tableShape || 'rect';
+      const x = (+byId('tableW').value || 20) / 2;
+      const z = shape === 'round' || shape === 'hex' ? x : (+byId('tableD').value || 14) / 2;
+      room.send('table', { x, z });
+    };
     const w = byId('tableW'),
       d = byId('tableD');
     if (w) w.onchange = send;
     if (d) d.onchange = send;
+    // Shape picker: rect/round/oval/hex/roundedRect. round + hex are single-size (send z = x).
+    document.querySelectorAll('#tableShapes [data-tshape]').forEach((b) => {
+      b.onclick = () => {
+        const shape = b.dataset.tshape;
+        const msg = { shape };
+        if (shape === 'round' || shape === 'hex') {
+          msg.x = room.state.tableX;
+          msg.z = room.state.tableX; // depth follows width for round/hex
+        }
+        room.send('table', msg);
+      };
+    });
     const felt = byId('tableFelt');
     if (felt) felt.oninput = () => room.send('tableColor', { color: felt.value });
     buildColorSwatches(byId('feltSwatches'), FELT_COLORS, (hex) => {

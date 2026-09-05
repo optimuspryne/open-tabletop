@@ -644,11 +644,31 @@
         </div>
         <div class="libPane" data-pane="table">
           <div class="tableBody">
+            <div class="sizeRow" id="tableShapeRow">
+              <label>Shape</label>
+              <div id="tableShapes" class="chipRow">
+                <button class="chip" data-tshape="rect" data-icon="square">
+                  <span class="lbl">Rectangle</span>
+                </button>
+                <button class="chip" data-tshape="round" data-icon="circle">
+                  <span class="lbl">Round</span>
+                </button>
+                <button class="chip" data-tshape="oval" data-icon="circle">
+                  <span class="lbl">Oval</span>
+                </button>
+                <button class="chip" data-tshape="hex" data-icon="hexagon">
+                  <span class="lbl">Hex</span>
+                </button>
+                <button class="chip" data-tshape="roundedRect" data-icon="square-rounded-plus">
+                  <span class="lbl">Rounded</span>
+                </button>
+              </div>
+            </div>
             <div class="dimGrid">
-              <label for="tableW" data-icon="arrow-autofit-width" title="Width">Width</label
+              <label id="tableWLabel" for="tableW" data-icon="arrow-autofit-width" title="Width">Width</label
               ><span></span
-              ><label for="tableD" data-icon="arrow-autofit-height" title="Depth">Depth</label>
-              <input id="tableW" type="number" min="8" max="40" step="1" /><span class="dimX"
+              ><label id="tableDLabel" for="tableD" data-icon="arrow-autofit-height" title="Depth">Depth</label>
+              <input id="tableW" type="number" min="8" max="40" step="1" /><span class="dimX" id="tableDimSep"
                 >×</span
               ><input id="tableD" type="number" min="6" max="32" step="1" />
             </div>
