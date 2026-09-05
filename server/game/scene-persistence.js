@@ -1,4 +1,4 @@
-import { KINDS, MEASURE, TABLE } from '../../shared/pieces.js';
+import { KINDS, MEASURE, TABLE, TABLE_SHAPES } from '../../shared/pieces.js';
 import { readProps } from './props-codec.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -58,7 +58,7 @@ export function serializeScene(room, { geoOf }) {
   });
 
   return {
-    table: { x: room.state.tableX, z: room.state.tableZ },
+    table: { x: room.state.tableX, z: room.state.tableZ, shape: room.state.tableShape },
     pieces,
     overlays,
     scale: room.scaleSnapshot(),
@@ -123,9 +123,12 @@ export function applyScene(
     tableLimits.minZ,
     tableLimits.maxZ,
   );
+  const shape =
+    scene.table && TABLE_SHAPES.includes(scene.table.shape) ? scene.table.shape : 'rect';
   room.state.tableX = tableX;
   room.state.tableZ = tableZ;
-  room.buildBounds(tableX, tableZ);
+  room.state.tableShape = shape;
+  room.buildBounds(tableX, tableZ, shape);
   room.applyScale(scene.scale);
   room.applyTrays(scene.trays);
 

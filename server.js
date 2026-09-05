@@ -22,6 +22,7 @@ import {
   BOARDS,
   TABLE,
   tableOutline,
+  TABLE_SHAPES,
   deckHeight,
   MEASURE,
   DISPENSERS,
@@ -421,6 +422,7 @@ class State extends Schema {
     this.notes = '';
     this.tableX = TABLE.x;
     this.tableZ = TABLE.z;
+    this.tableShape = 'rect';
     this.whiteboard = new Whiteboard();
     this.trays = new MapSchema();
     this.skybox = '';
@@ -441,6 +443,7 @@ defineTypes(State, {
   notes: 'string',
   tableX: 'number',
   tableZ: 'number',
+  tableShape: 'string',
   whiteboard: Whiteboard,
   trays: { map: 'boolean' },
   skybox: 'string',
@@ -597,6 +600,7 @@ class TableRoom extends Room {
       this.state.notes = String(rs.notes || '').slice(0, 8000);
       this.state.tableX = clamp(rs.tableX, TABLE_LIMIT.minX, TABLE_LIMIT.maxX);
       this.state.tableZ = clamp(rs.tableZ, TABLE_LIMIT.minZ, TABLE_LIMIT.maxZ);
+      if (TABLE_SHAPES.includes(rs.tableShape)) this.state.tableShape = rs.tableShape;
       if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
       this.applyScale(rs.scale); // grid + measurement calibration (seeded defaults survive a null column)
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';

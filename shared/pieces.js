@@ -1015,6 +1015,9 @@ export const SEAT_ANGLES = [
 ];
 export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
 
+// The set of table shapes; 'rect' is the historical default. Interpreted against tableX/tableZ.
+export const TABLE_SHAPES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
+
 // The table's outline as a closed polygon of {x,z} perimeter points, for a shape + half-extents.
 // One source of truth for the three consumers that must agree: the physics wall ring (one box
 // per edge), the surface mesh (extruded outline), and the grid clip. 'rect' returns its four

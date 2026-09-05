@@ -107,9 +107,10 @@ export function registerRoomStateHandlers(
     if (room.rank(client) < RANK.gm) return;
     const parsed = tablePayload(message, tableLimits);
     if (!parsed) return;
-    room.state.tableX = parsed.x;
-    room.state.tableZ = parsed.z;
-    room.buildBounds(parsed.x, parsed.z);
+    if (parsed.x !== undefined) room.state.tableX = parsed.x;
+    if (parsed.z !== undefined) room.state.tableZ = parsed.z;
+    if (parsed.shape !== undefined) room.state.tableShape = parsed.shape;
+    room.buildBounds(room.state.tableX, room.state.tableZ, room.state.tableShape);
     room.scheduleSave();
   });
 
@@ -165,6 +166,7 @@ export async function saveRoomStateNow(room, { db }) {
     notes: room.state.notes,
     tableX: room.state.tableX,
     tableZ: room.state.tableZ,
+    tableShape: room.state.tableShape,
     skybox: room.state.skybox,
     feltColor: room.state.feltColor,
     scene: room.savedScene,

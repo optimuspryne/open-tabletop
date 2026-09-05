@@ -93,11 +93,24 @@ export function scorePayload(message) {
   return value === null ? null : { action, id, [field]: Math.trunc(value) };
 }
 
+const TABLE_SHAPE_NAMES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
 export function tablePayload(message, limits) {
-  if (!exactObject(message, ['x', 'z'])) return null;
-  const x = finiteNumber(message.x, { min: limits.minX, max: limits.maxX });
-  const z = finiteNumber(message.z, { min: limits.minZ, max: limits.maxZ });
-  return x === null || z === null ? null : { x, z };
+  if (!isPlainObject(message)) return null;
+  const keys = Object.keys(message);
+  if (!keys.length || keys.some((k) => k !== 'x' && k !== 'z' && k !== 'shape')) return null;
+  const out = {};
+  if ('x' in message || 'z' in message) {
+    const x = finiteNumber(message.x, { min: limits.minX, max: limits.maxX });
+    const z = finiteNumber(message.z, { min: limits.minZ, max: limits.maxZ });
+    if (x === null || z === null) return null; // width + depth travel together
+    out.x = x;
+    out.z = z;
+  }
+  if ('shape' in message) {
+    if (!TABLE_SHAPE_NAMES.includes(message.shape)) return null;
+    out.shape = message.shape;
+  }
+  return out;
 }
 
 export function scalePayload(message, { gridLiftMax = 3 } = {}) {
