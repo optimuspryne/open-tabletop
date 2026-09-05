@@ -264,6 +264,8 @@ const rimTex = new THREE.TextureLoader().load('/textures/table-rim.jpg');
 rimTex.colorSpace = THREE.SRGBColorSpace;
 rimTex.wrapS = rimTex.wrapT = THREE.RepeatWrapping;
 rimTex.repeat.set(0.5, 0.5);
+rimTex.center.set(0.5, 0.5);
+rimTex.rotation = Math.PI / 2; // run the grain across the rim rather than along the image's vertical
 rimTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 const rimMat = new THREE.MeshStandardMaterial({ map: rimTex, roughness: 0.6, metalness: 0 });
 
