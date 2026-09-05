@@ -1,6 +1,6 @@
 # Open Tabletop — Roadmap
 
-_Last groomed 2026-09-01, reconciled against v0.12.2 (+41 commits)._
+_Last groomed 2026-09-05 (hex grids shipped); prior reconcile v0.12.2 (+41 commits)._
 
 ## North star
 
@@ -199,9 +199,9 @@ scoped against the real tree rather than from memory.
 2. **Interactive tutorial.** Nothing exists today beyond the player-facing How-to-Play panel.
    Worth deciding early whether this is an overlay walkthrough in a normal room or a scripted
    starter scene — the latter reuses `setupStarter` and stays physical-first.
-3. **Hex grid + multi-cell footprints.** *Already tracked* — see Parked threads below, where
-   both halves are recorded with their existing groundwork. Listed here so the wishlist is
-   complete; do not duplicate the entry.
+3. **Hex grid + multi-cell footprints.** Hex grid ✅ **DONE** (see Parked threads / `CHANGELOG.md`).
+   The remaining half is **multi-cell footprints** (big-base minis spanning several cells), still
+   parked below. Listed here so the wishlist is complete; do not duplicate the entry.
 4. **Fog of war.** No implementation today (`grep` for `fog`/`spectator` returns nothing).
    This is the item most in tension with **trust by transparency** and the public-state model —
    it needs the same design answer as the GM staging area (§5), and probably shares a mechanism
@@ -272,10 +272,13 @@ Small, concrete, each completes an existing feature:
   `LobbyRoom`, the schema classes and the starter builders are also still in `server.js`. The
   remaining seam is `TableRoom` itself; the handler modules it now delegates to are the pattern
   to keep pulling against.
-- **Hex grids** — the grid shipped square-only; hex needs an orientation choice and axial snap.
-  Groundwork now exists: hexagon **tiles** already have regular pointy-top meshes + matching 6-gon
-  colliders (0.9.0), so the remaining piece is a hex grid + snap that they drop onto. (See
-  `DESIGN_grid_snap.md`, Phase 5, and `DESIGN_tiles.md`.)
+- ✅ **Hex grids — DONE (confirmed by Ben).** The grid now offers a **hex** style beside square:
+  `snapToCell` snaps to hex centres and `gridMesh` draws the hex lattice, pointy- or flat-top via
+  the new `RoomScale.hexOrient` (hex size = `cellWorld`), with `calibrateGrid` fitting hexes to a
+  board by count. Snap and render share the axial math in `shared/pieces.js`, so the client preview
+  and the server authority agree. Built on the 0.9.0 hex-tile groundwork (pointy-top mesh + 6-gon
+  collider), which drops onto the grid cleanly. Decoupled from **table shape** (backlog item 1),
+  which stays open. Only **multi-cell footprints** (below) remains of the original hex work.
 - **Multi-cell footprints** — snap assumes 1×1; big-base minis need a per-kind `cells` hint.
 - **Free-drag group rotation** — multi-select rotates in 45° steps; a grab-and-spin handle is the
   polish. (`DESIGN_multiselect.md`, deferred.)
