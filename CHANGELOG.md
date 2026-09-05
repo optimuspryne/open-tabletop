@@ -14,7 +14,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   rim your pieces bump against, and the grid all take the new outline; round and hex are a single
   **Size** (depth follows width). It's GM-set and durable: the shape survives a reload and rides
   along in saved scenes. Seats, hand-fans and personal dice trays all carry over to the new shapes
-  as-is.
+  as-is. Every table also gets a **wooden rim** around the edge that follows the shape.
 - **Hex grids.** The table grid can now be **hexagonal**, not just square. In *Customize
   Table → Grid*, set the cell shape to **Hex**, pick **pointy-top or flat-top**, and choose a
   hex size — or place a board and use **Fit to board** to size the hexes to how many go across

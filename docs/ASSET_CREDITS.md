@@ -1,6 +1,6 @@
 # Asset Credits
 
-Bundled assets — 3D models, sound effects, skyboxes, tile art, and UI icons — come from
+Bundled assets — 3D models, sound effects, skyboxes, tile art, textures, and UI icons — come from
 the creators below. Licenses vary: most art is **CC0** (public domain), a few are **CC BY**,
 and the UI icons are **MIT**.
 Attribution is given here in full as a courtesy for the CC0 assets and as a **licence
@@ -86,6 +86,14 @@ All CC0 (public domain).
   (https://opengameart.org/users/codeinfernogames)
   — https://opengameart.org/content/mahjong-tileset
 - **License:** CC BY 3.0. Author requests a link to https://codeinferno.com
+
+---
+
+## Table rim texture — `public/textures/`
+
+- **5 Wood Textures** — by **Luke.RUSTLTD**, https://opengameart.org/content/5-wood-textures
+- **License:** CC0 (public domain; no attribution required — credited here as a courtesy). Used for
+  the wooden table rim (`public/textures/table-rim.jpg`, one of the set re-encoded to JPEG).
 
 ---
 

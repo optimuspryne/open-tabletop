@@ -181,6 +181,8 @@ Pure constants and helpers imported by both sides.
   (`rect`/`round`/`oval`/`hex`/`roundedRect`) and the closed perimeter polygon for a shape +
   half-extents. One source of truth read by the physics wall ring (`buildBounds`), the felt mesh
   (`resizeTable`) and the grid clip (`gridMesh`). round/hex use `hx`; hex is flat-top.
+- **`offsetOutline(outline, w)`** — mitre-offset a convex, origin-centred outline by ±`w` (the
+  wooden rim's outer edge + a slight inward overlap onto the felt).
 - **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
   `boardEdge`, `ivory`, `ink`, `felt[dark,light]`, and `team {checker, go,
 chess}` each `[color0, color1]`.
@@ -749,8 +751,8 @@ lifetime (30 days by default, bounded to 1–365).
 ## `public/core.js` — setup + tunables
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
-felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`; the
-physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor the felt), and
+felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
+wooden rim around the edge; the physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor the felt), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
