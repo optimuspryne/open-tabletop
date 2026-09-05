@@ -254,9 +254,10 @@ chess}` each `[color0, color1]`.
   one guard both render and snap gate on, so the grid draws and snaps together.
 - **`snapToCell(x, z, scale) → {x, z}`** — the nearest cell position on the grid, the
   single quantiser the client preview and the server authority both call so they can't
-  drift. Square only (`hex`/`off`/zero-cell return the point unchanged). Honours
-  per-axis spacing (`cellZ`), the `gridX`/`gridZ` offset, and `snapAnchor` (`center`
-  lands in cell middles, `cross` on line intersections). Uses exact rounding, not
+  drift. **Square** honours per-axis spacing (`cellZ`), the `gridX`/`gridZ` offset, and
+  `snapAnchor` (`center` lands in cell middles, `cross` on line intersections); **hex**
+  snaps to hex centres (pointy- or flat-top per `hexOrient`, size = `cellWorld`, offset
+  honoured). `off`/zero-cell return the point unchanged. Uses exact rounding, not
   `roundToStep`'s display rounding, so a non-round cell size lands on true multiples.
 - **`formatMeasure(worldDist, scale) → string`** — a world distance as a display
   label: `worldDist ÷ scale.worldPerUnit → roundToStep(·, roundStep) → + unitLabel`
@@ -375,9 +376,11 @@ Postgres write remain in `server/game/handlers/room-state.js`.
   as messages and replayed onto a texture (see the protocol below).
 - **`RoomScale`** — the per-room measurement + grid layer over the fixed world scale
   (a display/snap layer, never a rescale). Measurement half: `worldPerUnit, unitLabel,
-roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square`), `cellWorld` (cell
-  width in world units), `cellZ` (cell depth; `0` = square, falls back to `cellWorld`),
-  `gridX`/`gridZ` (lattice offset), `snapAnchor` (`center|cross`), `gridColor`, `gridLift`
+roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellWorld`
+  (square cell width, or hex centre-to-vertex size, in world units), `cellZ` (square cell
+  depth; `0` = square, falls back to `cellWorld`; unused for hex), `hexOrient`
+  (`pointy|flat`, hex only), `gridX`/`gridZ` (lattice offset), `snapAnchor` (`center|cross`,
+  square only — hex is centres-only), `gridColor`, `gridLift`
   (height above the felt). Durable (persisted via `saveRoomState`, **and** carried in the
   scene snapshot — see `serializeScene`).
 - **`Overlay`** — `kind` (`ruler|circle|cone|line`), `color`, `owner` (creator
@@ -476,9 +479,10 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 (scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
 **`tableColor`** (felt color), **`scaleSet`** (measurement + grid — a partial update
 of any `RoomScale` field: `worldPerUnit`/`unitLabel`/`roundStep`/`gridStyle`/
-`cellWorld`/`cellZ`/`gridX`/`gridZ`/`snapAnchor`/`gridColor`/`gridLift`, each
-clamped), **`calibrateGrid`** (fit a square grid to the board on the table — sets
-`gridStyle`, per-axis cell size from the collider ÷ cell count, and the anchor),
+`cellWorld`/`cellZ`/`hexOrient`/`gridX`/`gridZ`/`snapAnchor`/`gridColor`/`gridLift`, each
+clamped), **`calibrateGrid`** (fit the grid to the board on the table — square: sets
+`gridStyle`, per-axis cell size from the collider ÷ cell count, and the anchor; hex: keeps
+the hex style/orientation and sets the hex size from board width ÷ hexes-across),
 **`skybox`** (apply a background).
 
 Dispenser handlers: **`dispense`** creates one item beside a dispenser and
@@ -843,8 +847,9 @@ lclick, rclick }`; the interaction layer dispatches off this, no type switches.
 - **`gridMesh(scale, tableX, tableZ) → THREE.LineSegments | null`** — the table grid: a
   single line mesh drawn from the same lattice `snapToCell` quantises to (per-axis
   `cellWorld`/`cellZ`, `gridX`/`gridZ` offset), tinted `scale.gridColor`, `depthWrite:false`
-  so pieces occlude it. `null` for `off`/`hex`/zero-cell, and skips a hair-fine grid
-  (>300 lines/axis). The client's **`rebuildGrid`** builds/replaces it at `gridLift` above
+  so pieces occlude it. Draws **square** lines or a **hex** lattice (`hexOrient` pointy/flat,
+  edges de-duped and clipped to the felt); `null` for `off`/zero-cell, and skips a hair-fine
+  grid (>300 lines/axis square, or a hex-count cap). The client's **`rebuildGrid`** builds/replaces it at `gridLift` above
   the felt and re-runs on the relevant `scale`/table-size changes.
 - **`trayMesh(feltColor) → THREE.Group`** — a felt-lined open box built from the shared
   `trayParts()` in tray-local space (so the mesh matches the collider), skipping the `noMesh`

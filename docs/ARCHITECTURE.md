@@ -234,8 +234,8 @@ throws carry accurate momentum.
 
 **Snap-to-grid** (0.7.0) is a placement concern layered on top of this, not a change
 to the sim. A piece carries a `snap` flag (per-piece, like `stand`; **G** toggles it).
-When a grid is active, a snapped piece's `move`/`release` XZ runs through the shared
-`snapToCell` quantiser — the same function on client (drag preview) and server
+When a grid is active (square cells or hex centres — one `snapToCell` for both), a
+snapped piece's `move`/`release` XZ runs through the shared `snapToCell` quantiser — the same function on client (drag preview) and server
 (authority), so they can't drift — and it's dropped **throw-free** (velocity zeroed)
 rather than flung. It's still an ordinary rigid body; it just falls onto a quantised
 point. The one part that _does_ touch body state is **pinning**: once a snapped piece
@@ -388,7 +388,8 @@ geometry — `tile` / `geom` / `snap`, via `geoOf` — through deck → hand →
 face-down tile still shows its true silhouette while its face stays hidden (the privacy
 invariant, unchanged). A hexagon card carries this all the way into physics: the mesh is a
 regular pointy-top hex prism and the collider a matching 6-gon (cannon's default hexagon
-already points the same way), so it's ready to drop onto a future hex grid.
+already points the same way), so it drops cleanly onto the hex grid (`gridStyle: 'hex'`,
+pointy- or flat-top; snap + render share the axial math in `snapToCell` / `gridMesh`).
 
 The board and deck sides generalize the same way. A `proc` board paints its top from data
 (`BOARD_PAINTERS`), so a premium word grid — or a later battlemap — is a painter plus a
