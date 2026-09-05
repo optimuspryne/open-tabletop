@@ -1113,14 +1113,15 @@ function hexRound(q, r) {
     z = r,
     y = -x - z;
   let rx = Math.round(x),
-    ry = Math.round(y),
     rz = Math.round(z);
+  const ry = Math.round(y);
   const dx = Math.abs(rx - x),
     dy = Math.abs(ry - y),
     dz = Math.abs(rz - z);
+  // Recompute the coord with the largest rounding error from the other two. Only q (rx)
+  // and r (rz) are returned, so when y carries the largest error, rx/rz already stand.
   if (dx > dy && dx > dz) rx = -ry - rz;
-  else if (dy > dz) ry = -rx - rz;
-  else rz = -rx - ry;
+  else if (dz >= dy) rz = -rx - ry;
   return { q: rx, r: rz };
 }
 

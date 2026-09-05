@@ -6,7 +6,7 @@ import { gridActive, snapToCell } from '../shared/pieces.js';
 
 test('gridActive: true only for a real style + positive cell', () => {
   assert.equal(gridActive({ gridStyle: 'square', cellWorld: 1 }), true);
-  assert.equal(gridActive({ gridStyle: 'hex', cellWorld: 2 }), true); // exists for rendering, even pre-hex-snap
+  assert.equal(gridActive({ gridStyle: 'hex', cellWorld: 2 }), true); // hex snaps + renders
   assert.equal(gridActive({ gridStyle: 'off', cellWorld: 1 }), false);
   assert.equal(gridActive({ gridStyle: 'square', cellWorld: 0 }), false);
   assert.equal(gridActive({}), false);
@@ -59,12 +59,42 @@ test('snapToCell (rectangular): X and Z snap on independent spacings (go board)'
   );
 });
 
-test('snapToCell: hex / off / zero-cell are identity (safe to always call)', () => {
-  assert.deepEqual(snapToCell(3.3, -1.7, { gridStyle: 'hex', cellWorld: 2 }), { x: 3.3, z: -1.7 });
+test('snapToCell: off / zero-cell are identity (safe to always call)', () => {
   assert.deepEqual(snapToCell(3.3, -1.7, { gridStyle: 'off', cellWorld: 2 }), { x: 3.3, z: -1.7 });
   assert.deepEqual(snapToCell(3.3, -1.7, { gridStyle: 'square', cellWorld: 0 }), {
     x: 3.3,
     z: -1.7,
   });
   assert.deepEqual(snapToCell(3.3, -1.7, {}), { x: 3.3, z: -1.7 });
+});
+
+const S3 = Math.sqrt(3);
+const close = (a, b, e = 1e-9) => Math.abs(a - b) <= e;
+
+test('snapToCell (hex pointy, size=2): pulls to the nearest hex centre', () => {
+  const sc = { gridStyle: 'hex', cellWorld: 2, hexOrient: 'pointy' };
+  const o = snapToCell(0.3, -0.2, sc); // origin is a centre
+  assert.ok(close(o.x, 0) && close(o.z, 0));
+  const c = snapToCell(3.4, 0.1, sc); // near the (q=1,r=0) centre at (2√3, 0)
+  assert.ok(close(c.x, 2 * S3) && close(c.z, 0));
+  const k = snapToCell(1.0, 2.9, sc); // snapping a centre is idempotent
+  assert.deepEqual(snapToCell(k.x, k.z, sc), k);
+});
+
+test('snapToCell (hex): pointy and flat give different lattices, both idempotent', () => {
+  const pointy = { gridStyle: 'hex', cellWorld: 2, hexOrient: 'pointy' };
+  const flat = { gridStyle: 'hex', cellWorld: 2, hexOrient: 'flat' };
+  const p = snapToCell(1.5, 1.0, pointy);
+  const f = snapToCell(1.5, 1.0, flat);
+  assert.notDeepEqual(p, f);
+  assert.deepEqual(snapToCell(p.x, p.z, pointy), p);
+  assert.deepEqual(snapToCell(f.x, f.z, flat), f);
+});
+
+test('snapToCell (hex): gridX/gridZ shift the lattice', () => {
+  const base = { gridStyle: 'hex', cellWorld: 2, hexOrient: 'pointy' };
+  const o = snapToCell(0, 0, base);
+  assert.ok(close(o.x, 0) && close(o.z, 0)); // origin is a centre with no offset
+  const off = snapToCell(0.5, -0.3, { ...base, gridX: 0.5, gridZ: -0.3 });
+  assert.ok(close(off.x, 0.5) && close(off.z, -0.3)); // the offset point is now a centre
 });

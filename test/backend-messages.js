@@ -148,7 +148,12 @@ test('table and scale settings reject coercion and invalid partial updates', () 
     cellWorld: 2,
     gridHidden: false,
   });
+  assert.deepEqual(scalePayload({ gridStyle: 'hex', hexOrient: 'flat' }), {
+    gridStyle: 'hex',
+    hexOrient: 'flat',
+  });
   assert.equal(scalePayload({ gridStyle: 'triangle' }), null);
+  assert.equal(scalePayload({ hexOrient: 'diagonal' }), null);
   assert.equal(scalePayload({ gridX: Infinity }), null);
   assert.equal(scalePayload({ unknown: 1 }), null);
 });

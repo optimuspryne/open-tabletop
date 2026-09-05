@@ -2034,7 +2034,7 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
   if (!(hx > 0) || !(hz > 0)) return null;
   const ox = +scale.gridX || 0,
     oz = +scale.gridZ || 0; // lattice offset (align to a printed map)
-  let pts = null;
+  let pts;
   if (scale.gridStyle === 'square') {
     const cell = +scale.cellWorld;
     const cz = +scale.cellZ > 0 ? +scale.cellZ : cell; // rectangular grids: separate depth spacing
