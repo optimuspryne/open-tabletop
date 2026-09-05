@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { TABLE } from '/shared/pieces.js';
+import { TABLE, tableOutline } from '/shared/pieces.js';
 
 // Core client scene — sets up Three.js: scene, camera, renderer, lights, and the
 // table mesh. This module is visual ONLY; the server owns all physics and this
@@ -250,17 +250,35 @@ if (typeof window !== 'undefined') {
 // ===== Table ================================================================
 const tableMesh = new THREE.Mesh(
   new THREE.BoxGeometry(TABLE.x * 2, 1, TABLE.z * 2),
-  new THREE.MeshStandardMaterial({ color: 0x2f6b4f, roughness: 0.95 }),
+  new THREE.MeshStandardMaterial({ color: 0x2f6b4f, roughness: 0.95, side: THREE.DoubleSide }),
 );
 tableMesh.position.y = -0.5; // top surface sits at y = 0
 tableMesh.receiveShadow = true;
 scene.add(tableMesh);
 
-// Rebuild the felt at new half-extents (the GM resized the play surface).
-function resizeTable(hx, hz) {
+// The felt geometry for a shape: a plain box for 'rect', else the shared tableOutline extruded
+// to the slab thickness (1) — the SAME outline the server walls use, so the visible edge and the
+// physics rim line up. Centred on Y like the box so the existing position.y = -0.5 keeps the top
+// surface at y = 0. (Table material is DoubleSide, so the extruded cap shows regardless of the
+// outline's winding.)
+function tableGeometry(hx, hz, shape) {
+  if (!shape || shape === 'rect') return new THREE.BoxGeometry(hx * 2, 1, hz * 2);
+  const outline = tableOutline(shape, hx, hz);
+  const s = new THREE.Shape();
+  outline.forEach((p, i) => (i ? s.lineTo(p.x, p.z) : s.moveTo(p.x, p.z)));
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // shape's plane into world XZ, thickness along +Y (0..1)
+  geo.translate(0, -0.5, 0); // centre on Y like the box slab
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Rebuild the felt at new half-extents / shape (the GM resized or reshaped the play surface).
+function resizeTable(hx, hz, shape = 'rect') {
   tableMesh.geometry.dispose();
-  tableMesh.geometry = new THREE.BoxGeometry(hx * 2, 1, hz * 2);
-  fitShadow(hx, hz); // keep the shadow frustum matched to the surface
+  tableMesh.geometry = tableGeometry(hx, hz, shape);
+  fitShadow(hx, hz); // keep the shadow frustum matched to the (bounding) surface
 }
 
 // Recolor the felt (the GM picked a new table color).

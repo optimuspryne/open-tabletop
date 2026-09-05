@@ -997,7 +997,7 @@ function rebuildGrid() {
     cb(room.state).listen(
       'tableX',
       () => {
-        resizeTable(room.state.tableX, room.state.tableZ);
+        resizeTable(room.state.tableX, room.state.tableZ, room.state.tableShape);
         rebuildSeats();
         rebuildGrid();
       },
@@ -1006,7 +1006,7 @@ function rebuildGrid() {
     cb(room.state).listen(
       'tableZ',
       () => {
-        resizeTable(room.state.tableX, room.state.tableZ);
+        resizeTable(room.state.tableX, room.state.tableZ, room.state.tableShape);
         rebuildSeats();
         rebuildGrid();
       },
@@ -1047,7 +1047,7 @@ function rebuildGrid() {
   updateRoomNotes();
   renderUnclaimed();
   if (room.state.tableX) {
-    resizeTable(room.state.tableX, room.state.tableZ);
+    resizeTable(room.state.tableX, room.state.tableZ, room.state.tableShape);
     rebuildSeats();
   } // initial size (may be default until decode)
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
