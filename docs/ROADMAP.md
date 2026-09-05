@@ -1,6 +1,6 @@
 # Open Tabletop — Roadmap
 
-_Last groomed 2026-09-05 (hex grids shipped); prior reconcile v0.12.2 (+41 commits)._
+_Last groomed 2026-09-05 (hex grids + table shapes shipped); prior reconcile v0.12.2 (+41 commits)._
 
 ## North star
 
@@ -190,12 +190,16 @@ remains is closing the known gesture gaps and proving it on real devices — not
 Unordered — priority not yet assigned. Each note records what exists today, so the work is
 scoped against the real tree rather than from memory.
 
-1. **Table shape customization.** Today the table is resizable and recolorable
-   (`resizeTable` and `setTableColor`, `public/core.js:110–119`; `applyScale` /
-   `scaleSnapshot` on `TableRoom`) but the surface is rectangular only. Shape is a new axis —
-   round, oval, hex — and it touches the physics bounds (`TableRoom.buildBounds`), the tray
-   layout (`buildTrays`, `seatAngle`, `trayCenterFor`) and the grid calibration
-   (`calibrateGrid`), not just the mesh.
+1. ✅ **Table shape customization — DONE (2026-09-05, confirmed by Ben; CHANGELOG under
+   `[Unreleased]`).** The play surface can be **round, oval, hex (flat-top) or a rounded
+   rectangle**, not just a rectangle (`state.tableShape`, GM-set + durable, carried in scenes;
+   migration 014). One shared `tableOutline(shape, hx, hz)` drives all three consumers: the physics
+   wall ring (`buildBounds` — one box wall per outline edge; the floor stays a box), the felt mesh
+   (`resizeTable` extrudes it), and the grid clip (`gridMesh` via `clipSegConvex`). round/hex are
+   single-size (depth follows width). Shipped **decoupled from the hex grid** (item 3) — a hex grid
+   never needed a hex table. Seats, hand-fans and personal trays carried over unchanged (trays
+   already ride a circular track), so the deferred perimeter-following seating work stays parked
+   and, confirmed in play, looks unnecessary.
 2. **Interactive tutorial.** Nothing exists today beyond the player-facing How-to-Play panel.
    Worth deciding early whether this is an overlay walkthrough in a normal room or a scripted
    starter scene — the latter reuses `setupStarter` and stays physical-first.
@@ -277,8 +281,8 @@ Small, concrete, each completes an existing feature:
   the new `RoomScale.hexOrient` (hex size = `cellWorld`), with `calibrateGrid` fitting hexes to a
   board by count. Snap and render share the axial math in `shared/pieces.js`, so the client preview
   and the server authority agree. Built on the 0.9.0 hex-tile groundwork (pointy-top mesh + 6-gon
-  collider), which drops onto the grid cleanly. Decoupled from **table shape** (backlog item 1),
-  which stays open. Only **multi-cell footprints** (below) remains of the original hex work.
+  collider), which drops onto the grid cleanly. Decoupled from **table shape** (backlog item 1, since shipped). Only **multi-cell footprints**
+  (below) remains of the original hex work.
 - **Multi-cell footprints** — snap assumes 1×1; big-base minis need a per-kind `cells` hint.
 - **Free-drag group rotation** — multi-select rotates in 45° steps; a grab-and-spin handle is the
   polish. (`DESIGN_multiselect.md`, deferred.)
