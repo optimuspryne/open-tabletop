@@ -21,6 +21,7 @@ import {
   PROPS,
   BOARDS,
   TABLE,
+  tableOutline,
   deckHeight,
   MEASURE,
   DISPENSERS,
@@ -1352,7 +1353,7 @@ class TableRoom extends Room {
 
   // Build (or rebuild) the table surface + four containment walls at the given
   // half-extents. Called on create and whenever the GM resizes the table.
-  buildBounds(hx, hz) {
+  buildBounds(hx, hz, shape = (this.state && this.state.tableShape) || 'rect') {
     const w = this.world,
       mat = w.__mat;
     for (const b of this._bounds || []) w.removeBody(b); // drop the previous surface + walls
@@ -1362,21 +1363,43 @@ class TableRoom extends Room {
       this._bounds.push(body);
     };
     const table = new CANNON.Body({ mass: 0, material: mat }); // surface sits just below y=0
-    table.addShape(new CANNON.Box(new CANNON.Vec3(hx, SIM.tableThick, hz)));
+    table.addShape(new CANNON.Box(new CANNON.Vec3(hx, SIM.tableThick, hz))); // floor stays a box under any shape
     table.position.set(0, -SIM.tableThick, 0);
     add(table);
-    const thick = SIM.wall.thick,
-      overlap = SIM.wall.over;
-    const wall = (px, pz, whx, whz) => {
-      const b = new CANNON.Body({ mass: 0, material: mat });
-      b.addShape(new CANNON.Box(new CANNON.Vec3(whx, SIM.wall.half, whz)));
-      b.position.set(px, SIM.wall.half, pz);
-      add(b);
-    };
-    wall(0, -(hz + thick), hx + overlap, thick); // near / far
-    wall(0, hz + thick, hx + overlap, thick);
-    wall(-(hx + thick), 0, thick, hz + overlap); // left / right
-    wall(hx + thick, 0, thick, hz + overlap);
+    if (shape && shape !== 'rect') {
+      // Shaped rim: one thin box wall per outline edge, each sealed at the seams by a small
+      // over-length so neighbours overlap at the vertices. Same source outline as the mesh + grid.
+      const outline = tableOutline(shape, hx, hz),
+        wy = SIM.wall.half,
+        th = SIM.wall.thick,
+        seal = th;
+      for (let i = 0; i < outline.length; i++) {
+        const a = outline[i],
+          b = outline[(i + 1) % outline.length];
+        const dx = b.x - a.x,
+          dz = b.z - a.z,
+          len = Math.hypot(dx, dz);
+        if (!(len > 0)) continue;
+        const body = new CANNON.Body({ mass: 0, material: mat });
+        body.addShape(new CANNON.Box(new CANNON.Vec3(len / 2 + seal, wy, th))); // local X along edge, Z = thickness
+        body.position.set((a.x + b.x) / 2, wy, (a.z + b.z) / 2);
+        body.quaternion.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), -Math.atan2(dz, dx));
+        add(body);
+      }
+    } else {
+      const thick = SIM.wall.thick,
+        overlap = SIM.wall.over;
+      const wall = (px, pz, whx, whz) => {
+        const b = new CANNON.Body({ mass: 0, material: mat });
+        b.addShape(new CANNON.Box(new CANNON.Vec3(whx, SIM.wall.half, whz)));
+        b.position.set(px, SIM.wall.half, pz);
+        add(b);
+      };
+      wall(0, -(hz + thick), hx + overlap, thick); // near / far
+      wall(0, hz + thick, hx + overlap, thick);
+      wall(-(hx + thick), 0, thick, hz + overlap); // left / right
+      wall(hx + thick, 0, thick, hz + overlap);
+    }
     this.buildTrays(); // the personal trays ride the same track; rebuild against the new table size
   }
 

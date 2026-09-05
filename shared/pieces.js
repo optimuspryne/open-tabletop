@@ -1015,6 +1015,59 @@ export const SEAT_ANGLES = [
 ];
 export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
 
+// The table's outline as a closed polygon of {x,z} perimeter points, for a shape + half-extents.
+// One source of truth for the three consumers that must agree: the physics wall ring (one box
+// per edge), the surface mesh (extruded outline), and the grid clip. 'rect' returns its four
+// corners; 'round'/'oval' sample the (elliptical) rim; 'hex' is a flat-top hexagon (flat edges
+// facing ±Z, the near/far seats) sized to hx; 'roundedRect' is straight edges plus sampled corner
+// arcs. 'round' and 'hex' use hx and ignore hz (the UI locks depth to width for them).
+export function tableOutline(shape, hx, hz) {
+  if (shape === 'round' || shape === 'oval') {
+    const a = hx,
+      b = shape === 'round' ? hx : hz;
+    const n = Math.max(24, Math.min(96, Math.round((Math.PI * (a + b)) / 0.8))); // ~0.8u segments
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const t = (i / n) * Math.PI * 2;
+      pts.push({ x: Math.cos(t) * a, z: Math.sin(t) * b });
+    }
+    return pts;
+  }
+  if (shape === 'hex') {
+    const r = hx,
+      pts = [];
+    for (let i = 0; i < 6; i++) {
+      const t = (i * Math.PI) / 3; // vertices at 0,60,…,300 → flat edges facing ±Z
+      pts.push({ x: Math.cos(t) * r, z: Math.sin(t) * r });
+    }
+    return pts;
+  }
+  if (shape === 'roundedRect') {
+    const r = Math.min(hx, hz) * 0.2, // corner radius
+      per = 4, // segments per 90° corner arc
+      pts = [];
+    const corners = [
+      { cx: hx - r, cz: hz - r, a0: 0 },
+      { cx: -(hx - r), cz: hz - r, a0: Math.PI / 2 },
+      { cx: -(hx - r), cz: -(hz - r), a0: Math.PI },
+      { cx: hx - r, cz: -(hz - r), a0: (3 * Math.PI) / 2 },
+    ];
+    for (const c of corners)
+      for (let i = 0; i <= per; i++) {
+        const t = c.a0 + (i / per) * (Math.PI / 2);
+        pts.push({ x: c.cx + Math.cos(t) * r, z: c.cz + Math.sin(t) * r });
+      }
+    return pts;
+  }
+  // rect (default): four corners
+  return [
+    { x: hx, z: hz },
+    { x: -hx, z: hz },
+    { x: -hx, z: -hz },
+    { x: hx, z: -hz },
+  ];
+}
+
 // The tray's centre on the track, for a given angle and table size. Same radius formula as the
 // whiteboard (max half-extent + a margin), so the tray hugs the table edge at any table size.
 export function trayCenter(angle, tableX, tableZ, T = TRAY) {
