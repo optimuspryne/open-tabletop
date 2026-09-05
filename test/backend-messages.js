@@ -143,6 +143,15 @@ test('table and scale settings reject coercion and invalid partial updates', () 
   assert.deepEqual(tablePayload({ x: 10, z: 7 }, limits), { x: 10, z: 7 });
   assert.equal(tablePayload({ x: '10', z: 7 }, limits), null);
   assert.equal(tablePayload({ x: 30, z: 7 }, limits), null);
+  assert.deepEqual(tablePayload({ shape: 'hex' }, limits), { shape: 'hex' });
+  assert.deepEqual(tablePayload({ x: 12, z: 12, shape: 'round' }, limits), {
+    x: 12,
+    z: 12,
+    shape: 'round',
+  });
+  assert.equal(tablePayload({ shape: 'blob' }, limits), null);
+  assert.equal(tablePayload({ x: 10 }, limits), null); // width + depth travel together
+  assert.equal(tablePayload({ x: 10, z: 7, extra: 1 }, limits), null);
   assert.deepEqual(scalePayload({ gridStyle: 'square', cellWorld: 2, gridHidden: false }), {
     gridStyle: 'square',
     cellWorld: 2,
