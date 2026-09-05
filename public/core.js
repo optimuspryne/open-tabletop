@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { TABLE, tableOutline } from '/shared/pieces.js';
+import { TABLE, tableOutline, offsetOutline } from '/shared/pieces.js';
 
 // Core client scene — sets up Three.js: scene, camera, renderer, lights, and the
 // table mesh. This module is visual ONLY; the server owns all physics and this
@@ -256,6 +256,40 @@ tableMesh.position.y = -0.5; // top surface sits at y = 0
 tableMesh.receiveShadow = true;
 scene.add(tableMesh);
 
+// A wooden rim around the felt edge: the shared tableOutline offset outward for the outer edge,
+// with a slight inward overlap onto the felt, extruded into a low raised lip. Purely visual — the
+// physics walls already sit at the felt edge — and rebuilt with the felt on any resize / reshape.
+const RIM = { width: 0.4, lip: 0.35, base: -1, overlap: 0.06 };
+const rimTex = new THREE.TextureLoader().load('/textures/table-rim.jpg');
+rimTex.colorSpace = THREE.SRGBColorSpace;
+rimTex.wrapS = rimTex.wrapT = THREE.RepeatWrapping;
+rimTex.repeat.set(0.5, 0.5);
+rimTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+const rimMat = new THREE.MeshStandardMaterial({ map: rimTex, roughness: 0.6, metalness: 0 });
+
+function rimGeometry(hx, hz, shape) {
+  const felt = tableOutline(shape, hx, hz);
+  const outer = offsetOutline(felt, RIM.width);
+  const inner = offsetOutline(felt, -RIM.overlap); // slightly onto the felt so there's no seam
+  const shp = new THREE.Shape();
+  outer.forEach((p, i) => (i ? shp.lineTo(p.x, p.z) : shp.moveTo(p.x, p.z)));
+  shp.closePath();
+  const hole = new THREE.Path();
+  inner.forEach((p, i) => (i ? hole.lineTo(p.x, p.z) : hole.moveTo(p.x, p.z)));
+  hole.closePath();
+  shp.holes.push(hole);
+  const geo = new THREE.ExtrudeGeometry(shp, { depth: RIM.lip - RIM.base, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // into the world XZ plane, height along +Y
+  geo.translate(0, RIM.base, 0); // base flush with the felt bottom; the lip rises above the felt
+  geo.computeVertexNormals();
+  return geo;
+}
+
+const rimMesh = new THREE.Mesh(rimGeometry(TABLE.x, TABLE.z, 'rect'), rimMat);
+rimMesh.castShadow = true;
+rimMesh.receiveShadow = true;
+scene.add(rimMesh);
+
 // The felt geometry for a shape: a plain box for 'rect', else the shared tableOutline extruded
 // to the slab thickness (1) — the SAME outline the server walls use, so the visible edge and the
 // physics rim line up. Centred on Y like the box so the existing position.y = -0.5 keeps the top
@@ -278,6 +312,8 @@ function tableGeometry(hx, hz, shape) {
 function resizeTable(hx, hz, shape = 'rect') {
   tableMesh.geometry.dispose();
   tableMesh.geometry = tableGeometry(hx, hz, shape);
+  rimMesh.geometry.dispose();
+  rimMesh.geometry = rimGeometry(hx, hz, shape);
   fitShadow(hx, hz); // keep the shadow frustum matched to the (bounding) surface
 }
 

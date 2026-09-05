@@ -1071,6 +1071,44 @@ export function tableOutline(shape, hx, hz) {
   ];
 }
 
+// Offset a convex, origin-centred outline by a constant width — outward (w>0) or inward (w<0) —
+// with a mitre at each vertex. Used for the table's wooden rim (an outer ring, plus a slight
+// inward overlap onto the felt). Every table shape is convex and contains the origin, which is
+// what lets \"outward\" be read off each vertex.
+export function offsetOutline(outline, w) {
+  const n = outline.length,
+    out = [];
+  const unit = (dx, dz) => {
+    const l = Math.hypot(dx, dz) || 1;
+    return { x: dx / l, z: dz / l };
+  };
+  const outward = (e, p) => {
+    let nx = e.z,
+      nz = -e.x; // a perpendicular to the edge
+    if (nx * p.x + nz * p.z < 0) {
+      nx = -nx;
+      nz = -nz;
+    } // face away from the origin
+    return { x: nx, z: nz };
+  };
+  for (let i = 0; i < n; i++) {
+    const prev = outline[(i - 1 + n) % n],
+      cur = outline[i],
+      next = outline[(i + 1) % n];
+    const n1 = outward(unit(cur.x - prev.x, cur.z - prev.z), cur);
+    const n2 = outward(unit(next.x - cur.x, next.z - cur.z), cur);
+    let mx = n1.x + n2.x,
+      mz = n1.z + n2.z;
+    const ml = Math.hypot(mx, mz) || 1;
+    mx /= ml;
+    mz /= ml;
+    const cos = Math.max(mx * n1.x + mz * n1.z, 0.2); // clamp the mitre at sharp corners
+    const s = w / cos;
+    out.push({ x: cur.x + mx * s, z: cur.z + mz * s });
+  }
+  return out;
+}
+
 // The tray's centre on the track, for a given angle and table size. Same radius formula as the
 // whiteboard (max half-extent + a margin), so the tray hugs the table edge at any table size.
 export function trayCenter(angle, tableX, tableZ, T = TRAY) {
