@@ -1949,28 +1949,111 @@ const KIND = {
 // Lines on cell multiples through the world origin (matching snapToCell, whose cell
 // CENTRES sit half a cell between them), spanning the whole table. Built flat at y=0;
 // the client lifts it just above the felt. Colour is GM-set (`scale.gridColor`) so it
-// reads on any felt. Returns null when there's no grid to draw. Square only for now.
+// reads on any felt. Returns null when there's no grid to draw.
+
+// Clip a segment to the table rectangle [-hx,hx]x[-hz,hz] (Liang-Barsky), so hex
+// cells at the boundary are trimmed to the felt edge just like the square lines are.
+// Returns [x1,z1,x2,z2] of the visible part, or null if the segment misses the table.
+function clipSegRect(x1, z1, x2, z2, hx, hz) {
+  let t0 = 0,
+    t1 = 1;
+  const dx = x2 - x1,
+    dz = z2 - z1;
+  const pp = [-dx, dx, -dz, dz];
+  const qq = [x1 + hx, hx - x1, z1 + hz, hz - z1];
+  for (let i = 0; i < 4; i++) {
+    if (pp[i] === 0) {
+      if (qq[i] < 0) return null; // parallel and outside this edge
+    } else {
+      const t = qq[i] / pp[i];
+      if (pp[i] < 0) {
+        if (t > t1) return null;
+        if (t > t0) t0 = t;
+      } else {
+        if (t < t0) return null;
+        if (t < t1) t1 = t;
+      }
+    }
+  }
+  return [x1 + t0 * dx, z1 + t0 * dz, x1 + t1 * dx, z1 + t1 * dz];
+}
+
+// Line-segment endpoints (y=0 triples) for a hex lattice of size `s` (centre-to-vertex),
+// offset by (ox,oz), clipped to the table. `flat` = flat-top, else pointy-top (matching
+// snapToCell). Centres are enumerated in axial (q,r) space over the table + one hex of
+// margin; each hex's 6 edges are de-duped so a shared edge is drawn once. Returns null
+// past a perf cap (a hair-fine grid) so a bad size never floods the scene.
+function hexGridPts(s, hx, hz, ox, oz, flat) {
+  if (!(s > 0)) return null;
+  const S3 = 2 * HEX_HH; // √3
+  const colDX = flat ? 1.5 * s : S3 * s, // horizontal centre spacing
+    rowDZ = flat ? S3 * s : 1.5 * s; // vertical centre spacing
+  if (((2 * hx) / colDX) * ((2 * hz) / rowDZ) > 6000) return null; // sanity cap (perf)
+  // 6 vertex offsets: pointy-top starts at +Z (a point at top), flat-top at +X.
+  const verts = [];
+  for (let i = 0; i < 6; i++) {
+    const a = (flat ? 0 : Math.PI / 2) + (i * Math.PI) / 3;
+    verts.push([s * Math.cos(a), s * Math.sin(a)]);
+  }
+  const mx = hx + s,
+    mz = hz + s; // include hexes whose centre sits just off the table
+  const rMax = Math.ceil(mz / rowDZ) + 2,
+    qMax = Math.ceil(mx / colDX) + 2;
+  const pts = [],
+    seen = new Set();
+  const key = (a, b) => Math.round(a * 1000) + ',' + Math.round(b * 1000);
+  const edge = (ax, az, bx, bz) => {
+    const ka = key(ax, az),
+      kb = key(bx, bz);
+    const k = ka < kb ? ka + '|' + kb : kb + '|' + ka; // order-independent
+    if (seen.has(k)) return;
+    seen.add(k);
+    const c = clipSegRect(ax, az, bx, bz, hx, hz);
+    if (c) pts.push(c[0], 0, c[1], c[2], 0, c[3]);
+  };
+  for (let r = -rMax; r <= rMax; r++) {
+    const skew = Math.ceil(Math.abs(r) / 2); // pointy rows shift ±r/2 in q
+    for (let q = -qMax - skew; q <= qMax + skew; q++) {
+      const cx = ox + (flat ? colDX * q : s * (S3 * q + HEX_HH * r));
+      const cz = oz + (flat ? s * (HEX_HH * q + S3 * r) : rowDZ * r);
+      if (cx < -mx || cx > mx || cz < -mz || cz > mz) continue;
+      for (let i = 0; i < 6; i++) {
+        const a = verts[i],
+          b = verts[(i + 1) % 6];
+        edge(cx + a[0], cz + a[1], cx + b[0], cz + b[1]);
+      }
+    }
+  }
+  return pts;
+}
+
 export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z) {
-  if (!gridActive(scale) || scale.gridStyle !== 'square' || scale.gridHidden) return null; // hidden: still snaps, just not drawn
-  const cell = +scale.cellWorld,
-    hx = +tableX,
+  if (!gridActive(scale) || scale.gridHidden) return null; // hidden: still snaps, just not drawn
+  const hx = +tableX,
     hz = +tableZ;
-  const cz = +scale.cellZ > 0 ? +scale.cellZ : cell; // rectangular grids: separate depth spacing
+  if (!(hx > 0) || !(hz > 0)) return null;
   const ox = +scale.gridX || 0,
     oz = +scale.gridZ || 0; // lattice offset (align to a printed map)
-  if (!(cell > 0) || !(hx > 0) || !(hz > 0)) return null;
-  if ((hx / cell) * 2 > 300 || (hz / cz) * 2 > 300) return null; // sanity cap: skip a hair-fine grid (perf)
-  const pts = [];
-  for (let m = Math.ceil((-hx - ox) / cell); m <= Math.floor((hx - ox) / cell); m++) {
-    // constant-x lines, spaced by cell
-    const x = ox + m * cell;
-    pts.push(x, 0, -hz, x, 0, hz);
-  }
-  for (let m = Math.ceil((-hz - oz) / cz); m <= Math.floor((hz - oz) / cz); m++) {
-    // constant-z lines, spaced by cz
-    const z = oz + m * cz;
-    pts.push(-hx, 0, z, hx, 0, z);
-  }
+  let pts = null;
+  if (scale.gridStyle === 'square') {
+    const cell = +scale.cellWorld;
+    const cz = +scale.cellZ > 0 ? +scale.cellZ : cell; // rectangular grids: separate depth spacing
+    if (!(cell > 0)) return null;
+    if ((hx / cell) * 2 > 300 || (hz / cz) * 2 > 300) return null; // sanity cap: skip a hair-fine grid (perf)
+    pts = [];
+    for (let m = Math.ceil((-hx - ox) / cell); m <= Math.floor((hx - ox) / cell); m++) {
+      const x = ox + m * cell; // constant-x lines, spaced by cell
+      pts.push(x, 0, -hz, x, 0, hz);
+    }
+    for (let m = Math.ceil((-hz - oz) / cz); m <= Math.floor((hz - oz) / cz); m++) {
+      const z = oz + m * cz; // constant-z lines, spaced by cz
+      pts.push(-hx, 0, z, hx, 0, z);
+    }
+  } else if (scale.gridStyle === 'hex') {
+    pts = hexGridPts(+scale.cellWorld, hx, hz, ox, oz, scale.hexOrient === 'flat');
+    if (!pts) return null;
+  } else return null;
+  if (!pts.length) return null;
   const color = /^#[0-9a-f]{6}$/i.test(scale.gridColor || '') ? scale.gridColor : '#ffffff';
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
