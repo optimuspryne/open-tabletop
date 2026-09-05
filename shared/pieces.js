@@ -1105,17 +1105,63 @@ export function gridActive(scale = {}) {
   return !!scale && scale.gridStyle !== 'off' && +scale.cellWorld > 0;
 }
 
+// Round fractional axial hex coords (q, r) to the nearest hex centre, via cube
+// rounding (the coordinate with the largest rounding error is recomputed from the
+// other two so the cube constraint x+y+z=0 always holds).
+function hexRound(q, r) {
+  const x = q,
+    z = r,
+    y = -x - z;
+  let rx = Math.round(x),
+    ry = Math.round(y),
+    rz = Math.round(z);
+  const dx = Math.abs(rx - x),
+    dy = Math.abs(ry - y),
+    dz = Math.abs(rz - z);
+  if (dx > dy && dx > dz) rx = -ry - rz;
+  else if (dy > dz) ry = -rx - rz;
+  else rz = -rx - ry;
+  return { q: rx, r: rz };
+}
+
+// Snap an XZ point (already offset-relative) to the nearest hex CENTRE for a hex
+// grid whose size `s` is the centre-to-vertex circumradius (= cellWorld, matching
+// the hex TILE convention). `flat` = flat-top; default is pointy-top (points at
+// ±Z, like the hex tiles). Pixel↔axial per the standard hex layout, so the
+// centres tile the plane with no gaps or overlaps.
+function snapToHexCentre(x, z, s, flat) {
+  const S3 = 2 * HEX_HH, // √3
+    T3 = (2 / 3) * HEX_HH; // √3/3
+  let q, r;
+  if (flat) {
+    q = ((2 / 3) * x) / s;
+    r = (-(1 / 3) * x + T3 * z) / s;
+  } else {
+    q = (T3 * x - (1 / 3) * z) / s;
+    r = ((2 / 3) * z) / s;
+  }
+  const h = hexRound(q, r);
+  if (flat) return { x: s * ((3 / 2) * h.q), z: s * (HEX_HH * h.q + S3 * h.r) };
+  return { x: s * (S3 * h.q + HEX_HH * h.r), z: s * ((3 / 2) * h.r) };
+}
+
 // Snap a world XZ point to the nearest cell CENTRE, returning a new { x, z }.
-// Square only for now; 'hex' (needs an orientation — see the grid plan) and 'off'
-// return the point unchanged, so a drop can always be routed through this safely.
+// Handles 'square' (rectangular cells; 'center' or 'cross' anchor) and 'hex'
+// (centres only, pointy- or flat-top per hexOrient). 'off' or a zero cell size
+// returns the point unchanged, so a drop can always be routed through this safely.
 // Uses exact rounding (not roundToStep's display rounding), so any cell size lands
 // on true multiples with no float truncation.
 export function snapToCell(x, z, scale = {}) {
   const cx = +scale.cellWorld;
-  if (!(cx > 0) || scale.gridStyle !== 'square') return { x, z };
-  const cz = +scale.cellZ > 0 ? +scale.cellZ : cx; // rectangular grids (e.g. a go board) have cz ≠ cx
+  if (!(cx > 0)) return { x, z };
   const ox = +scale.gridX || 0,
     oz = +scale.gridZ || 0; // lattice offset — align to a printed map's phase
+  if (scale.gridStyle === 'hex') {
+    const c = snapToHexCentre(x - ox, z - oz, cx, scale.hexOrient === 'flat');
+    return { x: c.x + ox, z: c.z + oz };
+  }
+  if (scale.gridStyle !== 'square') return { x, z };
+  const cz = +scale.cellZ > 0 ? +scale.cellZ : cx; // rectangular grids (e.g. a go board) have cz ≠ cx
   // 'cross' snaps to the line intersections (go stones sit on crossings); the default
   // 'center' snaps to mid-cell (chess/checkers pieces sit in the squares).
   const cross = scale.snapAnchor === 'cross';
