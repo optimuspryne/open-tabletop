@@ -296,7 +296,6 @@ const WOOD_RIM = {
   walnut: '/textures/wood-walnut.jpg',
   birch: '/textures/wood-birch.jpg',
   green: '/textures/wood-green.jpg',
-  oak: '/textures/wood-oak.jpg',
 };
 const _woodCache = new Map();
 function woodTexture(name) {

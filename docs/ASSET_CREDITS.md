@@ -95,7 +95,15 @@ All CC0 (public domain).
 - **License:** CC0 (public domain; no attribution required — credited here as a courtesy). Four of
   the set are used as the selectable wooden table rim, re-encoded to JPEG:
   `public/textures/wood-mahogany.jpg` (default), `wood-walnut.jpg`, `wood-birch.jpg`,
-  `wood-green.jpg`, `wood-oak.jpg`.
+  `wood-green.jpg`.
+
+---
+
+## Felt texture — `public/textures/felt.jpg`
+
+- **Felt Backgrounds** — by **jbp4444**, https://opengameart.org/content/felt-backgrounds
+- **License:** CC0 (public domain; no attribution required — credited here as a courtesy). Scans of
+  real felt; used desaturated as the tintable felt surface (`public/textures/felt.jpg`).
 
 ---
 

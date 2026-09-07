@@ -94,7 +94,7 @@ export function scorePayload(message) {
 }
 
 const TABLE_SHAPE_NAMES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
-const RIM_WOOD_NAMES = ['mahogany', 'walnut', 'birch', 'green', 'oak'];
+const RIM_WOOD_NAMES = ['mahogany', 'walnut', 'birch', 'green'];
 export function tablePayload(message, limits) {
   if (!isPlainObject(message)) return null;
   const keys = Object.keys(message);
