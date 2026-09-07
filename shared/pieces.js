@@ -1018,7 +1018,7 @@ export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
 // The set of table shapes; 'rect' is the historical default. Interpreted against tableX/tableZ.
 export const TABLE_SHAPES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
 // Wooden-rim textures (public/textures/wood-*.jpg); 'mahogany' is the default.
-export const RIM_WOODS = ['mahogany', 'walnut', 'birch', 'green'];
+export const RIM_WOODS = ['mahogany', 'walnut', 'birch', 'green', 'oak'];
 
 // The table's outline as a closed polygon of {x,z} perimeter points, for a shape + half-extents.
 // One source of truth for the three consumers that must agree: the physics wall ring (one box
