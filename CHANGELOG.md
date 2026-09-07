@@ -8,6 +8,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+
+## [0.15.0] — 2026-09-06
+
 ### Added
 - **Table shapes.** The play surface is no longer only a rectangle. In *Customize Table* pick a
   **Shape** — Rectangle, **Round**, **Oval**, **Hex**, or **Rounded** — and the felt, the physics
@@ -898,7 +901,8 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
-[0.13.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.14.0
+[0.15.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.15.0
+[0.14.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.14.0
 [0.13.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.13.0
 [0.12.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.2
 [0.12.1]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.12.1
