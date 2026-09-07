@@ -71,6 +71,7 @@ import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { registerPieceHandlers } from './server/game/handlers/pieces.js';
 import {
   registerRoomStateHandlers,
+  saveFinalRoomState,
   saveRoomStateNow,
   scheduleRoomSave,
 } from './server/game/handlers/room-state.js';
@@ -85,6 +86,7 @@ import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
 import { buildCollider, buildWorld, COLLIDER_TYPES } from './server/physics.js';
 import {
   applyScene as applyPersistedScene,
+  clearGameTable,
   serializeGame as serializePersistedGame,
   serializeScene as serializePersistedScene,
 } from './server/game/scene-persistence.js';
@@ -1463,19 +1465,7 @@ class TableRoom extends Room {
   // Wipe every piece + its private bookkeeping (shared by Reset and scene load).
   // Leaves the timer, scoreboard, notes, and table size alone.
   clearTable() {
-    const ids = [];
-    this.state.pieces.forEach((piece, id) => ids.push(id));
-    for (const id of ids) this.removePiece(id);
-    this.hands.clear();
-    this.pendingInspect.clear();
-    this.drafts.clear();
-    this.deckCards.clear();
-    this.cardData.clear();
-    this.flips.clear();
-    this.targets.clear();
-    for (const sid of [...this.shows.keys()]) this.stopShow(sid); // end any live reveals
-    for (const client of this.clients) this.sendHand(client); // clear every player's hand
-    this.state.overlays.clear(); // wipe measurement/template overlays
+    clearGameTable(this);
   }
 
   // Serialize the current table into a scene payload: the table size, and every
@@ -1572,13 +1562,13 @@ class TableRoom extends Room {
   async onDispose() {
     // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     roomAccess.dispose(this);
-    if (this.state.pieces.size) {
-      // only overwrite the saved state when there's actually something on the table
-      const snap = this.serializeGame();
-      if (JSON.stringify(snap).length <= SCENE_MAX_BYTES) this.savedScene = snap;
-    }
-    if (this._saveTimer) clearTimeout(this._saveTimer);
-    await safeRoomTask(this, 'disposeSave', null, () => this.saveStateNow(), { notify: false }); // flush — persists the snapshot + latest settings
+    await safeRoomTask(
+      this,
+      'disposeSave',
+      null,
+      () => saveFinalRoomState(this, { sceneMaxBytes: SCENE_MAX_BYTES }),
+      { notify: false },
+    );
     LIVE_ROOMS.delete(this);
   }
 

@@ -3,6 +3,36 @@ import { readProps } from './props-codec.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+// Reset game contents, including private state that may have no visible piece.
+// Room configuration, timer, notes, chat, whiteboard and personal notebooks survive.
+export function clearGameTable(room) {
+  for (const id of [...room.state.pieces.keys()]) room.removePiece(id);
+  for (const map of [
+    room.hands,
+    room.pendingHands,
+    room.pendingInspect,
+    room.drafts,
+    room.deckCards,
+    room.cardData,
+    room.flips,
+    room.targets,
+    room.groups,
+    room._released,
+    room.lastDrop,
+  ])
+    map.clear();
+  room.pendingTurn = null;
+  room.state.turn = '';
+  room.state.turnPending = '';
+  room.state.unclaimed.clear();
+  for (const sid of [...room.shows.keys()]) room.stopShow(sid);
+  for (const client of room.clients) room.sendHand(client);
+  room.state.overlays.clear();
+  // A reset must invalidate an old checkpoint even before the room empties.
+  room.savedScene = null;
+  room.scheduleSave();
+}
+
 export function serializeScene(room, { geoOf }) {
   const pieces = [];
   room.state.pieces.forEach((piece, id) => {
@@ -97,8 +127,11 @@ export function serializeGame(room, options) {
     hands.push({ userId, name: held.name, cards: held.cards });
   }
 
-  let turn = null;
-  if (room.state.turn) {
+  let turn =
+    room.pendingTurn != null
+      ? { userId: String(room.pendingTurn), name: room.state.turnPending || '' }
+      : null;
+  if (!turn && room.state.turn) {
     const client = room.clientBy(room.state.turn);
     if (client && client.auth && client.auth.userId != null) {
       const player = room.state.players.get(room.state.turn);
@@ -182,10 +215,6 @@ export function applyScene(
     room.state.overlays.set(`o${room.nextOverlayId++}`, overlay);
   }
 
-  room.pendingHands.clear();
-  room.pendingTurn = null;
-  room.state.unclaimed.clear();
-  room.state.turnPending = '';
   if (Array.isArray(scene.hands)) {
     for (const hand of scene.hands) {
       if (!hand || hand.userId == null || !Array.isArray(hand.cards) || !hand.cards.length)
@@ -202,5 +231,6 @@ export function applyScene(
     room.state.turnPending = scene.turn.name || '';
     room.state.turn = '';
   }
+  room.savedScene = scene;
   room.scheduleSave();
 }

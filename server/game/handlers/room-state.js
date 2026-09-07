@@ -152,6 +152,15 @@ export function scheduleRoomSave(
   }, delay);
 }
 
+// Empty and hands-only games are real snapshots, not a reason to keep an old save.
+export async function saveFinalRoomState(room, { sceneMaxBytes, clearTimer = clearTimeout }) {
+  if (room._saveTimer) clearTimer(room._saveTimer);
+  room._saveTimer = null;
+  const snapshot = room.serializeGame();
+  if (JSON.stringify(snapshot).length <= sceneMaxBytes) room.savedScene = snapshot;
+  await room.saveStateNow();
+}
+
 export async function saveRoomStateNow(room, { db }) {
   if (!room.roomId) return;
   const scoreboard = [];

@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { applyScene, serializeGame, serializeScene } from '../server/game/scene-persistence.js';
+import {
+  applyScene,
+  clearGameTable,
+  serializeGame,
+  serializeScene,
+} from '../server/game/scene-persistence.js';
+import { saveFinalRoomState, saveRoomStateNow } from '../server/game/handlers/room-state.js';
 
 const geoOf = (props) => ({ ...(props.tile ? { tile: props.tile } : {}) });
 
@@ -118,6 +124,7 @@ function restorationRoom() {
     state: {
       pieces: new Map(),
       overlays: new Map(),
+      scores: new Map(),
       unclaimed: new Map([['old', 'Old']]),
       tableX: 0,
       tableZ: 0,
@@ -125,13 +132,34 @@ function restorationRoom() {
       turnPending: 'Old',
     },
     cardData: new Map(),
+    hands: new Map(),
+    pendingInspect: new Map(),
+    drafts: new Map(),
+    deckCards: new Map(),
+    flips: new Map(),
+    targets: new Map(),
+    groups: new Map(),
+    _released: new Map(),
+    lastDrop: new Map(),
+    shows: new Map(),
+    clients: [],
     pendingHands: new Map([['old', { name: 'Old', cards: ['/old'] }]]),
     pendingTurn: 'old',
     nextOverlayId: 1,
     clearTable() {
-      this.state.pieces.clear();
-      this.state.overlays.clear();
+      clearGameTable(this);
       calls.push(['clear']);
+    },
+    removePiece(id) {
+      this.state.pieces.delete(id);
+      calls.push(['remove', id]);
+    },
+    stopShow(sid) {
+      this.shows.delete(sid);
+      calls.push(['stopShow', sid]);
+    },
+    sendHand(client) {
+      calls.push(['hand', client.sessionId, this.hands.get(client.sessionId) || []]);
     },
     buildBounds(...args) {
       calls.push(['bounds', ...args]);
@@ -210,4 +238,177 @@ test('scene restoration validates bounds and keeps face-down fronts private', ()
   assert.equal(room.pendingTurn, '7');
   assert.equal(room.state.turn, '');
   assert.equal(calls.at(-1)[0], 'save');
+});
+
+const restoreOptions = {
+  createOverlay: () => ({}),
+  maxPieces: 250,
+  overlayKinds: new Set(['line']),
+  overlayMax: 200,
+  tableLimits: { minX: 4, maxX: 20, minZ: 3, maxZ: 16 },
+};
+
+test('reset removes pending game state and undo data while preserving room features', () => {
+  const { room, calls } = restorationRoom();
+  room.state.pieces.set('old-piece', { type: 'card' });
+  room.state.overlays.set('old-overlay', {});
+  room.savedScene = { pieces: [{ type: 'card' }] };
+  room.clients = [{ sessionId: 'live' }];
+  for (const map of [
+    room.hands,
+    room.pendingInspect,
+    room.drafts,
+    room.deckCards,
+    room.cardData,
+    room.flips,
+    room.targets,
+    room.groups,
+    room._released,
+    room.lastDrop,
+    room.shows,
+  ])
+    map.set('live', ['old-card']);
+  room.state.notes = 'campaign notes';
+  room.state.scores.set('score', { score: 7 });
+  room.state.timer = { running: true };
+  room.state.whiteboard = { enabled: true };
+  room.notebooks = new Map([['user:7', 'private note']]);
+  room.chatLog = ['hello'];
+  room.strokes = ['stroke'];
+  const preserved = structuredClone({
+    notes: room.state.notes,
+    scores: room.state.scores,
+    timer: room.state.timer,
+    whiteboard: room.state.whiteboard,
+    notebooks: room.notebooks,
+    chatLog: room.chatLog,
+    strokes: room.strokes,
+  });
+
+  room.clearTable();
+  for (const map of [
+    room.state.pieces,
+    room.state.overlays,
+    room.state.unclaimed,
+    room.hands,
+    room.pendingHands,
+    room.pendingInspect,
+    room.drafts,
+    room.deckCards,
+    room.cardData,
+    room.flips,
+    room.targets,
+    room.groups,
+    room._released,
+    room.lastDrop,
+    room.shows,
+  ])
+    assert.equal(map.size, 0);
+  assert.equal(room.pendingTurn, null);
+  assert.equal(room.state.turn, '');
+  assert.equal(room.state.turnPending, '');
+  assert.equal(room.savedScene, null);
+  assert.ok(calls.some(([type]) => type === 'save'));
+  assert.deepEqual(
+    calls.find(([type]) => type === 'hand'),
+    ['hand', 'live', []],
+  );
+  assert.deepEqual(
+    {
+      notes: room.state.notes,
+      scores: room.state.scores,
+      timer: room.state.timer,
+      whiteboard: room.state.whiteboard,
+      notebooks: room.notebooks,
+      chatLog: room.chatLog,
+      strokes: room.strokes,
+    },
+    preserved,
+  );
+});
+
+test('loading a scene without hands or a turn removes the previous game and replaces its checkpoint', () => {
+  const { room } = restorationRoom();
+  room.savedScene = { pieces: [{ type: 'card' }] };
+  const scene = { pieces: [] };
+  applyScene(room, scene, restoreOptions);
+  assert.equal(room.pendingHands.size, 0);
+  assert.equal(room.state.unclaimed.size, 0);
+  assert.equal(room.pendingTurn, null);
+  assert.equal(room.state.turnPending, '');
+  assert.equal(room.state.turn, '');
+  assert.deepEqual(room.savedScene, scene);
+});
+
+test('final save persists hands without table pieces and restores them on reopen', async () => {
+  const room = serializationRoom();
+  room.roomId = 'room';
+  room.state.pieces.clear();
+  room.state.scores = new Map();
+  room.pendingTurn = 'departed';
+  room.state.turnPending = 'Departed';
+  room.savedScene = { pieces: [{ type: 'die' }] };
+  room.serializeGame = () => serializeGame(room, { geoOf });
+  let written;
+  room.saveStateNow = () =>
+    saveRoomStateNow(room, {
+      db: {
+        async saveRoomState(id, value) {
+          written = structuredClone(value);
+        },
+      },
+    });
+  room._saveTimer = { pending: true };
+  const cancelled = [];
+  await saveFinalRoomState(room, {
+    sceneMaxBytes: 2_000_000,
+    clearTimer: (timer) => cancelled.push(timer),
+  });
+  assert.equal(cancelled.length, 1);
+  assert.equal(room._saveTimer, null);
+  assert.deepEqual(written.scene.pieces, []);
+  assert.equal(written.scene.hands.length, 2);
+  assert.deepEqual(written.scene.turn, { userId: 'departed', name: 'Departed' });
+  const { room: reopened } = restorationRoom();
+  applyScene(reopened, written.scene, restoreOptions);
+  assert.equal(reopened.state.pieces.size, 0);
+  assert.deepEqual(reopened.pendingHands.get('42').cards, ['/live-card']);
+  assert.deepEqual(reopened.pendingHands.get('departed').cards, ['/held-card']);
+  assert.equal(reopened.pendingTurn, 'departed');
+  assert.deepEqual(reopened.savedScene, written.scene);
+});
+
+test('final save of an empty game replaces an older populated checkpoint', async () => {
+  const room = serializationRoom();
+  room.state.pieces.clear();
+  room.hands.clear();
+  room.pendingHands.clear();
+  room.state.turn = '';
+  room.savedScene = { pieces: [{ type: 'die' }], hands: [{ cards: ['/old'] }] };
+  room.serializeGame = () => serializeGame(room, { geoOf });
+  let saved;
+  room.saveStateNow = async () => {
+    saved = structuredClone(room.savedScene);
+  };
+  await saveFinalRoomState(room, { sceneMaxBytes: 2_000_000 });
+  assert.deepEqual(saved.pieces, []);
+  assert.deepEqual(saved.hands, []);
+  assert.equal(saved.turn, null);
+  const { room: reopened } = restorationRoom();
+  applyScene(reopened, saved, restoreOptions);
+  assert.equal(reopened.state.pieces.size, 0);
+  assert.equal(reopened.pendingHands.size, 0);
+});
+
+test('final save retains the size limit and propagates persistence failures', async () => {
+  const previous = { pieces: [] };
+  const room = {
+    savedScene: previous,
+    serializeGame: () => ({ data: 'x'.repeat(100) }),
+    async saveStateNow() {
+      throw new Error('database unavailable');
+    },
+  };
+  await assert.rejects(saveFinalRoomState(room, { sceneMaxBytes: 20 }), /database unavailable/);
+  assert.equal(room.savedScene, previous);
 });

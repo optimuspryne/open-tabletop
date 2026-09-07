@@ -42,6 +42,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Save hands-only and empty games when a room closes, replacing stale populated snapshots.
+  Preserve pending turn ownership when saving a game before its owner returns.
+- Clear pending/unclaimed hands, active and pending turns, group drags, and undo bookkeeping
+  with table resets, starter changes, and scene loads. Reset invalidates the old checkpoint;
+  scene loading replaces it with the loaded scene. Room settings and personal notes remain intact.
 - Restore the hand immediately when a card drag ends, including plays rejected at table
   capacity. Rejected plays resend the unchanged private hand so it remains visible and usable.
 - Protect referenced mat files, saved room snapshots (including soft-deleted rooms), and private
