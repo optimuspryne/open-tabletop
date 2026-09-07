@@ -62,6 +62,7 @@ function serializationRoom() {
       tableX: 10,
       tableZ: 8,
       tableShape: 'rect',
+      rimWood: 'mahogany',
       turn: 'live',
     },
     deckCards: new Map([['deck-1', ['/two']]]),
@@ -76,7 +77,7 @@ function serializationRoom() {
 
 test('scene serialization preserves public geometry and private card fronts safely', () => {
   const snapshot = serializeScene(serializationRoom(), { geoOf });
-  assert.deepEqual(snapshot.table, { x: 10, z: 8, shape: 'rect' });
+  assert.deepEqual(snapshot.table, { x: 10, z: 8, shape: 'rect', rimWood: 'mahogany' });
   assert.deepEqual(snapshot.trays, [0, 2]);
   assert.deepEqual(snapshot.scale, { worldPerUnit: 2 });
   assert.deepEqual(snapshot.pieces[0].props, {

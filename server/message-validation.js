@@ -94,10 +94,12 @@ export function scorePayload(message) {
 }
 
 const TABLE_SHAPE_NAMES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
+const RIM_WOOD_NAMES = ['mahogany', 'walnut', 'birch', 'green'];
 export function tablePayload(message, limits) {
   if (!isPlainObject(message)) return null;
   const keys = Object.keys(message);
-  if (!keys.length || keys.some((k) => k !== 'x' && k !== 'z' && k !== 'shape')) return null;
+  if (!keys.length || keys.some((k) => k !== 'x' && k !== 'z' && k !== 'shape' && k !== 'rimWood'))
+    return null;
   const out = {};
   if ('x' in message || 'z' in message) {
     const x = finiteNumber(message.x, { min: limits.minX, max: limits.maxX });
@@ -109,6 +111,10 @@ export function tablePayload(message, limits) {
   if ('shape' in message) {
     if (!TABLE_SHAPE_NAMES.includes(message.shape)) return null;
     out.shape = message.shape;
+  }
+  if ('rimWood' in message) {
+    if (!RIM_WOOD_NAMES.includes(message.rimWood)) return null;
+    out.rimWood = message.rimWood;
   }
   return out;
 }

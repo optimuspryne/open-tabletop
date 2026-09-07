@@ -59,6 +59,7 @@ CREATE TABLE rooms (
   table_x           real        NOT NULL DEFAULT 10,    -- play-surface half-extents (GM-resizable)
   table_z           real        NOT NULL DEFAULT 7,
   table_shape       text        NOT NULL DEFAULT 'rect', -- play-surface shape (rect/round/oval/hex/roundedRect)
+  table_rim_wood    text        NOT NULL DEFAULT 'mahogany', -- wooden-rim texture (mahogany/walnut/birch/green)
   skybox            text        NOT NULL DEFAULT '',    -- durable per-room skybox URL (GM-set; '' = default)
   felt_color        text        NOT NULL DEFAULT '#2f6b4f', -- durable per-room felt color (GM-set)
   scene             jsonb,      -- GM's saved table snapshot (table size + pieces + transforms); null = none
@@ -188,6 +189,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('007_scenes.sql'),        ('008_room_skybox.sql'), ('009_room_state.sql'),
   ('010_room_scale.sql'),       ('011_user_sessions.sql'),
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
-  ('014_room_table_shape.sql');
+  ('014_room_table_shape.sql'), ('015_room_rim_wood.sql');
 
 COMMIT;

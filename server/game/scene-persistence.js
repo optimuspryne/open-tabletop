@@ -1,4 +1,4 @@
-import { KINDS, MEASURE, TABLE, TABLE_SHAPES } from '../../shared/pieces.js';
+import { KINDS, MEASURE, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
 import { readProps } from './props-codec.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -58,7 +58,12 @@ export function serializeScene(room, { geoOf }) {
   });
 
   return {
-    table: { x: room.state.tableX, z: room.state.tableZ, shape: room.state.tableShape },
+    table: {
+      x: room.state.tableX,
+      z: room.state.tableZ,
+      shape: room.state.tableShape,
+      rimWood: room.state.rimWood,
+    },
     pieces,
     overlays,
     scale: room.scaleSnapshot(),
@@ -125,9 +130,12 @@ export function applyScene(
   );
   const shape =
     scene.table && TABLE_SHAPES.includes(scene.table.shape) ? scene.table.shape : 'rect';
+  const rimWood =
+    scene.table && RIM_WOODS.includes(scene.table.rimWood) ? scene.table.rimWood : 'mahogany';
   room.state.tableX = tableX;
   room.state.tableZ = tableZ;
   room.state.tableShape = shape;
+  room.state.rimWood = rimWood;
   room.buildBounds(tableX, tableZ, shape);
   room.applyScale(scene.scale);
   room.applyTrays(scene.trays);

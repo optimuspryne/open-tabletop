@@ -110,6 +110,7 @@ export function registerRoomStateHandlers(
     if (parsed.x !== undefined) room.state.tableX = parsed.x;
     if (parsed.z !== undefined) room.state.tableZ = parsed.z;
     if (parsed.shape !== undefined) room.state.tableShape = parsed.shape;
+    if (parsed.rimWood !== undefined) room.state.rimWood = parsed.rimWood;
     room.buildBounds(room.state.tableX, room.state.tableZ, room.state.tableShape);
     room.scheduleSave();
   });
@@ -167,6 +168,7 @@ export async function saveRoomStateNow(room, { db }) {
     tableX: room.state.tableX,
     tableZ: room.state.tableZ,
     tableShape: room.state.tableShape,
+    rimWood: room.state.rimWood,
     skybox: room.state.skybox,
     feltColor: room.state.feltColor,
     scene: room.savedScene,

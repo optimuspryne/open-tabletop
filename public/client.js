@@ -8,6 +8,7 @@ import {
   controls,
   resizeTable,
   setTableColor,
+  setRimWood,
   setQuality,
   getQuality,
   deviceClass,
@@ -551,6 +552,11 @@ function syncTableShapeUI() {
   if (ds) ds.hidden = locked;
   if (diWrap) diWrap.hidden = locked;
   if (wl) wl.textContent = locked ? 'Size' : 'Width';
+  document
+    .querySelectorAll('#tableWoods [data-wood]')
+    .forEach((b) =>
+      b.classList.toggle('on', b.dataset.wood === (room.state.rimWood || 'mahogany')),
+    );
 }
 
 function rebuildGrid() {
@@ -1041,6 +1047,14 @@ function rebuildGrid() {
       },
       false,
     );
+    cb(room.state).listen(
+      'rimWood',
+      () => {
+        setRimWood(room.state.rimWood);
+        syncTableShapeUI();
+      },
+      false,
+    );
     cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
     cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
     cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
@@ -1080,6 +1094,7 @@ function rebuildGrid() {
     rebuildSeats();
   } // initial size (may be default until decode)
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
+  setRimWood(room.state.rimWood || 'mahogany'); // initial rim wood
   rebuildGrid(); // initial grid (inert until a GM sets a cell size + square style)
 
   // The game table and the editor have different toolbars but share this file, so
@@ -1216,6 +1231,10 @@ function rebuildGrid() {
         }
         room.send('table', msg);
       };
+    });
+    // Rim wood picker (GM-set, durable): swap the wooden border texture.
+    document.querySelectorAll('#tableWoods [data-wood]').forEach((b) => {
+      b.onclick = () => room.send('table', { rimWood: b.dataset.wood });
     });
     const felt = byId('tableFelt');
     if (felt) felt.oninput = () => room.send('tableColor', { color: felt.value });

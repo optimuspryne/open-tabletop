@@ -248,9 +248,39 @@ if (typeof window !== 'undefined') {
 }
 
 // ===== Table ================================================================
+// Felt: a desaturated fabric texture tinted by the GM's felt colour, so the colour picker still
+// works — it now tints the fabric instead of a flat fill. World-unit UVs (the felt is always an
+// extruded outline), so the tiling density stays consistent across shapes and sizes.
+const feltTex = new THREE.TextureLoader().load('/textures/felt.jpg');
+feltTex.colorSpace = THREE.SRGBColorSpace;
+feltTex.wrapS = feltTex.wrapT = THREE.RepeatWrapping;
+feltTex.repeat.set(0.35, 0.35);
+feltTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+// The felt geometry for a shape: the shared tableOutline extruded to the slab thickness (1) — the
+// SAME outline the server walls use, so the visible edge and the physics rim line up. Centred on Y
+// so the existing position.y = -0.5 keeps the top surface at y = 0. (Material is DoubleSide, so the
+// extruded cap shows regardless of the outline's winding.)
+function tableGeometry(hx, hz, shape) {
+  const outline = tableOutline(shape || 'rect', hx, hz);
+  const s = new THREE.Shape();
+  outline.forEach((p, i) => (i ? s.lineTo(p.x, p.z) : s.moveTo(p.x, p.z)));
+  s.closePath();
+  const geo = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false });
+  geo.rotateX(-Math.PI / 2); // shape's plane into world XZ, thickness along +Y (0..1)
+  geo.translate(0, -0.5, 0); // centre on Y like the old box slab
+  geo.computeVertexNormals();
+  return geo;
+}
+
 const tableMesh = new THREE.Mesh(
-  new THREE.BoxGeometry(TABLE.x * 2, 1, TABLE.z * 2),
-  new THREE.MeshStandardMaterial({ color: 0x2f6b4f, roughness: 0.95, side: THREE.DoubleSide }),
+  tableGeometry(TABLE.x, TABLE.z, 'rect'),
+  new THREE.MeshStandardMaterial({
+    color: 0x2f6b4f,
+    roughness: 0.95,
+    side: THREE.DoubleSide,
+    map: feltTex,
+  }),
 );
 tableMesh.position.y = -0.5; // top surface sits at y = 0
 tableMesh.receiveShadow = true;
@@ -259,15 +289,40 @@ scene.add(tableMesh);
 // A wooden rim around the felt edge: the shared tableOutline offset outward for the outer edge,
 // with a slight inward overlap onto the felt, extruded into a low raised lip. Purely visual — the
 // physics walls already sit at the felt edge — and rebuilt with the felt on any resize / reshape.
+// The wood is a GM-chosen texture, swapped on the shared material by setRimWood.
 const RIM = { width: 0.4, lip: 0.35, base: -1, overlap: 0.06 };
-const rimTex = new THREE.TextureLoader().load('/textures/table-rim.jpg');
-rimTex.colorSpace = THREE.SRGBColorSpace;
-rimTex.wrapS = rimTex.wrapT = THREE.RepeatWrapping;
-rimTex.repeat.set(0.5, 0.5);
-rimTex.center.set(0.5, 0.5);
-rimTex.rotation = Math.PI / 2; // run the grain across the rim rather than along the image's vertical
-rimTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-const rimMat = new THREE.MeshStandardMaterial({ map: rimTex, roughness: 0.6, metalness: 0 });
+const WOOD_RIM = {
+  mahogany: '/textures/wood-mahogany.jpg',
+  walnut: '/textures/wood-walnut.jpg',
+  birch: '/textures/wood-birch.jpg',
+  green: '/textures/wood-green.jpg',
+};
+const _woodCache = new Map();
+function woodTexture(name) {
+  const url = WOOD_RIM[name] || WOOD_RIM.mahogany;
+  let t = _woodCache.get(url);
+  if (t) return t;
+  t = new THREE.TextureLoader().load(url);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(0.5, 0.5);
+  t.center.set(0.5, 0.5);
+  t.rotation = Math.PI / 2; // run the grain across the rim, not along the image's vertical
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  _woodCache.set(url, t);
+  return t;
+}
+const rimMat = new THREE.MeshStandardMaterial({
+  map: woodTexture('mahogany'),
+  roughness: 0.6,
+  metalness: 0,
+});
+
+// Swap the rim to a named wood (GM-set, durable). Unknown names fall back to mahogany.
+function setRimWood(name) {
+  rimMat.map = woodTexture(name);
+  rimMat.needsUpdate = true;
+}
 
 function rimGeometry(hx, hz, shape) {
   const felt = tableOutline(shape, hx, hz);
@@ -292,25 +347,7 @@ rimMesh.castShadow = true;
 rimMesh.receiveShadow = true;
 scene.add(rimMesh);
 
-// The felt geometry for a shape: a plain box for 'rect', else the shared tableOutline extruded
-// to the slab thickness (1) — the SAME outline the server walls use, so the visible edge and the
-// physics rim line up. Centred on Y like the box so the existing position.y = -0.5 keeps the top
-// surface at y = 0. (Table material is DoubleSide, so the extruded cap shows regardless of the
-// outline's winding.)
-function tableGeometry(hx, hz, shape) {
-  if (!shape || shape === 'rect') return new THREE.BoxGeometry(hx * 2, 1, hz * 2);
-  const outline = tableOutline(shape, hx, hz);
-  const s = new THREE.Shape();
-  outline.forEach((p, i) => (i ? s.lineTo(p.x, p.z) : s.moveTo(p.x, p.z)));
-  s.closePath();
-  const geo = new THREE.ExtrudeGeometry(s, { depth: 1, bevelEnabled: false });
-  geo.rotateX(-Math.PI / 2); // shape's plane into world XZ, thickness along +Y (0..1)
-  geo.translate(0, -0.5, 0); // centre on Y like the box slab
-  geo.computeVertexNormals();
-  return geo;
-}
-
-// Rebuild the felt at new half-extents / shape (the GM resized or reshaped the play surface).
+// Rebuild the felt + rim at new half-extents / shape (the GM resized or reshaped the play surface).
 function resizeTable(hx, hz, shape = 'rect') {
   tableMesh.geometry.dispose();
   tableMesh.geometry = tableGeometry(hx, hz, shape);
@@ -333,6 +370,7 @@ export {
   controls,
   resizeTable,
   setTableColor,
+  setRimWood,
   setQuality,
   getQuality,
   deviceClass,
