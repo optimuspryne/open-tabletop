@@ -300,6 +300,27 @@ chess}` each `[color0, color1]`.
   card collider that stabilizes stacks — plus `linDamp`/`angDamp`/`maxThrow`/
   sleep).
 
+### Piece capacity and movement safety
+
+- **`server/game/piece-capacity.js`** — **`MAX_PIECES = 250`** supplies
+  `SIM.maxPieces`. **`hasPieceCapacity`** checks for a free slot;
+  **`ensurePieceCapacity`** also sends the caller the full-table warning;
+  **`assertPieceCapacity`** guards `TableRoom.spawn` before any body or state is created.
+- **`server/game/handlers/placement.js`** — **`registerPlacementHandlers`** registers
+  `dispense`, `dispenseDrag`, `playCard`, and `handToTable`. Capacity is checked before
+  inventory is consumed, with no intervening await. A rejected `playCard` resends the
+  unchanged private hand. `handToTable` places only the cards that fit, retaining the rest
+  and recording only spawned IDs for undo. Rejected inspected-card field placement retains
+  the pending card and resends `inspectCard` so the player can choose another destination.
+- Library loads check capacity after asynchronous database reads. A blocked `deckFinish`
+  spawn retains its draft; `saveMat` still saves the library record when its optional spawn
+  is blocked. Replacing an existing board remains possible at capacity.
+- **`server/game/physics-safety.js`** — **`WORLD_COORD_LIMIT = 10_000`** and
+  **`isWorldCoordinate`** bound incoming drag and hand-placement coordinates on each axis.
+  Group movement also checks destinations after adding member offsets. **`dragVelocity`**
+  computes and caps the servo velocity, returning `null` for unsafe derived values;
+  `TableRoom.update` then clears that target and ownership and zeros linear velocity.
+
 ### Asset files (disk) + library (Postgres)
 
 The image/model **files** stay on disk; their **metadata** moved to Postgres (see
@@ -990,6 +1011,11 @@ a mesh), shared by the add, card-rebuild, and render paths.
   **P** drops a ping at the cursor. Esc exits the Select tool, then clears the selection.
 
 ### Seats, hands, turns
+
+The hand's drag `pointerup` handler checks whether the drop hit the table before revealing
+the hand, then removes `hand-dragging` immediately. Cancellation also removes the class;
+visibility does not depend on a subsequent server update. Capacity-rejected plays additionally
+receive the unchanged private `hand` message, rendered through `renderHand`.
 
 Seat layout, standing avatar/name markers (with a public **"SHOWING n"** badge
 via `makePlayerTexture`, a `graphics.js` builder, when a player is revealing), other players' fanned hands —

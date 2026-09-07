@@ -120,6 +120,26 @@ and allowlisted identifiers/enums/nested records. They return a fresh trusted va
 or `null`; invalid messages fail closed without partial work. Payloadless messages
 are the only exception because they carry nothing to validate.
 
+Piece creation has a second boundary: `server/game/piece-capacity.js` defines the
+250-piece limit and `TableRoom.spawn` asserts capacity before creating physics or
+synchronized state. Hand, dispenser, and card handlers check before consuming inventory;
+library loads check after their database awaits so concurrent loads cannot reserve the
+same last slot. The extracted `server/game/handlers/placement.js` owns hand/dispenser
+placement. Whole-hand drops retain cards that do not fit; replacing an existing board
+can still proceed at capacity. A rejected draft spawn retains the draft, while saving a
+mat still persists its library record even when its optional table spawn is blocked.
+
+Rejection also restores private UI state: a blocked inspected-card placement resends
+the inspection, and a blocked hand play resends the unchanged hand. The browser reveals
+the hand as soon as its drag ends, after hit-testing the drop while the hand is hidden,
+so a rejected play cannot leave the hand bar invisible.
+
+`server/game/physics-safety.js` bounds drag and hand-placement input coordinates to
+±10,000 per axis, well outside the playable table. Group destinations are checked again
+after adding offsets. The physics servo uses `dragVelocity` to reject non-finite derived
+velocities before they reach Cannon; on failure it clears the target and ownership and
+zeros the body's linear velocity.
+
 Every table message then runs through `safeMessage`: synchronous throws and rejected
 promises are logged with payload-free room/user/session context and converted to a
 sanitized `serverError` (or the narrower asset/member error) for that client. The

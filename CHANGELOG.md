@@ -27,6 +27,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document piece-capacity enforcement, movement safety, and rejected-placement UI recovery
+  in the reference and architecture guides.
 - Extract hand/dispenser placement handlers and shared piece-capacity/physics-safety helpers, with
   regression tests for full tables, retained inventory, concurrent library loads, and numeric overflow.
 - Centralize live authorization and reconnection tracking in `server/room-access.js`, with
