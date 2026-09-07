@@ -3592,6 +3592,9 @@ addEventListener('pointerup', (e) => {
   if (e.pointerId !== handDrag.pointerId) return; // only the arming finger ends the drag/tap
   const drag = handDrag;
   handDrag = null;
+  // Hit-test before revealing the hand, which may cover the drop point.
+  const droppedOnTable = document.elementFromPoint(e.clientX, e.clientY) === renderer.domElement;
+  byId('hand').classList.remove('hand-dragging'); // a rejected play may not change the hand
   document.body.style.userSelect = document.body.style.webkitUserSelect = ''; // re-enable selection
   dropPreview(drag.mesh); // discard the local preview
   if (!drag.dragging) {
@@ -3603,8 +3606,7 @@ addEventListener('pointerup', (e) => {
     );
     return;
   } // click = quick play (delayed so a double-click inspects instead)
-  if (document.elementFromPoint(e.clientX, e.clientY) !== renderer.domElement) {
-    byId('hand').classList.remove('hand-dragging');
+  if (!droppedOnTable) {
     return;
   } // dropped on UI → cancel, reveal the hand
   setPointer(e);

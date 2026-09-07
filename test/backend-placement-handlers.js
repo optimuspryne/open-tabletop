@@ -6,6 +6,7 @@ import { MAX_PIECES, assertPieceCapacity } from '../server/game/piece-capacity.j
 function harness(count = 0) {
   const handlers = new Map();
   const events = [];
+  const sentHands = [];
   let next = count;
   const room = {
     state: {
@@ -18,7 +19,12 @@ function harness(count = 0) {
     onMessage: (type, handler) => handlers.set(type, handler),
     notifyFull: () => events.push('full'),
     broadcast: () => {},
-    sendHand: () => {},
+    sendHand(client) {
+      sentHands.push({
+        sessionId: client.sessionId,
+        cards: structuredClone(this.hands.get(client.sessionId) || []),
+      });
+    },
     dispenserItem: () => ({ type: 'prop', props: {} }),
     afterDispense: (piece) => {
       piece.count--;
@@ -39,7 +45,7 @@ function harness(count = 0) {
     dropSfx: () => 'card-drop',
     logger: { error() {} },
   });
-  return { room, client, handlers, events };
+  return { room, client, handlers, events, sentHands };
 }
 
 test('all placement messages register and direct creation refuses a full room', () => {
@@ -71,6 +77,7 @@ test('a full table preserves a played card and the entire unplaced hand', () => 
   ];
   h.room.hands.set('player', hand);
   h.handlers.get('playCard')(h.client, { hid: 'h1', faceDown: true });
+  assert.deepEqual(h.sentHands, [{ sessionId: 'player', cards: hand }]);
   h.handlers.get('handToTable')(h.client, { faceDown: false });
   assert.equal(hand.length, 2);
   assert.deepEqual(h.events, ['full', 'full']);

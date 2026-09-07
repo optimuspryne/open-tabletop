@@ -55,7 +55,10 @@ export function registerPlacementHandlers(
     if (!hand) return;
     const index = hand.findIndex((card) => card.hid === hid);
     if (index < 0) return;
-    if (!ensurePieceCapacity(room, client, maxPieces)) return;
+    if (!ensurePieceCapacity(room, client, maxPieces)) {
+      room.sendHand(client); // restore clients that hid their hand while submitting the play
+      return;
+    }
     const card = hand[index];
 
     const pos =

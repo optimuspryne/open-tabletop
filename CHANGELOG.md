@@ -40,6 +40,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Restore the hand immediately when a card drag ends, including plays rejected at table
+  capacity. Rejected plays resend the unchanged private hand so it remains visible and usable.
 - Protect referenced mat files, saved room snapshots (including soft-deleted rooms), and private
   deck/hand data from orphan cleanup. Scan drafts, pending inspections, unclaimed hands, live
   reveals, and in-memory saved snapshots as well as synchronized state.
