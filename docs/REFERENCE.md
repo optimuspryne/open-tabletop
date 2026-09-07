@@ -306,13 +306,33 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 `db.js` below). Assets are keyed by a row **id**, not a filename slug.
 
 - **`ASSETS_DIR`** = `process.env.ASSETS_DIR || './saved-assets'`, with category
-  subfolders `uploads/ decks/ boards/ props/` — **files only** now.
+  subfolders `uploads/ decks/ boards/ props/ sky/ dice/ mats/` — **files only** now.
 - **`saveAsset(kind, buf, ext) → /assets/<kind>/<name>`** — writes a random-named
   file into a validated category folder (`assetKind`).
 - **`saveImageRef(dataURL, kind)`** — an inline `data:` image → a disk file → URL.
 - **`isDataURL`**, **`deckRefOk`** — ref validators (kept for the save paths).
   _(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
   gone — that logic now lives in `db.js`.)_
+
+### `server/asset-cleanup.js` — orphan preview and trash
+
+**`createAssetCleanup({assetsDir, assetKinds, allAssetRefBlobs, liveRooms})`** returns:
+
+- **`findOrphanAssets()`** — collect database and live references, then return
+  `{url, kind, name, size}` candidates. Only unreferenced regular files older than
+  24 hours qualify; recent files, directories, and symlinks are excluded. Reference
+  collection failures reject the scan.
+- **`trashOrphans(orphans)`** — validate category/filename boundaries and move
+  candidates to `.trash/<kind>/<name>`, returning successfully moved URLs. The admin
+  purge route invokes a fresh scan before calling it.
+
+Internal **`roomAssetValues(room)`** selects synchronized state, saved snapshots,
+private decks/cards/hands, pending hands/inspections, drafts, reveals, notebooks,
+and chat. **`collectReferences(value, references)`** traverses maps, sets, objects,
+and JSON strings, including escaped URLs, using the same category allowlist as
+uploads. **`collectLiveReferences(references)`** runs before and after the database
+await to retain departing-room references and include newly created live data.
+Private values remain internal; only orphan file metadata is returned by the API.
 
 ### `server/physics.js` — physics construction
 
@@ -459,7 +479,8 @@ public-chat history, last 80, replayed to late joiners), and — for resumable g
 **`pendingHands`** (map `userId → {name,cards}`: saved hands awaiting their owner's
 return) + **`pendingTurn`** (the `userId` whose turn a loaded game paused on).
 Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
-see in-play asset references.
+see in-play asset references. A disposing room remains tracked until its final
+persistence flush completes.
 
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
 out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
@@ -722,11 +743,13 @@ return the flag:
 - **Skyboxes** — `listSkyboxes`, `insertSkybox({name,url,ownerId,isPublic})`
   (`url` is an equirect `/assets/sky/…` or a cubemap descriptor).
 - **Asset admin** (generic over the tables via an `ASSET_TABLE` whitelist,
-  `kind ∈ deck|board|prop|scene|sky`) — `setAssetPublic(kind,id,isPublic)`,
+  `kind ∈ deck|board|prop|scene|sky|dice|mat`) — `setAssetPublic(kind,id,isPublic)`,
   `renameAsset(kind,id,name)`, `deleteAsset(kind,id)`.
-- **Orphan cleanup** — `allAssetRefBlobs()` returns every stored row (all asset
-  tables + `rooms.skybox`) as JSON strings, the reference set the orphan scan
-  greps for `/assets/…` paths.
+- **Orphan cleanup** — `allAssetRefBlobs()` returns whole-row JSON strings from every
+  registered asset table and `rooms`, including private mats, saved scenes, and
+  soft-deleted rooms. One `UNION ALL` statement provides a consistent snapshot;
+  table names come from the internal asset-admin allowlist. The cleanup collector
+  scans these values for `/assets/…` paths.
 
 **Per-room durable state.** A room's non-piece settings survive restarts:
 `getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, tableShape, rimWood, skybox, feltColor,

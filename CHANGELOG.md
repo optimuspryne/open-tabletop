@@ -27,6 +27,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Record the commit/push, change-summary, and documentation-update workflow in `AGENTS.md`.
 - Update the reference and architecture documentation for the pushed room-authorization and
   access-revocation changes.
+- Document the pushed asset-cleanup reference sources, disposal handling, and file-retention rules.
 - Extract asset cleanup into `server/asset-cleanup.js` with temporary-file and PostgreSQL
   regression coverage. File categories use the upload allowlist; database references use the
   existing asset-table registry in a single consistent query.

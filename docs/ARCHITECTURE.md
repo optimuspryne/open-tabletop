@@ -661,9 +661,25 @@ session and reach the row only through that snapshot.
 
 Because unreferenced `/assets` files pile up as the library and tables churn
 (deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)
-grep-scans every DB row _and_ every live table for `/assets/…` references, then
-moves anything unreferenced and older than a day to `saved-assets/.trash/`
-(recoverable, never a hard delete).
+uses `server/asset-cleanup.js` to collect references before identifying unused
+files. File categories come from the upload allowlist, including mats. The database
+collector uses the existing asset-table registry and one `UNION ALL` statement to
+read whole-row JSON from every library table and `rooms` in a consistent snapshot.
+Private library records and snapshots in soft-deleted rooms remain protected.
+
+Live reference collection traverses synchronized state and private data: deck
+contents, card faces, hands, unclaimed hands, pending inspections, drafts, reveals,
+notebooks, chat, and the in-memory saved snapshot. It understands maps, sets, nested
+objects, and JSON-encoded strings, without exposing that private data to the admin
+response. Live rooms are scanned before and after the database await; disposing
+rooms remain in `LIVE_ROOMS` until their final save finishes. This protects references
+held by rooms that disappear during the scan and includes newly created live data.
+
+The preview lists only unreferenced regular files older than 24 hours. Purge performs
+a fresh scan and moves candidates to `saved-assets/.trash/` (recoverable, never a hard
+delete). Recent files, directories, and symlinks are excluded. Database or live-state
+reference failures abort the scan. Live reference tracking is process-local, matching
+the current single-server deployment.
 
 Each asset now carries an `owner_id` (the admin who created it) and an `is_public`
 flag, and the library is **admin-curated**: creation and curation (publish/rename/
