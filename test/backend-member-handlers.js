@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerMemberHandlers } from '../server/game/handlers/members.js';
 import { RANK, canManageMember, canSetMemberRole } from '../server/permissions.js';
+import { createRoomAccess } from '../server/room-access.js';
 
 function harness() {
   const handlers = new Map();
@@ -9,6 +10,12 @@ function harness() {
   const memberships = new Map();
   const users = new Map();
   const db = {
+    async findUserByToken(userId) {
+      return { id: userId, username: userId };
+    },
+    async findRoomByCode() {
+      return { id: 'room-1' };
+    },
     async admitMember(roomId, userId) {
       calls.push(['admitMember', roomId, userId]);
     },
@@ -29,6 +36,7 @@ function harness() {
   };
   const room = {
     roomId: 'room-1',
+    roomCode: 'CODE',
     clients: [],
     pendingHands: new Map(),
     hands: new Map(),
@@ -57,8 +65,9 @@ function harness() {
       calls.push(['sendHand', client.sessionId]);
     },
   };
-  registerMemberHandlers(room, { db, logger: { error() {} } });
-  return { room, handlers, calls, memberships, users, db };
+  const roomAccess = createRoomAccess({ db, hashToken: String });
+  registerMemberHandlers(room, { db, roomAccess, logger: { error() {} } });
+  return { room, handlers, calls, memberships, users, db, roomAccess };
 }
 
 const actor = (role, userId = '1') => ({
@@ -117,15 +126,21 @@ test('GM cannot kick a GM, owner, self, or site administrator', async () => {
   );
 });
 
-test('an owner can promote a helper to GM and live state updates immediately', async () => {
-  const { room, handlers, calls, memberships } = harness();
-  memberships.set('2', { role: 'helper' });
+test('an owner can promote a helper to GM and every tab updates immediately', async () => {
+  const { room, handlers, calls, memberships, roomAccess } = harness();
+  memberships.set('2', { status: 'admitted', role: 'helper' });
   const target = actor('helper', '2');
-  room.clients.push(target);
-  room.state.players.set(target.sessionId, { role: 'helper' });
+  const second = actor('helper', '2');
+  second.sessionId = 'another-tab';
+  for (const client of [target, second]) {
+    client.auth = await roomAccess.authorize(room, client, { code: 'CODE', token: '2' });
+    room.clients.push(client);
+    room.state.players.set(client.sessionId, { role: 'helper' });
+  }
 
   await handlers.get('setRole')(actor('owner'), { userId: '2', role: 'gm' });
   assert.equal(target.auth.role, 'gm');
+  assert.equal(second.auth.role, 'gm');
   assert.equal(room.state.players.get(target.sessionId).role, 'gm');
   assert.equal(
     calls.some((call) => call[0] === 'setMemberRole' && call[3] === 'gm'),

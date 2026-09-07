@@ -8,6 +8,23 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Security
+- Bind table and waiting-lobby authorization to the room being joined, preventing a direct
+  room-ID join from borrowing membership or owner privileges from another room code.
+- Apply room kicks and role changes to every connection for the affected user in that room,
+  including connections awaiting reconnection. Roles in other rooms remain unchanged.
+- Disconnect matching live sessions after logout, logout-all, site-admin changes, and account
+  deletion. Logout targets the current login token; logout-all and admin changes apply across
+  devices, tables, editors, and waiting lobbies. Reconnection rechecks current session validity
+  and room access, and revoked clients cannot dispatch queued game messages.
+- Revalidate connected sessions every 30 seconds to catch session expiry and administrative
+  changes made outside the web application, including the admin CLI. Failed authorization
+  checks disconnect affected sessions rather than retaining cached privileges.
+
+### Internal
+- Centralize live authorization and reconnection tracking in `server/room-access.js`, with
+  regression tests for room isolation, multiple tabs, revocation races, and HTTP revocation hooks.
+- Record the commit/push, change-summary, and documentation-update workflow in `AGENTS.md`.
 
 ## [0.15.0] — 2026-09-06
 

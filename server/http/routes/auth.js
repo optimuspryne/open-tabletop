@@ -12,6 +12,7 @@ export function createAuthRouter({
   verifyPassword,
   makeToken,
   hashToken,
+  roomAccess,
 }) {
   const router = express.Router();
   const json = express.json({ limit: '1kb' });
@@ -89,7 +90,11 @@ export function createAuthRouter({
     json,
     asyncRoute(async (req, res) => {
       const raw = String((req.body && req.body.token) || '');
-      if (raw) await db.revokeSession(hashToken(raw));
+      if (raw) {
+        const tokenHash = hashToken(raw);
+        await db.revokeSession(tokenHash);
+        roomAccess.revokeSession(tokenHash);
+      }
       res.status(204).end();
     }),
   );
@@ -102,6 +107,7 @@ export function createAuthRouter({
       const user = raw ? await db.findUserByToken(hashToken(raw)) : null;
       if (!user) return res.status(401).json({ error: 'not signed in' });
       await db.revokeUserSessions(user.id);
+      roomAccess.revokeUser(user.id);
       res.status(204).end();
     }),
   );

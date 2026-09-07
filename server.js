@@ -11,7 +11,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { performance } from 'node:perf_hooks';
-import { Server, Room, ServerError, matchMaker } from '@colyseus/core';
+import { Server, Room, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
@@ -52,6 +52,7 @@ import * as db from './db.js'; // Postgres-backed saved-asset library (metadata;
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
+import { createRoomAccess } from './server/room-access.js';
 import { httpErrorHandler } from './server/http/async-route.js';
 import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
 import { createAuthRouter } from './server/http/routes/auth.js';
@@ -213,6 +214,8 @@ function saveImageRef(dataURL, kind = 'decks') {
 // every LIVE table's state), and we skip anything newer than a day so an
 // in-progress upload can't be swept. public/ is never touched (built-ins live there).
 const LIVE_ROOMS = new Set(); // in-process TableRoom instances (see onCreate/onDispose)
+const roomAccess = createRoomAccess({ db, hashToken });
+setInterval(() => void roomAccess.revalidate(), 30_000).unref();
 const ASSET_PATH_RE = /\/assets\/(?:uploads|decks|boards|props|sky|dice)\/[A-Za-z0-9._-]+/g;
 const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const extractAssetPaths = (str, set) => {
@@ -840,7 +843,7 @@ class TableRoom extends Room {
     });
 
     // --- Member management (DB-backed; all mutations authorized server-side) ---
-    registerMemberHandlers(this, { db });
+    registerMemberHandlers(this, { db, roomAccess });
 
     tableMessage('nextTurn', () => this.advanceTurn());
     tableMessage('turnOrder', (client, message) => {
@@ -1696,6 +1699,7 @@ class TableRoom extends Room {
   async onDispose() {
     // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     LIVE_ROOMS.delete(this);
+    roomAccess.dispose(this);
     if (this.state.pieces.size) {
       // only overwrite the saved state when there's actually something on the table
       const snap = this.serializeGame();
@@ -1777,42 +1781,26 @@ class TableRoom extends Room {
     }
   }
 
-  // The door. Runs before onJoin: resolve the device token to a user, confirm
-  // they're an ADMITTED member of the room this code belongs to, and hand their
-  // role to onJoin as client.auth. Anyone else is turned away. (Site admins may
-  // enter any room.) filterBy(['code']) already segregates the live rooms; this is
-  // the authorization on top of that segregation.
+  // Bind authorization to this room, including joins made directly by room ID.
   async onAuth(client, options) {
-    const user =
-      options && options.token ? await db.findUserByToken(hashToken(options.token)) : null;
-    if (!user) throw new ServerError(401, 'Please sign in first.');
-    const room = options && options.code ? await db.findRoomByCode(options.code) : null;
-    if (!room) throw new ServerError(404, 'That room no longer exists.');
-    const m = await db.getMembership(room.id, user.id);
-    let role = m && m.status === 'admitted' ? m.role : null;
-    if (user.isAdmin) role = 'owner'; // site admins get full control in any room, member or not
-    if (!role)
-      throw new ServerError(
-        403,
-        m ? 'Waiting for a GM to admit you.' : 'You are not a member of this room.',
-      );
-    return {
-      userId: user.id,
-      username: user.username,
-      avatar: user.avatar,
-      role,
-      isAdmin: user.isAdmin,
-    };
+    return roomAccess.authorize(this, client, options);
+  }
+
+  async onReconnect(client) {
+    await roomAccess.reconnect(this, client);
+    client.send('whoami', { isAdmin: client.auth.isAdmin });
   }
 
   rank(client) {
+    if (client.auth?.revoked) return -1;
     return rankOf(client.auth && client.auth.role);
   }
   isAdmin(client) {
-    return !!(client.auth && client.auth.isAdmin);
+    return !!(client.auth && !client.auth.revoked && client.auth.isAdmin);
   } // site admin — curates the library, spawns private assets anywhere
 
   async onJoin(client) {
+    roomAccess.assertActive(this, client);
     const auth = client.auth || {};
     // Give the new player the lowest free seat and a color to match.
     const takenSeats = new Set();
@@ -2148,14 +2136,16 @@ class TableRoom extends Room {
     // On an unexpected drop (not a deliberate leave), hold their seat briefly in
     // case they reconnect. allowReconnection resolves if they come back in time.
     const consented = arg === true || arg === 4000; // true/4000 = a deliberate leave
-    if (!consented) {
+    if (!consented && !client.auth?.revoked) {
       try {
-        await this.allowReconnection(client, 30);
+        await roomAccess.waitForReconnect(this, client, 30);
         return; // they reconnected — keep everything
       } catch (e) {
         /* didn't return in time — fall through and clean up */
       }
     }
+
+    roomAccess.forget(this, client);
 
     // Park a departing player's hand as unclaimed so it survives to a save and can be
     // reclaimed on their return or reassigned by a GM (fires only after the reconnect window).
@@ -2207,17 +2197,7 @@ class TableRoom extends Room {
 // testing library assets live. The admin joins at max role + admin rights.
 class EditorRoom extends TableRoom {
   async onAuth(client, options) {
-    const user =
-      options && options.token ? await db.findUserByToken(hashToken(options.token)) : null;
-    if (!user) throw new ServerError(401, 'Please sign in first.');
-    if (!user.isAdmin) throw new ServerError(403, 'The library editor is for site admins only.');
-    return {
-      userId: user.id,
-      username: user.username,
-      avatar: user.avatar,
-      role: 'owner',
-      isAdmin: true,
-    };
+    return roomAccess.authorize(this, client, options, 'editor');
   }
 }
 
@@ -2318,7 +2298,15 @@ app.use(createUploadRouter({ rateLimitUpload, requireAdmin, saveAsset }));
 // is returned once (stored client-side) so return visits log in without a password.
 app.use(
   '/auth',
-  createAuthRouter({ db, rateLimitAuth, hashPassword, verifyPassword, makeToken, hashToken }),
+  createAuthRouter({
+    db,
+    rateLimitAuth,
+    hashPassword,
+    verifyPassword,
+    makeToken,
+    hashToken,
+    roomAccess,
+  }),
 );
 
 // --- Admin console (site superusers only) ---------------------------------
@@ -2345,20 +2333,7 @@ app.use(
 // Drop a user from EVERY live table they're currently in (admin action). Reuses the
 // per-room kick's 'kicked' notice + consented leave. In-process (single-instance) scope.
 function kickUserEverywhere(userId) {
-  let n = 0;
-  for (const room of LIVE_ROOMS) {
-    const live = room.clients.find((c) => c.auth && String(c.auth.userId) === String(userId));
-    if (live) {
-      live.send('kicked');
-      setTimeout(() => {
-        try {
-          live.leave(4000);
-        } catch (e) {}
-      }, 150);
-      n++;
-    }
-  }
-  return n;
+  return roomAccess.kickUser(userId);
 }
 
 app.use(
@@ -2370,6 +2345,7 @@ app.use(
     trashOrphans,
     disposeLive,
     kickUserEverywhere,
+    roomAccess,
   }),
 );
 
@@ -2382,26 +2358,33 @@ const httpServer = createServer(app);
 // should join the table, non-members must request first. When a GM admits/declines,
 // the table room calls notifyAdmitted/notifyDeclined here to push + release them.
 class LobbyRoom extends Room {
+  onCreate(options) {
+    this.roomCode = options?.code || null;
+  }
   async onAuth(client, options) {
-    const user =
-      options && options.token ? await db.findUserByToken(hashToken(options.token)) : null;
-    if (!user) throw new ServerError(401, 'Please sign in first.');
-    const room = options && options.code ? await db.findRoomByCode(options.code) : null;
-    if (!room) throw new ServerError(404, 'That room no longer exists.');
-    const m = await db.getMembership(room.id, user.id);
-    if (!m) throw new ServerError(403, 'Request to join this room first.');
-    if (m.status === 'admitted') throw new ServerError(409, 'Already admitted — join the table.');
-    return { userId: user.id };
+    return roomAccess.authorize(this, client, options, 'lobby');
+  }
+  onJoin(client) {
+    roomAccess.assertActive(this, client);
+  }
+  async onReconnect(client) {
+    await roomAccess.reconnect(this, client);
+  }
+  onDispose() {
+    roomAccess.dispose(this);
   }
   async onLeave(client, consented) {
     // A pending joiner who dropped (tab close / flaky net): hold their spot briefly so a
     // reconnect keeps them waiting. Admit/decline leave consented → no hold (clean exit).
-    if (consented) return;
-    try {
-      await this.allowReconnection(client, 20);
-    } catch (e) {
-      /* didn't return in time */
+    if (consented !== true && consented !== 4000 && !client.auth?.revoked) {
+      try {
+        await roomAccess.waitForReconnect(this, client, 20);
+        return;
+      } catch (e) {
+        /* didn't return in time or access was revoked */
+      }
     }
+    roomAccess.forget(this, client);
   }
   notifyAdmitted(userId) {
     this._resolve(userId, 'admitted');

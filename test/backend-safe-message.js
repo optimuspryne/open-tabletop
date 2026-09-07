@@ -26,8 +26,18 @@ function harness(handler, options = {}) {
     },
   };
   safeMessage(room, 'libraryRead', handler, { logger, ...options });
-  return { invoke: (message) => registered(client, message), logs, sent };
+  return { invoke: (message) => registered(client, message), logs, sent, client };
 }
+
+test('revoked clients cannot dispatch queued room messages', async () => {
+  let called = false;
+  const { invoke, client } = harness(() => {
+    called = true;
+  });
+  client.auth.revoked = true;
+  await invoke({});
+  assert.equal(called, false);
+});
 
 test('safe message boundary catches rejected handlers and reports sanitized context', async () => {
   const secret = { password: 'must-not-be-logged' };

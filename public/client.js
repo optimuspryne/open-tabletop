@@ -853,6 +853,10 @@ function rebuildGrid() {
     exitReason = 'You have been removed from this room by a GM.';
     sessionStorage.removeItem(key);
   });
+  room.onMessage('accessRevoked', () => {
+    exitReason = 'Your sign-in or permissions changed. Return to the lobby to join again.';
+    sessionStorage.removeItem(key);
+  });
   room.onLeave(() => {
     if (!leaving) showExit(exitReason || 'You have been disconnected from the table.');
   });

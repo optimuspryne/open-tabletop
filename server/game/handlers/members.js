@@ -8,7 +8,7 @@ import { safeMessage } from '../safe-message.js';
 
 // Database-backed room membership controls. Client-side visibility is only a
 // convenience; every mutation is independently authorized here.
-export function registerMemberHandlers(room, { db, logger = console }) {
+export function registerMemberHandlers(room, { db, roomAccess, logger = console }) {
   const memberMessage = (type, handler) =>
     safeMessage(room, type, handler, {
       logger,
@@ -40,17 +40,7 @@ export function registerMemberHandlers(room, { db, logger = console }) {
     const targetUser = await db.findUserById(userId);
     if (targetUser && targetUser.isAdmin) return;
     await db.kickMember(room.roomId, userId);
-    const live = room.clients.find(
-      (candidate) => candidate.auth && String(candidate.auth.userId) === String(userId),
-    );
-    if (live) {
-      live.send('kicked');
-      setTimeout(() => {
-        try {
-          live.leave(4000);
-        } catch {}
-      }, 150);
-    }
+    roomAccess.kickRoom(room, userId);
     await Promise.all([room.notifyLobby(userId, 'notifyDeclined'), room.broadcastMembers()]);
   });
 
@@ -65,14 +55,7 @@ export function registerMemberHandlers(room, { db, logger = console }) {
     const targetUser = await db.findUserById(userId);
     if (targetUser && targetUser.isAdmin) return;
     await db.setMemberRole(room.roomId, userId, role);
-    const live = room.clients.find(
-      (candidate) => candidate.auth && String(candidate.auth.userId) === String(userId),
-    );
-    if (live) {
-      const player = room.state.players.get(live.sessionId);
-      if (player) player.role = role;
-      if (live.auth) live.auth.role = role;
-    }
+    roomAccess.setRole(room, userId, role);
     await room.broadcastMembers();
   });
 

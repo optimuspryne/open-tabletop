@@ -8,6 +8,7 @@ export function createAdminRouter({
   trashOrphans,
   disposeLive,
   kickUserEverywhere,
+  roomAccess,
 }) {
   const router = express.Router();
 
@@ -103,6 +104,7 @@ export function createAdminRouter({
         return res.status(400).json({ error: 'you cannot remove your own admin rights' });
       }
       await db.setAdmin(req.params.id, makeAdmin);
+      roomAccess.revokeUser(req.params.id);
       res.json({ ok: true });
     }),
   );
@@ -125,8 +127,8 @@ export function createAdminRouter({
       const target = await db.findUserById(req.params.id);
       if (!target) return res.status(404).json({ error: 'user not found' });
       for (const room of await db.roomsOwnedBy(req.params.id)) await disposeLive(room.code);
-      kickUserEverywhere(req.params.id);
       await db.purgeUser(req.params.id);
+      kickUserEverywhere(req.params.id);
       res.json({ ok: true });
     }),
   );

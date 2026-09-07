@@ -30,6 +30,7 @@ export function safeRoomTask(
   } = {},
 ) {
   const options = { errorType, publicMessage, logger, notify };
+  if (client?.auth?.revoked) return Promise.resolve();
   try {
     return Promise.resolve(task()).catch((error) => report(room, type, client, error, options));
   } catch (error) {
