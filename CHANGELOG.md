@@ -27,6 +27,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document empty/hand-only snapshots, pending-turn preservation, and shared reset cleanup
+  in the reference and architecture guides.
 - Document piece-capacity enforcement, movement safety, and rejected-placement UI recovery
   in the reference and architecture guides.
 - Extract hand/dispenser placement handlers and shared piece-capacity/physics-safety helpers, with

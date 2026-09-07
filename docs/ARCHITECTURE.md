@@ -729,12 +729,17 @@ Two serializers, layered on purpose:
   **`client.auth.userId`** — so `serializeGame` resolves session → account as it
   writes, emitting `hands: [{ userId, name, cards }]` and `turn: { userId, name }`.
   Already-departed players are gone from `clientBy(sid)`, so their hands are read
-  from `pendingHands` (account-keyed) instead of the live `hands` map.
+  from `pendingHands` (account-keyed) instead of the live `hands` map. A pending
+  turn retains its account and display name until reclaimed or explicitly advanced.
 
-Two triggers write a snapshot into the room's `scene` jsonb: the GM's **`stateSave`**
-("Save Table State") and the **`onDispose`** auto-save (only when the table isn't
-empty, and only under `SCENE_MAX_BYTES`). Both go through `savedScene` →
-`saveRoomState`, alongside the room's other durable settings.
+The GM's **`stateSave`** ("Save Table State") captures a checkpoint; **`onDispose`**
+captures the latest game through `saveFinalRoomState`, including hands-only and
+completely empty games. An empty snapshot replaces a previously populated one so
+old pieces cannot return on reopening. The final save cancels the pending debounce
+timer and awaits persistence through `savedScene` → `saveRoomState`, alongside the
+room's other durable settings. The existing `SCENE_MAX_BYTES` limit still applies;
+an oversized final snapshot retains the previous checkpoint. Scene loading also
+replaces `savedScene` with the loaded scene and schedules persistence.
 
 `applyScene` rebuilds the pieces, then _stages_ — never assigns — the private layer:
 saved hands land in `pendingHands` (account-keyed) with a public `unclaimed`
@@ -826,9 +831,14 @@ handler explains the exit and removes its stale reconnection token.
 
 ## Reset & room lifecycle
 
-**Reset** wipes the table contents: every piece (boards included), all hands,
-piece/deck bookkeeping, active shows, placed overlays, and the shared timer. It
-leaves the room's **durable settings** (scoreboard, GM notes, table size, skybox —
+**Reset** wipes the table contents: every piece (boards included), active and pending
+hands, unclaimed-hand labels, active and pending turns, piece/deck bookkeeping,
+drag groups/targets, release and hand-drop undo records, active shows, placed
+overlays, and the shared timer. `clearGameTable` owns the shared cleanup used by
+Reset, starter changes, and scene loads; Reset separately resets the timer. Cleanup
+invalidates the old checkpoint and schedules persistence, so a later settings save
+cannot preserve the previous game. Scene loading then installs its replacement
+checkpoint. Reset leaves the room's **durable settings** (scoreboard, GM notes, table size, skybox —
 room configuration, not table contents) plus ephemeral notebooks, chat history,
 and the whiteboard drawing; the latter clears only on an explicit `wbClear`.
 New rooms start **empty**

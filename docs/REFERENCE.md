@@ -395,15 +395,30 @@ Private values remain internal; only orphan file metadata is returned by the API
   fronts, overlays, measurement/grid scale, and enabled tray seats.
 - **`serializeGame(room, options)`** — adds private hands and turn ownership,
   converting ephemeral Colyseus session IDs to stable user IDs so returning
-  accounts can reclaim them.
+  accounts can reclaim them. An existing `pendingTurn` and its public name take
+  precedence, preserving the turn while its owner is absent.
+- **`clearGameTable(room)`** — shared by `TableRoom.clearTable()` for resets,
+  starter changes, and scene loading. Removes pieces, active/pending hands,
+  inspections, drafts, private card/deck data, reveals, overlays, active/pending
+  turns, unclaimed-hand labels, drag groups/targets, release tracking, and hand-drop
+  undo records. Invalidates `savedScene` and schedules persistence. Room settings,
+  notebooks, chat, whiteboard, and timer survive this helper; the Reset handler
+  separately stops and resets the timer.
 - **`applyScene(room, scene, options)`** — validates and clamps the table,
   pieces, overlays, and private layer before rebuilding through the room's
   existing spawn/bounds/tray APIs. Restored overlays become table-owned, and
-  hands/turns are staged for account rebinding.
+  hands/turns are staged for account rebinding. Clears the previous game first and
+  replaces `savedScene` with the loaded scene before scheduling persistence.
 
 `TableRoom.serializeScene`, `serializeGame`, and `applyScene` are thin facades
 that supply room-specific limits and constructors. Debouncing and the final
 Postgres write remain in `server/game/handlers/room-state.js`.
+
+**`saveFinalRoomState(room, {sceneMaxBytes, clearTimer})`** in that module is called
+by `TableRoom.onDispose()` through `safeRoomTask`. It cancels the pending debounce
+timer, snapshots even hands-only or empty games, and awaits `saveStateNow()`.
+Snapshots exceeding the existing size limit leave the previous checkpoint intact;
+database failures propagate to the lifecycle error boundary.
 
 ### Schema (synced state)
 
