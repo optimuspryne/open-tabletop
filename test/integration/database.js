@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 13); // 001–013 (013 = player mats)
+  assert.equal(migrations.rows.length, 15); // 001–015 (014 = table shape, 015 = rim wood)
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
