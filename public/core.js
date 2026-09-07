@@ -253,7 +253,7 @@ if (typeof window !== 'undefined') {
 // extruded outline), so the tiling density stays consistent across shapes and sizes.
 const feltTex = new THREE.TextureLoader().load('/textures/felt.jpg');
 feltTex.colorSpace = THREE.SRGBColorSpace;
-feltTex.wrapS = feltTex.wrapT = THREE.RepeatWrapping;
+feltTex.wrapS = feltTex.wrapT = THREE.MirroredRepeatWrapping; // reflect at tile edges — no visible seam
 feltTex.repeat.set(0.35, 0.35);
 feltTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
 
@@ -292,11 +292,11 @@ scene.add(tableMesh);
 // The wood is a GM-chosen texture, swapped on the shared material by setRimWood.
 const RIM = { width: 0.4, lip: 0.35, base: -1, overlap: 0.06 };
 const WOOD_RIM = {
-  mahogany: '/textures/wood-mahogany.jpg',
-  walnut: '/textures/wood-walnut.jpg',
-  birch: '/textures/wood-birch.jpg',
-  green: '/textures/wood-green.jpg',
-  oak: '/textures/wood-oak.jpg',
+  mahogany: '/textures/wood-mahogany.png',
+  walnut: '/textures/wood-walnut.png',
+  birch: '/textures/wood-birch.png',
+  green: '/textures/wood-green.png',
+  oak: '/textures/wood-oak.png',
 };
 const _woodCache = new Map();
 function woodTexture(name) {
