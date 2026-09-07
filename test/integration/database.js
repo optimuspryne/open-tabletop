@@ -126,3 +126,28 @@ test('case-insensitive user uniqueness is enforced by PostgreSQL', async () => {
     (error) => error.conflict === 'username',
   );
 });
+
+test('cleanup references include private mats and snapshots in soft-deleted rooms', async () => {
+  const owner = await database.createUser({
+    username: 'cleanup-owner',
+    email: 'cleanup@example.test',
+  });
+  const room = await database.createRoom({ ownerId: owner.id, code: 'CLEANUP', name: 'Cleanup' });
+  await database.insertMat('Private mat', {
+    tex: '/assets/mats/private.jpg',
+    geom: { w: 5, h: 3 },
+  });
+  await pool.query('UPDATE rooms SET scene = $2, skybox = $3, deleted_at = now() WHERE id = $1', [
+    room.id,
+    JSON.stringify({ hands: [{ cards: [{ front: '/assets/decks/saved-hand.jpg' }] }] }),
+    '/assets/sky/saved-sky.jpg',
+  ]);
+  const references = (await database.allAssetRefBlobs()).join('\n');
+  for (const url of [
+    '/assets/mats/private.jpg',
+    '/assets/decks/saved-hand.jpg',
+    '/assets/sky/saved-sky.jpg',
+  ]) {
+    assert.ok(references.includes(url), `missing reference: ${url}`);
+  }
+});

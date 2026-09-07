@@ -414,11 +414,40 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
 
 ### `TableRoom extends Room`
 
-**`onAuth(client, options)`** resolves the device token → user and the room code →
-room (via `db`), admits only _admitted_ members (an admin gets `gm` in any room),
+**`onAuth(client, options)`** delegates to `roomAccess.authorize()`, binds the supplied
+code to the actual room, and admits only _admitted_ members (an admin gets `owner` in any room),
 and returns `{ userId, username, avatar, role, isAdmin }` onto `client.auth`.
 Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** and
 **`isAdmin(client)`** back the gates.
+
+**`onJoin`** checks that authorization has not been revoked since `onAuth`.
+**`onReconnect`** revalidates session and membership, updates the role, and sends
+`whoami`. **`onLeave`** retains tracked access during the reconnect window and removes
+it on final departure; **`onDispose`** releases the room's access records. Revoked
+clients have rank `-1` and cannot pass `isAdmin()`.
+
+### `server/room-access.js` — live access and revocation
+
+**`createRoomAccess({db, hashToken})`** returns a process-local service:
+
+- `authorize(room,client,options,kind)` checks table/lobby room binding, membership,
+  or editor-admin access; `assertActive(room,client)` guards join completion.
+- `waitForReconnect(room,client,seconds)` tracks the reservation;
+  `reconnect(room,client)` rechecks database authorization before resuming.
+- `setRole(room,userId,role)` updates all matching tabs and pending reconnects in
+  that room; `kickRoom(room,userId)` revokes only that room's connections.
+- `kickUser(userId)` and `revokeUser(userId)` disconnect an account across rooms;
+  `revokeSession(tokenHash)` targets only connections using that login token.
+- `revalidate()` checks live credentials every 30 seconds, including session expiry
+  and CLI/database admin changes. Database failures fail closed. `forget()` and
+  `dispose()` release session and room records.
+
+Token hashes and reconnect handles remain private. Scoped in-flight guards prevent
+stale authorization from being installed after revocation without interrupting an
+unrelated user's join. The browser handles `accessRevoked` by explaining the exit
+and clearing its reconnection token.
+
+### `TableRoom` private state and operations
 
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
 `cardData`, `hands`, `drafts`, **`groups`** (a group drag: `sessionId → Map(id → offset)`,
@@ -554,6 +583,7 @@ public messages/error types. **`safeRoomTask(room,type,client,task,options)`** e
 the same boundary to join-time and detached lifecycle work; `notify:false` keeps
 clientless saves log-only. The browser displays generic `serverError` messages at
 most once per five seconds.
+`safeRoomTask` also rejects queued work from clients marked `auth.revoked`.
 
 Per-piece flags (rank-gated, mirror each other): **`setStand`** (`{id}` — toggle
 keep-upright; **U**), **`setSnap`** (`{id}` — toggle snap-to-grid, snapping the piece
@@ -622,8 +652,8 @@ admin sandbox for building and testing library assets live. Registered as the
 - **Auth:** `POST /auth/signup` (with a password → host, pending approval; without
   → passwordless player), `POST /auth/login` (creates a device session),
   `POST /auth/token` (resolve a token → current user), `POST /auth/logout`
-  (revoke this session), and `POST /auth/logout-all` (revoke every session for the
-  authenticated account). `requireUser` is the
+  (revoke this token and disconnect its live connections), and `POST /auth/logout-all`
+  (revoke every session and connection for the authenticated account). `requireUser` is the
   Bearer-token guard; `clientUser` is the safe projection sent to clients
   (`isAdmin`, `canOwnRooms`, `hostStatus`, `hasPassword`).
 - **Rooms:** `GET /rooms` (your rooms), `POST /rooms` (create — approved-host or

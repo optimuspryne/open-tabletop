@@ -54,6 +54,36 @@ test('database writes and shutdown delegate to the injected pool', async () => {
   assert.deepEqual(pool.calls.at(-1), { target: 'pool', operation: 'end' });
 });
 
+test('asset references use one snapshot across all library categories and complete room records', async () => {
+  const pool = fakePool([
+    { rows: [{ refs: { scene: { front: '/assets/decks/room-only.jpg' } } }] },
+  ]);
+  const result = await createDatabase(pool).allAssetRefBlobs();
+  assert.deepEqual(result.map(JSON.parse), [{ scene: { front: '/assets/decks/room-only.jpg' } }]);
+  assert.equal(pool.calls.length, 1);
+  for (const table of [
+    'custom_decks',
+    'custom_boards',
+    'custom_objects',
+    'custom_scenes',
+    'custom_skyboxes',
+    'custom_dice',
+    'custom_mats',
+    'rooms',
+  ]) {
+    assert.ok(pool.calls[0].sql.includes(`FROM ${table} AS asset`));
+  }
+});
+
+test('asset reference lookup rejects database failure instead of reporting an empty reference set', async () => {
+  const database = createDatabase({
+    query: async () => {
+      throw new Error('offline');
+    },
+  });
+  await assert.rejects(database.allAssetRefBlobs(), /offline/);
+});
+
 test('transactional operations acquire and release from the injected pool', async () => {
   const pool = fakePool([
     { rows: [], rowCount: 0 },

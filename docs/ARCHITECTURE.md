@@ -734,6 +734,12 @@ avatar, hand). The server holds the seat for 30 s on an unexpected disconnect
 and notes (they aren't in shared state). Because `sessionStorage` is per-tab,
 separate tabs stay distinct.
 
+`server/room-access.js` tracks all authorized connections, including seats awaiting
+reconnection. `onReconnect` rechecks the database session and the actual room's
+membership before restoring access. Kicks cancel pending reconnect reservations;
+revoked clients cannot dispatch queued game messages. The browser's `accessRevoked`
+handler explains the exit and removes its stale reconnection token.
+
 ## The message protocol (intent up, state down)
 
 - **Up (client → server):** `grab`, `move`, `release`, `flip`, `dealToTable`,
@@ -803,17 +809,30 @@ environment, never code.
 **Accounts.** A _player_ is passwordless (display name + device token); a _host_
 has a password. Each browser login has its own hashed, expiring row in
 `user_sessions`, so devices coexist and can be revoked independently. `onAuth`
-resolves the token to a user and the room code to a room,
+resolves the token to a user and uses the live room's own code to resolve membership,
 admits only admitted members (else rejects with a waiting/forbidden message), and
 stamps the membership **role** — and the account's admin flag — onto the connection
 (`client.auth`).
+
+The supplied code must match the actual table or waiting lobby, including direct
+`joinById` requests; matchmaking filters are not authorization. The shared
+`createRoomAccess()` service owns these checks for tables, pending-member lobbies,
+and the admin-only editor. It tracks token hashes privately and guards in-flight
+authorization reads against changes affecting that token, user, or room.
+
+Logout revokes connections using that token; logout-all revokes the account's
+connections across devices. Admin-console privilege changes and account deletion
+also disconnect affected live connections. Application-route invalidation is
+immediate within the server process. A non-overlapping check every 30 seconds
+also detects expired sessions and CLI/database privilege changes; failed database
+authorization checks disconnect affected sessions rather than retaining cached access.
 
 **Rooms & roles.** A room has an owner, a join code, and an optional
 require-approval gate; roles rank **owner → GM → helper → player** (`RANK`), and
 every privileged handler checks `this.rank(client)` — spawn = helper+,
 reshape/reset/board = GM+, member management = GM+. **Admins** are a global flag
 (`is_admin`), threaded through `onAuth` as `client.auth.isAdmin`: they join any
-room as a GM and can act on private library assets anywhere. GMs manage members
+room as an owner and can act on private library assets anywhere. GMs manage members
 (admit / kick / promote) live from the Members panel; the server pushes
 `memberList` to GMs plus a pending-join pulse. Because `onAuth` turns a _pending_
 joiner away from the table, they instead hold a socket to a tiny per-code
@@ -822,6 +841,9 @@ joiner away from the table, they instead hold a socket to a tiny per-code
 15s poll left as a fallback. A **site admin** can also kick a user out of _every_
 live table at once (`kickUserEverywhere`, at `POST /admin/users/:id/kick` and on
 user-delete); the per-room GM kick is separate and scoped to that one table.
+Room-role updates and room kicks reach every matching tab and pending reconnect
+in that room. They do not change the user's roles in other rooms. Site-wide kicks
+also cover editor and waiting-lobby connections.
 
 **Host approval.** Creating a room needs approved host access (`host_status =
 'approved'`, or admin). A password signup starts **pending**; a passwordless

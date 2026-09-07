@@ -25,6 +25,18 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Centralize live authorization and reconnection tracking in `server/room-access.js`, with
   regression tests for room isolation, multiple tabs, revocation races, and HTTP revocation hooks.
 - Record the commit/push, change-summary, and documentation-update workflow in `AGENTS.md`.
+- Update the reference and architecture documentation for the pushed room-authorization and
+  access-revocation changes.
+- Extract asset cleanup into `server/asset-cleanup.js` with temporary-file and PostgreSQL
+  regression coverage. File categories use the upload allowlist; database references use the
+  existing asset-table registry in a single consistent query.
+
+### Fixed
+- Protect referenced mat files, saved room snapshots (including soft-deleted rooms), and private
+  deck/hand data from orphan cleanup. Scan drafts, pending inspections, unclaimed hands, live
+  reveals, and in-memory saved snapshots as well as synchronized state.
+- Retain live-room references across the cleanup database read and through final room-save
+  completion. Reference-scan failures abort cleanup; recent files and symlinks are not swept.
 
 ## [0.15.0] — 2026-09-06
 

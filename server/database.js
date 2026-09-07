@@ -214,22 +214,19 @@ export function createDatabase(pool) {
   }
 
   // Every stored blob that could name an asset file — the reference set for orphan
-  // cleanup. SELECT * (not named columns) so a newly-added column can never silently
+  // cleanup. Whole-row JSON (not named columns) so a newly-added column cannot silently
   // un-protect a file. Throws on any error, so the caller aborts rather than over-delete.
   async function allAssetRefBlobs() {
-    const out = [];
-    const dump = async (sql) => {
-      const { rows } = await pool.query(sql);
-      for (const r of rows) out.push(JSON.stringify(r));
-    };
-    await dump('SELECT * FROM custom_decks');
-    await dump('SELECT * FROM custom_boards');
-    await dump('SELECT * FROM custom_objects');
-    await dump('SELECT * FROM custom_scenes');
-    await dump('SELECT * FROM custom_skyboxes');
-    await dump('SELECT * FROM custom_dice');
-    await dump("SELECT skybox FROM rooms WHERE skybox <> ''");
-    return out;
+    // One statement gives a consistent snapshot across every registered asset
+    // table and all room data (including saved scenes and soft-deleted rooms).
+    // Names come only from the internal admin allowlist, never user input.
+    const tables = [...Object.values(ASSET_TABLE), 'rooms'];
+    const { rows } = await pool.query(
+      tables
+        .map((table) => `SELECT to_jsonb(asset) AS refs FROM ${table} AS asset`)
+        .join(' UNION ALL '),
+    );
+    return rows.map((row) => JSON.stringify(row.refs));
   }
 
   // ===== Asset admin (generic across the asset tables) =========================

@@ -53,6 +53,7 @@ import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
 import { createRoomAccess } from './server/room-access.js';
+import { createAssetCleanup } from './server/asset-cleanup.js';
 import { httpErrorHandler } from './server/http/async-route.js';
 import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
 import { createAuthRouter } from './server/http/routes/auth.js';
@@ -208,62 +209,16 @@ function saveImageRef(dataURL, kind = 'decks') {
   return saveAsset(kind, Buffer.from(base64, 'base64'), ext);
 }
 
-// ---- Orphaned-asset cleanup (admin) ---------------------------------------
-// Files under saved-assets/ that nothing references anymore. "Referenced" is
-// gathered conservatively (broad regex over every library row + room skybox +
-// every LIVE table's state), and we skip anything newer than a day so an
-// in-progress upload can't be swept. public/ is never touched (built-ins live there).
-const LIVE_ROOMS = new Set(); // in-process TableRoom instances (see onCreate/onDispose)
+// Track rooms through their final persistence flush so cleanup can protect their data.
+const LIVE_ROOMS = new Set();
 const roomAccess = createRoomAccess({ db, hashToken });
 setInterval(() => void roomAccess.revalidate(), 30_000).unref();
-const ASSET_PATH_RE = /\/assets\/(?:uploads|decks|boards|props|sky|dice)\/[A-Za-z0-9._-]+/g;
-const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
-const extractAssetPaths = (str, set) => {
-  const m = String(str).match(ASSET_PATH_RE);
-  if (m) for (const p of m) set.add(p);
-};
-
-async function findOrphanAssets() {
-  const referenced = new Set();
-  for (const blob of await db.allAssetRefBlobs()) extractAssetPaths(blob, referenced); // DB refs (throws → abort)
-  for (const room of LIVE_ROOMS) extractAssetPaths(JSON.stringify(room.state.toJSON()), referenced); // live tables
-  const cutoff = Date.now() - ORPHAN_MIN_AGE_MS;
-  const orphans = [];
-  for (const kind of ASSET_KINDS) {
-    let names;
-    try {
-      names = fs.readdirSync(path.join(ASSETS_DIR, kind));
-    } catch {
-      continue;
-    }
-    for (const name of names) {
-      let st;
-      try {
-        st = fs.statSync(path.join(ASSETS_DIR, kind, name));
-      } catch {
-        continue;
-      }
-      if (!st.isFile() || st.mtimeMs > cutoff) continue; // skip dirs and too-new files
-      if (referenced.has(`/assets/${kind}/${name}`)) continue; // still in use
-      orphans.push({ url: `/assets/${kind}/${name}`, kind, name, size: st.size });
-    }
-  }
-  return orphans;
-}
-function trashOrphans(orphans) {
-  const moved = [];
-  for (const o of orphans) {
-    try {
-      const destDir = path.join(ASSETS_DIR, '.trash', o.kind);
-      fs.mkdirSync(destDir, { recursive: true });
-      fs.renameSync(path.join(ASSETS_DIR, o.kind, o.name), path.join(destDir, o.name));
-      moved.push(o.url);
-    } catch (e) {
-      console.error('[cleanup] move', o.url, e.message);
-    }
-  }
-  return moved;
-}
+const { findOrphanAssets, trashOrphans } = createAssetCleanup({
+  assetsDir: ASSETS_DIR,
+  assetKinds: ASSET_KINDS,
+  allAssetRefBlobs: db.allAssetRefBlobs,
+  liveRooms: LIVE_ROOMS,
+});
 
 // --- Synced state ----------------------------------------------------------
 // defineTypes() is the no-build-step way to declare schema in plain JS.
@@ -1698,7 +1653,6 @@ class TableRoom extends Room {
   }
   async onDispose() {
     // safety net: snapshot the live table so progress survives an empty room even without a manual Save
-    LIVE_ROOMS.delete(this);
     roomAccess.dispose(this);
     if (this.state.pieces.size) {
       // only overwrite the saved state when there's actually something on the table
@@ -1707,6 +1661,7 @@ class TableRoom extends Room {
     }
     if (this._saveTimer) clearTimeout(this._saveTimer);
     await safeRoomTask(this, 'disposeSave', null, () => this.saveStateNow(), { notify: false }); // flush — persists the snapshot + latest settings
+    LIVE_ROOMS.delete(this);
   }
 
   // Send a client the library list for one asset kind. Admins get everything
