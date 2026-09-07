@@ -61,6 +61,7 @@ import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import { absorbedEntry, cardBackRef, cardFrontRef } from './server/deck-state.js';
+import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { MAX_PIECES, assertPieceCapacity } from './server/game/piece-capacity.js';
 import { dragVelocity } from './server/game/physics-safety.js';
@@ -576,6 +577,7 @@ class TableRoom extends Room {
     this.drafts = new Map(); // sessionId -> {back,cards} PRIVATE: a deck being built in chunks
     this.cardData = new Map(); // id -> { front }         PRIVATE: a face-down table card's hidden face
     this.hands = new Map(); // sessionId -> [{hid,front,back}]  PRIVATE: each player's hidden hand
+    this.handOwners = new Map(); // session -> account, retained through the reconnect window
     this.lastDrop = new Map(); // sessionId -> { ids:[pieceId], ts }  PRIVATE: undo for handToTable
     this.notebooks = new Map(); // user/session key -> text         PRIVATE: each player's notes (ephemeral; dies with the room)
     this.strokes = []; // whiteboard stroke history (server-held; sent to late-joiners, gone on dispose)
@@ -1684,10 +1686,9 @@ class TableRoom extends Room {
 
     // Reclaim a saved hand / the turn if this account owned one in the loaded game.
     const uid = auth.userId != null ? String(auth.userId) : null;
-    if (uid && this.pendingHands.has(uid)) {
-      this.hands.set(client.sessionId, this.pendingHands.get(uid).cards);
-      this.pendingHands.delete(uid);
-      this.state.unclaimed.delete(uid);
+    if (uid != null) {
+      this.handOwners.set(client.sessionId, uid);
+      claimHand(this, uid, client.sessionId);
     }
     if (uid && this.pendingTurn === uid) {
       this.pendingTurn = null;
@@ -2013,15 +2014,7 @@ class TableRoom extends Room {
 
     // Park a departing player's hand as unclaimed so it survives to a save and can be
     // reclaimed on their return or reassigned by a GM (fires only after the reconnect window).
-    const _uid = client.auth && client.auth.userId != null ? String(client.auth.userId) : null;
-    const _hand = this.hands.get(client.sessionId);
-    if (_uid && _hand && _hand.length) {
-      const _p = this.state.players.get(client.sessionId);
-      const _nm = (_p && _p.name) || (client.auth && client.auth.username) || '';
-      this.pendingHands.set(_uid, { name: _nm, cards: _hand });
-      this.state.unclaimed.set(_uid, _nm);
-    }
-    this.hands.delete(client.sessionId);
+    parkHand(this, client);
     this.lastDrop.delete(client.sessionId);
     this.notebooks.delete(`session:${client.sessionId}`); // account-keyed notes live until the room closes
     this.stopShow(client.sessionId); // clear any hold-to-show they had live

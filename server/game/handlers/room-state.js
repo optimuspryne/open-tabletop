@@ -22,20 +22,29 @@ export function registerRoomStateHandlers(
   const notebookKey = (client) =>
     client.auth?.userId != null ? `user:${client.auth.userId}` : `session:${client.sessionId}`;
 
-  roomMessage('stateSave', (client) => {
-    if (room.rank(client) < RANK.gm) return;
-    const payload = room.serializeGame();
-    if (JSON.stringify(payload).length > sceneMaxBytes) {
-      client.send('sceneError', {
-        message:
-          'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.',
-      });
-      return;
-    }
-    room.savedScene = payload;
-    room.scheduleSave();
-    client.send('stateSaved', {});
-  });
+  safeMessage(
+    room,
+    'stateSave',
+    async (client) => {
+      if (room.rank(client) < RANK.gm) return;
+      if (!room.roomId) {
+        client.send('sceneError', { message: 'This table has no persistent room to save.' });
+        return;
+      }
+      const payload = room.serializeGame();
+      if (JSON.stringify(payload).length > sceneMaxBytes) {
+        client.send('sceneError', {
+          message:
+            'Table state is too large to save. Save any table-built decks to the library first so their art is stored as files.',
+        });
+        return;
+      }
+      room.savedScene = payload;
+      await room.saveStateNow();
+      client.send('stateSaved', {});
+    },
+    { logger, errorType: 'sceneError', publicMessage: 'Could not save table state. Try again.' },
+  );
 
   roomMessage('notebook', (client, message) => {
     const parsed = oneField(message, 'text', (text) => boundedString(text, { max: 4000 }));
@@ -171,7 +180,8 @@ export async function saveRoomStateNow(room, { db }) {
       score: row.score,
     }),
   );
-  await db.saveRoomState(room.roomId, {
+  const roomId = room.roomId;
+  const payload = structuredClone({
     scoreboard,
     notes: room.state.notes,
     tableX: room.state.tableX,
@@ -183,4 +193,11 @@ export async function saveRoomStateNow(room, { db }) {
     scene: room.savedScene,
     scale: room.scaleSnapshot(),
   });
+  // Capture at request time and serialize writes, including background/final saves.
+  const pending = (room._savePromise || Promise.resolve()).then(async () => {
+    const result = await db.saveRoomState(roomId, payload);
+    if (result?.rowCount === 0) throw new Error('Room no longer exists');
+  });
+  room._savePromise = pending.catch(() => {}); // a failed write must not poison later saves
+  await pending;
 }

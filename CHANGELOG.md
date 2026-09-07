@@ -44,6 +44,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Preserve all same-account cards across multiple tabs, pending hands, saves, and disconnects.
+  Retain hand ownership during reconnection; restore cards with fresh hand IDs to avoid collisions.
+  Live hands remain separate per tab; saved/unclaimed cards combine per account for reclamation.
+- Acknowledge manual Save only after its database write succeeds; report failures to the caller.
+  Serialize room writes in request order with independent snapshots so older background saves
+  cannot overwrite newer checkpoints, and allow later saves to recover after a failed write.
 - Save hands-only and empty games when a room closes, replacing stale populated snapshots.
   Preserve pending turn ownership when saving a game before its owner returns.
 - Clear pending/unclaimed hands, active and pending turns, group drags, and undo bookkeeping

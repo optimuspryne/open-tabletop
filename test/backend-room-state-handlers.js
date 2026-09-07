@@ -187,3 +187,78 @@ test('save scheduling is debounced until the pending callback runs', async () =>
   assert.equal(room._saveTimer, null);
   assert.equal(saves, 1);
 });
+
+test('manual Save acknowledges only after durable completion and reports write failures', async () => {
+  const { room, handlers } = harness();
+  const user = client();
+  let finish;
+  room.saveStateNow = () =>
+    new Promise((resolve) => {
+      finish = resolve;
+    });
+  const saving = handlers.get('stateSave')(user);
+  assert.deepEqual(user.sent, []);
+  finish();
+  await saving;
+  assert.deepEqual(user.sent, [{ type: 'stateSaved', payload: {} }]);
+  user.sent.length = 0;
+  room.saveStateNow = async () => {
+    throw new Error('private database details');
+  };
+  await handlers.get('stateSave')(user);
+  assert.equal(user.sent.length, 1);
+  assert.equal(user.sent[0].type, 'sceneError');
+  assert.equal(user.sent[0].payload.message, 'Could not save table state. Try again.');
+});
+
+test('manual Save never claims durability for a nonpersistent table', async () => {
+  const { room, handlers } = harness();
+  room.roomId = null;
+  const user = client();
+  await handlers.get('stateSave')(user);
+  assert.equal(user.sent[0].type, 'sceneError');
+});
+
+test('room writes capture snapshots and serialize completion across failures', async () => {
+  const { room } = harness();
+  const writes = [],
+    gates = [];
+  const db = {
+    saveRoomState(id, value) {
+      writes.push(value);
+      return new Promise((resolve, reject) => {
+        gates.push({ resolve, reject });
+      });
+    },
+  };
+  room.savedScene = { pieces: [{ props: { front: 'first' } }] };
+  const first = saveRoomStateNow(room, { db });
+  const failure = assert.rejects(first, /failed write/);
+  await Promise.resolve();
+  room.savedScene.pieces[0].props.front = 'second';
+  const second = saveRoomStateNow(room, { db });
+  await Promise.resolve();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].scene.pieces[0].props.front, 'first');
+  gates[0].reject(new Error('failed write'));
+  await failure;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(writes.length, 2);
+  assert.equal(writes[1].scene.pieces[0].props.front, 'second');
+  gates[1].resolve();
+  await second;
+});
+
+test('a save that updates no room is a failure', async () => {
+  const { room } = harness();
+  await assert.rejects(
+    saveRoomStateNow(room, {
+      db: {
+        async saveRoomState() {
+          return { rowCount: 0 };
+        },
+      },
+    }),
+    /Room no longer exists/,
+  );
+});

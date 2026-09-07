@@ -1,4 +1,5 @@
 import { KINDS, MEASURE, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
+import { appendAccountHand } from './hand-state.js';
 import { readProps } from './props-codec.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
@@ -107,19 +108,13 @@ export function serializeGame(room, options) {
   for (const [sessionId, cards] of room.hands) {
     if (!cards || !cards.length) continue;
     const client = room.clientBy(sessionId);
-    const userId = client && client.auth && client.auth.userId;
+    const userId = room.handOwners?.get(sessionId) ?? client?.auth?.userId;
     if (userId == null) continue;
     const player = room.state.players.get(sessionId);
-    byUser.set(String(userId), {
-      name: (player && player.name) || '',
-      cards: cards.slice(),
-    });
+    appendAccountHand(byUser, userId, player?.name, cards);
   }
   for (const [userId, held] of room.pendingHands) {
-    byUser.set(String(userId), {
-      name: held.name || '',
-      cards: held.cards.slice(),
-    });
+    appendAccountHand(byUser, userId, held.name, held.cards);
   }
 
   const hands = [];
@@ -219,10 +214,12 @@ export function applyScene(
     for (const hand of scene.hands) {
       if (!hand || hand.userId == null || !Array.isArray(hand.cards) || !hand.cards.length)
         continue;
-      room.pendingHands.set(String(hand.userId), {
-        name: hand.name || '',
-        cards: hand.cards.slice(),
-      });
+      // Saved IDs belong to the previous room lifetime. Assign fresh IDs before
+      // these cards can be mixed with newly drawn cards or other restored hands.
+      const cards = hand.cards.map((card) =>
+        typeof card === 'object' && card !== null ? { ...card, hid: 'h' + room.nextHid++ } : card,
+      );
+      appendAccountHand(room.pendingHands, hand.userId, hand.name, cards);
       room.state.unclaimed.set(String(hand.userId), hand.name || '');
     }
   }

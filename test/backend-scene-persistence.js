@@ -412,3 +412,38 @@ test('final save retains the size limit and propagates persistence failures', as
   await assert.rejects(saveFinalRoomState(room, { sceneMaxBytes: 20 }), /database unavailable/);
   assert.equal(room.savedScene, previous);
 });
+
+test('snapshot combines same-account live, reconnecting, and pending hands without overwrites', () => {
+  const room = serializationRoom();
+  room.handOwners = new Map([
+    ['live', '42'],
+    ['reconnecting', '42'],
+  ]);
+  room.hands.set('reconnecting', ['/reconnecting-card']);
+  room.pendingHands.set('42', { name: 'Live Player', cards: ['/parked-card'] });
+  const snapshot = serializeGame(room, { geoOf });
+  assert.deepEqual(snapshot.hands.find((hand) => hand.userId === '42').cards, [
+    '/live-card',
+    '/reconnecting-card',
+    '/parked-card',
+  ]);
+  assert.deepEqual(room.hands.get('live'), ['/live-card']);
+  assert.deepEqual(room.pendingHands.get('42').cards, ['/parked-card']);
+});
+
+test('restoring duplicate account entries preserves cards and replaces stale hand IDs', () => {
+  const { room } = restorationRoom();
+  room.nextHid = 1;
+  const card = { hid: 'h1', front: '/same', back: '/custom', open: true, geom: { w: 2 } };
+  const scene = {
+    pieces: [],
+    hands: [
+      { userId: 7, name: 'Player', cards: [card] },
+      { userId: '7', name: 'Player', cards: [card] },
+    ],
+  };
+  applyScene(room, scene, restoreOptions);
+  assert.deepEqual(room.pendingHands.get('7').cards, [card, { ...card, hid: 'h2' }]);
+  assert.equal(room.nextHid, 3); // the next newly drawn card cannot collide
+  assert.equal(scene.hands[1].cards[0].hid, 'h1');
+});
