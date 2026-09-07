@@ -1,6 +1,7 @@
 // Normalizers for values arriving across the WebSocket trust boundary. A
 // normalizer returns a fresh, trusted value or null; handlers must not continue
 // using the original message after validation.
+import { isWorldCoordinate } from './game/physics-safety.js';
 export const isPlainObject = (value) => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const proto = Object.getPrototypeOf(value);
@@ -299,7 +300,7 @@ export function namedIdPayload(message, { idKey = 'id', optionalId = false } = {
 export function dispenserDragPayload(message) {
   if (!exactObject(message, ['id', 'x', 'y', 'z'])) return null;
   const id = boundedString(message.id, { min: 1, max: 20, pattern: /^\d+$/ });
-  if (id === null || ![message.x, message.y, message.z].every(Number.isFinite)) return null;
+  if (id === null || ![message.x, message.y, message.z].every(isWorldCoordinate)) return null;
   return { id, x: message.x, y: message.y, z: message.z };
 }
 
@@ -319,7 +320,7 @@ export function cardPlacementPayload(message, { wholeHand = false } = {}) {
   }
   const hasX = message.x !== undefined,
     hasZ = message.z !== undefined;
-  if (hasX !== hasZ || (hasX && (!Number.isFinite(message.x) || !Number.isFinite(message.z))))
+  if (hasX !== hasZ || (hasX && (!isWorldCoordinate(message.x) || !isWorldCoordinate(message.z))))
     return null;
   if (hasX) {
     out.x = message.x;
@@ -718,7 +719,7 @@ export function deckIdPayload(message) {
 export function deckDragPayload(message) {
   if (!exactObject(message, ['deckId', 'x', 'y', 'z'])) return null;
   const deckId = boundedString(message.deckId, { min: 1, max: 20, pattern: /^\d+$/ });
-  if (!deckId || ![message.x, message.y, message.z].every(Number.isFinite)) return null;
+  if (!deckId || ![message.x, message.y, message.z].every(isWorldCoordinate)) return null;
   return { deckId, x: message.x, y: message.y, z: message.z };
 }
 
@@ -782,7 +783,7 @@ export function saveDicePayload(message, { urlOk }) {
 export function pieceMovePayload(message) {
   if (!exactObject(message, ['id', 'x', 'y', 'z'])) return null;
   const id = boundedString(message.id, { min: 1, max: 20, pattern: /^\d+$/ });
-  return id && [message.x, message.y, message.z].every(Number.isFinite)
+  return id && [message.x, message.y, message.z].every(isWorldCoordinate)
     ? { id, x: message.x, y: message.y, z: message.z }
     : null;
 }
@@ -811,7 +812,7 @@ export function groupReleasePayload(message) {
 export function groupMovePayload(message) {
   if (
     !exactObject(message, ['x', 'y', 'z']) ||
-    ![message.x, message.y, message.z].every(Number.isFinite)
+    ![message.x, message.y, message.z].every(isWorldCoordinate)
   )
     return null;
   return { x: message.x, y: message.y, z: message.z };
@@ -903,6 +904,6 @@ export function recolorPayload(message) {
 export function finitePosition(message) {
   if (!isPlainObject(message)) return null;
   const { x, y, z } = message;
-  if (![x, y, z].every(Number.isFinite)) return null;
+  if (![x, y, z].every(isWorldCoordinate)) return null;
   return { x, y, z };
 }

@@ -35,6 +35,14 @@ const actor = (sessionId) => ({
 const alice = actor('alice');
 const bob = actor('bob');
 
+test('group offsets cannot turn a valid target into an unbounded physics destination', () => {
+  const { room, handlers } = harness();
+  room.state.pieces.set('1', { owner: 'alice' });
+  room.groups.set('alice', new Map([['1', { x: 1e308, y: 0, z: 0 }]]));
+  handlers.get('moveGroup')(alice, { x: 10, y: 2, z: 0 });
+  assert.equal(room.targets.size, 0);
+});
+
 test('movement module registers the single and group movement messages', () => {
   assert.deepEqual(
     [...harness().handlers.keys()],

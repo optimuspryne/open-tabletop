@@ -7,6 +7,7 @@ import {
   pieceReleasePayload,
 } from '../../message-validation.js';
 import { safeMessage } from '../safe-message.js';
+import { isWorldCoordinate } from '../physics-safety.js';
 
 // Exclusive piece ownership is the authority boundary for dragging. A client may
 // move/release only pieces it successfully claimed; group movement applies the
@@ -69,11 +70,12 @@ export function registerMovementHandlers(room, { isMovable, maxPieces = 250, log
     for (const [id, offset] of group) {
       const piece = room.state.pieces.get(id);
       if (piece && piece.owner === client.sessionId) {
-        room.targets.set(id, {
+        const destination = {
           x: target.x + offset.x,
           y: target.y + offset.y,
           z: target.z + offset.z,
-        });
+        };
+        if (Object.values(destination).every(isWorldCoordinate)) room.targets.set(id, destination);
       }
     }
   });

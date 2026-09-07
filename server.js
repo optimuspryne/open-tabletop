@@ -61,6 +61,9 @@ import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import { absorbedEntry, cardBackRef, cardFrontRef } from './server/deck-state.js';
+import { registerPlacementHandlers } from './server/game/handlers/placement.js';
+import { MAX_PIECES, assertPieceCapacity } from './server/game/piece-capacity.js';
+import { dragVelocity } from './server/game/physics-safety.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
@@ -75,14 +78,7 @@ import { registerOverlayHandlers } from './server/game/handlers/overlays.js';
 import { registerRoomFeatureHandlers } from './server/game/handlers/room-features.js';
 import { readProps, writeProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
-import {
-  boundedString,
-  cardPlacementPayload,
-  dispenserDragPayload,
-  oneField,
-  pieceIdPayload,
-  reorderHandPayload,
-} from './server/message-validation.js';
+import { boundedString, oneField, reorderHandPayload } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -126,7 +122,7 @@ const SIM = {
     sleepSpeed: 0.5, // a card goes fully static (stops jittering) below this speed...
     sleepTime: 0.2, // ...sustained for this many seconds
   },
-  maxPieces: 250,
+  maxPieces: MAX_PIECES,
 };
 
 // Dev profiling toggle: PERF_LOG=1 logs a per-second physics/tick summary (docs/ROADMAP.md §1).
@@ -637,38 +633,7 @@ class TableRoom extends Room {
     // Dispensers: hand out one item on left-click / left-drag (right-drag moves the
     // whole thing, handled by the generic grab). Uniform, public copies — no private
     // list, unlike a deck. dispense = drop beside it; dispenseDrag = drop + carry.
-    tableMessage('dispense', (client, message) => {
-      const parsed = pieceIdPayload(message);
-      if (!parsed) return;
-      const { id } = parsed;
-      const disp = this.state.pieces.get(id);
-      if (!disp || disp.type !== 'dispenser') return;
-      const item = this.dispenserItem(disp);
-      if (!item) return;
-      const body = this.bodies.get(id);
-      this.spawn(item.type, body ? this.besideDeck(body) : rnd(), item.props);
-      this.afterDispense(disp, id);
-      this.broadcast('sfx', { type: 'object-drop' });
-    });
-    tableMessage('dispenseDrag', (client, message) => {
-      const msg = dispenserDragPayload(message);
-      if (!msg) return;
-      const disp = this.state.pieces.get(msg.id);
-      if (!disp || disp.type !== 'dispenser') return;
-      const item = this.dispenserItem(disp);
-      if (!item) return;
-      const body = this.bodies.get(msg.id);
-      const newId = this.spawn(
-        item.type,
-        body ? [body.position.x, 2.5, body.position.z] : rnd(),
-        item.props,
-      );
-      this.afterDispense(disp, msg.id);
-      // Hand the new item straight to the dragger's cursor (reuses the deal-adopt path).
-      this.state.pieces.get(newId).owner = client.sessionId;
-      this.targets.set(newId, { x: msg.x, y: msg.y, z: msg.z });
-      client.send('dealt', { id: newId });
-    });
+    registerPlacementHandlers(this, { randomPosition: rnd, dropSfx, maxPieces: SIM.maxPieces });
 
     registerLibraryHandlers(this, {
       db,
@@ -692,26 +657,6 @@ class TableRoom extends Room {
       sceneMaxBytes: SCENE_MAX_BYTES,
     });
 
-    // Play a card from your hand onto the table, face-up or face-down.
-    tableMessage('playCard', (client, message) => {
-      const parsed = cardPlacementPayload(message);
-      if (!parsed) return;
-      const { hid, faceDown, x, z } = parsed;
-      const hand = this.hands.get(client.sessionId);
-      if (!hand) return;
-      const index = hand.findIndex((card) => card.hid === hid);
-      if (index < 0) return;
-      const [card] = hand.splice(index, 1);
-
-      const pos =
-        typeof x === 'number' && typeof z === 'number'
-          ? [x, 3, z] // where the client dropped it
-          : [(Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 3]; // or scattered
-      this.spawnHandCard(pos, card, faceDown);
-      this.sendHand(client);
-      this.broadcast('sfx', { type: dropSfx('card', card) }); // played tile clacks
-    });
-
     // Reorder a player's own hand (drag-to-rearrange / sort). The order must be a permutation of
     // the current hand — never adds or drops a card — so any drift (e.g. a card played mid-drag)
     // just resyncs. Private, so it only re-sends to this client.
@@ -732,34 +677,6 @@ class TableRoom extends Room {
       this.sendHand(client);
     });
 
-    // Put the player's whole hand on the table (e.g. an Uno "swap hands"), face up or
-    // down, spread just in front of their marker (x/z sent by the client).
-    tableMessage('handToTable', (client, message) => {
-      const parsed = cardPlacementPayload(message, { wholeHand: true });
-      if (!parsed) return;
-      const { faceDown, x, z } = parsed;
-      const hand = this.hands.get(client.sessionId);
-      if (!hand || !hand.length) return;
-      const cx = typeof x === 'number' ? x : 0,
-        cz = typeof z === 'number' ? z : 0;
-      let spawned = 0;
-      const ids = []; // remember what we created, so the drop can be undone
-      for (const card of hand) {
-        if (this.state.pieces.size >= SIM.maxPieces) break; // respect the piece cap
-        const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6];
-        const id = this.spawnHandCard(pos, card, faceDown);
-        ids.push(id);
-        spawned++;
-      }
-      const capped = spawned < hand.length; // couldn't place the whole hand — table filled up
-      hand.splice(0, spawned);
-      this.sendHand(client);
-      if (spawned) {
-        this.lastDrop.set(client.sessionId, { ids, ts: Date.now() });
-        this.broadcast('sfx', { type: 'hand-drop' });
-      }
-      if (capped) this.notifyFull(client);
-    });
     tableMessage('handFromTable', (client) => {
       const batch = this.lastDrop.get(client.sessionId);
       this.lastDrop.delete(client.sessionId); // one shot, either way
@@ -857,6 +774,7 @@ class TableRoom extends Room {
   // Create a piece: a physics body + a synced Piece record, wired together by id.
   // pos is [x,y,z]; props are the type-specific fields (shape, sides, back, …).
   spawn(type, pos, props = {}, quat = null) {
+    assertPieceCapacity(this, SIM.maxPieces);
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: this.mat });
     const collider = buildCollider(type, props, { cardColliderThickness: SIM.cards.colliderThick });
@@ -1908,21 +1826,22 @@ class TableRoom extends Room {
       if (!target) return;
       body.wakeUp();
 
-      let vx = (target.x - body.position.x) * stiffness;
-      // A flat-collider piece hangs its footprint below the body center; drive the body so
-      // that FOOTPRINT (not the center) hovers at the drag height, so it clears pieces
-      // resting on a raised board instead of plowing through them.
-      const holdY = target.y - (body.shapeOffsets[0] ? body.shapeOffsets[0].y : 0);
-      let vy = (holdY - body.position.y) * stiffness;
-      let vz = (target.z - body.position.z) * stiffness;
-      const speed = Math.hypot(vx, vy, vz);
-      if (speed > maxSpeed) {
-        const scale = maxSpeed / speed;
-        vx *= scale;
-        vy *= scale;
-        vz *= scale;
+      // Drive the collider footprint at the requested height. Reject a bad derived
+      // velocity before it can introduce Infinity/NaN into the physics world.
+      const velocity = dragVelocity(
+        body.position,
+        target,
+        body.shapeOffsets[0]?.y ?? 0,
+        stiffness,
+        maxSpeed,
+      );
+      if (!velocity) {
+        this.targets.delete(id);
+        piece.owner = '';
+        body.velocity.setZero();
+        return;
       }
-      body.velocity.set(vx, vy, vz);
+      body.velocity.set(velocity.x, velocity.y, velocity.z);
       body.angularVelocity.scale(SIM.servo.angDamp, body.angularVelocity);
 
       // While held, a "stand" piece is kept level: strip its pitch/roll and keep

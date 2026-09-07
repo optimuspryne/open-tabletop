@@ -8,6 +8,7 @@ import {
 } from '../../message-validation.js';
 import { readProps, writeProps } from '../props-codec.js';
 import { safeMessage } from '../safe-message.js';
+import { ensurePieceCapacity } from '../piece-capacity.js';
 
 // Register the card/deck message family against a TableRoom-compatible object.
 // Rendering/physics policy stays injected so this module owns orchestration only.
@@ -61,10 +62,7 @@ export function registerCardHandlers(
     if (!parsed) return;
     const { deckId } = parsed;
     const deck = room.state.pieces.get(deckId);
-    if (room.state.pieces.size >= maxPieces) {
-      room.notifyFull(client); // check before takeTopCard so we never pull a card we can't place
-      return;
-    }
+    if (!ensurePieceCapacity(room, client, maxPieces)) return;
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
@@ -99,10 +97,7 @@ export function registerCardHandlers(
     const deck = room.state.pieces.get(deckId);
     const deckBody = room.bodies.get(deckId);
     if (!deckBody) return;
-    if (room.state.pieces.size >= maxPieces) {
-      room.notifyFull(client); // check before takeTopCard so we never pull a card we can't place
-      return;
-    }
+    if (!ensurePieceCapacity(room, client, maxPieces)) return;
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
@@ -158,6 +153,12 @@ export function registerCardHandlers(
     if (!parsed) return;
     const pending = room.pendingInspect.get(client.sessionId);
     if (!pending) return;
+    if (parsed.where.startsWith('field-') && !ensurePieceCapacity(room, client, maxPieces)) {
+      // The browser closes the inspection optimistically when choosing a destination.
+      // Reopen it so the retained card can still go to the hand/deck or be retried.
+      client.send('inspectCard', { front: pending.front, back: pending.back, ...pending.geo });
+      return;
+    }
     room.pendingInspect.delete(client.sessionId);
     const { deckId, front, back, cardBack, open, geo = {} } = pending;
     const { where } = parsed;
@@ -216,10 +217,7 @@ export function registerCardHandlers(
     const deck = room.state.pieces.get(deckId);
     const cards = room.deckCards.get(deckId);
     if (!deck || deck.type !== 'deck' || !cards || cards.length < 2) return;
-    if (room.state.pieces.size >= maxPieces) {
-      room.notifyFull(client);
-      return;
-    }
+    if (!ensurePieceCapacity(room, client, maxPieces)) return;
     const props = readProps(deck);
     const bottom = cards.splice(Math.floor(cards.length / 2));
     deck.count = cards.length;

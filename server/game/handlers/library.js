@@ -15,6 +15,7 @@ import {
   saveSkyboxPayload,
 } from '../../message-validation.js';
 import { safeMessage } from '../safe-message.js';
+import { ensurePieceCapacity } from '../piece-capacity.js';
 
 const LIBRARY_ERROR = {
   errorType: 'assetError',
@@ -77,6 +78,7 @@ export function registerLibraryHandlers(
     const msg = deckFinishPayload(message);
     if (!msg) return;
     const draft = room.drafts.get(client.sessionId);
+    if (msg.spawn && !ensurePieceCapacity(room, client)) return;
     room.drafts.delete(client.sessionId);
     if (!draft || !draft.cards.length) return;
     const geo = draft.geom ? { geom: draft.geom } : {};
@@ -134,6 +136,7 @@ export function registerLibraryHandlers(
     if (!msg) return;
     const deck = await db.getDeck(msg.id);
     if (!deck || (!deck.isPublic && !room.isAdmin(client))) return;
+    if (!ensurePieceCapacity(room, client)) return;
     room.spawn('deck', randomPosition(), {
       back: deck.back,
       cards: deck.fronts,
@@ -162,7 +165,8 @@ export function registerLibraryHandlers(
     const rec = { tex: msg.tex, geom: msg.geom };
     if (msg.editId) await db.updateMat(msg.editId, msg.name, rec);
     else await db.insertMat(msg.name, rec, { ownerId: client.auth.userId });
-    if (msg.spawn) room.spawn('mat', randomPosition(), { geom: msg.geom, front: msg.tex });
+    if (msg.spawn && ensurePieceCapacity(room, client))
+      room.spawn('mat', randomPosition(), { geom: msg.geom, front: msg.tex });
     await room.sendAssetList(client, 'mat');
   });
   assetMessage('listMats', (client) => room.sendAssetList(client, 'mat'));
@@ -172,6 +176,7 @@ export function registerLibraryHandlers(
     if (!msg) return;
     const mat = await db.getMat(msg.id);
     if (!mat || (!mat.isPublic && !room.isAdmin(client)) || !mat.geom || !mat.tex) return;
+    if (!ensurePieceCapacity(room, client)) return;
     room.spawn('mat', randomPosition(), { geom: mat.geom, front: mat.tex });
   });
 
@@ -262,6 +267,11 @@ export function registerLibraryHandlers(
       : rec.model
         ? { model: rec.model, modelScale: rec.modelScale, box: rec.box }
         : { w: rec.w, d: rec.d, tex: rec.tex || undefined };
+    if (
+      ![...room.state.pieces.values()].some((piece) => piece.type === 'board') &&
+      !ensurePieceCapacity(room, client)
+    )
+      return;
     room.swapBoard(props);
   });
 

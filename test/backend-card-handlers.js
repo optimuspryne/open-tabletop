@@ -70,6 +70,26 @@ const makeClient = () => ({
 });
 const client = makeClient();
 
+test('a full table retains inspected cards until they can be placed or returned to a hand', () => {
+  const { room, handlers, events } = harness();
+  for (let i = 0; i < 80; i++) room.state.pieces.set(String(i), { type: 'die' });
+  const pending = { deckId: '999', front: 'ace', back: 'blue' };
+  room.pendingInspect.set(client.sessionId, pending);
+  for (const where of ['field-up', 'field-down']) {
+    handlers.get('inspectPlace')(client, { where });
+    assert.equal(room.pendingInspect.get(client.sessionId), pending);
+    assert.equal(room.cardData.size, 0);
+    assert.deepEqual(client.sent.at(-1), {
+      type: 'inspectCard',
+      payload: { front: 'ace', back: 'blue' },
+    });
+  }
+  handlers.get('inspectPlace')(client, { where: 'hand' });
+  assert.equal(room.pendingInspect.has(client.sessionId), false);
+  assert.equal(events.filter((event) => event.name === 'full').length, 2);
+  assert.equal(events.filter((event) => event.name === 'hand').length, 1);
+});
+
 test('card handler module registers the complete card/deck message family', () => {
   const { handlers } = harness();
   assert.deepEqual(

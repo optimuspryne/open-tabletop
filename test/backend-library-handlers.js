@@ -47,6 +47,10 @@ function harness({ admin = true, rank = 3 } = {}) {
     },
   );
   const room = {
+    state: { pieces: new Map() },
+    notifyFull() {
+      calls.push({ name: 'full' });
+    },
     drafts: new Map(),
     onMessage(name, handler) {
       handlers.set(name, handler);
@@ -59,6 +63,7 @@ function harness({ admin = true, rank = 3 } = {}) {
     },
     spawn(...args) {
       calls.push({ name: 'spawn', args });
+      this.state.pieces.set(String(this.state.pieces.size), { type: args[0] });
     },
     async sendAssetList(...args) {
       calls.push({ name: 'sendAssetList', args });
@@ -100,6 +105,49 @@ const client = () => ({
   send(type, payload) {
     this.sent.push({ type, payload });
   },
+});
+
+test('library spawns respect the cap and a blocked deck finish retains its draft', async () => {
+  const { room, db, handlers, calls } = harness();
+  for (let i = 0; i < 250; i++) room.state.pieces.set(String(i), { type: 'die' });
+  const user = client();
+  const draft = { back: 'back', cards: ['ace'] };
+  room.drafts.set(user.sessionId, draft);
+  db.getDeck = async () => ({ isPublic: true, back: 'back', fronts: ['ace'] });
+  db.getMat = async () => ({ isPublic: true, tex: '/assets/mats/m.jpg', geom: { w: 5, h: 3 } });
+  await handlers.get('deckFinish')(user, { name: 'Saved deck', spawn: true });
+  await handlers.get('loadDeck')(user, { id: '1' });
+  await handlers.get('loadMat')(user, { id: '1' });
+  assert.equal(room.drafts.get(user.sessionId), draft);
+  assert.equal(calls.filter(({ name }) => name === 'spawn').length, 0);
+  assert.equal(calls.filter(({ name }) => name === 'full').length, 3);
+});
+
+test('concurrent library loads check the final slot after their database reads', async () => {
+  const { room, db, handlers, calls } = harness();
+  for (let i = 0; i < 249; i++) room.state.pieces.set(String(i), { type: 'die' });
+  db.getDeck = async () => ({ isPublic: true, back: 'back', fronts: ['ace'] });
+  await Promise.all([
+    handlers.get('loadDeck')(client(), { id: '1' }),
+    handlers.get('loadDeck')(client(), { id: '2' }),
+  ]);
+  assert.equal(room.state.pieces.size, 250);
+  assert.equal(calls.filter(({ name }) => name === 'spawn').length, 1);
+  assert.equal(calls.filter(({ name }) => name === 'full').length, 1);
+});
+
+test('a full table still saves a mat but skips the optional spawn', async () => {
+  const { room, handlers, calls } = harness();
+  for (let i = 0; i < 250; i++) room.state.pieces.set(String(i), { type: 'die' });
+  await handlers.get('saveMat')(client(), {
+    name: 'Mat',
+    tex: '/assets/mats/m.jpg',
+    geom: { w: 5, h: 3 },
+    spawn: true,
+  });
+  assert.equal(calls.filter(({ name }) => name === 'insertMat').length, 1);
+  assert.equal(calls.filter(({ name }) => name === 'spawn').length, 0);
+  assert.equal(calls.filter(({ name }) => name === 'full').length, 1);
 });
 
 test('library handler module registers the complete asset message family', () => {

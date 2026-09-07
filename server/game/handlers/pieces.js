@@ -20,6 +20,7 @@ import {
 } from '../../message-validation.js';
 import { readProps, writeProps } from '../props-codec.js';
 import { safeMessage } from '../safe-message.js';
+import { ensurePieceCapacity } from '../piece-capacity.js';
 
 // Register piece and multi-selection operations. The room remains responsible
 // for constructing/removing physics bodies; this module owns message policy and
@@ -214,16 +215,19 @@ export function registerPieceHandlers(
   });
 
   pieceMessage('spawn', (client, message) => {
-    if (room.state.pieces.size >= maxPieces) {
-      room.notifyFull(client);
-      return;
-    }
     const msg = spawnPayload(message, { boardKeys, propKeys, dispenserKeys, colliders });
     if (!msg) return;
     if (msg.type === 'board') {
-      if (room.rank(client) >= RANK.gm) room.swapBoard(msg.props || {});
+      if (room.rank(client) < RANK.gm) return;
+      if (
+        ![...room.state.pieces.values()].some((piece) => piece.type === 'board') &&
+        !ensurePieceCapacity(room, client, maxPieces)
+      )
+        return;
+      room.swapBoard(msg.props || {});
       return;
     }
+    if (!ensurePieceCapacity(room, client, maxPieces)) return;
     if (msg.props?.tray) {
       const seat = room.seatOf(client);
       if (msg.type !== 'die' || seat == null || !room.state.trays.get(String(seat))) return;

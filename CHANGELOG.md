@@ -9,6 +9,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Security
+- Enforce the 250-piece limit at the creation boundary and before hand/dispenser consumption,
+  inspected-card placement, and library spawns. Rejected placements preserve inventory; library
+  loads recheck capacity after database reads. Existing boards can still be replaced at capacity.
+- Reject drag and hand-placement coordinates outside a generous world envelope, including huge
+  finite numbers. Check group destinations and derived drag velocities before passing them to physics.
 - Bind table and waiting-lobby authorization to the room being joined, preventing a direct
   room-ID join from borrowing membership or owner privileges from another room code.
 - Apply room kicks and role changes to every connection for the affected user in that room,
@@ -22,6 +27,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract hand/dispenser placement handlers and shared piece-capacity/physics-safety helpers, with
+  regression tests for full tables, retained inventory, concurrent library loads, and numeric overflow.
 - Centralize live authorization and reconnection tracking in `server/room-access.js`, with
   regression tests for room isolation, multiple tabs, revocation races, and HTTP revocation hooks.
 - Record the commit/push, change-summary, and documentation-update workflow in `AGENTS.md`.
