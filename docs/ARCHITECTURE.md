@@ -449,7 +449,9 @@ emits one box wall per outline edge for a non-rect shape; the floor stays a box)
 (`resizeTable` extrudes the same outline), and the grid (which clips to it via `clipSegConvex`).
 round and hex are single-size (depth follows width). Seats, personal trays and cameras are left
 as they were — trays already ride a circular track — so the first cut keeps seating unchanged on
-the new shapes.
+the new shapes. The rim is a GM-selectable **wood** (`state.rimWood`, five textures, durable + in
+scenes) swapped on the shared material; the felt is a desaturated fabric texture tinted by the felt
+colour (mirrored-wrapped + gradient-flattened for seamless tiling).
 
 ## Live table tools
 

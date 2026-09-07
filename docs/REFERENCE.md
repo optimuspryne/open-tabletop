@@ -399,7 +399,8 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
   per creator. Rendered via the client's `OVERLAY` registry.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents), **`tableShape`**
-  (surface shape: `rect`/`round`/`oval`/`hex`/`roundedRect`),
+  (surface shape: `rect`/`round`/`oval`/`hex`/`roundedRect`), **`rimWood`** (wooden-rim texture:
+  `mahogany`/`walnut`/`birch`/`green`/`oak`),
   **`whiteboard`**, **`trays`** (a `MapSchema<boolean>` keyed by seat index `"0".."5"` —
   presence = that seat's _personal_ dice tray is out; the tray dice are ordinary `die` pieces
   tagged `props.traySeat`, not schema here), **`skybox`** (empty, a `/assets/sky/…` equirect URL, or a
@@ -484,7 +485,7 @@ broadcast as `chatMsg`) / **`chatLog`** (request the backlog), and **`stateSave`
 (gm+ — checkpoint the live game via `serializeGame` into the room's `scene`; replies
 `stateSaved`). Room settings (gm+, persisted via `scheduleSave`): **`score`**
 (scoreboard add/set/clear), **`roomNotes`**, **`table`** (resize the felt),
-**`table`** also carries an optional `{shape}` (reshape). **`tableColor`** (felt color), **`scaleSet`** (measurement + grid — a partial update
+**`table`** also carries an optional `{shape}` (reshape) and `{rimWood}` (rim texture). **`tableColor`** (felt color), **`scaleSet`** (measurement + grid — a partial update
 of any `RoomScale` field: `worldPerUnit`/`unitLabel`/`roundStep`/`gridStyle`/
 `cellWorld`/`cellZ`/`hexOrient`/`gridX`/`gridZ`/`snapAnchor`/`gridColor`/`gridLift`, each
 clamped), **`calibrateGrid`** (fit the grid to the board on the table — square: sets
@@ -698,7 +699,7 @@ return the flag:
   greps for `/assets/…` paths.
 
 **Per-room durable state.** A room's non-piece settings survive restarts:
-`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, tableShape, skybox, feltColor,
+`getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, tableShape, rimWood, skybox, feltColor,
 scene, scale}` (where `scene` is the GM/auto-save game snapshot and `scale` the
 per-room measurement scale) and
 `saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
@@ -752,7 +753,9 @@ lifetime (30 days by default, bounded to 1–365).
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
 felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
-wooden rim around the edge; the physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor the felt), and
+wooden rim around the edge; the physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor/tint the felt
+fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`walnut`/`birch`/`green`/
+`oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
@@ -876,7 +879,7 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 `window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
 marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
-(→ `resizeTable` + `rebuildGrid`), **`tableShape`** (→ the same, plus the shape-picker UI), the `scale` grid fields (→ `rebuildGrid` /
+(→ `resizeTable` + `rebuildGrid`), **`tableShape`** (→ the same, plus the shape-picker UI), **`rimWood`** (→ `setRimWood`), the `scale` grid fields (→ `rebuildGrid` /
 `syncScalePanel`), `trays` (→ `syncTrays` — one tray mesh per enabled seat), and
 `roomName` (→ the Room Info header), plus
 `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
