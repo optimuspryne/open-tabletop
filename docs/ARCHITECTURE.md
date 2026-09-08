@@ -678,11 +678,16 @@ string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 can't reshape or drop the schema.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
-notes, table size, skybox, and felt color — plus the GM/auto-save **game
+notes, table size and shape, rim wood, skybox, and felt color — plus the GM/auto-save **game
 snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
 `saveRoomState`, debounced by the room's `scheduleSave`). So those survive a
 restart or an empty-table reset; live pieces and hands stay in memory during a
 session and reach the row only through that snapshot.
+
+Table shape and rim wood are read directly from `rooms.table_shape` and
+`rooms.table_rim_wood` during room-state loading. Their restoration is independent
+of a scene snapshot, so an unsnapshotted room retains its chosen shape and rim.
+When present, a scene can still apply its own saved table settings afterward.
 
 Because unreferenced `/assets` files pile up as the library and tables churn
 (deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)

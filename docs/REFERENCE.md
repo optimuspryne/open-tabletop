@@ -823,6 +823,11 @@ return the flag:
 scene, scale}` (where `scene` is the GM/auto-save game snapshot and `scale` the
 per-room measurement scale) and
 `saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
+The read query explicitly selects `table_shape` and `table_rim_wood`, mapped to
+`tableShape` and `rimWood`. Non-default choices therefore load from the room row
+even when `scene` is null; a saved scene is not required to restore them. Missing
+values retain the existing `rect` and `mahogany` defaults. PostgreSQL regression
+coverage saves and reloads a hex table with a walnut rim and no scene snapshot.
 
 **Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,
 hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admin`;

@@ -27,6 +27,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document table shape and rim-wood restoration from durable room settings without a scene snapshot.
 - Document account-deletion ownership release, asset visibility preservation, and database
   rollback behavior in the reference and architecture guides.
 - Document shared card-transfer helpers, deck metadata preservation, inspection ordering,
