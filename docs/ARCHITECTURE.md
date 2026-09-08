@@ -732,6 +732,14 @@ Two serializers, layered on purpose:
   from `pendingHands` (account-keyed) instead of the live `hands` map. A pending
   turn retains its account and display name until reclaimed or explicitly advanced.
 
+Hands remain separate per live session, but durable ownership is account-based within
+each room. `handOwners` keeps that association through the reconnect window. Saving
+appends every live and pending card for an account; identical-looking cards remain
+distinct inventory. Disconnect cleanup also appends rather than replacing pending
+cards. The first returning tab claims the combined hand once. Restoration assigns
+fresh hand-card IDs to avoid collisions with newly drawn cards. These operations
+share `server/game/hand-state.js` helpers.
+
 The GM's **`stateSave`** ("Save Table State") captures a checkpoint; **`onDispose`**
 captures the latest game through `saveFinalRoomState`, including hands-only and
 completely empty games. An empty snapshot replaces a previously populated one so
@@ -740,6 +748,12 @@ timer and awaits persistence through `savedScene` → `saveRoomState`, alongside
 room's other durable settings. The existing `SCENE_MAX_BYTES` limit still applies;
 an oversized final snapshot retains the previous checkpoint. Scene loading also
 replaces `savedScene` with the loaded scene and schedules persistence.
+
+Manual Save reports success only after its database write completes. Failure produces
+`sceneError`, including a table without durable room storage. Background saves remain
+debounced. All writes capture independent payloads and run in request order per room,
+so an older background write cannot finish after and replace a newer checkpoint.
+A failed write rejects its caller while allowing later queued saves to proceed.
 
 `applyScene` rebuilds the pieces, then _stages_ — never assigns — the private layer:
 saved hands land in `pendingHands` (account-keyed) with a public `unclaimed`

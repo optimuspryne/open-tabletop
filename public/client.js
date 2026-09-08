@@ -5245,7 +5245,7 @@ function selColorDesc(piece) {
 // Eligibility mirrors selectionPalette: a signature fn maps each piece to a compatibility key (or
 // null if the op can't touch it), and the selection is 'ok' when 2+ agree, 'mixed' when 2+
 // disagree, or hidden when fewer than 2 apply. The server re-checks authoritatively.
-// A card-family key = what makes two pieces stack into one deck: same back + geometry.
+// Match geometry, snap and visibility; only secret cards require a shared back.
 function cardFamilySig(piece) {
   if (piece.type !== 'card' && piece.type !== 'deck') return null;
   let props;
@@ -5254,7 +5254,13 @@ function cardFamilySig(piece) {
   } catch {
     props = {};
   }
-  return JSON.stringify([props.back || 'back', props.tile ?? null, props.geom ?? null]);
+  return JSON.stringify([
+    props.open ? null : props.back || 'back',
+    props.tile ?? null,
+    props.geom ?? null,
+    !!props.open,
+    !!props.snap,
+  ]);
 }
 // A dispenser key = same kind + tint/team; infinite bowls are excluded (nothing to pour).
 function dispenserSig(piece) {
@@ -5381,7 +5387,7 @@ function refreshSelTools() {
     byId('selCombine'),
     composeState(cardFamilySig),
     'Combine into one deck',
-    'Cards and decks must share a back to combine',
+    'Match shape, snap and double-sided settings; secret cards must also share a back',
   );
   const gplan = gatherPlan();
   setComposeBtn(byId('selGather'), gplan.state, gplan.okTitle, 'This selection can’t be gathered');

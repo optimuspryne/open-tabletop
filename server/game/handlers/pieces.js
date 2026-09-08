@@ -1,3 +1,4 @@
+import { takeTableCard } from '../card-transfer.js';
 import * as CANNON from 'cannon-es';
 import {
   DISPENSERS,
@@ -156,14 +157,7 @@ export function registerPieceHandlers(
   pieceMessage('takeGroup', (client, message) => {
     const ids = idsFrom(message);
     if (!ids) return;
-    for (const id of ids) {
-      const piece = room.state.pieces.get(id);
-      if (!piece || piece.type !== 'card') continue;
-      const props = readProps(piece);
-      const front = room.cardData.get(id)?.front || props.front;
-      room.addToHand(client, front, props.back || 'back', geoOf(props));
-      room.removePiece(id);
-    }
+    for (const id of ids) takeTableCard(room, client, id, geoOf);
   });
 
   pieceMessage('rotateGroup', (client, message) => {

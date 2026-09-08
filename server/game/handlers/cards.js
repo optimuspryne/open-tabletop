@@ -1,4 +1,12 @@
-import { cardBackRef, takeTopCard } from '../../deck-state.js';
+import { takeTableCard } from '../card-transfer.js';
+import {
+  absorbedEntry,
+  cardFrontRef,
+  cardBackRef,
+  takeTopCard,
+  inspectedEntry,
+  deckSpawnProps,
+} from '../../deck-state.js';
 import {
   deckDragPayload,
   deckIdPayload,
@@ -117,12 +125,7 @@ export function registerCardHandlers(
     const parsed = pieceIdPayload(message);
     if (!parsed) return;
     const { id } = parsed;
-    const piece = room.state.pieces.get(id);
-    if (!piece || piece.type !== 'card') return;
-    const props = readProps(piece);
-    const front = (room.cardData.get(id) || {}).front || props.front;
-    room.addToHand(client, front, props.back || 'back', geoOf(props), props.open);
-    room.removePiece(id);
+    takeTableCard(room, client, id, geoOf);
   });
 
   cardMessage('drawInspect', (client, message) => {
@@ -160,12 +163,12 @@ export function registerCardHandlers(
       return;
     }
     room.pendingInspect.delete(client.sessionId);
-    const { deckId, front, back, cardBack, open, geo = {} } = pending;
+    const { deckId, front, back, open, geo = {} } = pending;
     const { where } = parsed;
     if (where === 'deck') {
       const cards = room.deckCards.get(deckId);
       if (cards) {
-        cards.push(cardBack != null ? { front, back: cardBack } : front); // keep the per-tile back
+        cards.push(inspectedEntry(pending)); // keep the per-tile back
         const deck = room.state.pieces.get(deckId);
         if (deck) deck.count = cards.length;
         room.updateDeckCollider(deckId);
@@ -224,17 +227,12 @@ export function registerCardHandlers(
     room.updateDeckCollider(deckId);
     syncOpenCover(room, deckId); // the source stack lost its top half → repaint its cover
     const position = room.bodies.get(deckId)?.position || { x: 0, z: 0 };
-    room.spawn('deck', [position.x + 2.2, spawnY, position.z], {
-      back: props.back || 'back',
-      cards: bottom,
-      ...(props.open ? { open: true } : {}),
-      ...geoOf(props),
-    });
+    room.spawn('deck', [position.x + 2.2, spawnY, position.z], deckSpawnProps(props, bottom));
   });
 
   // Consolidate a multi-selection of card-family pieces (loose cards + whole decks) into one
   // face-down deck at their centre. The inverse-and-then-some of splitDeck: it also scoops a
-  // deck's discard pile back in. Homogeneous back + geometry only — a mixed selection is refused
+  // deck's discard pile back in. Matching geometry, visibility and snap behavior only — a mixed selection is refused
   // outright (no partial combine); non-card pieces in the selection are ignored. Open to anyone
   // who can touch decks, like splitDeck.
   cardMessage('combineIntoDeck', (client, message) => {
@@ -248,10 +246,20 @@ export function registerCardHandlers(
       members.push({ id, piece, body, props: readProps(piece) });
     }
     if (members.length < 2) return; // need at least two card-family pieces to consolidate
-    const sig = (pr) => JSON.stringify([pr.back || 'back', pr.tile ?? null, pr.geom ?? null]);
+    const sig = (pr) =>
+      JSON.stringify([
+        pr.open ? null : pr.back || 'back',
+        pr.tile ?? null,
+        pr.geom ?? null,
+        !!pr.open,
+        !!pr.snap,
+      ]);
     const target = sig(members[0].props);
-    if (members.some((m) => sig(m.props) !== target)) return; // mixed back/geom → refuse
-    members.sort((a, b) => b.body.position.y - a.body.position.y); // top of the table → top of deck
+    if (members.some((m) => sig(m.props) !== target)) return; // incompatible card behavior → refuse
+    if ([...room.pendingInspect.values()].some((p) => members.some((m) => m.id === p.deckId)))
+      return;
+    members.sort((a, b) => a.body.position.y - b.body.position.y); // top of the table → top of deck
+    const props = (members.find((m) => m.piece.type === 'deck') || members[0]).props;
     const cards = [];
     let cx = 0;
     let cz = 0;
@@ -259,22 +267,26 @@ export function registerCardHandlers(
       cx += m.body.position.x;
       cz += m.body.position.z;
       if (m.piece.type === 'deck') {
-        cards.push(...(room.deckCards.get(m.id) || [])); // whole stack, top-first
+        cards.push(
+          ...(room.deckCards.get(m.id) || []).map((entry) =>
+            absorbedEntry(
+              cardFrontRef(entry),
+              cardBackRef(entry) ?? m.props.back ?? 'back',
+              props.back || 'back',
+            ),
+          ),
+        ); // bottom-first, matching pop()
       } else {
         const front = room.cardData.get(m.id)?.front ?? m.props.front;
-        if (front != null) cards.push(front);
+        if (front != null)
+          cards.push(absorbedEntry(front, m.props.back || 'back', props.back || 'back'));
       }
     }
     if (cards.length < 2) return; // e.g. only empty decks were selected
     cx /= members.length;
     cz /= members.length;
-    const props = members[0].props;
     for (const m of members) room.removePiece(m.id); // remove first → the new deck always fits
-    room.spawn('deck', [cx, spawnY, cz], {
-      back: props.back || 'back',
-      cards,
-      ...geoOf(props),
-    });
+    room.spawn('deck', [cx, spawnY, cz], deckSpawnProps(props, cards));
     room.broadcast('sfx', { type: dropSfx('deck', props) });
   });
 }

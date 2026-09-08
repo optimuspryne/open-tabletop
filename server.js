@@ -60,7 +60,7 @@ import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
-import { absorbedEntry, cardBackRef, cardFrontRef } from './server/deck-state.js';
+import { absorbedEntry, cardBackRef, cardFrontRef, inspectedEntry } from './server/deck-state.js';
 import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { MAX_PIECES, assertPieceCapacity } from './server/game/piece-capacity.js';
@@ -2024,7 +2024,7 @@ class TableRoom extends Room {
     if (pending) {
       const cards = this.deckCards.get(pending.deckId);
       if (cards) {
-        cards.push(pending.front);
+        cards.push(inspectedEntry(pending));
         const deck = this.state.pieces.get(pending.deckId);
         if (deck) deck.count = cards.length;
         this.updateDeckCollider(pending.deckId);

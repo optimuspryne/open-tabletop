@@ -1,3 +1,4 @@
+import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
 import { KINDS, MEASURE, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
 import { appendAccountHand } from './hand-state.js';
 import { readProps } from './props-codec.js';
@@ -34,27 +35,17 @@ export function clearGameTable(room) {
   room.scheduleSave();
 }
 
-export function serializeScene(room, { geoOf }) {
+export function serializeScene(room) {
   const pieces = [];
   room.state.pieces.forEach((piece, id) => {
     let props = readProps(piece);
     if (piece.type === 'deck') {
       const cards = (room.deckCards.get(id) || []).slice();
-      for (const pending of room.pendingInspect.values()) {
-        if (pending.deckId === id)
-          cards.unshift(
-            pending.cardBack != null
-              ? { front: pending.front, back: pending.cardBack }
-              : pending.front,
-          );
+      // Last popped is returned first; the first inspected card was the original top.
+      for (const pending of [...room.pendingInspect.values()].reverse()) {
+        if (pending.deckId === id) cards.push(inspectedEntry(pending));
       }
-      props = {
-        back: props.back || 'back',
-        cards,
-        ...geoOf(props),
-        ...(props.model ? { deckModel: props.model } : {}),
-        ...(props.open ? { open: true } : {}),
-      };
+      props = deckSpawnProps(props, cards);
     } else if (piece.type === 'card') {
       const card = room.cardData.get(id);
       if (card && card.front) props = { ...props, front: card.front, faceDown: true };

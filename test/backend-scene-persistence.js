@@ -88,7 +88,7 @@ test('scene serialization preserves public geometry and private card fronts safe
   assert.deepEqual(snapshot.scale, { worldPerUnit: 2 });
   assert.deepEqual(snapshot.pieces[0].props, {
     back: '/back',
-    cards: ['/one', '/two'],
+    cards: ['/two', '/one'],
     tile: { w: 2 },
     deckModel: '/box.glb',
   });
@@ -446,4 +446,41 @@ test('restoring duplicate account entries preserves cards and replaces stale han
   assert.deepEqual(room.pendingHands.get('7').cards, [card, { ...card, hid: 'h2' }]);
   assert.equal(room.nextHid, 3); // the next newly drawn card cannot collide
   assert.equal(scene.hands[1].cards[0].hid, 'h1');
+});
+
+test('snapshot restores inspected top cards in draw order with backs and deck appearance intact', () => {
+  const room = serializationRoom();
+  room.state.pieces.get('deck-1').props = JSON.stringify({
+    back: 'shared',
+    model: 'pouch',
+    color: '#123456',
+    textColor: '#abcdef',
+    open: true,
+    geom: { w: 2, h: 3 },
+    snap: true,
+    cover: 'derived-cover',
+  });
+  room.deckCards.set('deck-1', ['bottom']);
+  room.pendingInspect = new Map([
+    ['first', { deckId: 'deck-1', front: 'top', cardBack: 'top-back' }],
+    ['second', { deckId: 'deck-1', front: 'middle', cardBack: 'middle-back' }],
+  ]);
+  const scene = serializeScene(room);
+  const deck = scene.pieces[0].props;
+  assert.deepEqual(deck, {
+    back: 'shared',
+    deckModel: 'pouch',
+    color: '#123456',
+    textColor: '#abcdef',
+    open: true,
+    snap: true,
+    geom: { w: 2, h: 3 },
+    cards: ['bottom', { front: 'middle', back: 'middle-back' }, { front: 'top', back: 'top-back' }],
+  });
+  assert.deepEqual(room.deckCards.get('deck-1'), ['bottom']);
+  assert.equal(room.pendingInspect.size, 2);
+  const { room: restored, calls } = restorationRoom();
+  applyScene(restored, scene, restoreOptions);
+  const spawn = calls.find(([type, kind]) => type === 'spawn' && kind === 'deck');
+  assert.deepEqual(spawn[3], deck);
 });

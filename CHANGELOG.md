@@ -27,6 +27,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document the pushed account-hand preservation and durable Save acknowledgment behavior.
 - Document empty/hand-only snapshots, pending-turn preservation, and shared reset cleanup
   in the reference and architecture guides.
 - Document piece-capacity enforcement, movement safety, and rejected-placement UI recovery
@@ -44,6 +45,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Preserve double-sided card flags when taking groups, and deck skins, tints, geometry,
+  snap behavior, and individual card backs across splits, combinations, and scene saves.
+- Keep the top table card on top of a combined deck and restore inspected cards at the
+  drawing end in their original order. Inspection returns on disconnect retain per-card backs.
+  Combining refuses mixed visibility/snap behavior and decks with active private inspections.
 - Preserve all same-account cards across multiple tabs, pending hands, saves, and disconnects.
   Retain hand ownership during reconnection; restore cards with fresh hand IDs to avoid collisions.
   Live hands remain separate per tab; saved/unclaimed cards combine per account for reclamation.

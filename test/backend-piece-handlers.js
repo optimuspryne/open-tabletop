@@ -80,8 +80,11 @@ function harness({ rank = 3 } = {}) {
     broadcast(name, payload) {
       events.push({ name, payload });
     },
-    addToHand(client, front, back, geo) {
-      events.push({ name: 'hand', payload: { client, front, back, geo } });
+    addToHand(client, front, back, geo, open) {
+      events.push({
+        name: 'hand',
+        payload: { client, front, back, geo, ...(open ? { open: true } : {}) },
+      });
     },
     removePiece(id) {
       this.state.pieces.delete(id);
@@ -429,4 +432,25 @@ test('group flip turns over open tiles without concealing', async () => {
   assert.equal(cp.back, 'B');
   assert.equal(cp.down, true); // turned over via the orientation flag
   assert.equal(room.cardData.has('1'), false);
+});
+
+test('group-taking double-sided tiles preserves open state, back and geometry', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'card',
+    props: JSON.stringify({
+      front: 'front',
+      back: 'other-face',
+      open: true,
+      down: true,
+      tile: 'domino',
+    }),
+  });
+  handlers.get('takeGroup')({ sessionId: 'player' }, { ids: ['1'] });
+  const hand = events.find((e) => e.name === 'hand').payload;
+  assert.equal(hand.open, true);
+  assert.equal(hand.front, 'front');
+  assert.equal(hand.back, 'other-face');
+  assert.deepEqual(hand.geo, { tile: 'domino' });
+  assert.equal(room.state.pieces.has('1'), false);
 });

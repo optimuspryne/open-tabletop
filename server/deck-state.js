@@ -24,3 +24,16 @@ export function takeTopCard(deck, cards) {
 export function absorbedEntry(front, cardBack, sharedBack) {
   return cardBack && cardBack !== sharedBack ? { front, back: cardBack } : front;
 }
+
+// Snapshot and live inspection returns share the same deck-entry representation.
+export const inspectedEntry = (pending) =>
+  pending.cardBack != null ? { front: pending.front, back: pending.cardBack } : pending.front;
+
+// Translate public deck properties to spawn input without copying derived cover/count.
+export function deckSpawnProps(props, cards) {
+  const result = { back: props.back || 'back', cards };
+  for (const key of ['tile', 'geom', 'snap', 'open', 'color', 'textColor'])
+    if (props[key] !== undefined) result[key] = props[key];
+  if (props.model) result.deckModel = props.model;
+  return result;
+}

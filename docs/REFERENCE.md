@@ -397,6 +397,9 @@ Private values remain internal; only orphan file metadata is returned by the API
   converting ephemeral Colyseus session IDs to stable user IDs so returning
   accounts can reclaim them. An existing `pendingTurn` and its public name take
   precedence, preserving the turn while its owner is absent.
+  Live hands remain session-specific; saving appends all live, reconnecting, and
+  pending cards for each account without deduplication. `handOwners` retains account
+  identity through the reconnect window. Restored cards receive fresh `hid` values.
 - **`clearGameTable(room)`** — shared by `TableRoom.clearTable()` for resets,
   starter changes, and scene loading. Removes pieces, active/pending hands,
   inspections, drafts, private card/deck data, reveals, overlays, active/pending
@@ -419,6 +422,16 @@ by `TableRoom.onDispose()` through `safeRoomTask`. It cancels the pending deboun
 timer, snapshots even hands-only or empty games, and awaits `saveStateNow()`.
 Snapshots exceeding the existing size limit leave the previous checkpoint intact;
 database failures propagate to the lifecycle error boundary.
+
+`server/game/hand-state.js` provides **`appendAccountHand`**, **`parkHand`**, and
+**`claimHand`**. Leaving tabs append to the account's pending hand; the first returning
+tab claims the combined inventory once. Other live tabs retain their own hands.
+
+Manual **`stateSave`** awaits **`saveStateNow`** before sending `stateSaved`.
+Failures send `sceneError`; tables without a persistent room cannot report a durable save.
+**`saveRoomStateNow`** captures an independent payload and queues writes per room in
+request order, including background and final saves. Failed writes reject their caller
+without blocking subsequent saves; a database update affecting no room is also a failure.
 
 ### Schema (synced state)
 

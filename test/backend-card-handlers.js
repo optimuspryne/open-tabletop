@@ -255,7 +255,7 @@ test('combining loose cards and a deck consolidates them top-first into one deck
 
   const spawn = events.find((e) => e.name === 'spawn');
   assert.equal(spawn.payload.type, 'deck');
-  assert.deepEqual(spawn.payload.props.cards, ['ace', 'king', 'queen']); // top card first
+  assert.deepEqual(spawn.payload.props.cards, ['king', 'queen', 'ace']); // top card is popped from the end
   assert.equal(spawn.payload.props.back, 'blue');
   assert.deepEqual(spawn.payload.position, [1, 4, 2]); // centroid x/z, spawnY
   assert.equal(room.state.pieces.has('1'), false);
@@ -422,4 +422,90 @@ test("shuffling repaints an open set's cover to the new top; a secret deck stays
   room.deckCards.set('s', ['x', 'y']);
   handlers.get('shuffle')(client, { deckId: 's' });
   assert.equal('cover' in JSON.parse(room.state.pieces.get('s').props), false); // never revealed
+});
+
+test('combine preserves double-sided backs, deck appearance, and top-to-bottom order', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'deck',
+    props: JSON.stringify({
+      back: 'shared',
+      open: true,
+      snap: true,
+      model: 'pouch',
+      color: '#123456',
+      textColor: '#abcdef',
+    }),
+  });
+  room.bodies.set('1', { position: { x: 0, y: 1, z: 0 } });
+  room.deckCards.set('1', [{ front: 'bottom', back: 'bottom-back' }, 'middle']);
+  room.state.pieces.set('2', {
+    type: 'card',
+    props: JSON.stringify({
+      front: 'top',
+      back: 'top-back',
+      open: true,
+      down: true,
+      snap: true,
+    }),
+  });
+  room.bodies.set('2', { position: { x: 0, y: 3, z: 0 } });
+  handlers.get('combineIntoDeck')(client, { ids: ['2', '1'] });
+  const props = events.find((e) => e.name === 'spawn').payload.props;
+  assert.deepEqual(props, {
+    back: 'shared',
+    open: true,
+    snap: true,
+    deckModel: 'pouch',
+    color: '#123456',
+    textColor: '#abcdef',
+    cards: [{ front: 'bottom', back: 'bottom-back' }, 'middle', { front: 'top', back: 'top-back' }],
+  });
+});
+
+test('combine refuses mixed visibility and decks with a private inspection in progress', () => {
+  for (const inspection of [false, true]) {
+    const { room, handlers, events } = harness();
+    for (const id of ['1', '2']) {
+      room.state.pieces.set(id, {
+        type: 'deck',
+        props: JSON.stringify({ back: 'back', open: id === '1' || inspection }),
+      });
+      room.bodies.set(id, { position: { x: 0, y: 1, z: 0 } });
+      room.deckCards.set(id, ['card']);
+    }
+    if (inspection) room.pendingInspect.set('player', { deckId: '1', front: 'peeked' });
+    handlers.get('combineIntoDeck')(client, { ids: ['1', '2'] });
+    assert.equal(room.state.pieces.size, 2);
+    assert.equal(
+      events.some((e) => e.name === 'spawn'),
+      false,
+    );
+  }
+});
+
+test('split preserves deck skin, tints, snap and per-card backs', () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', {
+    type: 'deck',
+    props: JSON.stringify({
+      back: 'back',
+      open: true,
+      snap: true,
+      model: 'pouch',
+      color: '#123456',
+      textColor: '#abcdef',
+    }),
+  });
+  room.deckCards.set('1', ['bottom', { front: 'top', back: 'other' }]);
+  handlers.get('splitDeck')(client, { deckId: '1' });
+  assert.deepEqual(events.find((e) => e.name === 'spawn').payload.props, {
+    back: 'back',
+    open: true,
+    snap: true,
+    deckModel: 'pouch',
+    color: '#123456',
+    textColor: '#abcdef',
+    cards: [{ front: 'top', back: 'other' }],
+  });
 });
