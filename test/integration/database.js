@@ -61,15 +61,21 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
     notes: 'integration note',
     tableX: 12,
     tableZ: 9,
+    tableShape: 'hex',
+    rimWood: 'walnut',
     skybox: '/sky/night.jpg',
     feltColor: '#123456',
-    scene: { pieces: [] },
+    scene: null, // no saved scene to mask missing room-setting columns
     scale: { worldPerUnit: 2 },
   });
   const state = await database.getRoomState(room.id);
   assert.deepEqual(state.scoreboard, [{ id: 's1', label: 'Points', score: 4 }]);
   assert.equal(state.notes, 'integration note');
   assert.equal(state.tableX, 12);
+  assert.equal(state.tableZ, 9);
+  assert.equal(state.tableShape, 'hex');
+  assert.equal(state.rimWood, 'walnut');
+  assert.equal(state.scene, null);
   assert.equal(state.scale.worldPerUnit, 2);
 });
 

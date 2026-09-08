@@ -84,7 +84,7 @@ export function createRoomQueries(query) {
 
     async getRoomState(roomId) {
       const { rows } = await query(
-        'SELECT scoreboard, notes, table_x, table_z, skybox, felt_color, scene, scale FROM rooms WHERE id = $1',
+        'SELECT scoreboard, notes, table_x, table_z, table_shape, table_rim_wood, skybox, felt_color, scene, scale FROM rooms WHERE id = $1',
         [roomId],
       );
       if (!rows[0]) return freshDefaultState();

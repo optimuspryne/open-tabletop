@@ -49,6 +49,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Load saved table shape and rim wood from the room row, preserving non-default choices
+  even when no scene snapshot is present. Add PostgreSQL round-trip regression coverage.
 - Allow account deletion for owners of every registered library asset category, including
   scenes, skyboxes, dice, and mats. Release ownership within the existing transaction while
   preserving asset records, content, and public/private visibility; failures roll back all changes.
