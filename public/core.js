@@ -375,4 +375,6 @@ export {
   setQuality,
   getQuality,
   deviceClass,
+  rimMat,
+  tableMesh,
 };

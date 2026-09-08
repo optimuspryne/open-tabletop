@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CONFIG, renderer, deviceClass } from './core.js';
+import { CONFIG, renderer, deviceClass, tableMesh, rimMat} from './core.js';
 import {
   PROPS,
   COLORS,
@@ -2117,12 +2117,8 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z, shape =
 // it by the tray angle (Three's rotation.y matches the server's trayPlace transform).
 function trayMesh(feltColor) {
   const g = new THREE.Group();
-  const felt = new THREE.MeshStandardMaterial({
-    color: feltColor || 0x2f6b4f,
-    roughness: 0.85,
-    metalness: 0,
-  });
-  const wood = new THREE.MeshStandardMaterial({ color: 0x4a3b2a, roughness: 0.8, metalness: 0 });
+  const felt = tableMesh.material; // Inherits the grayscale felt + the table's color
+  const wood = rimMat;          // Inherits the currently selected wood rim texture set on the table
   trayParts().forEach((p, i) => {
     if (p.noMesh) return; // the lid is a physics-only cap — never drawn, or it'd block the top-down view
     const m = new THREE.Mesh(
