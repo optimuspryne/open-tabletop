@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CONFIG, renderer, deviceClass, tableMesh, rimMat} from './core.js';
+import { CONFIG, renderer, deviceClass, tableMesh, rimMat } from './core.js';
 import {
   PROPS,
   COLORS,
@@ -2115,10 +2115,10 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z, shape =
 // Built from the SAME trayParts() the collider uses, in tray-LOCAL space, so the mesh and the
 // walls line up exactly. The client parks the group at the tray's track position and rotates
 // it by the tray angle (Three's rotation.y matches the server's trayPlace transform).
-function trayMesh(feltColor) {
+function trayMesh() {
   const g = new THREE.Group();
   const felt = tableMesh.material; // Inherits the grayscale felt + the table's color
-  const wood = rimMat;          // Inherits the currently selected wood rim texture set on the table
+  const wood = rimMat; // Inherits the currently selected wood rim texture set on the table
   trayParts().forEach((p, i) => {
     if (p.noMesh) return; // the lid is a physics-only cap — never drawn, or it'd block the top-down view
     const m = new THREE.Mesh(
