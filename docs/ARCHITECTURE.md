@@ -901,6 +901,16 @@ immediate within the server process. A non-overlapping check every 30 seconds
 also detects expired sessions and CLI/database privilege changes; failed database
 authorization checks disconnect affected sessions rather than retaining cached access.
 
+Account deletion preserves library assets. `purgeUser` uses the same internal
+asset-table registry as asset administration and reference collection to release
+ownership across decks, boards, objects, scenes, skyboxes, dice, and mats. Records,
+content, and public/private visibility stay intact; releasing ownership does not
+publish private assets. Ownership release, deletion of owned rooms, and user deletion
+share one database transaction, so a failure rolls back those database changes.
+The admin route disposes owned live rooms before that transaction and disconnects
+the deleted user's remaining connections after it succeeds; live-room disposal is
+outside the database rollback.
+
 **Rooms & roles.** A room has an owner, a join code, and an optional
 require-approval gate; roles rank **owner → GM → helper → player** (`RANK`), and
 every privileged handler checks `this.rank(client)` — spawn = helper+,

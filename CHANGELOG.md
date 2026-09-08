@@ -27,6 +27,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document account-deletion ownership release, asset visibility preservation, and database
+  rollback behavior in the reference and architecture guides.
 - Document shared card-transfer helpers, deck metadata preservation, inspection ordering,
   and Combine compatibility rules in the reference and architecture guides.
 - Document the pushed account-hand preservation and durable Save acknowledgment behavior.

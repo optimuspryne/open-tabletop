@@ -839,6 +839,14 @@ hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admi
   `roomsOwnedBy`, `purgeUser` (one transaction: null-out the user's asset
   ownership, delete their owned rooms, delete the user — cascades memberships).
 
+`purgeUser(userId)` uses the internal `ASSET_TABLE` registry for ownership release:
+decks, boards, objects, scenes, skyboxes, dice, and mats. Only `owner_id` becomes
+`NULL`; asset records, content, file references, and `is_public` remain unchanged.
+Other owners' assets are untouched. Any query failure rolls back the entire database
+transaction, including ownership releases and owned-room deletion; the pooled client
+is always released. PostgreSQL integration coverage exercises every category and a
+failure after owned-room deletion.
+
 **Rooms & membership.** `createRoom({ownerId,code,name,requireApproval}) → room`
 (atomic room + owner-membership CTE), `findRoomByCode`, `getRoom`,
 `listRoomsForUser`, `listRoomsForAdmin`, `listRooms({includeDeleted})`, `setRoomPolicy`, `renameRoom`,
