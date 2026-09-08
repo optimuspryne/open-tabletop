@@ -388,11 +388,27 @@ Private values remain internal; only orphan file metadata is returned by the API
   Physics-only vector helpers, including **`averagePoint`**, stay private to
   `server/physics.js`.
 
+### Card transfers and deck properties
+
+- **`takeTableCard(room, client, id, geoOf)`** in `server/game/card-transfer.js`
+  serves both `takeCard` and `takeGroup`. It preserves the private/public front,
+  back, geometry, snap behavior, and double-sided `open` flag before removing the piece.
+- **`inspectedEntry(pending)`** in `server/deck-state.js` restores a bare front or
+  `{front, back}` entry consistently for inspection returns, disconnect cleanup,
+  and snapshots. Deck arrays are bottom-first; `takeTopCard` draws with `pop()`.
+- **`deckSpawnProps(props, cards)`** in that module preserves back, tile/geometry,
+  snap/open flags, color, and textColor, translating `model` to `deckModel` for
+  spawn. Split, combine, and scene serialization share it; count and cover are
+  derived again when spawning. Combine inherits appearance from the lowest selected
+  deck, or the lowest selected card when no deck is present.
+
 ### `server/game/scene-persistence.js` — snapshots and restoration
 
-- **`serializeScene(room, {geoOf})`** — creates the portable public snapshot:
+- **`serializeScene(room)`** — creates the portable public snapshot:
   table size, pieces and transforms, exact deck order, protected face-down card
-  fronts, overlays, measurement/grid scale, and enabled tray seats.
+  fronts, overlays, measurement/grid scale, and enabled tray seats. Inspected cards
+  are appended to the snapshot's deck in reverse inspection order, preserving their
+  original draw order and individual backs without mutating live inspections.
 - **`serializeGame(room, options)`** — adds private hands and turn ownership,
   converting ephemeral Colyseus session IDs to stable user IDs so returning
   accounts can reclaim them. An existing `pendingTurn` and its public name take
@@ -620,8 +636,10 @@ body's facing; skips boards).
 Composition ops turn a selection into a construction tool (still **not rank-gated**, like
 `splitDeck`): **`combineIntoDeck`** (`{ids}` — consolidate the selected card-family pieces —
 loose cards _and_ whole decks — into one face-down deck at their centroid, the top-of-table card
-on top; homogeneous back + geometry only, a mixed selection is refused rather than partly
-combined; registered with the card handlers) and **`gatherDispensers`** (`{ids}` — pour like
+on top; geometry, snap and double-sided settings must match. Secret cards also require
+a shared back; double-sided cards may have different backs, preserved per card.
+Decks with active private inspections cannot be combined. Registered with the card
+handlers) and **`gatherDispensers`** (`{ids}` — pour like
 dispensers, same kind + tint/team, into one stack at their centroid carrying the summed count;
 infinite bowls are skipped, and the true total is preserved past the per-stack spawn cap). Together
 they are the inverse-and-more of `splitDeck`: `combineIntoDeck` also scoops a discard pile back

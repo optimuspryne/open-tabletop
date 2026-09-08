@@ -297,8 +297,13 @@ pieces — loose cards and whole decks alike — into one face-down deck (the to
 the top of the deck), and `gatherDispensers` pours like dispensers into one summed stack. Both stay
 "selection → one server-side piece": read the members, remove them, spawn the composite at the
 centroid — no new state, the same ownership and validation path as every other handler. Each refuses
-a heterogeneous selection (mismatched card backs, or unlike dispensers) rather than combining part
-of it, and the client greys the offer to match.
+a heterogeneous selection rather than combining part of it, and the client greys the offer
+to match. Cards must agree on geometry, snap and double-sided behavior; secret cards
+also require matching backs. Double-sided tiles can retain different individual backs.
+The server refuses to combine a deck with an active private inspection, preventing the
+inspected card from being duplicated or stranded. Combined arrays are bottom-first so
+the highest table card is drawn first with `pop()`. The lowest selected deck supplies
+the resulting skin and tints (or the lowest card if no deck is selected).
 
 Dispenser consolidation is the same idea widened to loose tokens. The absorb rule was already
 there — dropping a chip on its stack rejoins it — so `absorbIntoDispenser` (pour the selected loose
@@ -714,6 +719,15 @@ is editor-only and the asset handlers refuse non-admin creation/curation.
 See "Accounts, rooms & roles" below.
 
 ## Scene vs. game snapshot (`serializeScene` / `serializeGame`)
+
+Card transfers share explicit preservation rules: `takeTableCard` handles both single
+and group takes, including the double-sided flag and hidden-face lookup.
+`deckSpawnProps` supplies split, combine, and snapshot paths with geometry, snap/open
+flags, skin and tints; derived cover and count are rebuilt on spawn.
+`inspectedEntry` preserves individual backs for both live returns and disconnect cleanup.
+Snapshotting returns pending inspections to the drawing end in reverse inspection order,
+so the first inspected card remains the original top card. It operates on a copied deck
+array and leaves the live inspection unchanged.
 
 Two serializers, layered on purpose:
 
