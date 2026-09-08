@@ -2115,7 +2115,7 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z, shape =
 // Built from the SAME trayParts() the collider uses, in tray-LOCAL space, so the mesh and the
 // walls line up exactly. The client parks the group at the tray's track position and rotates
 // it by the tray angle (Three's rotation.y matches the server's trayPlace transform).
-function trayMesh(feltColor) {
+function trayMesh() {
   const g = new THREE.Group();
   const felt = tableMesh.material; // Inherits the grayscale felt + the table's color
   const wood = rimMat;          // Inherits the currently selected wood rim texture set on the table
