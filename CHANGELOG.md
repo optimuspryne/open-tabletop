@@ -47,6 +47,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Allow account deletion for owners of every registered library asset category, including
+  scenes, skyboxes, dice, and mats. Release ownership within the existing transaction while
+  preserving asset records, content, and public/private visibility; failures roll back all changes.
 - Preserve double-sided card flags when taking groups, and deck skins, tints, geometry,
   snap behavior, and individual card backs across splits, combinations, and scene saves.
 - Keep the top table card on top of a combined deck and restore inspected cards at the

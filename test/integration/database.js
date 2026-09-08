@@ -151,3 +151,91 @@ test('cleanup references include private mats and snapshots in soft-deleted room
     assert.ok(references.includes(url), `missing reference: ${url}`);
   }
 });
+
+test('account purge preserves every asset category and rolls back atomically on failure', async () => {
+  const owner = await database.createUser({ username: 'purge-owner', email: 'purge@example.test' });
+  const other = await database.createUser({
+    username: 'purge-other',
+    email: 'purge-other@example.test',
+  });
+  const ownedRoom = await database.createRoom({
+    ownerId: owner.id,
+    code: 'PURGEOWN',
+    name: 'Owned',
+  });
+  const otherRoom = await database.createRoom({
+    ownerId: other.id,
+    code: 'PURGEOTHER',
+    name: 'Other',
+  });
+  await database.joinRoom({ roomId: otherRoom.id, userId: owner.id, requireApproval: false });
+  const tables = [
+    'custom_decks',
+    'custom_boards',
+    'custom_objects',
+    'custom_scenes',
+    'custom_skyboxes',
+    'custom_dice',
+    'custom_mats',
+  ];
+  const assets = [];
+  for (const table of tables) {
+    for (const [userId, isPublic] of [
+      [owner.id, false],
+      [owner.id, true],
+      [other.id, false],
+    ]) {
+      const fileColumn = [
+        'custom_objects',
+        'custom_skyboxes',
+        'custom_dice',
+        'custom_mats',
+      ].includes(table);
+      const { rows } = await pool.query(
+        `INSERT INTO ${table} (owner_id, name, is_public${fileColumn ? ', file_url' : ''})
+         VALUES ($1, $2, $3${fileColumn ? ', $4' : ''}) RETURNING *`,
+        [userId, 'Retained asset', isPublic, ...(fileColumn ? ['/assets/test/retained.png'] : [])],
+      );
+      assets.push({ table, row: rows[0] });
+    }
+  }
+  // Fail after the asset releases and owned-room deletion, using a real transaction.
+  const failing = createDatabase({
+    async connect() {
+      const client = await pool.connect();
+      return {
+        query(sql, params) {
+          if (sql.startsWith('DELETE FROM users')) throw new Error('injected purge failure');
+          return client.query(sql, params);
+        },
+        release: () => client.release(),
+      };
+    },
+  });
+  await assert.rejects(failing.purgeUser(owner.id), /injected purge failure/);
+  for (const { table, row } of assets) {
+    const { rows } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [row.id]);
+    assert.deepEqual(rows[0], row);
+  }
+  assert.ok(await database.findUserById(owner.id));
+  assert.ok(await database.findRoomByCode('PURGEOWN'));
+  assert.ok(await database.getMembership(otherRoom.id, owner.id));
+
+  await database.purgeUser(owner.id);
+  assert.equal(await database.findUserById(owner.id), null);
+  assert.equal(await database.findRoomByCode('PURGEOWN'), null);
+  assert.equal(await database.getMembership(otherRoom.id, owner.id), null);
+  assert.ok(await database.findRoomByCode('PURGEOTHER'));
+  assert.ok(await database.findUserById(other.id));
+  assert.equal(
+    (await pool.query('SELECT * FROM room_members WHERE room_id = $1', [ownedRoom.id])).rowCount,
+    0,
+  );
+  for (const { table, row } of assets) {
+    const { rows } = await pool.query(`SELECT * FROM ${table} WHERE id = $1`, [row.id]);
+    assert.deepEqual(rows[0], {
+      ...row,
+      owner_id: row.owner_id === owner.id ? null : row.owner_id,
+    });
+  }
+});

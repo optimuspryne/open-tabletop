@@ -445,9 +445,9 @@ export function createDatabase(pool) {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      await client.query('UPDATE custom_decks   SET owner_id = NULL WHERE owner_id = $1', [userId]);
-      await client.query('UPDATE custom_boards  SET owner_id = NULL WHERE owner_id = $1', [userId]);
-      await client.query('UPDATE custom_objects SET owner_id = NULL WHERE owner_id = $1', [userId]);
+      // Internal allowlist only: keep every asset and its visibility, release ownership.
+      for (const table of Object.values(ASSET_TABLE))
+        await client.query(`UPDATE ${table} SET owner_id = NULL WHERE owner_id = $1`, [userId]);
       await client.query('DELETE FROM rooms WHERE owner_id = $1', [userId]); // cascades those rooms' members
       await client.query('DELETE FROM users WHERE id = $1', [userId]); // cascades this user's memberships
       await client.query('COMMIT');
