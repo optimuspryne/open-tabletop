@@ -32,6 +32,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document missing-deck inspection recovery, capacity retries, durable recovery cards,
+  and current-turn identity preservation during reconnection.
 - Document authorization rechecks across asynchronous library/member operations, protected
   response delivery, and the boundary for already-submitted database writes.
 - Document the patched `qs` override, its advisory coverage, and dependency-audit commands.
@@ -58,6 +60,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Preserve current turn ownership in saves during the player's reconnect window by falling
+  back to the retained account identity when their live client is unavailable.
 - Recover inspected cards onto the table when their source deck disappears, including on
   disconnect. Preserve card faces and geometry; keep normal fronts private. Full tables retain
   pending cards for retry, and snapshots preserve orphaned inspections across reloads.

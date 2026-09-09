@@ -740,6 +740,21 @@ Snapshotting returns pending inspections to the drawing end in reverse inspectio
 so the first inspected card remains the original top card. It operates on a copied deck
 array and leaves the live inspection unchanged.
 
+If another player empties the source deck during inspection, **Return to Deck**
+recovers the inspected card as a standalone face-down card at the table center.
+`server/game/inspection-recovery.js` shares this behavior with disconnect cleanup.
+Geometry, individual backs, and double-sided behavior survive; a normal card's
+front remains private. At capacity, connected players retain the inspection dialog
+and can retry or move the card to their hand. Disconnected players' cards stay in
+private `pendingInspect` with `recover: true`; simulation ticks retry when space opens.
+
+Snapshots store missing-deck inspections in an optional `recoveryCards` array,
+separate from `pieces`, so restoring a full table cannot truncate this inventory.
+The entries contain card data and geometry, without player identity. Restoration
+stages them for the same automatic recovery; pending overflow survives later saves.
+Resetting the table clears these pending cards along with other inspections.
+The overall snapshot size limit still applies.
+
 Two serializers, layered on purpose:
 
 - **`serializeScene`** produces the portable _template_: table size + shape + every piece
@@ -756,6 +771,9 @@ Two serializers, layered on purpose:
   Already-departed players are gone from `clientBy(sid)`, so their hands are read
   from `pendingHands` (account-keyed) instead of the live `hands` map. A pending
   turn retains its account and display name until reclaimed or explicitly advanced.
+  During a temporary disconnect, active turn serialization falls back to the
+  session's `handOwners` account and retained player name when `clientBy` has no
+  client, preserving turn ownership in saves made during the reconnect window.
 
 Hands remain separate per live session, but durable ownership is account-based within
 each room. `handOwners` keeps that association through the reconnect window. Saving

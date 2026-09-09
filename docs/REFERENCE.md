@@ -402,6 +402,23 @@ Private values remain internal; only orphan file metadata is returned by the API
   derived again when spawning. Combine inherits appearance from the lowest selected
   deck, or the lowest selected card when no deck is present.
 
+### `server/game/inspection-recovery.js` — missing-deck recovery
+
+- **`returnInspectedCard(room, sessionId, maxPieces)`** returns an inspection to its
+  source deck when present. Otherwise it spawns a standalone card at `[0, 4, 0]`
+  through `spawnCardFlat`, preserving geometry and backs. Normal fronts stay in
+  private `cardData`; open cards keep both faces public with `down: true`.
+  Pending state is removed only after placement succeeds. At capacity it returns
+  `false` and retains the card.
+- **`recoverPendingInspections(room, maxPieces)`** retries entries marked `recover`
+  on `TableRoom.update` ticks. Disconnect cleanup marks outstanding inspections
+  before attempting their return, so a full table cannot discard a departing
+  player's card. A connected player's blocked return reopens `inspectCard` and
+  sends the capacity warning; they can retry or choose their hand instead.
+
+Recovery remains in private `pendingInspect`, which resets clear and asset cleanup
+already scans. No separate public recovery queue is synchronized to clients.
+
 ### `server/game/scene-persistence.js` — snapshots and restoration
 
 - **`serializeScene(room)`** — creates the portable public snapshot:
@@ -409,10 +426,15 @@ Private values remain internal; only orphan file metadata is returned by the API
   fronts, overlays, measurement/grid scale, and enabled tray seats. Inspected cards
   are appended to the snapshot's deck in reverse inspection order, preserving their
   original draw order and individual backs without mutating live inspections.
+  Missing-deck inspections are stored separately as `recoveryCards` entries
+  (`front`, `back`, `open`, `geo`), without player identity, so the table piece cap
+  does not truncate them.
 - **`serializeGame(room, options)`** — adds private hands and turn ownership,
   converting ephemeral Colyseus session IDs to stable user IDs so returning
   accounts can reclaim them. An existing `pendingTurn` and its public name take
-  precedence, preserving the turn while its owner is absent.
+  precedence, preserving the turn while its owner is absent. For an active turn
+  whose client is disconnected, serialization falls back to `handOwners` and the
+  retained player name during the reconnect window.
   Live hands remain session-specific; saving appends all live, reconnecting, and
   pending cards for each account without deduplication. `handOwners` retains account
   identity through the reconnect window. Restored cards receive fresh `hid` values.
@@ -428,6 +450,9 @@ Private values remain internal; only orphan file metadata is returned by the API
   existing spawn/bounds/tray APIs. Restored overlays become table-owned, and
   hands/turns are staged for account rebinding. Clears the previous game first and
   replaces `savedScene` with the loaded scene before scheduling persistence.
+  `recoveryCards` with string fronts/backs become private pending inspections
+  marked for automatic recovery. They spawn as space allows on simulation ticks;
+  excess cards remain pending and are included in subsequent saves.
 
 `TableRoom.serializeScene`, `serializeGame`, and `applyScene` are thin facades
 that supply room-specific limits and constructors. Debouncing and the final
