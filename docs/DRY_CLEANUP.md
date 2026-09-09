@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: synchronized schema extraction completed and documented; starter layout extraction is next.
+Status: starter layout extraction completed, tested, and documented; table-boundary extraction is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -51,7 +51,7 @@ source and the MCP memory graph before starting each step.
 
 ### 2. Extract starter layout setup
 
-- [ ] Move `setupStarter` into a proposed `server/game/starters.js`.
+- [x] Move `setupStarter` into `server/game/starters.js`.
 - Continue using shared `STARTERS` definitions and the extracted deck builders.
 - Keep reset cleanup, board/piece creation, initial dealing, and capacity behavior intact.
 - Validate representative standard-card and tile starters, including replacing a

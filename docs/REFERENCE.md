@@ -10,6 +10,7 @@ The codebase:
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries                                                                                                            |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
+| `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
 | `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
 | `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
@@ -65,6 +66,10 @@ classDiagram
         +Piece / Player / Timer / ScoreRow
         +Whiteboard / RoomScale / Overlay
         +State root + ordered defineTypes
+    }
+    class StarterSetup["server/game/starters.js"] {
+        +createStarterSetup(dependencies)
+        +setupStarter(room, game)
     }
     class Physics["server/physics.js"] {
         +buildWorld(simulation)
@@ -136,6 +141,8 @@ classDiagram
     Shared <.. Server
     Shared <.. SyncedSchema
     SyncedSchema <.. Server
+    Shared <.. StarterSetup
+    StarterSetup <.. Server
     Shared <.. Physics
     Shared <.. ScenePersistence
     Shared <.. Core
@@ -395,8 +402,9 @@ Private values remain internal; only orphan file metadata is returned by the API
 ### `server/game/deck-builders.js` — built-in inventories
 
 **`createDeckBuilders({shuffle})`** returns four builders. `server.js` supplies its
-existing Fisher–Yates shuffle once and uses the returned functions in `spawn`
-and `setupStarter`. Each call creates a fresh card array and shuffles it once.
+existing Fisher–Yates shuffle once, uses the returned functions in `spawn`, and injects
+the complete builder collection into `createStarterSetup`. Each call creates a fresh
+card array and shuffles it once.
 
 - **`buildSimpleDeck(jokers = false)`** — 52 standard rank/suit references, or 54
   with one red and one black joker; uses the procedural `back` reference.
@@ -413,6 +421,27 @@ These functions build private game inventory and spawn properties, not graphics.
 Standalone set spawning and starter layouts use the same builders; browser-side
 rendering interprets their face references. The module does not start a server or
 own the random-number implementation.
+
+### `server/game/starters.js` — one-click game layouts
+
+**`createStarterSetup({deckBuilders, geoOf, maxPieces, spawnY})`** returns
+**`setupStarter(room, game)`**. `TableRoom.setupStarter(game)` is a forwarding method
+that preserves the room API used by the GM-only `loadStarter` handler.
+
+`setupStarter` returns `false` without mutation for an unknown shared `STARTERS` key.
+For a valid key it calls `room.clearTable()` before creating anything, then:
+
+- replaces/configures a built-in board through `swapBoard` and `calibrateGrid`;
+- places configured board pieces upright at calibrated cell coordinates, stopping at
+  `maxPieces` after accounting for the board;
+- disables stale grids for boardless games;
+- creates configured bowls and chip stacks through the normal `spawn` boundary;
+- selects the injected standard/domino/letter/Mahjong builder, carries `geoOf` tile/snap
+  properties and `deckModel`, and deals the configured count to seated players.
+
+Clearing remains delegated to the shared scene-persistence reset path, so old public
+pieces, private hands/decks/inspections, pending turn/recovery data, overlays, and the
+saved checkpoint are removed with the same ordering as before extraction.
 
 ### Card transfers and deck properties
 
@@ -677,7 +706,8 @@ face-down), `shuffle`, **`splitDeck`** (deal a deck in
 two — original keeps the top half, a new ephemeral deck gets the rest),
 **`drawInspect`/`inspectPlace`** (private draw-to-inspect; the `inspectCard` message carries the
 deck's `geo` so the preview shows the tile's real proportions), **`loadStarter`** →
-**`setupStarter(game)`** (one-click Games: board + pieces/bowls/deck + deal), **`recolor`**
+the `TableRoom.setupStarter(game)` forwarding method → extracted starter orchestration
+(one-click Games: clear + board + pieces/bowls/deck + deal), **`recolor`**
 (`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+;
 a `props.tray:true` die is placed in the caller's tray via `trayDropPos`, any player),
 **`roll`** (now flings only the _caller's_ tray dice, gentle `SIM.trayRoll` impulse) /

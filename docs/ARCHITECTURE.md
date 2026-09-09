@@ -63,6 +63,11 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   declarations, constructor defaults, and `MapSchema` collection construction.
   `server.js` imports these types when composing `TableRoom`; the process-wide
   encoder buffer setting deliberately remains in that entry point.
+- **`server/game/starters.js`** — one-click starter-game orchestration. It reads
+  shared `STARTERS`/board/piece definitions and coordinates room-owned clearing,
+  board calibration, authoritative spawning, initial dealing, and persistence.
+  Deck construction, geometry projection, capacity, and spawn height are injected
+  from `server.js`, keeping the module deterministic and independently testable.
 - **`server/` support modules** — shared permission and validation rules,
   card/deck state helpers, the piece-props codec, upload validation, database and
   session/Redis configuration, bootstrap-admin provisioning, async HTTP and
@@ -748,11 +753,31 @@ receives the existing server shuffle function and returns `buildSimpleDeck`,
 `buildDominoSet`, `buildScrabbleBag`, and `buildMahjongWall`. Each builds a fresh
 inventory, preserves its back/tile/model/snap metadata, and shuffles once.
 
-`TableRoom.spawn` and `setupStarter` remain responsible for choosing and placing
-these inventories. Letter counts and Mahjong face definitions come from
-`shared/pieces.js`; rendering their references stays in the browser. The injected
-shuffle keeps initial deck creation and later gameplay shuffles on the same
-Fisher–Yates implementation while allowing deterministic inventory tests.
+`TableRoom.spawn` chooses these inventories for standalone set spawning.
+`server/game/starters.js` receives the same builder collection and chooses the
+appropriate inventory while assembling a complete starter layout. Letter counts
+and Mahjong face definitions come from `shared/pieces.js`; rendering their references
+stays in the browser. The injected shuffle keeps initial deck creation and later
+gameplay shuffles on the same Fisher–Yates implementation while allowing deterministic
+inventory and layout tests.
+
+## Starter-game layout boundary
+
+`createStarterSetup` builds one `setupStarter(room, game)` function from the existing
+deck builders, card-geometry projection, piece limit, and spawn height. Unknown starter
+IDs return before changing the room. A valid starter first calls the same `clearTable`
+path as Reset and scene replacement, so visible pieces, private hands, deck contents,
+inspections, recovery state, turn ownership, overlays, and the previous checkpoint are
+removed together before anything new is created.
+
+Board starters then use the room's `swapBoard` and `calibrateGrid` operations. Their
+pieces are placed upright on the calibrated cells and stop at the shared capacity limit;
+starter grids remain active for snapping but hidden visually. Boardless starters disable
+stale grid settings. Deck starters select the shared standard/domino/letter/Mahjong
+builder, retain tile geometry, snapping, and bag/box skins, and optionally deal the
+configured starting hand to each seated player. Bowls and chip stacks use the ordinary
+authoritative `spawn` boundary. `TableRoom.setupStarter` remains as a small forwarding
+method so its caller-facing contract stays recognizable.
 
 ## Synchronized state boundary
 

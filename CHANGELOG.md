@@ -32,6 +32,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract starter-game layout orchestration into `server/game/starters.js`, retaining shared
+  starter definitions, injected deck builders, reset ordering, grid calibration, initial dealing,
+  and piece-capacity behavior.
 - Extract synchronized Colyseus state classes and field declarations into
   `server/game/schema.js`, preserving defaults, collection types, reflection order, and the
   entry point's deliberate encoder buffer configuration.

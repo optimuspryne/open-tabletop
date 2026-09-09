@@ -1,4 +1,5 @@
 import { createDeckBuilders } from './server/game/deck-builders.js';
+import { createStarterSetup } from './server/game/starters.js';
 import { spawnTableCard } from './server/game/card-transfer.js';
 import { Piece, Player, ScoreRow, Overlay, State } from './server/game/schema.js';
 import {
@@ -278,9 +279,8 @@ const shuffle = (array) => {
   }
   return array;
 };
-const { buildSimpleDeck, buildDominoSet, buildScrabbleBag, buildMahjongWall } = createDeckBuilders({
-  shuffle,
-});
+const deckBuilders = createDeckBuilders({ shuffle });
+const { buildSimpleDeck, buildDominoSet, buildScrabbleBag, buildMahjongWall } = deckBuilders;
 
 // The PUBLIC geometry/behavior a card/tile inherits from its deck: a named tile kind (`tile`), an
 // explicit `geom` (custom-aspect image decks), and a `snap` flag (word tiles snap to the grid). Plain
@@ -294,6 +294,12 @@ const geoOf = (o) => {
   if (o && o.snap) g.snap = true;
   return g;
 };
+const setupStarterGame = createStarterSetup({
+  deckBuilders,
+  geoOf,
+  maxPieces: SIM.maxPieces,
+  spawnY: SIM.spawnY,
+});
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
@@ -774,67 +780,7 @@ class TableRoom extends Room {
   // Load a ready-to-play starter game: clear the table, then set up the board + pieces (or the
   // deck + chips) so a host has a complete game in one click. Replaces the whole table (GM+).
   setupStarter(game) {
-    const def = STARTERS[game];
-    if (!def) return false;
-    this.clearTable();
-    let gridded = false;
-    if (def.board) {
-      this.swapBoard({ board: def.board });
-      // Turn on the board's grid: chess/checkers derive cell = width ÷ cells; go pins its exact
-      // printed-line spacing (BOARDS.go.grid.cellX/cellZ) so its bordered lines line up.
-      const grid = this.calibrateGrid();
-      if (grid) {
-        gridded = true;
-        this.state.scale.gridHidden = true; // starter games snap to the grid but don't draw it
-        if (def.pieces) {
-          const cells = def.cells || 8,
-            half = (cells - 1) / 2;
-          const boardTop = (BOARDS[def.board].box[1] || 0.15) * 2; // board sits at y=box[1], half-height box[1]
-          for (const p of def.pieces()) {
-            if (this.state.pieces.size >= SIM.maxPieces) break;
-            const x = (p.col - half) * grid.cellX,
-              z = (p.row - half) * grid.cellZ;
-            const box = ((PROPS[p.shape] || {}).collider || {}).box;
-            const restY = boardTop + (box ? box[1] : 0.2) + 0.03; // sit it ON the board, no drop-tumble
-            // Identity quaternion → spawn UPRIGHT (no random tumble), so tall pieces don't fall
-            // across neighbouring squares and knock the set over as they settle.
-            this.spawn(
-              'prop',
-              [x, restY, z],
-              { shape: p.shape, team: p.team, snap: true },
-              [0, 0, 0, 1],
-            );
-          }
-        }
-      }
-    }
-    if (!gridded) {
-      this.state.scale.gridStyle = 'off';
-      this.scheduleSave();
-    } // board-less games (poker/dominoes): no stale grid
-    for (const b of def.bowls || [])
-      this.spawn('dispenser', [b.x, SIM.spawnY, b.z], { disp: b.disp, team: b.team });
-    if (def.deck) {
-      const d = def.deck === true ? {} : def.deck; // {set?, deal?, jokers?}
-      const built =
-        d.set === 'domino'
-          ? buildDominoSet()
-          : d.set === 'letter'
-            ? buildScrabbleBag()
-            : d.set === 'mahjong'
-              ? buildMahjongWall()
-              : buildSimpleDeck(!!d.jokers);
-      const deckId = this.spawn('deck', [0, SIM.spawnY, def.deckZ ?? 0], {
-        back: built.back,
-        cards: built.cards,
-        ...geoOf(built),
-        deckModel: built.deckModel,
-      }); // carry the box/bag skin, if any
-      if (d.deal > 0) this.dealFromDeckToSeats(deckId, d.deal); // deal a starting rack to each seated player
-    }
-    for (const s of def.stacks || [])
-      this.spawn('dispenser', [s.x, SIM.spawnY, s.z], { disp: s.disp, color: s.color });
-    return true;
+    return setupStarterGame(this, game);
   }
 
   // Rebuild a deck's collider box so its height matches its current card count.
