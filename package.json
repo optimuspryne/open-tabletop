@@ -32,6 +32,9 @@
     "pg": "^8.23.0",
     "redis": "^5.12.1"
   },
+  "overrides": {
+    "qs": "6.16.0"
+  },
   "allowScripts": {
     "msgpackr-extract@3.0.4": true
   },
