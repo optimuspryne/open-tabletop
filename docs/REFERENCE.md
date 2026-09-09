@@ -733,6 +733,14 @@ admin sandbox for building and testing library assets live. Registered as the
 
 ### HTTP (Express)
 
+`package.json` overrides transitive **`qs` to `6.16.0`**, with the resolved package
+pinned in `package-lock.json`. This addresses GHSA-x5fp-wj9c-mxmx (comma-parsing
+array-limit bypass) and GHSA-4mjr-xmp4-gh2g (stringification denial of service),
+while retaining Express `4.22.2` and body-parser `1.20.6`. Their dependency ranges
+otherwise exclude the patched release. Reassess the override when upgrading them.
+Use `npm audit` to inspect production and development dependencies; `npm run audit`
+checks production dependencies and fails only at high severity or above.
+
 - `express.static` for `public/`, `/shared`; **`/assets`** serves category files
   but a guard 404s any `.json` (metadata stays private).
 - **Uploads:** `POST /upload?kind=` (one resized image → `{ url }`),

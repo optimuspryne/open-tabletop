@@ -113,6 +113,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 
 ## Trust and failure boundaries
 
+The HTTP dependency tree uses a targeted npm override for `qs@6.16.0` to address
+the array-limit bypass and stringification denial-of-service advisories
+GHSA-x5fp-wj9c-mxmx and GHSA-4mjr-xmp4-gh2g. The lockfile records the patched
+resolution without changing the Express/body-parser versions. This override should
+be reassessed when their normal dependency ranges admit a patched `qs` release.
+
 Every payload-bearing Colyseus message crosses `server/message-validation.js`
 before authorization, lookup, physics, state, or database work. Normalizers accept
 only plain objects with documented keys, finite numbers, bounded strings/batches,
