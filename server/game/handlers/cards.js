@@ -2,6 +2,7 @@ import { returnInspectedCard } from '../inspection-recovery.js';
 import { spawnTableCard, takeTableCard } from '../card-transfer.js';
 import {
   absorbedEntry,
+  cardCompatibilityKey,
   cardFrontRef,
   cardBackRef,
   takeTopCard,
@@ -214,16 +215,8 @@ export function registerCardHandlers(
       members.push({ id, piece, body, props: readProps(piece) });
     }
     if (members.length < 2) return; // need at least two card-family pieces to consolidate
-    const sig = (pr) =>
-      JSON.stringify([
-        pr.open ? null : pr.back || 'back',
-        pr.tile ?? null,
-        pr.geom ?? null,
-        !!pr.open,
-        !!pr.snap,
-      ]);
-    const target = sig(members[0].props);
-    if (members.some((m) => sig(m.props) !== target)) return; // incompatible card behavior → refuse
+    const target = cardCompatibilityKey(members[0].props);
+    if (members.some((m) => cardCompatibilityKey(m.props) !== target)) return;
     if ([...room.pendingInspect.values()].some((p) => members.some((m) => m.id === p.deckId)))
       return;
     members.sort((a, b) => a.body.position.y - b.body.position.y); // top of the table → top of deck

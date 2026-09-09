@@ -63,6 +63,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Apply the same card compatibility rules to drop-on-deck absorption and Combine. Reject
+  mismatched geometry, tile types, visibility, snap settings, and normal-card backs without
+  consuming the card. Compatible open sets still preserve individual backs.
 - Preserve current turn ownership in saves during the player's reconnect window by falling
   back to the retained account identity when their live client is unavailable.
 - Recover inspected cards onto the table when their source deck disappears, including on

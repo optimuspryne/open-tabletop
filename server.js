@@ -65,7 +65,12 @@ import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
-import { absorbedEntry, cardBackRef, cardFrontRef } from './server/deck-state.js';
+import {
+  absorbedEntry,
+  cardBackRef,
+  cardFrontRef,
+  cardCompatibilityKey,
+} from './server/deck-state.js';
 import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { MAX_PIECES, assertPieceCapacity } from './server/game/piece-capacity.js';
@@ -1391,12 +1396,15 @@ class TableRoom extends Room {
         if (onDeck) {
           const cp = readProps(piece);
           const deckPiece = this.state.pieces.get(deckId);
+          if (deckPiece?.type !== 'deck') continue;
           const deckProps = readProps(deckPiece);
+          if (cardCompatibilityKey(cp) !== cardCompatibilityKey(deckProps)) continue;
           const front = (this.cardData.get(id) || {}).front || cp.front;
           // Preserve a per-tile back (a double-sided tile's own face, or a mixed-back stack) so
           // re-drawing shows the SAME back, not the deck's shared cover; a card whose back is just
           // the deck's shared back rejoins as a bare front.
-          if (front) cards.push(absorbedEntry(front, cp.back, deckProps.back));
+          if (!front) continue;
+          cards.push(absorbedEntry(front, cp.back, deckProps.back));
           deckPiece.count = cards.length;
           // The absorbed tile is the new top → repaint an open set's cover (mirrors syncOpenCover).
           if (deckProps.open) {

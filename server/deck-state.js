@@ -37,3 +37,15 @@ export function deckSpawnProps(props, cards) {
   if (props.model) result.deckModel = props.model;
   return result;
 }
+
+// A deck shares geometry and visibility rules across its entries. Open sets
+// allow individual backs; normal decks must share a concealing back.
+export function cardCompatibilityKey(props) {
+  return JSON.stringify([
+    props.open ? null : props.back || 'back',
+    props.tile ?? null,
+    props.geom ?? null,
+    !!props.open,
+    !!props.snap,
+  ]);
+}
