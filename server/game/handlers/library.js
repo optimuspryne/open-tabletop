@@ -135,6 +135,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const deck = await db.getDeck(msg.id);
+    if (client.auth?.revoked || room.rank(client) < RANK.helper) return;
     if (!deck || (!deck.isPublic && !room.isAdmin(client))) return;
     if (!ensurePieceCapacity(room, client)) return;
     room.spawn('deck', randomPosition(), {
@@ -165,6 +166,7 @@ export function registerLibraryHandlers(
     const rec = { tex: msg.tex, geom: msg.geom };
     if (msg.editId) await db.updateMat(msg.editId, msg.name, rec);
     else await db.insertMat(msg.name, rec, { ownerId: client.auth.userId });
+    if (client.auth?.revoked || !room.isAdmin(client)) return;
     if (msg.spawn && ensurePieceCapacity(room, client))
       room.spawn('mat', randomPosition(), { geom: msg.geom, front: msg.tex });
     await room.sendAssetList(client, 'mat');
@@ -175,6 +177,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const mat = await db.getMat(msg.id);
+    if (client.auth?.revoked || room.rank(client) < RANK.helper) return;
     if (!mat || (!mat.isPublic && !room.isAdmin(client)) || !mat.geom || !mat.tex) return;
     if (!ensurePieceCapacity(room, client)) return;
     room.spawn('mat', randomPosition(), { geom: mat.geom, front: mat.tex });
@@ -209,6 +212,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const deck = await db.getDeck(msg.id);
+    if (client.auth?.revoked || !room.isAdmin(client)) return;
     if (deck)
       client.send('deckData', {
         id: msg.id,
@@ -251,6 +255,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const scene = await db.getScene(msg.id);
+    if (client.auth?.revoked || room.rank(client) < RANK.gm) return;
     if (!scene || (!scene.isPublic && !room.isAdmin(client))) return;
     room.applyScene(scene.payload);
   });
@@ -260,6 +265,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const data = await db.getBoard(msg.id);
+    if (client.auth?.revoked || room.rank(client) < RANK.gm) return;
     if (!data || (!data.isPublic && !room.isAdmin(client))) return;
     const rec = data.rec;
     const props = rec.board

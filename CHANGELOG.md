@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Security
+- Recheck live authorization after asynchronous library/member reads before changing the table,
+  kicking members, changing roles, or delivering privileged data. Revocation/demotion also
+  prevents a pending mat save from spawning onto the table.
 - Override transitive `qs` to `6.16.0` to address GHSA-x5fp-wj9c-mxmx and
   GHSA-4mjr-xmp4-gh2g while retaining the existing Express and body-parser versions.
 - Enforce the 250-piece limit at the creation boundary and before hand/dispenser consumption,

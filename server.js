@@ -1577,6 +1577,7 @@ class TableRoom extends Room {
   // Send a client the library list for one asset kind. Admins get everything
   // (incl. private); everyone else gets only published (public) assets.
   async sendAssetList(client, kind) {
+    if (client.auth?.revoked) return false;
     const includePrivate = this.isAdmin(client);
     const config = {
       deck: ['deckList', () => db.listDecks({ includePrivate })],
@@ -1589,6 +1590,7 @@ class TableRoom extends Room {
     }[kind];
     if (!config) return false;
     const list = await config[1]();
+    if (client.auth?.revoked || (includePrivate && !this.isAdmin(client))) return false;
     client.send(config[0], list);
     return true;
   }
@@ -1603,7 +1605,10 @@ class TableRoom extends Room {
     return canSetMemberRole(actorRank, currentRole, newRole);
   }
   async sendMembers(client) {
-    if (this.roomId) client.send('memberList', await db.listMembers(this.roomId));
+    if (!this.roomId || this.rank(client) < RANK.gm) return;
+    const list = await db.listMembers(this.roomId);
+    if (this.rank(client) < RANK.gm) return;
+    client.send('memberList', list);
   }
   async broadcastMembers() {
     // push the fresh list to every GM viewing the panel

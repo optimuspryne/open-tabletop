@@ -266,3 +266,58 @@ test('private assets cannot be loaded by non-admin helpers', async () => {
     false,
   );
 });
+
+for (const change of ['revoke', 'demote', 'unchanged']) {
+  for (const [message, read, result, effect] of [
+    ['loadDeck', 'getDeck', { isPublic: true, fronts: ['ace'] }, 'spawn'],
+    ['loadMat', 'getMat', { isPublic: true, geom: {}, tex: 'mat' }, 'spawn'],
+    ['sceneLoad', 'getScene', { isPublic: true, payload: {} }, 'applyScene'],
+    ['loadBoard', 'getBoard', { isPublic: true, rec: { board: 'chess' } }, 'swapBoard'],
+    ['getDeck', 'getDeck', { fronts: ['private'] }, 'deckData'],
+  ]) {
+    test(`${message} rechecks authorization after its read: ${change}`, async () => {
+      const { room, db, handlers, calls } = harness();
+      const c = client();
+      let resolve;
+      db[read] = () => new Promise((done) => (resolve = done));
+      const pending = handlers.get(message)(c, { id: '1' });
+      assert.equal(typeof resolve, 'function');
+      if (change === 'revoke') c.auth.revoked = true;
+      if (change === 'demote') {
+        room.rank = () => 0;
+        room.isAdmin = () => false;
+      }
+      resolve(result);
+      await pending;
+      const performed =
+        effect === 'deckData'
+          ? c.sent.some((entry) => entry.type === effect)
+          : calls.some((entry) => entry.name === effect);
+      assert.equal(performed, change === 'unchanged');
+    });
+  }
+}
+
+test('mat persistence can finish after admin access is lost without spawning a mat', async () => {
+  for (const change of ['revoke', 'demote']) {
+    const { room, db, handlers, calls } = harness();
+    const c = client();
+    let resolve;
+    db.insertMat = () => new Promise((done) => (resolve = done));
+    const pending = handlers.get('saveMat')(c, {
+      name: 'Mat',
+      tex: '/assets/mats/test.png',
+      geom: { w: 2, h: 2 },
+      spawn: true,
+    });
+    assert.equal(typeof resolve, 'function');
+    if (change === 'revoke') c.auth.revoked = true;
+    else room.isAdmin = () => false;
+    resolve();
+    await pending;
+    assert.equal(
+      calls.some((entry) => entry.name === 'spawn'),
+      false,
+    );
+  }
+});

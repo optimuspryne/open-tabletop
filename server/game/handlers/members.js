@@ -36,9 +36,11 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
     const { userId } = parsed;
     if (String(userId) === String(client.auth && client.auth.userId)) return;
     const membership = await db.getMembership(room.roomId, userId);
+    if (client.auth?.revoked) return;
     if (!membership || !room.canManage(room.rank(client), membership.role)) return;
     const targetUser = await db.findUserById(userId);
     if (targetUser && targetUser.isAdmin) return;
+    if (client.auth?.revoked || !room.canManage(room.rank(client), membership.role)) return;
     await db.kickMember(room.roomId, userId);
     roomAccess.kickRoom(room, userId);
     await Promise.all([room.notifyLobby(userId, 'notifyDeclined'), room.broadcastMembers()]);
@@ -51,9 +53,11 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
     const { userId, role } = parsed;
     if (String(userId) === String(client.auth && client.auth.userId)) return;
     const membership = await db.getMembership(room.roomId, userId);
+    if (client.auth?.revoked) return;
     if (!membership || !room.canSetRole(room.rank(client), membership.role, role)) return;
     const targetUser = await db.findUserById(userId);
     if (targetUser && targetUser.isAdmin) return;
+    if (client.auth?.revoked || !room.canSetRole(room.rank(client), membership.role, role)) return;
     await db.setMemberRole(room.roomId, userId, role);
     roomAccess.setRole(room, userId, role);
     await room.broadcastMembers();

@@ -217,3 +217,37 @@ test('a lobby notification failure does not skip the local member-list refresh',
   );
   assert.equal(owner.sent[0].type, 'serverError');
 });
+
+for (const operation of ['kick', 'setRole']) {
+  for (const pauseAt of ['getMembership', 'findUserById']) {
+    for (const change of ['revoke', 'demote', 'unchanged']) {
+      test(`${operation} rechecks authority after ${pauseAt}: ${change}`, async () => {
+        const { handlers, db, calls, memberships } = harness();
+        memberships.set('2', { role: 'gm' });
+        const c = actor('owner');
+        let resolve;
+        let entered;
+        const reading = new Promise((done) => (entered = done));
+        db[pauseAt] = () => {
+          entered();
+          return new Promise((done) => (resolve = done));
+        };
+        const pending = handlers.get(operation)(c, {
+          userId: '2',
+          ...(operation === 'setRole' ? { role: 'helper' } : {}),
+        });
+        await reading;
+        if (change === 'revoke') c.auth.revoked = true;
+        if (change === 'demote') c.auth.role = 'gm';
+        resolve(pauseAt === 'getMembership' ? { role: 'gm' } : { isAdmin: false });
+        await pending;
+        assert.equal(
+          calls.some(
+            (entry) => entry[0] === (operation === 'kick' ? 'kickMember' : 'setMemberRole'),
+          ),
+          change === 'unchanged',
+        );
+      });
+    }
+  }
+}
