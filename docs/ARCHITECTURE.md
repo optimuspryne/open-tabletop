@@ -940,6 +940,20 @@ Room-role updates and room kicks reach every matching tab and pending reconnect
 in that room. They do not change the user's roles in other rooms. Site-wide kicks
 also cover editor and waiting-lobby connections.
 
+Authorization is checked again when asynchronous reads finish. Library loads
+recheck the current room rank before spawning pieces, replacing a board, or
+applying a scene; private assets also require current site-admin access. Member
+kick/role handlers recheck the actor after the target-user lookup and before
+submitting the database mutation. This prevents a request started before a kick
+or demotion from using its earlier privileges to mutate the room afterward.
+
+The same boundary protects response data: private library lists and deck data are
+suppressed if admin access was lost, and member lists require current GM+ access.
+A mat save that has already reached the database may finish, but losing admin
+access prevents its subsequent table spawn. These checks do not cancel database
+writes already submitted; synchronization of completed membership changes still
+runs so live connections reflect the persisted result.
+
 **Host approval.** Creating a room needs approved host access (`host_status =
 'approved'`, or admin). A password signup starts **pending**; a passwordless
 player can request host access (which sets a password); an admin approves /

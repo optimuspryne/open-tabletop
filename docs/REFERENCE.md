@@ -532,6 +532,23 @@ stale authorization from being installed after revocation without interrupting a
 unrelated user's join. The browser handles `accessRevoked` by explaining the exit
 and clearing its reconnection token.
 
+Async message handlers also recheck current access after database reads, before
+performing a later privileged action:
+
+- `loadDeck`/`loadMat` require helper+ again; `sceneLoad`/`loadBoard` require GM+
+  again. Private assets still require site-admin access.
+- `kick`/`setRole` recheck revocation after the membership read and current actor
+  authority after the target-user read, immediately before submitting the mutation.
+- `getDeck` rechecks site-admin access before sending `deckData`; `saveMat` rechecks
+  it after persistence before optionally spawning the mat.
+- `TableRoom.sendAssetList` drops revoked responses and suppresses a list fetched
+  with private assets if site-admin access was lost during the read.
+  `sendMembers` checks GM+ both before its read and before sending `memberList`.
+
+These checks use live connection authorization. They do not cancel or roll back
+an already-submitted database write; required follow-up synchronization for a
+completed membership write still runs.
+
 ### `TableRoom` private state and operations
 
 Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,

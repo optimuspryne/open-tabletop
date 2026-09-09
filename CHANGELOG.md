@@ -32,6 +32,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document authorization rechecks across asynchronous library/member operations, protected
+  response delivery, and the boundary for already-submitted database writes.
 - Document the patched `qs` override, its advisory coverage, and dependency-audit commands.
 - Document table shape and rim-wood restoration from durable room settings without a scene snapshot.
 - Document account-deletion ownership release, asset visibility preservation, and database
