@@ -1,3 +1,4 @@
+import { spawnTableCard } from './server/game/card-transfer.js';
 import {
   returnInspectedCard,
   recoverPendingInspections,
@@ -918,22 +919,7 @@ class TableRoom extends Room {
   // faces public and lands with the chosen side up (face-down = the back face up); a normal card
   // lands face-up (front+back) or face-down (back shown, front hidden in cardData until flipped).
   spawnHandCard(pos, card, faceDown) {
-    if (card.open) {
-      return this.spawnCardFlat(
-        pos,
-        faceDown
-          ? { front: card.front, back: card.back, open: true, down: true, ...geoOf(card) }
-          : { front: card.front, back: card.back, open: true, ...geoOf(card) },
-      );
-    }
-    const id = this.spawnCardFlat(
-      pos,
-      faceDown
-        ? { back: card.back, ...geoOf(card) }
-        : { front: card.front, back: card.back, ...geoOf(card) },
-    );
-    if (faceDown) this.cardData.set(id, { front: card.front });
-    return id;
+    return spawnTableCard(this, pos, { ...card, geo: geoOf(card) }, !!faceDown);
   }
 
   // Replace the current board with a new one (there's only ever one). The board

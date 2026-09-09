@@ -1,3 +1,4 @@
+import { spawnTableCard } from './card-transfer.js';
 import { inspectedEntry } from '../deck-state.js';
 import { hasPieceCapacity, MAX_PIECES } from './piece-capacity.js';
 
@@ -13,12 +14,7 @@ export function returnInspectedCard(room, sessionId, maxPieces = MAX_PIECES) {
     room.updateDeckCollider(pending.deckId);
   } else {
     if (!hasPieceCapacity(room, maxPieces)) return false;
-    const { front, back, open, geo = {} } = pending;
-    const id = room.spawnCardFlat(
-      [0, 4, 0],
-      open ? { ...geo, front, back, open: true, down: true } : { ...geo, back },
-    );
-    if (!open) room.cardData.set(id, { front });
+    spawnTableCard(room, [0, 4, 0], pending);
   }
   room.pendingInspect.delete(sessionId);
   return true;

@@ -1,5 +1,5 @@
 import { returnInspectedCard } from '../inspection-recovery.js';
-import { takeTableCard } from '../card-transfer.js';
+import { spawnTableCard, takeTableCard } from '../card-transfer.js';
 import {
   absorbedEntry,
   cardFrontRef,
@@ -25,20 +25,6 @@ export function registerCardHandlers(
   { flipHop, maxPieces, spawnY, geoOf, dropSfx, randomPosition, shuffle, logger = console },
 ) {
   const cardMessage = (type, handler) => safeMessage(room, type, handler, { logger });
-
-  // Place a drawn card on the table. An OPEN deck yields a face-up double-sided tile (both faces
-  // public — flip turns it over); a normal deck deals face-down with the front hidden. `back` is the
-  // card's own per-tile back or the deck's shared back.
-  const dealCard = (pos, { front, back, open, geo }) => {
-    if (open) {
-      // Deal face-down like a normal deck (the back shows), but both faces are public — `down` is the
-      // orientation; the content stays in `front`. Flip turns it over.
-      return room.spawnCardFlat(pos, { front, back, open: true, down: true, ...geo });
-    }
-    const id = room.spawnCardFlat(pos, { back, ...geo });
-    room.cardData.set(id, { front });
-    return id;
-  };
 
   cardMessage('flip', (client, message) => {
     const parsed = pieceIdPayload(message);
@@ -74,7 +60,7 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    dealCard(room.besideDeck(room.bodies.get(deckId)), {
+    spawnTableCard(room, room.besideDeck(room.bodies.get(deckId)), {
       front: draw.front,
       back: draw.back || props.back || 'back',
       open: props.open,
@@ -109,7 +95,7 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    const id = dealCard([deckBody.position.x, 2.5, deckBody.position.z], {
+    const id = spawnTableCard(room, [deckBody.position.x, 2.5, deckBody.position.z], {
       front: draw.front,
       back: draw.back || props.back || 'back',
       open: props.open,
@@ -177,22 +163,7 @@ export function registerCardHandlers(
     } else {
       const deckBody = room.bodies.get(deckId);
       const position = deckBody ? room.besideDeck(deckBody) : randomPosition();
-      if (open) {
-        const faceDown = where === 'field-down';
-        room.spawnCardFlat(
-          position,
-          faceDown
-            ? { front, back, open: true, down: true, ...geo } // back face up; content stays front
-            : { front, back, open: true, ...geo },
-        );
-      } else {
-        const faceDown = where === 'field-down';
-        const id = room.spawnCardFlat(
-          position,
-          faceDown ? { back, ...geo } : { front, back, ...geo },
-        );
-        if (faceDown) room.cardData.set(id, { front });
-      }
+      spawnTableCard(room, position, { front, back, open, geo }, where === 'field-down');
     }
     const cards = room.deckCards.get(deckId);
     if (cards && cards.length === 0) room.removePiece(deckId);
