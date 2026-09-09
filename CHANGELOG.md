@@ -32,6 +32,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Record the remaining server/client DRY cleanup sequence, scopes, and validation in
+  `docs/DRY_CLEANUP.md`.
 - Document the extracted deck builders, inventory metadata, and injected shuffle ownership
   in the reference and architecture guides.
 - Extract standard playing-card, domino, letter-bag, and Mahjong inventory builders into
