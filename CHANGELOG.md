@@ -32,6 +32,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document shared table-card placement and the compatibility rules used by both Combine
+  and drop-on-deck absorption, including preservation of rejected cards.
 - Consolidate hand, deck-draw, inspection, and recovery table-card creation in `spawnTableCard`.
   Share face visibility and double-sided orientation rules while preserving caller-owned
   capacity checks, inventory handling, positioning, and physics/grid placement.

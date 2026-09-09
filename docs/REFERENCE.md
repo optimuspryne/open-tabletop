@@ -390,6 +390,20 @@ Private values remain internal; only orphan file metadata is returned by the API
 
 ### Card transfers and deck properties
 
+- **`spawnTableCard(room, position, {front, back, open, geo}, faceDown = true)`**
+  in `server/game/card-transfer.js` creates table cards for deck deals, inspection
+  placement, missing-deck recovery, and the `TableRoom.spawnHandCard` facade.
+  Normal face-down fronts go into private `cardData`; face-up fronts are public.
+  Open cards always keep both faces public and use `down: true` when face-down.
+  The helper returns the spawned ID without consuming inventory. Callers retain
+  capacity checks and positioning; `spawnCardFlat` retains grid snapping and physics
+  orientation. `spawnHandCard` preserves its face-up default.
+- **`cardCompatibilityKey(props)`** in `server/deck-state.js` supplies the shared
+  compatibility rule for `combineIntoDeck` and `TableRoom.releasePiece` absorption:
+  matching tile/geometry, double-sided behavior, snap flag, and normal-card backs.
+  Front artwork can differ; open cards may also have different individual backs.
+  Incompatible drops leave the card on the table. A card without recoverable front
+  data is likewise retained instead of being consumed.
 - **`takeTableCard(room, client, id, geoOf)`** in `server/game/card-transfer.js`
   serves both `takeCard` and `takeGroup`. It preserves the private/public front,
   back, geometry, snap behavior, and double-sided `open` flag before removing the piece.
@@ -406,7 +420,7 @@ Private values remain internal; only orphan file metadata is returned by the API
 
 - **`returnInspectedCard(room, sessionId, maxPieces)`** returns an inspection to its
   source deck when present. Otherwise it spawns a standalone card at `[0, 4, 0]`
-  through `spawnCardFlat`, preserving geometry and backs. Normal fronts stay in
+  through `spawnTableCard` → `spawnCardFlat`, preserving geometry and backs. Normal fronts stay in
   private `cardData`; open cards keep both faces public with `down: true`.
   Pending state is removed only after placement succeeds. At capacity it returns
   `false` and retains the card.

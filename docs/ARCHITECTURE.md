@@ -306,6 +306,11 @@ centroid — no new state, the same ownership and validation path as every other
 a heterogeneous selection rather than combining part of it, and the client greys the offer
 to match. Cards must agree on geometry, snap and double-sided behavior; secret cards
 also require matching backs. Double-sided tiles can retain different individual backs.
+`cardCompatibilityKey` in `server/deck-state.js` supplies this rule to both server
+Combine and drop-on-deck absorption in `releasePiece`. Proximity alone cannot
+absorb a card: incompatible cards stay on the table with their private data intact.
+Different front artwork is allowed when the shared properties match. Absorption
+also retains cards with no recoverable front rather than silently deleting them.
 The server refuses to combine a deck with an active private inspection, preventing the
 inspected card from being duplicated or stranded. Combined arrays are bottom-first so
 the highest table card is drawn first with `pop()`. The lowest selected deck supplies
@@ -733,6 +738,12 @@ See "Accounts, rooms & roles" below.
 
 Card transfers share explicit preservation rules: `takeTableCard` handles both single
 and group takes, including the double-sided flag and hidden-face lookup.
+The same module's `spawnTableCard` centralizes placement for hands, deck draws,
+inspection choices, and recovery. It decides which faces belong in public props
+versus private `cardData`, and applies the double-sided `down` flag. Capacity checks,
+inventory consumption, and destination selection remain explicit in the callers;
+`spawnCardFlat` still handles grid snapping and physics orientation. The hand
+placement method is a thin facade that supplies geometry and the chosen orientation.
 `deckSpawnProps` supplies split, combine, and snapshot paths with geometry, snap/open
 flags, skin and tints; derived cover and count are rebuilt on spawn.
 `inspectedEntry` preserves individual backs for both live returns and disconnect cleanup.
