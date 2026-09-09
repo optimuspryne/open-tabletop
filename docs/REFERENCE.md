@@ -57,7 +57,7 @@ classDiagram
     }
     class Server["server.js"] {
         +SIM config
-        +buildSimpleDeck() / saveAsset() / saveImageRef()
+        +saveAsset() / saveImageRef()
         +compose extracted message handlers and HTTP routers
     }
     class Physics["server/physics.js"] {
@@ -372,10 +372,6 @@ Private values remain internal; only orphan file metadata is returned by the API
   `collider: { box:[...], type:'cylinder', sides:6 }` — no `buildCollider` change.
 - **`dieShape(sides)`** — convex hull of `dieVerts`, coplanar triangles merged,
   windings outward. d6 ⇒ box.
-- **`buildSimpleDeck()`** — a standard 52-card deck of `rank:…` refs (`jokers` ⇒ 54).
-- **`buildDominoSet()` / `buildScrabbleBag()` / `buildMahjongWall()`** — the tile sets, each a
-  shuffled "deck" (28 / 100 / 144) carrying a `tile` kind, a back, and (for tiles) `snap` /
-  `deckModel`. Spawned via `props.set` (`'domino'`/`'letter'`/`'mahjong'`) or a `STARTERS` entry.
 - **`geoOf(o)`** — the public geometry/behavior a card/tile inherits from its deck (`tile`, `geom`,
   `snap`), threaded through deck → hand → played tile so a face-down tile keeps its true shape while
   its face stays private. **`dropSfx(type, props)`** picks the tile vs. card/deck drop cue.
@@ -387,6 +383,28 @@ Private values remain internal; only orphan file metadata is returned by the API
   **`besideDeck`** / **`addToHand`** (deal/hand placement), **`swapBoard`**,
   Physics-only vector helpers, including **`averagePoint`**, stay private to
   `server/physics.js`.
+
+### `server/game/deck-builders.js` — built-in inventories
+
+**`createDeckBuilders({shuffle})`** returns four builders. `server.js` supplies its
+existing Fisher–Yates shuffle once and uses the returned functions in `spawn`
+and `setupStarter`. Each call creates a fresh card array and shuffles it once.
+
+- **`buildSimpleDeck(jokers = false)`** — 52 standard rank/suit references, or 54
+  with one red and one black joker; uses the procedural `back` reference.
+- **`buildDominoSet()`** — 28 double-six tiles, `domback`, `tile: 'domino'`, and
+  the `bentwood` deck model.
+- **`buildScrabbleBag()`** — 100 letter tiles with counts and scores from shared
+  `LETTER_DIST`, including blanks; `lback`, `tile: 'letter'`, `snap: true`, and
+  the `bentwood` deck model.
+- **`buildMahjongWall()`** — 144 image references built from shared `MAHJONG`:
+  four copies of each ordinary face and one of each bonus; `mjback`,
+  `tile: 'mahjong'`, and the `bentwood` deck model.
+
+These functions build private game inventory and spawn properties, not graphics.
+Standalone set spawning and starter layouts use the same builders; browser-side
+rendering interprets their face references. The module does not start a server or
+own the random-number implementation.
 
 ### Card transfers and deck properties
 

@@ -32,6 +32,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Document the extracted deck builders, inventory metadata, and injected shuffle ownership
+  in the reference and architecture guides.
 - Extract standard playing-card, domino, letter-bag, and Mahjong inventory builders into
   `server/game/deck-builders.js`, retaining the shared shuffle routine and existing spawn/starter behavior.
 - Document shared table-card placement and the compatibility rules used by both Combine

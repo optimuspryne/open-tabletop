@@ -734,6 +734,20 @@ table engine. The game table and workshop share one combined **Library** modal
 is editor-only and the asset handlers refuse non-admin creation/curation.
 See "Accounts, rooms & roles" below.
 
+## Built-in deck inventories
+
+`server/game/deck-builders.js` owns construction of standard playing cards,
+double-six dominoes, the letter bag, and the Mahjong wall. `createDeckBuilders`
+receives the existing server shuffle function and returns `buildSimpleDeck`,
+`buildDominoSet`, `buildScrabbleBag`, and `buildMahjongWall`. Each builds a fresh
+inventory, preserves its back/tile/model/snap metadata, and shuffles once.
+
+`TableRoom.spawn` and `setupStarter` remain responsible for choosing and placing
+these inventories. Letter counts and Mahjong face definitions come from
+`shared/pieces.js`; rendering their references stays in the browser. The injected
+shuffle keeps initial deck creation and later gameplay shuffles on the same
+Fisher–Yates implementation while allowing deterministic inventory tests.
+
 ## Scene vs. game snapshot (`serializeScene` / `serializeGame`)
 
 Card transfers share explicit preservation rules: `takeTableCard` handles both single
