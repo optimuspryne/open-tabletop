@@ -32,6 +32,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract synchronized Colyseus state classes and field declarations into
+  `server/game/schema.js`, preserving defaults, collection types, reflection order, and the
+  entry point's deliberate encoder buffer configuration.
 - Record the remaining server/client DRY cleanup sequence, scopes, and validation in
   `docs/DRY_CLEANUP.md`.
 - Document the extracted deck builders, inventory metadata, and injected shuffle ownership

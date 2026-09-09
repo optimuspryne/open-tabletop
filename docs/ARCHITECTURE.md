@@ -57,6 +57,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   and the private (non-synced) memory that holds secrets. Card, movement, and
   membership handlers live under `server/game/handlers/`; HTTP route factories
   live under `server/http/routes/`. All physics tuning remains in one `SIM` block.
+- **`server/game/schema.js`** — the synchronized Colyseus state boundary. It owns
+  the eight `Schema` classes (`Piece`, `Player`, `Timer`, `ScoreRow`, `Whiteboard`,
+  `RoomScale`, `Overlay`, and root `State`), their ordered `defineTypes`
+  declarations, constructor defaults, and `MapSchema` collection construction.
+  `server.js` imports these types when composing `TableRoom`; the process-wide
+  encoder buffer setting deliberately remains in that entry point.
 - **`server/` support modules** — shared permission and validation rules,
   card/deck state helpers, the piece-props codec, upload validation, database and
   session/Redis configuration, bootstrap-admin provisioning, async HTTP and
@@ -747,6 +753,22 @@ these inventories. Letter counts and Mahjong face definitions come from
 `shared/pieces.js`; rendering their references stays in the browser. The injected
 shuffle keeps initial deck creation and later gameplay shuffles on the same
 Fisher–Yates implementation while allowing deterministic inventory tests.
+
+## Synchronized state boundary
+
+`server/game/schema.js` is the single server-side declaration site for the state
+Colyseus reflects to browsers. Declaration order and field types are a wire contract:
+clients reconstruct the schema from reflection rather than importing this Node module.
+The module therefore contains only schema definitions and the shared `TABLE` defaults;
+it does not configure listeners, rooms, physics, persistence, or process-wide encoder
+capacity.
+
+The root `State` constructs fresh maps for pieces, players, scores, personal dice trays,
+unclaimed-hand labels, and overlays, plus fresh `Timer`, `Whiteboard`, and `RoomScale`
+singletons for every room. `TableRoom.onCreate` installs that root and continues to own
+durable restoration, handler registration, and all authoritative mutations. Extracting
+the declarations changes their module boundary only: reflection order, defaults, late-join
+serialization, and reconnect synchronization remain unchanged.
 
 ## Scene vs. game snapshot (`serializeScene` / `serializeGame`)
 

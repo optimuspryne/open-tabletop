@@ -9,6 +9,7 @@ The codebase:
 | ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries                                                                                                            |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
+| `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
 | `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
 | `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
@@ -59,6 +60,11 @@ classDiagram
         +SIM config
         +saveAsset() / saveImageRef()
         +compose extracted message handlers and HTTP routers
+    }
+    class SyncedSchema["server/game/schema.js"] {
+        +Piece / Player / Timer / ScoreRow
+        +Whiteboard / RoomScale / Overlay
+        +State root + ordered defineTypes
     }
     class Physics["server/physics.js"] {
         +buildWorld(simulation)
@@ -128,6 +134,8 @@ classDiagram
         +fetch to the HTTP API
     }
     Shared <.. Server
+    Shared <.. SyncedSchema
+    SyncedSchema <.. Server
     Shared <.. Physics
     Shared <.. ScenePersistence
     Shared <.. Core
@@ -507,6 +515,14 @@ request order, including background and final saves. Failed writes reject their 
 without blocking subsequent saves; a database update affecting no room is also a failure.
 
 ### Schema (synced state)
+
+All eight classes below and their `defineTypes` declarations live in
+**`server/game/schema.js`**. Declaration order is preserved because it forms the
+reflection/wire contract used by joining and reconnecting browser clients. Each `State`
+constructs fresh `MapSchema` collections and nested singleton schemas. The module imports
+only shared `TABLE` defaults besides `@colyseus/schema`; process-wide
+**`Encoder.BUFFER_SIZE = 128 * 1024`** remains explicit in `server.js`, before rooms are
+created, rather than becoming an import side effect of the schema module.
 
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
   `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the `props` JSON, not the schema:

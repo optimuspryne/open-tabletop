@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: built-in deck builders completed and pushed; schema extraction is next.
+Status: synchronized schema extraction completed and documented; starter layout extraction is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -40,9 +40,9 @@ source and the MCP memory graph before starting each step.
 
 ### 1. Extract synchronized schema definitions
 
-- [ ] Move `Piece`, `Player`, `Timer`, `ScoreRow`, `Whiteboard`, `RoomScale`,
+- [x] Move `Piece`, `Player`, `Timer`, `ScoreRow`, `Whiteboard`, `RoomScale`,
   `Overlay`, and `State`, with their associated `defineTypes` declarations, into
-  a proposed `server/game/schema.js`.
+  `server/game/schema.js`.
 - Preserve field names, types, registration order, defaults, and collection construction.
 - Keep process-wide encoder configuration deliberate; moving classes should not
   introduce unrelated startup side effects.

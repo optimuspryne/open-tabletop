@@ -1,5 +1,6 @@
 import { createDeckBuilders } from './server/game/deck-builders.js';
 import { spawnTableCard } from './server/game/card-transfer.js';
+import { Piece, Player, ScoreRow, Overlay, State } from './server/game/schema.js';
 import {
   returnInspectedCard,
   recoverPendingInspections,
@@ -19,14 +20,13 @@ import crypto from 'crypto';
 import { performance } from 'node:perf_hooks';
 import { Server, Room, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
-import { Schema, MapSchema, defineTypes, Encoder } from '@colyseus/schema';
+import { Encoder } from '@colyseus/schema';
 Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
 import * as CANNON from 'cannon-es';
 import {
   KINDS,
   PROPS,
   BOARDS,
-  TABLE,
   tableOutline,
   TABLE_SHAPES,
   RIM_WOODS,
@@ -226,202 +226,6 @@ const { findOrphanAssets, trashOrphans } = createAssetCleanup({
   assetKinds: ASSET_KINDS,
   allAssetRefBlobs: db.allAssetRefBlobs,
   liveRooms: LIVE_ROOMS,
-});
-
-// --- Synced state ----------------------------------------------------------
-// defineTypes() is the no-build-step way to declare schema in plain JS.
-// (The modern alternative is TypeScript with @type() decorators.)
-// Clients rebuild this schema automatically via reflection — no shared file.
-class Piece extends Schema {}
-defineTypes(Piece, {
-  type: 'string',
-  owner: 'string',
-  props: 'string',
-  count: 'number', // count = cards in a deck (0 for other pieces)
-  x: 'number',
-  y: 'number',
-  z: 'number',
-  qx: 'number',
-  qy: 'number',
-  qz: 'number',
-  qw: 'number',
-});
-class Player extends Schema {} // PUBLIC per-player info: seat/turn order + hand count (never card identities)
-defineTypes(Player, {
-  seat: 'number',
-  order: 'number',
-  hand: 'number',
-  name: 'string',
-  color: 'string',
-  avatar: 'string',
-  showing: 'number',
-  handBack: 'string',
-  role: 'string',
-}); // showing = how many hand cards this player is currently revealing (public badge; never the content); handBack = the (public) back image of their hand cards; role = their per-room role (owner/gm/helper/player)
-
-// Per-room role ladder — the server gates privileged actions by rank, and the
-// client hides tools it can't use (courtesy only; these checks are the real rule).
-// PUBLIC shared timer. We sync only the anchor (running/mode/base/since), never a
-// ticking number — each client computes the live value with timerLive(), the same
-// way the render loop interpolates piece positions locally. base = ms frozen at
-// the last pause; since = server Date.now() at the last start (0 while paused).
-class Timer extends Schema {
-  constructor() {
-    super();
-    this.running = false;
-    this.mode = 'up';
-    this.base = 0;
-    this.since = 0;
-    this.duration = 300000;
-  }
-}
-defineTypes(Timer, {
-  running: 'boolean',
-  mode: 'string',
-  base: 'number',
-  since: 'number',
-  duration: 'number',
-});
-// A durable scoreboard row: a free label + a number, keyed by id in State.scores.
-class ScoreRow extends Schema {
-  constructor(label = '', score = 0) {
-    super();
-    this.label = label;
-    this.score = score;
-  }
-}
-defineTypes(ScoreRow, { label: 'string', score: 'number' });
-// The whiteboard is a synced singleton (like the timer), NOT a physics piece: it
-// rides a circular track behind the players (angle), one person "owns" it to draw,
-// and it's dark (chalkboard) or light (whiteboard). Strokes are held server-side,
-// not in the schema. Ephemeral — gone on room dispose.
-class Whiteboard extends Schema {
-  constructor() {
-    super();
-    this.enabled = false;
-    this.angle = 0;
-    this.owner = '';
-    this.dark = true;
-  }
-}
-defineTypes(Whiteboard, { enabled: 'boolean', angle: 'number', owner: 'string', dark: 'boolean' });
-// Dice trays are PERSONAL: one physics-walled box per seat, on the track directly behind that
-// player (angle from SEAT_ANGLES). `State.trays` maps seat index → true for each tray that's
-// out; the dice inside are ordinary `die` pieces tagged `props.traySeat = N`, so they ride
-// scene save/load and the physics/net/roll all key on the owning seat. Each player toggles
-// only their own tray. (Replaced the old single shared `DiceTray` singleton.)
-// PUBLIC per-room measurement scale — a DISPLAY/snap layer over the FIXED world
-// scale; it never rescales physics or piece sizes. worldPerUnit converts a world
-// distance into display units; unitLabel is freeform ("in"/"cm"/"hex"/…). roundStep
-// is the display rounding, in display units. cellWorld/gridStyle/gridColor/gridLift
-// are the grid: cell size (world units), 'off'|'square'|'hex', the line colour (so it
-// reads on any felt), and the grid's height above the felt. GM-set, durable.
-class RoomScale extends Schema {
-  constructor() {
-    super();
-    this.worldPerUnit = 1;
-    this.unitLabel = 'u';
-    this.roundStep = 0.1;
-    this.cellWorld = 0;
-    this.cellZ = 0;
-    this.gridX = 0;
-    this.gridZ = 0;
-    this.gridStyle = 'off';
-    this.gridColor = '#ffffff';
-    this.gridLift = 0.05;
-    this.snapAnchor = 'center';
-    this.hexOrient = 'pointy'; // hex grids: 'pointy' | 'flat' (unused for square/off)
-    this.gridHidden = false;
-  }
-}
-defineTypes(RoomScale, {
-  worldPerUnit: 'number',
-  unitLabel: 'string',
-  roundStep: 'number',
-  cellWorld: 'number',
-  cellZ: 'number',
-  gridX: 'number',
-  gridZ: 'number',
-  gridStyle: 'string',
-  gridColor: 'string',
-  gridLift: 'number',
-  snapAnchor: 'string',
-  hexOrient: 'string',
-  gridHidden: 'boolean',
-});
-// PUBLIC measurement/template overlay — a flat, non-physics annotation on the felt
-// (rendered via the OVERLAY registry client-side). Every overlay is two points plus
-// optional scalars, so one shape + one interaction (drag A→B) covers ruler today and
-// circle/cone/line next. Never enters the physics world.
-class Overlay extends Schema {
-  constructor() {
-    super();
-    this.kind = 'ruler';
-    this.color = '#ffffff';
-    this.owner = '';
-    this.x = 0;
-    this.z = 0;
-    this.x2 = 0;
-    this.z2 = 0;
-    this.w = 0;
-    this.ang = 0;
-  }
-}
-defineTypes(Overlay, {
-  kind: 'string',
-  color: 'string',
-  owner: 'string',
-  x: 'number',
-  z: 'number',
-  x2: 'number',
-  z2: 'number',
-  w: 'number',
-  ang: 'number',
-});
-class State extends Schema {
-  constructor() {
-    super();
-    this.pieces = new MapSchema();
-    this.players = new MapSchema();
-    this.turn = '';
-    this.timer = new Timer();
-    this.scores = new MapSchema();
-    this.notes = '';
-    this.tableX = TABLE.x;
-    this.tableZ = TABLE.z;
-    this.tableShape = 'rect';
-    this.rimWood = 'mahogany';
-    this.whiteboard = new Whiteboard();
-    this.trays = new MapSchema();
-    this.skybox = '';
-    this.feltColor = '#2f6b4f';
-    this.roomName = '';
-    this.turnPending = '';
-    this.unclaimed = new MapSchema();
-    this.scale = new RoomScale();
-    this.overlays = new MapSchema();
-  }
-}
-defineTypes(State, {
-  pieces: { map: Piece },
-  players: { map: Player },
-  turn: 'string',
-  timer: Timer,
-  scores: { map: ScoreRow },
-  notes: 'string',
-  tableX: 'number',
-  tableZ: 'number',
-  tableShape: 'string',
-  rimWood: 'string',
-  whiteboard: Whiteboard,
-  trays: { map: 'boolean' },
-  skybox: 'string',
-  feltColor: 'string',
-  roomName: 'string',
-  turnPending: 'string',
-  unclaimed: { map: 'string' },
-  scale: RoomScale,
-  overlays: { map: Overlay },
 });
 
 const PALETTE = [
