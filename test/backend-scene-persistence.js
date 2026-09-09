@@ -486,6 +486,26 @@ test('snapshot restores inspected top cards in draw order with backs and deck ap
   assert.deepEqual(spawn[3], deck);
 });
 
+test('disconnected turn player falls back to handOwners for turn identity', () => {
+  const room = serializationRoom();
+  // Simulate: the current turn player's session has disconnected.
+  // clientBy() returns null for that session, but handOwners retains their identity.
+  room.handOwners = new Map([['live', '42']]);
+  room.state.turn = 'ghost';
+  room.state.players.set('ghost', { name: 'Ghost Player' });
+  room.hands.set('ghost', ['/ghost-card']);
+  room.handOwners.set('ghost', '42'); // identity retained after disconnect
+
+  const snapshot = serializeGame(room, { geoOf });
+
+  // Without the fix, turn would be null because clientBy('ghost') is null.
+  // With the fix, it should resolve via handOwners.
+  assert.deepEqual(snapshot.turn, {
+    userId: '42',
+    name: 'Ghost Player',
+  });
+});
+
 test('orphaned inspections survive a full snapshot and recover privately after loading', () => {
   const source = serializationRoom();
   source.pendingInspect.clear();

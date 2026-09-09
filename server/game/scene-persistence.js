@@ -132,6 +132,16 @@ export function serializeGame(room, options) {
         userId: String(client.auth.userId),
         name: (player && player.name) || '',
       };
+    } else {
+      // Disconnected player: fall back to retained account identity
+      const userId = room.handOwners?.get(room.state.turn);
+      if (userId != null) {
+        const player = room.state.players.get(room.state.turn);
+        turn = {
+          userId: String(userId),
+          name: (player && player.name) || '',
+        };
+      }
     }
   }
   return { ...scene, hands, turn };
