@@ -1,3 +1,4 @@
+import { recoverPendingInspections } from '../server/game/inspection-recovery.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -483,4 +484,31 @@ test('snapshot restores inspected top cards in draw order with backs and deck ap
   applyScene(restored, scene, restoreOptions);
   const spawn = calls.find(([type, kind]) => type === 'spawn' && kind === 'deck');
   assert.deepEqual(spawn[3], deck);
+});
+
+test('orphaned inspections survive a full snapshot and recover privately after loading', () => {
+  const source = serializationRoom();
+  source.pendingInspect.clear();
+  source.pendingInspect.set('offline', {
+    deckId: 'gone',
+    front: 'orphan',
+    back: 'blue',
+    geo: { tile: 'domino' },
+    recover: true,
+  });
+  const snapshot = JSON.parse(JSON.stringify(serializeScene(source)));
+  assert.equal(snapshot.recoveryCards.length, 1);
+  assert.equal(source.pendingInspect.size, 1, 'saving does not consume the pending card');
+  const { room, calls } = restorationRoom();
+  room.spawnCardFlat = (pos, props) => room.spawn('card', pos, props);
+  applyScene(room, snapshot, { ...restoreOptions, maxPieces: 2 });
+  assert.equal(room.state.pieces.size, 2);
+  recoverPendingInspections(room, 2);
+  assert.equal(room.pendingInspect.size, 1, 'full load retains overflow recovery');
+  room.state.pieces.delete([...room.state.pieces.keys()][0]);
+  recoverPendingInspections(room, 2);
+  assert.equal(room.pendingInspect.size, 0);
+  const spawn = calls.filter(([type]) => type === 'spawn').at(-1);
+  assert.deepEqual(spawn[3], { tile: 'domino', back: 'blue' });
+  assert.ok([...room.cardData.values()].some((card) => card.front === 'orphan'));
 });

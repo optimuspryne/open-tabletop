@@ -1,3 +1,7 @@
+import {
+  returnInspectedCard,
+  recoverPendingInspections,
+} from './server/game/inspection-recovery.js';
 // server.js  —  node server.js   (Node 18+)
 // Authoritative physics server. One cannon-es world is the single source of
 // truth for every piece. Clients send intent (grab / move-target / release /
@@ -60,7 +64,7 @@ import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
-import { absorbedEntry, cardBackRef, cardFrontRef, inspectedEntry } from './server/deck-state.js';
+import { absorbedEntry, cardBackRef, cardFrontRef } from './server/deck-state.js';
 import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { MAX_PIECES, assertPieceCapacity } from './server/game/piece-capacity.js';
@@ -1806,6 +1810,7 @@ class TableRoom extends Room {
   }
 
   update(dtMs) {
+    recoverPendingInspections(this);
     const dt = dtMs / 1000;
     const stiffness = SIM.servo.stiffness,
       maxSpeed = SIM.servo.maxSpeed;
@@ -2024,17 +2029,11 @@ class TableRoom extends Room {
     this.notebooks.delete(`session:${client.sessionId}`); // account-keyed notes live until the room closes
     this.stopShow(client.sessionId); // clear any hold-to-show they had live
 
-    // If they'd drawn a card to inspect but never placed it, return it to its deck.
+    // Return an inspection to its deck, or recover it as a face-down table card.
     const pending = this.pendingInspect.get(client.sessionId);
     if (pending) {
-      const cards = this.deckCards.get(pending.deckId);
-      if (cards) {
-        cards.push(inspectedEntry(pending));
-        const deck = this.state.pieces.get(pending.deckId);
-        if (deck) deck.count = cards.length;
-        this.updateDeckCollider(pending.deckId);
-      }
-      this.pendingInspect.delete(client.sessionId);
+      pending.recover = true;
+      returnInspectedCard(this, client.sessionId);
     }
 
     // Put away their personal dice tray + its dice — a tray belongs to whoever's seated there,

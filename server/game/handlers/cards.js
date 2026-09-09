@@ -1,10 +1,10 @@
+import { returnInspectedCard } from '../inspection-recovery.js';
 import { takeTableCard } from '../card-transfer.js';
 import {
   absorbedEntry,
   cardFrontRef,
   cardBackRef,
   takeTopCard,
-  inspectedEntry,
   deckSpawnProps,
 } from '../../deck-state.js';
 import {
@@ -162,19 +162,16 @@ export function registerCardHandlers(
       client.send('inspectCard', { front: pending.front, back: pending.back, ...pending.geo });
       return;
     }
-    room.pendingInspect.delete(client.sessionId);
-    const { deckId, front, back, open, geo = {} } = pending;
-    const { where } = parsed;
-    if (where === 'deck') {
-      const cards = room.deckCards.get(deckId);
-      if (cards) {
-        cards.push(inspectedEntry(pending)); // keep the per-tile back
-        const deck = room.state.pieces.get(deckId);
-        if (deck) deck.count = cards.length;
-        room.updateDeckCollider(deckId);
+    if (parsed.where === 'deck') {
+      if (!returnInspectedCard(room, client.sessionId, maxPieces)) {
+        room.notifyFull(client);
+        client.send('inspectCard', { front: pending.front, back: pending.back, ...pending.geo });
       }
       return;
     }
+    room.pendingInspect.delete(client.sessionId);
+    const { deckId, front, back, open, geo = {} } = pending;
+    const { where } = parsed;
     if (where === 'hand') {
       room.addToHand(client, front, back, geo, open);
     } else {

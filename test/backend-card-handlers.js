@@ -1,3 +1,4 @@
+import { recoverPendingInspections } from '../server/game/inspection-recovery.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerCardHandlers } from '../server/game/handlers/cards.js';
@@ -508,4 +509,70 @@ test('split preserves deck skin, tints, snap and per-card backs', () => {
     textColor: '#abcdef',
     cards: [{ front: 'top', back: 'other' }],
   });
+});
+
+for (const open of [false, true]) {
+  test(`returning an inspection after another player drains its deck recovers a table card (open=${open})`, async () => {
+    const { room, handlers } = harness();
+    const inspect = makeClient();
+    const draw = { ...makeClient(), sessionId: 'other' };
+    room.state.pieces.set('1', {
+      type: 'deck',
+      props: JSON.stringify({ back: 'shared', open, tile: 'domino' }),
+    });
+    room.deckCards.set('1', ['bottom', { front: 'top', back: 'own-back' }]);
+    const remove = room.removePiece.bind(room);
+    room.removePiece = (id) => {
+      remove(id);
+      room.deckCards.delete(id);
+    };
+    await handlers.get('drawInspect')(inspect, { deckId: '1' });
+    await handlers.get('drawToHand')(draw, { deckId: '1' });
+    assert.equal(room.state.pieces.has('1'), false);
+    await handlers.get('inspectPlace')(inspect, { where: 'deck' });
+    const [id, piece] = [...room.state.pieces][0];
+    assert.deepEqual(
+      JSON.parse(piece.props),
+      open
+        ? { tile: 'domino', front: 'top', back: 'own-back', open: true, down: true }
+        : { tile: 'domino', back: 'own-back' },
+    );
+    assert.deepEqual(room.cardData.get(id), open ? undefined : { front: 'top' });
+    assert.equal(room.pendingInspect.size, 0);
+    await handlers.get('inspectPlace')(inspect, { where: 'deck' });
+    assert.equal(room.state.pieces.size, 1, 'repeated return cannot duplicate a card');
+  });
+}
+
+test('a missing-deck return at capacity retains the inspection and allows a hand destination', async () => {
+  const { room, handlers } = harness();
+  const c = makeClient();
+  for (let i = 0; i < 80; i++) room.state.pieces.set(String(i), { type: 'die' });
+  const pending = { deckId: 'missing', front: 'ace', back: 'blue' };
+  room.pendingInspect.set(c.sessionId, pending);
+  await handlers.get('inspectPlace')(c, { where: 'deck' });
+  assert.equal(room.pendingInspect.get(c.sessionId), pending);
+  assert.equal(c.sent.at(-1).type, 'inspectCard');
+  await handlers.get('inspectPlace')(c, { where: 'hand' });
+  assert.equal(room.pendingInspect.size, 0);
+  assert.equal(room.state.pieces.size, 80);
+});
+
+test('disconnected inspections retry once when capacity becomes available', () => {
+  const { room } = harness();
+  room.state.pieces.set('full', { type: 'die' });
+  room.pendingInspect.set('departed', {
+    deckId: 'missing',
+    front: 'ace',
+    back: 'blue',
+    recover: true,
+  });
+  recoverPendingInspections(room, 1);
+  assert.equal(room.pendingInspect.size, 1);
+  room.state.pieces.clear();
+  recoverPendingInspections(room, 1);
+  recoverPendingInspections(room, 1);
+  assert.equal(room.pendingInspect.size, 0);
+  assert.equal(room.state.pieces.size, 1);
+  assert.deepEqual([...room.cardData.values()], [{ front: 'ace' }]);
 });

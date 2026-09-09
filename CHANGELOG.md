@@ -58,6 +58,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   existing asset-table registry in a single consistent query.
 
 ### Fixed
+- Recover inspected cards onto the table when their source deck disappears, including on
+  disconnect. Preserve card faces and geometry; keep normal fronts private. Full tables retain
+  pending cards for retry, and snapshots preserve orphaned inspections across reloads.
 - Load saved table shape and rim wood from the room row, preserving non-default choices
   even when no scene snapshot is present. Add PostgreSQL round-trip regression coverage.
 - Allow account deletion for owners of every registered library asset category, including

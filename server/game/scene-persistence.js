@@ -79,7 +79,14 @@ export function serializeScene(room) {
     if (enabled) trays.push(+seat);
   });
 
+  // Orphaned inspections cannot be appended to a missing deck. Store them
+  // separately so a full snapshot never truncates recovery cards at the piece cap.
+  const recoveryCards = [...room.pendingInspect.values()]
+    .filter((pending) => room.state.pieces.get(pending.deckId)?.type !== 'deck')
+    .map(({ front, back, open, geo }) => ({ front, back, open, geo }));
+
   return {
+    ...(recoveryCards.length ? { recoveryCards } : {}),
     table: {
       x: room.state.tableX,
       z: room.state.tableZ,
@@ -182,6 +189,15 @@ export function applyScene(
       Array.isArray(entry.q) ? entry.q : null,
     );
     if (faceDownFront) room.cardData.set(id, { front: faceDownFront });
+  }
+
+  for (const card of Array.isArray(scene.recoveryCards) ? scene.recoveryCards : []) {
+    if (!card || typeof card.front !== 'string' || typeof card.back !== 'string') continue;
+    room.pendingInspect.set(Symbol('recovered-inspection'), {
+      ...card,
+      deckId: null,
+      recover: true,
+    });
   }
 
   const coordinate = (value) => clamp(+value || 0, -MEASURE.maxLen, MEASURE.maxLen);
