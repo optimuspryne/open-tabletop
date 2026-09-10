@@ -32,6 +32,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract physical table floor and containment-ring construction into
+  `server/game/table-bounds.js`, retaining shared shape outlines, live resize cleanup,
+  collision behavior, and personal-tray rebuilding.
 - Extract starter-game layout orchestration into `server/game/starters.js`, retaining shared
   starter definitions, injected deck builders, reset ordering, grid calibration, initial dealing,
   and piece-capacity behavior.

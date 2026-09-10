@@ -68,6 +68,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   board calibration, authoritative spawning, initial dealing, and persistence.
   Deck construction, geometry projection, capacity, and spawn height are injected
   from `server.js`, keeping the module deterministic and independently testable.
+- **`server/game/table-bounds.js`** — physical table floor and containment-ring
+  construction. `server.js` injects the `SIM` table/wall dimensions, while the
+  module reads the shared table outline, replaces obsolete Cannon bodies, and
+  rebuilds personal trays after every table-size or shape change.
 - **`server/` support modules** — shared permission and validation rules,
   card/deck state helpers, the piece-props codec, upload validation, database and
   session/Redis configuration, bootstrap-admin provisioning, async HTTP and
@@ -235,11 +239,11 @@ pieces — no prediction seams.
 
 Both halves of the heartbeat are instrumented for the "plays well at real scale" work
 (ROADMAP §1), and the split above is why the measurement is split too. Because resting bodies
-sleep and cost no bandwidth, a table of hundreds of *settled* pieces is nearly free on the
+sleep and cost no bandwidth, a table of hundreds of _settled_ pieces is nearly free on the
 server step and the network — the cost lives in two different places. **Client render** cost is
 paid every frame for whatever is drawn, moving or not (draw calls, triangles, shadows, skybox);
 `public/perf.js` reads it off `renderer.info` behind `?perf=1`. **Server step + network** cost
-spikes only when many bodies are *awake at once* — a scoop, a shuffle, a dump; `PERF_LOG=1` logs
+spikes only when many bodies are _awake at once_ — a scoop, a shuffle, a dump; `PERF_LOG=1` logs
 the per-tick `world.step` time and the awake-body count that drives it. So the render lever
 (graphics-quality tiers) and the simulation lever are aimed at genuinely different bottlenecks,
 and each is profiled on real hardware, not in the headless suites. A first pass found the client
@@ -491,8 +495,9 @@ player's tray away so it never lingers for the next occupant.
 **Table shape.** The play surface is rectangular by default but can be **round, oval, hex
 (flat-top) or a rounded rectangle** (`state.tableShape`, GM-set and durable). One shared
 `tableOutline(shape, hx, hz)` — a closed perimeter polygon over the existing `tableX/tableZ`
-half-extents — is the single source the three consumers agree on: the physics rim (`buildBounds`
-emits one box wall per outline edge for a non-rect shape; the floor stays a box), the felt mesh
+half-extents — is the single source the three consumers agree on: the physics rim
+(`server/game/table-bounds.js` emits one box wall per outline edge for a non-rect shape; the
+floor stays a box), the felt mesh
 (`resizeTable` extrudes the same outline), and the grid (which clips to it via `clipSegConvex`).
 round and hex are single-size (depth follows width). Seats, personal trays and cameras are left
 as they were — trays already ride a circular track — so the first cut keeps seating unchanged on
@@ -778,6 +783,19 @@ builder, retain tile geometry, snapping, and bag/box skins, and optionally deal 
 configured starting hand to each seated player. Bowls and chip stacks use the ordinary
 authoritative `spawn` boundary. `TableRoom.setupStarter` remains as a small forwarding
 method so its caller-facing contract stays recognizable.
+
+## Table-boundary physics boundary
+
+`createTableBounds({ tableThickness, wall })` captures the table-related `SIM` tuning and
+returns `buildTableBounds(room, hx, hz, shape)`. Rebuilding first removes only the bodies
+tracked in `room._bounds`, preserving pieces and other world bodies, then creates the static
+box floor. Rectangular tables receive four axis-aligned outside walls; every other supported
+shape receives a slightly overlapping oriented wall box for each edge from the shared
+`tableOutline`, sealing its vertices while keeping browser rendering independent.
+
+`TableRoom.buildBounds` remains as a small forwarding method because room creation, durable
+scene restoration, and live GM resizing already call that room API. The extracted builder
+finishes by calling `room.buildTrays()`, keeping personal trays aligned with the resized table.
 
 ## Synchronized state boundary
 

@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: starter layout extraction completed, tested, and documented; table-boundary extraction is next.
+Status: table-boundary extraction completed, tested, and documented; dice-tray extraction is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -59,7 +59,7 @@ source and the MCP memory graph before starting each step.
 
 ### 3. Extract table boundaries
 
-- [ ] Move `buildBounds` into a proposed `server/game/table-bounds.js`.
+- [x] Move `buildBounds` into `server/game/table-bounds.js`.
 - Keep collision geometry separate from browser table rendering while retaining
   the shared outline definitions.
 - Validate all supported table shapes, resizing, collision containment, and body cleanup.

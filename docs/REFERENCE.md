@@ -10,7 +10,8 @@ The codebase:
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries                                                                                                            |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
-| `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                            |
+| `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                           |
+| `server/game/table-bounds.js`                                                                          | Node    | Injected Cannon floor and containment-ring construction for every table shape, including boundary-body replacement and tray rebuilding                                                           |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
 | `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
 | `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
@@ -70,6 +71,10 @@ classDiagram
     class StarterSetup["server/game/starters.js"] {
         +createStarterSetup(dependencies)
         +setupStarter(room, game)
+    }
+    class TableBounds["server/game/table-bounds.js"] {
+        +createTableBounds({tableThickness, wall})
+        +buildTableBounds(room, hx, hz, shape)
     }
     class Physics["server/physics.js"] {
         +buildWorld(simulation)
@@ -143,6 +148,8 @@ classDiagram
     SyncedSchema <.. Server
     Shared <.. StarterSetup
     StarterSetup <.. Server
+    Shared <.. TableBounds
+    TableBounds <.. Server
     Shared <.. Physics
     Shared <.. ScenePersistence
     Shared <.. Core
@@ -194,8 +201,9 @@ Pure constants and helpers imported by both sides.
 - **`TABLE`** `{ x, z }` — half-extents of the play surface.
 - **`TABLE_SHAPES`** / **`tableOutline(shape, hx, hz)`** — the shape list
   (`rect`/`round`/`oval`/`hex`/`roundedRect`) and the closed perimeter polygon for a shape +
-  half-extents. One source of truth read by the physics wall ring (`buildBounds`), the felt mesh
-  (`resizeTable`) and the grid clip (`gridMesh`). round/hex use `hx`; hex is flat-top.
+  half-extents. One source of truth read by the extracted physics wall ring
+  (`server/game/table-bounds.js`), the felt mesh (`resizeTable`) and the grid clip (`gridMesh`).
+  round/hex use `hx`; hex is flat-top.
 - **`offsetOutline(outline, w)`** — mitre-offset a convex, origin-centred outline by ±`w` (the
   wooden rim's outer edge + a slight inward overlap onto the felt).
 - **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
@@ -443,6 +451,19 @@ Clearing remains delegated to the shared scene-persistence reset path, so old pu
 pieces, private hands/decks/inspections, pending turn/recovery data, overlays, and the
 saved checkpoint are removed with the same ordering as before extraction.
 
+### `server/game/table-bounds.js` — physical table boundaries
+
+**`createTableBounds({tableThickness, wall})`** returns
+**`buildTableBounds(room, hx, hz, shape)`**. `server.js` injects `SIM.tableThick` and
+`SIM.wall`, then `TableRoom.buildBounds(hx, hz, shape)` forwards to the returned builder.
+
+The builder removes the old bodies in `room._bounds`, creates a static box floor under the
+felt, and reconstructs the containment ring using the world's table material. Rectangular
+tables use four axis-aligned walls with the configured corner overlap. Other shapes use one
+oriented, slightly over-length box per non-zero edge from shared `tableOutline`, sealing the
+ring at each vertex. It then calls `room.buildTrays()` so enabled personal trays follow table
+resizes. Piece bodies and other unrelated Cannon bodies are not replaced.
+
 ### Card transfers and deck properties
 
 - **`spawnTableCard(room, position, {front, back, open, geo}, faceDown = true)`**
@@ -686,6 +707,10 @@ color, and the saved game snapshot — now / debounced via `db.saveRoomState`),
 `pendingHands`/`pendingTurn`; on leave, after the reconnect window, a departing
 hand is parked back into `pendingHands` + `unclaimed`, **and the leaver's tray is put away and
 its dice cleared**).
+
+**`buildBounds(hx, hz, shape)`** is a thin facade over the injected
+`server/game/table-bounds.js` builder. It preserves the room API used during creation, scene
+restoration, and live resizing while boundary-body ownership stays in the extracted module.
 
 Dice-tray methods (personal, one per seat): **`buildTrays()`** (rebuild every enabled seat's
 floor+walls at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on
