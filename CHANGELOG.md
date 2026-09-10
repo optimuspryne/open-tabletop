@@ -24,6 +24,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   the production container already uses Node.js 22.
 
 ### Fixed
+- Keep deck-count rendering attached to the current mesh after an open deck rebuilds its visible
+  cover, preventing later deals from showing a stale full-height stack that clips through the table.
 - Keep the bootstrap table mesh hidden until the joined room's synchronized shape, size, felt,
   rim wood, and grid are applied, preventing a rectangular mahogany flash on refresh or re-entry.
 
@@ -51,6 +53,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract deck and finite-dispenser collider rebuilding into
+  `server/game/collider-maintenance.js`, preserving shared card/tile geometry, modeled deck boxes,
+  visible stack-height caps, and the existing `TableRoom` methods.
 - Extract authoritative piece creation, complete removal bookkeeping, capped release/snap behavior,
   and deck/dispenser absorption into `server/game/piece-lifecycle.js`, retaining the existing
   `TableRoom` API and physics/collider contracts.

@@ -3,6 +3,10 @@ import {
   afterDispense as consumeDispensedItem,
   dispenserItem as resolveDispenserItem,
 } from './server/game/dispenser-operations.js';
+import {
+  updateDeckCollider as updateRoomDeckCollider,
+  updateStackCollider as updateRoomStackCollider,
+} from './server/game/collider-maintenance.js';
 import { createLibraryOperations } from './server/game/library.js';
 import { createMemberService } from './server/game/member-service.js';
 import { createPieceLifecycle } from './server/game/piece-lifecycle.js';
@@ -45,16 +49,13 @@ import {
   BOARDS,
   TABLE_SHAPES,
   RIM_WOODS,
-  deckHeight,
   MEASURE,
   DISPENSERS,
-  stackVisible,
   gridActive,
   snapToCell,
   trayPlace,
   inTray,
   STARTERS,
-  cardGeom,
   sanitizeGeom,
   sanitizeMatGeom,
   seatAngle,
@@ -680,49 +681,14 @@ class TableRoom extends Room {
 
   // Rebuild a deck's collider box so its height matches its current card count.
   updateDeckCollider(deckId) {
-    const body = this.bodies.get(deckId),
-      piece = this.state.pieces.get(deckId);
-    if (!body || !piece) return;
-    while (body.shapes.length) body.removeShape(body.shapes[0]);
-    const props = readProps(piece);
-    const skin = props.model && DECK_MODELS[props.model];
-    if (skin) {
-      // a modeled deck (box/bag): a fixed box, not a growing stack
-      const [bx, by, bz] = skin.box;
-      body.addShape(new CANNON.Box(new CANNON.Vec3(bx, by, bz)));
-    } else {
-      const g = cardGeom(props); // a deck of tiles is shaped like its tiles
-      const hy = deckHeight(piece.count) / 2; // footprint = the card exactly (matches deckMesh)
-      body.addShape(
-        g.shape === 'hex'
-          ? new CANNON.Cylinder(g.hh, g.hh, hy * 2, 6) // a hex deck is a hex stack (radius = circumradius)
-          : new CANNON.Box(new CANNON.Vec3(g.hw, hy, g.hh)),
-      );
-    }
-    body.updateBoundingRadius();
-    body.updateMassProperties();
-    body.wakeUp();
+    return updateRoomDeckCollider(this, deckId);
   }
 
   // --- Dispensers: hand out copies of a child piece (shared by dispense/dispenseDrag) ---
 
   // Rebuild a stack dispenser's cylinder collider to its current count (no-op for a bowl).
   updateStackCollider(id) {
-    const body = this.bodies.get(id),
-      piece = this.state.pieces.get(id);
-    if (!body || !piece) return;
-    const d = DISPENSERS[readProps(piece).disp];
-    if (!d || d.body !== 'stack') return;
-    const box = PROPS[d.item].collider.box,
-      r = box[0],
-      discH = box[1] * 2;
-    while (body.shapes.length) body.removeShape(body.shapes[0]);
-    body.addShape(
-      new CANNON.Cylinder(r, r, Math.max(discH, stackVisible(piece.count) * discH), 16),
-    );
-    body.updateBoundingRadius();
-    body.updateMassProperties();
-    body.wakeUp();
+    return updateRoomStackCollider(this, id);
   }
 
   // The spawn spec a dispenser hands out: an existing PROP, tinted (poker/coin) or

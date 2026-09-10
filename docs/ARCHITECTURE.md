@@ -85,6 +85,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   map entry together, and owns release snapping, throw caps, landing cues, and compatible
   deck/dispenser absorption. Physics tuning, deck builders, and small presentation rules are
   injected; collider maintenance remains behind the room API.
+- **`server/game/collider-maintenance.js`** — deck and finite-stack collider reconstruction.
+  Ordinary decks derive their footprint from shared card/tile geometry and their height from the
+  live count; modeled decks retain their authored fixed box, while modeled and infinite
+  dispensers retain their authored collider. `TableRoom` keeps stable forwarding methods.
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
   and delegates finite-stack removal or collider resizing back to the room after consumption.
@@ -127,6 +131,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
   render loop. Holds the mutable session state (`room`, `down`, `inspect`,
   `meshes`, `buffers`).
+- **`public/mesh-state.js`** — small browser state helpers that must resolve the current mesh by
+  piece ID. Deck-count synchronization uses it so a props-driven mesh replacement cannot leave
+  later count updates attached to a detached mesh.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
   raw events into device-neutral pointer/command intents consumed by `client.js`.
 - **`public/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
@@ -846,8 +853,24 @@ Release clears ownership before applying either shared-grid snapping or a type-s
 throw. It then performs the existing compatibility-checked card-to-deck and item-to-dispenser
 absorption rules without exposing private card fronts. `TableRoom` retains thin forwarding methods,
 so card, movement, piece/group, starter, persistence, and tray callers keep the same room contract.
-Deck/stack collider rebuilding and dispenser item resolution are deliberately delegated back to
-the room; those are separate Stage 8 boundaries rather than hidden inside another large module.
+Deck/stack collider rebuilding and dispenser item resolution are deliberately delegated through
+the room's stable API; their implementations belong to separate focused modules rather than being
+hidden inside the lifecycle boundary.
+
+## Collider maintenance boundary
+
+`server/game/collider-maintenance.js` owns shape replacement for deck and finite-stack count
+changes. `updateDeckCollider(room, id)` uses the same shared card/tile geometry and deck-height
+calculation as rendering; hex decks receive a matching six-sided cylinder. Modeled decks keep the
+fixed collider declared by their deck skin. `updateStackCollider(room, id)` resizes only ordinary
+finite stacks to their capped visible count, leaving modeled and infinite dispensers unchanged.
+Both paths refresh Cannon's bounding radius and mass properties and wake the body after replacing
+its shape. `TableRoom` retains thin forwarding methods for card, lifecycle, and dispenser callers.
+
+On the browser, deck cover changes may replace the rendered mesh while count listeners remain
+registered. `syncDeckMeshHeight(meshes, id, count)` therefore looks up the current mesh for every
+count update instead of retaining the original mesh reference, keeping the visual deck height in
+step with the authoritative collider after deals and rebuilds.
 
 ## Table-boundary physics boundary
 

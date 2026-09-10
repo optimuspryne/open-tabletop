@@ -44,6 +44,7 @@ import {
 } from './rows.js';
 import { reanchorOffset } from './drag.js';
 import { clickRoute } from './clicks.js';
+import { syncDeckMeshHeight } from './mesh-state.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -648,9 +649,7 @@ function rebuildGrid() {
         }
       })();
       if (!modeled) {
-        const setDeckHeight = (count) => {
-          mesh.scale.y = deckHeight(count);
-        };
+        const setDeckHeight = (count) => syncDeckMeshHeight(meshes, id, count);
         setDeckHeight(piece.count);
         cb(piece).listen('count', setDeckHeight);
       }

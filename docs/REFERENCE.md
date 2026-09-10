@@ -15,6 +15,7 @@ The codebase:
 | `server/game/table-scale.js`                                                                           | Node    | Injected measurement-scale snapshots, validated restoration, and square/hex board-grid calibration                                                                                              |
 | `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
 | `server/game/piece-lifecycle.js`                                                                       | Node    | Injected authoritative body/state creation, complete piece removal, release snapping/throws, landing cues, and deck/dispenser absorption                                                        |
+| `server/game/collider-maintenance.js`                                                                  | Node    | Deck and finite-stack collider reconstruction using shared geometry, count-derived heights, and authored modeled colliders                                                                      |
 | `server/game/library.js`                                                                               | Node    | Injected table-deck persistence and authorization-safe asset-list delivery                                                                                                                       |
 | `server/game/member-service.js`                                                                        | Node    | Injected member-list delivery/broadcasting and waiting-lobby matchmaker notifications                                                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
@@ -37,6 +38,7 @@ The codebase:
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables                                                                                                                                  |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, render loop                                                                                                                                  |
+| `public/mesh-state.js`                                                                                 | browser | Current-mesh deck-height synchronization across props-driven mesh replacement                                                                                                                    |
 | `public/controls.js`                                                                                   | browser | Mouse/touch profiles translated into device-neutral intents                                                                                                                                      |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
 | `public/credits.js`                                                                                    | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player _and_ credits panel)                                                                                                  |
@@ -757,7 +759,7 @@ see in-play asset references. A disposing room remains tracked until its final
 persistence flush completes.
 
 Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (servo → step →
-out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`**, **`removePiece(id)`** (piece-lifecycle facade),
+out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
@@ -812,6 +814,16 @@ Piece lifecycle methods forward to the operations returned by
 - **`releasePiece(room,id,velocity)`** clears ownership, snaps or caps throw velocity, then applies
   compatible card-to-deck and item-to-dispenser absorption. It delegates collider rebuilding,
   dispenser item resolution, removal, and broadcast through the stable room API.
+
+Collider methods forward to `server/game/collider-maintenance.js`:
+
+- **`replaceShape(body, shape)`** replaces all existing Cannon shapes, refreshes the bounding
+  radius and mass properties, and wakes the body.
+- **`updateDeckCollider(room, id)`** rebuilds an ordinary deck from shared card/tile geometry and
+  its live count-derived height, including a six-sided cylinder for hex tiles. A modeled deck uses
+  its skin's authored fixed box instead.
+- **`updateStackCollider(room, id)`** resizes an ordinary finite stack cylinder to the capped
+  visible item count. Modeled, infinite, unknown, or missing sources are unchanged.
 
 Saved-library methods forward to the operations returned by
 `createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:
@@ -1314,6 +1326,11 @@ Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room v
 **`renderSavedList`** (the scenes list). Snapshot buffering runs through
 **`snapshot`** (build a timestamped record) and **`applyTransform`** (copy it onto
 a mesh), shared by the add, card-rebuild, and render paths.
+
+For non-modeled decks, the synchronized `count` listener calls
+**`syncDeckMeshHeight(meshes, id, count)`** from `public/mesh-state.js`. The helper resolves the
+current mesh from the map on each update, so a preceding props/cover rebuild cannot leave later
+height changes targeting a detached mesh.
 
 ### Interaction (`meshes`, `buffers`, `down`, `inspect`)
 
