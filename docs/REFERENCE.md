@@ -14,6 +14,8 @@ The codebase:
 | `server/game/table-bounds.js`                                                                          | Node    | Injected Cannon floor and containment-ring construction for every table shape, including boundary-body replacement and tray rebuilding                                                           |
 | `server/game/table-scale.js`                                                                           | Node    | Injected measurement-scale snapshots, validated restoration, and square/hex board-grid calibration                                                                                              |
 | `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
+| `server/game/library.js`                                                                               | Node    | Injected table-deck persistence and authorization-safe asset-list delivery                                                                                                                       |
+| `server/game/member-service.js`                                                                        | Node    | Injected member-list delivery/broadcasting and waiting-lobby matchmaker notifications                                                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
 | `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
 | `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
@@ -729,9 +731,10 @@ performing a later privileged action:
   authority after the target-user read, immediately before submitting the mutation.
 - `getDeck` rechecks site-admin access before sending `deckData`; `saveMat` rechecks
   it after persistence before optionally spawning the mat.
-- `TableRoom.sendAssetList` drops revoked responses and suppresses a list fetched
-  with private assets if site-admin access was lost during the read.
-  `sendMembers` checks GM+ both before its read and before sending `memberList`.
+- `server/game/library.js`'s `sendAssetList` drops revoked responses and suppresses a list
+  fetched with private assets if site-admin access was lost during the read.
+- `server/game/member-service.js`'s `sendMembers` checks GM+ both before its read and before
+  sending `memberList`; `broadcastMembers` evaluates every recipient's live rank after the read.
 
 These checks use live connection authorization. They do not cancel or roll back
 an already-submitted database write; required follow-up synchronization for a
@@ -755,15 +758,16 @@ persistence flush completes.
 Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
 out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
-**`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async — inserts via `db`),
+**`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
 deck order + face-down fronts + overlays + the room **`scale`** (measurement + grid),
 no player identity), **`serializeGame`** (a scene _plus_ account-keyed `hands` + `turn`,
 session→`userId` resolved), **`applyScene`** (delegates validated restore; rebuild pieces + overlays, **apply the
 scene's `scale`** via `applyScale`, then _stage_ the private layer into
-`pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (push the
-member list to GMs), **`sendAssetList(client,kind)`** (a library listing,
+`pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (member-service
+facades that push the member list to current GMs), **`notifyLobby(userId,method)`** (member-service
+facade for waiting-lobby notifications), **`sendAssetList(client,kind)`** (library-service facade;
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
 (persist the room's durable settings — scoreboard, notes, table size, skybox, felt
 color, and the saved game snapshot — now / debounced via `db.saveRoomState`),
@@ -794,6 +798,22 @@ Dispenser methods similarly forward to `server/game/dispenser-operations.js`:
 drop-back matching, while **`afterDispense(piece, id)`** decrements a finite source only after a
 successful capacity check and spawn. A remaining finite stack delegates collider rebuilding to
 the room, its last item delegates removal, and an infinite bowl remains unchanged.
+
+Saved-library methods forward to the operations returned by
+`createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:
+
+- **`saveDeckById(room,deckId,name,ownerId)`** validates a live table deck, normalizes its name,
+  externalizes inline front/back images through the injected writer, and inserts the private deck.
+- **`sendAssetList(room,client,kind)`** maps all seven asset kinds to their database readers and
+  client messages, includes private rows only for admins, and rechecks access after the read.
+
+Member coordination methods forward to the operations returned by
+`createMemberService({db,matchMaker})` in `server/game/member-service.js`:
+
+- **`sendMembers(room,client)`** requires a durable room and GM+ rank before and after its read.
+- **`broadcastMembers(room)`** reads once and sends only to clients whose live rank is still GM+.
+- **`notifyLobby(room,userId,method)`** invokes the admission/decline endpoint on every matching
+  waiting lobby. Mutation permissions remain in the member handlers.
 
 Dice-tray methods (personal, one per seat): **`buildTrays()`** (rebuild every enabled seat's
 floor+walls at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on
@@ -942,11 +962,16 @@ on spawn/draw/shuffle/split; never persisted, never set for a secret deck); `loa
 `loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
 **visibility-gated** (public for GMs/helpers, everything for admins); the admin
 curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
+The handlers call the stable `TableRoom.saveDeckById`/`sendAssetList` facades; the injected
+library service owns their reusable persistence/list-delivery mechanics without absorbing payload
+validation or operation-specific permissions.
 
 Member-management handlers (gm+, keyed on the DB room): `members` (send the list),
 `admit`, `kick` (also disconnects the live client), `setRole` (owner is
 untouchable; managing a GM is owner-only), **`reassignHand`** (`{userId,
 toSessionId}` — give an `unclaimed` saved-game hand to a present player).
+They retain all mutation validation and permission policy, then use the member-service-backed
+`TableRoom` facades for list refreshes and waiting-lobby notifications.
 
 On join the room also sends each client **`whoami`** (`{ isAdmin }`), which the
 client uses to hide creation UI from non-admins.

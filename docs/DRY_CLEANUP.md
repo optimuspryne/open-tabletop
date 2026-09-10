@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: piece and dispenser operations completed; library and member services are next.
+Status: library and member services completed; physics and piece lifecycle are next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -13,6 +13,9 @@ source and the MCP memory graph before starting each step.
   `server/deck-state.js`; incompatible drops retain the card.
 - [x] Extract `buildSimpleDeck`, `buildDominoSet`, `buildScrabbleBag`, and
   `buildMahjongWall` into `server/game/deck-builders.js`, using the existing injected shuffle.
+- [x] Extract table-deck saving and authorization-safe asset-list delivery into
+  `server/game/library.js`, and member-list/lobby coordination into
+  `server/game/member-service.js`.
 
 ## Working rules
 
@@ -93,8 +96,8 @@ source and the MCP memory graph before starting each step.
 
 ### 7. Extract library and member service operations
 
-- [ ] Review `saveDeckById` and `sendAssetList` for a proposed `server/game/library.js`.
-- [ ] Review `sendMembers`, `broadcastMembers`, and `notifyLobby` for a proposed
+- [x] Move `saveDeckById` and `sendAssetList` into `server/game/library.js`.
+- [x] Move `sendMembers`, `broadcastMembers`, and `notifyLobby` into
   `server/game/member-service.js`.
 - Preserve private/public filtering, error handling, and authorization checks after reads.
 - Keep message validation and operation-specific permissions visible in handlers.

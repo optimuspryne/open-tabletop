@@ -83,6 +83,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
   and delegates finite-stack removal or collider resizing back to the room after consumption.
+- **`server/game/library.js`** — room-facing saved-library orchestration. It saves table decks
+  through injected image storage and database access, maps asset kinds to their list readers and
+  client messages, and rechecks live admin access after private-list reads before delivery.
+- **`server/game/member-service.js`** — member-list delivery and waiting-lobby coordination. It
+  rechecks live GM rank after database reads, broadcasts only to currently authorized clients,
+  and fans admission/decline notifications out through the injected matchmaker.
 - **`server/game/trays.js`** — personal tray physics and lifecycle operations. It owns
   tray-bound rebuilding, resize repositioning, randomized drop placement, per-seat clearing,
   and scene restoration; `TableRoom` keeps small forwarding methods and the general `seatOf`
@@ -737,6 +743,11 @@ The admin Storage panel can start the same encoder as a bounded, process-local b
 over all random-name JPG/JPEG/PNG uploads. Its status endpoint exposes scan/build progress and byte
 totals, repeat starts reuse the running job, and neither the originals nor database references change.
 
+Room-facing library operations are composed through `server/game/library.js`. `TableRoom` keeps
+small `saveDeckById` and `sendAssetList` forwarding methods so existing handlers retain their room
+contract. Filesystem writing and database access remain injected; message validation, creation and
+curation permissions, and asset-specific load/spawn rules remain visible in the library handlers.
+
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
 notes, table size and shape, rim wood, skybox, and felt color — plus the GM/auto-save **game
 snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
@@ -1118,6 +1129,11 @@ A mat save that has already reached the database may finish, but losing admin
 access prevents its subsequent table spawn. These checks do not cancel database
 writes already submitted; synchronization of completed membership changes still
 runs so live connections reflect the persisted result.
+
+`server/game/member-service.js` owns member-list reads/broadcasts and the table-to-lobby
+matchmaker fan-out, while `TableRoom` retains small forwarding methods. The membership handlers
+continue to own mutation validation and role-policy checks, and `LobbyRoom` retains the remote
+admit/decline endpoints that release waiting clients.
 
 **Host approval.** Creating a room needs approved host access (`host_status =
 'approved'`, or admin). A password signup starts **pending**; a passwordless

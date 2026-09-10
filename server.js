@@ -3,6 +3,8 @@ import {
   afterDispense as consumeDispensedItem,
   dispenserItem as resolveDispenserItem,
 } from './server/game/dispenser-operations.js';
+import { createLibraryOperations } from './server/game/library.js';
+import { createMemberService } from './server/game/member-service.js';
 import {
   naturalStand as naturalPieceStand,
   recolorPiece as recolorRoomPiece,
@@ -203,8 +205,6 @@ const validSky = (v) => {
 // Keep an untrusted category name inside the allowlist (falls back to 'uploads').
 const assetKind = (kind) => (ASSET_KINDS.includes(kind) ? kind : 'uploads');
 
-const isDataURL = (value) => typeof value === 'string' && value.startsWith('data:image');
-
 // A card "ref" is whatever string the client sends for a card face: procedural
 // text, a URL, or an inline data-URL. We only bound its length here.
 const deckRefOk = (value) => typeof value === 'string' && value.length < 200000;
@@ -227,6 +227,14 @@ function saveImageRef(dataURL, kind = 'decks') {
   const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
   return saveAsset(kind, Buffer.from(base64, 'base64'), ext);
 }
+
+const { saveDeckById: saveRoomDeckById, sendAssetList: sendRoomAssetList } =
+  createLibraryOperations({ db, saveImageRef });
+const {
+  broadcastMembers: broadcastRoomMembers,
+  notifyLobby: notifyRoomLobby,
+  sendMembers: sendRoomMembers,
+} = createMemberService({ db, matchMaker });
 
 // Track rooms through their final persistence flush so cleanup can protect their data.
 const LIVE_ROOMS = new Set();
@@ -826,20 +834,7 @@ class TableRoom extends Room {
   // Write a table deck to the disk library; returns true on success. Any inline
   // image art (data-URLs) is moved to files so the saved JSON stays small.
   async saveDeckById(deckId, name, ownerId = null) {
-    const fronts = this.deckCards.get(deckId),
-      piece = this.state.pieces.get(deckId);
-    if (!fronts || !fronts.length || !piece || piece.type !== 'deck') return false;
-    const cleanName = String(name || '')
-      .slice(0, 60)
-      .trim();
-    if (!cleanName) return false;
-    let back = readProps(piece).back || 'back';
-    if (isDataURL(back)) back = saveImageRef(back, 'decks') || 'back'; // inline art -> file, store the URL
-    const savedFronts = fronts.map((front) =>
-      isDataURL(front) ? saveImageRef(front, 'decks') || front : front,
-    );
-    await db.insertDeck({ name: cleanName, back, fronts: savedFronts, ownerId }); // private by default
-    return true;
+    return saveRoomDeckById(this, deckId, name, ownerId);
   }
 
   // The effective self-right mode for a piece:
@@ -1105,22 +1100,7 @@ class TableRoom extends Room {
   // Send a client the library list for one asset kind. Admins get everything
   // (incl. private); everyone else gets only published (public) assets.
   async sendAssetList(client, kind) {
-    if (client.auth?.revoked) return false;
-    const includePrivate = this.isAdmin(client);
-    const config = {
-      deck: ['deckList', () => db.listDecks({ includePrivate })],
-      board: ['boardList', () => db.listBoards({ includePrivate })],
-      prop: ['propList', () => db.listProps({ includePrivate })],
-      scene: ['sceneList', () => db.listScenes({ includePrivate })],
-      sky: ['skyList', () => db.listSkyboxes({ includePrivate })],
-      dice: ['diceList', () => db.listDice({ includePrivate })],
-      mat: ['matList', () => db.listMats({ includePrivate })],
-    }[kind];
-    if (!config) return false;
-    const list = await config[1]();
-    if (client.auth?.revoked || (includePrivate && !this.isAdmin(client))) return false;
-    client.send(config[0], list);
-    return true;
+    return sendRoomAssetList(this, client, kind);
   }
 
   // --- Member-management authorization + list delivery ---
@@ -1133,24 +1113,15 @@ class TableRoom extends Room {
     return canSetMemberRole(actorRank, currentRole, newRole);
   }
   async sendMembers(client) {
-    if (!this.roomId || this.rank(client) < RANK.gm) return;
-    const list = await db.listMembers(this.roomId);
-    if (this.rank(client) < RANK.gm) return;
-    client.send('memberList', list);
+    return sendRoomMembers(this, client);
   }
   async broadcastMembers() {
-    // push the fresh list to every GM viewing the panel
-    if (!this.roomId) return;
-    const list = await db.listMembers(this.roomId);
-    for (const c of this.clients) if (this.rank(c) >= RANK.gm) c.send('memberList', list);
+    return broadcastRoomMembers(this);
   }
   // Tell the matching lobby (if anyone's waiting there) that a pending user's status
   // changed, so it can push + release them instead of them polling for it.
   async notifyLobby(userId, method) {
-    const lobbies = await matchMaker.query({ name: 'lobby', code: this.roomCode });
-    await Promise.all(
-      lobbies.map((lobby) => matchMaker.remoteRoomCall(lobby.roomId, method, [userId])),
-    );
+    return notifyRoomLobby(this, userId, method);
   }
 
   // Called via the matchmaker when the owner closes the room from the lobby: tell

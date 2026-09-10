@@ -51,6 +51,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract table-deck saving and authorization-safe asset-list delivery into
+  `server/game/library.js`, and membership-list/lobby coordination into
+  `server/game/member-service.js`, retaining the existing room and handler contracts.
 - Extract authoritative recoloring and stand-mode policy into `server/game/piece-operations.js`,
   and dispenser item/inventory behavior into `server/game/dispenser-operations.js`, while retaining
   the existing room-facing contracts used by handlers and physics.
