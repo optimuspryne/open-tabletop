@@ -21,7 +21,11 @@ import {
   wantsSnap as roomPieceWantsSnap,
   writeTransform as writePieceTransform,
 } from './server/game/placement-operations.js';
-import { preparePieceMotion } from './server/game/physics-update.js';
+import {
+  preparePieceMotion,
+  publishTransforms,
+  recoverEscapedBodies,
+} from './server/game/physics-update.js';
 import { createStarterSetup } from './server/game/starters.js';
 import { createTableBounds } from './server/game/table-bounds.js';
 import { createTableScale } from './server/game/table-scale.js';
@@ -60,12 +64,9 @@ import {
   DISPENSERS,
   gridActive,
   snapToCell,
-  trayPlace,
-  inTray,
   STARTERS,
   sanitizeGeom,
   sanitizeMatGeom,
-  seatAngle,
   SEAT_ANGLES,
   DECK_MODELS,
 } from './shared/pieces.js';
@@ -1078,55 +1079,8 @@ class TableRoom extends Room {
     this.world.step(SIM.step.fixed, dt, SIM.step.maxSub);
     if (PERF_LOG) this._perfTick(performance.now() - __perfT0, dtMs);
 
-    // Safety net: if anything still escaped the walls (rare tunnelling on a very
-    // hard throw), drop it back onto the table instead of losing it into the void.
-    const tx = this.state.tableX,
-      tz = this.state.tableZ;
-    const limitX = tx + SIM.bounds.margin,
-      limitZ = tz + SIM.bounds.margin;
-    this.bodies.forEach((body) => {
-      const pos = body.position;
-      if (body.__traySeat != null) {
-        // A tray die obeys ITS SEAT's tray footprint, not the table's — otherwise the net would
-        // yank it back to the table every tick. If it somehow left the tray (a hard throw over
-        // the wall, or the tray was just put away), drop it back into that tray's centre.
-        const seat = body.__traySeat,
-          angle = seatAngle(seat),
-          c = this.trayCenterFor(seat);
-        const stillOut = this.state.trays.get(String(seat));
-        const out =
-          pos.y < SIM.bounds.floor ||
-          pos.y > SIM.bounds.ceiling ||
-          !stillOut ||
-          !inTray(pos.x, pos.z, c, angle, 0.5);
-        if (out && stillOut) {
-          const p = trayPlace({ x: 0, y: 1, z: 0 }, c, angle);
-          pos.set(p.x, p.y, p.z);
-          body.velocity.setZero();
-          body.angularVelocity.setZero();
-          body.wakeUp();
-        }
-        return;
-      }
-      const escaped =
-        pos.y < SIM.bounds.floor ||
-        pos.y > SIM.bounds.ceiling ||
-        Math.abs(pos.x) > limitX ||
-        Math.abs(pos.z) > limitZ;
-      if (escaped) {
-        pos.set(clamp(pos.x, -tx + 1, tx - 1), 3, clamp(pos.z, -tz + 1, tz - 1));
-        body.velocity.setZero();
-        body.angularVelocity.setZero();
-        body.wakeUp();
-      }
-    });
-
-    // Publish transforms into synced state. Colyseus only ships fields that
-    // actually changed, so pieces sitting still (asleep) cost no bandwidth.
-    this.state.pieces.forEach((piece, id) => {
-      const body = this.bodies.get(id);
-      if (body) this.writeTransform(piece, body);
-    });
+    recoverEscapedBodies(this, SIM);
+    publishTransforms(this);
   }
 
   async onLeave(client, arg) {

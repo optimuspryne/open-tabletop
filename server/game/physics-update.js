@@ -1,5 +1,5 @@
 import * as CANNON from 'cannon-es';
-import { snapToCell } from '../../shared/pieces.js';
+import { inTable, inTray, seatAngle, snapToCell, trayPlace } from '../../shared/pieces.js';
 import { dragVelocity } from './physics-safety.js';
 
 // Drive held bodies toward their validated cursor targets while preserving physical collisions.
@@ -119,4 +119,88 @@ export function preparePieceMotion(room, dt, sim) {
   selfRightPieces(room, sim);
   maintainSnapPins(room, sim);
   advanceFlips(room, dt, sim);
+}
+
+// Recover bodies that escaped either the shared table bounds or their assigned personal tray.
+export function recoverEscapedBodies(room, sim) {
+  const tableX = room.state.tableX;
+  const tableZ = room.state.tableZ;
+  const tableShape = room.state.tableShape || 'rect';
+  const shapeDepth = tableShape === 'round' || tableShape === 'hex' ? tableX : tableZ;
+  const maxInset = Math.max(0, Math.min(tableX, shapeDepth) - 0.25);
+  room.bodies.forEach((body) => {
+    const position = body.position;
+    if (body.__traySeat != null) {
+      const seat = body.__traySeat;
+      const angle = seatAngle(seat);
+      const center = room.trayCenterFor(seat);
+      const trayEnabled = room.state.trays.get(String(seat));
+      const escaped =
+        position.y < sim.bounds.floor ||
+        position.y > sim.bounds.ceiling ||
+        !trayEnabled ||
+        !inTray(position.x, position.z, center, angle, 0.5);
+      if (escaped && trayEnabled) {
+        const recovered = trayPlace({ x: 0, y: 1, z: 0 }, center, angle);
+        position.set(recovered.x, recovered.y, recovered.z);
+        body.velocity.setZero();
+        body.angularVelocity.setZero();
+        body.aabbNeedsUpdate = true;
+        body.wakeUp();
+      }
+      return;
+    }
+
+    // Most bodies are well inside the table, so their bounding radius gives a cheap safe-zone
+    // check. Only bodies near an edge need an exact current AABB footprint.
+    const verticalEscape = position.y < sim.bounds.floor || position.y > sim.bounds.ceiling;
+    let inset = Math.min((body.boundingRadius || 0) + 0.1, maxInset);
+    let verticalHalf = 0;
+    if (verticalEscape || !inTable(position.x, position.z, tableShape, tableX, tableZ, inset)) {
+      if (body.shapes.length && body.aabbNeedsUpdate) body.updateAABB();
+      if (body.shapes.length) {
+        const lower = body.aabb.lowerBound;
+        const upper = body.aabb.upperBound;
+        inset = Math.min(
+          Math.max(
+            position.x - lower.x,
+            upper.x - position.x,
+            position.z - lower.z,
+            upper.z - position.z,
+          ) + 0.1,
+          maxInset,
+        );
+        verticalHalf = Math.max(position.y - lower.y, upper.y - position.y);
+      }
+    }
+    const escaped =
+      verticalEscape || !inTable(position.x, position.z, tableShape, tableX, tableZ, inset);
+    if (escaped) {
+      // Every supported table is convex and centred at the origin. Binary-searching the ray back
+      // toward the centre preserves as much of the escaped position as the real surface permits.
+      let low = 0;
+      let high = 1;
+      if (inTable(0, 0, tableShape, tableX, tableZ, inset)) {
+        for (let i = 0; i < 24; i++) {
+          const middle = (low + high) / 2;
+          if (inTable(position.x * middle, position.z * middle, tableShape, tableX, tableZ, inset))
+            low = middle;
+          else high = middle;
+        }
+      }
+      position.set(position.x * low, Math.max(3, verticalHalf + 0.5), position.z * low);
+      body.velocity.setZero();
+      body.angularVelocity.setZero();
+      body.aabbNeedsUpdate = true;
+      body.wakeUp();
+    }
+  });
+}
+
+// Publish final authoritative body transforms after stepping and escape recovery.
+export function publishTransforms(room) {
+  room.state.pieces.forEach((piece, id) => {
+    const body = room.bodies.get(id);
+    if (body) room.writeTransform(piece, body);
+  });
 }

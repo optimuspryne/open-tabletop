@@ -1073,6 +1073,43 @@ export function tableOutline(shape, hx, hz) {
   ];
 }
 
+// Whether a world-space point is inside the playable table surface, optionally inset from the
+// perimeter. Escape recovery uses the inset for a piece's horizontal footprint, preventing bodies
+// from settling on the invisible containment walls. Keep these equations aligned with
+// tableOutline(): round/hex use hx, while oval/rect/roundedRect use both half-extents.
+export function inTable(x, z, shape, hx, hz, inset = 0) {
+  x = Math.abs(+x);
+  z = Math.abs(+z);
+  hx = Math.max(0, +hx);
+  hz = Math.max(0, +hz);
+  inset = Math.max(0, +inset || 0);
+
+  if (shape === 'round') {
+    const radius = hx - inset;
+    return radius >= 0 && x * x + z * z <= radius * radius;
+  }
+  if (shape === 'oval') {
+    const a = hx - inset,
+      b = hz - inset;
+    return a > 0 && b > 0 && (x / a) ** 2 + (z / b) ** 2 <= 1;
+  }
+  if (shape === 'hex') {
+    const sqrt3 = Math.sqrt(3);
+    return hx >= inset && z <= (sqrt3 * hx) / 2 - inset && sqrt3 * x + z <= sqrt3 * hx - inset * 2;
+  }
+  if (shape === 'roundedRect') {
+    const radius = Math.min(hx, hz) * 0.2;
+    const innerX = hx - inset,
+      innerZ = hz - inset,
+      innerRadius = Math.max(0, radius - inset);
+    if (innerX < 0 || innerZ < 0 || x > innerX || z > innerZ) return false;
+    const cornerX = Math.max(0, x - (hx - radius));
+    const cornerZ = Math.max(0, z - (hz - radius));
+    return cornerX * cornerX + cornerZ * cornerZ <= innerRadius * innerRadius;
+  }
+  return x <= hx - inset && z <= hz - inset;
+}
+
 // Offset a convex, origin-centred outline by a constant width — outward (w>0) or inward (w<0) —
 // with a mitre at each vertex. Used for the table's wooden rim (an outer ring, plus a slight
 // inward overlap onto the felt). Every table shape is convex and contains the origin, which is

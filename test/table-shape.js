@@ -2,7 +2,7 @@
 // clip (client), so it must agree for all three. Run: `node --test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tableOutline, TABLE_SHAPES, offsetOutline } from '../shared/pieces.js';
+import { inTable, tableOutline, TABLE_SHAPES, offsetOutline } from '../shared/pieces.js';
 
 const hx = 10,
   hz = 7,
@@ -55,6 +55,20 @@ test('roundedRect outline: inside the bounds and reaching both extents', () => {
 test('round ignores depth (uses hx); oval does not', () => {
   assert.deepEqual(tableOutline('round', hx, 3), tableOutline('round', hx, hz)); // hz irrelevant
   assert.notDeepEqual(tableOutline('oval', hx, 3), tableOutline('oval', hx, hz));
+});
+
+test('inTable matches each playable shape and supports a safety inset', () => {
+  assert.equal(inTable(9.5, 6.5, 'rect', hx, hz), true);
+  assert.equal(inTable(9.5, 6.5, 'rect', hx, hz, 1), false);
+  assert.equal(inTable(7, 7, 'round', hx, hz), true);
+  assert.equal(inTable(8, 7, 'round', hx, hz), false);
+  assert.equal(inTable(7, 4.8, 'oval', hx, hz), true);
+  assert.equal(inTable(8, 4.8, 'oval', hx, hz), false);
+  assert.equal(inTable(0, (hx * S3) / 2, 'hex', hx, hz), true);
+  assert.equal(inTable(0, (hx * S3) / 2, 'hex', hx, hz, 0.1), false);
+  assert.equal(inTable(9.9, 6.9, 'roundedRect', hx, hz), false);
+  assert.equal(inTable(9, 6, 'roundedRect', hx, hz), true);
+  assert.equal(inTable(9, 6, 'blob', hx, hz), true);
 });
 
 test('offsetOutline: outward grows, inward shrinks; rect corners mitre; circle stays circular', () => {

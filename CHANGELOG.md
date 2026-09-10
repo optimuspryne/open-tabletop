@@ -24,6 +24,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   the production container already uses Node.js 22.
 
 ### Fixed
+- Recover fallen and perimeter-stranded pieces against the table's actual playable shape and the
+  body's current footprint, preventing objects from remaining outside shaped tables or resting on
+  the invisible containment-wall ring after a table resize.
 - Keep deck-count rendering attached to the current mesh after an open deck rebuilds its visible
   cover, preventing later deals from showing a stale full-height stack that clips through the table.
 - Keep the bootstrap table mesh hidden until the joined room's synchronized shape, size, felt,
@@ -53,6 +56,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract post-step table/tray escape recovery and synchronized transform publication into
+  `server/game/physics-update.js`, leaving `TableRoom.update` as the explicit coordinator around
+  inspection recovery, motion preparation, world stepping, and performance profiling.
 - Extract the ordered pre-step physics passes for held-piece servoing, self-righting, snap-pin
   maintenance, and scripted flips into `server/game/physics-update.js`, leaving recovery,
   simulation stepping, out-of-bounds rescue, and transform publication in `TableRoom.update`.

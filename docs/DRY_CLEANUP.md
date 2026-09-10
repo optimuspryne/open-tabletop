@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: pre-step physics passes completed; remaining heartbeat orchestration is next.
+Status: server-side extraction sequence completed; client mesh replacement is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -24,6 +24,8 @@ source and the MCP memory graph before starting each step.
   `server/game/placement-operations.js` behind the existing `TableRoom` methods.
 - [x] Extract the ordered held-piece, self-righting, snap-pin, and flip passes into
   `server/game/physics-update.js` while retaining their position before `world.step`.
+- [x] Extract post-step table/tray escape recovery and synchronized transform publication into
+  `server/game/physics-update.js`, leaving the profiled `world.step` visible in `TableRoom.update`.
 
 ## Working rules
 
@@ -124,8 +126,10 @@ This is several small changes, not one large move.
   `server/game/placement-operations.js` behind the existing `TableRoom` methods.
 - [x] Move the cohesive pre-step motion passes from `update` into
   `server/game/physics-update.js` after tracing their shared state and ordering.
-- [ ] Review the remaining world-step profiling, out-of-bounds recovery, and transform-publication
-  orchestration without obscuring its order or duplicating tray/table boundary rules.
+- [x] Move post-step tray/table escape recovery and transform publication into
+  `server/game/physics-update.js` without obscuring their order around the room-owned profiled
+  `world.step`. Table recovery uses the shared playable-shape test and the current body footprint,
+  so resized-table escape and invisible-wall-ring cases return to the nearest safe point.
 - Reuse `server/physics.js` and existing safety helpers where appropriate; do not
   duplicate physics configuration or turn the new module into another monolith.
 - Validate dragging, throws, group release, snapping, absorption compatibility,

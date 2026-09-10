@@ -93,10 +93,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   placement policy. It freezes settled dynamic pieces as collidable static bodies, restores them
   before movement, and combines the synchronized snap flag with live grid availability.
   `TableRoom` keeps stable forwarding methods so simulation ordering remains in `update`.
-- **`server/game/physics-update.js`** — the ordered pre-step motion phase: held-piece velocity
-  servoing, self-righting, settled snap-pin maintenance, and scripted card flips. It reuses room
-  placement/piece-policy methods and shared physics safety while `TableRoom.update` retains
-  recovery, world stepping/profiling, out-of-bounds rescue, and transform publication.
+- **`server/game/physics-update.js`** — the ordered physics passes around the authoritative step:
+  pre-step held-piece servoing, self-righting, snap-pin maintenance, and scripted flips; post-step
+  tray/table escape recovery and synchronized transform publication. `TableRoom.update` retains
+  the profiled `world.step` and makes the complete heartbeat order explicit.
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
   and delegates finite-stack removal or collider resizing back to the room after consumption.
@@ -894,7 +894,7 @@ before servo movement, unheld snap-enabled pieces pin only after sleeping, stale
 and scripted flips advance last. Thin room facades preserve callers in piece lifecycle, piece
 handlers, and the physics loop without duplicating those state transitions.
 
-## Pre-step physics update boundary
+## Physics update boundary
 
 `server/game/physics-update.js` splits the motion phase into four independently testable passes.
 `driveHeldPieces` applies the bounded velocity servo, angular damping, pinned-body release, and
@@ -903,11 +903,17 @@ leaving held, sleeping, toppled-upright, and offset-flat bodies alone. `maintain
 the existing fast sleep tuning and pins only fully settled pieces on their exact grid cell.
 `advanceFlips` interpolates scripted flips and returns completed bodies to dynamic simulation.
 
-`preparePieceMotion(room, dt, sim)` calls those passes in their established order. It remains one
-explicit call in `TableRoom.update` before `world.step`; inspection recovery still precedes it,
-while profiling, the physics step, tray/table escape recovery, and synchronized transform
-publication still follow it. This keeps the timing and authority boundary visible at the room
-heartbeat rather than moving the entire former method into another monolith.
+`preparePieceMotion(room, dt, sim)` calls those passes in their established order before the step.
+Afterward, `recoverEscapedBodies(room, sim)` keeps personal-tray bodies in their enabled tray and
+tests ordinary bodies against the real playable table shape. Its fast interior check falls back to
+the current Cannon AABB near an edge, then projects an escaped body toward the nearest safe point
+with enough inset for its footprint. This prevents pieces from remaining outside shaped tables or
+settling atop the invisible containment-wall ring. `publishTransforms(room)` then writes every
+surviving body's final authoritative transform through the existing room facade.
+
+`TableRoom.update` keeps the heartbeat visible as inspection recovery → pre-step motion → profiled
+`world.step` → escape recovery → transform publication. The extracted module owns the cohesive
+passes on either side without hiding simulation stepping or performance instrumentation.
 
 ## Table-boundary physics boundary
 
@@ -917,6 +923,10 @@ tracked in `room._bounds`, preserving pieces and other world bodies, then create
 box floor. Rectangular tables receive four axis-aligned outside walls; every other supported
 shape receives a slightly overlapping oriented wall box for each edge from the shared
 `tableOutline`, sealing its vertices while keeping browser rendering independent.
+
+The shared `inTable(x, z, shape, hx, hz, inset)` predicate mirrors those playable shapes without
+allocating an outline each tick. Post-step recovery supplies a body's horizontal footprint as the
+inset, closing the deliberate gap between the rectangular support slab and a non-rectangular felt.
 
 `TableRoom.buildBounds` remains as a small forwarding method because room creation, durable
 scene restoration, and live GM resizing already call that room API. The extracted builder

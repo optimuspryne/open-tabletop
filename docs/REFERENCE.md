@@ -7,7 +7,7 @@ The codebase:
 
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, prop/board registries                                                                                                            |
+| `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, table containment, and prop/board registries                                                                                     |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
 | `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                           |
@@ -17,7 +17,7 @@ The codebase:
 | `server/game/piece-lifecycle.js`                                                                       | Node    | Injected authoritative body/state creation, complete piece removal, release snapping/throws, landing cues, and deck/dispenser absorption                                                        |
 | `server/game/collider-maintenance.js`                                                                  | Node    | Deck and finite-stack collider reconstruction using shared geometry, count-derived heights, and authored modeled colliders                                                                      |
 | `server/game/placement-operations.js`                                                                  | Node    | Transform publication, snapped-body pin/unpin transitions, and active-grid snap eligibility                                                                                                     |
-| `server/game/physics-update.js`                                                                        | Node    | Ordered pre-step held-piece servo, self-righting, snap-pin maintenance, and scripted-flip passes                                                                                                |
+| `server/game/physics-update.js`                                                                        | Node    | Ordered pre-step motion plus post-step tray/table recovery and authoritative transform publication                                                                                              |
 | `server/game/library.js`                                                                               | Node    | Injected table-deck persistence and authorization-safe asset-list delivery                                                                                                                       |
 | `server/game/member-service.js`                                                                        | Node    | Injected member-list delivery/broadcasting and waiting-lobby matchmaker notifications                                                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
@@ -271,6 +271,10 @@ chess}` each `[color0, color1]`.
   behind that player.
 
 ### Functions
+
+- **`inTable(x, z, shape, hx, hz, inset?) → bool`** — test a point against the playable rectangle,
+  circle, ellipse, flat-top hexagon, or rounded rectangle. The optional inward offset lets server
+  recovery include a body's current horizontal footprint rather than testing only its centre.
 
 - **`deckHeight(count) → number`** — clamps deck thickness; used by client visual
   _and_ server collider so a flipped deck is solid.
@@ -760,8 +764,8 @@ Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
 see in-play asset references. A disposing room remains tracked until its final
 persistence flush completes.
 
-Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → world step →
-out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
+Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → profiled world step →
+extracted tray/table recovery → extracted transform publication; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
 **`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
@@ -838,7 +842,7 @@ Placement methods forward to `server/game/placement-operations.js`:
 - **`wantsSnap(room, piece)`** is true only when the room grid is active and the decoded piece
   props enable snapping.
 
-The pre-step physics phase in `server/game/physics-update.js` calls these operations in order:
+`server/game/physics-update.js` exposes the ordered pre-step passes and the two post-step operations:
 
 - **`driveHeldPieces(room, sim)`** unpins held bodies, applies a bounded velocity servo and angular
   damping, rejects unsafe derived velocities, and keeps standing pieces level.
@@ -849,10 +853,16 @@ The pre-step physics phase in `server/game/physics-update.js` calls these operat
 - **`advanceFlips(room, dt, sim)`** interpolates active flip quaternions and arcs, deletes orphaned
   flips, and restores completed bodies to awake dynamic simulation.
 - **`preparePieceMotion(room, dt, sim)`** invokes the four passes in that established order.
+- **`recoverEscapedBodies(room, sim)`** runs after stepping. Enabled personal-tray bodies recover
+  through shared tray geometry; ordinary bodies use `inTable` plus a near-edge AABB footprint and
+  return along the ray toward table centre to the nearest safe playable position. Recovery clears
+  motion, refreshes Cannon's AABB, and wakes the body.
+- **`publishTransforms(room)`** writes each synchronized piece's final body transform through
+  `room.writeTransform`, after any recovery correction.
 
 `TableRoom.update` calls `preparePieceMotion` after inspection recovery and before `world.step`.
-It still owns step profiling, the tray/table out-of-bounds safety net, and final synchronized
-transform publication.
+It owns the step and its profiling, then calls `recoverEscapedBodies` and `publishTransforms` in
+that order.
 
 Saved-library methods forward to the operations returned by
 `createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:

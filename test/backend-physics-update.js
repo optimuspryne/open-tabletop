@@ -6,10 +6,14 @@ import {
   driveHeldPieces,
   maintainSnapPins,
   preparePieceMotion,
+  publishTransforms,
+  recoverEscapedBodies,
   selfRightPieces,
 } from '../server/game/physics-update.js';
+import { inTable, seatAngle, trayPlace } from '../shared/pieces.js';
 
 const SIM = {
+  bounds: { margin: 1.5, floor: -3, ceiling: 12 },
   cards: { sleepSpeed: 0.5, sleepTime: 0.2 },
   flipArc: 0.7,
   propRight: { strength: 9, maxTilt: 0.85, damp: 0.82 },
@@ -30,8 +34,14 @@ function harness() {
     state: {
       pieces: new Map(),
       scale: { gridStyle: 'square', cellWorld: 1, snapAnchor: 'cross' },
+      tableX: 5,
+      tableZ: 4,
+      trays: new Map(),
     },
     targets: new Map(),
+    trayCenterFor(seat) {
+      return { x: 8 + seat, y: 0, z: -2 };
+    },
     pinPiece(id) {
       events.push(['pin', id]);
       this.bodies.get(id).__pinned = true;
@@ -178,4 +188,90 @@ test('preparePieceMotion keeps snap maintenance before flip completion', () => {
   assert.deepEqual(events, [['pin', 'piece']]);
   assert.equal(room.flips.has('piece'), false);
   assert.equal(flipping.type, CANNON.Body.DYNAMIC);
+});
+
+test('recoverEscapedBodies returns table pieces inside the bounds and clears motion', () => {
+  const { room } = harness();
+  const escaped = body({ position: [20, 13, -20] });
+  escaped.velocity.set(1, 2, 3);
+  escaped.angularVelocity.set(4, 5, 6);
+  escaped.sleep();
+  room.bodies.set('piece', escaped);
+
+  recoverEscapedBodies(room, SIM);
+
+  assert.equal(escaped.position.y, 3);
+  assert.equal(inTable(escaped.position.x, escaped.position.z, 'rect', 5, 4, 0.1), true);
+  assert.deepEqual([escaped.velocity.x, escaped.velocity.y, escaped.velocity.z], [0, 0, 0]);
+  assert.deepEqual(
+    [escaped.angularVelocity.x, escaped.angularVelocity.y, escaped.angularVelocity.z],
+    [0, 0, 0],
+  );
+  assert.equal(escaped.sleepState, CANNON.Body.AWAKE);
+});
+
+test('recoverEscapedBodies removes pieces from a shaped table wall ring', () => {
+  const { room } = harness();
+  room.state.tableShape = 'round';
+  room.state.tableX = 5;
+  room.state.tableZ = 5;
+  const perched = body({ position: [5, 4, 0] });
+  perched.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)));
+  room.bodies.set('piece', perched);
+
+  recoverEscapedBodies(room, SIM);
+
+  assert.equal(inTable(perched.position.x, perched.position.z, 'round', 5, 5, 0.6), true);
+  assert.equal(perched.position.y, 3);
+});
+
+test('recoverEscapedBodies uses an enabled personal tray instead of table bounds', () => {
+  const { room } = harness();
+  const seat = 2;
+  const escaped = body({ position: [0, 13, 0] });
+  escaped.__traySeat = seat;
+  room.state.trays.set(String(seat), true);
+  room.bodies.set('die', escaped);
+  const center = room.trayCenterFor(seat);
+  const expected = trayPlace({ x: 0, y: 1, z: 0 }, center, seatAngle(seat));
+
+  recoverEscapedBodies(room, SIM);
+
+  assert.deepEqual(
+    [escaped.position.x, escaped.position.y, escaped.position.z],
+    [expected.x, expected.y, expected.z],
+  );
+});
+
+test('recoverEscapedBodies leaves safe bodies and inactive tray assignments untouched', () => {
+  const { room } = harness();
+  const safe = body({ position: [1, 2, 1] });
+  const inactiveTray = body({ position: [100, 2, 100] });
+  inactiveTray.__traySeat = 3;
+  room.bodies.set('safe', safe);
+  room.bodies.set('inactive', inactiveTray);
+
+  recoverEscapedBodies(room, SIM);
+
+  assert.deepEqual([safe.position.x, safe.position.y, safe.position.z], [1, 2, 1]);
+  assert.deepEqual(
+    [inactiveTray.position.x, inactiveTray.position.y, inactiveTray.position.z],
+    [100, 2, 100],
+  );
+});
+
+test('publishTransforms writes matching bodies and ignores missing bodies', () => {
+  const { room } = harness();
+  const writes = [];
+  const present = { id: 'present' };
+  const missing = { id: 'missing' };
+  const presentBody = body({ position: [1, 2, 3] });
+  room.state.pieces.set('present', present);
+  room.state.pieces.set('missing', missing);
+  room.bodies.set('present', presentBody);
+  room.writeTransform = (piece, value) => writes.push([piece, value]);
+
+  publishTransforms(room);
+
+  assert.deepEqual(writes, [[present, presentBody]]);
 });
