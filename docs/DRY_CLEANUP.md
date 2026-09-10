@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: placement helpers completed; physics-update decomposition is next.
+Status: pre-step physics passes completed; remaining heartbeat orchestration is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -22,6 +22,8 @@ source and the MCP memory graph before starting each step.
   `server/game/collider-maintenance.js` behind the existing `TableRoom` methods.
 - [x] Extract synchronized transform publication and snapped-piece pin/unpin policy into
   `server/game/placement-operations.js` behind the existing `TableRoom` methods.
+- [x] Extract the ordered held-piece, self-righting, snap-pin, and flip passes into
+  `server/game/physics-update.js` while retaining their position before `world.step`.
 
 ## Working rules
 
@@ -120,7 +122,10 @@ This is several small changes, not one large move.
   `server/game/collider-maintenance.js` behind the existing `TableRoom` methods.
 - [x] Move `writeTransform`, `pinPiece`, `unpinPiece`, and `wantsSnap` into
   `server/game/placement-operations.js` behind the existing `TableRoom` methods.
-- [ ] Split cohesive parts of `update` only after tracing their shared state and ordering.
+- [x] Move the cohesive pre-step motion passes from `update` into
+  `server/game/physics-update.js` after tracing their shared state and ordering.
+- [ ] Review the remaining world-step profiling, out-of-bounds recovery, and transform-publication
+  orchestration without obscuring its order or duplicating tray/table boundary rules.
 - Reuse `server/physics.js` and existing safety helpers where appropriate; do not
   duplicate physics configuration or turn the new module into another monolith.
 - Validate dragging, throws, group release, snapping, absorption compatibility,

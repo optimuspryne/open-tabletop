@@ -53,6 +53,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract the ordered pre-step physics passes for held-piece servoing, self-righting, snap-pin
+  maintenance, and scripted flips into `server/game/physics-update.js`, leaving recovery,
+  simulation stepping, out-of-bounds rescue, and transform publication in `TableRoom.update`.
 - Extract synchronized transform publication, snapped-piece pin/unpin transitions, and snap intent
   checks into `server/game/placement-operations.js`, preserving the existing `TableRoom` methods
   and physics-loop ordering.

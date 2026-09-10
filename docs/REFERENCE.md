@@ -17,6 +17,7 @@ The codebase:
 | `server/game/piece-lifecycle.js`                                                                       | Node    | Injected authoritative body/state creation, complete piece removal, release snapping/throws, landing cues, and deck/dispenser absorption                                                        |
 | `server/game/collider-maintenance.js`                                                                  | Node    | Deck and finite-stack collider reconstruction using shared geometry, count-derived heights, and authored modeled colliders                                                                      |
 | `server/game/placement-operations.js`                                                                  | Node    | Transform publication, snapped-body pin/unpin transitions, and active-grid snap eligibility                                                                                                     |
+| `server/game/physics-update.js`                                                                        | Node    | Ordered pre-step held-piece servo, self-righting, snap-pin maintenance, and scripted-flip passes                                                                                                |
 | `server/game/library.js`                                                                               | Node    | Injected table-deck persistence and authorization-safe asset-list delivery                                                                                                                       |
 | `server/game/member-service.js`                                                                        | Node    | Injected member-list delivery/broadcasting and waiting-lobby matchmaker notifications                                                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
@@ -759,7 +760,7 @@ Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
 see in-play asset references. A disposing room remains tracked until its final
 persistence flush completes.
 
-Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (servo → step →
+Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → world step →
 out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
 **`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
@@ -837,9 +838,21 @@ Placement methods forward to `server/game/placement-operations.js`:
 - **`wantsSnap(room, piece)`** is true only when the room grid is active and the decoded piece
   props enable snapping.
 
-`TableRoom.update` retains the ordered policy that calls these operations: held bodies unpin before
-servo movement, eligible unheld bodies pin only after settling, and stale pins are removed when
-the grid or per-piece snap flag is disabled.
+The pre-step physics phase in `server/game/physics-update.js` calls these operations in order:
+
+- **`driveHeldPieces(room, sim)`** unpins held bodies, applies a bounded velocity servo and angular
+  damping, rejects unsafe derived velocities, and keeps standing pieces level.
+- **`selfRightPieces(room, sim)`** nudges eligible awake, unheld bodies toward world-up using the
+  existing stand-mode cutoffs and skips offset flat colliders.
+- **`maintainSnapPins(room, sim)`** gives snap-enabled pieces the fast card sleep thresholds, pins
+  fully settled bodies on their exact grid cell, and removes stale pins.
+- **`advanceFlips(room, dt, sim)`** interpolates active flip quaternions and arcs, deletes orphaned
+  flips, and restores completed bodies to awake dynamic simulation.
+- **`preparePieceMotion(room, dt, sim)`** invokes the four passes in that established order.
+
+`TableRoom.update` calls `preparePieceMotion` after inspection recovery and before `world.step`.
+It still owns step profiling, the tray/table out-of-bounds safety net, and final synchronized
+transform publication.
 
 Saved-library methods forward to the operations returned by
 `createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:

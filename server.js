@@ -21,6 +21,7 @@ import {
   wantsSnap as roomPieceWantsSnap,
   writeTransform as writePieceTransform,
 } from './server/game/placement-operations.js';
+import { preparePieceMotion } from './server/game/physics-update.js';
 import { createStarterSetup } from './server/game/starters.js';
 import { createTableBounds } from './server/game/table-bounds.js';
 import { createTableScale } from './server/game/table-scale.js';
@@ -88,7 +89,6 @@ import { cardBackRef, cardFrontRef } from './server/deck-state.js';
 import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { MAX_PIECES } from './server/game/piece-capacity.js';
-import { dragVelocity } from './server/game/physics-safety.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
@@ -1071,132 +1071,7 @@ class TableRoom extends Room {
   update(dtMs) {
     recoverPendingInspections(this);
     const dt = dtMs / 1000;
-    const stiffness = SIM.servo.stiffness,
-      maxSpeed = SIM.servo.maxSpeed;
-
-    // Pass 1 — held pieces. Instead of teleporting a held piece to the cursor, we
-    // set its VELOCITY toward the drag target ("servo"). It stays a real body, so
-    // it still shoves others and gets shoved, but tracks the cursor tightly.
-    this.state.pieces.forEach((piece, id) => {
-      if (!piece.owner) return;
-      const target = this.targets.get(id),
-        body = this.bodies.get(id);
-      if (!body) return;
-      if (body.__pinned) this.unpinPiece(id); // grabbing a pinned piece frees it to move
-      if (!target) return;
-      body.wakeUp();
-
-      // Drive the collider footprint at the requested height. Reject a bad derived
-      // velocity before it can introduce Infinity/NaN into the physics world.
-      const velocity = dragVelocity(
-        body.position,
-        target,
-        body.shapeOffsets[0]?.y ?? 0,
-        stiffness,
-        maxSpeed,
-      );
-      if (!velocity) {
-        this.targets.delete(id);
-        piece.owner = '';
-        body.velocity.setZero();
-        return;
-      }
-      body.velocity.set(velocity.x, velocity.y, velocity.z);
-      body.angularVelocity.scale(SIM.servo.angDamp, body.angularVelocity);
-
-      // While held, a "stand" piece is kept level: strip its pitch/roll and keep
-      // only its yaw, so decks/chess pieces don't tumble in your hand.
-      const standMode = this.standOf(piece);
-      if (standMode) {
-        const quat = body.quaternion,
-          mag = Math.hypot(quat.w, quat.y) || 1;
-        quat.set(0, quat.y / mag, 0, quat.w / mag);
-        body.angularVelocity.setZero();
-      }
-    });
-
-    // Pass 2 — self-righting for pieces that aren't held. We nudge the piece's
-    // local +Y back toward world-up. For a tall piece that stands it upright; for
-    // a flat piece (deck, checker, coin) the thin axis IS +Y, so it lies flat.
-    // The only difference is the cutoff: a tall piece that has fully toppled is
-    // left down, but a flat piece is righted from any angle (it should always
-    // settle flat).
-    const right = SIM.propRight;
-    const worldUp = new CANNON.Vec3(0, 1, 0),
-      pieceUp = new CANNON.Vec3(),
-      axis = new CANNON.Vec3();
-    this.state.pieces.forEach((piece, id) => {
-      if (piece.owner) return;
-      const standMode = this.standOf(piece);
-      if (!standMode) return;
-      const body = this.bodies.get(id);
-      if (!body || body.sleepState === CANNON.Body.SLEEPING) return;
-      // A flat-collider piece rests on a thin footprint offset below its center, so it
-      // already lies flat on its own. Self-righting would spin it about that center and
-      // drag the offset footprint sideways (a slow drift on a board) — so skip it here.
-      if (body.shapeOffsets[0] && Math.abs(body.shapeOffsets[0].y) > 0.01) return;
-
-      body.quaternion.vmult(worldUp, pieceUp); // the piece's up-axis, in world space
-      pieceUp.cross(worldUp, axis); // rotation axis that brings it back to upright
-      const tilt = axis.length(); // = sin(angle between them)
-      const cutoff = standMode === 'flat' ? 1.5 : right.maxTilt; // flat: any tilt; tall: near-upright only
-      if (tilt > 0.02 && tilt < cutoff) {
-        axis.scale(1 / tilt, axis); // normalise
-        body.angularVelocity.x += axis.x * tilt * right.strength;
-        body.angularVelocity.y += axis.y * tilt * right.strength;
-        body.angularVelocity.z += axis.z * tilt * right.strength;
-        body.angularVelocity.scale(right.damp, body.angularVelocity);
-        body.wakeUp();
-      }
-    });
-
-    // Pass 2.5 — pin snapped pieces once they settle (and unpin if their flag/grid goes
-    // away). Freezing them STATIC keeps a bumped neighbour from sliding them off a cell.
-    this.state.pieces.forEach((piece, id) => {
-      if (piece.owner) return; // held pieces are handled (and unpinned) in Pass 1
-      const body = this.bodies.get(id);
-      if (!body) return;
-      if (this.wantsSnap(piece)) {
-        // Settle quickly (card-like sleep timing), then pin ONLY once actually ASLEEP — i.e.
-        // it has fallen and come to rest on the surface. Pinning on mere low speed froze
-        // pieces in mid-air the instant release zeroed their velocity, before gravity could
-        // drop them onto the cell.
-        if (body.sleepTimeLimit !== SIM.cards.sleepTime) {
-          body.sleepSpeedLimit = SIM.cards.sleepSpeed;
-          body.sleepTimeLimit = SIM.cards.sleepTime;
-        }
-        if (!body.__pinned && body.sleepState === CANNON.Body.SLEEPING) {
-          const p = snapToCell(body.position.x, body.position.z, this.state.scale);
-          body.position.x = p.x;
-          body.position.z = p.z; // exact cell (a bounce may have nudged it) before freezing
-          this.pinPiece(id);
-        }
-      } else if (body.__pinned) {
-        this.unpinPiece(id); // snap turned off, or the grid was removed
-      }
-    });
-
-    // Pass 3 — advance any in-progress card flips. A flip is a scripted animation
-    // (a kinematic half-turn plus a little hop) rather than a physical toss.
-    for (const [id, flip] of this.flips) {
-      const body = this.bodies.get(id);
-      if (!body) {
-        this.flips.delete(id);
-        continue;
-      }
-      flip.t += dt;
-      const progress = Math.min(flip.t / flip.dur, 1);
-      flip.start.slerp(flip.end, progress, body.quaternion);
-      body.position.y = flip.baseY + Math.sin(progress * Math.PI) * SIM.flipArc; // arc up and back down
-      if (progress >= 1) {
-        // hand it back to the physics engine
-        body.type = CANNON.Body.DYNAMIC;
-        body.wakeUp();
-        body.velocity.setZero();
-        body.angularVelocity.setZero();
-        this.flips.delete(id);
-      }
-    }
+    preparePieceMotion(this, dt, SIM);
 
     let __perfT0 = 0;
     if (PERF_LOG) __perfT0 = performance.now();

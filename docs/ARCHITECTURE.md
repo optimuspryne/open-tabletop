@@ -93,6 +93,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   placement policy. It freezes settled dynamic pieces as collidable static bodies, restores them
   before movement, and combines the synchronized snap flag with live grid availability.
   `TableRoom` keeps stable forwarding methods so simulation ordering remains in `update`.
+- **`server/game/physics-update.js`** — the ordered pre-step motion phase: held-piece velocity
+  servoing, self-righting, settled snap-pin maintenance, and scripted card flips. It reuses room
+  placement/piece-policy methods and shared physics safety while `TableRoom.update` retains
+  recovery, world stepping/profiling, out-of-bounds rescue, and transform publication.
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
   and delegates finite-stack removal or collider resizing back to the room after consumption.
@@ -885,10 +889,25 @@ unpinned body after clearing its motion; `unpinPiece(room, id)` restores a pinne
 dynamic simulation. `wantsSnap(room, piece)` requires both an active synchronized grid and the
 piece's synchronized snap flag.
 
-The ordered simulation work deliberately stays in `TableRoom.update`: held pieces unpin before
-servo movement, unheld snap-enabled pieces pin only after sleeping, and pieces unpin when their
-flag or grid disappears. Thin room facades preserve callers in piece lifecycle, piece handlers,
-and the physics loop without moving those ordering constraints into a generic helper module.
+The ordered pre-step simulation work is coordinated by `preparePieceMotion`: held pieces unpin
+before servo movement, unheld snap-enabled pieces pin only after sleeping, stale pins are removed,
+and scripted flips advance last. Thin room facades preserve callers in piece lifecycle, piece
+handlers, and the physics loop without duplicating those state transitions.
+
+## Pre-step physics update boundary
+
+`server/game/physics-update.js` splits the motion phase into four independently testable passes.
+`driveHeldPieces` applies the bounded velocity servo, angular damping, pinned-body release, and
+standing-piece leveling. `selfRightPieces` nudges eligible awake bodies toward world-up while
+leaving held, sleeping, toppled-upright, and offset-flat bodies alone. `maintainSnapPins` applies
+the existing fast sleep tuning and pins only fully settled pieces on their exact grid cell.
+`advanceFlips` interpolates scripted flips and returns completed bodies to dynamic simulation.
+
+`preparePieceMotion(room, dt, sim)` calls those passes in their established order. It remains one
+explicit call in `TableRoom.update` before `world.step`; inspection recovery still precedes it,
+while profiling, the physics step, tray/table escape recovery, and synchronized transform
+publication still follow it. This keeps the timing and authority boundary visible at the room
+heartbeat rather than moving the entire former method into another monolith.
 
 ## Table-boundary physics boundary
 
