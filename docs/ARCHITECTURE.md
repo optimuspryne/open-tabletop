@@ -89,6 +89,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   Ordinary decks derive their footprint from shared card/tile geometry and their height from the
   live count; modeled decks retain their authored fixed box, while modeled and infinite
   dispensers retain their authored collider. `TableRoom` keeps stable forwarding methods.
+- **`server/game/placement-operations.js`** — synchronized transform publication and snapped-piece
+  placement policy. It freezes settled dynamic pieces as collidable static bodies, restores them
+  before movement, and combines the synchronized snap flag with live grid availability.
+  `TableRoom` keeps stable forwarding methods so simulation ordering remains in `update`.
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
   and delegates finite-stack removal or collider resizing back to the room after consumption.
@@ -871,6 +875,20 @@ On the browser, deck cover changes may replace the rendered mesh while count lis
 registered. `syncDeckMeshHeight(meshes, id, count)` therefore looks up the current mesh for every
 count update instead of retaining the original mesh reference, keeping the visual deck height in
 step with the authoritative collider after deals and rebuilds.
+
+## Placement operations boundary
+
+`server/game/placement-operations.js` owns the small state transitions shared by spawning,
+handlers, and the physics heartbeat. `writeTransform(piece, body)` publishes all position and
+quaternion fields from the authoritative Cannon body. `pinPiece(room, id)` freezes only a dynamic,
+unpinned body after clearing its motion; `unpinPiece(room, id)` restores a pinned body to awake
+dynamic simulation. `wantsSnap(room, piece)` requires both an active synchronized grid and the
+piece's synchronized snap flag.
+
+The ordered simulation work deliberately stays in `TableRoom.update`: held pieces unpin before
+servo movement, unheld snap-enabled pieces pin only after sleeping, and pieces unpin when their
+flag or grid disappears. Thin room facades preserve callers in piece lifecycle, piece handlers,
+and the physics loop without moving those ordering constraints into a generic helper module.
 
 ## Table-boundary physics boundary
 

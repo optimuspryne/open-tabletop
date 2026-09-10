@@ -16,6 +16,7 @@ The codebase:
 | `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
 | `server/game/piece-lifecycle.js`                                                                       | Node    | Injected authoritative body/state creation, complete piece removal, release snapping/throws, landing cues, and deck/dispenser absorption                                                        |
 | `server/game/collider-maintenance.js`                                                                  | Node    | Deck and finite-stack collider reconstruction using shared geometry, count-derived heights, and authored modeled colliders                                                                      |
+| `server/game/placement-operations.js`                                                                  | Node    | Transform publication, snapped-body pin/unpin transitions, and active-grid snap eligibility                                                                                                     |
 | `server/game/library.js`                                                                               | Node    | Injected table-deck persistence and authorization-safe asset-list delivery                                                                                                                       |
 | `server/game/member-service.js`                                                                        | Node    | Injected member-list delivery/broadcasting and waiting-lobby matchmaker notifications                                                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
@@ -760,7 +761,7 @@ persistence flush completes.
 
 Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (servo → step →
 out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
-**`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
+**`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
@@ -824,6 +825,21 @@ Collider methods forward to `server/game/collider-maintenance.js`:
   its skin's authored fixed box instead.
 - **`updateStackCollider(room, id)`** resizes an ordinary finite stack cylinder to the capped
   visible item count. Modeled, infinite, unknown, or missing sources are unchanged.
+
+Placement methods forward to `server/game/placement-operations.js`:
+
+- **`writeTransform(piece, body)`** copies the Cannon body's position and quaternion into every
+  synchronized transform field on the piece.
+- **`pinPiece(room, id)`** changes only an unpinned dynamic body to static, clears linear and
+  angular motion, refreshes mass properties, and sleeps it while retaining collisions.
+- **`unpinPiece(room, id)`** restores a pinned body to dynamic, refreshes mass properties, and
+  wakes it before movement resumes.
+- **`wantsSnap(room, piece)`** is true only when the room grid is active and the decoded piece
+  props enable snapping.
+
+`TableRoom.update` retains the ordered policy that calls these operations: held bodies unpin before
+servo movement, eligible unheld bodies pin only after settling, and stale pins are removed when
+the grid or per-piece snap flag is disabled.
 
 Saved-library methods forward to the operations returned by
 `createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:

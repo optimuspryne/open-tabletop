@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: collider maintenance completed; placement helpers are next.
+Status: placement helpers completed; physics-update decomposition is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -20,6 +20,8 @@ source and the MCP memory graph before starting each step.
   `server/game/piece-lifecycle.js` while retaining the `TableRoom` API.
 - [x] Extract deck and finite-stack collider rebuilding into
   `server/game/collider-maintenance.js` behind the existing `TableRoom` methods.
+- [x] Extract synchronized transform publication and snapped-piece pin/unpin policy into
+  `server/game/placement-operations.js` behind the existing `TableRoom` methods.
 
 ## Working rules
 
@@ -116,7 +118,8 @@ This is several small changes, not one large move.
   `server/game/piece-lifecycle.js` behind the existing `TableRoom` methods.
 - [x] Move `updateDeckCollider` and `updateStackCollider` into
   `server/game/collider-maintenance.js` behind the existing `TableRoom` methods.
-- [ ] Review `writeTransform`, `pinPiece`, `unpinPiece`, and `wantsSnap` for placement helpers.
+- [x] Move `writeTransform`, `pinPiece`, `unpinPiece`, and `wantsSnap` into
+  `server/game/placement-operations.js` behind the existing `TableRoom` methods.
 - [ ] Split cohesive parts of `update` only after tracing their shared state and ordering.
 - Reuse `server/physics.js` and existing safety helpers where appropriate; do not
   duplicate physics configuration or turn the new module into another monolith.

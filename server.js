@@ -15,6 +15,12 @@ import {
   recolorPiece as recolorRoomPiece,
   standOf as pieceStand,
 } from './server/game/piece-operations.js';
+import {
+  pinPiece as pinRoomPiece,
+  unpinPiece as unpinRoomPiece,
+  wantsSnap as roomPieceWantsSnap,
+  writeTransform as writePieceTransform,
+} from './server/game/placement-operations.js';
 import { createStarterSetup } from './server/game/starters.js';
 import { createTableBounds } from './server/game/table-bounds.js';
 import { createTableScale } from './server/game/table-scale.js';
@@ -1042,13 +1048,7 @@ class TableRoom extends Room {
   }
 
   writeTransform(piece, body) {
-    piece.x = body.position.x;
-    piece.y = body.position.y;
-    piece.z = body.position.z;
-    piece.qx = body.quaternion.x;
-    piece.qy = body.quaternion.y;
-    piece.qz = body.quaternion.z;
-    piece.qw = body.quaternion.w;
+    return writePieceTransform(piece, body);
   }
 
   // The simulation heartbeat, run 60×/second. Three passes over the pieces
@@ -1059,26 +1059,13 @@ class TableRoom extends Room {
   // unpins it (see update Pass 1). Only ever touches pieces that are DYNAMIC to begin
   // with, so boards and other static bodies are never affected.
   pinPiece(id) {
-    const body = this.bodies.get(id);
-    if (!body || body.__pinned || body.type !== CANNON.Body.DYNAMIC) return;
-    body.__pinned = true;
-    body.type = CANNON.Body.STATIC;
-    body.velocity.setZero();
-    body.angularVelocity.setZero();
-    body.updateMassProperties(); // STATIC → invMass 0: immovable but still collidable
-    body.sleep();
+    return pinRoomPiece(this, id);
   }
   unpinPiece(id) {
-    const body = this.bodies.get(id);
-    if (!body || !body.__pinned) return;
-    body.__pinned = false;
-    body.type = CANNON.Body.DYNAMIC;
-    body.updateMassProperties();
-    body.wakeUp();
+    return unpinRoomPiece(this, id);
   }
   wantsSnap(piece) {
-    if (!gridActive(this.state.scale)) return false;
-    return !!readProps(piece).snap;
+    return roomPieceWantsSnap(this, piece);
   }
 
   update(dtMs) {

@@ -53,6 +53,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract synchronized transform publication, snapped-piece pin/unpin transitions, and snap intent
+  checks into `server/game/placement-operations.js`, preserving the existing `TableRoom` methods
+  and physics-loop ordering.
 - Extract deck and finite-dispenser collider rebuilding into
   `server/game/collider-maintenance.js`, preserving shared card/tile geometry, modeled deck boxes,
   visible stack-height caps, and the existing `TableRoom` methods.
