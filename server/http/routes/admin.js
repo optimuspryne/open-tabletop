@@ -9,6 +9,7 @@ export function createAdminRouter({
   disposeLive,
   kickUserEverywhere,
   roomAccess,
+  texturePrebuilder,
 }) {
   const router = express.Router();
 
@@ -41,6 +42,22 @@ export function createAdminRouter({
       const totalBytes = orphans.reduce((sum, item) => sum + item.size, 0);
       const moved = trashOrphans(orphans);
       res.json({ moved: moved.length, totalBytes });
+    }),
+  );
+
+  router.get(
+    '/texture-cache',
+    asyncRoute(async (req, res) => {
+      if (!(await requireAdmin(req, res))) return;
+      res.json(texturePrebuilder.status());
+    }),
+  );
+
+  router.post(
+    '/texture-cache/prebuild',
+    asyncRoute(async (req, res) => {
+      if (!(await requireAdmin(req, res))) return;
+      res.status(202).json(texturePrebuilder.start());
     }),
   );
 

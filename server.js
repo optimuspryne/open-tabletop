@@ -62,7 +62,10 @@ import { createRequireUser, createRequireAdmin } from './server/http/auth-contex
 import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
-import { createAssetTextureRouter } from './server/http/routes/asset-textures.js';
+import {
+  createAssetTextureRouter,
+  createTexturePrebuilder,
+} from './server/http/routes/asset-textures.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import {
   absorbedEntry,
@@ -226,6 +229,10 @@ const { findOrphanAssets, trashOrphans } = createAssetCleanup({
   assetKinds: ASSET_KINDS,
   allAssetRefBlobs: db.allAssetRefBlobs,
   liveRooms: LIVE_ROOMS,
+});
+const texturePrebuilder = createTexturePrebuilder({
+  assetsDir: ASSETS_DIR,
+  assetKinds: ASSET_KINDS,
 });
 
 const PALETTE = [
@@ -1821,6 +1828,7 @@ app.use(
     disposeLive,
     kickUserEverywhere,
     roomAccess,
+    texturePrebuilder,
   }),
 );
 

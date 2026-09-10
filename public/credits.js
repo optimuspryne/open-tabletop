@@ -100,18 +100,11 @@ export const MODEL_CREDITS = [
     license: 'CC0',
   },
   {
-    title: 'Bowl (go bowl)',
-    by: 'DREAM_SEARCH_REPEAT',
-    url: 'https://opengameart.org/users/dreamsearchrepeat',
-    license: 'CC0',
-  },
-  {
     title: 'Poker chip',
     by: 'mehrasaur',
     url: 'https://opengameart.org/users/mehrasaur',
     license: 'CC0',
   },
-  { title: 'Gold coin', by: 'plaggy', url: 'https://opengameart.org/users/plaggy', license: 'CC0' },
   {
     title: 'Chess / checker board',
     by: 'pennomi',

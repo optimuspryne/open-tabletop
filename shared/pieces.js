@@ -197,15 +197,15 @@ export const PROPS = {
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.21, 0.021, 0.21], type: 'cylinder' },
+    collider: { box: [0.29, 0.015, 0.29], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
-    modelScale: 0.3,
+    modelScale: 0.25,
     ownMaterial: false,
     metal: true,
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.45, 0.045, 0.45] },
+    collider: { box: [0.4, 0.045, 0.4] },
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.18,
     tintMaterial: 'c1',
@@ -422,11 +422,11 @@ export const DECK_MODELS = {
   bag: {
     name: 'Pouch',
     model: '/models/decks/bag.glb',
-    modelScale: 0.85,
+    modelScale: 2,
     // The pouch is modeled upright (drawstring at +y, flattened along z); tip it a quarter-turn
     // about X so it rests on a flat face. box = the reoriented collider half-extents (y/z swapped).
     modelRot: [Math.PI / 2, 0, 0],
-    box: [0.45, 0.2, 0.46],
+    box: [1, 0.5, 1],
     tints: { bag: 'color', string: 'textColor' },
     color: 0x7a5a3a, // sack: warm leather brown
     textColor: 0xc8b06a, // drawstring: tan
@@ -535,7 +535,7 @@ export const DISPENSERS = {
     infinite: true,
     model: '/models/pieces/misc/gobowl.glb',
     modelScale: 1,
-    tintMaterial: 'c1',
+    tintMaterial: 'c01',
     collider: { box: [0.8, 0.5, 0.8] },
     mass: 0.5,
   },

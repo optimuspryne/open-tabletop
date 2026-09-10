@@ -9,6 +9,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Replace the bundled coin and Go-bowl meshes with original project models, retune their rendering,
+  material-slot, and collider metadata, refine the poker-chip collider, and use the enlarged low-poly
+  bag plus its matching collider for the built-in domino, Wordy, and Mahjong inventories.
+- Add an admin-triggered, background texture-cache prebuild that generates missing display-sized
+  WebP copies for random-name JPG and PNG uploads while preserving every original and library
+  reference. Existing derivatives are skipped and live progress is reported in the admin console.
 - Reuse immutable card and tile geometry by dimensions during browser hydration instead of
   repeatedly triangulating identical pieces. Cache random-name uploaded assets immutably and
   bundled Mahjong faces for repeat room entries, reducing large double-sided tile load stalls.

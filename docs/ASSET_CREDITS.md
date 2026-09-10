@@ -22,19 +22,13 @@ requirement is actually met.
 - **Source:** https://opengameart.org/content/human-token
 - **License:** CC0 (public domain)
 
-### Bowl (used as the go-stone bowl) — `pieces/misc/gobowl.glb`
-- **Author:** DREAM_SEARCH_REPEAT — https://opengameart.org/users/dreamsearchrepeat
-- **Source:** https://opengameart.org/content/bowl-with-meat
-- **License:** CC0 (public domain)
+### Open Tabletop original models — `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`
+- **Author/source:** Original models created for Open Tabletop.
+- **License:** Distributed under the repository license.
 
 ### Poker chip — `pieces/misc/poker_chip.glb`
 - **Author:** mehrasaur — https://opengameart.org/users/mehrasaur
 - **Source:** https://opengameart.org/content/poker-pack
-- **License:** CC0 (public domain)
-
-### Gold coin — `pieces/misc/coin.glb`
-- **Author:** plaggy — https://opengameart.org/users/plaggy
-- **Source:** https://opengameart.org/content/gold-coin-blank
 - **License:** CC0 (public domain)
 
 ### Chess / checker board — `boards/checker_chess_board.glb`

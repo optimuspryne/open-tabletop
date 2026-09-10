@@ -250,7 +250,8 @@ chess}` each `[color0, color1]`.
   via `props.model`. Optional `modelRot` `[x,y,z]` reorients the raw model before it is fit/centred
   (the pouch tips onto a flat face); `tints` `{ slot → propKey }` maps a named material slot to a
   deck prop (the pouch: `bag → color`, `string → textColor`), each falling back to the skin's own
-  `color`/`textColor` default, so the sack and drawstring recolor independently.
+  `color`/`textColor` default, so the sack and drawstring recolor independently. The bundled domino,
+  letter, and Mahjong inventories use the scaled low-poly `bag` skin and its matching authored collider.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
 - **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
   the client mesh, and the tests: `hx`/`hz` (floor half-extents), `wall` (wall half-height),
@@ -379,6 +380,12 @@ metadata, models, and arbitrary filenames return 404.
 - **`createTextureDerivative(source, destination, maxDimension = 768)`** preserves aspect and
   alpha, never enlarges the source, applies EXIF orientation, and writes a quality-82 WebP via
   an atomic temporary file. Concurrent requests for one face share the same pending job.
+- **`prebuildTextureCache(...)`** scans every allowlisted asset folder for random-name JPG/JPEG/PNG
+  uploads, creates only missing derivatives with two bounded workers by default, continues past
+  individual conversion failures, and reports processed/created/skipped/failed counts plus byte totals.
+- **`createTexturePrebuilder(options)`** wraps that scan as one process-local background job. Repeated
+  starts while it is running coalesce onto the existing job; `status()` exposes its scan/build/complete
+  state for the admin console without holding an HTTP request open.
 - Successful responses are `image/webp` with a one-year immutable cache policy. Originals stay
   untouched for library editing, backups, and future derivative versions. `cardTextureURL` in
   `public/graphics.js` redirects only local random-name `/assets/...` card/tile references;
@@ -444,13 +451,13 @@ card array and shuffles it once.
 - **`buildSimpleDeck(jokers = false)`** — 52 standard rank/suit references, or 54
   with one red and one black joker; uses the procedural `back` reference.
 - **`buildDominoSet()`** — 28 double-six tiles, `domback`, `tile: 'domino'`, and
-  the `bentwood` deck model.
+  the low-poly `bag` deck model.
 - **`buildScrabbleBag()`** — 100 letter tiles with counts and scores from shared
   `LETTER_DIST`, including blanks; `lback`, `tile: 'letter'`, `snap: true`, and
-  the `bentwood` deck model.
+  the low-poly `bag` deck model.
 - **`buildMahjongWall()`** — 144 image references built from shared `MAHJONG`:
   four copies of each ordinary face and one of each bonus; `mjback`,
-  `tile: 'mahjong'`, and the `bentwood` deck model.
+  `tile: 'mahjong'`, and the low-poly `bag` deck model.
 
 These functions build private game inventory and spawn properties, not graphics.
 Standalone set spawning and starter layouts use the same builders; browser-side
@@ -953,7 +960,9 @@ checks production dependencies and fails only at high severity or above.
   `POST /admin/users/:id/kick` (disconnect that account from every live table),
   **`GET /admin/orphans`** (dry-run: `/assets` files no library row, room, or live
   table references — old enough to be safe), **`POST /admin/orphans/purge`**
-  (re-scan, move them to `saved-assets/.trash/`).
+  (re-scan, move them to `saved-assets/.trash/`), **`GET /admin/texture-cache`**
+  (background prebuild status), and **`POST /admin/texture-cache/prebuild`**
+  (start or reuse the non-destructive WebP cache job; returns 202 immediately).
 - **Rate limiting:** auth and upload middleware use atomic Redis token buckets
   namespaced by purpose and resolved IP. TTL is the time to refill a bucket, so
   inactive IP keys expire. Redis errors fail closed with `503` and `Retry-After`;
@@ -1402,8 +1411,9 @@ device token lives in `localStorage`.
 - **`public/admin.js`** (admin.html) — the admin console. Guards on `/auth/token`
   → `isAdmin`, then renders the rooms table (rename / approval / close / restore /
   purge) and the users table (grant/revoke admin, **approve/reject/revoke host**,
-  kick from all live rooms, delete). Admins host implicitly, so they're kept out of the host queue and the
-  header's pending badge.
+  kick from all live rooms, delete). Its Storage controls preview/trash orphaned uploads and start/poll
+  the WebP texture-cache prebuild with live counts and byte totals. Admins host implicitly, so they're
+  kept out of the host queue and the header's pending badge.
 - **`public/editor-panel.js`** (`table.html?workshop=1`; `editor.html` redirects there) — the library-management panel. Rides
   on the game client's room via `window.onOttRoom`, and gets listings through
   `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).

@@ -388,7 +388,8 @@ The kinds:
   while still working as an ordinary draw pile. An `open` set also carries a runtime-only
   `cover` prop the server keeps pointed at the current top tile's back (repainted on every
   draw/shuffle/split), so a mixed-back stack shows a real card on top rather than a placeholder;
-  the client rebuilds the deck mesh on any prop change to reflect it.
+  the client rebuilds the deck mesh on any prop change to reflect it. The domino, letter, and Mahjong
+  built-in inventories all use the enlarged low-poly pouch and its correspondingly enlarged collider.
 - **dispenser** — a reusable source for an existing prop: finite poker/coin stacks
   shrink as they hand out copies, while Go bowls are unlimited. Left-click drops one
   beside the source, left-drag adopts the new item into the drag, and dropping a
@@ -411,7 +412,8 @@ The kinds:
 Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
 card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
-are bundled CC0 `.glb` files under `public/models/` (see `ASSET_CREDITS.md`).
+are bundled `.glb` files under `public/models/` (see `ASSET_CREDITS.md`); the current coin and Go-bowl
+models are original project assets rather than the previously bundled third-party models.
 
 ### Models: scale, orientation, color
 
@@ -718,6 +720,9 @@ a maximum-768-pixel WebP under `ASSETS_DIR/.texture-cache/v1/`, coalesces concur
 the same face, and serves the result immutably. This benefits existing uploads without rewriting
 their database references or original files. The cache version keeps future encoding changes
 addressable; orphan purge removes the matching derivative when it trashes an original.
+The admin Storage panel can start the same encoder as a bounded, process-local background prebuild
+over all random-name JPG/JPEG/PNG uploads. Its status endpoint exposes scan/build progress and byte
+totals, repeat starts reuse the running job, and neither the originals nor database references change.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
 notes, table size and shape, rim wood, skybox, and felt color — plus the GM/auto-save **game
@@ -771,7 +776,8 @@ See "Accounts, rooms & roles" below.
 double-six dominoes, the letter bag, and the Mahjong wall. `createDeckBuilders`
 receives the existing server shuffle function and returns `buildSimpleDeck`,
 `buildDominoSet`, `buildScrabbleBag`, and `buildMahjongWall`. Each builds a fresh
-inventory, preserves its back/tile/model/snap metadata, and shuffles once.
+inventory, preserves its back/tile/model/snap metadata, and shuffles once. Dominoes, letters, and
+Mahjong select the shared low-poly `bag` skin rather than the bentwood box.
 
 `TableRoom.spawn` chooses these inventories for standalone set spawning.
 `server/game/starters.js` receives the same builder collection and chooses the
@@ -794,7 +800,7 @@ Board starters then use the room's `swapBoard` and `calibrateGrid` operations. T
 pieces are placed upright on the calibrated cells and stop at the shared capacity limit;
 starter grids remain active for snapping but hidden visually. Boardless starters disable
 stale grid settings. Deck starters select the shared standard/domino/letter/Mahjong
-builder, retain tile geometry, snapping, and bag/box skins, and optionally deal the
+builder, retain tile geometry, snapping, and their selected deck skin, and optionally deal the
 configured starting hand to each seated player. Bowls and chip stacks use the ordinary
 authoritative `spawn` boundary. `TableRoom.setupStarter` remains as a small forwarding
 method so its caller-facing contract stays recognizable.
@@ -1095,7 +1101,8 @@ re-request). Admins host regardless and are excluded from the pending count.
 
 **Admin console.** `/admin.html` (guarded by `is_admin`) manages all rooms
 (restore / purge soft-deleted) and users (grant/revoke admin, approve/reject/
-revoke host, delete-with-cascade). A fresh installation provisions its first
+revoke host, delete-with-cascade). Its Storage section also previews and trashes orphaned assets and
+starts/polls the non-destructive uploaded-image WebP prebuild. A fresh installation provisions its first
 administrator before the listener opens from `BOOTSTRAP_ADMIN_USERNAME`,
 `BOOTSTRAP_ADMIN_EMAIL`, and a password file. The transaction is advisory-locked
 and only permits an empty users table; normal signup never grants admin. Local

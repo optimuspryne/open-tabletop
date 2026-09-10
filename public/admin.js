@@ -9,6 +9,7 @@ const TOKEN_KEY = 'tabletop.token';
 const MB = 1024 * 1024; // bytes → MB divisor for the cleanup readout
 const byId = (id) => document.getElementById(id);
 const token = () => localStorage.getItem(TOKEN_KEY) || '';
+let texturePollTimer = null;
 
 // Authenticated fetch wrapper: attaches the Bearer token, JSON-encodes a body,
 // and THROWS on any non-2xx — so callers just try/catch and alert the message.
@@ -295,6 +296,60 @@ async function purgeOrphans(count) {
   }
 }
 
+function renderTextureCache(status) {
+  const button = byId('prebuildTextures');
+  const label = button.querySelector('.lbl');
+  const resultEl = byId('textureCacheResult');
+  const running = status.state === 'running';
+  button.disabled = running;
+  label.textContent = running ? 'Building texture cache…' : 'Prebuild texture cache';
+
+  if (status.state === 'idle') {
+    resultEl.textContent = 'No cache prebuild has run since the server started.';
+  } else if (running && status.phase === 'scanning') {
+    resultEl.textContent = 'Finding uploaded JPG and PNG files…';
+  } else if (running) {
+    resultEl.textContent =
+      `Processed ${status.processed} of ${status.total}: ` +
+      `${status.created} built, ${status.skipped} already cached, ${status.failed} failed.`;
+  } else if (status.state === 'complete') {
+    resultEl.textContent =
+      `Cache ready: ${status.created} built, ${status.skipped} already cached, ` +
+      `${status.failed} failed. ${(status.sourceBytes / MB).toFixed(1)} MB of originals has ` +
+      `${(status.cachedBytes / MB).toFixed(1)} MB of cached WebP copies.`;
+  } else {
+    resultEl.textContent = `Cache build stopped: ${status.error || 'unknown error'}`;
+  }
+}
+
+async function refreshTextureCache() {
+  clearTimeout(texturePollTimer);
+  try {
+    const status = await api('/admin/texture-cache');
+    renderTextureCache(status);
+    if (status.state === 'running') {
+      texturePollTimer = setTimeout(refreshTextureCache, 1000);
+    }
+  } catch (e) {
+    byId('prebuildTextures').disabled = false;
+    byId('textureCacheResult').textContent = e.message;
+  }
+}
+
+async function prebuildTextures() {
+  clearTimeout(texturePollTimer);
+  byId('prebuildTextures').disabled = true;
+  byId('textureCacheResult').textContent = 'Starting…';
+  try {
+    const { status } = await api('/admin/texture-cache/prebuild', { method: 'POST' });
+    renderTextureCache(status);
+    texturePollTimer = setTimeout(refreshTextureCache, 250);
+  } catch (e) {
+    byId('prebuildTextures').disabled = false;
+    byId('textureCacheResult').textContent = e.message;
+  }
+}
+
 // Gate the page: require a token → resolve it → require isAdmin, else show the
 // "denied" panel. On success, wire the cleanup button and load the two tables.
 (async function boot() {
@@ -316,6 +371,8 @@ async function purgeOrphans(count) {
   myId = me.id;
   byId('admin').hidden = false;
   byId('scanOrphans').onclick = scanOrphans;
+  byId('prebuildTextures').onclick = prebuildTextures;
+  await refreshTextureCache();
   await loadRooms();
   await loadUsers();
 })();

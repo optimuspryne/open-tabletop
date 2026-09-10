@@ -69,6 +69,13 @@ function harness() {
     roomAccess,
     requireAdmin: async () => ({ id: '1' }),
     kickUserEverywhere: (id) => calls.push(['kickUser', id]),
+    texturePrebuilder: {
+      status: () => ({ state: 'idle' }),
+      start: () => {
+        calls.push(['prebuildTextures']);
+        return { started: true, status: { state: 'running' } };
+      },
+    },
   });
   return { calls, db, auth, admin };
 }
@@ -104,6 +111,19 @@ test('admin privilege changes invalidate live authority after the database updat
     ['setAdmin', '2', false],
     ['disconnectUser', '2'],
   ]);
+});
+
+test('admin texture cache endpoints expose status and start a background prebuild', async () => {
+  const h = harness();
+  assert.deepEqual(await invoke(h.admin, '/texture-cache'), {
+    code: 200,
+    body: { state: 'idle' },
+  });
+  assert.deepEqual(await invoke(h.admin, '/texture-cache/prebuild'), {
+    code: 202,
+    body: { started: true, status: { state: 'running' } },
+  });
+  assert.deepEqual(h.calls, [['prebuildTextures']]);
 });
 
 test('account deletion revokes connections after deletion prevents new authorization', async () => {

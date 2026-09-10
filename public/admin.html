@@ -65,6 +65,17 @@
           Cleanup moves files to <code>saved-assets/.trash/</code>, so it stays recoverable.
         </p>
       </div>
+      <div id="textureCache">
+        <button id="prebuildTextures" data-icon="device-floppy">
+          <span class="lbl">Prebuild texture cache</span>
+        </button>
+        <div id="textureCacheResult" class="muted" role="status" aria-live="polite"></div>
+        <p class="muted cleanupNote">
+          Builds display-sized WebP copies of random-name JPG and PNG uploads in every asset
+          library. Existing cache files are skipped, and original uploads and library references
+          are never changed.
+        </p>
+      </div>
     </main>
 
     <section id="denied" hidden>

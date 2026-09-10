@@ -28,7 +28,7 @@ export function createDeckBuilders({ shuffle }) {
   function buildDominoSet() {
     const cards = [];
     for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) cards.push(`domino:${a}:${b}`);
-    return { back: 'domback', cards: shuffle(cards), tile: 'domino', deckModel: 'bentwood' };
+    return { back: 'domback', cards: shuffle(cards), tile: 'domino', deckModel: 'bag' };
   }
 
   // A shuffled 100-tile letter bag for Wordy McWordface, built from LETTER_DIST (edit the bag there).
@@ -43,7 +43,7 @@ export function createDeckBuilders({ shuffle }) {
       cards: shuffle(cards),
       tile: 'letter',
       snap: true,
-      deckModel: 'bentwood',
+      deckModel: 'bag',
     };
   }
 
@@ -57,7 +57,7 @@ export function createDeckBuilders({ shuffle }) {
     for (const suit of MAHJONG.suits) for (let r = 1; r <= 9; r++) push(suit + r, 4); // 3 suits × 1-9 × 4 = 108
     for (const h of MAHJONG.honors) push(h, 4); // winds + dragons × 4 = 28
     for (const b of MAHJONG.bonus) push(b, 1); // flowers + seasons × 1 = 8
-    return { back: 'mjback', cards: shuffle(cards), tile: 'mahjong', deckModel: 'bentwood' };
+    return { back: 'mjback', cards: shuffle(cards), tile: 'mahjong', deckModel: 'bag' };
   }
 
   return { buildSimpleDeck, buildDominoSet, buildScrabbleBag, buildMahjongWall };

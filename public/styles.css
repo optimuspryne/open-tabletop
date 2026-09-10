@@ -3698,8 +3698,9 @@ body.not-gm .gm-only {
   opacity: 1;
 }
 
-/* ---- admin: storage cleanup as a stated two-step ----------------------- */
-#cleanup {
+/* ---- admin: storage maintenance cards --------------------------------- */
+#cleanup,
+#textureCache {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -3709,13 +3710,18 @@ body.not-gm .gm-only {
   border: 1px solid var(--border);
   border-radius: var(--r-lg);
 }
-#cleanupResult {
+#textureCache {
+  margin-top: 10px;
+}
+#cleanupResult,
+#textureCacheResult {
   display: flex;
   align-items: center;
   gap: 8px;
   font-size: var(--fs-sm);
 }
-#cleanup .cleanupNote {
+#cleanup .cleanupNote,
+#textureCache .cleanupNote {
   flex: 1 0 100%;
   margin: 0;
   font-size: var(--fs-sm);

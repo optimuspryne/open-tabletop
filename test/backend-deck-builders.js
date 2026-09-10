@@ -34,7 +34,7 @@ test('standard decks contain every rank/suit once, with optional red and black j
 
 test('domino inventory includes all 28 unordered double-six pairs and its skin', () => {
   const { cards, ...props } = builders.buildDominoSet();
-  assert.deepEqual(props, { back: 'domback', tile: 'domino', deckModel: 'bentwood' });
+  assert.deepEqual(props, { back: 'domback', tile: 'domino', deckModel: 'bag' });
   assert.equal(cards.length, 28);
   assert.equal(new Set(cards).size, 28);
   for (let a = 0; a <= 6; a++)
@@ -43,7 +43,7 @@ test('domino inventory includes all 28 unordered double-six pairs and its skin',
 
 test('letter inventory preserves configured counts, scores, blanks, and grid behavior', () => {
   const { cards, ...props } = builders.buildScrabbleBag();
-  assert.deepEqual(props, { back: 'lback', tile: 'letter', snap: true, deckModel: 'bentwood' });
+  assert.deepEqual(props, { back: 'lback', tile: 'letter', snap: true, deckModel: 'bag' });
   assert.equal(cards.length, 100);
   const actual = counts(cards);
   const expected = Object.fromEntries(
@@ -58,7 +58,7 @@ test('letter inventory preserves configured counts, scores, blanks, and grid beh
 
 test('Mahjong inventory contains 144 tiles with four copies of ordinary faces and single bonuses', () => {
   const { cards, ...props } = builders.buildMahjongWall();
-  assert.deepEqual(props, { back: 'mjback', tile: 'mahjong', deckModel: 'bentwood' });
+  assert.deepEqual(props, { back: 'mjback', tile: 'mahjong', deckModel: 'bag' });
   assert.equal(cards.length, 144);
   const actual = counts(cards);
   const expected = {};
