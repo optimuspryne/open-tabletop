@@ -1,13 +1,14 @@
 import { createDeckBuilders } from './server/game/deck-builders.js';
 import { createStarterSetup } from './server/game/starters.js';
 import { createTableBounds } from './server/game/table-bounds.js';
+import { createTrayOperations } from './server/game/trays.js';
 import { spawnTableCard } from './server/game/card-transfer.js';
 import { Piece, Player, ScoreRow, Overlay, State } from './server/game/schema.js';
 import {
   returnInspectedCard,
   recoverPendingInspections,
 } from './server/game/inspection-recovery.js';
-// server.js  —  node server.js   (Node 18+)
+// server.js  —  node server.js   (Node 20.9+; production uses Node 22)
 // Authoritative physics server. One cannon-es world is the single source of
 // truth for every piece. Clients send intent (grab / move-target / release /
 // flip / spawn); the server simulates and Colyseus syncs the resulting
@@ -39,9 +40,6 @@ import {
   stackVisible,
   gridActive,
   snapToCell,
-  TRAY,
-  trayCenter,
-  trayParts,
   trayPlace,
   inTray,
   colorProps,
@@ -64,6 +62,7 @@ import { createRequireUser, createRequireAdmin } from './server/http/auth-contex
 import { createAuthRouter } from './server/http/routes/auth.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
+import { createAssetTextureRouter } from './server/http/routes/asset-textures.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import {
   absorbedEntry,
@@ -304,6 +303,14 @@ const buildTableBounds = createTableBounds({
   tableThickness: SIM.tableThick,
   wall: SIM.wall,
 });
+const {
+  applyTrays: applyRoomTrays,
+  buildTrays: buildRoomTrays,
+  clearTraySeat: clearRoomTraySeat,
+  repositionTrayDice: repositionRoomTrayDice,
+  trayCenterFor: roomTrayCenter,
+  trayDropPos: roomTrayDropPos,
+} = createTrayOperations();
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
@@ -942,7 +949,7 @@ class TableRoom extends Room {
 
   // The world-space centre of seat N's tray (on the track, behind that seat).
   trayCenterFor(seat) {
-    return trayCenter(seatAngle(seat), this.state.tableX, this.state.tableZ);
+    return roomTrayCenter(this, seat);
   }
 
   // Build / rebuild the physics (floor + walls + lid) for EVERY enabled seat's tray, each at
@@ -950,58 +957,19 @@ class TableRoom extends Room {
   // die back to the right tray. Called when a tray is toggled or the table is resized; before
   // rebuilding, tray dice are moved to their seat's new centre so they stay inside their walls.
   buildTrays() {
-    const w = this.world,
-      mat = w.__mat;
-    for (const b of this._trayBounds || []) w.removeBody(b);
-    this._trayBounds = [];
-    this.repositionTrayDice(); // walls are about to move (resize/rebuild) — carry the dice along
-    this.state.trays.forEach((on, seatKey) => {
-      if (!on) return;
-      const seat = +seatKey,
-        angle = seatAngle(seat);
-      const center = this.trayCenterFor(seat);
-      const spin = new CANNON.Quaternion();
-      spin.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
-      for (const part of trayParts()) {
-        const b = new CANNON.Body({ mass: 0, material: mat });
-        b.addShape(new CANNON.Box(new CANNON.Vec3(part.hx, part.hy, part.hz)));
-        const p = trayPlace(part, center, angle);
-        b.position.set(p.x, p.y, p.z);
-        b.quaternion.copy(spin);
-        b.__traySeat = seat;
-        w.addBody(b);
-        this._trayBounds.push(b);
-      }
-    });
+    buildRoomTrays(this);
   }
 
   // Keep each tray die glued to its seat's tray as the track radius changes (table resize):
   // clamp it back inside that seat's current footprint. Cheap and only matters on resize.
   repositionTrayDice() {
-    if (!this.bodies) return; // buildBounds() runs in onCreate before the bodies map exists — nothing to move yet
-    this.bodies.forEach((body, _id) => {
-      if (body.__traySeat == null) return;
-      const seat = body.__traySeat,
-        angle = seatAngle(seat),
-        c = this.trayCenterFor(seat);
-      if (inTray(body.position.x, body.position.z, c, angle, 0.2)) return; // still inside → leave it
-      const p = trayPlace({ x: 0, y: 1, z: 0 }, c, angle);
-      body.position.set(p.x, p.y, p.z);
-      body.velocity.setZero();
-      body.angularVelocity.setZero();
-      body.wakeUp();
-    });
+    repositionRoomTrayDice(this);
   }
 
   // A drop point for a new die in SEAT's tray: a random spot inside its footprint, above the
   // floor (below the wall tops) so it tumbles in.
   trayDropPos(seat) {
-    const c = this.trayCenterFor(seat),
-      angle = seatAngle(seat);
-    const lx = (Math.random() * 2 - 1) * (TRAY.hx - 0.7);
-    const lz = (Math.random() * 2 - 1) * (TRAY.hz - 0.7);
-    const p = trayPlace({ x: lx, y: 1.3, z: lz }, c, angle);
-    return [p.x, p.y, p.z];
+    return roomTrayDropPos(this, seat);
   }
 
   // The caller's seat, or null if they're not seated (can't own a tray).
@@ -1108,12 +1076,7 @@ class TableRoom extends Room {
 
   // Remove every die belonging to seat N's tray (used by Clear and by putting the tray away).
   clearTraySeat(seat) {
-    const ids = [];
-    this.state.pieces.forEach((piece, id) => {
-      const b = this.bodies.get(id);
-      if (piece.type === 'die' && b && b.__traySeat === seat) ids.push(id);
-    });
-    for (const id of ids) this.removePiece(id);
+    clearRoomTraySeat(this, seat);
   }
 
   // Wipe every piece + its private bookkeeping (shared by Reset and scene load).
@@ -1172,12 +1135,7 @@ class TableRoom extends Room {
   // Restore which seats' trays are out from a scene (an array of seat indices), then rebuild
   // their walls. Absent → no trays (older scenes have none). The tray DICE ride as pieces.
   applyTrays(seats) {
-    this.state.trays.clear();
-    for (const s of Array.isArray(seats) ? seats : []) {
-      const seat = +s;
-      if (seat >= 0 && seat < SEAT_ANGLES.length) this.state.trays.set(String(seat), true);
-    }
-    this.buildTrays();
+    applyRoomTrays(this, seats);
   }
 
   serializeScene() {
@@ -1783,8 +1741,15 @@ app.post(
   },
 );
 
+// Bundled Mahjong faces keep stable paths within a release. Let repeat room entries reuse them
+// without 42 conditional requests, while the general public tree (including JS) still revalidates.
+app.use('/mahjong/faces', express.static('public/mahjong/faces', { maxAge: '1d' }));
 app.use(express.static('public'));
 app.use('/shared', express.static('shared'));
+
+// Card/tile faces use a display-sized WebP derivative. Originals remain untouched for library
+// editing and future reprocessing; the derivative is generated once and then cached immutably.
+app.use(createAssetTextureRouter({ assetsDir: ASSETS_DIR, assetKinds: ASSET_KINDS }));
 
 // Serve uploaded images/models, but NEVER the .json metadata beside them — that
 // keeps a hidden card front living on disk from being fetched directly.
@@ -1794,7 +1759,8 @@ app.use(
     if (/\.json$/i.test(req.path)) return res.sendStatus(404);
     next();
   },
-  express.static(ASSETS_DIR),
+  // Uploaded files receive random names and are never overwritten; edits create a new URL.
+  express.static(ASSETS_DIR, { maxAge: '1y', immutable: true }),
 );
 
 // Raw image/model uploads are authenticated, byte-validated, and throttled in

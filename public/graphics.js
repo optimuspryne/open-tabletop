@@ -817,6 +817,13 @@ function loadImageTexture(url) {
   return texture;
 }
 
+// Uploaded originals can be several megabytes and far larger than a rendered card face. Ask the
+// server for its persistent display-sized derivative while leaving external/data URLs untouched.
+function cardTextureURL(ref) {
+  const match = /^\/assets\/([a-z]+)\/([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))$/i.exec(ref);
+  return match ? `/asset-textures/v1/${match[1]}/${encodeURIComponent(match[2])}.webp` : ref;
+}
+
 // Decode a card "front" ref into a structured descriptor. The tagged-string
 // encoding (rank: / text: / tback: / back / image) is defined HERE ONLY — both
 // the 3D texture path (below) and the DOM hand-card path (client.js) decode via
@@ -872,7 +879,7 @@ function resolveTexture(ref) {
     texture = textFaceTexture(parsed.text, parsed.color, parsed.bg, parsed.accent);
   else if (parsed.kind === 'tback')
     texture = textBackTexture(parsed.bg, parsed.text, parsed.textColor, parsed.accent);
-  else texture = loadImageTexture(parsed.ref);
+  else texture = loadImageTexture(cardTextureURL(parsed.ref));
 
   _texCache.set(ref, texture);
   return texture;
@@ -1242,6 +1249,25 @@ function roundMask(hw = TILES.card.w, hh = TILES.card.h, round = CARD_ROUND) {
 // A card mesh: a thin box whose top/bottom faces carry the front/back textures
 // and whose four edges are invisible. A face-down card omits the front texture
 // so its hidden face can never even be rendered client-side.
+// Card/tile geometry is immutable after construction. Initial room hydration may create hundreds
+// of identical pieces, so share geometry by dimensions instead of repeatedly triangulating the
+// same rounded prism (or rebuilding the same thin box) on the browser's main thread.
+const _thinCardGeometry = new Map(),
+  _tileGeometry = new Map(),
+  _hexGeometry = new Map();
+const geometryKey = (...values) => values.join(':');
+
+function thinCardGeo(hw, hh, th) {
+  const key = geometryKey(hw, hh, th);
+  let geometry = _thinCardGeometry.get(key);
+  if (!geometry) {
+    geometry = new THREE.BoxGeometry(hw * 2, th * 2, hh * 2);
+    geometry.userData.sharedCardGeometry = true;
+    _thinCardGeometry.set(key, geometry);
+  }
+  return geometry;
+}
+
 function cardMesh(props = {}) {
   const { hw, hh, th, round, shape } = cardGeom(props); // footprint/thickness/shape (standard card, a tile, or explicit geom)
   // Which face renders up vs down. A double-sided (open) tile shows its BACK when face-down (`down`);
@@ -1304,7 +1330,7 @@ function cardMesh(props = {}) {
     });
   const dnMat = faceMat(dn);
   const upMat = up ? faceMat(up) : dnMat; // secret face-down (no front): both faces show the back
-  const geo = new THREE.BoxGeometry(hw * 2, th * 2, hh * 2);
+  const geo = thinCardGeo(hw, hh, th);
   // Box material order: +X, -X, +Y(top), -Y(bottom), +Z, -Z → up face on top, down face beneath, edges hidden.
   const mesh = new THREE.Mesh(geo, [invisible, invisible, upMat, dnMat, invisible, invisible]);
   // Cast a shadow that follows the alpha silhouette, not the square box — no dark sliver at the corners.
@@ -1539,7 +1565,14 @@ function extrudeShape(shape, W, D, depth) {
 // A rounded SOLID tile geometry (rounded vertical edges too, unlike a plain box): a rounded-rect
 // footprint W×D extruded to `depth`, centred, thickness along Y.
 function tileGeo(W, D, radius, depth) {
-  return extrudeShape(roundedRectShape(W, D, radius), W, D, depth);
+  const key = geometryKey(W, D, radius, depth);
+  let geometry = _tileGeometry.get(key);
+  if (!geometry) {
+    geometry = extrudeShape(roundedRectShape(W, D, radius), W, D, depth);
+    geometry.userData.sharedCardGeometry = true;
+    _tileGeometry.set(key, geometry);
+  }
+  return geometry;
 }
 // A regular POINTY-TOP hexagon THREE.Shape, circumradius `r` (vertices point at top & bottom). After
 // the extrude's rotateX its vertices land at world XZ angles ±30°/±90°/±150° — exactly where cannon's
@@ -1558,7 +1591,14 @@ function hexShape(r) {
 }
 // A regular pointy-top hexagonal prism (circumradius `r`, thickness `depth`), image on the caps.
 function hexGeo(r, depth) {
-  return extrudeShape(hexShape(r), r * 2 * HEX_HH, r * 2, depth);
+  const key = geometryKey(r, depth);
+  let geometry = _hexGeometry.get(key);
+  if (!geometry) {
+    geometry = extrudeShape(hexShape(r), r * 2 * HEX_HH, r * 2, depth);
+    geometry.userData.sharedCardGeometry = true;
+    _hexGeometry.set(key, geometry);
+  }
+  return geometry;
 }
 
 // The deck mesh: a rounded footprint extruded upward, whose height scales with

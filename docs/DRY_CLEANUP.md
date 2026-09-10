@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: table-boundary extraction completed, tested, and documented; dice-tray extraction is next.
+Status: dice-tray extraction completed; scale and grid extraction is next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -66,9 +66,9 @@ source and the MCP memory graph before starting each step.
 
 ### 4. Extract dice tray operations
 
-- [ ] Group `buildTrays`, `trayCenterFor`, `trayDropPos`, `repositionTrayDice`,
-  `clearTraySeat`, and `applyTrays` in a proposed `server/game/trays.js`.
-- Decide whether `seatOf` stays as a small room helper after checking its other callers.
+- [x] Group `buildTrays`, `trayCenterFor`, `trayDropPos`, `repositionTrayDice`,
+  `clearTraySeat`, and `applyTrays` in `server/game/trays.js`.
+- Keep `seatOf` as a small room helper because card dealing and multiple handlers also use it.
 - Preserve ownership, positioning, rebuild behavior, and disconnect cleanup.
 - Validate tray creation/removal, rolling and clearing dice, table resizing, and
   player departure/reconnection without duplicate bodies or stranded dice.

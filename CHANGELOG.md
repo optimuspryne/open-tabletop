@@ -8,6 +8,19 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Changed
+- Reuse immutable card and tile geometry by dimensions during browser hydration instead of
+  repeatedly triangulating identical pieces. Cache random-name uploaded assets immutably and
+  bundled Mahjong faces for repeat room entries, reducing large double-sided tile load stalls.
+  Serve existing uploaded card and tile art through persistent, display-sized WebP derivatives,
+  preserving the original files while reducing cold-room transfer and image-decode cost. The
+  server runtime minimum is now Node.js 20.9 so this pipeline can use the patched Sharp release;
+  the production container already uses Node.js 22.
+
+### Fixed
+- Keep the bootstrap table mesh hidden until the joined room's synchronized shape, size, felt,
+  rim wood, and grid are applied, preventing a rectangular mahogany flash on refresh or re-entry.
+
 ### Security
 - Recheck live authorization after asynchronous library/member reads before changing the table,
   kicking members, changing roles, or delivering privileged data. Revocation/demotion also
@@ -32,6 +45,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract personal dice-tray physics and lifecycle operations into `server/game/trays.js`,
+  retaining shared geometry, seat ownership, resize repositioning, scene restoration, and
+  disconnect cleanup behind the existing room methods.
 - Extract physical table floor and containment-ring construction into
   `server/game/table-bounds.js`, retaining shared shape outlines, live resize cleanup,
   collision behavior, and personal-tray rebuilding.

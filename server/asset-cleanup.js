@@ -98,6 +98,10 @@ export function createAssetCleanup({ assetsDir, assetKinds, allAssetRefBlobs, li
         const destDir = path.join(assetsDir, '.trash', kind);
         fs.mkdirSync(destDir, { recursive: true });
         fs.renameSync(source, path.join(destDir, name));
+        // Texture derivatives are reproducible and must not outlive a removed original.
+        fs.rmSync(path.join(assetsDir, '.texture-cache', 'v1', kind, `${name}.webp`), {
+          force: true,
+        });
         moved.push(url);
       } catch (error) {
         console.error('[cleanup] move', url, error.message);

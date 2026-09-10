@@ -284,6 +284,7 @@ const tableMesh = new THREE.Mesh(
 );
 tableMesh.position.y = -0.5; // top surface sits at y = 0
 tableMesh.receiveShadow = true;
+tableMesh.visible = false; // reveal only after the joined room's durable appearance is applied
 scene.add(tableMesh);
 
 // A wooden rim around the felt edge: the shared tableOutline offset outward for the outer edge,
@@ -346,7 +347,14 @@ function rimGeometry(hx, hz, shape) {
 const rimMesh = new THREE.Mesh(rimGeometry(TABLE.x, TABLE.z, 'rect'), rimMat);
 rimMesh.castShadow = true;
 rimMesh.receiveShadow = true;
+rimMesh.visible = false;
 scene.add(rimMesh);
+
+// Avoid flashing the local rectangular/mahogany bootstrap meshes while the room join is pending.
+function setTableVisible(visible) {
+  tableMesh.visible = !!visible;
+  rimMesh.visible = !!visible;
+}
 
 // Rebuild the felt + rim at new half-extents / shape (the GM resized or reshaped the play surface).
 function resizeTable(hx, hz, shape = 'rect') {
@@ -372,6 +380,7 @@ export {
   resizeTable,
   setTableColor,
   setRimWood,
+  setTableVisible,
   setQuality,
   getQuality,
   deviceClass,

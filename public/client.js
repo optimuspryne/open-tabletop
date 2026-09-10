@@ -9,6 +9,7 @@ import {
   resizeTable,
   setTableColor,
   setRimWood,
+  setTableVisible,
   setQuality,
   getQuality,
   deviceClass,
@@ -1100,6 +1101,7 @@ function rebuildGrid() {
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
   setRimWood(room.state.rimWood || 'mahogany'); // initial rim wood
   rebuildGrid(); // initial grid (inert until a GM sets a cell size + square style)
+  setTableVisible(true); // reveal only after the joined room's complete table appearance is applied
 
   // The game table and the editor have different toolbars but share this file, so
   // every page-specific control is wired defensively (no-op if it isn't on the page).
@@ -3517,7 +3519,8 @@ let handDrag = null; // dragging a card out of the hand onto the table
 const dropPreview = (m) => {
   if (!m) return;
   scene.remove(m);
-  m.geometry && m.geometry.dispose();
+  // Placed cards and drag previews share immutable geometry; keep the cached GPU buffer alive.
+  if (m.geometry && !m.geometry.userData.sharedCardGeometry) m.geometry.dispose();
   (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x && x.dispose());
 };
 let handClickTimer = null; // a pending single-click play, cancelled if a double-click (inspect) follows

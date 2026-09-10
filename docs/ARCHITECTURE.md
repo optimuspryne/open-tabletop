@@ -72,6 +72,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   construction. `server.js` injects the `SIM` table/wall dimensions, while the
   module reads the shared table outline, replaces obsolete Cannon bodies, and
   rebuilds personal trays after every table-size or shape change.
+- **`server/game/trays.js`** — personal tray physics and lifecycle operations. It owns
+  tray-bound rebuilding, resize repositioning, randomized drop placement, per-seat clearing,
+  and scene restoration; `TableRoom` keeps small forwarding methods and the general `seatOf`
+  ownership helper.
 - **`server/` support modules** — shared permission and validation rules,
   card/deck state helpers, the piece-props codec, upload validation, database and
   session/Redis configuration, bootstrap-admin provisioning, async HTTP and
@@ -91,10 +95,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
-  plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks.
+  plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks. Bootstrap table/rim meshes stay
+  hidden until `client.js` applies the joined room's synchronized shape, size, felt, rim, and grid.
 - **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
-  the `.glb` model loading/measuring helpers, and the `KIND` registry. Pure:
-  props in, meshes out — no shared runtime state.
+  the `.glb` model loading/measuring helpers, and the `KIND` registry. Immutable thin-card,
+  rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
+  does not repeatedly triangulate identical pieces.
 - **`public/client.js`** — the tightly-coupled runtime: networking, interaction
   (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
   render loop. Holds the mutable session state (`room`, `down`, `inspect`,
@@ -482,7 +488,8 @@ are the source of truth, and a ledger would pull the feel away from a real table
 
 Two things let it fit the engine without new machinery. First, the tray is a real **physics
 container** — floor + four walls + an invisible lid — built from the shared `trayParts()` so the
-collider and the client mesh are the same box; `buildTrays()` rebuilds every enabled seat's walls
+collider and the client mesh are the same box. `server/game/trays.js` owns `buildTrays()` and the
+related room operations; it rebuilds every enabled seat's walls
 at its angle (bodies tagged `__traySeat`) and slides the dice along on a table resize. The one
 real subtlety is the **out-of-bounds net**: it yanks any stray body back to table centre, and a
 tray sits _past_ the table edge, so a tray die is contained by _its own_ tray bounds (`inTray`,
@@ -704,6 +711,14 @@ string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 **CRUD-only role** (`tabletop_app`) — it can't run DDL — so a leaked app credential
 can't reshape or drop the schema.
 
+Large uploaded face originals are not sent directly to the renderer. For local random-name card
+and tile references, `public/graphics.js` requests the versioned
+`/asset-textures/v1/<kind>/<file>.webp` route. `server/http/routes/asset-textures.js` lazily creates
+a maximum-768-pixel WebP under `ASSETS_DIR/.texture-cache/v1/`, coalesces concurrent requests for
+the same face, and serves the result immutably. This benefits existing uploads without rewriting
+their database references or original files. The cache version keeps future encoding changes
+addressable; orphan purge removes the matching derivative when it trashes an original.
+
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
 notes, table size and shape, rim wood, skybox, and felt color — plus the GM/auto-save **game
 snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
@@ -796,6 +811,16 @@ shape receives a slightly overlapping oriented wall box for each edge from the s
 `TableRoom.buildBounds` remains as a small forwarding method because room creation, durable
 scene restoration, and live GM resizing already call that room API. The extracted builder
 finishes by calling `room.buildTrays()`, keeping personal trays aligned with the resized table.
+
+## Personal tray operations boundary
+
+`createTrayOperations` captures only injectable randomness and returns the room-oriented tray
+operations. `TableRoom.trayCenterFor`, `buildTrays`, `repositionTrayDice`, `trayDropPos`,
+`clearTraySeat`, and `applyTrays` remain recognizable forwarding methods for existing callers.
+The extracted module depends on room capabilities (`world`, `state`, `bodies`, `removePiece`) and
+shared tray geometry rather than the `TableRoom` class, which keeps early construction and scene
+restoration independently testable. `seatOf` remains on the room because deals, permissions,
+disconnect handling, and other non-tray features also consume it.
 
 ## Synchronized state boundary
 

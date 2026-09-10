@@ -46,6 +46,8 @@ paths are below.
 
 ## Run via NPM
 
+Direct installs require **Node.js 20.9 or newer**. The production container uses Node.js 22.
+
 ```bash
 # Set up Postgres and Redis first — see "Database" and "Redis" below
 git clone "https://github.com/optimuspryne/open-tabletop.git"
@@ -373,11 +375,12 @@ server/
   assets/              image and self-contained GLB upload validation
   game/
     handlers/          movement, pieces, cards, library, rooms, overlays, and members
+    trays.js            personal dice-tray physics and lifecycle operations
     scene-persistence.js portable scene/game serialization and restoration
     safe-message.js    Colyseus message and lifecycle error boundaries
     props-codec.js     canonical synced-piece props encoding
   http/
-    routes/            auth, rooms/profile/host, admin, and upload routers
+    routes/            auth, rooms/profile/host, admin, upload, and texture-derivative routers
     async-route.js     async Express error boundary
     auth-context.js    Bearer-user and administrator guards
 
@@ -592,6 +595,7 @@ Files get random names, so unrevealed fronts stay hidden.
 ```
 saved-assets/            (ASSETS_DIR, default ./saved-assets — image/model FILES only)
   uploads/  decks/  boards/  props/
+  .texture-cache/v1/     generated card/tile WebP derivatives (reproducible)
 ```
 
 `/assets/<kind>/<file>` is served statically. Card faces are stored as
@@ -599,6 +603,11 @@ saved-assets/            (ASSETS_DIR, default ./saved-assets — image/model FIL
 never image bytes — so a full backup of image decks means dumping the DB **and**
 copying `saved-assets/`. Bundled models live separately under `public/models/`
 (trusted, shipped with the app — no upload path).
+
+For rendering, local uploaded card/tile faces are served through a persistent 768-pixel WebP
+derivative. The original remains unchanged, while the generated `.texture-cache/v1` copy reduces
+cold-room transfer and is cached immutably by the browser. The derivative cache can be regenerated
+from the originals and does not need to be included in backups.
 
 ## Custom `.glb` models
 

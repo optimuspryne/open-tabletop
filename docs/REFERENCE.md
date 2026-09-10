@@ -12,6 +12,7 @@ The codebase:
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
 | `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                           |
 | `server/game/table-bounds.js`                                                                          | Node    | Injected Cannon floor and containment-ring construction for every table shape, including boundary-body replacement and tray rebuilding                                                           |
+| `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
 | `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
 | `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
@@ -20,7 +21,7 @@ The codebase:
 | `auth.js`                                                                                              | Node    | Password hashing (scrypt) + device-token hashing                                                                                                                                                 |
 | `migrate.js`                                                                                           | Node    | Owner-role startup migration runner for `postgres/NNN_*.sql`                                                                                                                                     |
 | `server/game/handlers/*.js`                                                                            | Node    | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers                                             |
-| `server/http/*.js` + `server/http/routes/*.js`                                                         | Node    | HTTP auth/error seams and auth/room/admin/upload routers                                                                                                                                         |
+| `server/http/*.js` + `server/http/routes/*.js`                                                         | Node    | HTTP auth/error seams and auth/room/admin/upload routers, including on-demand card/tile texture derivatives                                                                                      |
 | `server/{auth-validation,permissions,message-validation,deck-state}.js` + `server/game/props-codec.js` | Node    | Shared validation/rules, state helpers, canonical piece-props codec                                                                                                                              |
 | `server/{database-config,session-config,bootstrap-admin}.js`                                           | Node    | DB config, session lifetime, and first-boot admin provisioning                                                                                                                                   |
 | `server/assets/upload-validation.js`                                                                   | Node    | Image magic-byte and self-contained GLB validation                                                                                                                                               |
@@ -30,7 +31,7 @@ The codebase:
 | `server/room-queries.js`                                                                               | Node    | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection                                                                       |
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables                                                                                                                                  |
-| `public/graphics.js`                                                                                   | browser | Texture & mesh builders, model loading, `KIND` registry                                                                                                                                          |
+| `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, render loop                                                                                                                                  |
 | `public/controls.js`                                                                                   | browser | Mouse/touch profiles translated into device-neutral intents                                                                                                                                      |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
@@ -75,6 +76,12 @@ classDiagram
     class TableBounds["server/game/table-bounds.js"] {
         +createTableBounds({tableThickness, wall})
         +buildTableBounds(room, hx, hz, shape)
+    }
+    class TrayOperations["server/game/trays.js"] {
+        +createTrayOperations({random})
+        +buildTrays(room) / repositionTrayDice(room)
+        +trayDropPos(room, seat) / clearTraySeat(room, seat)
+        +applyTrays(room, seats)
     }
     class Physics["server/physics.js"] {
         +buildWorld(simulation)
@@ -150,6 +157,8 @@ classDiagram
     StarterSetup <.. Server
     Shared <.. TableBounds
     TableBounds <.. Server
+    Shared <.. TrayOperations
+    TrayOperations <.. Server
     Shared <.. Physics
     Shared <.. ScenePersistence
     Shared <.. Core
@@ -358,6 +367,23 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   _(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
   gone — that logic now lives in `db.js`.)_
 
+### `server/http/routes/asset-textures.js` — card/tile display derivatives
+
+**`createAssetTextureRouter({assetsDir, assetKinds, maxDimension?})`** serves
+`GET /asset-textures/v1/<kind>/<random-image-name>.webp`. It accepts only an allowlisted
+asset category and the random image filename shape produced by `saveAsset`; traversal,
+metadata, models, and arbitrary filenames return 404.
+
+- **`textureAssetPaths(...)`** resolves the immutable original and its versioned cache path
+  under `.texture-cache/v1/<kind>/`.
+- **`createTextureDerivative(source, destination, maxDimension = 768)`** preserves aspect and
+  alpha, never enlarges the source, applies EXIF orientation, and writes a quality-82 WebP via
+  an atomic temporary file. Concurrent requests for one face share the same pending job.
+- Successful responses are `image/webp` with a one-year immutable cache policy. Originals stay
+  untouched for library editing, backups, and future derivative versions. `cardTextureURL` in
+  `public/graphics.js` redirects only local random-name `/assets/...` card/tile references;
+  procedural, data, bundled, and external references keep their existing path.
+
 ### `server/asset-cleanup.js` — orphan preview and trash
 
 **`createAssetCleanup({assetsDir, assetKinds, allAssetRefBlobs, liveRooms})`** returns:
@@ -368,7 +394,8 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   collection failures reject the scan.
 - **`trashOrphans(orphans)`** — validate category/filename boundaries and move
   candidates to `.trash/<kind>/<name>`, returning successfully moved URLs. The admin
-  purge route invokes a fresh scan before calling it.
+  purge route invokes a fresh scan before calling it. A reproducible cached texture derivative
+  is removed when its original is moved.
 
 Internal **`roomAssetValues(room)`** selects synchronized state, saved snapshots,
 private decks/cards/hands, pending hands/inspections, drafts, reveals, notebooks,
@@ -463,6 +490,20 @@ tables use four axis-aligned walls with the configured corner overlap. Other sha
 oriented, slightly over-length box per non-zero edge from shared `tableOutline`, sealing the
 ring at each vertex. It then calls `room.buildTrays()` so enabled personal trays follow table
 resizes. Piece bodies and other unrelated Cannon bodies are not replaced.
+
+### `server/game/trays.js` — personal dice-tray operations
+
+**`createTrayOperations({random = Math.random} = {})`** returns the six room operations behind
+the existing `TableRoom` forwarding methods: `trayCenterFor`, `buildTrays`,
+`repositionTrayDice`, `trayDropPos`, `clearTraySeat`, and `applyTrays`. The module reads shared
+`TRAY`, `SEAT_ANGLES`, and tray transforms, while `server.js` retains the `SIM` roll tuning and
+the broader `seatOf` ownership helper.
+
+Rebuilding removes only bodies tracked in `room._trayBounds`, repositions already-tagged dice
+before replacing enabled seats' floor/wall/lid bodies, and remains safe during early room setup
+before the piece-body map exists. Drop randomness is injectable for deterministic tests. Scene
+restoration validates and deduplicates seat indices; clearing removes only dice whose Cannon body
+has the matching `__traySeat`.
 
 ### Card transfers and deck properties
 
@@ -1041,7 +1082,9 @@ Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** 
 felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
 wooden rim around the edge; the physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor/tint the felt
 fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`walnut`/`birch`/`green`/
-`oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`), and
+`oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`),
+**`setTableVisible(visible)`** (toggle the felt and rim together; initial room join reveals them
+only after synchronized appearance is applied), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,

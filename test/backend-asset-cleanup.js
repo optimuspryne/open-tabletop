@@ -98,6 +98,9 @@ test('scan/purge preserve recent files, directories, symlinks and referenced ass
   refs.push(h.file('mats', 'used.jpg'));
   h.file('mats', 'recent.jpg', false);
   const old = h.file('mats', 'unused.jpg');
+  const derivative = path.join(h.assetsDir, '.texture-cache', 'v1', 'mats', 'unused.jpg.webp');
+  fs.mkdirSync(path.dirname(derivative), { recursive: true });
+  fs.writeFileSync(derivative, 'derived texture');
   fs.mkdirSync(path.join(h.assetsDir, 'mats', 'directory'));
   fs.symlinkSync('used.jpg', path.join(h.assetsDir, 'mats', 'link.jpg'));
   const orphans = await h.findOrphanAssets();
@@ -107,6 +110,7 @@ test('scan/purge preserve recent files, directories, symlinks and referenced ass
   );
   assert.deepEqual(h.trashOrphans(orphans), [old]);
   assert.equal(fs.existsSync(path.join(h.assetsDir, '.trash', 'mats', 'unused.jpg')), true);
+  assert.equal(fs.existsSync(derivative), false);
   for (const name of ['used.jpg', 'recent.jpg', 'directory', 'link.jpg']) {
     assert.equal(fs.existsSync(path.join(h.assetsDir, 'mats', name)), true);
   }
