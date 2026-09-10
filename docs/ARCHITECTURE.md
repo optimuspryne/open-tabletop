@@ -76,6 +76,13 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   `server.js` injects the grid-lift ceiling; the module snapshots and validates synchronized scale
   state, reads board metadata/collider dimensions, and schedules saves after successful square or
   hex calibration while the room keeps stable forwarding methods.
+- **`server/game/piece-operations.js`** — authoritative recoloring and self-righting policy.
+  It resolves effective and natural stand modes from synchronized props and shared piece
+  definitions, and applies validated `colorProps` results through the piece-props codec.
+  `TableRoom` retains forwarding methods for piece handlers and the physics update loop.
+- **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
+  It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
+  and delegates finite-stack removal or collider resizing back to the room after consumption.
 - **`server/game/trays.js`** — personal tray physics and lifecycle operations. It owns
   tray-bound rebuilding, resize repositioning, randomized drop placement, per-seat clearing,
   and scene restoration; `TableRoom` keeps small forwarding methods and the general `seatOf`

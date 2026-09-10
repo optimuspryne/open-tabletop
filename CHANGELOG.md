@@ -51,6 +51,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract authoritative recoloring and stand-mode policy into `server/game/piece-operations.js`,
+  and dispenser item/inventory behavior into `server/game/dispenser-operations.js`, while retaining
+  the existing room-facing contracts used by handlers and physics.
 - Extract measurement-scale snapshots, validated restoration, and board grid calibration into
   `server/game/table-scale.js`, retaining the room's existing persistence and starter interfaces.
 - Extract personal dice-tray physics and lifecycle operations into `server/game/trays.js`,

@@ -1,4 +1,13 @@
 import { createDeckBuilders } from './server/game/deck-builders.js';
+import {
+  afterDispense as consumeDispensedItem,
+  dispenserItem as resolveDispenserItem,
+} from './server/game/dispenser-operations.js';
+import {
+  naturalStand as naturalPieceStand,
+  recolorPiece as recolorRoomPiece,
+  standOf as pieceStand,
+} from './server/game/piece-operations.js';
 import { createStarterSetup } from './server/game/starters.js';
 import { createTableBounds } from './server/game/table-bounds.js';
 import { createTableScale } from './server/game/table-scale.js';
@@ -36,14 +45,12 @@ import {
   deckHeight,
   MEASURE,
   DISPENSERS,
-  dispensedSpec,
   itemMatchesDispenser,
   stackVisible,
   gridActive,
   snapToCell,
   trayPlace,
   inTray,
-  colorProps,
   STARTERS,
   cardGeom,
   sanitizeGeom,
@@ -807,17 +814,13 @@ class TableRoom extends Room {
   // The spawn spec a dispenser hands out: an existing PROP, tinted (poker/coin) or
   // team-colored (go bowl) from the dispenser's own config.
   dispenserItem(piece) {
-    return dispensedSpec(readProps(piece)); // shape + tint/team the stack hands out (shared rule)
+    return resolveDispenserItem(piece); // shape + tint/team the stack hands out (shared rule)
   }
 
   // After a dispense: a finite dispenser shrinks and is removed when empty; an
   // infinite one (bowl) is unchanged.
   afterDispense(piece, id) {
-    const d = DISPENSERS[readProps(piece).disp];
-    if (!d || d.infinite) return;
-    piece.count = Math.max(0, piece.count - 1);
-    if (piece.count <= 0) this.removePiece(id);
-    else this.updateStackCollider(id);
+    consumeDispensedItem(this, piece, id);
   }
 
   // Write a table deck to the disk library; returns true on success. Any inline
@@ -844,21 +847,13 @@ class TableRoom extends Room {
   //   'flat' → keep it lying flat (decks, checkers, coins)
   //   falsy  → don't self-right at all
   standOf(piece) {
-    const props = readProps(piece);
-    if (props.stand !== undefined) return props.stand; // per-instance override (the U-key toggle)
-    if (piece.type === 'deck' || piece.type === 'dispenser' || piece.type === 'mat') return 'flat'; // stacks/bowls/mats settle flat
-    return (PROPS[props.shape] || {}).stand; // else the prop shape's default
+    return pieceStand(piece);
   }
   // Which mode to switch a piece INTO when the toggle turns self-right on. Uses
   // the shape's declared default, or infers "flat" when the collider is thin on Y
   // (so a coin/checker lies down) and "stand tall" otherwise.
   naturalStand(piece) {
-    if (piece.type === 'deck' || piece.type === 'dispenser' || piece.type === 'mat') return 'flat';
-    const props = readProps(piece),
-      spec = PROPS[props.shape] || {};
-    if (spec.stand) return spec.stand;
-    const box = spec.collider && spec.collider.box;
-    return box && box[1] <= box[0] && box[1] <= box[2] ? 'flat' : true;
+    return naturalPieceStand(piece);
   }
 
   // Delete a piece everywhere: physics body, synced state, and every private map.
@@ -878,14 +873,7 @@ class TableRoom extends Room {
   // prop takes body; a poker/coin dispenser takes its tint; a team bowl takes a team flag.
   // Anything else — cards, boards — is left untouched. Writing props re-syncs it to every client.
   recolorPiece(id, opts = {}) {
-    const piece = this.state.pieces.get(id);
-    if (!piece) return false;
-    const props = readProps(piece);
-    const dispDef = piece.type === 'dispenser' ? DISPENSERS[props.disp] : null;
-    const next = colorProps(piece.type, props, opts, dispDef);
-    if (!next) return false;
-    writeProps(piece, next); // synced → every client rebuilds the piece with the new tint
-    return true;
+    return recolorRoomPiece(this, id, opts); // synced → every client rebuilds the piece
   }
 
   // Send a player their private hand, and publish only its COUNT to everyone

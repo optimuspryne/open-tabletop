@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: scale and grid extraction completed; piece and dispenser operations are next.
+Status: piece and dispenser operations completed; library and member services are next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -82,8 +82,10 @@ source and the MCP memory graph before starting each step.
 
 ### 6. Extract remaining piece/dispenser operations
 
-- [ ] Review `recolorPiece`, `standOf`, and `naturalStand` as a focused piece-operations group.
-- [ ] Review `dispenserItem` and `afterDispense` as a dispenser-operations group.
+- [x] Extract `recolorPiece`, `standOf`, and `naturalStand` into the focused
+  `server/game/piece-operations.js` module.
+- [x] Extract `dispenserItem` and `afterDispense` into the focused
+  `server/game/dispenser-operations.js` module.
 - Choose module boundaries from their dependencies; avoid a general-purpose utility dump.
 - Keep color changes authoritative and synchronized; retain shared `colorProps` rules.
 - Validate single/group recoloring, standing/flat behavior, finite versus infinite

@@ -782,6 +782,19 @@ retains the durable room/scene shape, **`applyScale(value)`** validates restored
 **`calibrateGrid(message)`** fits the active board before scheduling persistence. Existing callers
 continue using the `TableRoom` API.
 
+Piece-policy methods are thin facades over `server/game/piece-operations.js`:
+**`standOf(piece)`** honors a synchronized per-instance override before the shared shape default,
+**`naturalStand(piece)`** selects the declared or collider-derived mode used when self-righting is
+enabled, and **`recolorPiece(id, options)`** validates through shared `colorProps` before writing
+the resulting props through the synchronized JSON codec. Single and group handlers retain the
+existing `TableRoom` API, as does the physics update loop.
+
+Dispenser methods similarly forward to `server/game/dispenser-operations.js`:
+**`dispenserItem(piece)`** resolves the exact shared `dispensedSpec` used by spawning and
+drop-back matching, while **`afterDispense(piece, id)`** decrements a finite source only after a
+successful capacity check and spawn. A remaining finite stack delegates collider rebuilding to
+the room, its last item delegates removal, and an infinite bowl remains unchanged.
+
 Dice-tray methods (personal, one per seat): **`buildTrays()`** (rebuild every enabled seat's
 floor+walls at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on
 toggle), **`trayCenterFor(seat)`** (→ `trayCenter` at the seat angle + live table size),
