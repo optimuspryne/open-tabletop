@@ -51,6 +51,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract authoritative piece creation, complete removal bookkeeping, capped release/snap behavior,
+  and deck/dispenser absorption into `server/game/piece-lifecycle.js`, retaining the existing
+  `TableRoom` API and physics/collider contracts.
 - Extract table-deck saving and authorization-safe asset-list delivery into
   `server/game/library.js`, and membership-list/lobby coordination into
   `server/game/member-service.js`, retaining the existing room and handler contracts.

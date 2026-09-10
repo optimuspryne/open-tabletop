@@ -5,6 +5,7 @@ import {
 } from './server/game/dispenser-operations.js';
 import { createLibraryOperations } from './server/game/library.js';
 import { createMemberService } from './server/game/member-service.js';
+import { createPieceLifecycle } from './server/game/piece-lifecycle.js';
 import {
   naturalStand as naturalPieceStand,
   recolorPiece as recolorRoomPiece,
@@ -15,7 +16,7 @@ import { createTableBounds } from './server/game/table-bounds.js';
 import { createTableScale } from './server/game/table-scale.js';
 import { createTrayOperations } from './server/game/trays.js';
 import { spawnTableCard } from './server/game/card-transfer.js';
-import { Piece, Player, ScoreRow, Overlay, State } from './server/game/schema.js';
+import { Player, ScoreRow, Overlay, State } from './server/game/schema.js';
 import {
   returnInspectedCard,
   recoverPendingInspections,
@@ -47,7 +48,6 @@ import {
   deckHeight,
   MEASURE,
   DISPENSERS,
-  itemMatchesDispenser,
   stackVisible,
   gridActive,
   snapToCell,
@@ -77,15 +77,10 @@ import {
   createTexturePrebuilder,
 } from './server/http/routes/asset-textures.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
-import {
-  absorbedEntry,
-  cardBackRef,
-  cardFrontRef,
-  cardCompatibilityKey,
-} from './server/deck-state.js';
+import { cardBackRef, cardFrontRef } from './server/deck-state.js';
 import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
-import { MAX_PIECES, assertPieceCapacity } from './server/game/piece-capacity.js';
+import { MAX_PIECES } from './server/game/piece-capacity.js';
 import { dragVelocity } from './server/game/physics-safety.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
@@ -100,13 +95,13 @@ import {
 } from './server/game/handlers/room-state.js';
 import { registerOverlayHandlers } from './server/game/handlers/overlays.js';
 import { registerRoomFeatureHandlers } from './server/game/handlers/room-features.js';
-import { readProps, writeProps } from './server/game/props-codec.js';
+import { readProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
 import { boundedString, oneField, reorderHandPayload } from './server/message-validation.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
-import { buildCollider, buildWorld, COLLIDER_TYPES } from './server/physics.js';
+import { buildWorld, COLLIDER_TYPES } from './server/physics.js';
 import {
   applyScene as applyPersistedScene,
   clearGameTable,
@@ -302,7 +297,6 @@ const shuffle = (array) => {
   return array;
 };
 const deckBuilders = createDeckBuilders({ shuffle });
-const { buildSimpleDeck, buildDominoSet, buildScrabbleBag, buildMahjongWall } = deckBuilders;
 
 // The PUBLIC geometry/behavior a card/tile inherits from its deck: a named tile kind (`tile`), an
 // explicit `geom` (custom-aspect image decks), and a `snap` flag (word tiles snap to the grid). Plain
@@ -316,6 +310,11 @@ const geoOf = (o) => {
   if (o && o.snap) g.snap = true;
   return g;
 };
+const {
+  releasePiece: releaseRoomPiece,
+  removePiece: removeRoomPiece,
+  spawn: spawnRoomPiece,
+} = createPieceLifecycle({ deckBuilders, dropSfx, geoOf, sim: SIM });
 const setupStarterGame = createStarterSetup({
   deckBuilders,
   geoOf,
@@ -583,100 +582,7 @@ class TableRoom extends Room {
   // Create a piece: a physics body + a synced Piece record, wired together by id.
   // pos is [x,y,z]; props are the type-specific fields (shape, sides, back, …).
   spawn(type, pos, props = {}, quat = null) {
-    assertPieceCapacity(this, SIM.maxPieces);
-    const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
-    const body = new CANNON.Body({ mass, material: this.mat });
-    const collider = buildCollider(type, props, { cardColliderThickness: SIM.cards.colliderThick });
-    if (collider.shape)
-      body.addShape(collider.shape, collider.offset); // some colliders (flat) sit off-centre
-    else body.addShape(collider);
-    body.position.set(pos[0], pos[1], pos[2]);
-
-    // An exact orientation (scene load) wins; otherwise dice/props tumble, boards/decks stay flat.
-    if (quat && quat.length === 4) {
-      body.quaternion.set(quat[0], quat[1], quat[2], quat[3]);
-    } else if (KINDS[type].mass > 0 && type !== 'deck' && type !== 'dispenser' && type !== 'mat') {
-      body.quaternion.setFromEuler(Math.random() * 6, Math.random() * 6, Math.random() * 6);
-    }
-    // Cards get their own damping/sleep tuning so stacks settle nicely.
-    if (type === 'card') {
-      body.angularDamping = SIM.cards.angDamp;
-      body.linearDamping = SIM.cards.linDamp;
-      body.sleepSpeedLimit = SIM.cards.sleepSpeed;
-      body.sleepTimeLimit = SIM.cards.sleepTime;
-    } else if (type === 'mat') {
-      body.angularDamping = SIM.damp.flat; // stays level
-      body.linearDamping = 0.6; // a heavy surface — resting pieces / bumps don't shove it
-    } else {
-      body.angularDamping = type === 'deck' ? SIM.damp.flat : SIM.damp.solid;
-    }
-    if (props.traySeat != null) body.__traySeat = +props.traySeat; // a tray die obeys its seat's tray bounds, not the table's
-    this.world.addBody(body);
-
-    const id = String(this.nextId++);
-    const piece = new Piece();
-    piece.type = type;
-    piece.owner = '';
-    piece.count = 0;
-    piece.props = '{}';
-
-    if (type === 'deck') {
-      // A deck's cards + order are PRIVATE (deckCards); only the shared back is
-      // published, which is all a client needs to render the face-down stack.
-      const deckData =
-        props.set === 'domino'
-          ? buildDominoSet() // a domino boneyard, spawned on its own (no starter/table-clear)
-          : props.set === 'letter'
-            ? buildScrabbleBag() // a Wordy McWordface letter bag on its own
-            : props.set === 'mahjong'
-              ? buildMahjongWall() // a 144-tile mahjong wall on its own
-              : props.cards && props.cards.length
-                ? {
-                    back: props.back || 'back',
-                    cards: props.cards,
-                    ...geoOf(props),
-                    deckModel: props.deckModel,
-                  } // pre-built cards (e.g. a starter) can carry a skin
-                : buildSimpleDeck(!!props.jokers);
-      this.deckCards.set(id, deckData.cards.slice());
-      piece.count = deckData.cards.length;
-      const deckProps = { back: deckData.back, ...geoOf(deckData) }; // deck-level tile/geom rides to its cards
-      if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
-        deckProps.model = deckData.deckModel; // an optional 3D box/bag/pouch skin
-      if (props.color != null) deckProps.color = props.color; // skin tints (pouch: bag / string)
-      if (props.textColor != null) deckProps.textColor = props.textColor;
-      if (props.open) {
-        deckProps.open = true; // a deck of double-sided tiles → dealt tiles turn over
-        const topBack = cardBackRef(deckData.cards[deckData.cards.length - 1]);
-        if (topBack) deckProps.cover = topBack; // its visible top face follows the current top tile
-      }
-      writeProps(piece, deckProps);
-    } else if (type === 'dispenser') {
-      const d = DISPENSERS[props.disp] || {};
-      piece.count = d.infinite || !d.count ? 0 : clamp(+props.count || d.count.def, 1, d.count.max); // remaining items (0 = infinite)
-      writeProps(piece, props);
-    } else {
-      writeProps(piece, props);
-    }
-
-    this.writeTransform(piece, body);
-    this.state.pieces.set(id, piece);
-    this.bodies.set(id, body);
-    body.addEventListener('collide', (e) => {
-      // landing sound, only for pieces a player just dropped
-      const rel = this._released.get(id);
-      if (rel === undefined) return; // deals/rolls/idle collisions stay silent here
-      if (Date.now() - rel > 3000) {
-        this._released.delete(id);
-        return;
-      } // never really landed — disarm
-      if (Math.abs(e.contact.getImpactVelocityAlongNormal()) < SIM.impact.minVel) return; // ignore gentle grazes
-      this._released.delete(id); // one cue per drop (kills multi-bounce spam)
-      this.broadcast('sfx', { type: dropSfx(type, props) }); // props carries `tile` for tile pieces/decks
-    });
-    if (type === 'deck') this.updateDeckCollider(id); // match the collider to the stack height
-    if (type === 'dispenser') this.updateStackCollider(id); // stack cylinder ∝ count (no-op for a bowl)
-    return id;
+    return spawnRoomPiece(this, type, pos, props, quat);
   }
 
   // --- Small card helpers (shared by the deal/draw/play handlers) -------------
@@ -853,14 +759,7 @@ class TableRoom extends Room {
 
   // Delete a piece everywhere: physics body, synced state, and every private map.
   removePiece(id) {
-    const body = this.bodies.get(id);
-    if (body) this.world.removeBody(body);
-    this.bodies.delete(id);
-    this.targets.delete(id);
-    this.flips.delete(id);
-    this.deckCards.delete(id);
-    this.cardData.delete(id);
-    this.state.pieces.delete(id);
+    return removeRoomPiece(this, id);
   }
 
   // Apply a color to one piece, validating by type (shared by the single `recolor` message and
@@ -929,95 +828,7 @@ class TableRoom extends Room {
   // hand-speed `v` into a capped throw; finally absorb a card back onto a deck, or a chip/stone
   // back onto its dispenser, if it was dropped there. Shared by single `release` and `releaseGroup`.
   releasePiece(id, v) {
-    const piece = this.state.pieces.get(id);
-    if (!piece) return;
-    piece.owner = '';
-    this.targets.delete(id);
-    this._released.set(id, Date.now()); // arm a one-shot landing cue on its next hard impact
-
-    const body = this.bodies.get(id);
-    if (body) {
-      if (piece.type !== 'deck' && gridActive(this.state.scale) && readProps(piece).snap) {
-        const p = snapToCell(body.position.x, body.position.z, this.state.scale); // the bag carries snap for its tiles, but shouldn't itself jump to a cell
-        body.position.x = p.x;
-        body.position.z = p.z;
-        body.velocity.set(0, 0, 0);
-        body.angularVelocity.set(0, 0, 0);
-      } else if (v) {
-        let [vx, vy, vz] = v;
-        const speed = Math.hypot(vx, vy, vz);
-        const cap = piece.type === 'card' ? SIM.cards.maxThrow : SIM.throwCap;
-        const scale = speed > cap ? cap / speed : 1;
-        body.velocity.set(vx * scale, vy * scale, vz * scale);
-      }
-      body.wakeUp();
-    }
-
-    // If a card is dropped on top of a deck, absorb it back onto the stack.
-    if (piece.type === 'card' && body) {
-      for (const [deckId, cards] of this.deckCards) {
-        const deckBody = this.bodies.get(deckId);
-        if (!deckBody) continue;
-        const onDeck =
-          Math.abs(body.position.x - deckBody.position.x) < SIM.absorb.x &&
-          Math.abs(body.position.z - deckBody.position.z) < SIM.absorb.z;
-        if (onDeck) {
-          const cp = readProps(piece);
-          const deckPiece = this.state.pieces.get(deckId);
-          if (deckPiece?.type !== 'deck') continue;
-          const deckProps = readProps(deckPiece);
-          if (cardCompatibilityKey(cp) !== cardCompatibilityKey(deckProps)) continue;
-          const front = (this.cardData.get(id) || {}).front || cp.front;
-          // Preserve a per-tile back (a double-sided tile's own face, or a mixed-back stack) so
-          // re-drawing shows the SAME back, not the deck's shared cover; a card whose back is just
-          // the deck's shared back rejoins as a bare front.
-          if (!front) continue;
-          cards.push(absorbedEntry(front, cp.back, deckProps.back));
-          deckPiece.count = cards.length;
-          // The absorbed tile is the new top → repaint an open set's cover (mirrors syncOpenCover).
-          if (deckProps.open) {
-            const topBack = cardBackRef(cards[cards.length - 1]);
-            const next = topBack ?? deckProps.back;
-            if ((deckProps.cover ?? deckProps.back) !== next) {
-              if (topBack) deckProps.cover = topBack;
-              else delete deckProps.cover;
-              writeProps(deckPiece, deckProps);
-            }
-          }
-          this.updateDeckCollider(deckId);
-          this.removePiece(id);
-          break;
-        }
-      }
-    }
-
-    // A chip/coin/stone dropped on its matching dispenser rejoins it (finite → count++; the
-    // infinite bowl just takes it back). Match by the exact item the stack hands out.
-    if (piece.type === 'prop' && body) {
-      const pp = readProps(piece);
-      for (const [dispId, disp] of this.state.pieces) {
-        if (disp.type !== 'dispenser') continue;
-        const want = this.dispenserItem(disp);
-        if (!itemMatchesDispenser(want, pp)) continue;
-        const dispBody = this.bodies.get(dispId);
-        if (!dispBody) continue;
-        const d = DISPENSERS[readProps(disp).disp];
-        const fbox =
-          d && (d.body === 'stack' ? PROPS[d.item].collider.box : d.collider && d.collider.box);
-        const reach = (fbox ? Math.max(fbox[0], fbox[2]) : 0.5) + 0.5;
-        const dx = body.position.x - dispBody.position.x,
-          dz = body.position.z - dispBody.position.z;
-        if (dx * dx + dz * dz < reach * reach) {
-          if (d && !d.infinite) {
-            disp.count = (disp.count | 0) + 1;
-            this.updateStackCollider(dispId);
-          }
-          this.removePiece(id);
-          this.broadcast('sfx', { type: 'object-drop' });
-          break;
-        }
-      }
-    }
+    return releaseRoomPiece(this, id, v);
   }
 
   // Remove every die belonging to seat N's tray (used by Clear and by putting the tray away).

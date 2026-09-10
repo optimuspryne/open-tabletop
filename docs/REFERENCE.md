@@ -14,6 +14,7 @@ The codebase:
 | `server/game/table-bounds.js`                                                                          | Node    | Injected Cannon floor and containment-ring construction for every table shape, including boundary-body replacement and tray rebuilding                                                           |
 | `server/game/table-scale.js`                                                                           | Node    | Injected measurement-scale snapshots, validated restoration, and square/hex board-grid calibration                                                                                              |
 | `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
+| `server/game/piece-lifecycle.js`                                                                       | Node    | Injected authoritative body/state creation, complete piece removal, release snapping/throws, landing cues, and deck/dispenser absorption                                                        |
 | `server/game/library.js`                                                                               | Node    | Injected table-deck persistence and authorization-safe asset-list delivery                                                                                                                       |
 | `server/game/member-service.js`                                                                        | Node    | Injected member-list delivery/broadcasting and waiting-lobby matchmaker notifications                                                                                                            |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
@@ -755,8 +756,8 @@ Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
 see in-play asset references. A disposing room remains tracked until its final
 persistence flush completes.
 
-Methods: **`spawn(type,pos,props) → id`**, **`update(dt)`** (servo → step →
-out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`**, **`removePiece(id)`**,
+Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (servo → step →
+out-of-bounds net → write; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`**, **`removePiece(id)`** (piece-lifecycle facade),
 **`writeTransform`**, **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
@@ -771,7 +772,7 @@ facade for waiting-lobby notifications), **`sendAssetList(client,kind)`** (libra
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
 (persist the room's durable settings — scoreboard, notes, table size, skybox, felt
 color, and the saved game snapshot — now / debounced via `db.saveRoomState`),
-**`closeAndDispose`** (broadcast `roomClosed`, then dispose — invoked by
+**`releasePiece(id,velocity)`** (piece-lifecycle facade), **`closeAndDispose`** (broadcast `roomClosed`, then dispose — invoked by
 `matchMaker.remoteRoomCall`), `onJoin`/`onLeave` (on join, an account reclaims its
 `pendingHands`/`pendingTurn`; on leave, after the reconnect window, a departing
 hand is parked back into `pendingHands` + `unclaimed`, **and the leaver's tray is put away and
@@ -798,6 +799,19 @@ Dispenser methods similarly forward to `server/game/dispenser-operations.js`:
 drop-back matching, while **`afterDispense(piece, id)`** decrements a finite source only after a
 successful capacity check and spawn. A remaining finite stack delegates collider rebuilding to
 the room, its last item delegates removal, and an infinite bowl remains unchanged.
+
+Piece lifecycle methods forward to the operations returned by
+`createPieceLifecycle({deckBuilders,dropSfx,geoOf,sim})` in
+`server/game/piece-lifecycle.js`:
+
+- **`spawn(room,type,pos,props,quat) → id`** enforces the final capacity invariant, creates the
+  Cannon body and synchronized `Piece`, initializes private deck order or dispenser count, and
+  installs the landing-sound collision listener. Exact scene quaternions override random tumble.
+- **`removePiece(room,id)`** removes the Cannon body plus synchronized, target, flip, deck-card,
+  and private-card records.
+- **`releasePiece(room,id,velocity)`** clears ownership, snaps or caps throw velocity, then applies
+  compatible card-to-deck and item-to-dispenser absorption. It delegates collider rebuilding,
+  dispenser item resolution, removal, and broadcast through the stable room API.
 
 Saved-library methods forward to the operations returned by
 `createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:

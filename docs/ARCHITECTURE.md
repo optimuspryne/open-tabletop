@@ -80,6 +80,11 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   It resolves effective and natural stand modes from synchronized props and shared piece
   definitions, and applies validated `colorProps` results through the piece-props codec.
   `TableRoom` retains forwarding methods for piece handlers and the physics update loop.
+- **`server/game/piece-lifecycle.js`** — authoritative synchronized-piece and Cannon-body
+  lifecycle. It creates both representations together, removes every existing body/state/private
+  map entry together, and owns release snapping, throw caps, landing cues, and compatible
+  deck/dispenser absorption. Physics tuning, deck builders, and small presentation rules are
+  injected; collider maintenance remains behind the room API.
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
   and delegates finite-stack removal or collider resizing back to the room after consumption.
@@ -828,6 +833,21 @@ builder, retain tile geometry, snapping, and their selected deck skin, and optio
 configured starting hand to each seated player. Bowls and chip stacks use the ordinary
 authoritative `spawn` boundary. `TableRoom.setupStarter` remains as a small forwarding
 method so its caller-facing contract stays recognizable.
+
+## Piece lifecycle boundary
+
+`createPieceLifecycle({ deckBuilders, dropSfx, geoOf, sim })` returns the authoritative
+`spawn`, `removePiece`, and `releasePiece` operations. Spawn asserts the final room capacity,
+constructs the Cannon body and synchronized `Piece` as one operation, keeps deck order private,
+and installs the existing one-shot landing cue. Removal clears the body, synchronized record,
+drag/flip state, and private deck/card data through one path.
+
+Release clears ownership before applying either shared-grid snapping or a type-specific capped
+throw. It then performs the existing compatibility-checked card-to-deck and item-to-dispenser
+absorption rules without exposing private card fronts. `TableRoom` retains thin forwarding methods,
+so card, movement, piece/group, starter, persistence, and tray callers keep the same room contract.
+Deck/stack collider rebuilding and dispenser item resolution are deliberately delegated back to
+the room; those are separate Stage 8 boundaries rather than hidden inside another large module.
 
 ## Table-boundary physics boundary
 

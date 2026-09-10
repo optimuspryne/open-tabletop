@@ -1,22 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { runInNewContext } from 'node:vm';
-import { absorbedEntry, cardBackRef, cardCompatibilityKey } from '../server/deck-state.js';
-import { readProps, writeProps } from '../server/game/props-codec.js';
+import { createPieceLifecycle } from '../server/game/piece-lifecycle.js';
+import { readProps } from '../server/game/props-codec.js';
 
-const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
-const start = source.indexOf('  releasePiece(');
-const end = source.indexOf('\n  }', start) + 4;
-assert.ok(start > 0 && end > start);
-const { releasePiece } = runInNewContext(`({${source.slice(start, end)}})`, {
-  absorbedEntry,
-  cardBackRef,
-  cardCompatibilityKey,
-  readProps,
-  writeProps,
-  gridActive: () => false,
-  SIM: { absorb: { x: 1, z: 1 } },
+const { releasePiece } = createPieceLifecycle({
+  deckBuilders: {},
+  dropSfx: () => 'drop',
+  geoOf: () => ({}),
+  sim: { absorb: { x: 1, z: 1 }, cards: { maxThrow: 14 }, throwCap: 40 },
 });
 
 function harness(cardProps, deckProps, front = 'new-front') {
@@ -54,7 +45,7 @@ for (const props of [
 ]) {
   test(`incompatible card remains on the table: ${JSON.stringify(props)}`, () => {
     const room = harness({ back: 'blue', ...props }, { back: 'blue' });
-    releasePiece.call(room, 'card');
+    releasePiece(room, 'card');
     assert.equal(room.state.pieces.has('card'), true);
     assert.deepEqual(room.deckCards.get('deck'), ['old-front']);
     assert.equal(room.state.pieces.get('deck').count, 1);
@@ -64,7 +55,7 @@ for (const props of [
 
 test('compatible normal cards still absorb their private front', () => {
   const room = harness({ back: 'blue' }, { back: 'blue' });
-  releasePiece.call(room, 'card');
+  releasePiece(room, 'card');
   assert.equal(room.state.pieces.has('card'), false);
   assert.deepEqual(room.deckCards.get('deck'), ['old-front', 'new-front']);
   assert.equal(room.state.pieces.get('deck').count, 2);
@@ -76,7 +67,7 @@ test('compatible open tiles preserve their individual back and update the cover'
     { open: true, tile: 'domino', back: 'shared' },
     null,
   );
-  releasePiece.call(room, 'card');
+  releasePiece(room, 'card');
   assert.equal(room.state.pieces.has('card'), false);
   assert.deepEqual(room.deckCards.get('deck'), [
     'old-front',
@@ -87,7 +78,7 @@ test('compatible open tiles preserve their individual back and update the cover'
 
 test('a card without recoverable front data is not consumed', () => {
   const room = harness({ back: 'blue' }, { back: 'blue' }, null);
-  releasePiece.call(room, 'card');
+  releasePiece(room, 'card');
   assert.equal(room.state.pieces.has('card'), true);
   assert.deepEqual(room.deckCards.get('deck'), ['old-front']);
 });
