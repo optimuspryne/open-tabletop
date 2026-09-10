@@ -12,6 +12,7 @@ The codebase:
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
 | `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                           |
 | `server/game/table-bounds.js`                                                                          | Node    | Injected Cannon floor and containment-ring construction for every table shape, including boundary-body replacement and tray rebuilding                                                           |
+| `server/game/table-scale.js`                                                                           | Node    | Injected measurement-scale snapshots, validated restoration, and square/hex board-grid calibration                                                                                              |
 | `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
 | `server/physics.js`                                                                                    | Node    | Cannon world setup and collider construction for dice, cards, props, boards, and dispensers                                                                                                      |
 | `server/game/scene-persistence.js`                                                                     | Node    | Portable scene/game snapshot serialization and validated restoration                                                                                                                             |
@@ -498,6 +499,22 @@ oriented, slightly over-length box per non-zero edge from shared `tableOutline`,
 ring at each vertex. It then calls `room.buildTrays()` so enabled personal trays follow table
 resizes. Piece bodies and other unrelated Cannon bodies are not replaced.
 
+### `server/game/table-scale.js` — measurement scale and grid calibration
+
+**`createTableScale({gridLiftMax})`** returns `scaleSnapshot(room)`, `applyScale(room, value)`,
+and `calibrateGrid(room, message)`. `server.js` injects the grid-lift ceiling and keeps the existing
+`TableRoom.scaleSnapshot`, `applyScale`, and `calibrateGrid` methods as forwarding facades for room
+state persistence, scene serialization/restoration, settings handlers, and starter layouts.
+
+`scaleSnapshot` emits the established durable `RoomScale` field set without leaking future/runtime
+properties. `applyScale` accepts old or partial snapshots, retaining the existing per-field enums,
+string length, numeric coercion, and clamps. `calibrateGrid` finds the current board and reads its
+Cannon box: custom and ordinary built-in square grids derive independent X/Z cell spacing and their
+center/cross anchor, while built-ins such as Go may pin printed-line spacing. Hex calibration preserves
+pointy/flat orientation and derives the centre-to-vertex size from board width and requested columns.
+Successful calibration recentres grid offsets and schedules the same durable room save; invalid or
+boardless requests remain no-ops.
+
 ### `server/game/trays.js` — personal dice-tray operations
 
 **`createTrayOperations({random = Math.random} = {})`** returns the six room operations behind
@@ -759,6 +776,11 @@ its dice cleared**).
 **`buildBounds(hx, hz, shape)`** is a thin facade over the injected
 `server/game/table-bounds.js` builder. It preserves the room API used during creation, scene
 restoration, and live resizing while boundary-body ownership stays in the extracted module.
+
+Scale/grid methods are also thin facades over `server/game/table-scale.js`: **`scaleSnapshot()`**
+retains the durable room/scene shape, **`applyScale(value)`** validates restored settings, and
+**`calibrateGrid(message)`** fits the active board before scheduling persistence. Existing callers
+continue using the `TableRoom` API.
 
 Dice-tray methods (personal, one per seat): **`buildTrays()`** (rebuild every enabled seat's
 floor+walls at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on

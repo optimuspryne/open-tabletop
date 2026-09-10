@@ -51,6 +51,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   checks disconnect affected sessions rather than retaining cached privileges.
 
 ### Internal
+- Extract measurement-scale snapshots, validated restoration, and board grid calibration into
+  `server/game/table-scale.js`, retaining the room's existing persistence and starter interfaces.
 - Extract personal dice-tray physics and lifecycle operations into `server/game/trays.js`,
   retaining shared geometry, seat ownership, resize repositioning, scene restoration, and
   disconnect cleanup behind the existing room methods.

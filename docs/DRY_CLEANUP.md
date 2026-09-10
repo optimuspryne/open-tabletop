@@ -1,6 +1,6 @@
 # DRY cleanup and module extraction
 
-Status: dice-tray extraction completed; scale and grid extraction is next.
+Status: scale and grid extraction completed; piece and dispenser operations are next.
 This checklist records the remaining cleanup discussed after the backend fixes.
 Suggested module names are proposals, not implemented architecture. Recheck current
 source and the MCP memory graph before starting each step.
@@ -75,7 +75,7 @@ source and the MCP memory graph before starting each step.
 
 ### 5. Extract scale and grid settings
 
-- [ ] Group `scaleSnapshot`, `applyScale`, and `calibrateGrid` in a proposed
+- [x] Group `scaleSnapshot`, `applyScale`, and `calibrateGrid` in
   `server/game/table-scale.js`.
 - Preserve validation, measurement calibration, snapping settings, and saved formats.
 - Validate square/hex grids, board calibration, scene restoration, and durable settings.

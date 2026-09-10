@@ -1,6 +1,7 @@
 import { createDeckBuilders } from './server/game/deck-builders.js';
 import { createStarterSetup } from './server/game/starters.js';
 import { createTableBounds } from './server/game/table-bounds.js';
+import { createTableScale } from './server/game/table-scale.js';
 import { createTrayOperations } from './server/game/trays.js';
 import { spawnTableCard } from './server/game/card-transfer.js';
 import { Piece, Player, ScoreRow, Overlay, State } from './server/game/schema.js';
@@ -318,6 +319,11 @@ const {
   trayCenterFor: roomTrayCenter,
   trayDropPos: roomTrayDropPos,
 } = createTrayOperations();
+const {
+  applyScale: applyRoomScale,
+  calibrateGrid: calibrateRoomGrid,
+  scaleSnapshot: snapshotRoomScale,
+} = createTableScale({ gridLiftMax: GRID_LIFT_MAX });
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
@@ -720,57 +726,7 @@ class TableRoom extends Room {
   // grid we derive the hex size from the board width ÷ the hex count instead. Returns a small
   // result object (or null) so a starter setup can react.
   calibrateGrid(msg = {}) {
-    let boardId = null;
-    this.state.pieces.forEach((p, id) => {
-      if (!boardId && p.type === 'board') boardId = id;
-    }); // the single table board
-    if (!boardId) return null;
-    const sc = this.state.scale;
-    const body = this.bodies.get(boardId),
-      shape = body && body.shapes[0];
-    const he = shape && shape.halfExtents;
-    const wx = he ? he.x * 2 : 0,
-      wz = he ? he.z * 2 : 0;
-    // Hex: fit N hexes across the board width. Pointy columns step √3·s, flat columns step 1.5·s
-    // (s = centre-to-vertex), so s = width ÷ (N · step). Orientation + hex style are left as set.
-    if (sc.gridStyle === 'hex') {
-      const gaps = Math.round(+msg.cells);
-      if (!(gaps > 0) || !(wx > 0)) return null;
-      const step = sc.hexOrient === 'flat' ? 1.5 : Math.sqrt(3);
-      sc.cellWorld = clamp(wx / (gaps * step), 1e-3, 1e3);
-      sc.cellZ = 0;
-      sc.gridX = 0;
-      sc.gridZ = 0; // the board is centred at the origin, so no offset
-      this.scheduleSave();
-      return { hexSize: sc.cellWorld, gaps, orient: sc.hexOrient };
-    }
-    const spec = BOARDS[readProps(this.state.pieces.get(boardId)).board];
-    let gaps, anchor;
-    if (spec && spec.grid) {
-      gaps = spec.grid.cells;
-      anchor = spec.grid.anchor;
-    } else {
-      anchor = msg.anchor === 'cross' ? 'cross' : 'center';
-      const count = Math.round(+msg.cells);
-      gaps = anchor === 'cross' ? count - 1 : count;
-    }
-    if (!(gaps > 0)) return null;
-    // A board can pin its exact printed-line spacing (cellX/cellZ) — needed when a wide border
-    // means the lines don't fill the collider (go). Otherwise derive cell = board width ÷ gaps.
-    if (spec && spec.grid && spec.grid.cellX > 0) {
-      sc.cellWorld = clamp(spec.grid.cellX, 1e-3, 1e3);
-      sc.cellZ = clamp(spec.grid.cellZ > 0 ? spec.grid.cellZ : spec.grid.cellX, 1e-3, 1e3);
-    } else {
-      if (!(wx > 0) || !(wz > 0)) return null;
-      sc.cellWorld = clamp(wx / gaps, 1e-3, 1e3);
-      sc.cellZ = clamp(wz / gaps, 1e-3, 1e3);
-    }
-    sc.gridX = 0;
-    sc.gridZ = 0; // the board is centred at the origin, so no offset
-    sc.gridStyle = 'square';
-    sc.snapAnchor = anchor === 'cross' ? 'cross' : 'center';
-    this.scheduleSave();
-    return { cellX: sc.cellWorld, cellZ: sc.cellZ, gaps, anchor: sc.snapAnchor };
+    return calibrateRoomGrid(this, msg);
   }
 
   // Deal `n` cards from a deck to each SEATED player's private hand (starter setups deal a
@@ -1098,45 +1054,12 @@ class TableRoom extends Room {
   // The per-room scale as a plain object (grid + measurement calibration), for both the
   // durable room row and the scene snapshot, so a saved scene restores its grid/units too.
   scaleSnapshot() {
-    const sc = this.state.scale;
-    return {
-      worldPerUnit: sc.worldPerUnit,
-      unitLabel: sc.unitLabel,
-      roundStep: sc.roundStep,
-      cellWorld: sc.cellWorld,
-      cellZ: sc.cellZ,
-      gridX: sc.gridX,
-      gridZ: sc.gridZ,
-      gridStyle: sc.gridStyle,
-      gridColor: sc.gridColor,
-      gridLift: sc.gridLift,
-      snapAnchor: sc.snapAnchor,
-      hexOrient: sc.hexOrient,
-      gridHidden: sc.gridHidden,
-    };
+    return snapshotRoomScale(this);
   }
   // Validate + apply a scale object (from the room row or a scene). Every field is optional
   // and range-checked, so an old/partial snapshot just keeps the current defaults.
   applyScale(s) {
-    if (!s || typeof s !== 'object') return;
-    const sc = this.state.scale;
-    if (Number.isFinite(+s.worldPerUnit) && +s.worldPerUnit > 0)
-      sc.worldPerUnit = clamp(+s.worldPerUnit, 1e-3, 1e3);
-    if (typeof s.unitLabel === 'string') sc.unitLabel = s.unitLabel.slice(0, 8);
-    if (Number.isFinite(+s.roundStep) && +s.roundStep > 0)
-      sc.roundStep = clamp(+s.roundStep, 1e-3, 1e2);
-    if (Number.isFinite(+s.cellWorld) && +s.cellWorld >= 0)
-      sc.cellWorld = clamp(+s.cellWorld, 0, 1e3);
-    if (Number.isFinite(+s.cellZ) && +s.cellZ >= 0) sc.cellZ = clamp(+s.cellZ, 0, 1e3);
-    if (Number.isFinite(+s.gridX)) sc.gridX = clamp(+s.gridX, -1e3, 1e3);
-    if (Number.isFinite(+s.gridZ)) sc.gridZ = clamp(+s.gridZ, -1e3, 1e3);
-    if (/^#[0-9a-f]{6}$/i.test(s.gridColor || '')) sc.gridColor = s.gridColor;
-    if (Number.isFinite(+s.gridLift)) sc.gridLift = clamp(+s.gridLift, 0, GRID_LIFT_MAX);
-    if (s.snapAnchor === 'center' || s.snapAnchor === 'cross') sc.snapAnchor = s.snapAnchor;
-    if (s.gridStyle === 'square' || s.gridStyle === 'hex' || s.gridStyle === 'off')
-      sc.gridStyle = s.gridStyle;
-    if (s.hexOrient === 'pointy' || s.hexOrient === 'flat') sc.hexOrient = s.hexOrient;
-    if (typeof s.gridHidden === 'boolean') sc.gridHidden = s.gridHidden;
+    applyRoomScale(this, s);
   }
 
   // Restore which seats' trays are out from a scene (an array of seat indices), then rebuild

@@ -72,6 +72,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   construction. `server.js` injects the `SIM` table/wall dimensions, while the
   module reads the shared table outline, replaces obsolete Cannon bodies, and
   rebuilds personal trays after every table-size or shape change.
+- **`server/game/table-scale.js`** — measurement-scale persistence and board-grid calibration.
+  `server.js` injects the grid-lift ceiling; the module snapshots and validates synchronized scale
+  state, reads board metadata/collider dimensions, and schedules saves after successful square or
+  hex calibration while the room keeps stable forwarding methods.
 - **`server/game/trays.js`** — personal tray physics and lifecycle operations. It owns
   tray-bound rebuilding, resize repositioning, randomized drop placement, per-seat clearing,
   and scene restoration; `TableRoom` keeps small forwarding methods and the general `seatOf`
@@ -661,6 +665,8 @@ anchor, line color, height) — is durable **two** ways: `saveRoomState`'s own `
 column restores it on room load, and (since 0.7.0) `serializeScene` also embeds it in
 the scene snapshot, so a saved library scene reopens measured and gridded exactly as it
 was, not just the live room. `applyScene` re-applies it via `applyScale`.
+Those snapshot, restoration, and calibration rules live together in `server/game/table-scale.js`;
+the `TableRoom` facades preserve the scene, durable-room, handler, and starter call contracts.
 
 ## Sound & music
 
@@ -817,6 +823,19 @@ shape receives a slightly overlapping oriented wall box for each edge from the s
 `TableRoom.buildBounds` remains as a small forwarding method because room creation, durable
 scene restoration, and live GM resizing already call that room API. The extracted builder
 finishes by calling `room.buildTrays()`, keeping personal trays aligned with the resized table.
+
+## Scale and grid settings boundary
+
+`createTableScale({ gridLiftMax })` returns room-oriented snapshot, restoration, and calibration
+operations. It owns the durable `RoomScale` field list and restoration clamps, so room-row and scene
+loads apply the same compatibility rules. Calibration reads the active board's synchronized metadata
+and Cannon half-extents: square grids derive per-axis spacing and center/cross anchoring, built-ins may
+pin printed-line spacing, and hex grids retain pointy/flat orientation while deriving hex size from
+board width. Only successful calibration resets offsets and schedules a save.
+
+`TableRoom.scaleSnapshot`, `applyScale`, and `calibrateGrid` remain thin forwarding methods because
+room persistence, scene persistence, settings handlers, and starter setup already depend on that API.
+The extraction changes ownership without changing synchronized state or saved formats.
 
 ## Personal tray operations boundary
 
