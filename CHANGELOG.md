@@ -8,6 +8,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+
+## [0.16.0] — 2026-09-11
+
 ### Changed
 - Replaced 'train_dispenser' model with custom-built one.
 - Let every bundled object use the shared matte, satin, glossy, metallic, brushed, pearl,
@@ -1063,6 +1066,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.16.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.16.0
 [0.15.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.15.0
 [0.14.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.14.0
 [0.13.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.13.0
