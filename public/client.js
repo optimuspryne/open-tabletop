@@ -52,6 +52,9 @@ import {
   DICE_SETS,
   DICE_FINISHES,
   DICE_FINISH_FALLBACK,
+  OBJECT_FINISHES,
+  PROPS,
+  objectFinish,
   PALETTE,
   COLORS,
   readableInk,
@@ -2511,13 +2514,15 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
     if (text) text.value = toHex(readableInk(color));
     commit();
   };
-  const finishDie = (key, finishImg) => {
-    if (!inspect || inspect.type !== 'die') return;
+  const finishObject = (key, finishImg) => {
+    if (!inspect || (inspect.type !== 'die' && inspect.type !== 'prop')) return;
+    const isDie = inspect.type === 'die';
+    if (!isDie && (!inspect.props || !PROPS[inspect.props.shape])) return;
     const props = { ...(inspect.props || {}) };
-    if (key === 'matte') {
+    if (isDie && key === 'matte') {
       delete props.finish;
       delete props.finishImg;
-    } else if (key === 'custom') {
+    } else if (isDie && key === 'custom') {
       props.finish = 'custom';
       if (finishImg) props.finishImg = finishImg;
     } else {
@@ -2531,7 +2536,7 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       room.send('recolor', { id: inspect.origId, ...extra });
     }
   };
-  finishDieRef = finishDie; // let a late diceList rebuild the inspector's texture chips
+  finishDieRef = finishObject; // let a late diceList rebuild the inspector's texture chips
   if (body) {
     // live preview while dragging: props tint blunt; stacks reclone (cached, cheap)
     body.oninput = () => {
@@ -2568,10 +2573,9 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       chip.onclick = () => paintDie(s.color);
       swatchRow.appendChild(chip);
     }
-  const dieFinRow = byId('dieFinishes'); // per-die finish picker (inspector)
+  const dieFinRow = byId('dieFinishes'); // shared die / built-in-object material picker
   if (dieFinRow) {
-    for (const f of DICE_FINISHES) {
-      if (f.key === 'custom') continue; // custom = the uploaded-texture chips appended below
+    for (const f of OBJECT_FINISHES) {
       if (DICE_FINISH_FALLBACK[f.key] && deviceClass() === 'phone') continue; // GPU-heavy on phones
       const chip = document.createElement('button');
       chip.type = 'button';
@@ -2579,7 +2583,7 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       chip.dataset.finish = f.key;
       chip.innerHTML = '<span class="lbl"></span>';
       chip.querySelector('.lbl').textContent = f.name;
-      chip.onclick = () => finishDie(f.key);
+      chip.onclick = () => finishObject(f.key);
       dieFinRow.appendChild(chip);
     }
     refreshTextureChips(); // Custom textures live in their own #dieTextures menu
@@ -2744,6 +2748,7 @@ function inspectMesh(mesh, opts = {}) {
       inspect.props = props0;
       if (opts.type === 'dispenser') inspect.props.count = piece0.count; // carry stack height into reclone previews
       const isDie = opts.type === 'die';
+      const propSpec = opts.type === 'prop' ? PROPS[inspect.props.shape] : null;
       // A prop/dispenser's ALLOWED palette (team set / limited palette / general) — mirrors the
       // spawn cards, so an object can't be tinted off its intended colors. null for a die.
       const opt = colorMode && !isDie ? recolorPalette(opts.type, props0, spec) : null;
@@ -2775,8 +2780,13 @@ function inspectMesh(mesh, opts = {}) {
       if (dcg) dcg.hidden = !isDie || isModelDie || !diceTextures.length; // Custom textures: dice only, when any exist
       const dfRow = byId('dieFinishes');
       if (dfRow) {
-        dfRow.hidden = !isDie || isModelDie; // finishes (dice only; not modeled dice)
-        const cur = (isDie && inspect.props && inspect.props.finish) || 'matte';
+        const finishable = (isDie && !isModelDie) || !!propSpec;
+        dfRow.hidden = !finishable;
+        const cur = finishable
+          ? isDie
+            ? inspect.props.finish || 'matte'
+            : objectFinish(propSpec, inspect.props.finish)
+          : null;
         dfRow
           .querySelectorAll('[data-finish]')
           .forEach((c) => c.classList.toggle('on', c.dataset.finish === cur));
@@ -2799,7 +2809,11 @@ const hexStr = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0')
 // Rebuild the inspected mesh with new props (live preview for die colors and
 // dispenser color/team). Cheap for stacks — they reclone from the cached model.
 function swapInspect(props) {
-  if (!inspect || !inspect.pivot || (inspect.type !== 'die' && inspect.type !== 'dispenser'))
+  if (
+    !inspect ||
+    !inspect.pivot ||
+    (inspect.type !== 'die' && inspect.type !== 'prop' && inspect.type !== 'dispenser')
+  )
     return;
   const old = inspect.pivot.children[0];
   if (old) inspect.pivot.remove(old);

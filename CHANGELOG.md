@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Let every bundled object use the shared matte, satin, glossy, metallic, brushed, pearl,
+  translucent, glow, and marbled material system through definition flags in `shared/pieces.js`,
+  with synchronized per-object material overrides available from the inspect panel.
 - Replace the bundled coin and Go-bowl meshes with original project models, retune their rendering,
   material-slot, and collider metadata, refine the poker-chip collider, and use the enlarged low-poly
   bag plus its matching collider for the built-in domino, Wordy, and Mahjong inventories.

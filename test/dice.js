@@ -15,6 +15,8 @@ import {
   readableInk,
   DIE_INK,
   DIE_INK_LIGHT,
+  OBJECT_FINISHES,
+  objectFinish,
 } from '../shared/pieces.js';
 
 test('dieSpawnProps: a valid die + colors passes through', () => {
@@ -167,6 +169,41 @@ test('colorProps: a team prop takes a team index, not a freeform color', () => {
 test('colorProps: a non-team prop (coin/general) still takes a color', () => {
   assert.equal(colorProps('prop', { shape: 'coin' }, { color: 0xd4af37 }).color, 0xd4af37);
   assert.equal(colorProps('prop', { shape: 'token' }, { color: 0x5fae5f }).color, 0x5fae5f);
+});
+
+test('built-in object finish flags and instance overrides resolve through the shared material list', () => {
+  assert.deepEqual(
+    OBJECT_FINISHES.map((finish) => finish.key),
+    ['matte', 'satin', 'glossy', 'metallic', 'brushed', 'pearl', 'translucent', 'glow', 'marbled'],
+  );
+  assert.equal(objectFinish({ satin: true }), 'satin');
+  assert.equal(objectFinish({ metal: true }), 'metallic'); // legacy definition spelling
+  assert.equal(objectFinish({ glossy: true }, 'matte'), 'matte'); // explicit instance override wins
+  assert.equal(objectFinish({}), 'matte');
+  assert.equal(objectFinish(null), 'matte'); // inspector uses null for non-object definitions
+});
+
+test('colorProps: built-in props accept material-only changes but uploaded models do not', () => {
+  assert.deepEqual(colorProps('prop', { shape: 'chess-king', team: 0 }, { finish: 'satin' }), {
+    shape: 'chess-king',
+    team: 0,
+    finish: 'satin',
+  });
+  assert.deepEqual(colorProps('prop', { shape: 'token' }, { finish: 'matte' }), {
+    shape: 'token',
+    finish: 'matte',
+  });
+  assert.equal(colorProps('prop', { shape: 'token' }, { finish: 'custom' }), null);
+  assert.equal(
+    colorProps('prop', { shape: 'token' }, { finish: 'glossy', finishImg: '/assets/dice/a.jpg' }),
+    null,
+  );
+  assert.equal(
+    colorProps('prop', { shape: 'chess-king' }, { finish: 'satin', color: 0xffffff }),
+    null,
+  );
+  assert.equal(colorProps('prop', { model: '/assets/props/a.glb' }, { finish: 'glossy' }), null);
+  assert.equal(colorProps('dispenser', { disp: 'pokerStack' }, { finish: 'glossy' }), null);
 });
 
 test('colorProps: a limited-palette object rejects an off-palette color (group-recolor safety)', () => {
