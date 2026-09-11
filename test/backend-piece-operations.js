@@ -56,3 +56,11 @@ test('team dispensers recolor by team while color dispensers retain tint rules',
   assert.equal(JSON.parse(bowl.props).team, 1);
   assert.equal(JSON.parse(chips.props).color, 0xabcdef);
 });
+
+test('recolor persists a material override for a bundled object', () => {
+  const king = piece('prop', { shape: 'chess-king', team: 0 });
+  const room = { state: { pieces: new Map([['king', king]]) } };
+  assert.equal(recolorPiece(room, 'king', { finish: 'translucent' }), true);
+  assert.equal(JSON.parse(king.props).finish, 'translucent');
+  assert.equal(recolorPiece(room, 'king', { finish: 'custom' }), false);
+});

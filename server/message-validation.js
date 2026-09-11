@@ -1,6 +1,7 @@
 // Normalizers for values arriving across the WebSocket trust boundary. A
 // normalizer returns a fresh, trusted value or null; handlers must not continue
 // using the original message after validation.
+import { OBJECT_FINISH_KEYS } from '../shared/pieces.js';
 import { isWorldCoordinate } from './game/physics-safety.js';
 export const isPlainObject = (value) => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -637,7 +638,7 @@ export function spawnPayload(
       return prop ? { type, props: prop } : null;
     }
     if (
-      !hasOnlyKeys(props, new Set(['shape', 'color', 'team', 'snap', 'stand'])) ||
+      !hasOnlyKeys(props, new Set(['shape', 'color', 'team', 'snap', 'stand', 'finish'])) ||
       !propKeys.includes(props.shape)
     )
       return null;
@@ -658,6 +659,10 @@ export function spawnPayload(
     if (props.stand !== undefined) {
       if (props.stand !== false && props.stand !== true && props.stand !== 'flat') return null;
       out.stand = props.stand;
+    }
+    if (props.finish !== undefined) {
+      if (!OBJECT_FINISH_KEYS.has(props.finish)) return null;
+      out.finish = props.finish;
     }
     return { type, props: out };
   }
@@ -868,8 +873,8 @@ export function groupRecolor(message, { max = 80 } = {}) {
     out.textColor = textColor;
   }
   if (message.finish !== undefined) {
-    // A die finish key. colorProps() is the real gate (rejects unknown keys, dice-only); here we
-    // only bound the shape: a short lowercase token.
+    // A material finish key. colorProps() is the real gate (rejects unknown keys and object types);
+    // here we only bound the shape to a short lowercase token.
     const finish = boundedString(message.finish, { min: 1, max: 16, pattern: /^[a-z]+$/ });
     if (finish === null) return null;
     out.finish = finish;

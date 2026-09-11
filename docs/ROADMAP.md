@@ -247,9 +247,9 @@ scoped against the real tree rather than from memory.
      box Add menu + the library built-in Dice tab (`dieModelPreviewURL`).
 10. **Multi-select composition.**  ✅ **shipped 2026-09-02** Multi-select exists (`DESIGN_multiselect.md`) but only moves
    and rotates a selection. These three turn it into a construction tool:
-   1. Combine loose like cards into a **new deck** (discard pile → deck).
-   2. **Merge two decks** — the inverse of the existing split.
-   3. Gather dispenser-type objects into a **single dispenser**.
+    1. Combine loose like cards into a **new deck** (discard pile → deck).
+    2. **Merge two decks** — the inverse of the existing split.
+    3. Gather dispenser-type objects into a **single dispenser**.
 11. **More Room Customization.** Ability to adjust lighting (angles, intensity, color) — still open.
     Skybox resolution: ✅ **shipped 2026-09-01** — a per-viewer off/low/medium/high/ultra control in
     Settings → UI → Graphics (a max equirect / cube-face width, downscaled at load; also disposed

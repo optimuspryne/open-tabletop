@@ -459,6 +459,14 @@ test('save and spawn payloads reject unknown nested fields and unsupported types
     spawnPayload({ type: 'prop', props: { shape: 'pawn', team: 1, snap: true } }, options),
     { type: 'prop', props: { shape: 'pawn', team: 1, snap: true } },
   );
+  assert.deepEqual(
+    spawnPayload({ type: 'prop', props: { shape: 'pawn', finish: 'pearl' } }, options),
+    { type: 'prop', props: { shape: 'pawn', finish: 'pearl' } },
+  );
+  assert.equal(
+    spawnPayload({ type: 'prop', props: { shape: 'pawn', finish: 'custom' } }, options),
+    null,
+  );
   assert.equal(spawnPayload({ type: 'prop', props: { shape: 'unknown' } }, options), null);
   assert.equal(spawnPayload({ type: 'die', props: { sides: 20, injected: true } }, options), null);
   assert.equal(spawnPayload({ type: 'admin', props: {} }, options), null);

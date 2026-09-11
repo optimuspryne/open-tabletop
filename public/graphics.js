@@ -20,6 +20,7 @@ import {
   DISPENSERS,
   DICE_FINISH_FALLBACK,
   DICE_MODELS,
+  objectFinish,
   stackDiscH,
   stackVisible,
   gridActive,
@@ -602,14 +603,19 @@ function addTriplanarUV(geo, scale) {
 
 // The body material for a die, given its color + finish. Convex dice + d4 use this directly; the
 // d6 uses dieFaceMaterial (its faces bake the number into the map).
-function dieBodyMaterial(color, finishKey, finishImg) {
+function finishMaterial(color, finishKey, { finishImg, side, flatShading = false } = {}) {
   const f = FINISHES[finishKey] || FINISHES.matte;
-  const c = Number.isInteger(color) ? color : 0xf4f1ea;
+  const c = Number.isInteger(color)
+    ? color
+    : color && typeof color.getHex === 'function'
+      ? color.getHex()
+      : 0xf4f1ea;
   const params = {
     color: f.marble || (f.image && finishImg) ? 0xffffff : (color ?? COLORS.ivory),
     roughness: f.roughness,
     metalness: f.metalness || 0,
-    flatShading: true,
+    side,
+    flatShading,
   };
   if (f.marble) params.map = marbleTexture(c);
   if (f.image && finishImg) params.map = customTexture(finishImg);
@@ -625,6 +631,10 @@ function dieBodyMaterial(color, finishKey, finishImg) {
   return f.physical
     ? new THREE.MeshPhysicalMaterial({ ...params, ...f.physical })
     : new THREE.MeshStandardMaterial(params);
+}
+
+function dieBodyMaterial(color, finishKey, finishImg) {
+  return finishMaterial(color, finishKey, { finishImg, flatShading: true });
 }
 // A d6 face material: the composited (solid or marble) number face as the map, plus the finish params.
 function dieFaceMaterial(value, color, textColor, finishKey, finishImg) {
@@ -1359,8 +1369,6 @@ function propColor(props) {
   return props.color ?? COLORS.neutralProp;
 }
 
-const propMat = (color) =>
-  new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.05 });
 const gltfLoader = new GLTFLoader();
 const MODEL_SIZE = CONFIG.model.size; // custom-model normalization target
 
@@ -1387,16 +1395,14 @@ function loadModelGroup(url, fitOpts, onMesh, beforeFit) {
   return group;
 }
 
-// The surface for a tinted prop/stack slot, honoring the spec's finish flag: `metal` renders
-// metallic and `glossy` a clear-gloss sheen (both catch the scene env map, like the Metallic /
-// Glossy dice finishes); everything else stays matte. One place, so a spawned prop and its
-// dispenser stack always match.
-function itemSurface(spec, color, side) {
-  if (spec && spec.metal)
-    return new THREE.MeshStandardMaterial({ color, metalness: 0.95, roughness: 0.35, side });
-  if (spec && spec.glossy)
-    return new THREE.MeshStandardMaterial({ color, metalness: 0.05, roughness: 0.1, side });
-  return new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+// Surface for a bundled object's tinted material slot. Definitions select a default with flags such
+// as `satin: true`; props.finish is an inspector-set override. Heavy finishes use the same phone-safe
+// substitutions as dice.
+function itemSurface(spec, color, side, override) {
+  let finish = objectFinish(spec, override);
+  if (DICE_FINISH_FALLBACK[finish] && deviceClass() === 'phone')
+    finish = DICE_FINISH_FALLBACK[finish];
+  return finishMaterial(color, finish, { side });
 }
 
 // Build a prop's visual mesh. A prop is either a bundled/custom .glb MODEL or a
@@ -1412,24 +1418,26 @@ function propMesh(props = {}) {
     // Work out how the model gets colored (used by paint below):
     const teamTint = builtin && spec.team ? propColor(props) : null; // a team set → recolor every slot
     const pick = !builtin || !spec.ownMaterial || spec.tintMaterial ? (props.color ?? null) : null; // the player's picked color
-    const matte = (color, side) => itemSurface(spec, color, side); // metal/glossy per spec, else matte
+    const surface = (color, side) => itemSurface(spec, color, side, props.finish);
+    const styled = props.finish !== undefined || objectFinish(spec) !== 'matte';
 
     // Decide the fate of one material slot on the loaded model.
     const paint = (material) => {
-      if (teamTint != null) return matte(teamTint, material.side); // team set: recolor everything
+      if (teamTint != null) return surface(teamTint, material.side); // team set: recolor everything
       if (builtin && spec.tintMaterial) {
         // Only the one named slot takes the picked color; de-metal the rest so
         // their own baked-in colors read correctly.
-        if (material.name === spec.tintMaterial && pick != null) return matte(pick, material.side);
+        if (material.name === spec.tintMaterial && (pick != null || styled))
+          return surface(pick ?? material.color, material.side);
         material.metalness = 0;
         return material;
       }
-      if (builtin && spec.ownMaterial) {
+      if (builtin && spec.ownMaterial && !styled) {
         // keep the model's own materials, just de-metal
         material.metalness = 0;
         return material;
       }
-      return pick != null ? matte(pick, material.side) : material; // full tint (color-picker / custom upload)
+      return pick != null || styled ? surface(pick ?? material.color, material.side) : material;
     };
 
     return loadModelGroup(
@@ -1463,7 +1471,7 @@ function propMesh(props = {}) {
 function propShapeMesh(props = {}) {
   const spec = PROPS[props.shape] || PROPS.box;
   const render = spec.render;
-  const material = propMat(propColor(props));
+  const material = itemSurface(spec, propColor(props), undefined, props.finish);
   switch (render.prim) {
     case 'sphere':
       return new THREE.Mesh(new THREE.SphereGeometry(render.r, 24, 16), material);

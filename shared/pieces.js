@@ -186,6 +186,7 @@ export const PROPS = {
     render: { prim: 'cyl', r: 0.3, h: 0.1 },
     team: 'checker',
     stand: 'flat',
+    pearl: true,
   },
   crowned_checker: {
     mass: 0.6,
@@ -193,6 +194,7 @@ export const PROPS = {
     render: { prim: 'cyl', r: 0.3, h: 0.2 },
     team: 'checker',
     stand: 'flat',
+    pearl: true,
   },
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
@@ -209,7 +211,7 @@ export const PROPS = {
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.18,
     tintMaterial: 'c1',
-    glossy: true, // the tinted body gets a glossy sheen; the white rim stays matte
+    pearl: true,
   }, // color picker tints only the body; white rim kept
   token: {
     mass: 0.4,
@@ -217,7 +219,7 @@ export const PROPS = {
     model: '/models/pieces/misc/token.glb',
     modelScale: 0.84,
     stand: true,
-    glossy: true,
+    satin: true,
   }, //Generic token to represent a player, for use in various games.
   go: {
     mass: 0.2,
@@ -225,7 +227,7 @@ export const PROPS = {
     render: { prim: 'lens', r: 0.2, sy: 0.375 },
     team: 'go',
     stand: 'flat',
-    glossy: true,
+    pearl: true,
   }, // ~0.4 wide, fits the go board grid
   train_piece: {
     mass: 0.4,
@@ -233,8 +235,9 @@ export const PROPS = {
     model: '/models/pieces/misc/train_piece.glb',
     modelScale: 0.12,
     ownMaterial: false,
+    tintMaterial: 'c01',
     stand: true,
-    glossy: true,
+    satin: true,
   },
   // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
   // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
@@ -246,7 +249,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
-    glossy: true,
+    pearl: true,
   },
   'chess-rook': {
     mass: 0.5,
@@ -255,7 +258,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
-    glossy: true,
+    pearl: true,
   },
   'chess-knight': {
     mass: 0.5,
@@ -264,7 +267,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
-    glossy: true,
+    pearl: true,
   },
   'chess-bishop': {
     mass: 0.5,
@@ -273,7 +276,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
-    glossy: true,
+    pearl: true,
   },
   'chess-queen': {
     mass: 0.6,
@@ -282,7 +285,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
-    glossy: true,
+    pearl: true,
   },
   'chess-king': {
     mass: 0.6,
@@ -291,7 +294,7 @@ export const PROPS = {
     modelScale: 2.124,
     team: 'chess',
     stand: true,
-    glossy: true,
+    pearl: true,
   },
 };
 // Ordered list for the spawn UI. team:true = fixed two-color set; else color picker.
@@ -518,10 +521,11 @@ export const DISPENSERS = {
     body: 'model',
     item: 'train_piece',
     color: true,
+    tintMaterial: 'c01',
     model: '/models/pieces/misc/train_dispenser.glb',
-    modelScale: 0.75,
+    modelScale: 1,
     count: { def: 41, max: 100 },
-    collider: { box: [0.2, 0.2, 0.6] },
+    collider: { box: [0.7, 0.5, 0.7] },
     mass: 0.5,
   },
   // Go bowl: infinite, team-colored (interior stones + fill = black/white; the bowl
@@ -781,6 +785,18 @@ export const DICE_FINISHES = [
   { key: 'custom', name: 'Custom' }, // needs a finishImg (an uploaded /assets/dice/ texture)
 ];
 export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
+// Built-in objects share every parameter/procedural dice finish except `custom`, which depends on
+// a dice-library texture. A PROPS entry can choose its default with a boolean flag (`satin: true`,
+// `translucent: true`, etc.); the legacy `metal: true` spelling remains an alias for `metallic`.
+export const OBJECT_FINISHES = DICE_FINISHES.filter((f) => f.key !== 'custom');
+export const OBJECT_FINISH_KEYS = new Set(OBJECT_FINISHES.map((f) => f.key));
+export function objectFinish(spec = {}, override) {
+  spec ||= {}; // callers may deliberately use null for a non-object/dispenser definition
+  if (OBJECT_FINISH_KEYS.has(override)) return override;
+  if (spec.metal || spec.metallic) return 'metallic';
+  for (const { key } of OBJECT_FINISHES) if (spec[key]) return key;
+  return 'matte';
+}
 // Finishes whose shaders a low-end mobile GPU (some Android phones) black-screens on — physical
 // materials, transparency, extra sampler maps. On a phone the renderer substitutes the safe value
 // and the picker hides these; capable devices show the real thing.
@@ -863,20 +879,31 @@ export function colorProps(
     }
     return out;
   }
+  const finishChange = finish != null;
+  if (finishImg != null) return null; // uploaded finish textures belong to dice only
+  if (finishChange) {
+    // Instance material overrides are only valid for bundled objects. Custom uploaded models keep
+    // their authored material, and dice-only custom textures never cross into the object system.
+    if (type !== 'prop' || !PROPS[props.shape] || !OBJECT_FINISH_KEYS.has(finish)) return null;
+    out.finish = finish; // keep explicit matte: it must be able to override a glossy definition
+  }
   // Props & dispensers share one rule: the object's allowed palette (recolorPalette) decides
   // whether a swatch sets a fixed team set, must come from a limited palette, or is freeform.
   const opt = recolorPalette(type, props, dispDef);
   if (!opt) return null; // cards, boards, unknown dispensers
   if (opt.team) {
-    if (team == null) return null;
-    out.team = team ? 1 : 0;
+    if (color != null) return null;
+    if (team != null) out.team = team ? 1 : 0;
+    else if (!finishChange) return null;
   } // team piece: switch set, not a color
   else {
-    if (color == null) return null;
-    const c = clampColor(color);
-    if (c == null) return null;
-    if (!opt.free && !opt.swatches.some((s) => s.hex === c)) return null; // limited palette (coins): color must be in it
-    out.color = c;
+    if (team != null) return null;
+    if (color != null) {
+      const c = clampColor(color);
+      if (c == null) return null;
+      if (!opt.free && !opt.swatches.some((s) => s.hex === c)) return null; // limited palette (coins): color must be in it
+      out.color = c;
+    } else if (!finishChange) return null;
   }
   return out;
 }
