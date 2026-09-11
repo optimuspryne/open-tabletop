@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Security
+- Run the Docker container as a non-root user (`appuser`) instead of root, limiting the impact if an attacker gains access to the container.
 
 ## [0.16.0] — 2026-09-11
 
