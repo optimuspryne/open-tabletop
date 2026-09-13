@@ -176,9 +176,12 @@ function restorationRoom() {
     },
     spawn(type, position, props, quaternion) {
       const id = `piece-${this.state.pieces.size + 1}`;
-      this.state.pieces.set(id, { type });
+      this.state.pieces.set(id, { type, count: 0 });
       calls.push(['spawn', type, position, props, quaternion]);
       return id;
+    },
+    updateStackCollider(id) {
+      calls.push(['stackCollider', id]);
     },
     scheduleSave() {
       calls.push(['save']);
@@ -339,6 +342,32 @@ test('loading a scene without hands or a turn removes the previous game and repl
   assert.equal(room.state.turnPending, '');
   assert.equal(room.state.turn, '');
   assert.deepEqual(room.savedScene, scene);
+});
+
+test('scene persistence preserves the exact remaining dispenser inventory', () => {
+  const source = serializationRoom();
+  source.state.pieces.set('dispenser-1', {
+    type: 'dispenser',
+    props: JSON.stringify({ disp: 'pokerStack', color: 0xff0000 }),
+    count: 137,
+    x: 7,
+    y: 1,
+    z: 8,
+    qx: 0,
+    qy: 0,
+    qz: 0,
+    qw: 1,
+  });
+
+  const scene = serializeScene(source);
+  const saved = scene.pieces.find((piece) => piece.type === 'dispenser');
+  assert.equal(saved.count, 137);
+
+  const { room, calls } = restorationRoom();
+  applyScene(room, scene, restoreOptions);
+  const dispenserId = [...room.state.pieces].find(([, piece]) => piece.type === 'dispenser')[0];
+  assert.equal(room.state.pieces.get(dispenserId).count, 137);
+  assert.ok(calls.some(([name, id]) => name === 'stackCollider' && id === dispenserId));
 });
 
 test('final save persists hands without table pieces and restores them on reopen', async () => {

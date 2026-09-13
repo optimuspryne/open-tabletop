@@ -53,6 +53,7 @@ export function serializeScene(room) {
     pieces.push({
       type: piece.type,
       props,
+      ...(piece.type === 'dispenser' ? { count: piece.count } : {}),
       x: piece.x,
       y: piece.y,
       z: piece.z,
@@ -199,6 +200,14 @@ export function applyScene(
       Array.isArray(entry.q) ? entry.q : null,
     );
     if (faceDownFront) room.cardData.set(id, { front: faceDownFront });
+    if (entry.type === 'dispenser' && Number.isSafeInteger(entry.count) && entry.count > 0) {
+      const piece = room.state.pieces.get(id);
+      if (piece) {
+        // A gathered stack may legitimately exceed the normal single-spawn limit.
+        piece.count = entry.count;
+        room.updateStackCollider(id);
+      }
+    }
   }
 
   for (const card of Array.isArray(scene.recoveryCards) ? scene.recoveryCards : []) {

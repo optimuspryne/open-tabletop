@@ -1042,6 +1042,8 @@ Two serializers, layered on purpose:
   the room **`scale`** (measurement calibration and grid layout), and **no player
   identity**. Library scenes call this directly — they must stay hands-free. A deck's
   skin is written under the same `deckModel` name the spawn path reads, so it round-trips.
+  Finite dispensers also store their authoritative `count` alongside their props, preserving
+  the remaining inventory in both portable templates and full-game checkpoints.
 - **`serializeGame`** wraps a scene with the live private layer: each held **hand**
   and the **turn**. The catch is that both are keyed by ephemeral **`sessionId`**,
   but anything that must survive a reload has to key on the stable
@@ -1077,7 +1079,10 @@ debounced. All writes capture independent payloads and run in request order per 
 so an older background write cannot finish after and replace a newer checkpoint.
 A failed write rejects its caller while allowing later queued saves to proceed.
 
-`applyScene` rebuilds the pieces, then _stages_ — never assigns — the private layer:
+`applyScene` rebuilds the pieces, restores each saved finite-dispenser count, and refreshes its
+count-derived collider. The post-spawn assignment deliberately preserves gathered stacks above a
+single dispenser's normal creation cap; snapshots without a count retain the legacy default. It
+then _stages_ — never assigns — the private layer:
 saved hands land in `pendingHands` (account-keyed) with a public `unclaimed`
 (`userId → name`) map mirrored into synced state for the GM's reassign UI; the saved
 turn lands in `pendingTurn` with a public `turnPending` name, and `state.turn` is

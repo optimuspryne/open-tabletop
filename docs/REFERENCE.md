@@ -617,8 +617,8 @@ already scans. No separate public recovery queue is synchronized to clients.
 
 - **`serializeScene(room)`** — creates the portable public snapshot:
   table size, pieces and transforms, exact deck order, protected face-down card
-  fronts, overlays, measurement/grid scale, and enabled tray seats. Inspected cards
-  are appended to the snapshot's deck in reverse inspection order, preserving their
+  fronts, finite-dispenser inventory counts, overlays, measurement/grid scale, and
+  enabled tray seats. Inspected cards are appended to the snapshot's deck in reverse inspection order, preserving their
   original draw order and individual backs without mutating live inspections.
   Missing-deck inspections are stored separately as `recoveryCards` entries
   (`front`, `back`, `open`, `geo`), without player identity, so the table piece cap
@@ -644,6 +644,9 @@ already scans. No separate public recovery queue is synchronized to clients.
   existing spawn/bounds/tray APIs. Restored overlays become table-owned, and
   hands/turns are staged for account rebinding. Clears the previous game first and
   replaces `savedScene` with the loaded scene before scheduling persistence.
+  A saved positive integer dispenser count replaces the normal spawn default and
+  refreshes the stack collider, preserving gathered inventories above the single-spawn
+  cap; older snapshots without the field keep the normal default.
   `recoveryCards` with string fronts/backs become private pending inspections
   marked for automatic recovery. They spawn as space allows on simulation ticks;
   excess cards remain pending and are included in subsequent saves.
@@ -678,8 +681,9 @@ only shared `TABLE` defaults besides `@colyseus/schema`; process-wide
 **`Encoder.BUFFER_SIZE = 128 * 1024`** remains explicit in `server.js`, before rooms are
 created, rather than becoming an import side effect of the schema module.
 
-- **`Piece`** — `type, owner, props` (strings), `count`, transform
-  `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the `props` JSON, not the schema:
+- **`Piece`** — `type, owner, props` (strings), `count` (deck cards or remaining
+  finite-dispenser items), transform `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the
+  `props` JSON, not the schema:
   `color` (die body / prop tint), `textColor` (die numbers), and `finish`. Dice accept
   `matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled`/`brushed`/`glow`/`translucent`, or
   `custom` — a host-uploaded texture named by a companion `finishImg` `/assets/dice/` URL);
@@ -801,7 +805,8 @@ extracted tray/table recovery → extracted transform publication; with `PERF_LO
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
-deck order + face-down fronts + overlays + the room **`scale`** (measurement + grid),
+deck order + face-down fronts + finite-dispenser counts + overlays + the room **`scale`**
+(measurement + grid),
 no player identity), **`serializeGame`** (a scene _plus_ account-keyed `hands` + `turn`,
 session→`userId` resolved), **`applyScene`** (delegates validated restore; rebuild pieces + overlays, **apply the
 scene's `scale`** via `applyScale`, then _stage_ the private layer into

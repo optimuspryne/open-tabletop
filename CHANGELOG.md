@@ -23,6 +23,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Preserve the remaining inventory of finite dispensers across manual table-state saves and room
+  shutdown/re-entry, including gathered stacks above the normal single-spawn limit.
 - Keep the WebGL canvas hidden until the synchronized table and player-seat camera are both ready,
   preventing the bootstrap camera angle from flashing during room entry.
 - Use center-based escape detection on rectangular tables while retaining footprint-aware checks

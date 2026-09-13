@@ -9,7 +9,7 @@ defineTypes(Piece, {
   type: 'string',
   owner: 'string',
   props: 'string',
-  count: 'number', // count = cards in a deck (0 for other pieces)
+  count: 'number', // cards in a deck or remaining items in a finite dispenser
   x: 'number',
   y: 'number',
   z: 'number',
