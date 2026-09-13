@@ -128,8 +128,9 @@ This is several small changes, not one large move.
   `server/game/physics-update.js` after tracing their shared state and ordering.
 - [x] Move post-step tray/table escape recovery and transform publication into
   `server/game/physics-update.js` without obscuring their order around the room-owned profiled
-  `world.step`. Table recovery uses the shared playable-shape test and the current body footprint,
-  so resized-table escape and invisible-wall-ring cases return to the nearest safe point.
+  `world.step`. Table recovery uses the shared playable-shape test: matching rectangular bounds
+  recover by body centre, while non-rectangular surfaces use the current body footprint so
+  resized-table escape and invisible-wall-ring cases return to the nearest safe point.
 - Reuse `server/physics.js` and existing safety helpers where appropriate; do not
   duplicate physics configuration or turn the new module into another monolith.
 - Validate dragging, throws, group release, snapping, absorption compatibility,

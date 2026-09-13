@@ -905,9 +905,11 @@ the existing fast sleep tuning and pins only fully settled pieces on their exact
 
 `preparePieceMotion(room, dt, sim)` calls those passes in their established order before the step.
 Afterward, `recoverEscapedBodies(room, sim)` keeps personal-tray bodies in their enabled tray and
-tests ordinary bodies against the real playable table shape. Its fast interior check falls back to
-the current Cannon AABB near an edge, then projects an escaped body toward the nearest safe point
-with enough inset for its footprint. This prevents pieces from remaining outside shaped tables or
+tests ordinary bodies against the real playable table shape. Rectangular tables already have a
+matching floor and outside-wall layout, so recovery triggers only when the body centre crosses the
+felt edge; a valid object may overlap the rim without being teleported. Other shapes use a fast
+interior check that falls back to the current Cannon AABB near an edge, then project an escaped body
+toward the nearest safe footprint. This prevents pieces from remaining outside shaped tables or
 settling atop the invisible containment-wall ring. `publishTransforms(room)` then writes every
 surviving body's final authoritative transform through the existing room facade.
 
@@ -925,8 +927,9 @@ shape receives a slightly overlapping oriented wall box for each edge from the s
 `tableOutline`, sealing its vertices while keeping browser rendering independent.
 
 The shared `inTable(x, z, shape, hx, hz, inset)` predicate mirrors those playable shapes without
-allocating an outline each tick. Post-step recovery supplies a body's horizontal footprint as the
-inset, closing the deliberate gap between the rectangular support slab and a non-rectangular felt.
+allocating an outline each tick. Post-step recovery uses its centre-only rectangle test where the
+floor already matches the felt; for other shapes it checks the body's AABB corners, closing the
+deliberate gap between the rectangular support slab and a non-rectangular felt.
 
 `TableRoom.buildBounds` remains as a small forwarding method because room creation, durable
 scene restoration, and live GM resizing already call that room API. The extracted builder

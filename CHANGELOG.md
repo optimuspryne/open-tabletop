@@ -8,6 +8,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Fixed
+- Use center-based escape detection on rectangular tables while retaining footprint-aware checks
+  for shaped surfaces, preventing valid edge placements from repeatedly triggering recovery.
+
 ### Security
 - Run the Docker container as a non-root user (`appuser`) instead of root, limiting the impact if an attacker gains access to the container.
 

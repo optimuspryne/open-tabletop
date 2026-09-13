@@ -126,8 +126,8 @@ export function recoverEscapedBodies(room, sim) {
   const tableX = room.state.tableX;
   const tableZ = room.state.tableZ;
   const tableShape = room.state.tableShape || 'rect';
-  const shapeDepth = tableShape === 'round' || tableShape === 'hex' ? tableX : tableZ;
-  const maxInset = Math.max(0, Math.min(tableX, shapeDepth) - 0.25);
+  const rectangular = tableShape === 'rect';
+  const edgeClearance = 0.1;
   room.bodies.forEach((body) => {
     const position = body.position;
     if (body.__traySeat != null) {
@@ -154,41 +154,63 @@ export function recoverEscapedBodies(room, sim) {
     // Most bodies are well inside the table, so their bounding radius gives a cheap safe-zone
     // check. Only bodies near an edge need an exact current AABB footprint.
     const verticalEscape = position.y < sim.bounds.floor || position.y > sim.bounds.ceiling;
-    let inset = Math.min((body.boundingRadius || 0) + 0.1, maxInset);
+    let bodyFits = rectangular ? (x, z) => inTable(x, z, tableShape, tableX, tableZ) : undefined;
+    let fits = rectangular
+      ? bodyFits(position.x, position.z)
+      : inTable(
+          position.x,
+          position.z,
+          tableShape,
+          tableX,
+          tableZ,
+          (body.boundingRadius || 0) + edgeClearance,
+        );
     let verticalHalf = 0;
-    if (verticalEscape || !inTable(position.x, position.z, tableShape, tableX, tableZ, inset)) {
+    let forceCenter = false;
+    if (verticalEscape || !fits) {
       if (body.shapes.length && body.aabbNeedsUpdate) body.updateAABB();
       if (body.shapes.length) {
         const lower = body.aabb.lowerBound;
         const upper = body.aabb.upperBound;
-        inset = Math.min(
-          Math.max(
-            position.x - lower.x,
-            upper.x - position.x,
-            position.z - lower.z,
-            upper.z - position.z,
-          ) + 0.1,
-          maxInset,
-        );
         verticalHalf = Math.max(position.y - lower.y, upper.y - position.y);
+        if (!rectangular) {
+          const centerFits = (x, z) => inTable(x, z, tableShape, tableX, tableZ, edgeClearance);
+          const corners = [
+            { x: lower.x - position.x, z: lower.z - position.z },
+            { x: lower.x - position.x, z: upper.z - position.z },
+            { x: upper.x - position.x, z: lower.z - position.z },
+            { x: upper.x - position.x, z: upper.z - position.z },
+          ];
+          bodyFits = (x, z) => corners.every((corner) => centerFits(x + corner.x, z + corner.z));
+          forceCenter = !bodyFits(0, 0);
+          fits = forceCenter
+            ? centerFits(position.x, position.z)
+            : bodyFits(position.x, position.z);
+        }
+      } else if (!rectangular) {
+        const centerFits = (x, z) => inTable(x, z, tableShape, tableX, tableZ, edgeClearance);
+        bodyFits = centerFits;
+        fits = centerFits(position.x, position.z);
       }
     }
-    const escaped =
-      verticalEscape || !inTable(position.x, position.z, tableShape, tableX, tableZ, inset);
+    const escaped = verticalEscape || !fits;
     if (escaped) {
       // Every supported table is convex and centred at the origin. Binary-searching the ray back
       // toward the centre preserves as much of the escaped position as the real surface permits.
-      let low = 0;
-      let high = 1;
-      if (inTable(0, 0, tableShape, tableX, tableZ, inset)) {
-        for (let i = 0; i < 24; i++) {
-          const middle = (low + high) / 2;
-          if (inTable(position.x * middle, position.z * middle, tableShape, tableX, tableZ, inset))
-            low = middle;
-          else high = middle;
+      let scale = 1;
+      if (!fits) {
+        scale = 0;
+        let high = 1;
+        if (!forceCenter && bodyFits(0, 0)) {
+          for (let i = 0; i < 24; i++) {
+            const middle = (scale + high) / 2;
+            if (bodyFits(position.x * middle, position.z * middle)) scale = middle;
+            else high = middle;
+          }
+          scale *= 0.999;
         }
       }
-      position.set(position.x * low, Math.max(3, verticalHalf + 0.5), position.z * low);
+      position.set(position.x * scale, Math.max(3, verticalHalf + 0.5), position.z * scale);
       body.velocity.setZero();
       body.angularVelocity.setZero();
       body.aabbNeedsUpdate = true;

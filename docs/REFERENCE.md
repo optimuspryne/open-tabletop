@@ -854,9 +854,11 @@ Placement methods forward to `server/game/placement-operations.js`:
   flips, and restores completed bodies to awake dynamic simulation.
 - **`preparePieceMotion(room, dt, sim)`** invokes the four passes in that established order.
 - **`recoverEscapedBodies(room, sim)`** runs after stepping. Enabled personal-tray bodies recover
-  through shared tray geometry; ordinary bodies use `inTable` plus a near-edge AABB footprint and
-  return along the ray toward table centre to the nearest safe playable position. Recovery clears
-  motion, refreshes Cannon's AABB, and wakes the body.
+  through shared tray geometry. Rectangular tables test the body centre because their floor and
+  walls match the felt, allowing legitimate edge overlap; other shapes use `inTable` plus the
+  near-edge AABB corners to keep the full footprint on the shaped surface. Actual escapes return
+  along the ray toward table centre with a small stability clearance. Recovery clears motion,
+  refreshes Cannon's AABB, and wakes the body.
 - **`publishTransforms(room)`** writes each synchronized piece's final body transform through
   `room.writeTransform`, after any recovery correction.
 

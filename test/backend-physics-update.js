@@ -201,7 +201,7 @@ test('recoverEscapedBodies returns table pieces inside the bounds and clears mot
   recoverEscapedBodies(room, SIM);
 
   assert.equal(escaped.position.y, 3);
-  assert.equal(inTable(escaped.position.x, escaped.position.z, 'rect', 5, 4, 0.1), true);
+  assert.equal(inTable(escaped.position.x, escaped.position.z, 'rect', 5, 4), true);
   assert.deepEqual([escaped.velocity.x, escaped.velocity.y, escaped.velocity.z], [0, 0, 0]);
   assert.deepEqual(
     [escaped.angularVelocity.x, escaped.angularVelocity.y, escaped.angularVelocity.z],
@@ -223,6 +223,51 @@ test('recoverEscapedBodies removes pieces from a shaped table wall ring', () => 
 
   assert.equal(inTable(perched.position.x, perched.position.z, 'round', 5, 5, 0.6), true);
   assert.equal(perched.position.y, 3);
+  const recovered = [perched.position.x, perched.position.y, perched.position.z];
+
+  recoverEscapedBodies(room, SIM);
+
+  assert.deepEqual([perched.position.x, perched.position.y, perched.position.z], recovered);
+});
+
+test('recoverEscapedBodies respects each rectangular footprint axis near an edge', () => {
+  const { room } = harness();
+  const nearEdge = body({ position: [4.95, 1, 0] });
+  nearEdge.addShape(new CANNON.Box(new CANNON.Vec3(0.2, 0.2, 1.5)));
+  room.bodies.set('piece', nearEdge);
+
+  recoverEscapedBodies(room, SIM);
+
+  assert.deepEqual([nearEdge.position.x, nearEdge.position.y, nearEdge.position.z], [4.95, 1, 0]);
+});
+
+test('recoverEscapedBodies rescues a rectangular wall-ring body by its center', () => {
+  const { room } = harness();
+  const perched = body({ position: [5.5, 4, 0] });
+  perched.addShape(new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)));
+  room.bodies.set('piece', perched);
+
+  recoverEscapedBodies(room, SIM);
+  const recovered = [perched.position.x, perched.position.y, perched.position.z];
+  recoverEscapedBodies(room, SIM);
+
+  assert.ok(perched.position.x < 5);
+  assert.deepEqual([perched.position.x, perched.position.y, perched.position.z], recovered);
+});
+
+test('recoverEscapedBodies stabilizes an oversized body instead of looping forever', () => {
+  const { room } = harness();
+  const oversized = body({ position: [6, 1, 0] });
+  oversized.addShape(new CANNON.Box(new CANNON.Vec3(6, 0.5, 1)));
+  room.bodies.set('piece', oversized);
+
+  recoverEscapedBodies(room, SIM);
+  const recovered = [oversized.position.x, oversized.position.y, oversized.position.z];
+  recoverEscapedBodies(room, SIM);
+
+  assert.ok(recovered[0] < 5);
+  assert.equal(recovered[1], 3);
+  assert.deepEqual([oversized.position.x, oversized.position.y, oversized.position.z], recovered);
 });
 
 test('recoverEscapedBodies uses an enabled personal tray instead of table bounds', () => {
