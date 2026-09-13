@@ -11,6 +11,7 @@ import {
   setRimWood,
   setTableVisible,
   setSeatCameraReady,
+  waitForVisualAssets,
   setQuality,
   getQuality,
   deviceClass,
@@ -108,6 +109,35 @@ window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers
 const byId = (id) => document.getElementById(id);
 const qs = (selector) => document.querySelector(selector);
 const qsa = (selector) => document.querySelectorAll(selector);
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+let sceneHydrationVersion = 0;
+const noteSceneHydration = () => sceneHydrationVersion++;
+
+// Keep the page-level loading cover in place until the synchronized scene has created its meshes,
+// every initial Three.js texture/model request has settled, and the collection stays quiet long
+// enough to catch Colyseus callbacks delivered just after the first state frame.
+async function finishTableLoading() {
+  for (;;) {
+    await waitForVisualAssets();
+    const version = sceneHydrationVersion;
+    await wait(300);
+    await waitForVisualAssets();
+    const pieceCount = room?.state?.pieces?.size ?? 0;
+    const seated = !!room?.state?.players?.get(mySession);
+    if (seated && meshes.size === pieceCount && version === sceneHydrationVersion) break;
+  }
+  renderer.shadowMap.needsUpdate = true;
+  renderer.render(scene, camera);
+  await nextFrame();
+  await nextFrame();
+  const overlay = byId('tableLoading');
+  if (!overlay) return;
+  overlay.classList.add('is-ready');
+  const remove = () => overlay.remove();
+  overlay.addEventListener('transitionend', remove, { once: true });
+  setTimeout(remove, 700); // reduced motion / interrupted transition fallback
+}
 // Escape a string for safe interpolation into an innerHTML fragment.
 const escapeHtml = (x) =>
   String(x).replace(
@@ -618,6 +648,7 @@ function rebuildGrid() {
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
   cb(room.state).pieces.onAdd((piece, id) => {
+    noteSceneHydration();
     const mesh = KIND[piece.type].mesh(meshPropsOf(piece, id));
     const castsShadow = PHYS[piece.type].mass > 0;
     applyTransform(mesh, piece);
@@ -688,6 +719,7 @@ function rebuildGrid() {
   });
 
   cb(room.state).pieces.onRemove((piece, id) => {
+    noteSceneHydration();
     const entry = meshes.get(id);
     if (entry) scene.remove(entry.mesh);
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
@@ -702,6 +734,7 @@ function rebuildGrid() {
   // them in the initial state — no replay needed. Immutable once placed in Step 3
   // (no overlayMove wired yet), so add/remove is the whole lifecycle here.
   cb(room.state).overlays.onAdd((o, id) => {
+    noteSceneHydration();
     addOverlay(id, o);
     // Re-render on any geometry/color change so a moved overlay (overlayMove) updates live.
     ['x', 'z', 'x2', 'z2', 'w', 'ang', 'color'].forEach((f) =>
@@ -709,6 +742,7 @@ function rebuildGrid() {
     );
   });
   cb(room.state).overlays.onRemove((o, id) => {
+    noteSceneHydration();
     removeOverlay(id);
     if (id === selOverlayId) selectOverlay(null);
   });
@@ -928,6 +962,7 @@ function rebuildGrid() {
 
   // seats, turn order, and other players' fanned hand-backs (all public info)
   cb(room.state).players.onAdd((player, sid) => {
+    noteSceneHydration();
     if (sid === mySession) {
       mySeat = player.seat;
       applySeat(mySeat);
@@ -1007,6 +1042,7 @@ function rebuildGrid() {
     cb(player).listen('handBack', () => refreshFan(sid), false); // re-skin the fan backs when the deck's back changes
   });
   cb(room.state).players.onRemove((player, sid) => {
+    noteSceneHydration();
     removePlayerVis(sid);
     clearDragPreview(sid);
     renderPlayers();
@@ -1104,7 +1140,9 @@ function rebuildGrid() {
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
   setRimWood(room.state.rimWood || 'mahogany'); // initial rim wood
   rebuildGrid(); // initial grid (inert until a GM sets a cell size + square style)
+  syncSkybox(room.state.skybox); // include the room's initial environment in the loading gate
   setTableVisible(true); // reveal only after the joined room's complete table appearance is applied
+  void finishTableLoading();
 
   // The game table and the editor have different toolbars but share this file, so
   // every page-specific control is wired defensively (no-op if it isn't on the page).

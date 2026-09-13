@@ -399,6 +399,68 @@ body {
   position: fixed;
   inset: 0;
 }
+.tableLoading {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(
+      circle at 50% 42%,
+      color-mix(in srgb, var(--accent) 10%, transparent),
+      transparent 34%
+    ),
+    var(--bg);
+  opacity: 1;
+  transition: opacity 260ms ease;
+}
+.tableLoading.is-ready {
+  pointer-events: none;
+  opacity: 0;
+}
+.tableLoadingCard {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  text-align: center;
+}
+.tableLoadingCard img {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 6px;
+}
+.tableLoadingCard strong {
+  color: var(--text);
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+.tableLoadingCard > span:not(.tableLoadingSpinner) {
+  font-size: 13px;
+}
+.tableLoadingSpinner {
+  width: 26px;
+  height: 26px;
+  margin-top: 10px;
+  border: 2px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: tableLoadingSpin 0.8s linear infinite;
+}
+@keyframes tableLoadingSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tableLoading {
+    transition: none;
+  }
+  .tableLoadingSpinner {
+    animation-duration: 1.6s;
+  }
+}
 canvas {
   display: block;
 }

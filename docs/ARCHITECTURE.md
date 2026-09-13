@@ -134,8 +134,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
   plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks. Bootstrap table/rim meshes stay
   hidden until `client.js` applies the joined room's synchronized shape, size, felt, rim, and grid.
-  The WebGL canvas has a second readiness gate for the synchronized player-seat camera; the client
-  renders that settled pose before revealing the canvas, so no arbitrary bootstrap angle is shown.
+  The WebGL canvas has a second readiness gate for the synchronized player-seat camera, and core
+  tracks active Three.js texture/model requests through the shared loading manager.
 - **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
   the `.glb` model loading/measuring helpers, and the `KIND` registry. Immutable thin-card,
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
@@ -143,7 +143,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`public/client.js`** — the tightly-coupled runtime: networking, interaction
   (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
   render loop. Holds the mutable session state (`room`, `down`, `inspect`,
-  `meshes`, `buffers`).
+  `meshes`, `buffers`). A full-screen Loading Table cover remains above the runtime until the local
+  mesh count matches synchronized pieces, the player's seat exists, visual assets are idle, and
+  pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
+  preventing both the bootstrap camera and late hydration from appearing to end users.
 - **`public/mesh-state.js`** — small browser state helpers that must resolve the current mesh by
   piece ID. Deck-count synchronization uses it so a props-driven mesh replacement cannot leave
   later count updates attached to a detached mesh.

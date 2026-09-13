@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Cover room entry with a Loading Table screen until synchronized pieces, visual assets, and the
+  first complete rendered frame are ready, preventing large tables from visibly popping into place.
 - Let uploaded custom 3D objects choose a default shared material during creation and change it
   later from the Inspect panel, while preserving compatible authored GLB texture maps and supplying
   procedural UVs when needed.

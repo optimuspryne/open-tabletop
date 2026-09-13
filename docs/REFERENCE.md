@@ -37,9 +37,9 @@ The codebase:
 | `server/user-queries.js`                                                                               | Node    | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection                                                                                                      |
 | `server/room-queries.js`                                                                               | Node    | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection                                                                       |
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
-| `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls + `CONFIG` & `LIGHTING` tunables                                                                                                                                  |
+| `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
-| `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, render loop                                                                                                                                  |
+| `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, loading gate, render loop                                                                                                                    |
 | `public/mesh-state.js`                                                                                 | browser | Current-mesh deck-height synchronization across props-driven mesh replacement                                                                                                                    |
 | `public/controls.js`                                                                                   | browser | Mouse/touch profiles translated into device-neutral intents                                                                                                                                      |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
@@ -1254,7 +1254,9 @@ fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`wa
 `oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`),
 **`setTableVisible(visible)`** (toggle the felt and rim together; initial room join reveals them
 only after synchronized appearance is applied), **`setSeatCameraReady()`** (open the second
-initial-view gate after `client.js` applies the synchronized seat camera), and
+initial-view gate after `client.js` applies the synchronized seat camera),
+**`waitForVisualAssets()`** (resolve after the shared Three.js loading manager is empty and remains
+quiet for a full frame), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
@@ -1262,9 +1264,13 @@ initial-view gate after `client.js` applies the synchronized seat camera), and
   tag), `ping` (attention-ping ring), `input` (click/drag thresholds), `tex`
   (die/board resolution), and `upload` (new card uploads use a 1024×1432 source canvas).
 - **Initial-view readiness.** The renderer canvas starts hidden. The table-appearance and seat-camera
-  gates must both open before `revealReadyView()` renders the settled pose once and reveals the canvas,
-  preventing the constructor camera from flashing during room join. The table-scaled seat pose comes
-  from `client.js`'s `VIEW`; its default `zoom` is 0.65.
+  gates must both open before `revealReadyView()` renders the settled pose once and reveals the canvas.
+  `table.html` keeps its higher Loading Table cover in place while `client.js`'s
+  `finishTableLoading()` additionally requires the local mesh count to match synchronized pieces,
+  the current player's seat to exist, Three.js visual assets to be idle, and piece/player/overlay
+  hydration to remain unchanged for 300 ms. It renders two more frames before fading and removing
+  the cover, preventing both the constructor camera and late object hydration from appearing. The
+  table-scaled seat pose comes from `client.js`'s `VIEW`; its default `zoom` is 0.65.
 - **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
   scales the baked `RoomEnvironment` for the env-map strength.
 - **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off; the render loop sets

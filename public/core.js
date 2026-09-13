@@ -42,6 +42,41 @@ scene.background = new THREE.Color(0x14181d);
 const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 200);
 camera.position.set(0, 14, 16);
 
+// Three's default loading manager is shared by the texture, cube-texture, and GLTF loaders used
+// throughout the table client. Track its active requests so room entry can stay covered until the
+// initial scene's visual assets have settled, including failures (loaders still call itemEnd).
+const visualAssetManager = THREE.DefaultLoadingManager;
+const managerItemStart = visualAssetManager.itemStart.bind(visualAssetManager);
+const managerItemEnd = visualAssetManager.itemEnd.bind(visualAssetManager);
+let visualAssetsPending = 0;
+let visualAssetVersion = 0;
+const visualAssetWaiters = new Set();
+visualAssetManager.itemStart = (url) => {
+  visualAssetsPending++;
+  visualAssetVersion++;
+  managerItemStart(url);
+};
+visualAssetManager.itemEnd = (url) => {
+  managerItemEnd(url);
+  visualAssetsPending = Math.max(0, visualAssetsPending - 1);
+  if (!visualAssetsPending) {
+    for (const resolve of visualAssetWaiters) resolve();
+    visualAssetWaiters.clear();
+  }
+};
+const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+
+// Resolve only after all currently registered visual loads finish and no new load begins for a
+// full frame. The quiet-frame check catches follow-up requests kicked off by a loader callback.
+async function waitForVisualAssets() {
+  for (;;) {
+    while (visualAssetsPending) await new Promise((resolve) => visualAssetWaiters.add(resolve));
+    const version = visualAssetVersion;
+    await nextFrame();
+    if (!visualAssetsPending && version === visualAssetVersion) return;
+  }
+}
+
 // --- Graphics quality tiers (docs/ROADMAP.md §1/§12) -----------------------
 // The tablet frame is fill-rate bound (pixel ratio × per-fragment shading, incl. soft-shadow
 // sampling), not draw bound, so quality is three fill-rate presets. Active tier resolves as:
@@ -403,6 +438,7 @@ export {
   setRimWood,
   setTableVisible,
   setSeatCameraReady,
+  waitForVisualAssets,
   setQuality,
   getQuality,
   deviceClass,
