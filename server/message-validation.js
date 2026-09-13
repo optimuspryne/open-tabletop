@@ -420,7 +420,7 @@ export function boardRecordPayload(value, { boardKeys = [] } = {}) {
 
 export function propRecordPayload(value, { colliders = [], allowSpawnOptions = false } = {}) {
   if (!isPlainObject(value)) return null;
-  const allowed = ['model', 'box', 'stand', 'scale', 'modelRot', 'collider', 'color'];
+  const allowed = ['model', 'box', 'stand', 'scale', 'modelRot', 'collider', 'color', 'finish'];
   if (allowSpawnOptions) allowed.push('snap');
   if (!hasOnlyKeys(value, new Set(allowed))) return null;
   const model = localAssetRef(value.model, { extension: '.glb' });
@@ -441,6 +441,10 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
     const color = finiteNumber(value.color, { min: 0, max: 0xffffff });
     if (color === null || !Number.isInteger(color)) return null;
     out.color = color;
+  }
+  if (value.finish !== undefined) {
+    if (!OBJECT_FINISH_KEYS.has(value.finish)) return null;
+    out.finish = value.finish;
   }
   if (allowSpawnOptions && value.snap !== undefined) {
     if (typeof value.snap !== 'boolean') return null;
@@ -668,7 +672,7 @@ export function spawnPayload(
   }
   if (type === 'dispenser') {
     if (
-      !hasOnlyKeys(props, new Set(['disp', 'color', 'team', 'count', 'snap'])) ||
+      !hasOnlyKeys(props, new Set(['disp', 'color', 'team', 'count', 'snap', 'finish'])) ||
       !dispenserKeys.includes(props.disp)
     )
       return null;
@@ -690,6 +694,10 @@ export function spawnPayload(
     if (props.snap !== undefined) {
       if (typeof props.snap !== 'boolean') return null;
       out.snap = props.snap;
+    }
+    if (props.finish !== undefined) {
+      if (!OBJECT_FINISH_KEYS.has(props.finish)) return null;
+      out.finish = props.finish;
     }
     return { type, props: out };
   }

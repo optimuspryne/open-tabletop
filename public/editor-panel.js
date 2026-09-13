@@ -62,6 +62,7 @@ import {
   BOARDS,
   COLORS,
   PROPS,
+  OBJECT_FINISHES,
   DISPENSER_LIST,
   DISPENSERS,
   PALETTE,
@@ -1381,16 +1382,17 @@ const showCardPrev = (el, ref) => {
   el.style.backgroundImage = u ? `url("${u}")` : 'none';
 };
 // Turn a .uploadSq (with a hidden <input type=file> inside) into a click-to-upload tile.
-function wireUploadSq(inputId, isGlb, onChange) {
+function wireUploadSq(inputId, isGlb, onChange, glbPreview = glbFilePreviewURL) {
   const input = byId(inputId),
     sq = input.parentElement;
   sq.addEventListener('click', () => input.click());
   input.addEventListener('change', () => {
     const f = input.files[0];
     sq.classList.toggle('filled', !!f);
+    if (onChange) onChange();
     if (!f) sq.style.backgroundImage = 'none';
     else if (isGlb)
-      glbFilePreviewURL(f).then((u) => {
+      glbPreview(f).then((u) => {
         sq.style.backgroundImage = u ? `url("${u}")` : 'none';
       });
     else {
@@ -1400,7 +1402,6 @@ function wireUploadSq(inputId, isGlb, onChange) {
       };
       r.readAsDataURL(f);
     }
-    if (onChange) onChange();
   });
 }
 const clearSq = (inputId) => {
@@ -1845,16 +1846,35 @@ function wireAddObject() {
     return on ? on.dataset.collider : 'box';
   };
   colliderBtns.forEach((b) => (b.onclick = () => setCollider(b.dataset.collider)));
+  const finishSelect = byId('adObjFinish');
+  for (const finish of OBJECT_FINISHES) {
+    const option = document.createElement('option');
+    option.value = finish.key;
+    option.textContent = finish.name;
+    finishSelect.appendChild(option);
+  }
+  const currentFinish = () => finishSelect.value;
   // Orientation: accumulate 90° world-axis rotations, stored as an Euler modelRot on spawn.
   let objQuat = new THREE.Quaternion();
+  let objSourceProps = null; // existing library record while Edit/Clone is open
   const objRot = () => {
     const e = new THREE.Euler().setFromQuaternion(objQuat);
     return [e.x, e.y, e.z];
   };
   const refreshObjPreview = () => {
     const f = byId('adObjGlb').files[0];
-    if (f)
-      glbFilePreviewURL(f, objRot()).then((u) => {
+    const finish = currentFinish();
+    const render = f
+      ? glbFilePreviewURL(f, objRot(), finish || undefined)
+      : objSourceProps
+        ? propPreviewURL({
+            ...objSourceProps,
+            modelRot: objRot(),
+            finish: finish || undefined,
+          })
+        : null;
+    if (render)
+      render.then((u) => {
         byId('adObjGlb').parentElement.style.backgroundImage = u ? `url("${u}")` : 'none';
       });
   };
@@ -1877,14 +1897,23 @@ function wireAddObject() {
     });
     byId('adObjScale').value = '1';
     byId('adObjStand').classList.remove('on');
+    finishSelect.value = '';
     setCollider('box');
     objQuat.identity();
+    objSourceProps = null;
     clearSq('adObjGlb');
     editCtx = null;
   };
-  wireUploadSq('adObjGlb', true, () => {
-    objQuat.identity();
-  }); // new file → fresh orientation
+  wireUploadSq(
+    'adObjGlb',
+    true,
+    () => {
+      objQuat.identity();
+      objSourceProps = null;
+    },
+    (file) => glbFilePreviewURL(file, objRot(), currentFinish() || undefined),
+  ); // new file → fresh orientation + selected material
+  finishSelect.onchange = refreshObjPreview;
   byId('adObjStand').onclick = () => byId('adObjStand').classList.toggle('on');
   const saveObj = async (spawn) => {
     const name = byId('adObjName').value.trim();
@@ -1899,6 +1928,7 @@ function wireAddObject() {
       if (!url) return alert('Choose a .glb file.');
       const box = await measureModel(url, scale, rot);
       const props = { model: url, box, stand, scale };
+      if (currentFinish()) props.finish = currentFinish();
       if (collider !== 'box') props.collider = collider;
       if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
       save(props, name, spawn);
@@ -1913,17 +1943,17 @@ function wireAddObject() {
   FILLERS.prop = (it, clone) => {
     // pre-fill the Object form from an existing asset (Edit / Clone)
     const p = it.props || {};
+    objSourceProps = { ...p };
     byId('adObjName').value = clone ? '' : it.name;
     byId('adObjScale').value = p.scale != null ? p.scale : 1;
     byId('adObjStand').classList.toggle('on', !!p.stand);
+    finishSelect.value = p.finish || '';
     setCollider(p.collider || 'box');
     objQuat.identity();
     if (Array.isArray(p.modelRot))
       objQuat.setFromEuler(new THREE.Euler(p.modelRot[0], p.modelRot[1], p.modelRot[2]));
     clearSq('adObjGlb');
-    propPreviewURL(it.props).then((u) => {
-      if (u) byId('adObjGlb').parentElement.style.backgroundImage = `url("${u}")`;
-    }); // current model — upload to replace
+    refreshObjPreview(); // current model + saved material — upload to replace
   };
 }
 

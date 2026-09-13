@@ -2502,6 +2502,8 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       room.send('recolor', { id: inspect.origId, color: b });
     } else {
       // custom prop
+      inspect.props = { ...(inspect.props || {}), color: b };
+      swapInspect(inspect.props);
       room.send('recolor', { id: inspect.origId, color: b });
     }
   };
@@ -2515,9 +2517,17 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
     commit();
   };
   const finishObject = (key, finishImg) => {
-    if (!inspect || (inspect.type !== 'die' && inspect.type !== 'prop')) return;
+    if (
+      !inspect ||
+      (inspect.type !== 'die' && inspect.type !== 'prop' && inspect.type !== 'dispenser')
+    )
+      return;
     const isDie = inspect.type === 'die';
-    if (!isDie && (!inspect.props || !PROPS[inspect.props.shape])) return;
+    const propModel = inspect.props && (PROPS[inspect.props.shape] || inspect.props.model);
+    const dispSpec = inspect.props && DISPENSERS[inspect.props.disp];
+    const dispenserModel =
+      dispSpec && (dispSpec.model || (PROPS[dispSpec.item] && PROPS[dispSpec.item].model));
+    if (!isDie && !propModel && !dispenserModel) return;
     const props = { ...(inspect.props || {}) };
     if (isDie && key === 'matte') {
       delete props.finish;
@@ -2749,6 +2759,15 @@ function inspectMesh(mesh, opts = {}) {
       if (opts.type === 'dispenser') inspect.props.count = piece0.count; // carry stack height into reclone previews
       const isDie = opts.type === 'die';
       const propSpec = opts.type === 'prop' ? PROPS[inspect.props.shape] : null;
+      const customProp = opts.type === 'prop' && !!inspect.props.model;
+      const dispenserModel =
+        opts.type === 'dispenser' &&
+        spec &&
+        (spec.model || (PROPS[spec.item] && PROPS[spec.item].model));
+      const finishSpec =
+        opts.type === 'dispenser' && spec && spec.body === 'stack'
+          ? PROPS[spec.item]
+          : propSpec || spec;
       // A prop/dispenser's ALLOWED palette (team set / limited palette / general) — mirrors the
       // spawn cards, so an object can't be tinted off its intended colors. null for a die.
       const opt = colorMode && !isDie ? recolorPalette(opts.type, props0, spec) : null;
@@ -2775,17 +2794,17 @@ function inspectMesh(mesh, opts = {}) {
       }
       const swRow = byId('dieSwatches');
       if (swRow) swRow.hidden = !isDie; // dice sets (dice only)
-      const isModelDie = isDie && !!inspect.props.model; // a pipped .glb die: no finish/texture system
+      const isModelDie = isDie && !!inspect.props.model; // a pipped .glb die: standard finishes, no custom texture
       const dcg = byId('dieCustomGroup');
       if (dcg) dcg.hidden = !isDie || isModelDie || !diceTextures.length; // Custom textures: dice only, when any exist
       const dfRow = byId('dieFinishes');
       if (dfRow) {
-        const finishable = (isDie && !isModelDie) || !!propSpec;
+        const finishable = isDie || !!propSpec || customProp || !!dispenserModel;
         dfRow.hidden = !finishable;
         const cur = finishable
           ? isDie
             ? inspect.props.finish || 'matte'
-            : objectFinish(propSpec, inspect.props.finish)
+            : objectFinish(finishSpec || {}, inspect.props.finish)
           : null;
         dfRow
           .querySelectorAll('[data-finish]')

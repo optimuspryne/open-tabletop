@@ -270,13 +270,13 @@ scoped against the real tree rather than from memory.
 ## Parked threads (finish-what-we-started)
 
 Small, concrete, each completes an existing feature:
-- **Finish the server split** — the DRY pass extracted routes, message handlers, queries,
+- ✅ **DONE 9-10-26 - Finish the server split** — the DRY pass extracted routes, message handlers, queries,
   validation, physics and config, but `TableRoom` (`server.js:560–2044`) is still a ~1,485-line
   class holding room lifecycle, seating, trays, scenes, hands, turns and starters. `EditorRoom`,
   `LobbyRoom`, the schema classes and the starter builders are also still in `server.js`. The
   remaining seam is `TableRoom` itself; the handler modules it now delegates to are the pattern
   to keep pulling against.
-- ✅ **Hex grids — DONE (confirmed by Ben).** The grid now offers a **hex** style beside square:
+- ✅ **Hex grids - DONE (confirmed by Ben).** The grid now offers a **hex** style beside square:
   `snapToCell` snaps to hex centres and `gridMesh` draws the hex lattice, pointy- or flat-top via
   the new `RoomScale.hexOrient` (hex size = `cellWorld`), with `calibrateGrid` fitting hexes to a
   board by count. Snap and render share the axial math in `shared/pieces.js`, so the client preview

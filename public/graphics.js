@@ -503,6 +503,7 @@ function brushedTexture() {
   ctx.putImageData(img, 0, 0);
   const tex = cTex(canvas, false); // data map, not sRGB
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.userData.ottSharedFinish = true; // cached across pieces/previews; thumbnail cleanup must retain it
   _brushedTex = tex;
   return _brushedTex;
 }
@@ -512,6 +513,7 @@ function marbleTexture(colorInt) {
   if (_marbleTex.has(key)) return _marbleTex.get(key);
   const tex = cTex(marbleCanvas(colorInt));
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.userData.ottSharedFinish = true; // cached across pieces/previews; thumbnail cleanup must retain it
   _marbleTex.set(key, tex);
   return tex;
 }
@@ -631,6 +633,104 @@ function finishMaterial(color, finishKey, { finishImg, side, flatShading = false
   return f.physical
     ? new THREE.MeshPhysicalMaterial({ ...params, ...f.physical })
     : new THREE.MeshStandardMaterial(params);
+}
+
+// Apply an object finish without flattening an uploaded GLB's authored surface. GLTFLoader normally
+// gives us MeshStandard/Physical materials, which can be cloned directly; pearl upgrades a standard
+// material to physical while carrying across the maps that both material types understand.
+const STANDARD_MAP_PROPS = [
+  'map',
+  'lightMap',
+  'lightMapIntensity',
+  'aoMap',
+  'aoMapIntensity',
+  'emissiveMap',
+  'bumpMap',
+  'bumpScale',
+  'normalMap',
+  'normalMapType',
+  'normalScale',
+  'displacementMap',
+  'displacementScale',
+  'displacementBias',
+  'roughnessMap',
+  'metalnessMap',
+  'alphaMap',
+  'envMap',
+  'envMapRotation',
+  'envMapIntensity',
+  'flatShading',
+  'wireframe',
+];
+const copyMaterialValue = (value) =>
+  value && !value.isTexture && typeof value.clone === 'function' ? value.clone() : value;
+function physicalMaterialFrom(source) {
+  if (source.isMeshPhysicalMaterial) return source.clone();
+  const out = new THREE.MeshPhysicalMaterial();
+  THREE.Material.prototype.copy.call(out, source); // opacity, alpha test, blending, depth, side, etc.
+  if (source.color) out.color.copy(source.color);
+  if (source.emissive) out.emissive.copy(source.emissive);
+  if (source.emissiveIntensity != null) out.emissiveIntensity = source.emissiveIntensity;
+  for (const key of STANDARD_MAP_PROPS)
+    if (source[key] !== undefined) out[key] = copyMaterialValue(source[key]);
+  return out;
+}
+function modelFinishMaterial(source, finishKey, color) {
+  const f = FINISHES[finishKey] || FINISHES.matte;
+  const material = f.physical
+    ? physicalMaterialFrom(source)
+    : source.isMeshStandardMaterial
+      ? source.clone()
+      : physicalMaterialFrom(source); // uncommon unlit GLB material: retain common maps/settings
+  const tint = Number.isInteger(color)
+    ? color
+    : color && typeof color.getHex === 'function'
+      ? color.getHex()
+      : (source.color?.getHex?.() ?? 0xf4f1ea);
+
+  if (material.color) material.color.set(f.marble ? 0xffffff : tint);
+  material.roughness = f.roughness;
+  material.metalness = f.metalness || 0;
+  if (f.marble) material.map = marbleTexture(tint); // this finish intentionally replaces base color art
+  if (f.brushed) material.roughnessMap = brushedTexture();
+  if (f.emissive) {
+    material.emissive.set(tint);
+    material.emissiveIntensity = f.emissiveIntensity;
+  }
+  if (f.opacity != null) {
+    material.transparent = true;
+    material.opacity = Math.min(material.opacity, f.opacity); // preserve stronger authored transparency
+  }
+  if (f.physical) for (const [key, value] of Object.entries(f.physical)) material[key] = value;
+  material.needsUpdate = true;
+  return material;
+}
+
+// Procedural marble/brushed maps need UVs. Uploaded models usually have them; for simple unwrapped
+// models, synthesize a normalized box projection from each vertex normal without disturbing indices.
+function addModelFinishUV(geo) {
+  if (geo.getAttribute('uv')) return;
+  const pos = geo.getAttribute('position');
+  if (!pos) return;
+  if (!geo.getAttribute('normal')) geo.computeVertexNormals();
+  const normal = geo.getAttribute('normal');
+  geo.computeBoundingBox();
+  const size = geo.boundingBox.getSize(new THREE.Vector3());
+  const span = Math.max(size.x, size.y, size.z) || 1;
+  const uv = new Float32Array(pos.count * 2);
+  const p = new THREE.Vector3(),
+    n = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    p.fromBufferAttribute(pos, i);
+    n.fromBufferAttribute(normal, i);
+    const ax = Math.abs(n.x),
+      ay = Math.abs(n.y),
+      az = Math.abs(n.z);
+    const [u, v] = ax >= ay && ax >= az ? [p.z, p.y] : ay >= az ? [p.x, p.z] : [p.x, p.y];
+    uv[i * 2] = u / span + 0.5;
+    uv[i * 2 + 1] = v / span + 0.5;
+  }
+  geo.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
 }
 
 function dieBodyMaterial(color, finishKey, finishImg) {
@@ -1188,37 +1288,37 @@ function cornerRadiusFrac(img) {
 // --- Die, card, and mask meshes ---------------------------------------------
 
 // The visual mesh for a die. A d6 is a textured box (a number per face); a d4
-// A bundled pipped d6 (DICE_MODELS): the .glb scaled to the d6 box size, its body material
-// (`Ivory`) tinted with the die color and its pips (`Dots`) with the number color — matte, like
-// the numbered dice. Physics/value are a normal d6, so only the mesh differs.
-function pippedDieMesh(url, color, textColor) {
+// A bundled pipped d6 (DICE_MODELS): keep body (`Ivory`) and pips (`Dots`) independently colored
+// while applying the same finish response as a procedural die. Physics/value remain a normal d6.
+function pippedDiePainter(color, textColor, finish = 'matte') {
   const body = Number.isInteger(color) ? color : 0xf4f1ea;
   const pip = Number.isInteger(textColor) ? textColor : 0x141414;
-  const paint = (material) =>
-    new THREE.MeshStandardMaterial({
-      color: material.name === 'Dots' ? pip : body,
-      metalness: 0,
-      roughness: 0.5,
-    });
-  return loadModelGroup(url, { target: dieR(6) * 2 }, (node) => {
+  return (node) => {
+    if (node.geometry && (finish === 'marbled' || finish === 'brushed'))
+      addModelFinishUV(node.geometry);
     node.castShadow = true;
     node.receiveShadow = true;
     if (!node.material) return;
+    const paint = (material) =>
+      modelFinishMaterial(material, finish, material.name === 'Dots' ? pip : body);
     node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
-  });
+  };
+}
+function pippedDieMesh(url, color, textColor, finish) {
+  return loadModelGroup(url, { target: dieR(6) * 2 }, pippedDiePainter(color, textColor, finish));
 }
 
 // uses the special vertex-numbered build; everything else is a convex polyhedron.
 function dieMesh(props = {}) {
   const sides = props.sides || 6;
-  const dm = props.model && DICE_MODELS[props.model];
-  if (dm) return pippedDieMesh(dm.model, props.color, props.textColor); // a bundled pipped d6
-
   // Phones fall back from GPU-heavy finishes to a safe look (regardless of who set the finish) —
   // this Android class black-screens on the physical / transparent / roughness-map shaders.
   let finish = props.finish;
   if (finish && DICE_FINISH_FALLBACK[finish] && deviceClass() === 'phone')
     finish = DICE_FINISH_FALLBACK[finish];
+  const dm = props.model && DICE_MODELS[props.model];
+  if (dm) return pippedDieMesh(dm.model, props.color, props.textColor, finish); // a bundled pipped d6
+
   const finishImg = finish === 'custom' ? props.finishImg : null; // only the custom finish uses it
   if (sides === 6) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
@@ -1405,6 +1505,43 @@ function itemSurface(spec, color, side, override) {
   return finishMaterial(color, finish, { side });
 }
 
+function propModelPainter(props, spec, builtin) {
+  const teamTint = builtin && spec.team ? propColor(props) : null;
+  const pick = !builtin || !spec.ownMaterial || spec.tintMaterial ? (props.color ?? null) : null;
+  const finish = objectFinish(spec, props.finish);
+  const surface = (color, side) => itemSurface(spec, color, side, props.finish);
+  const styled = props.finish !== undefined || finish !== 'matte';
+
+  const paint = (material) => {
+    if (!builtin)
+      return pick != null || styled ? modelFinishMaterial(material, finish, pick) : material;
+    if (teamTint != null) return surface(teamTint, material.side);
+    if (spec.tintMaterial) {
+      if (material.name === spec.tintMaterial && (pick != null || styled))
+        return surface(pick ?? material.color, material.side);
+      material.metalness = 0;
+      return material;
+    }
+    if (spec.ownMaterial && !styled) {
+      material.metalness = 0;
+      return material;
+    }
+    return pick != null || styled ? surface(pick ?? material.color, material.side) : material;
+  };
+
+  return (node) => {
+    if (node.geometry) {
+      node.geometry.computeVertexNormals();
+      if (!builtin && styled && (finish === 'marbled' || finish === 'brushed'))
+        addModelFinishUV(node.geometry);
+    }
+    if (!node.material) return;
+    node.castShadow = true;
+    node.receiveShadow = true;
+    node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+  };
+}
+
 // Build a prop's visual mesh. A prop is either a bundled/custom .glb MODEL or a
 // simple built-in SHAPE (box/sphere/cone/…). Models load asynchronously into a
 // placeholder group and color themselves in when ready; shapes build instantly.
@@ -1415,45 +1552,12 @@ function propMesh(props = {}) {
   if (modelUrl) {
     const builtin = !props.model && !!spec.model; // built-ins keep FIXED set proportions; custom uploads normalize
 
-    // Work out how the model gets colored (used by paint below):
-    const teamTint = builtin && spec.team ? propColor(props) : null; // a team set → recolor every slot
-    const pick = !builtin || !spec.ownMaterial || spec.tintMaterial ? (props.color ?? null) : null; // the player's picked color
-    const surface = (color, side) => itemSurface(spec, color, side, props.finish);
-    const styled = props.finish !== undefined || objectFinish(spec) !== 'matte';
-
-    // Decide the fate of one material slot on the loaded model.
-    const paint = (material) => {
-      if (teamTint != null) return surface(teamTint, material.side); // team set: recolor everything
-      if (builtin && spec.tintMaterial) {
-        // Only the one named slot takes the picked color; de-metal the rest so
-        // their own baked-in colors read correctly.
-        if (material.name === spec.tintMaterial && (pick != null || styled))
-          return surface(pick ?? material.color, material.side);
-        material.metalness = 0;
-        return material;
-      }
-      if (builtin && spec.ownMaterial && !styled) {
-        // keep the model's own materials, just de-metal
-        material.metalness = 0;
-        return material;
-      }
-      return pick != null || styled ? surface(pick ?? material.color, material.side) : material;
-    };
-
     return loadModelGroup(
       modelUrl,
       builtin
         ? { scale: (spec.modelScale || 1) * (props.scale || 1) }
         : { target: MODEL_SIZE * (props.scale || 1) },
-      (node) => {
-        if (node.geometry) node.geometry.computeVertexNormals(); // smooth normals — kills the flat-shading seam on flat .glb faces
-        if (!node.material) return;
-        node.castShadow = true;
-        node.receiveShadow = true;
-        node.material = Array.isArray(node.material)
-          ? node.material.map(paint)
-          : paint(node.material);
-      },
+      propModelPainter(props, spec, builtin),
       (obj) => {
         const mr = builtin ? spec.modelRot : props.modelRot;
         if (mr) obj.rotation.set(mr[0], mr[1], mr[2]);
@@ -1892,6 +1996,8 @@ function dispenserMesh(props = {}) {
     new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
 
   if (spec.body === 'model') {
+    const finish = objectFinish(spec, props.finish);
+    const styled = props.finish !== undefined || finish !== 'matte';
     const tint = spec.team
       ? COLORS.team[spec.team][props.team ? 1 : 0]
       : spec.color
@@ -1901,11 +2007,14 @@ function dispenserMesh(props = {}) {
       // A named slot preserves the rest of the model's baked materials (Go bowl); without one,
       // a colorable model dispenser takes the picked color across the whole model (train stack).
       if (tint != null && (!spec.tintMaterial || isTintSlot(m.name, spec.tintMaterial)))
-        return matte(tint, m.side);
+        return styled ? modelFinishMaterial(m, finish, tint) : matte(tint, m.side);
+      if (styled && !spec.tintMaterial) return modelFinishMaterial(m, finish);
       m.metalness = 0;
       return m; // shell keeps its baked look
     };
     return loadModelGroup(spec.model, { target: MODEL_SIZE * (spec.modelScale || 1) }, (node) => {
+      if (node.geometry && styled && (finish === 'marbled' || finish === 'brushed'))
+        addModelFinishUV(node.geometry);
       if (!node.material) return;
       node.castShadow = true;
       node.receiveShadow = true;
@@ -1920,18 +2029,20 @@ function dispenserMesh(props = {}) {
   const discH = stackDiscH(spec.item);
   const n = stackVisible(props.count ?? spec.count.def);
   const tint = props.color ?? null;
+  const finish = objectFinish(item, props.finish);
+  const styled = props.finish !== undefined || finish !== 'matte';
   const paint = (m) => {
     if (item.tintMaterial) {
-      if (tint != null && isTintSlot(m.name, item.tintMaterial))
-        return itemSurface(item, tint, m.side);
+      if ((tint != null || styled) && isTintSlot(m.name, item.tintMaterial))
+        return itemSurface(item, tint ?? m.color, m.side, props.finish);
       m.metalness = 0;
       return m;
     }
-    if (item.ownMaterial) {
+    if (item.ownMaterial && !styled) {
       m.metalness = 0;
       return m;
     }
-    return tint != null ? itemSurface(item, tint, m.side) : m;
+    return tint != null || styled ? itemSurface(item, tint ?? m.color, m.side, props.finish) : m;
   };
   // Per-disc facing jitter so a chip stack looks tumbled, not machine-aligned.
   // Deterministic in (index, seed): a given disc keeps its angle as the stack grows or
@@ -1949,6 +2060,7 @@ function dispenserMesh(props = {}) {
     fitModel(proto, { scale: item.modelScale || 1 }); // centre + scale, matching a spawned item
     proto.traverse((node) => {
       if (!node.isMesh || !node.material) return;
+      if (styled && (finish === 'marbled' || finish === 'brushed')) addModelFinishUV(node.geometry);
       node.castShadow = true;
       node.receiveShadow = true;
       node.material = Array.isArray(node.material)
@@ -2348,7 +2460,7 @@ function disposeHierarchy(root) {
     for (const m of mats) {
       for (const key in m) {
         const val = m[key];
-        if (val && val.isTexture) val.dispose();
+        if (val && val.isTexture && !val.userData.ottSharedFinish) val.dispose();
       }
       m.dispose();
     }
@@ -2407,12 +2519,22 @@ export function cardPreviewURL(ref) {
 export async function propPreviewURL(props = {}) {
   const spec = PROPS[props.shape] || {};
   const modelUrl = props.model || spec.model;
-  const key = modelUrl ? 'm:' + modelUrl : 's:' + props.shape + ':' + (props.color ?? '');
+  const materialKey = props.model ? (props.finish ?? 'original') : objectFinish(spec, props.finish);
+  const key = modelUrl
+    ? ['m', modelUrl, props.color ?? '', materialKey, props.modelRot || ''].join(':')
+    : ['s', props.shape, props.color ?? '', objectFinish(spec, props.finish)].join(':');
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
   try {
     if (modelUrl) {
       const gltf = await gltfLoader.loadAsync(modelUrl);
+      const builtin = !props.model && !!spec.model;
+      const modelRot = builtin ? spec.modelRot : props.modelRot;
+      if (modelRot) gltf.scene.rotation.set(modelRot[0], modelRot[1], modelRot[2]);
+      const paint = propModelPainter(props, spec, builtin);
+      gltf.scene.traverse((node) => {
+        if (node.isMesh) paint(node);
+      });
       url = snapshot(gltf.scene);
       disposeHierarchy(gltf.scene);
     } else url = snapshot(propShapeMesh(props));
@@ -2452,15 +2574,9 @@ export async function dieModelPreviewURL(key) {
   let url = null;
   try {
     const gltf = await gltfLoader.loadAsync(dm.model);
+    const paint = pippedDiePainter();
     gltf.scene.traverse((n) => {
-      if (!n.isMesh || !n.material) return;
-      const paint = (m) =>
-        new THREE.MeshStandardMaterial({
-          color: m.name === 'Dots' ? 0x141414 : 0xf4f1ea,
-          metalness: 0,
-          roughness: 0.5,
-        });
-      n.material = Array.isArray(n.material) ? n.material.map(paint) : paint(n.material);
+      if (n.isMesh) paint(n);
     });
     url = snapshot(gltf.scene);
     disposeHierarchy(gltf.scene);
@@ -2485,11 +2601,17 @@ export function diePreviewURL(sides, finish) {
 }
 
 // A local (not-yet-uploaded) .glb File → a rendered thumbnail data-URL, for previews.
-export async function glbFilePreviewURL(file, rot) {
+export async function glbFilePreviewURL(file, rot, finish) {
   const url = URL.createObjectURL(file);
   try {
     const gltf = await gltfLoader.loadAsync(url);
     if (rot) gltf.scene.rotation.set(rot[0], rot[1], rot[2]);
+    if (finish) {
+      const paint = propModelPainter({ finish }, {}, false);
+      gltf.scene.traverse((node) => {
+        if (node.isMesh) paint(node);
+      });
+    }
     const out = snapshot(gltf.scene);
     disposeHierarchy(gltf.scene);
     return out;

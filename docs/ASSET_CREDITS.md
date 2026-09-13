@@ -22,7 +22,8 @@ requirement is actually met.
 - **Source:** https://opengameart.org/content/human-token
 - **License:** CC0 (public domain)
 
-### Open Tabletop original models — `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`
+### Open Tabletop original models — `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`,
+`pieces/misc/train_piece.glb`, `pieces/misc/train_dispenser.glb`
 - **Author/source:** Original models created for Open Tabletop.
 - **License:** Distributed under the repository license.
 

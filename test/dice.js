@@ -17,6 +17,7 @@ import {
   DIE_INK_LIGHT,
   OBJECT_FINISHES,
   objectFinish,
+  DISPENSERS,
 } from '../shared/pieces.js';
 
 test('dieSpawnProps: a valid die + colors passes through', () => {
@@ -183,7 +184,7 @@ test('built-in object finish flags and instance overrides resolve through the sh
   assert.equal(objectFinish(null), 'matte'); // inspector uses null for non-object definitions
 });
 
-test('colorProps: built-in props accept material-only changes but uploaded models do not', () => {
+test('colorProps: built-in, uploaded, and dispenser models accept material-only changes', () => {
   assert.deepEqual(colorProps('prop', { shape: 'chess-king', team: 0 }, { finish: 'satin' }), {
     shape: 'chess-king',
     team: 0,
@@ -202,8 +203,15 @@ test('colorProps: built-in props accept material-only changes but uploaded model
     colorProps('prop', { shape: 'chess-king' }, { finish: 'satin', color: 0xffffff }),
     null,
   );
-  assert.equal(colorProps('prop', { model: '/assets/props/a.glb' }, { finish: 'glossy' }), null);
-  assert.equal(colorProps('dispenser', { disp: 'pokerStack' }, { finish: 'glossy' }), null);
+  assert.deepEqual(colorProps('prop', { model: '/assets/props/a.glb' }, { finish: 'glossy' }), {
+    model: '/assets/props/a.glb',
+    finish: 'glossy',
+  });
+  assert.equal(colorProps('prop', { model: '/assets/props/a.glb' }, { finish: 'custom' }), null);
+  assert.deepEqual(
+    colorProps('dispenser', { disp: 'pokerStack' }, { finish: 'glossy' }, DISPENSERS.pokerStack),
+    { disp: 'pokerStack', finish: 'glossy' },
+  );
 });
 
 test('colorProps: a limited-palette object rejects an off-palette color (group-recolor safety)', () => {
@@ -299,7 +307,7 @@ test('colorProps: custom finish requires a texture and clears it when leaving', 
   ); // matte clears both
 });
 
-test('dieSpawnProps: a valid pipped model is kept (forced to d6, drops the finish)', () => {
+test('dieSpawnProps: a valid pipped model is forced to d6 and keeps standard finishes', () => {
   assert.deepEqual(dieSpawnProps({ sides: 6, model: 'pip-round' }), {
     sides: 6,
     model: 'pip-round',
@@ -308,5 +316,31 @@ test('dieSpawnProps: a valid pipped model is kept (forced to d6, drops the finis
   const d = dieSpawnProps({ sides: 20, model: 'pip-square', finish: 'metallic' });
   assert.equal(d.sides, 6); // a model forces d6
   assert.equal(d.model, 'pip-square');
-  assert.equal('finish' in d, false); // and drops the finish system
+  assert.equal(d.finish, 'metallic');
+  assert.equal(
+    'finish' in
+      dieSpawnProps({
+        sides: 6,
+        model: 'pip-square',
+        finish: 'custom',
+        finishImg: '/assets/dice/a.jpg',
+      }),
+    false,
+  ); // custom surface images are for procedural dice only
+});
+
+test('colorProps: pipped models accept standard finishes but reject custom textures', () => {
+  assert.deepEqual(colorProps('die', { sides: 6, model: 'pip-round' }, { finish: 'pearl' }), {
+    sides: 6,
+    model: 'pip-round',
+    finish: 'pearl',
+  });
+  assert.equal(
+    colorProps(
+      'die',
+      { sides: 6, model: 'pip-round' },
+      { finish: 'custom', finishImg: '/assets/dice/a.jpg' },
+    ),
+    null,
+  );
 });

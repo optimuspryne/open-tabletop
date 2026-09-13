@@ -312,6 +312,7 @@ test('custom prop records validate model, collider, transforms, and colors', () 
     modelRot: [0, 1, 0],
     collider: 'cylinder',
     color: 123,
+    finish: 'satin',
   };
   assert.deepEqual(propRecordPayload(value, { colliders: ['cylinder'] }), value);
   assert.equal(
@@ -323,6 +324,10 @@ test('custom prop records validate model, collider, transforms, and colors', () 
     null,
   );
   assert.equal(propRecordPayload({ ...value, extra: true }, { colliders: ['cylinder'] }), null);
+  assert.equal(
+    propRecordPayload({ ...value, finish: 'custom' }, { colliders: ['cylinder'] }),
+    null,
+  );
 });
 
 test('deck draft boundaries validate geometry, finish flags, names, and edit ids', () => {
@@ -439,7 +444,13 @@ test('save and spawn payloads reject unknown nested fields and unsupported types
     board: { w: 10, d: 8 },
     editId: null,
   });
-  const prop = { model: '/assets/props/a.glb', box: [1, 1, 1], stand: false, scale: 1 };
+  const prop = {
+    model: '/assets/props/a.glb',
+    box: [1, 1, 1],
+    stand: false,
+    scale: 1,
+    finish: 'glossy',
+  };
   assert.deepEqual(savePropPayload({ name: 'Pawn', props: prop }, { colliders: [] }), {
     name: 'Pawn',
     props: prop,
@@ -463,6 +474,14 @@ test('save and spawn payloads reject unknown nested fields and unsupported types
     spawnPayload({ type: 'prop', props: { shape: 'pawn', finish: 'pearl' } }, options),
     { type: 'prop', props: { shape: 'pawn', finish: 'pearl' } },
   );
+  assert.deepEqual(
+    spawnPayload({ type: 'dispenser', props: { disp: 'chips', finish: 'satin' } }, options),
+    { type: 'dispenser', props: { disp: 'chips', finish: 'satin' } },
+  );
+  assert.deepEqual(spawnPayload({ type: 'prop', props: { ...prop, snap: true } }, options), {
+    type: 'prop',
+    props: { ...prop, snap: true },
+  });
   assert.equal(
     spawnPayload({ type: 'prop', props: { shape: 'pawn', finish: 'custom' } }, options),
     null,

@@ -521,6 +521,7 @@ export const DISPENSERS = {
     body: 'model',
     item: 'train_piece',
     color: true,
+    glossy: true,
     tintMaterial: 'c01',
     model: '/models/pieces/misc/train_dispenser.glb',
     modelScale: 1,
@@ -540,6 +541,7 @@ export const DISPENSERS = {
     model: '/models/pieces/misc/gobowl.glb',
     modelScale: 1,
     tintMaterial: 'c01',
+    pearl: true,
     collider: { box: [0.8, 0.5, 0.8] },
     mass: 0.5,
   },
@@ -835,7 +837,8 @@ export function dieSpawnProps(raw = {}) {
   if (typeof raw.model === 'string' && DICE_MODEL_KEYS.has(raw.model)) {
     p.sides = 6; // pipped models are d6 only
     p.model = raw.model;
-    delete p.finish; // a modeled die is coloured by body + pips, not the finish system
+    // Modeled dice support parameter/procedural finishes, but not a custom uploaded face texture.
+    if (p.finish === 'custom') delete p.finish;
     delete p.finishImg;
   }
   return p;
@@ -866,6 +869,7 @@ export function colorProps(
     } // die number color
     if (finish != null) {
       if (!DICE_FINISH_KEYS.has(finish)) return null;
+      if (props.model && finish === 'custom') return null; // modeled pips stay a distinct color slot
       if (finish === 'custom') {
         // custom needs its uploaded texture; without a valid one the change is rejected
         if (typeof finishImg !== 'string' || !finishImg.startsWith('/assets/dice/')) return null;
@@ -882,9 +886,14 @@ export function colorProps(
   const finishChange = finish != null;
   if (finishImg != null) return null; // uploaded finish textures belong to dice only
   if (finishChange) {
-    // Instance material overrides are only valid for bundled objects. Custom uploaded models keep
-    // their authored material, and dice-only custom textures never cross into the object system.
-    if (type !== 'prop' || !PROPS[props.shape] || !OBJECT_FINISH_KEYS.has(finish)) return null;
+    // Object finishes apply to bundled props and uploaded .glb props. Dice-only custom textures
+    // never cross into the object system.
+    const propModel = type === 'prop' && (PROPS[props.shape] || typeof props.model === 'string');
+    const dispenserModel =
+      type === 'dispenser' &&
+      dispDef &&
+      (dispDef.model || (PROPS[dispDef.item] && PROPS[dispDef.item].model));
+    if ((!propModel && !dispenserModel) || !OBJECT_FINISH_KEYS.has(finish)) return null;
     out.finish = finish; // keep explicit matte: it must be able to override a glossy definition
   }
   // Props & dispensers share one rule: the object's allowed palette (recolorPalette) decides

@@ -236,9 +236,19 @@ chess}` each `[color0, color1]`.
   omitted = box), and **either** a built-in `render` (`prim`:
   box/sphere/cone/cyl/lens + params) **or** a bundled `model` path with
   `modelScale` (+ optional `modelRot`, `team`, `tintMaterial`, `ownMaterial`,
-  `stand`).
+  `stand`). A bundled object's default surface is selected by one boolean finish flag:
+  `matte`, `satin`, `glossy`, `metallic` (or legacy `metal`), `brushed`, `pearl`,
+  `translucent`, `glow`, or `marbled`. An explicit `props.finish` set through Inspect wins over
+  that definition default, including explicit `matte`. Current authored defaults are metallic for
+  the coin; pearl for checkers, poker chips, Go stones, and chess; satin for the human token and
+  train piece; and matte for unflagged primitive shapes.
 - **`PROP_LIST`** `[{ id, name, team? }]` — ordered spawn-picker list;
   `team:true` shows the two-color toggle, else the color picker.
+- **`DISPENSERS`** `{ dispenserId → spec }` — finite model/item stacks and infinite sources. The
+  project-authored `trainStack` uses `train_dispenser.glb`, its authored fixed collider and scale,
+  and the `c01` tint slot; it dispenses the matching `train_piece` bundled prop. Modeled bodies and
+  GLB-backed item stacks accept an instance `finish` override while keeping named tint slots
+  independent.
 - **`BOARDS`** `{ key → … }` — built-in boards, either a **model** board
   (`{ name, model, modelScale, box, grid? }`, collider precomputed from
   `worldSize·scale/2`) or a **procedural** board (`{ name, proc, box, grid, paint }`)
@@ -261,6 +271,13 @@ chess}` each `[color0, color1]`.
   `color`/`textColor` default, so the sack and drawstring recolor independently. The bundled domino,
   letter, and Mahjong inventories use the scaled low-poly `bag` skin and its matching authored collider.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
+- **`DICE_MODELS`** / **`DICE_MODEL_KEYS`** — built-in pipped d6 GLB visuals. They retain normal d6
+  physics/value behavior, color the `Ivory` body and `Dots` pips independently, and accept every
+  standard dice finish except the image-backed `custom` finish.
+- **`DICE_FINISHES`** / **`DICE_FINISH_KEYS`** — the complete dice finish catalogue, including
+  procedural-dice-only `custom`. **`OBJECT_FINISHES`** / **`OBJECT_FINISH_KEYS`** derive the
+  model-object catalogue by excluding `custom`; both the Inspect picker and server validation use
+  this shared allowlist. `DICE_FINISH_FALLBACK` maps GPU-heavy finishes to phone-safe alternatives.
 - **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
   the client mesh, and the tests: `hx`/`hz` (floor half-extents), `wall` (wall half-height),
   `thick` (wall half-thickness), `floorThick` (floor half-height, its top at `y=0`), `lid`
@@ -293,6 +310,13 @@ chess}` each `[color0, color1]`.
   half-extents vs a card's 3) for a player mat's much larger footprint.
 - **`dieVerts(sides, radius?) → number[][] | null`** — polyhedron vertices scaled
   to `radius`; `null` for d6. One input for mesh (client) and collider (server).
+- **`objectFinish(spec, override?) → string`** — resolve an object's effective material.
+  A valid per-instance override wins, followed by `metal`/`metallic` and the definition's finish
+  flag; absent or null definitions resolve safely to `matte`.
+- **`colorProps(type, props, change, dispDef?) → object | null`** — validate and immutably apply
+  synchronized appearance changes. Bundled and uploaded model props plus modeled dispensers/stacks
+  accept material-only `finish` changes from `OBJECT_FINISH_KEYS`; pipped dice accept the standard
+  dice subset. Dice-only `custom`, pipped-die custom textures, and object finish textures are rejected.
 - **`timerLive(t, now) → ms`** — the shared timer's current value from its synced
   anchor (`running/mode/base/since`): counts up from `base`, or down toward 0.
   Used by the server handler _and_ every client, so the number is never synced tick
@@ -652,9 +676,12 @@ created, rather than becoming an import side effect of the schema module.
 
 - **`Piece`** — `type, owner, props` (strings), `count`, transform
   `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the `props` JSON, not the schema:
-  `color` (die body / prop tint), `textColor` (die numbers), and a die `finish`
-  (`matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled`/`brushed`/`glow`/`translucent`, or
-  `custom` — a host-uploaded texture named by a companion `finishImg` `/assets/dice/` URL).
+  `color` (die body / prop tint), `textColor` (die numbers), and `finish`. Dice accept
+  `matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled`/`brushed`/`glow`/`translucent`, or
+  `custom` — a host-uploaded texture named by a companion `finishImg` `/assets/dice/` URL);
+  bundled/uploaded model props and modeled dispensers accept the same list except `custom`, as a
+  synchronized override of their definition or saved default. Pipped dice also accept that standard
+  subset while preserving their separately colored pips.
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
   image), **`role`** (the per-room owner/gm/helper/player rank).
@@ -798,9 +825,10 @@ continue using the `TableRoom` API.
 Piece-policy methods are thin facades over `server/game/piece-operations.js`:
 **`standOf(piece)`** honors a synchronized per-instance override before the shared shape default,
 **`naturalStand(piece)`** selects the declared or collider-derived mode used when self-righting is
-enabled, and **`recolorPiece(id, options)`** validates through shared `colorProps` before writing
-the resulting props through the synchronized JSON codec. Single and group handlers retain the
-existing `TableRoom` API, as does the physics update loop.
+enabled, and **`recolorPiece(id, options)`** validates color, team, and material-finish changes
+through shared `colorProps` before writing the resulting props through the synchronized JSON
+codec. Single and group handlers retain the existing `TableRoom` API, as does the physics update
+loop.
 
 Dispenser methods similarly forward to `server/game/dispenser-operations.js`:
 **`dispenserItem(piece)`** resolves the exact shared `dispensedSpec` used by spawning and
@@ -903,7 +931,8 @@ two — original keeps the top half, a new ephemeral deck gets the rest),
 deck's `geo` so the preview shows the tile's real proportions), **`loadStarter`** →
 the `TableRoom.setupStarter(game)` forwarding method → extracted starter orchestration
 (one-click Games: clear + board + pieces/bowls/deck + deal), **`recolor`**
-(`{id,color,textColor?}` — tint a die body+numbers or a prop), `spawn` (helper+;
+(`{id,color?,textColor?,team?,finish?,finishImg?}` — tint a die/prop/dispenser, switch a team set, or
+set a supported piece material), `spawn` (helper+;
 a `props.tray:true` die is placed in the caller's tray via `trayDropPos`, any player),
 **`roll`** (now flings only the _caller's_ tray dice, gentle `SIM.trayRoll` impulse) /
 **`rollOne`** (`{id}` — right-click one die; `SIM.trayRoll` in a tray, `SIM.roll` on the
@@ -1296,7 +1325,9 @@ only after synchronized appearance is applied), and
   uploaded image (`props.finishImg`, via `customTexture` / async `customFaceTexture`), both over
   triplanar UVs on the convex dice. On a phone a GPU-heavy finish is swapped for a safe one
   (`DICE_FINISH_FALLBACK`); `custom` is a plain map and renders as-is. `DICE_FINISHES` (shared)
-  is the picker list; host-uploaded textures come from the `custom_dice` library.
+  is the picker list; host-uploaded textures come from the `custom_dice` library. When `props.model`
+  names a `DICE_MODELS` pipped d6, `pippedDiePainter` applies the same standard finish while keeping
+  body and `Dots` colors separate; image-backed `custom` is not offered for these models.
 - **`cardMesh`** — a card _or tile_, from `cardGeom(props)`: a thin card (a box with
   alpha-cut faces, so the art's own rounded/transparent corners define the silhouette), a
   **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with
@@ -1306,10 +1337,20 @@ only after synchronized appearance is applied), and
   loaded model, a **procedural** painter (`BOARDS[·].proc`), or a plain textured box. Shared
   extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**
   (true circular-arc corners; the hex matches its 6-gon collider).
-- **`propColor` / `propMat` / `propShapeMesh`** — built-in shape props.
+- **`finishMaterial`** — constructs the shared standard/physical material used by dice and
+  objects, including procedural marble, brushed roughness, glow, translucency, and pearl
+  clearcoat. **`itemSurface`** combines it with `objectFinish` and phone fallbacks for props.
+  **`modelFinishMaterial`** clones compatible authored standard/physical GLB material properties
+  and maps before applying that response; **`addModelFinishUV`** supplies projection UVs when a
+  brushed or marbled model lacks them.
+- **`propColor` / `propShapeMesh`** — color and geometry for built-in shape props; shape primitives
+  use the same resolved finish material as model props.
 - **`propMesh(p)`** — the dispatcher: loads a `.glb` (built-in fixed scale, or
   custom normalize) with the tint logic (team / full / `tintMaterial` one-slot /
-  `ownMaterial`), else builds a shape and applies `props.scale`.
+  `ownMaterial`) and its definition/instance finish, else builds a shape and applies `props.scale`.
+- **`dispenserMesh(p)`** — renders modeled dispenser bodies or repeated GLB stack items, applying
+  the dispenser's instance finish to eligible material slots while retaining independent shell/rim
+  materials and the stack item's definition default.
 - **`KIND`** `{ die, card, prop, deck, board }` — each `{ mesh, grab, ldrag,
 lclick, rclick }`; the interaction layer dispatches off this, no type switches.
 - **`OVERLAY`** `{ ruler, circle, cone, line }` — the overlay registry, parallel to
@@ -1398,7 +1439,10 @@ height changes targeting a detached mesh.
   `trayClear`, Put away → `trayShow {on:false}`, Back → restore camera).
 - **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
   double-click a piece to inspect (rotate-drag), double-click a deck to
-  draw-to-inspect with F/D/H/R placement.
+  draw-to-inspect with F/D/H/R placement. Numbered and pipped dice, bundled/uploaded model props,
+  and modeled dispensers/stacks share the standard material-chip picker; selecting a material
+  rebuilds the preview and sends a synchronized `recolor` finish override. Pipped dice hide the
+  image-backed custom-texture group so their body and pips remain separate.
 - **`keydown`** — with a **non-empty selection** the keys act on the whole group first
   (U/G stand/snap, R roll dice, F flip cards, H take cards, `[`/`]` rotate ±45°, Delete removes
   it) and only otherwise fall through to the single-piece behavior: Delete removes, U toggles
@@ -1551,7 +1595,9 @@ device token lives in `localStorage`.
   `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).
   Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
   Rename · Delete**, sending `loadDeck`/`loadBoard`/`spawn` and the
-  `assetPublic`/`assetRename`/`assetDelete` curation messages.
+  `assetPublic`/`assetRename`/`assetDelete` curation messages. The uploaded-object creation/edit form
+  includes a default material selector; its GLB preview updates immediately and the selected
+  standard finish is stored in the custom prop record for later spawns and Inspect overrides.
 - **`public/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
   `.actions` group, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an

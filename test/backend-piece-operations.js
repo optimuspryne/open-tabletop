@@ -57,10 +57,26 @@ test('team dispensers recolor by team while color dispensers retain tint rules',
   assert.equal(JSON.parse(chips.props).color, 0xabcdef);
 });
 
+test('modeled dispensers persist standard material overrides', () => {
+  const bowl = piece('dispenser', { disp: 'goBowl', team: 0 });
+  const room = { state: { pieces: new Map([['bowl', bowl]]) } };
+  assert.equal(recolorPiece(room, 'bowl', { finish: 'pearl' }), true);
+  assert.equal(JSON.parse(bowl.props).finish, 'pearl');
+  assert.equal(recolorPiece(room, 'bowl', { finish: 'custom' }), false);
+});
+
 test('recolor persists a material override for a bundled object', () => {
   const king = piece('prop', { shape: 'chess-king', team: 0 });
   const room = { state: { pieces: new Map([['king', king]]) } };
   assert.equal(recolorPiece(room, 'king', { finish: 'translucent' }), true);
   assert.equal(JSON.parse(king.props).finish, 'translucent');
   assert.equal(recolorPiece(room, 'king', { finish: 'custom' }), false);
+});
+
+test('recolor persists a material override for an uploaded object', () => {
+  const model = piece('prop', { model: '/assets/props/model.glb' });
+  const room = { state: { pieces: new Map([['model', model]]) } };
+  assert.equal(recolorPiece(room, 'model', { finish: 'brushed' }), true);
+  assert.equal(JSON.parse(model.props).finish, 'brushed');
+  assert.equal(recolorPiece(room, 'model', { finish: 'custom' }), false);
 });

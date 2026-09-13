@@ -78,7 +78,10 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   hex calibration while the room keeps stable forwarding methods.
 - **`server/game/piece-operations.js`** — authoritative recoloring and self-righting policy.
   It resolves effective and natural stand modes from synchronized props and shared piece
-  definitions, and applies validated `colorProps` results through the piece-props codec.
+  definitions, and applies validated color/team/material `colorProps` results through the
+  piece-props codec. Bundled and uploaded model props, modeled dispensers/stacks, and pipped dice
+  use the shared standard-finish allowlist; dice-only custom textures cannot enter the model-object
+  override path.
   `TableRoom` retains forwarding methods for piece handlers and the physics update loop.
 - **`server/game/piece-lifecycle.js`** — authoritative synchronized-piece and Cannon-body
   lifecycle. It creates both representations together, removes every existing body/state/private
@@ -427,14 +430,17 @@ The kinds:
   draw/shuffle/split), so a mixed-back stack shows a real card on top rather than a placeholder;
   the client rebuilds the deck mesh on any prop change to reflect it. The domino, letter, and Mahjong
   built-in inventories all use the enlarged low-poly pouch and its correspondingly enlarged collider.
-- **dispenser** — a reusable source for an existing prop: finite poker/coin stacks
-  shrink as they hand out copies, while Go bowls are unlimited. Left-click drops one
+- **dispenser** — a reusable source for an existing prop: finite poker/coin/train stacks
+  shrink as they hand out copies, while Go bowls are unlimited. The project-authored train
+  dispenser uses an authored fixed collider/scale and a named tint slot, and emits the matching
+  project-authored train prop. Left-click drops one
   beside the source, left-drag adopts the new item into the drag, and dropping a
   compatible item back onto a dispenser returns it.
 - **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
   box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Color comes
   from a picker, a two-color **team** palette, or a per-material **tint**; a
-  `stand` flag self-rights standing pieces. Universal `props.scale`.
+  `stand` flag self-rights standing pieces. Bundled definitions also select a default material
+  finish, and `props.finish` carries a synchronized Inspect override. Universal `props.scale`.
 - **board** — static (mass 0) but removable. A built-in model (`BOARDS`
   registry), an uploaded `.glb`, a **procedural** board drawn from data (a
   `BOARD_PAINTERS` painter, e.g. the word grid), or a plain flat box with an optional
@@ -449,25 +455,37 @@ The kinds:
 Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
 card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
-are bundled `.glb` files under `public/models/` (see `ASSET_CREDITS.md`); the current coin and Go-bowl
-models are original project assets rather than the previously bundled third-party models.
+are bundled `.glb` files under `public/models/` (see `ASSET_CREDITS.md`); the current coin, Go-bowl,
+train piece, and train dispenser models are original project assets.
 
-### Models: scale, orientation, color
+### Models: scale, orientation, color, and material
 
-- **Built-in model pieces** (chess/checkers/go/coin/chip/token) carry a fixed
+- **Built-in model pieces** (chess/coin/chip/token/train) carry a fixed
   `modelScale` and a **precomputed collider** in `PROPS` (`{ box, type? }` — a box
   by default, or `sphere`/`cylinder`/`cone`/`flat`), so a set keeps its
   real relative sizes and the server never has to load a model. `.glb` files can
   bake a node scale, so sizes are measured _as loaded_.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
   the table); the client measures the model and sends the collider box with the
-  spawn.
+  spawn. Object creation can store a default standard finish, previews it before upload, and later
+  accepts the same synchronized Inspect override as bundled model props.
 - **`modelRot`** reorients a mis-authored model (e.g. laying a coin flat).
 - **Tint modes** (in the loader): `team` recolors every slot; a color-picker
   prop recolors all; `tintMaterial:'name'` recolors **one** material slot and
   de-metals the rest (e.g. a chip body but not its white rim); `ownMaterial`
   keeps the model's materials. glTF defaults materials to metallic, so tinting
-  swaps in a clean matte material and de-metals kept slots.
+  swaps in a controlled surface material and de-metals kept slots.
+- **Object finishes** share one standard catalogue with numbered dice. A `PROPS` definition chooses
+  its default using one boolean flag (`matte`, `satin`, `glossy`, `metallic`/legacy `metal`,
+  `brushed`, `pearl`, `translucent`, `glow`, or `marbled`). `objectFinish` gives a valid
+  per-instance `props.finish` precedence, so Inspect can override even a definition's finish with
+  explicit `matte`. `finishMaterial` supplies the standard/physical shader parameters and
+  procedural maps for primitive pieces. `modelFinishMaterial` clones compatible authored GLB
+  materials/maps before applying the selected response, and `addModelFinishUV` supplies fallback
+  projection UVs for procedural brushed/marbled maps. The model painter preserves pips and named
+  tint slots independently. This path covers bundled/uploaded model props, modeled dispensers and
+  stacks, and built-in pipped dice; low-end phones retain the dice finish fallbacks. `custom`
+  remains procedural-dice-only because it requires a `finishImg` from the dice texture library.
 
 ### Tiles: one geometry, both sides
 
@@ -1275,6 +1293,6 @@ caps. Defense in depth, not provably safe.
 - **A die size:** one vertex entry in the shared dice data.
 - **A built-in model piece:** a `PROPS` entry with `model` + `modelScale` +
   a `collider` (`{ box, type? }`, `type` = `sphere`/`cylinder`/`cone`/`flat`)
-  (+ optional `team`/`tintMaterial`/`modelRot`/`stand`).
+  (+ optional `team`/`tintMaterial`/`modelRot`/`stand` and one boolean default-finish flag).
 - **A built-in board:** a `BOARDS` entry (`model`, `modelScale`, precomputed
   `box`).

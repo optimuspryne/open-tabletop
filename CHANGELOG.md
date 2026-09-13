@@ -8,6 +8,16 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- Let uploaded custom 3D objects choose a default shared material during creation and change it
+  later from the Inspect panel, while preserving compatible authored GLB texture maps and supplying
+  procedural UVs when needed.
+- Let built-in pipped GLB dice and modeled dispensers use standard material finishes during Inspect,
+  while retaining independently colored pips and named tint slots.
+
+### Changed
+- Increase generated die and board texture resolution and widen the table camera field of view.
+
 ### Fixed
 - Use center-based escape detection on rectangular tables while retaining footprint-aware checks
   for shaped surfaces, preventing valid edge placements from repeatedly triggering recovery.
