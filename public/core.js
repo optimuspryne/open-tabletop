@@ -21,7 +21,7 @@ const CONFIG = {
   measure: { fill: 0.14, edge: 0.08 }, // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
   input: { dblMs: 280, clickMs: 300, dragPx: 6, inspectPx: 4, handPx: 8 }, // click/drag feel: double-click window, click-defer (ms), drag thresholds (px)
   tex: { die: 1024, board: 2048 }, // canvas texture resolutions (higher = sharper, more GPU memory)
-  upload: { cardW: 512, cardH: 716, board: 1024, type: 'image/png', quality: 1.0 }, // uploaded image size + encoding (PNG = lossless; quality only affects lossy types)
+  upload: { cardW: 1024, cardH: 1432, board: 1024, type: 'image/png', quality: 1.0 }, // keep enough source detail for the high-quality card derivative; lower tiers still download the smaller display copy
   anim: { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
 };
 
@@ -131,6 +131,11 @@ renderer.shadowMap.type = SHADOW_TYPES[_q0.shadowType];
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true; // draw it once at startup
 document.getElementById('app').appendChild(renderer.domElement);
+// Do not expose the arbitrary bootstrap camera while room state and the player's seat are loading.
+// The two readiness gates below reveal the canvas only after both are applied.
+renderer.domElement.style.visibility = 'hidden';
+let tableViewReady = false;
+let seatCameraReady = false;
 // WebGL can drop the GPU context — Android under memory pressure, a driver reset, a backgrounded
 // tab. Without preventDefault the browser never restores it and the canvas stays black forever
 // (renders fine for a moment, then goes black). With it, three re-uploads its resources on the next
@@ -350,10 +355,26 @@ rimMesh.receiveShadow = true;
 rimMesh.visible = false;
 scene.add(rimMesh);
 
+function revealReadyView() {
+  if (!tableViewReady || !seatCameraReady) return;
+  renderer.render(scene, camera); // replace the hidden bootstrap frame before exposing the canvas
+  renderer.domElement.style.visibility = 'visible';
+}
+
 // Avoid flashing the local rectangular/mahogany bootstrap meshes while the room join is pending.
 function setTableVisible(visible) {
   tableMesh.visible = !!visible;
   rimMesh.visible = !!visible;
+  tableViewReady = !!visible;
+  if (!visible) renderer.domElement.style.visibility = 'hidden';
+  revealReadyView();
+}
+
+// The synchronized player record supplies the real seat and therefore the first camera worth
+// showing. This is separate from table readiness so callback order cannot reintroduce the flash.
+function setSeatCameraReady() {
+  seatCameraReady = true;
+  revealReadyView();
 }
 
 // Rebuild the felt + rim at new half-extents / shape (the GM resized or reshaped the play surface).
@@ -381,6 +402,7 @@ export {
   setTableColor,
   setRimWood,
   setTableVisible,
+  setSeatCameraReady,
   setQuality,
   getQuality,
   deviceClass,

@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CONFIG, renderer, deviceClass, tableMesh, rimMat } from './core.js';
+import { CONFIG, renderer, deviceClass, getQuality, tableMesh, rimMat } from './core.js';
 import {
   PROPS,
   COLORS,
@@ -45,6 +45,18 @@ function maxAnisotropy() {
   return _maxAniso || (_maxAniso = renderer.capabilities.getMaxAnisotropy());
 }
 
+// Quality selection is finalized by a reload (the same boundary used for antialiasing). Keep the
+// current low/medium card cost, but render procedural art at 1.5x and request the larger uploaded
+// derivative when the page boots in High.
+const HIGH_CARD_DETAIL = getQuality() === 'high';
+const cardDetailScale = (base = 1) => base * (HIGH_CARD_DETAIL ? 1.5 : 1);
+function makeCardCanvas(w, h, baseScale = 1) {
+  const scale = cardDetailScale(baseScale);
+  const { canvas, ctx } = makeCanvas(Math.round(w * scale), Math.round(h * scale));
+  ctx.scale(scale, scale);
+  return { canvas, ctx };
+}
+
 // ===== Texture builders (procedural canvas textures) ========================
 // Each returns a THREE texture via cTex(). Cards, dice, boards, and deck edges
 // are all drawn onto a 2D canvas rather than shipped as image files.
@@ -52,11 +64,9 @@ function maxAnisotropy() {
 // The face of a standard playing card: rank + suit small in two opposite corners
 // and large in the middle. `color` is the suit color (black or red).
 function cardFront(rank, suit, color) {
-  const S = 2,
-    w = 300,
+  const w = 300,
     h = 420;
-  const { canvas, ctx } = makeCanvas(w * S, h * S);
-  ctx.scale(S, S); // render at 2× for crisper rank/suit text
+  const { canvas, ctx } = makeCardCanvas(w, h, 2);
 
   ctx.fillStyle = '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
@@ -93,11 +103,9 @@ function cardFront(rank, suit, color) {
 // A joker face: a star motif over "JOKER", in the joker's color (a deck ships one
 // warm-red and one near-black joker). Same card proportions/border as cardFront.
 function jokerFace(color) {
-  const S = 2,
-    w = 300,
+  const w = 300,
     h = 420;
-  const { canvas, ctx } = makeCanvas(w * S, h * S);
-  ctx.scale(S, S);
+  const { canvas, ctx } = makeCardCanvas(w, h, 2);
   ctx.fillStyle = '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
   ctx.strokeStyle = '#ddd';
@@ -252,7 +260,7 @@ function mahjongBack() {
 
 // The classic diagonal cross-hatch card back.
 function cardBack() {
-  const { canvas, ctx } = makeCanvas(256, 256);
+  const { canvas, ctx } = makeCardCanvas(256, 256);
 
   ctx.fillStyle = '#7d2b2b';
   ctx.fillRect(0, 0, 256, 256);
@@ -931,7 +939,9 @@ function loadImageTexture(url) {
 // server for its persistent display-sized derivative while leaving external/data URLs untouched.
 function cardTextureURL(ref) {
   const match = /^\/assets\/([a-z]+)\/([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))$/i.exec(ref);
-  return match ? `/asset-textures/v1/${match[1]}/${encodeURIComponent(match[2])}.webp` : ref;
+  if (!match) return ref;
+  const quality = HIGH_CARD_DETAIL ? '?quality=high' : '';
+  return `/asset-textures/v1/${match[1]}/${encodeURIComponent(match[2])}.webp${quality}`;
 }
 
 // Decode a card "front" ref into a structured descriptor. The tagged-string
@@ -1052,11 +1062,9 @@ function drawWrapped(ctx, text, w, h, pad, weight) {
 
 // A procedural card FACE showing wrapped text (for custom text decks).
 function textFaceTexture(text, color, bg, accent) {
-  const S = 2,
-    w = 300,
+  const w = 300,
     h = 420;
-  const { canvas, ctx } = makeCanvas(w * S, h * S);
-  ctx.scale(S, S); // render at 2× so text stays crisp when a card is near the camera (draw in logical 300×420)
+  const { canvas, ctx } = makeCardCanvas(w, h, 2);
 
   ctx.fillStyle = bg || '#fbfbf7';
   ctx.fillRect(0, 0, w, h);
@@ -1077,7 +1085,7 @@ function textFaceTexture(text, color, bg, accent) {
 function textBackTexture(color, text, textColor, accent) {
   const w = 256,
     h = 358;
-  const { canvas, ctx } = makeCanvas(w, h);
+  const { canvas, ctx } = makeCardCanvas(w, h);
 
   ctx.fillStyle = color || '#7d2b2b';
   ctx.fillRect(0, 0, w, h);

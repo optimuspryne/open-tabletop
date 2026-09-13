@@ -17,8 +17,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ### Changed
 - Increase generated die and board texture resolution and widen the table camera field of view.
+- Move the default player-seat camera closer to the table, and let the High graphics tier use
+  sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Keep the WebGL canvas hidden until the synchronized table and player-seat camera are both ready,
+  preventing the bootstrap camera angle from flashing during room entry.
 - Use center-based escape detection on rectangular tables while retaining footprint-aware checks
   for shaped surfaces, preventing valid edge placements from repeatedly triggering recovery.
 

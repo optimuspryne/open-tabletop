@@ -134,6 +134,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
   plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks. Bootstrap table/rim meshes stay
   hidden until `client.js` applies the joined room's synchronized shape, size, felt, rim, and grid.
+  The WebGL canvas has a second readiness gate for the synchronized player-seat camera; the client
+  renders that settled pose before revealing the canvas, so no arbitrary bootstrap angle is shown.
 - **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
   the `.glb` model loading/measuring helpers, and the `KIND` registry. Immutable thin-card,
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
@@ -299,7 +301,9 @@ render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and
 tuning on the target device.
 That tuning is now a shipped, client-local **quality tier** (low/med/high, persisted per device,
 defaulting to medium on a coarse pointer) in Settings → UI — a per-viewer render preference, never
-room state, so it stays out of the scene save.
+room state, so it stays out of the scene save. High also raises card detail: procedural playing/text
+card canvases render at 1.5× the low/medium dimensions, and local uploaded faces select a larger
+server derivative after the tier's required reload.
 
 ## One action end to end: grab & throw
 
@@ -772,11 +776,14 @@ can't reshape or drop the schema.
 
 Large uploaded face originals are not sent directly to the renderer. For local random-name card
 and tile references, `public/graphics.js` requests the versioned
-`/asset-textures/v1/<kind>/<file>.webp` route. `server/http/routes/asset-textures.js` lazily creates
-a maximum-768-pixel WebP under `ASSETS_DIR/.texture-cache/v1/`, coalesces concurrent requests for
-the same face, and serves the result immutably. This benefits existing uploads without rewriting
-their database references or original files. The cache version keeps future encoding changes
-addressable; orphan purge removes the matching derivative when it trashes an original.
+`/asset-textures/v1/<kind>/<file>.webp` route. Low/medium use a maximum-768-pixel WebP under
+`ASSETS_DIR/.texture-cache/v1/`; High adds `?quality=high` and uses a separate maximum-1536-pixel
+copy under `.texture-cache/v1-high/`. `server/http/routes/asset-textures.js` creates either variant
+lazily, coalesces concurrent requests for the same face, and serves the result immutably. New
+standard-aspect card uploads retain a 1024×1432 PNG source so High has detail to derive; an older
+upload remains bounded by its existing source because derivatives never enlarge. The cache variants
+leave database references and originals unchanged; orphan purge removes matching derivatives when
+it trashes an original.
 The admin Storage panel can start the same encoder as a bounded, process-local background prebuild
 over all random-name JPG/JPEG/PNG uploads. Its status endpoint exposes scan/build progress and byte
 totals, repeat starts reuse the running job, and neither the originals nor database references change.
@@ -1086,7 +1093,8 @@ maps and each hand is delivered privately via `sendHand`, exactly as in a live g
 
 On join the server assigns the lowest free seat, a color, and a name, and
 creates a public `Player` (seat, hand count, name, color, avatar). The client
-parks _your_ camera at _your_ seat, draws every _other_ player's hand as N fanned
+parks _your_ camera at _your_ seat using the table-scaled `VIEW` pose (the default `zoom: 0.65`
+keeps the near rail and hand close while retaining the play surface), draws every _other_ player's hand as N fanned
 face-down backs (from the public count — you see how many, never which), and
 stands a marker (avatar or silhouette + name) at each seat. Each player also has a
 GM-reorderable `order` independent of their physical seat. `state.turn` holds a

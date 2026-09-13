@@ -8,14 +8,21 @@ import { asyncRoute } from '../async-route.js';
 const TEXTURE_FILE = /^([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))\.webp$/i;
 const PREBUILD_SOURCE_FILE = /^[a-f0-9]{18}\.(?:jpe?g|png)$/i;
 
-export function textureAssetPaths(assetsDir, assetKinds, kind, requestedFile) {
+export function textureAssetPaths(
+  assetsDir,
+  assetKinds,
+  kind,
+  requestedFile,
+  quality = 'standard',
+) {
   if (!assetKinds.includes(kind)) return null;
   const match = TEXTURE_FILE.exec(requestedFile);
   if (!match) return null;
   const sourceName = match[1];
+  const cacheVersion = quality === 'high' ? 'v1-high' : 'v1';
   return {
     source: path.resolve(assetsDir, kind, sourceName),
-    cached: path.resolve(assetsDir, '.texture-cache', 'v1', kind, `${sourceName}.webp`),
+    cached: path.resolve(assetsDir, '.texture-cache', cacheVersion, kind, `${sourceName}.webp`),
   };
 }
 
@@ -164,14 +171,26 @@ export function createTexturePrebuilder(options) {
   return { start, status };
 }
 
-export function createAssetTextureRouter({ assetsDir, assetKinds, maxDimension = 768 }) {
+export function createAssetTextureRouter({
+  assetsDir,
+  assetKinds,
+  maxDimension = 768,
+  highMaxDimension = 1536,
+}) {
   const router = express.Router();
   const pending = new Map();
 
   router.get(
     '/asset-textures/v1/:kind/:file',
     asyncRoute(async (req, res) => {
-      const paths = textureAssetPaths(assetsDir, assetKinds, req.params.kind, req.params.file);
+      const quality = req.query.quality === 'high' ? 'high' : 'standard';
+      const paths = textureAssetPaths(
+        assetsDir,
+        assetKinds,
+        req.params.kind,
+        req.params.file,
+        quality,
+      );
       if (!paths) return res.sendStatus(404);
 
       try {
@@ -185,7 +204,8 @@ export function createAssetTextureRouter({ assetsDir, assetKinds, maxDimension =
       } catch {
         let task = pending.get(paths.cached);
         if (!task) {
-          task = createTextureDerivative(paths.source, paths.cached, maxDimension).finally(() =>
+          const dimension = quality === 'high' ? highMaxDimension : maxDimension;
+          task = createTextureDerivative(paths.source, paths.cached, dimension).finally(() =>
             pending.delete(paths.cached),
           );
           pending.set(paths.cached, task);

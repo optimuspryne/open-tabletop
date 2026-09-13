@@ -10,6 +10,7 @@ import {
   setTableColor,
   setRimWood,
   setTableVisible,
+  setSeatCameraReady,
   setQuality,
   getQuality,
   deviceClass,
@@ -3978,7 +3979,9 @@ let mySeat = 0;
 //   dist / rise     : how far the camera sits back / up from that point (their ratio = the angle).
 //   zoom            : <1 dollies in, >1 pulls back — scales the offset, so the ANGLE is unchanged.
 // Table sits lower in frame → raise lookH and rise together.
-const VIEW = { lookFwd: 3.1, lookH: 4, dist: 15.4, rise: 3.7, zoom: 0.85 };
+// Default player-seat framing: close enough for the near rail and hand to anchor the view while
+// retaining the whole play surface, matching the natural seated composition players orbit toward.
+const VIEW = { lookFwd: 2, lookH: 4, dist: 15.4, rise: 10, zoom: 0.65 };
 function seatLayoutFor(hx, hz) {
   const m = 0.8; // hand inset from the edge
   const cx = hx * 0.66,
@@ -4036,6 +4039,7 @@ function applySeat(seat) {
   camera.position.set(...layout.cam.pos);
   controls.target.set(...layout.cam.target);
   controls.update();
+  setSeatCameraReady();
 }
 
 // Fit the current table into a true overhead view. Derive the height from both axes and the

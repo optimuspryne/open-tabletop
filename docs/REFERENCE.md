@@ -406,16 +406,19 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 
 ### `server/http/routes/asset-textures.js` — card/tile display derivatives
 
-**`createAssetTextureRouter({assetsDir, assetKinds, maxDimension?})`** serves
+**`createAssetTextureRouter({assetsDir, assetKinds, maxDimension?, highMaxDimension?})`** serves
 `GET /asset-textures/v1/<kind>/<random-image-name>.webp`. It accepts only an allowlisted
 asset category and the random image filename shape produced by `saveAsset`; traversal,
-metadata, models, and arbitrary filenames return 404.
+metadata, models, and arbitrary filenames return 404. A strict `?quality=high` request uses
+the High-quality derivative; every other value uses the standard derivative.
 
-- **`textureAssetPaths(...)`** resolves the immutable original and its versioned cache path
-  under `.texture-cache/v1/<kind>/`.
+- **`textureAssetPaths(..., quality = 'standard')`** resolves the immutable original and its
+  versioned cache path under `.texture-cache/v1/<kind>/` (standard) or
+  `.texture-cache/v1-high/<kind>/` (High).
 - **`createTextureDerivative(source, destination, maxDimension = 768)`** preserves aspect and
   alpha, never enlarges the source, applies EXIF orientation, and writes a quality-82 WebP via
-  an atomic temporary file. Concurrent requests for one face share the same pending job.
+  an atomic temporary file. The router passes 768 for standard requests and 1536 for High by
+  default. Concurrent requests for one face share the same pending job.
 - **`prebuildTextureCache(...)`** scans every allowlisted asset folder for random-name JPG/JPEG/PNG
   uploads, creates only missing derivatives with two bounded workers by default, continues past
   individual conversion failures, and reports processed/created/skipped/failed counts plus byte totals.
@@ -424,8 +427,9 @@ metadata, models, and arbitrary filenames return 404.
   state for the admin console without holding an HTTP request open.
 - Successful responses are `image/webp` with a one-year immutable cache policy. Originals stay
   untouched for library editing, backups, and future derivative versions. `cardTextureURL` in
-  `public/graphics.js` redirects only local random-name `/assets/...` card/tile references;
-  procedural, data, bundled, and external references keep their existing path.
+  `public/graphics.js` redirects only local random-name `/assets/...` card/tile references and
+  appends `?quality=high` when the viewer booted in High; procedural, data, bundled, and external
+  references keep their existing path.
 
 ### `server/asset-cleanup.js` — orphan preview and trash
 
@@ -1249,13 +1253,18 @@ wooden rim around the edge; the physics walls are the server's `buildBounds`), *
 fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`walnut`/`birch`/`green`/
 `oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`),
 **`setTableVisible(visible)`** (toggle the felt and rim together; initial room join reveals them
-only after synchronized appearance is applied), and
+only after synchronized appearance is applied), **`setSeatCameraReady()`** (open the second
+initial-view gate after `client.js` applies the synchronized seat camera), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
   tag), `ping` (attention-ping ring), `input` (click/drag thresholds), `tex`
-  (die/board resolution).
+  (die/board resolution), and `upload` (new card uploads use a 1024×1432 source canvas).
+- **Initial-view readiness.** The renderer canvas starts hidden. The table-appearance and seat-camera
+  gates must both open before `revealReadyView()` renders the settled pose once and reveals the canvas,
+  preventing the constructor camera from flashing during room join. The table-scaled seat pose comes
+  from `client.js`'s `VIEW`; its default `zoom` is 0.65.
 - **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
   scales the baked `RoomEnvironment` for the env-map strength.
 - **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off; the render loop sets
@@ -1269,7 +1278,9 @@ only after synchronized appearance is applied), and
   Graphics, with an **Apply & reload** button (shown once the tier changes) that commits AA and the
   pixel-ratio change, which iOS Safari only picks up on a fresh context. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
   `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
-  `window.ottPixelRatio(v)` / `window.ottShadow(v)`.
+  `window.ottPixelRatio(v)` / `window.ottShadow(v)`. High also renders procedural card canvases at
+  1.5× their standard dimensions and requests the 1536px uploaded-card derivative; Low and Medium
+  retain the standard card detail path.
 - **Skybox resolution** (separate per-viewer control beside the tier; `client.js`): `off` / `low`
   512 / `medium` 1024 / `high` 2048 / `ultra` native — a max width, downscaled at load for an
   equirect image or each cube-map face (`capTexture` / `capCubeTexture`) so only the smaller
@@ -1287,6 +1298,9 @@ only after synchronized appearance is applied), and
   (+ color space) so text/numbers stay sharp. All builders route through it.
   Builders allocate their canvas via a shared **`makeCanvas(w,h)`**, and the
   filtering is centralized in **`maxAnisotropy()`**.
+- **`makeCardCanvas(w,h,baseScale?)`** — allocates procedural card canvases at their normal
+  dimensions for Low/Medium and at 1.5× dimensions for High, returning a scale used to preserve
+  the builders' layout proportions.
 - **`cardFront(rank,suite,color)`** (corner index + centre rank), **`cardBack()`**,
   **`boardTex()`** (procedural checkerboard).
 - **`jokerFace(color)`**, **`dominoFace(a,b)` / `dominoBack()` / `drawPips`**,

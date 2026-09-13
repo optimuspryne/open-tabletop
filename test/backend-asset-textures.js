@@ -21,6 +21,19 @@ test('textureAssetPaths accepts only allowlisted random-name image derivatives',
   assert.equal(textureAssetPaths(root, ['decks'], 'decks', '../secret.png.webp'), null);
   assert.equal(textureAssetPaths(root, ['decks'], 'decks', 'deck.json.webp'), null);
   assert.equal(textureAssetPaths(root, ['decks'], 'decks', '0123456789abcdefab.glb.webp'), null);
+  assert.deepEqual(
+    textureAssetPaths(root, ['decks'], 'decks', '0123456789abcdefab.png.webp', 'high'),
+    {
+      source: path.resolve(root, 'decks', '0123456789abcdefab.png'),
+      cached: path.resolve(
+        root,
+        '.texture-cache',
+        'v1-high',
+        'decks',
+        '0123456789abcdefab.png.webp',
+      ),
+    },
+  );
 });
 
 test('createTextureDerivative bounds dimensions and emits a compact WebP', async (t) => {
@@ -40,6 +53,24 @@ test('createTextureDerivative bounds dimensions and emits a compact WebP', async
   assert.equal(metadata.width, 768);
   assert.ok(metadata.height <= 768);
   assert.ok((await fs.promises.stat(destination)).size < (await fs.promises.stat(source)).size);
+});
+
+test('createTextureDerivative supports the high-quality card bound', async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'open-tabletop-texture-high-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const source = path.join(root, 'source.png');
+  const destination = path.join(root, 'cache', 'source.png.webp');
+  await sharp({
+    create: { width: 1800, height: 2520, channels: 4, background: '#4a78c9' },
+  })
+    .png()
+    .toFile(source);
+
+  await createTextureDerivative(source, destination, 1536);
+  const metadata = await sharp(destination).metadata();
+  assert.equal(metadata.format, 'webp');
+  assert.equal(metadata.height, 1536);
+  assert.ok(metadata.width <= 1536);
 });
 
 test('prebuildTextureCache creates only missing upload derivatives and preserves originals', async (t) => {
