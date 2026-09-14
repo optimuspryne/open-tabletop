@@ -16,6 +16,8 @@ const MESSAGE_NAMES = [
   'loadMat',
   'saveProp',
   'listProps',
+  'removePropDispenser',
+  'loadProp',
   'assetPublic',
   'assetRename',
   'getDeck',
@@ -242,6 +244,86 @@ test('loadMat spawns a saved public mat; a bad or off-origin record is refused',
   assert.deepEqual(spawn.args[2].front, '/assets/mats/f.jpg');
 });
 
+test('loadProp attaches an immutable asset snapshot and can spawn its authored dispenser', async () => {
+  const { db, handlers, calls } = harness();
+  const user = client();
+  db.getProp = async () => ({
+    props: {
+      model: '/assets/props/token.glb',
+      box: [0.4, 0.2, 0.4],
+      scale: 1,
+      stand: false,
+      tintMaterial: 'paint',
+      dispenser: { appearance: 'automatic', infinite: false, defaultCount: 20 },
+    },
+    isPublic: true,
+  });
+  await handlers.get('loadProp')(user, { id: '7', color: 0xabcdef });
+  await handlers.get('loadProp')(user, {
+    id: '7',
+    asDispenser: true,
+    color: 0xabcdef,
+    count: 35,
+  });
+  const spawns = calls.filter(({ name }) => name === 'spawn');
+  assert.equal(spawns.length, 2);
+  assert.equal(spawns[0].args[0], 'prop');
+  assert.equal(spawns[0].args[2].asset.id, '7');
+  assert.equal(spawns[0].args[2].asset.item.dispenser, undefined);
+  assert.equal(spawns[1].args[0], 'dispenser');
+  assert.equal(spawns[1].args[2].asset.dispenser.defaultCount, 20);
+  assert.equal(spawns[1].args[2].count, 35);
+});
+
+test('saveProp Save+Spawn uses the newly persisted id in its server-authored snapshot', async () => {
+  const { db, handlers, calls } = harness();
+  db.insertProp = async () => '42';
+  await handlers.get('saveProp')(client(), {
+    name: 'Token',
+    props: {
+      model: '/assets/props/token.glb',
+      box: [0.4, 0.2, 0.4],
+      scale: 1,
+      stand: false,
+      dispenser: { appearance: 'generic', infinite: false, defaultCount: 12 },
+    },
+    spawn: true,
+  });
+  const spawn = calls.find(({ name }) => name === 'spawn');
+  assert.equal(spawn.args[0], 'prop');
+  assert.equal(spawn.args[2].asset.id, '42');
+  assert.equal(spawn.args[2].asset.dispenser.defaultCount, 12);
+  assert.equal(spawn.args[2].dispenser, undefined);
+});
+
+test('loadProp refuses dispenser mode when the saved object has no authored dispenser', async () => {
+  const { db, handlers, calls } = harness();
+  db.getProp = async () => ({
+    props: { model: '/assets/props/token.glb', box: [0.4, 0.2, 0.4], scale: 1 },
+    isPublic: true,
+  });
+  await handlers.get('loadProp')(client(), { id: '7', asDispenser: true });
+  assert.equal(
+    calls.some(({ name }) => name === 'spawn'),
+    false,
+  );
+  assert.equal(
+    calls.some(({ name }) => name === 'full'),
+    false,
+  );
+});
+
+test('removing a custom dispenser preserves its object and refreshes the prop library', async () => {
+  const { handlers, calls } = harness();
+  await handlers.get('removePropDispenser')(client(), { id: '7' });
+  assert.deepEqual(calls.find(({ name }) => name === 'removePropDispenser').args, ['7']);
+  assert.ok(calls.some(({ name, args }) => name === 'sendAssetList' && args[1] === 'prop'));
+  assert.equal(
+    calls.some(({ name }) => name === 'deleteAsset'),
+    false,
+  );
+});
+
 test('database failures use the sanitized asset error boundary', async () => {
   const user = client();
   const failure = harness();
@@ -271,6 +353,12 @@ for (const change of ['revoke', 'demote', 'unchanged']) {
   for (const [message, read, result, effect] of [
     ['loadDeck', 'getDeck', { isPublic: true, fronts: ['ace'] }, 'spawn'],
     ['loadMat', 'getMat', { isPublic: true, geom: {}, tex: 'mat' }, 'spawn'],
+    [
+      'loadProp',
+      'getProp',
+      { isPublic: true, props: { model: '/assets/props/token.glb', box: [0.4, 0.2, 0.4] } },
+      'spawn',
+    ],
     ['sceneLoad', 'getScene', { isPublic: true, payload: {} }, 'applyScene'],
     ['loadBoard', 'getBoard', { isPublic: true, rec: { board: 'chess' } }, 'swapBoard'],
     ['getDeck', 'getDeck', { fronts: ['private'] }, 'deckData'],

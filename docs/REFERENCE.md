@@ -248,7 +248,10 @@ chess}` each `[color0, color1]`.
   project-authored `trainStack` uses `train_dispenser.glb`, its authored fixed collider and scale,
   and the `c01` tint slot; it dispenses the matching `train_piece` bundled prop. Modeled bodies and
   GLB-backed item stacks accept an instance `finish` override while keeping named tint slots
-  independent.
+  independent. Uploaded custom objects store an optional dispenser spec in their library `props`:
+  `{appearance:'automatic'|'generic'|'custom',infinite,defaultCount?,model?,box?,scale?,modelRot?,collider?,tintMaterial?}`.
+  `automatic` repeats the object model, `generic` uses the procedural container, and `custom` loads
+  the second authored GLB.
 - **`BOARDS`** `{ key → … }` — built-in boards, either a **model** board
   (`{ name, model, modelScale, box, grid? }`, collider precomputed from
   `worldSize·scale/2`) or a **procedural** board (`{ name, proc, box, grid, paint }`)
@@ -317,6 +320,12 @@ chess}` each `[color0, color1]`.
   synchronized appearance changes. Bundled and uploaded model props plus modeled dispensers/stacks
   accept material-only `finish` changes from `OBJECT_FINISH_KEYS`; pipped dice accept the standard
   dice subset. Dice-only `custom`, pipped-die custom textures, and object finish textures are rejected.
+- **`customAssetSnapshot(id, recordProps) → {id,item,dispenser?}`** — remove the dispenser definition
+  from the base item and attach both to a server-authored runtime identity. **`dispenserDefinition`**
+  resolves either that custom definition or a built-in `DISPENSERS` entry;
+  **`dispenserIdentity`** / **`dispenserVariant`** provide stable gather keys; and
+  **`customDispenserForItem`** rebuilds an eligible custom dispenser spec from a loose item while
+  preserving only its asset ID, color, and finish variant.
 - **`timerLive(t, now) → ms`** — the shared timer's current value from its synced
   anchor (`running/mode/base/since`): counts up from `base`, or down toward 0.
   Used by the server handler _and_ every client, so the number is never synced tick
@@ -689,7 +698,9 @@ created, rather than becoming an import side effect of the schema module.
   `custom` — a host-uploaded texture named by a companion `finishImg` `/assets/dice/` URL);
   bundled/uploaded model props and modeled dispensers accept the same list except `custom`, as a
   synchronized override of their definition or saved default. Pipped dice also accept that standard
-  subset while preserving their separately colored pips.
+  subset while preserving their separately colored pips. A loaded custom object or custom dispenser
+  carries a server-authored `asset` snapshot (`id`, base `item`, optional `dispenser`) inside this
+  JSON; instance `color` and `finish` remain top-level variant fields used for exact regrouping.
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
   image), **`role`** (the per-room owner/gm/helper/player rank).
@@ -769,12 +780,12 @@ and clearing its reconnection token.
 Async message handlers also recheck current access after database reads, before
 performing a later privileged action:
 
-- `loadDeck`/`loadMat` require helper+ again; `sceneLoad`/`loadBoard` require GM+
+- `loadDeck`/`loadMat`/`loadProp` require helper+ again; `sceneLoad`/`loadBoard` require GM+
   again. Private assets still require site-admin access.
 - `kick`/`setRole` recheck revocation after the membership read and current actor
   authority after the target-user read, immediately before submitting the mutation.
-- `getDeck` rechecks site-admin access before sending `deckData`; `saveMat` rechecks
-  it after persistence before optionally spawning the mat.
+- `getDeck` rechecks site-admin access before sending `deckData`; `saveMat` and `saveProp` recheck
+  it after persistence before optionally spawning their asset.
 - `server/game/library.js`'s `sendAssetList` drops revoked responses and suppresses a list
   fetched with private assets if site-admin access was lost during the read.
 - `server/game/member-service.js`'s `sendMembers` checks GM+ both before its read and before
@@ -866,7 +877,8 @@ Collider methods forward to `server/game/collider-maintenance.js`:
   its live count-derived height, including a six-sided cylinder for hex tiles. A modeled deck uses
   its skin's authored fixed box instead.
 - **`updateStackCollider(room, id)`** resizes an ordinary finite stack cylinder to the capped
-  visible item count. Modeled, infinite, unknown, or missing sources are unchanged.
+  visible item count and rebuilds a custom automatic stack from its saved item box. Modeled/generic,
+  infinite, unknown, or missing sources retain their fixed collider.
 
 Placement methods forward to `server/game/placement-operations.js`:
 
@@ -999,12 +1011,14 @@ they are the inverse-and-more of `splitDeck`: `combineIntoDeck` also scoops a di
 onto its deck.
 
 Two more consolidate loose dispenser-items, sharing the same match rule the drop-back absorb uses
-(shape + tint/team, centralized as `dispensedSpec` / `itemMatchesDispenser` / `dispenserForItem`
-in `shared/pieces.js`): **`absorbIntoDispenser`** (`{ids}` — the one dispenser in the selection
+(built-ins use shape + tint/team; custom items use asset ID + color + finish, centralized as
+`dispensedSpec` / `itemMatchesDispenser` / `dispenserForItem` / `customDispenserForItem` in
+`shared/pieces.js`): **`absorbIntoDispenser`** (`{ids}` — the one dispenser in the selection
 swallows every matching loose piece; a finite stack's count climbs by one each, an infinite bowl
 just takes them) and **`dispenseFromPieces`** (`{ids}` — with no dispenser selected, mint a fresh
 dispenser from 2+ homogeneous loose pieces that have one — poker chips → a chip stack, go stones →
-a bowl — a finite stack starting one-per-piece, an infinite bowl ignoring the count). On the client
+a bowl, or uploaded objects → their admin-authored dispenser — a finite stack starting one-per-piece,
+an infinite source ignoring the count). On the client
 these three plus `gatherDispensers` are one **Gather** button that routes by the selection: 2+
 dispensers merge, one dispenser + loose items absorbs, loose items alone mint.
 
@@ -1064,9 +1078,14 @@ editor's **Double-Sided Tiles** tab saves a tile set as an `open` deck with per-
 persisted in `props` and validated against `DECK_MODELS`/`#rrggbb`. An open set's visible top is a
 runtime-only `cover` prop the server keeps pointed at the **current top tile's own back** (repainted
 on spawn/draw/shuffle/split; never persisted, never set for a secret deck); `loadDeck`/
-`loadBoard` and the `listDecks`/`listBoards`/`listProps` listings are
+`loadBoard`/`loadProp` and the `listDecks`/`listBoards`/`listProps` listings are
 **visibility-gated** (public for GMs/helpers, everything for admins); the admin
-curation verbs are `assetPublic`/`assetRename`/`assetDelete`.
+curation verbs are `assetPublic`/`assetRename`/`assetDelete`. `loadProp`
+fetches the record after validating its ID, rechecks authorization after the database await, and
+attaches `customAssetSnapshot`; clients cannot submit an `asset` field through the generic spawn
+payload. `saveProp` accepts an optional Save+Spawn flag and uses the newly inserted/updated row ID
+for the same snapshot. `removePropDispenser` is admin-only and deletes only the nested dispenser
+definition before refreshing `propList`, leaving the custom object record intact.
 The handlers call the stable `TableRoom.saveDeckById`/`sendAssetList` facades; the injected
 library service owns their reusable persistence/list-delivery mechanics without absorbing payload
 validation or operation-specific permissions.
@@ -1172,7 +1191,10 @@ return the flag:
   `getBoard(id) → {rec,name,isPublic,ownerId}` (`rec` is one of `{board}` /
   `{model,…}` / `{w,d,tex}`), `insertBoard(name, rec, {ownerId,isPublic}) → id`.
 - **Props** — `listProps({includePrivate}) → [{id,name,props,isPublic,ownerId}]`,
-  `insertProp(name, props, {ownerId,isPublic}) → id`.
+  `getProp(id) → {id,name,props,isPublic,ownerId}`,
+  `insertProp(name, props, {ownerId,isPublic}) → id`, `updateProp(id,name,props)`, and
+  `removePropDispenser(id)` (JSONB subtraction of only `props.dispenser`; the row and primary
+  `file_url` remain).
 - **Scenes** (whole-table snapshots) — `listScenes`, `getScene(id)`,
   `insertScene({name,payload,ownerId,isPublic})`.
 - **Skyboxes** — `listSkyboxes`, `insertSkybox({name,url,ownerId,isPublic})`
@@ -1373,10 +1395,14 @@ quiet for a full frame), and
 - **`propMesh(p)`** — the dispatcher: loads a `.glb` (built-in fixed scale, or
   custom normalize) with the tint logic (team / full / `tintMaterial` one-slot /
   `ownMaterial`) and its definition/instance finish, else builds a shape and applies `props.scale`.
-- **`dispenserMesh(p)`** — renders modeled dispenser bodies or repeated GLB stack items, applying
-  the dispenser's instance finish to eligible material slots while retaining independent shell/rim
-  materials and the stack item's definition default.
-- **`KIND`** `{ die, card, prop, deck, board }` — each `{ mesh, grab, ldrag,
+- **`modelMaterialNames(source)`** — load an uploaded or saved GLB and return its sorted stable
+  material names for authoring; runtime UUIDs are deliberately not persisted. A selected name also
+  matches Blender-exported `.001`/`.002` copies, while `null` preserves the model unchanged.
+- **`dispenserMesh(p)`** — renders built-in modeled bodies/repeated GLB stacks and all three custom
+  appearances: an automatic stack of the associated object, the procedural generic container, or
+  a separately uploaded dispenser model. It applies the instance color/finish only to the eligible
+  item or named dispenser material while retaining independent baked materials.
+- **`KIND`** `{ die, card, prop, deck, board, dispenser, mat }` — each `{ mesh, grab, ldrag,
 lclick, rclick }`; the interaction layer dispatches off this, no type switches.
 - **`OVERLAY`** `{ ruler, circle, cone, line }` — the overlay registry, parallel to
   `KIND`: each `{ build(o) }` returns a flat `THREE.Group` in table space from an
@@ -1619,10 +1645,14 @@ device token lives in `localStorage`.
   on the game client's room via `window.onOttRoom`, and gets listings through
   `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).
   Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
-  Rename · Delete**, sending `loadDeck`/`loadBoard`/`spawn` and the
-  `assetPublic`/`assetRename`/`assetDelete` curation messages. The uploaded-object creation/edit form
-  includes a default material selector; its GLB preview updates immediately and the selected
-  standard finish is stored in the custom prop record for later spawns and Inspect overrides.
+  Rename · Delete**, sending server-authoritative `loadDeck`/`loadBoard`/`loadProp` and the
+  `assetPublic`/`assetRename`/`assetDelete` curation messages. An uploaded object with a dispenser
+  appears in both Objects and Dispensers; deleting the latter sends `removePropDispenser`, preserving
+  the object. The creation/edit form selects whole-model/preserved/named-slot tinting, optionally
+  enables automatic/generic/custom dispenser appearance, uploads and measures a second GLB when
+  needed, and stores finite default amount or infinite supply. Library quantity/amount steppers
+  reserve enough width for multi-digit values, and the custom-model Scale stepper cannot collapse
+  away either button.
 - **`public/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
   `.actions` group, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an

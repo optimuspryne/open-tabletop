@@ -27,6 +27,8 @@ import {
   overlayGeometry,
   overlayMovePayload,
   propRecordPayload,
+  customDispenserRecord,
+  loadPropPayload,
   recolorPayload,
   reorderHandPayload,
   saveBoardPayload,
@@ -489,6 +491,48 @@ test('save and spawn payloads reject unknown nested fields and unsupported types
   assert.equal(spawnPayload({ type: 'prop', props: { shape: 'unknown' } }, options), null);
   assert.equal(spawnPayload({ type: 'die', props: { sides: 20, injected: true } }, options), null);
   assert.equal(spawnPayload({ type: 'admin', props: {} }, options), null);
+});
+
+test('custom object dispenser definitions and tint slots are strictly validated', () => {
+  const automatic = { appearance: 'automatic', infinite: false, defaultCount: 24 };
+  const custom = {
+    appearance: 'custom',
+    infinite: true,
+    model: '/assets/props/bowl.glb',
+    box: [1, 0.5, 1],
+    scale: 1,
+    collider: 'flat',
+    tintMaterial: 'inside',
+  };
+  assert.deepEqual(customDispenserRecord(automatic), automatic);
+  assert.deepEqual(customDispenserRecord(custom, { colliders: ['flat'] }), custom);
+  assert.equal(customDispenserRecord({ ...automatic, injected: true }), null);
+  assert.equal(customDispenserRecord({ ...automatic, defaultCount: 0 }), null);
+  assert.equal(customDispenserRecord({ ...custom, model: 'https://bad/model.glb' }), null);
+  const prop = {
+    model: '/assets/props/token.glb',
+    box: [0.4, 0.2, 0.4],
+    stand: false,
+    scale: 1,
+    tintMaterial: 'paint',
+    dispenser: automatic,
+  };
+  assert.deepEqual(propRecordPayload(prop), prop);
+  assert.deepEqual(propRecordPayload({ ...prop, tintMaterial: null }), {
+    ...prop,
+    tintMaterial: null,
+  });
+});
+
+test('loadProp accepts only bounded library spawn variants', () => {
+  assert.deepEqual(loadPropPayload({ id: '12', asDispenser: true, count: 40, color: 0xabcdef }), {
+    id: '12',
+    asDispenser: true,
+    count: 40,
+    color: 0xabcdef,
+  });
+  assert.equal(loadPropPayload({ id: '12', asDispenser: true, count: 0 }), null);
+  assert.equal(loadPropPayload({ id: '12', asset: {} }), null);
 });
 
 test('member and extracted card messages validate ids, roles, coordinates, and placement enums', () => {

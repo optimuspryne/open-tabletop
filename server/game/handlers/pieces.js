@@ -6,6 +6,9 @@ import {
   dieSpawnProps,
   dispensedSpec,
   dispenserForItem,
+  customDispenserForItem,
+  dispenserDefinition,
+  dispenserVariant,
   gridActive,
   itemMatchesDispenser,
   snapToCell,
@@ -309,14 +312,13 @@ export function registerPieceHandlers(
       const body = room.bodies.get(id);
       if (!piece || !body || piece.type !== 'dispenser') continue;
       const props = readProps(piece);
-      const def = DISPENSERS[props.disp];
+      const def = dispenserDefinition(props);
       if (!def || def.infinite) continue; // an unlimited bowl has nothing to pour
       members.push({ id, piece, body, props });
     }
     if (members.length < 2) return;
-    const sig = (m) => JSON.stringify([m.props.disp, m.props.color ?? null, m.props.team ?? null]);
-    const target = sig(members[0]);
-    if (members.some((m) => sig(m) !== target)) return; // mixed kind/tint → refuse
+    const target = dispenserVariant(members[0].props);
+    if (members.some((m) => dispenserVariant(m.props) !== target)) return; // mixed kind/variant → refuse
     let total = 0;
     let cx = 0;
     let cz = 0;
@@ -328,11 +330,12 @@ export function registerPieceHandlers(
     if (total <= 0) return;
     cx /= members.length;
     cz /= members.length;
-    const { disp, color, team } = members[0].props;
+    const { disp, asset, color, team, finish } = members[0].props;
     for (const m of members) room.removePiece(m.id); // remove first → the merged stack always fits
-    const spawnProps = { disp, count: total };
+    const spawnProps = asset ? { asset, count: total } : { disp, count: total };
     if (color != null) spawnProps.color = color;
     if (team != null) spawnProps.team = team;
+    if (finish != null) spawnProps.finish = finish;
     const id = room.spawn('dispenser', [cx, spawnY, cz], spawnProps);
     const merged = room.state.pieces.get(id);
     if (merged && merged.count !== total) {
@@ -366,7 +369,7 @@ export function registerPieceHandlers(
     }
     if (!disp || extraDispenser) return; // exactly one dispenser to pour into
     const want = dispensedSpec(readProps(disp));
-    const def = DISPENSERS[readProps(disp).disp];
+    const def = dispenserDefinition(readProps(disp));
     let absorbed = 0;
     for (const it of items) {
       if (!itemMatchesDispenser(want, it.props)) continue;
@@ -394,15 +397,19 @@ export function registerPieceHandlers(
       if (piece.type === 'dispenser') return; // a dispenser present -> absorb, not mint
       if (piece.type !== 'prop') continue;
       const props = readProps(piece);
-      if (!dispenserForItem(props.shape)) continue; // only pieces that have a dispenser
+      if (!dispenserForItem(props.shape) && !customDispenserForItem(props)) continue; // authored dispensers only
       items.push({ id, props, body });
     }
     if (items.length < 2) return;
-    const sig = (p) => JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
+    const sig = (p) =>
+      p.asset
+        ? JSON.stringify([String(p.asset.id), p.color ?? null, p.finish ?? null])
+        : JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
     const target = sig(items[0].props);
     if (items.some((it) => sig(it.props) !== target)) return; // mixed -> refuse
-    const kind = dispenserForItem(items[0].props.shape);
-    const def = DISPENSERS[kind];
+    const custom = customDispenserForItem(items[0].props);
+    const kind = custom ? null : dispenserForItem(items[0].props.shape);
+    const def = custom ? dispenserDefinition(custom) : DISPENSERS[kind];
     let cx = 0;
     let cz = 0;
     for (const it of items) {
@@ -411,9 +418,10 @@ export function registerPieceHandlers(
     }
     cx /= items.length;
     cz /= items.length;
-    const spawnProps = { disp: kind };
+    const spawnProps = custom || { disp: kind };
     if (def.team) spawnProps.team = items[0].props.team ? 1 : 0;
     else if (items[0].props.color != null) spawnProps.color = items[0].props.color | 0;
+    if (items[0].props.finish != null) spawnProps.finish = items[0].props.finish;
     if (!def.infinite) spawnProps.count = items.length;
     for (const it of items) room.removePiece(it.id);
     room.spawn('dispenser', [cx, spawnY, cz], spawnProps);

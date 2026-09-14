@@ -17,7 +17,7 @@ import {
   DECK_MODELS,
   TABLE,
   MEASURE,
-  DISPENSERS,
+  dispenserDefinition,
   DICE_FINISH_FALLBACK,
   DICE_MODELS,
   objectFinish,
@@ -624,9 +624,9 @@ function finishMaterial(color, finishKey, { finishImg, side, flatShading = false
     color: f.marble || (f.image && finishImg) ? 0xffffff : (color ?? COLORS.ivory),
     roughness: f.roughness,
     metalness: f.metalness || 0,
-    side,
     flatShading,
   };
+  if (side !== undefined) params.side = side;
   if (f.marble) params.map = marbleTexture(c);
   if (f.image && finishImg) params.map = customTexture(finishImg);
   if (f.brushed) params.roughnessMap = brushedTexture();
@@ -1193,6 +1193,36 @@ function measureGlb(url, rot) {
   );
 }
 
+// Material names exported in a GLB. Authoring UI uses these stable names for tint-slot selection;
+// Three.js material UUIDs are generated at load time and cannot be persisted.
+export function modelMaterialNames(source) {
+  const temporary = typeof File !== 'undefined' && source instanceof File;
+  const url = temporary ? URL.createObjectURL(source) : source;
+  return new Promise((resolve, reject) =>
+    gltfLoader.load(
+      url,
+      (gltf) => {
+        if (temporary) URL.revokeObjectURL(url);
+        const names = new Set();
+        gltf.scene.traverse((node) => {
+          const materials = node.material
+            ? Array.isArray(node.material)
+              ? node.material
+              : [node.material]
+            : [];
+          for (const material of materials) if (material.name) names.add(material.name);
+        });
+        resolve([...names].sort((a, b) => a.localeCompare(b)));
+      },
+      undefined,
+      (error) => {
+        if (temporary) URL.revokeObjectURL(url);
+        reject(error);
+      },
+    ),
+  );
+}
+
 // Centre a loaded model at the origin, then scale it — either by a fixed factor
 // (opts.scale) or by normalizing its largest dimension to opts.target. Returns
 // the scale that was applied.
@@ -1521,8 +1551,12 @@ function propModelPainter(props, spec, builtin) {
   const styled = props.finish !== undefined || finish !== 'matte';
 
   const paint = (material) => {
-    if (!builtin)
+    if (!builtin) {
+      if (spec.tintMaterial === null) return material;
+      if (typeof spec.tintMaterial === 'string' && !isTintSlot(material.name, spec.tintMaterial))
+        return material;
       return pick != null || styled ? modelFinishMaterial(material, finish, pick) : material;
+    }
     if (teamTint != null) return surface(teamTint, material.side);
     if (spec.tintMaterial) {
       if (material.name === spec.tintMaterial && (pick != null || styled))
@@ -1565,7 +1599,7 @@ function propMesh(props = {}) {
       builtin
         ? { scale: (spec.modelScale || 1) * (props.scale || 1) }
         : { target: MODEL_SIZE * (props.scale || 1) },
-      propModelPainter(props, spec, builtin),
+      propModelPainter(props, builtin ? spec : props, builtin),
       (obj) => {
         const mr = builtin ? spec.modelRot : props.modelRot;
         if (mr) obj.rotation.set(mr[0], mr[1], mr[2]);
@@ -1998,10 +2032,89 @@ const _stackProto = new Map();
 // color. `props` carries { disp, color?, team?, count?, _seed? } (_seed = the piece id,
 // stamped by meshPropsOf, seeds the stack's facing jitter; absent → a fixed scramble).
 function dispenserMesh(props = {}) {
-  const spec = DISPENSERS[props.disp];
+  const spec = dispenserDefinition(props);
   if (!spec) return new THREE.Group();
-  const matte = (color, side) =>
-    new THREE.MeshStandardMaterial({ color, metalness: 0, roughness: 0.6, side });
+  const matte = (color, side) => {
+    const params = { color, metalness: 0, roughness: 0.6 };
+    if (side !== undefined) params.side = side;
+    return new THREE.MeshStandardMaterial(params);
+  };
+
+  if (props.asset) {
+    const itemProps = { ...props.asset.item };
+    if (props.color != null) itemProps.color = props.color;
+    if (props.finish != null) itemProps.finish = props.finish;
+    if (spec.appearance === 'generic') {
+      const group = new THREE.Group();
+      const shell = matte(0x6f7378, THREE.DoubleSide);
+      const inner =
+        itemProps.tintMaterial === null
+          ? matte(0x44484d)
+          : itemSurface(itemProps, itemProps.color ?? 0x888888);
+      const wall = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.55, 0.55, 24, 1, true), shell);
+      const floor = new THREE.Mesh(new THREE.CylinderGeometry(0.54, 0.54, 0.08, 24), inner);
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.72, 0.055, 8, 24), shell);
+      floor.position.y = -0.24;
+      rim.position.y = 0.275;
+      rim.rotation.x = Math.PI / 2;
+      group.add(wall, floor, rim);
+      group.traverse((node) => {
+        if (node.isMesh) {
+          node.castShadow = true;
+          node.receiveShadow = true;
+        }
+      });
+      return group;
+    }
+    if (spec.appearance === 'custom') {
+      const paintedProps = { ...props, tintMaterial: spec.tintMaterial };
+      return loadModelGroup(
+        spec.model,
+        { target: MODEL_SIZE * (spec.scale || 1) },
+        propModelPainter(paintedProps, spec, false),
+        (obj) => {
+          if (spec.modelRot) obj.rotation.set(...spec.modelRot);
+        },
+      );
+    }
+
+    // Automatic: load and paint the authored item once, then share its geometry/material across
+    // a visible stack. The real finite count may exceed STACK_CAP.
+    const group = new THREE.Group();
+    const n = stackVisible(spec.infinite ? 8 : (props.count ?? spec.defaultCount ?? 1));
+    const itemHeight = Math.max(0.02, (itemProps.box?.[1] || 0.2) * 2);
+    const fill = (rawScene) => {
+      const proto = rawScene.clone(true);
+      if (itemProps.modelRot) proto.rotation.set(...itemProps.modelRot);
+      fitModel(proto, { target: MODEL_SIZE * (itemProps.scale || 1) });
+      const paintItem = propModelPainter(itemProps, itemProps, false);
+      proto.traverse((node) => {
+        if (node.isMesh) paintItem(node);
+      });
+      const seed = stackSeed(props.asset.id);
+      for (let i = 0; i < n; i++) {
+        const clone = proto.clone(true);
+        clone.position.y = (i - (n - 1) / 2) * itemHeight;
+        const x = Math.sin((i + 1) * 127.1 + seed) * 43758.5453;
+        clone.rotation.y += (x - Math.floor(x)) * Math.PI * 2;
+        group.add(clone);
+      }
+    };
+    const key = itemProps.model;
+    const cached = _stackProto.get(key);
+    if (cached) fill(cached);
+    else
+      gltfLoader.load(
+        key,
+        (gltf) => {
+          _stackProto.set(key, gltf.scene);
+          fill(gltf.scene);
+        },
+        undefined,
+        () => {},
+      );
+    return group;
+  }
 
   if (spec.body === 'model') {
     const finish = objectFinish(spec, props.finish);

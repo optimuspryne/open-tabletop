@@ -1259,7 +1259,6 @@
             <ul>
               <li><b>Custom games</b> — save a whole setup as a starter anyone can spawn.</li>
               <li><b>Custom dice</b> — your own faces, colours and textures.</li>
-              <li><b>Custom dispensers</b> — build your own, the way you build decks today.</li>
               <li>
                 <b>More from a selection</b> — gather loose cards into a deck, stack tiles, and fill
                 a dispenser from what is already on the table.
@@ -1329,6 +1328,7 @@
         </div>
         <div class="libPane" data-pane="dispensers" hidden>
           <ul id="nlb_dispensers" class="libList lib2-bi"></ul>
+          <ul id="nlc_dispenser" class="libList lib2-cu"></ul>
         </div>
         <div class="libPane" data-pane="sky" hidden>
           <ul id="nlb_sky" class="libList lib2-bi"></ul>
@@ -1917,7 +1917,7 @@
                   >
                 </div>
               </div>
-              <div class="note">Uploaded models keep their own colors.</div>
+              <div class="note">Keep the model colors, recolor everything, or choose one material slot.</div>
             </div>
             <div class="addCol">
               <label for="adObjName">Object name</label>
@@ -1925,6 +1925,11 @@
               <label for="adObjFinish">Default material</label>
               <select id="adObjFinish">
                 <option value="">Use model material</option>
+              </select>
+              <label for="adObjTint">Recolor material</label>
+              <select id="adObjTint">
+                <option value="__all__">Entire model</option>
+                <option value="__none__">Preserve model colors</option>
               </select>
               <label>Scale &amp; Collider Shape</label>
               <div class="addRow">
@@ -2046,6 +2051,64 @@
                 <button id="adObjRotY" type="button" title="Rotate 90° about Y">Y</button>
                 <button id="adObjRotZ" type="button" title="Rotate 90° about Z">Z</button>
                 <button id="adObjRotReset" type="button" title="Reset orientation">Reset</button>
+              </div>
+              <div class="addColorRow">
+                <span>Custom dispenser</span>
+                <button id="adObjDispEnable" type="button" class="chip chk">Enabled</button>
+              </div>
+              <div id="adObjDispFields" hidden>
+                <label for="adObjDispAppearance">Appearance</label>
+                <select id="adObjDispAppearance">
+                  <option value="automatic">Automatic stack</option>
+                  <option value="generic">Generic container</option>
+                  <option value="custom">Custom model</option>
+                </select>
+                <label for="adObjDispSupply">Supply</label>
+                <select id="adObjDispSupply">
+                  <option value="finite">Finite</option>
+                  <option value="infinite">Infinite</option>
+                </select>
+                <div id="adObjDispCountRow" class="addColorRow">
+                  <label for="adObjDispCount">Default amount</label>
+                  <input id="adObjDispCount" type="number" min="1" max="1000" value="20" />
+                </div>
+                <div id="adObjDispCustom" hidden>
+                  <div class="sqField">
+                    <div class="sqCap">Dispenser model</div>
+                    <div class="uploadSq sqBoard">
+                      <input
+                        id="adObjDispGlb"
+                        type="file"
+                        accept=".glb,model/gltf-binary"
+                        hidden
+                      /><span class="sqLabel">Drop a .glb<br />or click to choose</span>
+                    </div>
+                  </div>
+                  <label for="adObjDispTint">Recolor material</label>
+                  <select id="adObjDispTint">
+                    <option value="__all__">Entire model</option>
+                    <option value="__none__">Preserve model colors</option>
+                  </select>
+                  <div class="addRow">
+                    <label for="adObjDispScale">Scale</label>
+                    <input id="adObjDispScale" type="number" min="0.3" max="3" step="0.1" value="1" />
+                    <label for="adObjDispCollider">Collider</label>
+                    <select id="adObjDispCollider">
+                      <option value="box">Box</option>
+                      <option value="sphere">Sphere</option>
+                      <option value="cylinder">Cylinder</option>
+                      <option value="cone">Cone</option>
+                      <option value="flat">Flat</option>
+                    </select>
+                  </div>
+                  <div class="rotRow">
+                    <span class="rotLabel">Orientation</span>
+                    <button id="adObjDispRotX" type="button">X</button>
+                    <button id="adObjDispRotY" type="button">Y</button>
+                    <button id="adObjDispRotZ" type="button">Z</button>
+                    <button id="adObjDispRotReset" type="button">Reset</button>
+                  </div>
+                </div>
               </div>
               <div class="saveFoot">
                 <p class="destNote">

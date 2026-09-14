@@ -7,6 +7,7 @@ test('successful empty library queries remain ordinary empty and not-found resul
   assert.deepEqual(await library.listDecks(), []);
   assert.deepEqual(await library.listBoards(), []);
   assert.deepEqual(await library.listProps(), []);
+  assert.equal(await library.getProp('1'), null);
   assert.deepEqual(await library.listScenes(), []);
   assert.deepEqual(await library.listSkyboxes(), []);
   assert.equal(await library.getDeck('1'), null);
@@ -25,6 +26,7 @@ test('library query failures reject instead of masquerading as empty results', a
     () => library.listBoards(),
     () => library.getBoard('1'),
     () => library.listProps(),
+    () => library.getProp('1'),
     () => library.listScenes(),
     () => library.getScene('1'),
     () => library.listSkyboxes(),
@@ -48,4 +50,21 @@ test('library rows retain their public API shapes', async () => {
       ownerId: '3',
     },
   ]);
+});
+
+test('mixed-back deck rows expose the first front image instead of JSON as a preview URL', async () => {
+  const library = createLibraryQueries(async () => ({
+    rows: [
+      {
+        id: 9,
+        name: 'Forageables',
+        count: '1',
+        first: JSON.stringify({ front: '/assets/decks/front.png', back: '/assets/decks/back.png' }),
+        back: '/assets/decks/cover.png',
+        is_public: true,
+        owner_id: 3,
+      },
+    ],
+  }));
+  assert.equal((await library.listDecks())[0].first, '/assets/decks/front.png');
 });

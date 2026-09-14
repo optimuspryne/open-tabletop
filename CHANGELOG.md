@@ -9,6 +9,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Let admins attach finite or infinite dispensers to uploaded custom objects, choosing an automatic
+  visible stack, a generic container, or a second uploaded model. Custom pieces retain a
+  server-authored asset snapshot so matching color/finish variants can be gathered and absorbed
+  without allowing ad-hoc dispenser definitions.
+- Let uploaded object and custom-dispenser models target one named GLB material for recoloring and
+  finishes, preserving all other baked textures; the editor discovers material names from the GLB.
 - Cover room entry with a Loading Table screen until synchronized pieces, visual assets, and the
   first complete rendered frame are ready, preventing large tables from visibly popping into place.
 - Let uploaded custom 3D objects choose a default shared material during creation and change it
@@ -23,6 +29,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Keep both buttons visible on custom-dispenser scale steppers and give library quantity fields
+  enough width to display multi-digit values.
+- Delete custom dispenser configurations from their library view without deleting the associated
+  custom object or its primary 3D model.
+- Export the custom-object lookup through the production database facade so saved models and their
+  authored dispensers load correctly, omit undefined Three.js material options from previews, and
+  decode mixed-back deck entries before using their first card as a thumbnail URL.
 - Preserve the remaining inventory of finite dispensers across manual table-state saves and room
   shutdown/re-entry, including gathered stacks above the normal single-spawn limit.
 - Keep the WebGL canvas hidden until the synchronized table and player-seat camera are both ready,

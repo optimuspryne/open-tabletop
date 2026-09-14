@@ -289,6 +289,15 @@ test('gathering excludes infinite bowls (nothing to pour)', async () => {
 
 const chip = (color) => ({ type: 'prop', props: JSON.stringify({ shape: 'poker_chip', color }) });
 const stone = (team) => ({ type: 'prop', props: JSON.stringify({ shape: 'go', team }) });
+const customAsset = {
+  id: '42',
+  item: { model: '/assets/props/gem.glb', box: [0.3, 0.3, 0.3], scale: 1, stand: false },
+  dispenser: { appearance: 'automatic', infinite: false, defaultCount: 12 },
+};
+const customPiece = (color, finish = 'pearl') => ({
+  type: 'prop',
+  props: JSON.stringify({ ...customAsset.item, asset: customAsset, color, finish }),
+});
 
 test('absorbing loose pieces pours matching ones back into the one dispenser', async () => {
   const { room, handlers, events } = harness();
@@ -370,6 +379,38 @@ test('minting from go stones makes an infinite bowl with no count', async () => 
 
   const spawn = events.find((e) => e.name === 'spawn');
   assert.deepEqual(spawn.payload.props, { disp: 'goBowl', team: 0 }); // no count on an infinite bowl
+});
+
+test('authored custom objects regroup, absorb, and preserve their asset variant', async () => {
+  const { room, handlers, events } = harness();
+  room.state.pieces.set('1', customPiece(0xabcdef));
+  room.bodies.set('1', body({ x: 0, z: 0 }));
+  room.state.pieces.set('2', customPiece(0xabcdef));
+  room.bodies.set('2', body({ x: 2, z: 0 }));
+  await handlers.get('dispenseFromPieces')(client, { ids: ['1', '2'] });
+  const spawn = events.find((event) => event.name === 'spawn');
+  assert.deepEqual(spawn.payload.props, {
+    asset: customAsset,
+    color: 0xabcdef,
+    finish: 'pearl',
+    count: 2,
+  });
+
+  const disp = {
+    type: 'dispenser',
+    count: 2,
+    props: JSON.stringify(spawn.payload.props),
+  };
+  room.state.pieces.set('9', disp);
+  room.bodies.set('9', body({ x: 1, z: 0 }));
+  room.state.pieces.set('3', customPiece(0xabcdef));
+  room.bodies.set('3', body({ x: 3, z: 0 }));
+  room.state.pieces.set('4', customPiece(0xff0000));
+  room.bodies.set('4', body({ x: 4, z: 0 }));
+  await handlers.get('absorbIntoDispenser')(client, { ids: ['9', '3', '4'] });
+  assert.equal(disp.count, 3);
+  assert.equal(room.state.pieces.has('3'), false);
+  assert.equal(room.state.pieces.has('4'), true);
 });
 
 test('minting refuses mixed pieces and refuses when a dispenser is present', async () => {

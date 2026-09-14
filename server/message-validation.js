@@ -420,7 +420,18 @@ export function boardRecordPayload(value, { boardKeys = [] } = {}) {
 
 export function propRecordPayload(value, { colliders = [], allowSpawnOptions = false } = {}) {
   if (!isPlainObject(value)) return null;
-  const allowed = ['model', 'box', 'stand', 'scale', 'modelRot', 'collider', 'color', 'finish'];
+  const allowed = [
+    'model',
+    'box',
+    'stand',
+    'scale',
+    'modelRot',
+    'collider',
+    'color',
+    'finish',
+    'tintMaterial',
+    'dispenser',
+  ];
   if (allowSpawnOptions) allowed.push('snap');
   if (!hasOnlyKeys(value, new Set(allowed))) return null;
   const model = localAssetRef(value.model, { extension: '.glb' });
@@ -446,9 +457,73 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
     if (!OBJECT_FINISH_KEYS.has(value.finish)) return null;
     out.finish = value.finish;
   }
+  if (value.tintMaterial !== undefined) {
+    if (value.tintMaterial === null) out.tintMaterial = null;
+    else {
+      const material = boundedString(value.tintMaterial, { min: 1, max: 100 });
+      if (material === null || !material.trim()) return null;
+      out.tintMaterial = material.trim();
+    }
+  }
+  if (value.dispenser !== undefined) {
+    const dispenser = customDispenserRecord(value.dispenser, { colliders });
+    if (!dispenser) return null;
+    out.dispenser = dispenser;
+  }
   if (allowSpawnOptions && value.snap !== undefined) {
     if (typeof value.snap !== 'boolean') return null;
     out.snap = value.snap;
+  }
+  return out;
+}
+
+export function customDispenserRecord(value, { colliders = [] } = {}) {
+  if (!isPlainObject(value)) return null;
+  const allowed = new Set([
+    'appearance',
+    'infinite',
+    'defaultCount',
+    'model',
+    'box',
+    'scale',
+    'modelRot',
+    'collider',
+    'tintMaterial',
+  ]);
+  if (!hasOnlyKeys(value, allowed)) return null;
+  if (!['automatic', 'generic', 'custom'].includes(value.appearance)) return null;
+  if (typeof value.infinite !== 'boolean') return null;
+  const out = { appearance: value.appearance, infinite: value.infinite };
+  if (!value.infinite) {
+    const count = finiteNumber(value.defaultCount, { min: 1, max: 1000 });
+    if (count === null || !Number.isInteger(count)) return null;
+    out.defaultCount = count;
+  }
+  if (value.appearance === 'custom') {
+    const model = localAssetRef(value.model, { extension: '.glb' });
+    const box = finiteTuple(value.box, { min: 1e-3, max: 100 });
+    const scale = finiteNumber(value.scale, { min: 1e-3, max: 100 });
+    if (!model || !box || scale === null) return null;
+    out.model = model;
+    out.box = box;
+    out.scale = scale;
+    if (value.modelRot !== undefined) {
+      const rot = finiteTuple(value.modelRot, { min: -Math.PI * 2, max: Math.PI * 2 });
+      if (!rot) return null;
+      out.modelRot = rot;
+    }
+    if (value.collider !== undefined) {
+      if (!colliders.includes(value.collider)) return null;
+      out.collider = value.collider;
+    }
+    if (value.tintMaterial !== undefined) {
+      if (value.tintMaterial === null) out.tintMaterial = null;
+      else {
+        const material = boundedString(value.tintMaterial, { min: 1, max: 100 });
+        if (material === null || !material.trim()) return null;
+        out.tintMaterial = material.trim();
+      }
+    }
   }
   return out;
 }
@@ -494,16 +569,61 @@ export function saveMatPayload(message, { sanitizeGeom }) {
 }
 
 export function savePropPayload(message, options) {
-  if (!isPlainObject(message) || !hasOnlyKeys(message, new Set(['name', 'props', 'editId'])))
+  if (
+    !isPlainObject(message) ||
+    !hasOnlyKeys(message, new Set(['name', 'props', 'editId', 'spawn']))
+  )
     return null;
   const name = boundedString(message.name, { min: 1, max: 60 });
   const props = propRecordPayload(message.props, options);
   if (name === null || !name.trim() || !props) return null;
   const out = { name: name.trim(), props, editId: null };
+  if (message.spawn !== undefined) {
+    if (typeof message.spawn !== 'boolean') return null;
+    out.spawn = message.spawn;
+  }
   if (message.editId != null) {
     const id = databaseId(message.editId);
     if (id === null) return null;
     out.editId = id;
+  }
+  return out;
+}
+
+export function loadPropPayload(message) {
+  if (!isPlainObject(message)) return null;
+  if (
+    !hasOnlyKeys(
+      message,
+      new Set(['id', 'asDispenser', 'count', 'color', 'finish', 'snap', 'stand']),
+    )
+  )
+    return null;
+  const id = databaseId(message.id);
+  if (id === null) return null;
+  const out = { id, asDispenser: !!message.asDispenser };
+  if (message.asDispenser !== undefined && typeof message.asDispenser !== 'boolean') return null;
+  if (message.count !== undefined) {
+    const count = finiteNumber(message.count, { min: 1, max: 1000 });
+    if (count === null || !Number.isInteger(count)) return null;
+    out.count = count;
+  }
+  if (message.color !== undefined) {
+    const color = finiteNumber(message.color, { min: 0, max: 0xffffff });
+    if (color === null || !Number.isInteger(color)) return null;
+    out.color = color;
+  }
+  if (message.finish !== undefined) {
+    if (!OBJECT_FINISH_KEYS.has(message.finish)) return null;
+    out.finish = message.finish;
+  }
+  if (message.snap !== undefined) {
+    if (typeof message.snap !== 'boolean') return null;
+    out.snap = message.snap;
+  }
+  if (message.stand !== undefined) {
+    if (message.stand !== false && message.stand !== true && message.stand !== 'flat') return null;
+    out.stand = message.stand;
   }
   return out;
 }

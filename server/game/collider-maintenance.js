@@ -1,11 +1,11 @@
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
-  DISPENSERS,
   PROPS,
   cardGeom,
   deckHeight,
   stackVisible,
+  dispenserDefinition,
 } from '../../shared/pieces.js';
 import { readProps } from './props-codec.js';
 
@@ -47,8 +47,25 @@ export function updateStackCollider(room, id) {
   const body = room.bodies.get(id);
   const piece = room.state.pieces.get(id);
   if (!body || !piece) return;
-  const dispenser = DISPENSERS[readProps(piece).disp];
-  if (!dispenser || dispenser.body !== 'stack') return;
+  const props = readProps(piece);
+  const dispenser = dispenserDefinition(props);
+  if (!dispenser) return;
+  if (props.asset) {
+    if (dispenser.appearance !== 'automatic') return;
+    const [hx, hy, hz] = props.asset.item.box || [0.4, 0.2, 0.4];
+    replaceShape(
+      body,
+      new CANNON.Box(
+        new CANNON.Vec3(
+          hx,
+          Math.max(hy, stackVisible(dispenser.infinite ? 8 : piece.count) * hy),
+          hz,
+        ),
+      ),
+    );
+    return;
+  }
+  if (dispenser.body !== 'stack') return;
   const box = PROPS[dispenser.item].collider.box;
   const radius = box[0];
   const itemHeight = box[1] * 2;

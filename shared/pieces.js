@@ -553,12 +553,48 @@ export const DISPENSER_LIST = [
   { id: 'goBowl' },
 ];
 
+// A custom object carries this server-authored snapshot while it is on the table. Keeping the
+// source record with the piece lets saved scenes survive later library edits/deletion and lets the
+// server prove that a loose object is eligible to be gathered into a custom dispenser.
+export const customAssetSnapshot = (id, recordProps = {}) => {
+  const item = { ...recordProps };
+  const dispenser = item.dispenser;
+  delete item.dispenser;
+  return dispenser
+    ? { id: String(id), item, dispenser: { ...dispenser } }
+    : { id: String(id), item };
+};
+
+export const dispenserDefinition = (props = {}) =>
+  props.asset && props.asset.dispenser ? props.asset.dispenser : DISPENSERS[props.disp] || null;
+
+export const dispenserIdentity = (props = {}) =>
+  props.asset && props.asset.dispenser
+    ? `custom:${props.asset.id}`
+    : props.disp && DISPENSERS[props.disp]
+      ? `builtin:${props.disp}`
+      : null;
+
+export const dispenserVariant = (props = {}) =>
+  JSON.stringify([
+    dispenserIdentity(props),
+    props.color ?? null,
+    props.team ?? null,
+    props.finish ?? null,
+  ]);
+
 // The prop a dispenser hands out: its item shape plus the stack's own tint (poker/coin) or team
 // (go bowl). Shared by the server (spawn spec, absorb-on-drop) and the client (compose
 // eligibility) so the match rule can't drift between them.
 export const dispensedSpec = (dispProps = {}) => {
-  const d = DISPENSERS[dispProps.disp];
+  const d = dispenserDefinition(dispProps);
   if (!d) return null;
+  if (dispProps.asset) {
+    const props = { ...dispProps.asset.item, asset: dispProps.asset };
+    if (dispProps.color != null) props.color = dispProps.color | 0;
+    if (dispProps.finish != null) props.finish = dispProps.finish;
+    return { type: 'prop', props };
+  }
   const props = { shape: d.item };
   if (d.team) props.team = dispProps.team ? 1 : 0;
   else if (dispProps.color != null) props.color = dispProps.color | 0;
@@ -569,7 +605,11 @@ export const dispensedSpec = (dispProps = {}) => {
 // Does a loose piece's props match what a dispenser hands out? `want` is a dispensedSpec() result.
 export const itemMatchesDispenser = (want, props = {}) =>
   !!want &&
-  want.props.shape === props.shape &&
+  (want.props.asset
+    ? String(want.props.asset.id) === String(props.asset && props.asset.id) &&
+      (want.props.color ?? null) === (props.color ?? null) &&
+      (want.props.finish ?? null) === (props.finish ?? null)
+    : want.props.shape === props.shape) &&
   (want.props.color == null || (props.color | 0) === (want.props.color | 0)) &&
   (want.props.team == null || (props.team ? 1 : 0) === want.props.team);
 
@@ -578,6 +618,16 @@ export const itemMatchesDispenser = (want, props = {}) =>
 export const dispenserForItem = (shape) => {
   for (const key of Object.keys(DISPENSERS)) if (DISPENSERS[key].item === shape) return key;
   return null;
+};
+
+// Rebuild the dispenser snapshot carried by an eligible custom loose object. Color and finish are
+// instance variants, while the base item and dispenser authoring data remain immutable snapshots.
+export const customDispenserForItem = (props = {}) => {
+  if (!props.asset || !props.asset.id || !props.asset.dispenser) return null;
+  const out = { asset: props.asset };
+  if (props.color != null) out.color = props.color | 0;
+  if (props.finish != null) out.finish = props.finish;
+  return out;
 };
 
 // One-click starter games. The server's setupStarter() clears the table, then builds one of
@@ -892,7 +942,7 @@ export function colorProps(
     const dispenserModel =
       type === 'dispenser' &&
       dispDef &&
-      (dispDef.model || (PROPS[dispDef.item] && PROPS[dispDef.item].model));
+      (props.asset || dispDef.model || (PROPS[dispDef.item] && PROPS[dispDef.item].model));
     if ((!propModel && !dispenserModel) || !OBJECT_FINISH_KEYS.has(finish)) return null;
     out.finish = finish; // keep explicit matte: it must be able to override a glossy definition
   }
@@ -971,6 +1021,7 @@ const _teamSwatches = (name) =>
   (COLORS.team[name] || []).map((hex, i) => ({ name: 'Set ' + (i + 1), hex }));
 export function recolorPalette(type, props = {}, dispDef = null) {
   if (type === 'prop') {
+    if (props.asset && props.asset.item && props.asset.item.tintMaterial === null) return null;
     const spec = PROPS[props.shape] || {};
     if (spec.team) return { team: true, free: false, swatches: _teamSwatches(spec.team) };
     const entry = PROP_LIST.find((e) => e.id === props.shape);
@@ -981,6 +1032,7 @@ export function recolorPalette(type, props = {}, dispDef = null) {
   }
   if (type === 'dispenser') {
     if (!dispDef) return null;
+    if (props.asset && props.asset.item && props.asset.item.tintMaterial === null) return null;
     if (dispDef.team) return { team: true, free: false, swatches: _teamSwatches(dispDef.team) };
     const alt = dispDef.swatches ? PALETTES[dispDef.swatches] : null;
     return alt

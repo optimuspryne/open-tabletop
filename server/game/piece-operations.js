@@ -1,4 +1,4 @@
-import { DISPENSERS, PROPS, colorProps } from '../../shared/pieces.js';
+import { PROPS, colorProps, dispenserDefinition } from '../../shared/pieces.js';
 import { readProps, writeProps } from './props-codec.js';
 
 // Own the server-authoritative piece appearance and self-righting policy. The room keeps small
@@ -23,7 +23,7 @@ export function recolorPiece(room, id, opts = {}) {
   const piece = room.state.pieces.get(id);
   if (!piece) return false;
   const props = readProps(piece);
-  const dispDef = piece.type === 'dispenser' ? DISPENSERS[props.disp] : null;
+  const dispDef = piece.type === 'dispenser' ? dispenserDefinition(props) : null;
   const next = colorProps(piece.type, props, opts, dispDef);
   if (!next) return false;
   writeProps(piece, next);

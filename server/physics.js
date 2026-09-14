@@ -2,7 +2,6 @@ import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
 import {
   BOARDS,
-  DISPENSERS,
   KINDS,
   PROPS,
   TABLE,
@@ -10,6 +9,7 @@ import {
   dieR,
   dieVerts,
   stackVisible,
+  dispenserDefinition,
 } from '../shared/pieces.js';
 
 export const COLLIDER_TYPES = ['sphere', 'cylinder', 'cone', 'flat'];
@@ -83,8 +83,23 @@ export function buildCollider(type, props, { cardColliderThickness }) {
   }
 
   if (shape === 'dispenser') {
-    const dispenser = DISPENSERS[props.disp];
+    const dispenser = dispenserDefinition(props);
     if (!dispenser) return new CANNON.Box(new CANNON.Vec3(0.4, 0.2, 0.4));
+    if (props.asset) {
+      if (dispenser.appearance === 'automatic') {
+        const [hx, hy, hz] = props.asset.item.box || [0.4, 0.2, 0.4];
+        const visible = stackVisible(
+          dispenser.infinite ? 8 : (props.count ?? dispenser.defaultCount ?? 1),
+        );
+        return new CANNON.Box(new CANNON.Vec3(hx, Math.max(hy, visible * hy), hz));
+      }
+      if (dispenser.appearance === 'custom' && Array.isArray(dispenser.box)) {
+        const [hx, hy, hz] = dispenser.box;
+        return colliderShape(dispenser.collider, hx, hy, hz);
+      }
+      const [hx, , hz] = props.asset.item.box || [0.6, 0.4, 0.6];
+      return new CANNON.Cylinder(Math.max(hx, hz, 0.55), Math.max(hx, hz, 0.55), 0.7, 20);
+    }
     if (dispenser.body === 'stack') {
       const box = PROPS[dispenser.item].collider.box;
       const radius = box[0];

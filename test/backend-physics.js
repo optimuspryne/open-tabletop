@@ -103,6 +103,29 @@ test('uploaded props clamp dimensions and retain requested primitive type', () =
   assert.equal(shape.radius, 4);
 });
 
+test('custom dispenser colliders follow automatic, generic, and custom appearances', () => {
+  const asset = {
+    id: '5',
+    item: { model: '/assets/props/token.glb', box: [0.4, 0.1, 0.5] },
+    dispenser: { appearance: 'automatic', infinite: false, defaultCount: 10 },
+  };
+  const automatic = buildCollider('dispenser', { asset, count: 4 }, colliderOptions);
+  assert.ok(automatic instanceof CANNON.Box);
+  assert.deepEqual(
+    [automatic.halfExtents.x, automatic.halfExtents.y, automatic.halfExtents.z],
+    [0.4, 0.4, 0.5],
+  );
+  asset.dispenser = { appearance: 'generic', infinite: true };
+  assert.ok(buildCollider('dispenser', { asset }, colliderOptions) instanceof CANNON.Cylinder);
+  asset.dispenser = {
+    appearance: 'custom',
+    infinite: true,
+    box: [1, 0.5, 1],
+    collider: 'sphere',
+  };
+  assert.ok(buildCollider('dispenser', { asset }, colliderOptions) instanceof CANNON.Sphere);
+});
+
 test('procedural board colliders use half width and depth', () => {
   const shape = buildCollider('board', { w: 20, d: 14 }, colliderOptions);
   assert.ok(shape instanceof CANNON.Box);

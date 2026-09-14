@@ -1,11 +1,11 @@
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
-  DISPENSERS,
   KINDS,
   PROPS,
   gridActive,
   itemMatchesDispenser,
+  dispenserDefinition,
   snapToCell,
 } from '../../shared/pieces.js';
 import { absorbedEntry, cardBackRef, cardCompatibilityKey } from '../deck-state.js';
@@ -91,11 +91,17 @@ export function createPieceLifecycle({
       }
       writeProps(piece, deckProps);
     } else if (type === 'dispenser') {
-      const dispenser = DISPENSERS[props.disp] || {};
+      const dispenser = dispenserDefinition(props) || {};
       piece.count =
-        dispenser.infinite || !dispenser.count
+        dispenser.infinite || (!dispenser.count && !dispenser.defaultCount)
           ? 0
-          : Math.max(1, Math.min(dispenser.count.max, +props.count || dispenser.count.def));
+          : Math.max(
+              1,
+              Math.min(
+                dispenser.count ? dispenser.count.max : 1000,
+                +props.count || (dispenser.count ? dispenser.count.def : dispenser.defaultCount),
+              ),
+            );
       writeProps(piece, props);
     } else {
       writeProps(piece, props);
@@ -196,12 +202,17 @@ export function createPieceLifecycle({
         if (!itemMatchesDispenser(wanted, pieceProps)) continue;
         const dispenserBody = room.bodies.get(dispenserId);
         if (!dispenserBody) continue;
-        const dispenser = DISPENSERS[readProps(dispenserPiece).disp];
+        const dispenserProps = readProps(dispenserPiece);
+        const dispenser = dispenserDefinition(dispenserProps);
         const box =
-          dispenser &&
-          (dispenser.body === 'stack'
-            ? PROPS[dispenser.item].collider.box
-            : dispenser.collider && dispenser.collider.box);
+          dispenserProps.asset && dispenser
+            ? dispenser.appearance === 'custom'
+              ? dispenser.box
+              : dispenserProps.asset.item.box
+            : dispenser &&
+              (dispenser.body === 'stack'
+                ? PROPS[dispenser.item].collider.box
+                : dispenser.collider && dispenser.collider.box);
         const reach = (box ? Math.max(box[0], box[2]) : 0.5) + 0.5;
         const dx = body.position.x - dispenserBody.position.x;
         const dz = body.position.z - dispenserBody.position.z;

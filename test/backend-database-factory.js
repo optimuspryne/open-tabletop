@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { createDatabase } from '../server/database.js';
+
+const execFileAsync = promisify(execFile);
 
 function fakePool(responses = []) {
   const calls = [];
@@ -52,6 +56,29 @@ test('database writes and shutdown delegate to the injected pool', async () => {
 
   await database.close();
   assert.deepEqual(pool.calls.at(-1), { target: 'pool', operation: 'end' });
+});
+
+test('removing a prop dispenser updates only the object metadata', async () => {
+  const pool = fakePool([{ rows: [], rowCount: 1 }]);
+  assert.equal(await createDatabase(pool).removePropDispenser('12'), true);
+  assert.match(pool.calls[0].sql, /UPDATE custom_objects/);
+  assert.match(pool.calls[0].sql, /- 'dispenser'/);
+  assert.deepEqual(pool.calls[0].params, ['12']);
+});
+
+test('production database facade exports the custom-object lookup', async () => {
+  await execFileAsync(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "const db = await import('./db.js'); if (typeof db.getProp !== 'function' || typeof db.removePropDispenser !== 'function') process.exit(2); await db.close();",
+    ],
+    {
+      cwd: new URL('..', import.meta.url),
+      env: { ...process.env, DATABASE_URL: 'postgresql://unused:unused@127.0.0.1:1/unused' },
+    },
+  );
 });
 
 test('asset references use one snapshot across all library categories and complete room records', async () => {

@@ -144,6 +144,9 @@ export function createDatabase(pool) {
   async function listProps({ includePrivate = false } = {}) {
     return library.listProps({ includePrivate });
   }
+  async function getProp(id) {
+    return library.getProp(id);
+  }
   function insertProp(name, props, { ownerId = null, isPublic = false } = {}) {
     const { model, ...rest } = props;
     return pool
@@ -163,6 +166,14 @@ export function createDatabase(pool) {
         model,
         JSON.stringify(rest),
       ])
+      .then((r) => r.rowCount > 0);
+  }
+  function removePropDispenser(id) {
+    return pool
+      .query(
+        "UPDATE custom_objects SET props = COALESCE(props, '{}'::jsonb) - 'dispenser' WHERE id = $1",
+        [id],
+      )
       .then((r) => r.rowCount > 0);
   }
 
@@ -605,8 +616,10 @@ export function createDatabase(pool) {
     insertMat,
     updateMat,
     listProps,
+    getProp,
     insertProp,
     updateProp,
+    removePropDispenser,
     listScenes,
     getScene,
     insertScene,

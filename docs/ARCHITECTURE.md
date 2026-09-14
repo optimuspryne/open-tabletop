@@ -389,9 +389,11 @@ there — dropping a chip on its stack rejoins it — so `absorbIntoDispenser` (
 pieces into the one selected dispenser) and `dispenseFromPieces` (mint a new dispenser from loose
 pieces that have one) are that rule run over a selection instead of waiting for a physical drop. The
 match predicate now lives once in `shared/pieces.js` (`dispensedSpec` / `itemMatchesDispenser` /
-`dispenserForItem`), used by the drop-back path, both new handlers, and the client's eligibility
-check, so the three can't drift. All of it — merge, absorb, mint — is one **Gather** button that
-picks the handler from what's selected, the same way **Combine** unified loose cards and decks.
+`dispenserForItem` / `customDispenserForItem`), used by the drop-back path, both new handlers, and
+the client's eligibility check, so the three can't drift. Built-ins match shape + tint/team; custom
+items require the same server-authored asset ID + color + finish and must carry that asset's authored
+dispenser. All of it — merge, absorb, mint — is one **Gather** button that picks the handler from
+what's selected, the same way **Combine** unified loose cards and decks.
 
 ## Pieces today
 
@@ -438,11 +440,15 @@ The kinds:
   the client rebuilds the deck mesh on any prop change to reflect it. The domino, letter, and Mahjong
   built-in inventories all use the enlarged low-poly pouch and its correspondingly enlarged collider.
 - **dispenser** — a reusable source for an existing prop: finite poker/coin/train stacks
-  shrink as they hand out copies, while Go bowls are unlimited. The project-authored train
-  dispenser uses an authored fixed collider/scale and a named tint slot, and emits the matching
-  project-authored train prop. Left-click drops one
-  beside the source, left-drag adopts the new item into the drag, and dropping a
-  compatible item back onto a dispenser returns it.
+  shrink as they hand out copies, while Go bowls are unlimited. An admin can also attach a
+  dispenser definition to an uploaded custom object, choosing a visible automatic item stack, a
+  generic container, or a second uploaded `.glb`, plus finite/default-count or infinite supply.
+  A runtime custom piece carries the server-authored snapshot
+  `{asset:{id,item,dispenser},color?,finish?}`; that asset identity is what permits regrouping and
+  prevents loose pieces from inventing dispensers. The project-authored train dispenser uses an
+  authored fixed collider/scale and a named tint slot, and emits the matching project-authored
+  train prop. Left-click drops one beside the source, left-drag adopts the new item into the drag,
+  and dropping a compatible item back onto a dispenser returns it.
 - **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
   box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Color comes
   from a picker, a two-color **team** palette, or a per-material **tint**; a
@@ -473,15 +479,18 @@ train piece, and train dispenser models are original project assets.
   real relative sizes and the server never has to load a model. `.glb` files can
   bake a node scale, so sizes are measured _as loaded_.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
-  the table); the client measures the model and sends the collider box with the
-  spawn. Object creation can store a default standard finish, previews it before upload, and later
-  accepts the same synchronized Inspect override as bundled model props.
+  the table); the client measures the model and stores the collider box with the library record.
+  Object creation can store a default standard finish and a tint policy (whole model, preserve
+  authored colors, or one material name discovered from the GLB), previews it before upload, and
+  later accepts the same synchronized Inspect override as bundled model props. Spawning goes
+  through `loadProp`, which reads the record server-side and attaches its immutable asset snapshot
+  rather than trusting copied client props.
 - **`modelRot`** reorients a mis-authored model (e.g. laying a coin flat).
 - **Tint modes** (in the loader): `team` recolors every slot; a color-picker
-  prop recolors all; `tintMaterial:'name'` recolors **one** material slot and
-  de-metals the rest (e.g. a chip body but not its white rim); `ownMaterial`
-  keeps the model's materials. glTF defaults materials to metallic, so tinting
-  swaps in a controlled surface material and de-metals kept slots.
+  prop recolors all; `tintMaterial:'name'` recolors **one** material slot (including Blender-style
+  `.001` duplicates); `tintMaterial:null` preserves every authored material; `ownMaterial`
+  keeps a bundled model's materials. glTF defaults materials to metallic, so tinting
+  swaps eligible slots into a controlled surface material.
 - **Object finishes** share one standard catalogue with numbered dice. A `PROPS` definition chooses
   its default using one boolean flag (`matte`, `satin`, `glossy`, `metallic`/legacy `metal`,
   `brushed`, `pearl`, `translucent`, `glow`, or `marbled`). `objectFinish` gives a valid
@@ -777,6 +786,12 @@ string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 **CRUD-only role** (`tabletop_app`) — it can't run DDL — so a leaked app credential
 can't reshape or drop the schema.
 
+An uploaded object's optional custom-dispenser definition lives inside that existing `props`
+JSONB: `{appearance,infinite,defaultCount?,model?,box?,scale?,modelRot?,collider?,tintMaterial?}`.
+No schema migration is needed. `getProp` is exported through the production database facade so
+`loadProp` can fetch the authoritative record, while `removePropDispenser` removes only the nested
+definition (`props - 'dispenser'`) and preserves the object row and primary `file_url`.
+
 Large uploaded face originals are not sent directly to the renderer. For local random-name card
 and tile references, `public/graphics.js` requests the versioned
 `/asset-textures/v1/<kind>/<file>.webp` route. Low/medium use a maximum-768-pixel WebP under
@@ -840,6 +855,9 @@ table engine. The game table and workshop share one combined **Library** modal
 (built-ins, custom assets, games, and skyboxes), driven by `editor-panel.js` over
 `window.onOttRoom`; **Add to Library** (creation)
 is editor-only and the asset handlers refuse non-admin creation/curation.
+Custom objects with an authored dispenser also appear in the Dispensers tab. Deleting that
+dispenser card invokes the targeted metadata removal rather than generic asset deletion, so the
+object and its primary model remain in the Objects tab.
 See "Accounts, rooms & roles" below.
 
 ## Built-in deck inventories
@@ -898,8 +916,9 @@ hidden inside the lifecycle boundary.
 `server/game/collider-maintenance.js` owns shape replacement for deck and finite-stack count
 changes. `updateDeckCollider(room, id)` uses the same shared card/tile geometry and deck-height
 calculation as rendering; hex decks receive a matching six-sided cylinder. Modeled decks keep the
-fixed collider declared by their deck skin. `updateStackCollider(room, id)` resizes only ordinary
-finite stacks to their capped visible count, leaving modeled and infinite dispensers unchanged.
+fixed collider declared by their deck skin. `updateStackCollider(room, id)` resizes ordinary finite
+stacks and custom automatic stacks to their capped visible count; generic and custom-model bodies
+keep their fixed container collider, while infinite sources keep their authored/display collider.
 Both paths refresh Cannon's bounding radius and mass properties and wake the body after replacing
 its shape. `TableRoom` retains thin forwarding methods for card, lifecycle, and dispenser callers.
 
@@ -1129,7 +1148,8 @@ handler explains the exit and removes its stale reconnection token.
   `drawToHand`, `dealDrag`, `takeCard`, `playCard`, `handToTable`, `reorderHand`, `shuffle`,
   `splitDeck`, `drawInspect`,
   `inspectPlace`, `recolor`, `deckBegin`/`deckAppend`/`deckFinish`,
-  `saveDeck`/`listDecks`/`loadDeck`, `saveProp`/`listProps`,
+  `saveDeck`/`listDecks`/`loadDeck`, `saveProp`/`listProps`/`loadProp`,
+  `removePropDispenser` (admin-only targeted custom-dispenser removal),
   `listBoards`/`saveBoard`/`loadBoard`, `sceneSave`/`sceneLoad`/`listScenes`,
   `saveSkybox`/`listSkyboxes`/`skybox`,
   `assetPublic`/`assetRename`/`assetDelete` (admin curation),

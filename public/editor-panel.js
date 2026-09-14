@@ -16,6 +16,7 @@ import {
   measureBoard,
   measureModel,
   glbFilePreviewURL,
+  modelMaterialNames,
   parseCardFront,
 } from './graphics.js';
 import * as THREE from 'three';
@@ -513,8 +514,7 @@ function spawnCard({
     // every sibling card has a control (UI_Redesign 7c slice 4).
     const inf = document.createElement('span');
     inf.className = 'infiniteNote';
-    inf.dataset.icon = 'infinity';
-    inf.innerHTML = '<span class="lbl">unlimited</span>';
+    inf.innerHTML = '∞ <span class="lbl">unlimited</span>';
     ctrls.append(inf);
   }
 
@@ -758,10 +758,11 @@ function previewEl(kind, it) {
   return wrap;
 }
 
-function renderList(kind, list, sink) {
+function renderList(kind, list, sink, { asDispenser = false } = {}) {
   const ul = (sink || ((k) => byId(LIST_UL[k])))(kind);
   if (!ul) return;
   ul.replaceChildren();
+  if (asDispenser) list = list.filter((it) => it.props && it.props.dispenser);
   if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + color + multi-select for spawnable assets
   if (!list.length) {
     const li = document.createElement('li');
@@ -803,17 +804,26 @@ function renderList(kind, list, sink) {
                 },
               },
               {
-                label: 'Delete',
+                label: asDispenser ? 'Delete dispenser' : 'Delete',
                 icon: 'trash',
                 cls: 'danger',
-                confirm: 'Removes it from every room you host. This cannot be undone.',
+                confirm: asDispenser
+                  ? 'Removes only the dispenser setup. The custom object remains in the library.'
+                  : 'Removes it from every room you host. This cannot be undone.',
                 fn: () => {
                   // the touch sheet confirms inline; the desktop menu still asks
                   if (
                     matchMedia('(pointer: coarse)').matches ||
-                    confirm(`Delete "${it.name}"? This cannot be undone.`)
+                    confirm(
+                      asDispenser
+                        ? `Delete the dispenser for "${it.name}"? The custom object will remain.`
+                        : `Delete "${it.name}"? This cannot be undone.`,
+                    )
                   )
-                    ROOM.send('assetDelete', { kind, id: it.id });
+                    ROOM.send(asDispenser ? 'removePropDispenser' : 'assetDelete', {
+                      ...(asDispenser ? {} : { kind }),
+                      id: it.id,
+                    });
                 },
               },
             ],
@@ -827,17 +837,30 @@ function renderList(kind, list, sink) {
       const extra = kind === 'deck' && it.count != null ? ` \u00b7 ${it.count}` : '';
       ul.appendChild(
         spawnCard({
-          preview: previewEl(kind, it),
+          preview:
+            asDispenser && it.props.dispenser.appearance === 'custom'
+              ? (() => {
+                  const box = document.createElement('div');
+                  box.className = 'libPreview';
+                  fillAsync(box, () => boardPreviewURL(it.props.dispenser.model));
+                  return box;
+                })()
+              : previewEl(kind, it),
           title: it.name + extra,
           badge,
           extraActs: adminActs,
-          color: kind === 'prop' ? 'own' : 'none', // custom objects: default to their own material; decks never tint
-          stand: kind === 'prop' ? true : null,
+          color: kind === 'prop' && it.props.tintMaterial !== null ? 'own' : 'none', // preserve-only models have no tint variant
+          count:
+            asDispenser && !it.props.dispenser.infinite
+              ? { def: it.props.dispenser.defaultCount, max: 1000 }
+              : null,
+          infinite: asDispenser && !!it.props.dispenser.infinite,
+          stand: kind === 'prop' && !asDispenser ? true : null,
           standOn: false, // custom models: a Stand-upright toggle, off by default (free to tumble)
           send:
             kind === 'deck'
               ? () => ROOM.send('loadDeck', { id: it.id })
-              : (cp) => ROOM.send('spawn', { type: 'prop', props: { ...it.props, ...cp } }),
+              : (cp) => ROOM.send('loadProp', { id: it.id, asDispenser, ...cp }),
         }),
       );
     } else {
@@ -883,12 +906,19 @@ const listCache = {};
 window.onLibraryList = (kind, list) => {
   listCache[kind] = list;
   const lm = byId('libraryModal');
-  if (lm && !lm.hidden) renderList(kind, list, (k) => byId('nlc_' + k));
+  if (lm && !lm.hidden) {
+    renderList(kind, list, (k) => byId('nlc_' + k));
+    if (kind === 'prop') renderList(kind, list, () => byId('nlc_dispenser'), { asDispenser: true });
+  }
 };
 window.onLibraryAdmin = () => {
   const lm = byId('libraryModal');
   if (lm && !lm.hidden)
-    for (const k in listCache) renderList(k, listCache[k], (kk) => byId('nlc_' + kk));
+    for (const k in listCache) {
+      renderList(k, listCache[k], (kk) => byId('nlc_' + kk));
+      if (k === 'prop')
+        renderList(k, listCache[k], () => byId('nlc_dispenser'), { asDispenser: true });
+    }
 }; // admin status arrived → re-render
 
 // ---- built-in library (read-only: spawn the bundled pieces) ----------------
@@ -1140,6 +1170,9 @@ function renderLibrary() {
   for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene'])
     // custom kinds → nlc_* lists
     renderList(kind, listCache[kind] || [], (k) => byId('nlc_' + k));
+  renderList('prop', listCache.prop || [], () => byId('nlc_dispenser'), {
+    asDispenser: true,
+  });
 }
 
 // Room Controls → Skybox: a two-tab picker (built-in + custom), apply to the room.
@@ -1834,8 +1867,39 @@ function wireAddMat() {
 function wireAddObject() {
   // saveProp inserts to the library (no spawn); Save + Spawn also drops one on the table.
   const save = (props, name, spawn) => {
-    ROOM.send('saveProp', { name, props, editId: editCtx && editCtx.id });
-    if (spawn) ROOM.send('spawn', { type: 'prop', props });
+    ROOM.send('saveProp', { name, props, editId: editCtx && editCtx.id, spawn });
+  };
+  const tintValue = (select) =>
+    select.value === '__none__' ? null : select.value === '__all__' ? undefined : select.value;
+  const fillMaterials = async (select, source, selected) => {
+    select.replaceChildren();
+    for (const [value, label] of [
+      ['__all__', 'Entire model'],
+      ['__none__', 'Preserve model colors'],
+    ]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      select.append(option);
+    }
+    try {
+      for (const name of source ? await modelMaterialNames(source) : []) {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        select.append(option);
+      }
+    } catch {
+      // The normal model preview/upload error remains the primary error path.
+    }
+    const value = selected === null ? '__none__' : selected || '__all__';
+    if (typeof selected === 'string' && ![...select.options].some((o) => o.value === selected)) {
+      const option = document.createElement('option');
+      option.value = selected;
+      option.textContent = selected;
+      select.append(option);
+    }
+    select.value = [...select.options].some((o) => o.value === value) ? value : '__all__';
   };
   // collider is a single-select toggle group of icon buttons
   const colliderBtns = [...document.querySelectorAll('#adObjColliders .colliderBtn')];
@@ -1856,6 +1920,7 @@ function wireAddObject() {
   const currentFinish = () => finishSelect.value;
   // Orientation: accumulate 90° world-axis rotations, stored as an Euler modelRot on spawn.
   let objQuat = new THREE.Quaternion();
+  let dispQuat = new THREE.Quaternion();
   let objSourceProps = null; // existing library record while Edit/Clone is open
   const objRot = () => {
     const e = new THREE.Euler().setFromQuaternion(objQuat);
@@ -1891,6 +1956,46 @@ function wireAddObject() {
     objQuat.identity();
     refreshObjPreview();
   };
+  const dispRot = () => {
+    const e = new THREE.Euler().setFromQuaternion(dispQuat);
+    return [e.x, e.y, e.z];
+  };
+  const refreshDispPreview = () => {
+    const f = byId('adObjDispGlb').files[0];
+    const source = f || (objSourceProps && objSourceProps.dispenser?.model);
+    if (!source) return;
+    const render = f
+      ? glbFilePreviewURL(f, dispRot())
+      : boardPreviewURL(objSourceProps.dispenser.model);
+    render.then((u) => {
+      byId('adObjDispGlb').parentElement.style.backgroundImage = u ? `url("${u}")` : 'none';
+    });
+  };
+  const rotateDisp = (x, y, z) => {
+    dispQuat.premultiply(
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(x, y, z), Math.PI / 2),
+    );
+    refreshDispPreview();
+  };
+  byId('adObjDispRotX').onclick = () => rotateDisp(1, 0, 0);
+  byId('adObjDispRotY').onclick = () => rotateDisp(0, 1, 0);
+  byId('adObjDispRotZ').onclick = () => rotateDisp(0, 0, 1);
+  byId('adObjDispRotReset').onclick = () => {
+    dispQuat.identity();
+    refreshDispPreview();
+  };
+  const syncDispenserFields = () => {
+    const enabled = byId('adObjDispEnable').classList.contains('on');
+    byId('adObjDispFields').hidden = !enabled;
+    byId('adObjDispCustom').hidden = byId('adObjDispAppearance').value !== 'custom';
+    byId('adObjDispCountRow').hidden = byId('adObjDispSupply').value === 'infinite';
+  };
+  byId('adObjDispEnable').onclick = () => {
+    byId('adObjDispEnable').classList.toggle('on');
+    syncDispenserFields();
+  };
+  byId('adObjDispAppearance').onchange = syncDispenserFields;
+  byId('adObjDispSupply').onchange = syncDispenserFields;
   const clearObj = () => {
     ['adObjName'].forEach((id) => {
       byId(id).value = '';
@@ -1900,8 +2005,19 @@ function wireAddObject() {
     finishSelect.value = '';
     setCollider('box');
     objQuat.identity();
+    dispQuat.identity();
     objSourceProps = null;
     clearSq('adObjGlb');
+    clearSq('adObjDispGlb');
+    fillMaterials(byId('adObjTint'), null);
+    fillMaterials(byId('adObjDispTint'), null);
+    byId('adObjDispEnable').classList.remove('on');
+    byId('adObjDispAppearance').value = 'automatic';
+    byId('adObjDispSupply').value = 'finite';
+    byId('adObjDispCount').value = '20';
+    byId('adObjDispScale').value = '1';
+    byId('adObjDispCollider').value = 'box';
+    syncDispenserFields();
     editCtx = null;
   };
   wireUploadSq(
@@ -1909,10 +2025,21 @@ function wireAddObject() {
     true,
     () => {
       objQuat.identity();
-      objSourceProps = null;
+      const file = byId('adObjGlb').files[0];
+      fillMaterials(byId('adObjTint'), file);
     },
     (file) => glbFilePreviewURL(file, objRot(), currentFinish() || undefined),
   ); // new file → fresh orientation + selected material
+  wireUploadSq(
+    'adObjDispGlb',
+    true,
+    () => {
+      dispQuat.identity();
+      const file = byId('adObjDispGlb').files[0];
+      fillMaterials(byId('adObjDispTint'), file);
+    },
+    (file) => glbFilePreviewURL(file, dispRot()),
+  );
   finishSelect.onchange = refreshObjPreview;
   byId('adObjStand').onclick = () => byId('adObjStand').classList.toggle('on');
   const saveObj = async (spawn) => {
@@ -1931,6 +2058,33 @@ function wireAddObject() {
       if (currentFinish()) props.finish = currentFinish();
       if (collider !== 'box') props.collider = collider;
       if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
+      const tintMaterial = tintValue(byId('adObjTint'));
+      if (tintMaterial !== undefined) props.tintMaterial = tintMaterial;
+      if (byId('adObjDispEnable').classList.contains('on')) {
+        const appearance = byId('adObjDispAppearance').value;
+        const infinite = byId('adObjDispSupply').value === 'infinite';
+        const dispenser = { appearance, infinite };
+        if (!infinite)
+          dispenser.defaultCount = Math.max(1, Math.min(1000, +byId('adObjDispCount').value || 20));
+        if (appearance === 'custom') {
+          const df = byId('adObjDispGlb').files[0];
+          const model = df
+            ? await uploadModel(df)
+            : objSourceProps && objSourceProps.dispenser?.model;
+          if (!model) return alert('Choose a custom dispenser .glb file.');
+          const dscale = +byId('adObjDispScale').value || 1;
+          const drot = dispRot();
+          dispenser.model = model;
+          dispenser.box = await measureModel(model, dscale, drot);
+          dispenser.scale = dscale;
+          if (drot.some((v) => Math.abs(v) > 1e-4)) dispenser.modelRot = drot;
+          const dcollider = byId('adObjDispCollider').value;
+          if (dcollider !== 'box') dispenser.collider = dcollider;
+          const dtint = tintValue(byId('adObjDispTint'));
+          if (dtint !== undefined) dispenser.tintMaterial = dtint;
+        }
+        props.dispenser = dispenser;
+      }
       save(props, name, spawn);
       clearObj();
       closeAddModal();
@@ -1949,12 +2103,28 @@ function wireAddObject() {
     byId('adObjStand').classList.toggle('on', !!p.stand);
     finishSelect.value = p.finish || '';
     setCollider(p.collider || 'box');
+    fillMaterials(byId('adObjTint'), p.model, p.tintMaterial);
     objQuat.identity();
     if (Array.isArray(p.modelRot))
       objQuat.setFromEuler(new THREE.Euler(p.modelRot[0], p.modelRot[1], p.modelRot[2]));
     clearSq('adObjGlb');
+    const d = p.dispenser;
+    byId('adObjDispEnable').classList.toggle('on', !!d);
+    byId('adObjDispAppearance').value = d?.appearance || 'automatic';
+    byId('adObjDispSupply').value = d?.infinite ? 'infinite' : 'finite';
+    byId('adObjDispCount').value = d?.defaultCount || 20;
+    byId('adObjDispScale').value = d?.scale || 1;
+    byId('adObjDispCollider').value = d?.collider || 'box';
+    dispQuat.identity();
+    if (Array.isArray(d?.modelRot))
+      dispQuat.setFromEuler(new THREE.Euler(d.modelRot[0], d.modelRot[1], d.modelRot[2]));
+    clearSq('adObjDispGlb');
+    fillMaterials(byId('adObjDispTint'), d?.model, d?.tintMaterial);
+    syncDispenserFields();
     refreshObjPreview(); // current model + saved material — upload to replace
+    if (d?.model) refreshDispPreview();
   };
+  syncDispenserFields();
 }
 
 // ---- Add-to-Library: dice texture (a seamless image used as a custom die finish) ----------

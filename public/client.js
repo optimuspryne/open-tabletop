@@ -65,7 +65,9 @@ import {
   timerLive,
   MEASURE,
   formatMeasure,
-  DISPENSERS,
+  dispenserDefinition,
+  dispenserVariant,
+  customDispenserForItem,
   dispensedSpec,
   dispenserForItem,
   itemMatchesDispenser,
@@ -2563,9 +2565,12 @@ qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place
       return;
     const isDie = inspect.type === 'die';
     const propModel = inspect.props && (PROPS[inspect.props.shape] || inspect.props.model);
-    const dispSpec = inspect.props && DISPENSERS[inspect.props.disp];
+    const dispSpec = inspect.props && dispenserDefinition(inspect.props);
     const dispenserModel =
-      dispSpec && (dispSpec.model || (PROPS[dispSpec.item] && PROPS[dispSpec.item].model));
+      dispSpec &&
+      (inspect.props.asset ||
+        dispSpec.model ||
+        (PROPS[dispSpec.item] && PROPS[dispSpec.item].model));
     if (!isDie && !propModel && !dispenserModel) return;
     const props = { ...(inspect.props || {}) };
     if (isDie && key === 'matte') {
@@ -2786,9 +2791,12 @@ function inspectMesh(mesh, opts = {}) {
   } // a hand card has no deck to return to
   const piece0 = opts.origId && room.state.pieces.get(opts.origId);
   const props0 = piece0 ? JSON.parse(piece0.props || '{}') : {};
-  const spec = opts.type === 'dispenser' ? DISPENSERS[props0.disp] : null;
+  const spec = opts.type === 'dispenser' ? dispenserDefinition(props0) : null;
   const teamMode = !!(spec && spec.team); // go bowl → black/white toggle
-  const colorMode = opts.type === 'die' || opts.type === 'prop' || !!(spec && spec.color); // freeform picker
+  const colorMode =
+    opts.type === 'die' ||
+    (opts.type === 'prop' && props0.tintMaterial !== null) ||
+    !!(spec && (spec.color || (props0.asset && props0.asset.item.tintMaterial !== null))); // freeform picker
   const colorable = (colorMode || teamMode) && !opts.drawn;
   const row = byId('inspectColorRow');
   if (row) {
@@ -2798,11 +2806,12 @@ function inspectMesh(mesh, opts = {}) {
       if (opts.type === 'dispenser') inspect.props.count = piece0.count; // carry stack height into reclone previews
       const isDie = opts.type === 'die';
       const propSpec = opts.type === 'prop' ? PROPS[inspect.props.shape] : null;
-      const customProp = opts.type === 'prop' && !!inspect.props.model;
+      const customProp =
+        opts.type === 'prop' && !!inspect.props.model && inspect.props.tintMaterial !== null;
       const dispenserModel =
         opts.type === 'dispenser' &&
         spec &&
-        (spec.model || (PROPS[spec.item] && PROPS[spec.item].model));
+        (props0.asset || spec.model || (PROPS[spec.item] && PROPS[spec.item].model));
       const finishSpec =
         opts.type === 'dispenser' && spec && spec.body === 'stack'
           ? PROPS[spec.item]
@@ -2884,10 +2893,22 @@ function swapInspect(props) {
 // Live-tint the inspected mesh (its materials are its own — see enterInspect).
 function tintInspect(color) {
   if (!inspect || !inspect.pivot) return;
+  const props = inspect.props || {};
+  const definition = inspect.type === 'dispenser' ? dispenserDefinition(props) : null;
+  const slot =
+    inspect.type === 'dispenser' && props.asset
+      ? definition?.appearance === 'custom'
+        ? definition.tintMaterial
+        : props.asset.item.tintMaterial
+      : (definition?.tintMaterial ?? props.tintMaterial);
+  if (slot === null) return;
+  const matches = (name) =>
+    typeof slot !== 'string' ||
+    (typeof name === 'string' && (name === slot || name.startsWith(slot + '.')));
   inspect.pivot.traverse((node) => {
     if (node.isMesh && node.material)
       (Array.isArray(node.material) ? node.material : [node.material]).forEach(
-        (m) => m.color && m.color.setHex(color),
+        (m) => matches(m.name) && m.color && m.color.setHex(color),
       );
   });
 }
@@ -4266,7 +4287,7 @@ const hoverIdle = () =>
   !down && !inspect && !measuring && !wbOwning && !overlayMove && !handDrag && !measureDrag;
 function countLabel(piece) {
   if (piece.type === 'deck') return `${piece.count} card${piece.count === 1 ? '' : 's'}`;
-  const d = DISPENSERS[JSON.parse(piece.props || '{}').disp];
+  const d = dispenserDefinition(JSON.parse(piece.props || '{}'));
   if (!d) return null;
   return d.infinite ? '∞' : String(piece.count); // bowl = unlimited
 }
@@ -5311,7 +5332,7 @@ function selColorDesc(piece) {
   } catch {
     props = {};
   }
-  const dispDef = piece.type === 'dispenser' ? DISPENSERS[props.disp] : null;
+  const dispDef = piece.type === 'dispenser' ? dispenserDefinition(props) : null;
   const opt = recolorPalette(piece.type, props, dispDef);
   if (!opt) return null;
   const key = opt.swatches.map((s) => s.hex).join(',');
@@ -5348,9 +5369,9 @@ function dispenserSig(piece) {
   } catch {
     props = {};
   }
-  const def = DISPENSERS[props.disp];
+  const def = dispenserDefinition(props);
   if (!def || def.infinite) return null;
-  return JSON.stringify([props.disp, props.color ?? null, props.team ?? null]);
+  return dispenserVariant(props);
 }
 // Fold the selection through a signature fn: 'ok' | 'mixed' | null.
 function composeState(sigOf) {
@@ -5396,7 +5417,7 @@ function gatherPlan() {
       } catch {
         props = {};
       }
-      if (dispenserForItem(props.shape)) items.push(props);
+      if (dispenserForItem(props.shape) || customDispenserForItem(props)) items.push(props);
     }
   }
   if (disps.length >= 2)
@@ -5418,7 +5439,10 @@ function gatherPlan() {
     return { state: null };
   }
   if (items.length >= 2) {
-    const sig = (p) => JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
+    const sig = (p) =>
+      p.asset
+        ? JSON.stringify([String(p.asset.id), p.color ?? null, p.finish ?? null])
+        : JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
     const s0 = sig(items[0]);
     if (items.some((p) => sig(p) !== s0))
       return { state: 'mixed', msg: 'dispenseFromPieces', okTitle: '' };

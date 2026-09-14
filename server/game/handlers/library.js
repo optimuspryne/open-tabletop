@@ -12,8 +12,10 @@ import {
   saveDicePayload,
   saveMatPayload,
   savePropPayload,
+  loadPropPayload,
   saveSkyboxPayload,
 } from '../../message-validation.js';
+import { customAssetSnapshot } from '../../../shared/pieces.js';
 import { safeMessage } from '../safe-message.js';
 import { ensurePieceCapacity } from '../piece-capacity.js';
 
@@ -187,11 +189,57 @@ export function registerLibraryHandlers(
     if (!room.isAdmin(client)) return;
     const msg = savePropPayload(message, { colliders });
     if (!msg) return;
-    if (msg.editId) await db.updateProp(msg.editId, msg.name, msg.props);
-    else await db.insertProp(msg.name, msg.props, { ownerId: client.auth.userId });
+    const id = msg.editId
+      ? (await db.updateProp(msg.editId, msg.name, msg.props)) && msg.editId
+      : await db.insertProp(msg.name, msg.props, { ownerId: client.auth.userId });
+    if (client.auth?.revoked || !room.isAdmin(client)) return;
+    if (msg.spawn && id && ensurePieceCapacity(room, client)) {
+      const asset = customAssetSnapshot(id, msg.props);
+      room.spawn('prop', randomPosition(), { ...asset.item, asset });
+    }
     await room.sendAssetList(client, 'prop');
   });
   assetMessage('listProps', (client) => room.sendAssetList(client, 'prop'));
+  assetMessage('removePropDispenser', async (client, message) => {
+    if (!room.isAdmin(client)) return;
+    const msg = assetIdPayload(message);
+    if (!msg) return;
+    await db.removePropDispenser(msg.id);
+    if (client.auth?.revoked || !room.isAdmin(client)) return;
+    await room.sendAssetList(client, 'prop');
+  });
+  assetMessage('loadProp', async (client, message) => {
+    if (room.rank(client) < RANK.helper) return;
+    const msg = loadPropPayload(message);
+    if (!msg) return;
+    const prop = await db.getProp(msg.id);
+    if (client.auth?.revoked || room.rank(client) < RANK.helper) return;
+    if (!prop || (!prop.isPublic && !room.isAdmin(client))) return;
+    const asset = customAssetSnapshot(msg.id, prop.props);
+    if (msg.asDispenser && !asset.dispenser) return;
+    if (!ensurePieceCapacity(room, client)) return;
+    if (msg.asDispenser) {
+      const definition = asset.dispenser;
+      const runtime = { asset };
+      const baseColor = asset.item.tintMaterial === null ? undefined : asset.item.color;
+      const color = asset.item.tintMaterial === null ? undefined : (msg.color ?? baseColor);
+      const finish =
+        asset.item.tintMaterial === null ? undefined : (msg.finish ?? asset.item.finish);
+      if (color != null) runtime.color = color;
+      if (finish != null) runtime.finish = finish;
+      if (msg.snap != null) runtime.snap = msg.snap;
+      const count = definition.infinite ? undefined : (msg.count ?? definition.defaultCount);
+      if (count != null) runtime.count = count;
+      room.spawn('dispenser', randomPosition(), runtime);
+      return;
+    }
+    const runtime = { ...asset.item, asset };
+    if (asset.item.tintMaterial !== null && msg.color != null) runtime.color = msg.color;
+    if (asset.item.tintMaterial !== null && msg.finish != null) runtime.finish = msg.finish;
+    if (msg.snap != null) runtime.snap = msg.snap;
+    if (msg.stand != null) runtime.stand = msg.stand;
+    room.spawn('prop', randomPosition(), runtime);
+  });
 
   assetMessage('assetPublic', async (client, message) => {
     if (!room.isAdmin(client)) return;

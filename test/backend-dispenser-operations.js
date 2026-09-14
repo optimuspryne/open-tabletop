@@ -33,6 +33,23 @@ test('dispenser items preserve tint and team identity from shared definitions', 
   assert.equal(dispenserItem(dispenser('missing', 1)), null);
 });
 
+test('custom dispensers emit the snapshotted asset and exact color/finish variant', () => {
+  const asset = {
+    id: '42',
+    item: { model: '/assets/props/gem.glb', box: [0.3, 0.3, 0.3], scale: 1, stand: false },
+    dispenser: { appearance: 'automatic', infinite: false, defaultCount: 12 },
+  };
+  const piece = {
+    type: 'dispenser',
+    count: 12,
+    props: JSON.stringify({ asset, color: 0x123456, finish: 'pearl' }),
+  };
+  assert.deepEqual(dispenserItem(piece), {
+    type: 'prop',
+    props: { ...asset.item, asset, color: 0x123456, finish: 'pearl' },
+  });
+});
+
 test('finite dispensers decrement and resize while inventory remains', () => {
   const room = roomHarness();
   const stack = dispenser('pokerStack', 2);

@@ -11,6 +11,15 @@ const boardRecord = (row) => {
   if (row.file_url) record.model = row.file_url;
   return record;
 };
+const deckPreviewFront = (value) => {
+  if (typeof value !== 'string' || value[0] !== '{') return value || null;
+  try {
+    const entry = JSON.parse(value);
+    return entry && typeof entry.front === 'string' ? entry.front : value;
+  } catch {
+    return value;
+  }
+};
 
 // Dependency-injected library reads keep successful empty/not-found results
 // distinct from query rejection, and make that contract testable without a DB.
@@ -25,7 +34,7 @@ export function createLibraryQueries(query) {
         id: String(row.id),
         name: row.name,
         count: Number(row.count),
-        first: row.first || null,
+        first: deckPreviewFront(row.first),
         back: row.back || 'back',
         isPublic: row.is_public,
         ownerId: idOrNull(row.owner_id),
@@ -134,6 +143,22 @@ export function createLibraryQueries(query) {
         isPublic: row.is_public,
         ownerId: idOrNull(row.owner_id),
       }));
+    },
+
+    async getProp(id) {
+      const { rows } = await query(
+        'SELECT id, name, file_url, props, is_public, owner_id FROM custom_objects WHERE id = $1',
+        [id],
+      );
+      if (!rows[0]) return null;
+      const row = rows[0];
+      return {
+        id: String(row.id),
+        name: row.name,
+        props: { model: row.file_url, ...(row.props || {}) },
+        isPublic: row.is_public,
+        ownerId: idOrNull(row.owner_id),
+      };
     },
 
     async listScenes({ includePrivate = false } = {}) {

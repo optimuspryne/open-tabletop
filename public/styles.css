@@ -1608,6 +1608,12 @@ input[type='range']::-moz-range-thumb {
   flex: 0 1 auto;
   min-width: 0;
 } /* don't stretch — keep the preview beside the button */
+#adObjDispCustom .addRow .stepper {
+  flex: 0 0 auto;
+}
+#adObjDispCustom .addRow .stepper input[type='number'] {
+  width: 6ch;
+}
 .addColorRow {
   display: flex;
   align-items: center;
@@ -3956,7 +3962,8 @@ body.not-gm .gm-only {
   padding: 4px 8px;
 }
 .cardCtrls .qtyStep input[type='number'] {
-  width: 26px;
+  width: 5ch;
+  min-width: 42px;
 }
 
 /* ============================================================================
@@ -4079,7 +4086,8 @@ body.not-gm .gm-only {
   font-size: var(--fs-sm);
 }
 #libraryModal .cardCtrls .qtyStep input[type='number'] {
-  width: 24px;
+  width: 5ch;
+  min-width: 42px;
   font-size: var(--fs-sm);
 }
 #libraryModal .cardCtrls .stepCap {
