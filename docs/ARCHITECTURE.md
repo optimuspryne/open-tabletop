@@ -121,7 +121,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   without starting a room or listener.
 - **`db.js`** — the Postgres connection pool and **every** query: the saved
   library (deck / board / prop / scene / skybox _metadata_; image/model files stay
-  on disk) plus users, rooms, membership, and each room's durable settings. Config
+  on disk) plus users, rooms, membership, and each room's durable settings, including its
+  owner-selected lighting default. Config
   accepts `DATABASE_URL`, `DATABASE_URL_FILE`, or non-secret connection metadata
   paired with `DATABASE_PASSWORD_FILE` (the Compose default).
 - **`migrate.js`** — the startup schema migrator: on boot it applies any
@@ -132,7 +133,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **`public/core.js`** — scene/camera/renderer/controls + the environment map,
-  plus the `CONFIG` (client feel) and `LIGHTING` tunable blocks. Bootstrap table/rim meshes stay
+  plus the `CONFIG` (client feel) and startup `LIGHTING` tunable blocks. `applyLighting` maps the
+  synchronized table-relative direction, colors, intensities, and softness onto the directional
+  and hemisphere lights, easing remote changes over 500 ms. Bootstrap table/rim meshes stay
   hidden until `client.js` applies the joined room's synchronized shape, size, felt, rim, and grid.
   The WebGL canvas has a second readiness gate for the synchronized player-seat camera, and core
   tracks active Three.js texture/model requests through the shared loading manager.
@@ -171,7 +174,7 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   panels, `.field` inputs, `.chip`, `.miniLabel`, `.tile`, `.actions` — over the
   per-page layouts. Restyling a control means editing its one class, not every
   `#id` that uses it).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`011`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`016`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -625,6 +628,11 @@ machinery:
   whiteboard, not synced state.
 - **Felt color** (shared, durable) — the table surface color. GM-set, synced as
   `feltColor`, and persisted per room (the client applies it via `setTableColor`).
+- **Lighting** (shared current state + durable room default) — a compact synchronized object
+  carries preset identity, table-relative azimuth/elevation, directional and ambient colors and
+  intensities, and shadow softness. GMs and owners can preview drafts locally and apply the current
+  setup; only the room owner can replace the durable default or reset it to factory Neutral. A
+  shaded draggable globe exposes direction without coupling it to any player's camera.
 - **Lean in** (client-only) — an Interactions-menu toggle that eases the camera
   toward the orbit target for a closer look. Applied as a per-frame offset that's
   undone before `controls.update()`, so it never corrupts the real orbit distance
@@ -812,16 +820,16 @@ contract. Filesystem writing and database access remain injected; message valida
 curation permissions, and asset-specific load/spawn rules remain visible in the library handlers.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
-notes, table size and shape, rim wood, skybox, and felt color — plus the GM/auto-save **game
+notes, table size and shape, rim wood, skybox, felt color, and owner-selected lighting default — plus the GM/auto-save **game
 snapshot** (see "Scene vs. game snapshot"), in the `rooms` row (via `getRoomState`/
 `saveRoomState`, debounced by the room's `scheduleSave`). So those survive a
 restart or an empty-table reset; live pieces and hands stay in memory during a
 session and reach the row only through that snapshot.
 
-Table shape and rim wood are read directly from `rooms.table_shape` and
-`rooms.table_rim_wood` during room-state loading. Their restoration is independent
-of a scene snapshot, so an unsnapshotted room retains its chosen shape and rim.
-When present, a scene can still apply its own saved table settings afterward.
+Table shape, rim wood, and default lighting are read directly from their `rooms` columns during
+room-state loading. Their restoration is independent of a scene snapshot, so an unsnapshotted
+room retains those choices. When present, a scene can still apply its own saved table settings
+afterward; a scene without lighting leaves the current lighting unchanged.
 
 Because unreferenced `/assets` files pile up as the library and tables churn
 (deleted decks, replaced skyboxes), an admin **orphan cleanup** (`/admin/orphans`)
@@ -1059,11 +1067,13 @@ Two serializers, layered on purpose:
   (transform, and a deck's private card order / tile geometry / box **skin** / a
   face-down card's hidden front ride along so they rebuild faithfully) + the overlays +
   the room **`scale`** (measurement calibration and grid layout), and **no player
-  identity**. Library scenes call this directly — they must stay hands-free. A deck's
+  identity**. Library scenes call this directly — they must stay hands-free. Their save dialog may
+  opt into a normalized **lighting** snapshot; without that option the field is omitted, so loading
+  the scene preserves the room's current illumination. A deck's
   skin is written under the same `deckModel` name the spawn path reads, so it round-trips.
   Finite dispensers also store their authoritative `count` alongside their props, preserving
   the remaining inventory in both portable templates and full-game checkpoints.
-- **`serializeGame`** wraps a scene with the live private layer: each held **hand**
+- **`serializeGame`** always includes current lighting, then wraps the scene with the live private layer: each held **hand**
   and the **turn**. The catch is that both are keyed by ephemeral **`sessionId`**,
   but anything that must survive a reload has to key on the stable
   **`client.auth.userId`** — so `serializeGame` resolves session → account as it
@@ -1163,6 +1173,8 @@ handler explains the exit and removes its stale reconnection token.
   (whiteboard), `chat`/`chatLog` (public chat — send, and request the backlog),
   `score`/`roomNotes`/`table`/`tableColor`/`scaleSet`/`calibrateGrid` (durable room
   settings: scoreboard, notes, table size, felt color, measurement + grid),
+  `lightingApply`/`lightingRestore` (gm+ current-lighting control) and
+  `lightingDefaultSave`/`lightingFactoryReset` (owner-only durable-default control),
   `setStand`/`setSnap`/`snap` (per-piece flags: keep-upright, snap-to-grid, and step
   facing by 45°),
   `trayShow`/`trayScoop`/`trayClear` (your personal dice tray: toggle it out, re-rack, clear),
@@ -1175,7 +1187,7 @@ handler explains the exit and removes its stale reconnection token.
   private hand after a reconnect). (Library load/edit key on a row **`id`** — the
   Postgres primary key — not a filename slug.)
 - **Down (server → client):** synced state (pieces, players, turn, timer, scores,
-  notes, tableX/Z, whiteboard, trays, skybox, felt color, room name, scale/grid,
+  notes, tableX/Z, whiteboard, trays, skybox, felt color, room name, scale/grid, lighting,
   overlays, unclaimed hands, and a pending turn) plus direct messages — `hand` (your private
   cards), `dealt` (adopt a dealt card as the dragged piece), `inspectCard` (a drawn
   front for you alone), `notebook` (your private notes), `showFan` (cards someone
@@ -1200,7 +1212,8 @@ overlays, and the shared timer. `clearGameTable` owns the shared cleanup used by
 Reset, starter changes, and scene loads; Reset separately resets the timer. Cleanup
 invalidates the old checkpoint and schedules persistence, so a later settings save
 cannot preserve the previous game. Scene loading then installs its replacement
-checkpoint. Reset leaves the room's **durable settings** (scoreboard, GM notes, table size, skybox —
+checkpoint. Reset leaves the room's **durable settings** (scoreboard, GM notes, table size, skybox,
+lighting —
 room configuration, not table contents) plus ephemeral notebooks, chat history,
 and the whiteboard drawing; the latter clears only on an explicit `wbClear`.
 New rooms start **empty**

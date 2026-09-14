@@ -15,6 +15,10 @@ const MESSAGE_NAMES = [
   'roomNotes',
   'table',
   'tableColor',
+  'lightingApply',
+  'lightingRestore',
+  'lightingDefaultSave',
+  'lightingFactoryReset',
   'scaleSet',
   'calibrateGrid',
 ];
@@ -27,6 +31,26 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
     savedScene: null,
     notebooks: new Map(),
     nextScoreId: 1,
+    factoryLighting: {
+      preset: 'neutral',
+      azimuth: 130,
+      elevation: 55,
+      keyIntensity: 1,
+      keyColor: '#ffffff',
+      ambientIntensity: 1,
+      ambientColor: '#ffffff',
+      shadowSoftness: 0.55,
+    },
+    defaultLighting: {
+      preset: 'neutral',
+      azimuth: 130,
+      elevation: 55,
+      keyIntensity: 1,
+      keyColor: '#ffffff',
+      ambientIntensity: 1,
+      ambientColor: '#ffffff',
+      shadowSoftness: 0.55,
+    },
     state: {
       timer: { running: false, mode: 'up', base: 0, since: 0, duration: 0 },
       scores: new Map(),
@@ -38,6 +62,16 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
       feltColor: '#006633',
       skybox: '',
       scale: { gridStyle: 'off', cellWorld: 0 },
+      lighting: {
+        preset: 'neutral',
+        azimuth: 130,
+        elevation: 55,
+        keyIntensity: 1,
+        keyColor: '#ffffff',
+        ambientIntensity: 1,
+        ambientColor: '#ffffff',
+        shadowSoftness: 0.55,
+      },
     },
     onMessage(name, handler) {
       handlers.set(name, handler);
@@ -79,6 +113,34 @@ const client = () => ({
   send(type, payload) {
     this.sent.push({ type, payload });
   },
+});
+
+test('GMs apply and restore lighting while only owners can replace the room default', async () => {
+  const chosen = {
+    preset: 'custom',
+    azimuth: 275,
+    elevation: 25,
+    keyIntensity: 1.4,
+    keyColor: '#ff9955',
+    ambientIntensity: 0.4,
+    ambientColor: '#667799',
+    shadowSoftness: 0.2,
+  };
+  const gm = harness({ rank: 2 });
+  await gm.handlers.get('lightingApply')(client(), chosen);
+  assert.deepEqual(gm.room.state.lighting, chosen);
+  await gm.handlers.get('lightingDefaultSave')(client(), chosen);
+  assert.notDeepEqual(gm.room.defaultLighting, chosen);
+  await gm.handlers.get('lightingRestore')(client());
+  assert.deepEqual(gm.room.state.lighting, gm.room.defaultLighting);
+
+  const owner = harness({ rank: 3 });
+  await owner.handlers.get('lightingApply')(client(), chosen);
+  await owner.handlers.get('lightingDefaultSave')(client(), chosen);
+  assert.deepEqual(owner.room.defaultLighting, chosen);
+  assert.ok(owner.events.some(({ name }) => name === 'save'));
+  await owner.handlers.get('lightingFactoryReset')(client());
+  assert.deepEqual(owner.room.state.lighting, owner.room.factoryLighting);
 });
 
 test('room-state module registers the complete settings and persistence family', () => {
@@ -160,6 +222,7 @@ test('durable room serialization includes settings, score rows, scene, and scale
         feltColor: '#006633',
         scene: room.savedScene,
         scale: { gridStyle: 'off', cellWorld: 0 },
+        lighting: room.defaultLighting,
       },
     ],
   ]);

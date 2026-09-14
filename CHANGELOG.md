@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Let room owners and GMs preview and apply synchronized table lighting with a draggable shaded
+  globe, presets, directional and ambient colors/intensities, and shadow softness. Owners can save
+  or factory-reset the durable room default, while library scenes may optionally include lighting.
 - Let admins attach finite or infinite dispensers to uploaded custom objects, choosing an automatic
   visible stack, a generic container, or a second uploaded model. Custom pieces retain a
   server-authored asset snapshot so matching color/finish variants can be gathered and absorbed

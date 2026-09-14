@@ -1,9 +1,11 @@
 import { timerLive } from '../../../shared/pieces.js';
+import { lightingSnapshot } from '../../../shared/lighting.js';
 import { RANK } from '../../permissions.js';
 import {
   boundedString,
   gridCalibrationPayload,
   hexColor,
+  lightingPayload,
   oneField,
   scalePayload,
   scorePayload,
@@ -17,6 +19,14 @@ export function registerRoomStateHandlers(
   { createScoreRow, tableLimits, gridLiftMax, sceneMaxBytes, now = Date.now, logger = console },
 ) {
   const roomMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const rememberCurrentLighting = () => {
+    if (room.savedScene)
+      room.savedScene = {
+        ...room.savedScene,
+        lighting: lightingSnapshot(room.state.lighting),
+      };
+    room.scheduleSave();
+  };
   // Accounts are stable across reconnects and fresh browser joins. The session fallback still
   // supports unauthenticated/editor clients for the lifetime of their connection.
   const notebookKey = (client) =>
@@ -132,6 +142,36 @@ export function registerRoomStateHandlers(
     room.scheduleSave();
   });
 
+  roomMessage('lightingApply', (client, message) => {
+    if (room.rank(client) < RANK.gm) return;
+    const lighting = lightingPayload(message);
+    if (!lighting) return;
+    Object.assign(room.state.lighting, lighting);
+    rememberCurrentLighting();
+  });
+
+  roomMessage('lightingRestore', (client) => {
+    if (room.rank(client) < RANK.gm) return;
+    Object.assign(room.state.lighting, room.defaultLighting);
+    rememberCurrentLighting();
+  });
+
+  roomMessage('lightingDefaultSave', (client, message) => {
+    if (room.rank(client) < RANK.owner) return;
+    const lighting = lightingPayload(message);
+    if (!lighting) return;
+    Object.assign(room.state.lighting, lighting);
+    room.defaultLighting = lightingSnapshot(lighting);
+    rememberCurrentLighting();
+  });
+
+  roomMessage('lightingFactoryReset', (client) => {
+    if (room.rank(client) < RANK.owner) return;
+    room.defaultLighting = lightingSnapshot(room.factoryLighting);
+    Object.assign(room.state.lighting, room.defaultLighting);
+    rememberCurrentLighting();
+  });
+
   roomMessage('scaleSet', (client, message) => {
     if (room.rank(client) < RANK.gm) return;
     const msg = scalePayload(message, { gridLiftMax });
@@ -192,6 +232,7 @@ export async function saveRoomStateNow(room, { db }) {
     feltColor: room.state.feltColor,
     scene: room.savedScene,
     scale: room.scaleSnapshot(),
+    lighting: room.defaultLighting,
   });
   // Capture at request time and serialize writes, including background/final saves.
   const pending = (room._savePromise || Promise.resolve()).then(async () => {

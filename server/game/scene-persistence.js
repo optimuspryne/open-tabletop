@@ -2,6 +2,7 @@ import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
 import { KINDS, MEASURE, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
 import { appendAccountHand } from './hand-state.js';
 import { readProps } from './props-codec.js';
+import { lightingSnapshot, normalizeLighting } from '../../shared/lighting.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -35,7 +36,7 @@ export function clearGameTable(room) {
   room.scheduleSave();
 }
 
-export function serializeScene(room) {
+export function serializeScene(room, { includeLighting = false } = {}) {
   const pieces = [];
   room.state.pieces.forEach((piece, id) => {
     let props = readProps(piece);
@@ -87,6 +88,7 @@ export function serializeScene(room) {
     .map(({ front, back, open, geo }) => ({ front, back, open, geo }));
 
   return {
+    ...(includeLighting ? { lighting: lightingSnapshot(room.state.lighting) } : {}),
     ...(recoveryCards.length ? { recoveryCards } : {}),
     table: {
       x: room.state.tableX,
@@ -102,7 +104,7 @@ export function serializeScene(room) {
 }
 
 export function serializeGame(room, options) {
-  const scene = serializeScene(room, options);
+  const scene = serializeScene(room, { ...options, includeLighting: true });
   const byUser = new Map();
   for (const [sessionId, cards] of room.hands) {
     if (!cards || !cards.length) continue;
@@ -176,6 +178,7 @@ export function applyScene(
   room.buildBounds(tableX, tableZ, shape);
   room.applyScale(scene.scale);
   room.applyTrays(scene.trays);
+  if (scene.lighting) Object.assign(room.state.lighting, normalizeLighting(scene.lighting));
 
   for (const entry of Array.isArray(scene.pieces) ? scene.pieces : []) {
     if (room.state.pieces.size >= maxPieces) break;

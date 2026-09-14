@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–012, meant for a FRESH
+-- This is the flattened end state of migrations 001–016, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -64,6 +64,7 @@ CREATE TABLE rooms (
   felt_color        text        NOT NULL DEFAULT '#2f6b4f', -- durable per-room felt color (GM-set)
   scene             jsonb,      -- GM's saved table snapshot (table size + pieces + transforms); null = none
   scale             jsonb,      -- durable per-room measurement scale { worldPerUnit, unitLabel, roundStep, cellWorld, gridStyle }; null = defaults
+  room_lighting     jsonb       NOT NULL DEFAULT '{"preset":"neutral","azimuth":130,"elevation":55,"keyIntensity":1,"keyColor":"#ffffff","ambientIntensity":1,"ambientColor":"#ffffff","shadowSoftness":0.55}'::jsonb,
   created_at        timestamptz NOT NULL DEFAULT now(),
   deleted_at        timestamptz
 );
@@ -174,7 +175,7 @@ CREATE TABLE custom_mats (
 CREATE INDEX custom_mats_owner_idx ON custom_mats (owner_id);
 
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–013, so record them as
+-- This baseline IS the flattened result of migrations 001–016, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -189,6 +190,7 @@ INSERT INTO schema_migrations (version) VALUES
   ('007_scenes.sql'),        ('008_room_skybox.sql'), ('009_room_state.sql'),
   ('010_room_scale.sql'),       ('011_user_sessions.sql'),
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
-  ('014_room_table_shape.sql'), ('015_room_rim_wood.sql');
+  ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
+  ('016_room_lighting.sql');
 
 COMMIT;

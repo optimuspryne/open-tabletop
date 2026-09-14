@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { TABLE, tableOutline, offsetOutline } from '/shared/pieces.js';
+import { normalizeLighting } from '/shared/lighting.js';
 
 // Core client scene — sets up Three.js: scene, camera, renderer, lights, and the
 // table mesh. This module is visual ONLY; the server owns all physics and this
@@ -215,7 +216,8 @@ scene.environment = pmremGenerator.fromScene(
   0.04,
 ).texture;
 
-scene.add(new THREE.HemisphereLight(0xffffff, 0x222222, LIGHTING.hemi));
+const ambientLight = new THREE.HemisphereLight(0xffffff, 0x222222, LIGHTING.hemi);
+scene.add(ambientLight);
 
 const sun = new THREE.DirectionalLight(0xffffff, LIGHTING.sun);
 sun.position.set(10, 18, 8);
@@ -239,6 +241,68 @@ function fitShadow(hx, hz) {
 }
 fitShadow(TABLE.x, TABLE.z); // initial frustum from the default table size
 scene.add(sun);
+
+let liveLighting = normalizeLighting();
+let lightingAnimation = 0;
+const shortestAngle = (from, to) => {
+  const delta = ((to - from + 540) % 360) - 180;
+  return from + delta;
+};
+const lightingFrame = (value) => {
+  const azimuth = THREE.MathUtils.degToRad(value.azimuth);
+  const elevation = THREE.MathUtils.degToRad(value.elevation);
+  const horizontal = Math.cos(elevation) * 25;
+  sun.position.set(
+    Math.sin(azimuth) * horizontal,
+    Math.sin(elevation) * 25,
+    -Math.cos(azimuth) * horizontal,
+  );
+  sun.intensity = value.keyIntensity;
+  sun.color.set(value.keyColor);
+  ambientLight.intensity = value.ambientIntensity;
+  ambientLight.color.set(value.ambientColor);
+  ambientLight.groundColor.set(value.ambientColor).multiplyScalar(0.16);
+  sun.shadow.radius = 1 + value.shadowSoftness * 7;
+  renderer.shadowMap.needsUpdate = true;
+};
+
+function applyLighting(value, { duration = 500 } = {}) {
+  const target = normalizeLighting(value);
+  cancelAnimationFrame(lightingAnimation);
+  if (!duration) {
+    liveLighting = target;
+    lightingFrame(target);
+    return;
+  }
+  const from = { ...liveLighting };
+  const toAzimuth = shortestAngle(from.azimuth, target.azimuth);
+  const fromKey = new THREE.Color(from.keyColor);
+  const toKey = new THREE.Color(target.keyColor);
+  const fromAmbient = new THREE.Color(from.ambientColor);
+  const toAmbient = new THREE.Color(target.ambientColor);
+  const started = performance.now();
+  const tick = (now) => {
+    const raw = Math.min(1, (now - started) / duration);
+    const t = raw * raw * (3 - 2 * raw);
+    const frame = {
+      preset: target.preset,
+      azimuth: (from.azimuth + (toAzimuth - from.azimuth) * t + 360) % 360,
+      elevation: THREE.MathUtils.lerp(from.elevation, target.elevation, t),
+      keyIntensity: THREE.MathUtils.lerp(from.keyIntensity, target.keyIntensity, t),
+      keyColor: '#' + fromKey.clone().lerp(toKey, t).getHexString(),
+      ambientIntensity: THREE.MathUtils.lerp(from.ambientIntensity, target.ambientIntensity, t),
+      ambientColor: '#' + fromAmbient.clone().lerp(toAmbient, t).getHexString(),
+      shadowSoftness: THREE.MathUtils.lerp(from.shadowSoftness, target.shadowSoftness, t),
+    };
+    lightingFrame(frame);
+    if (raw < 1) lightingAnimation = requestAnimationFrame(tick);
+    else liveLighting = target;
+  };
+  lightingAnimation = requestAnimationFrame(tick);
+}
+
+const getLighting = () => ({ ...liveLighting });
+lightingFrame(liveLighting);
 
 // Apply a shadow config (on/off, size, soft/hard) to the live renderer. Recompiles materials so a
 // soft↔hard or on↔off change takes effect, and re-allocates the map for a new size.
@@ -436,6 +500,8 @@ export {
   resizeTable,
   setTableColor,
   setRimWood,
+  applyLighting,
+  getLighting,
   setTableVisible,
   setSeatCameraReady,
   waitForVisualAssets,

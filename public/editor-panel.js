@@ -2330,10 +2330,31 @@ window.onOttRoom = (room) => {
     wireAddDice();
   }
   const saveScene = byId('sceneSaveBtn');
+  const sceneSaveModal = byId('sceneSaveModal');
+  const closeSceneSave = () => {
+    if (sceneSaveModal) sceneSaveModal.hidden = true;
+  };
   if (saveScene)
     saveScene.onclick = () => {
-      const n = prompt('Save the current table as a scene named:');
-      if (n && n.trim()) room.send('sceneSave', { name: n.trim() });
+      if (!sceneSaveModal) return;
+      byId('sceneSaveName').value = '';
+      byId('sceneIncludeLighting').checked = false;
+      sceneSaveModal.hidden = false;
+      byId('sceneSaveName').focus();
     };
+  byId('sceneSaveClose')?.addEventListener('click', closeSceneSave);
+  byId('sceneSaveCancel')?.addEventListener('click', closeSceneSave);
+  byId('sceneSaveConfirm')?.addEventListener('click', () => {
+    const name = byId('sceneSaveName').value.trim();
+    if (!name) return byId('sceneSaveName').focus();
+    room.send('sceneSave', {
+      name,
+      includeLighting: byId('sceneIncludeLighting').checked,
+    });
+    closeSceneSave();
+  });
+  byId('sceneSaveName')?.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') byId('sceneSaveConfirm').click();
+  });
   refresh(); // prime the lists so the panel is populated on first open
 };

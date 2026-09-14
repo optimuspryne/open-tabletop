@@ -207,6 +207,32 @@ const SCENES = [
       await new Promise((r) => setTimeout(r, 60));`,
   },
   {
+    name: 'lighting-panel',
+    root: '#roomSettingsModal',
+    expect: { selector: '#lightingGlobe, .lightingControl', min: 4 },
+    drive: `
+      const core = await import('/core.js');
+      core.applyLighting({ preset: 'custom', azimuth: 275, elevation: 25,
+        keyIntensity: 1.4, keyColor: '#ff9955', ambientIntensity: 0.4,
+        ambientColor: '#667799', shadowSoftness: 0.2 }, { duration: 0 });
+      if (core.getLighting().azimuth !== 275) throw new Error('lighting preview did not apply');
+      document.getElementById('roomSettingsModal').hidden = false;
+      document.querySelectorAll('#roomSettingsModal .libPane').forEach((pane) =>
+        pane.hidden = pane.dataset.pane !== 'lighting');
+      document.querySelectorAll('#roomSettingsModal .libTab').forEach((tab) =>
+        tab.classList.toggle('on', tab.dataset.tab === 'lighting'));
+      (await import('/icons.js')).applyIcons();`,
+  },
+  {
+    name: 'scene-save-options',
+    root: '#sceneSaveModal',
+    expect: { selector: '#sceneSaveName, #sceneIncludeLighting, #sceneSaveConfirm', min: 3 },
+    drive: `
+      ${BE_ADMIN}
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('sceneSaveBtn').click();`,
+  },
+  {
     name: 'library-swatches-open',
     root: '#libraryModal',
     expect: { selector: '.libCard', min: 40 },

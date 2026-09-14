@@ -74,7 +74,8 @@ function harness({ admin = true, rank = 3 } = {}) {
       calls.push({ name: 'saveDeckById', args });
       return true;
     },
-    serializeScene() {
+    serializeScene(...args) {
+      calls.push({ name: 'serializeScene', args });
       return { pieces: [] };
     },
     applyScene(...args) {
@@ -123,6 +124,17 @@ test('library spawns respect the cap and a blocked deck finish retains its draft
   assert.equal(room.drafts.get(user.sessionId), draft);
   assert.equal(calls.filter(({ name }) => name === 'spawn').length, 0);
   assert.equal(calls.filter(({ name }) => name === 'full').length, 3);
+});
+
+test('scene saving forwards the optional lighting choice into its snapshot', async () => {
+  const { handlers, calls } = harness();
+  await handlers.get('sceneSave')(client(), { name: 'Dusk', includeLighting: true });
+  assert.deepEqual(calls.find(({ name }) => name === 'serializeScene').args, [
+    { includeLighting: true },
+  ]);
+  const insert = calls.find(({ name }) => name === 'insertScene');
+  assert.equal(insert.args[0].name, 'Dusk');
+  assert.deepEqual(insert.args[0].payload, { pieces: [] });
 });
 
 test('concurrent library loads check the final slot after their database reads', async () => {

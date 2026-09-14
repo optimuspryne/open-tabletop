@@ -106,6 +106,7 @@ import { registerRoomFeatureHandlers } from './server/game/handlers/room-feature
 import { readProps } from './server/game/props-codec.js';
 import { bootstrapAdminFromEnvironment } from './server/bootstrap-admin.js';
 import { boundedString, oneField, reorderHandPayload } from './server/message-validation.js';
+import { FACTORY_LIGHTING, normalizeLighting } from './shared/lighting.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
@@ -359,6 +360,8 @@ class TableRoom extends Room {
     const roomRec = this.roomCode ? await db.findRoomByCode(this.roomCode) : null;
     this.roomId = roomRec ? roomRec.id : null; // this live table's persistent room id (for membership)
     this.state.roomName = roomRec ? String(roomRec.name || '').slice(0, 60) : ''; // synced display name for the table header (empty for the code-less editor room)
+    this.factoryLighting = FACTORY_LIGHTING;
+    this.defaultLighting = normalizeLighting();
     if (this.roomId) {
       // restore the durable scoreboard, notes, and table size for this room
       const rs = await db.getRoomState(this.roomId);
@@ -377,6 +380,8 @@ class TableRoom extends Room {
       if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
       this.applyScale(rs.scale); // grid + measurement calibration (seeded defaults survive a null column)
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
+      this.defaultLighting = normalizeLighting(rs.lighting);
+      Object.assign(this.state.lighting, this.defaultLighting);
       this.savedScene = rs.scene || null; // GM's last saved table state — applied below, once physics maps exist
     }
     this.buildBounds(this.state.tableX, this.state.tableZ); // table surface + walls at the current size
@@ -835,8 +840,8 @@ class TableRoom extends Room {
     applyRoomTrays(this, seats);
   }
 
-  serializeScene() {
-    return serializePersistedScene(this, { geoOf });
+  serializeScene(options) {
+    return serializePersistedScene(this, options);
   }
 
   // Full game snapshot = the portable scene PLUS the private per-player layer

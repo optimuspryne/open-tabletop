@@ -1,3 +1,5 @@
+import { FACTORY_LIGHTING, normalizeLighting } from '../shared/lighting.js';
+
 export const roomRow = (row) =>
   row && {
     id: String(row.id),
@@ -26,6 +28,7 @@ export const DEFAULT_ROOM_STATE = Object.freeze({
   feltColor: '#2f6b4f',
   scene: null,
   scale: null,
+  lighting: FACTORY_LIGHTING,
 });
 
 const freshDefaultState = () => ({ ...DEFAULT_ROOM_STATE, scoreboard: [] });
@@ -84,7 +87,7 @@ export function createRoomQueries(query) {
 
     async getRoomState(roomId) {
       const { rows } = await query(
-        'SELECT scoreboard, notes, table_x, table_z, table_shape, table_rim_wood, skybox, felt_color, scene, scale FROM rooms WHERE id = $1',
+        'SELECT scoreboard, notes, table_x, table_z, table_shape, table_rim_wood, skybox, felt_color, scene, scale, room_lighting FROM rooms WHERE id = $1',
         [roomId],
       );
       if (!rows[0]) return freshDefaultState();
@@ -100,6 +103,7 @@ export function createRoomQueries(query) {
         feltColor: row.felt_color || '#2f6b4f',
         scene: row.scene || null,
         scale: row.scale || null,
+        lighting: normalizeLighting(row.room_lighting),
       };
     },
 

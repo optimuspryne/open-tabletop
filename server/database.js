@@ -533,10 +533,22 @@ export function createDatabase(pool) {
   }
   function saveRoomState(
     roomId,
-    { scoreboard, notes, tableX, tableZ, tableShape, rimWood, skybox, feltColor, scene, scale },
+    {
+      scoreboard,
+      notes,
+      tableX,
+      tableZ,
+      tableShape,
+      rimWood,
+      skybox,
+      feltColor,
+      scene,
+      scale,
+      lighting,
+    },
   ) {
     return pool.query(
-      'UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6, felt_color = $7, scene = $8, scale = $9, table_shape = $10, table_rim_wood = $11 WHERE id = $1',
+      'UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6, felt_color = $7, scene = $8, scale = $9, table_shape = $10, table_rim_wood = $11, room_lighting = $12 WHERE id = $1',
       [
         roomId,
         JSON.stringify(scoreboard),
@@ -549,6 +561,7 @@ export function createDatabase(pool) {
         scale ? JSON.stringify(scale) : null,
         tableShape || 'rect',
         rimWood || 'mahogany',
+        JSON.stringify(lighting || {}),
       ],
     );
   }

@@ -1814,7 +1814,8 @@ input[type='range']::-moz-range-thumb {
 #addModal,
 #settingsModal,
 #roomSettingsModal,
-#libraryModal {
+#libraryModal,
+#sceneSaveModal {
   position: fixed;
   inset: 0;
   background: var(--overlay);
@@ -1822,6 +1823,184 @@ input[type='range']::-moz-range-thumb {
   align-items: center;
   justify-content: center;
   z-index: 10;
+}
+
+.lightingBody {
+  max-height: min(68vh, 650px);
+  overflow-y: auto;
+}
+.lightingGlobeStage {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 0 4px;
+  text-align: center;
+}
+.lightingGlobeStage p {
+  margin: 2px 12px 8px;
+  font-size: var(--fs-sm);
+}
+.lightingGlobe {
+  position: relative;
+  width: 190px;
+  height: 160px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  outline: none;
+}
+.lightingGlobe:active {
+  cursor: grabbing;
+}
+.lightingGlobe:focus-visible .lightingSphere {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.lightingSphere {
+  position: absolute;
+  left: 35px;
+  top: 5px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle at var(--light-x, 68%) var(--light-y, 28%),
+      var(--key-color, #fff) 0 3%,
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at var(--light-x, 68%) var(--light-y, 28%),
+      color-mix(in srgb, var(--key-color, #fff) 72%, var(--ambient-color, #fff)) 0,
+      color-mix(in srgb, var(--ambient-color, #fff) 32%, #29313a) 52%,
+      #11161b 100%
+    );
+  box-shadow:
+    inset -12px -14px 25px rgba(0, 0, 0, 0.5),
+    0 10px 24px rgba(0, 0, 0, 0.28);
+  filter: brightness(var(--globe-brightness, 1));
+}
+.lightingSun {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  margin: -7.5px;
+  border-radius: 50%;
+  left: var(--sun-x, 68%);
+  top: var(--sun-y, 28%);
+  background: var(--key-color, #fff);
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 10px var(--key-color, #fff);
+}
+.lightingGround {
+  position: absolute;
+  left: 23px;
+  bottom: 4px;
+  width: 144px;
+  height: 25px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ambient-color, #fff) 18%, #20262d);
+  transform: perspective(90px) rotateX(58deg);
+}
+.lightingShadow {
+  position: absolute;
+  left: 52px;
+  top: 7px;
+  width: 70px;
+  height: 12px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.72);
+  opacity: var(--shadow-opacity, 0.7);
+  filter: blur(var(--shadow-blur, 4px));
+  transform-origin: 10px 50%;
+  transform: rotate(var(--shadow-angle, 130deg));
+}
+.globeNorth,
+.globeEast,
+.globeSouth,
+.globeWest {
+  position: absolute;
+  font-size: 10px;
+  opacity: 0.65;
+}
+.globeNorth {
+  left: 91px;
+  top: -8px;
+}
+.globeEast {
+  right: 16px;
+  top: 61px;
+}
+.globeSouth {
+  left: 91px;
+  top: 126px;
+}
+.globeWest {
+  left: 15px;
+  top: 61px;
+}
+.lightingDirectionGrid {
+  display: grid;
+  grid-template-columns: 1fr 72px 16px 1fr 72px 16px;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0 12px;
+  font-size: var(--fs-sm);
+}
+.lightingDirectionGrid input {
+  min-width: 0;
+  width: 100%;
+}
+.lightingControl {
+  display: grid;
+  grid-template-columns: 116px 1fr 38px;
+  gap: 9px;
+  align-items: center;
+  margin: 9px 0;
+}
+.lightingControl label {
+  font-size: var(--fs-sm);
+}
+.lightingControl output {
+  opacity: 0.65;
+}
+.lightingControl input[type='color'] {
+  width: 38px;
+  height: 30px;
+  padding: 2px;
+}
+.lightingDefaults,
+.lightingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+.lightingActions {
+  justify-content: flex-end;
+}
+.sceneSaveCard {
+  display: grid;
+  gap: 12px;
+  width: min(390px, 92vw);
+}
+.sceneSaveCard .checkRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.sceneSaveCard .checkRow small {
+  display: block;
+  opacity: 0.65;
+}
+
+@media (max-width: 520px) {
+  .lightingDirectionGrid {
+    grid-template-columns: 1fr 78px 16px;
+  }
+  .lightingControl {
+    grid-template-columns: 100px 1fr 38px;
+  }
 }
 .modalCard {
   background: var(--panel-solid);

@@ -213,7 +213,7 @@ scoped against the real tree rather than from memory.
 5. **Spectator mode.** No implementation today. Seat/role machinery already exists
    (`TableRoom.seatOf`, `canManage`, `canSetRole`, `rank`, `isAdmin`), so this is plausibly a
    new role that never gets a seat rather than a new connection path.
-6. **Custom dispensers.** Built-in dispensers exist end to end — `dispenserMesh`
+6. **Custom dispensers.** ✅ **DONE** Built-in dispensers exist end to end — `dispenserMesh`
    (`public/graphics.js:1493–1583`), `TableRoom.dispenserItem` (`server.js:1175`),
    `afterDispense`, and `dispenserDragPayload` validation
    (`server/message-validation.js:264–269`). "Custom" means a user-defined dispenser in the
@@ -250,7 +250,7 @@ scoped against the real tree rather than from memory.
     1. Combine loose like cards into a **new deck** (discard pile → deck).
     2. **Merge two decks** — the inverse of the existing split.
     3. Gather dispenser-type objects into a **single dispenser**.
-11. **More Room Customization.** Ability to adjust lighting (angles, intensity, color) — still open.
+11. **More Room Customization.** ✅ **DONE** Ability to adjust lighting (angles, intensity, color) — still open.
     Skybox resolution: ✅ **shipped 2026-09-01** — a per-viewer off/low/medium/high/ultra control in
     Settings → UI → Graphics (a max equirect / cube-face width, downscaled at load; also disposed
     on switch). Built-ins are 2048, so a genuinely higher 'ultra' needs higher-res source assets.

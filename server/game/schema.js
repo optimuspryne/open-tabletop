@@ -1,5 +1,6 @@
 import { Schema, MapSchema, defineTypes } from '@colyseus/schema';
 import { TABLE } from '../../shared/pieces.js';
+import { FACTORY_LIGHTING } from '../../shared/lighting.js';
 
 // defineTypes() is the no-build-step way to declare schema in plain JS.
 // Clients rebuild this schema automatically via reflection, so declaration order is part of the
@@ -135,6 +136,23 @@ defineTypes(Overlay, {
   ang: 'number',
 });
 
+export class Lighting extends Schema {
+  constructor(value = FACTORY_LIGHTING) {
+    super();
+    Object.assign(this, value);
+  }
+}
+defineTypes(Lighting, {
+  preset: 'string',
+  azimuth: 'number',
+  elevation: 'number',
+  keyIntensity: 'number',
+  keyColor: 'string',
+  ambientIntensity: 'number',
+  ambientColor: 'string',
+  shadowSoftness: 'number',
+});
+
 export class State extends Schema {
   constructor() {
     super();
@@ -157,6 +175,7 @@ export class State extends Schema {
     this.unclaimed = new MapSchema();
     this.scale = new RoomScale();
     this.overlays = new MapSchema();
+    this.lighting = new Lighting();
   }
 }
 defineTypes(State, {
@@ -179,4 +198,5 @@ defineTypes(State, {
   unclaimed: { map: 'string' },
   scale: RoomScale,
   overlays: { map: Overlay },
+  lighting: Lighting,
 });

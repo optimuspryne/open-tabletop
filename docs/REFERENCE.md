@@ -8,6 +8,7 @@ The codebase:
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, table containment, and prop/board registries                                                                                     |
+| `shared/lighting.js`                                                                                   | both    | Factory room lighting, six authored presets, normalization/clamping, and durable snapshot shaping                                                                                               |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
 | `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                           |
@@ -67,6 +68,10 @@ classDiagram
         +DECK_VISUAL / CARD_ROUND / DIE_RADIUS / DIE_SIDES / BOARD_SIZE
         +deckHeight(count) / dieVerts(sides, r) / timerLive(t, now)
     }
+    class SharedLighting["shared/lighting.js"] {
+        +LIGHTING_PRESETS / FACTORY_LIGHTING
+        +normalizeLighting(value) / lightingSnapshot(value)
+    }
     class Server["server.js"] {
         +SIM config
         +saveAsset() / saveImageRef()
@@ -74,7 +79,7 @@ classDiagram
     }
     class SyncedSchema["server/game/schema.js"] {
         +Piece / Player / Timer / ScoreRow
-        +Whiteboard / RoomScale / Overlay
+        +Whiteboard / RoomScale / Overlay / Lighting
         +State root + ordered defineTypes
     }
     class StarterSetup["server/game/starters.js"] {
@@ -131,6 +136,7 @@ classDiagram
     }
     class Core["public/core.js"] {
         +CONFIG / LIGHTING / clamp
+        +applyLighting(value, options) / getLighting()
         scene camera renderer controls
     }
     class Graphics["public/graphics.js"] {
@@ -160,6 +166,7 @@ classDiagram
     }
     Shared <.. Server
     Shared <.. SyncedSchema
+    SharedLighting <.. SyncedSchema
     SyncedSchema <.. Server
     Shared <.. StarterSetup
     StarterSetup <.. Server
@@ -169,7 +176,9 @@ classDiagram
     TrayOperations <.. Server
     Shared <.. Physics
     Shared <.. ScenePersistence
+    SharedLighting <.. ScenePersistence
     Shared <.. Core
+    SharedLighting <.. Core
     Shared <.. Graphics
     Shared <.. Client
     Core <.. Graphics
@@ -624,15 +633,17 @@ already scans. No separate public recovery queue is synchronized to clients.
 
 ### `server/game/scene-persistence.js` — snapshots and restoration
 
-- **`serializeScene(room)`** — creates the portable public snapshot:
+- **`serializeScene(room, {includeLighting = false})`** — creates the portable public snapshot:
   table size, pieces and transforms, exact deck order, protected face-down card
   fronts, finite-dispenser inventory counts, overlays, measurement/grid scale, and
-  enabled tray seats. Inspected cards are appended to the snapshot's deck in reverse inspection order, preserving their
+  enabled tray seats. When requested by the scene-save dialog, it also embeds a normalized
+  lighting snapshot; scenes saved without it deliberately leave the destination room's current
+  lighting unchanged. Inspected cards are appended to the snapshot's deck in reverse inspection order, preserving their
   original draw order and individual backs without mutating live inspections.
   Missing-deck inspections are stored separately as `recoveryCards` entries
   (`front`, `back`, `open`, `geo`), without player identity, so the table piece cap
   does not truncate them.
-- **`serializeGame(room, options)`** — adds private hands and turn ownership,
+- **`serializeGame(room, options)`** — always includes current lighting, then adds private hands and turn ownership,
   converting ephemeral Colyseus session IDs to stable user IDs so returning
   accounts can reclaim them. An existing `pendingTurn` and its public name take
   precedence, preserving the turn while its owner is absent. For an active turn
@@ -650,7 +661,8 @@ already scans. No separate public recovery queue is synchronized to clients.
   separately stops and resets the timer.
 - **`applyScene(room, scene, options)`** — validates and clamps the table,
   pieces, overlays, and private layer before rebuilding through the room's
-  existing spawn/bounds/tray APIs. Restored overlays become table-owned, and
+  existing spawn/bounds/tray APIs. If lighting is present it is normalized and applied; if absent,
+  the current room lighting is preserved. Restored overlays become table-owned, and
   hands/turns are staged for account rebinding. Clears the previous game first and
   replaces `savedScene` with the loaded scene before scheduling persistence.
   A saved positive integer dispenser count replaces the normal spawn default and
@@ -682,11 +694,11 @@ without blocking subsequent saves; a database update affecting no room is also a
 
 ### Schema (synced state)
 
-All eight classes below and their `defineTypes` declarations live in
+All nine classes below and their `defineTypes` declarations live in
 **`server/game/schema.js`**. Declaration order is preserved because it forms the
 reflection/wire contract used by joining and reconnecting browser clients. Each `State`
 constructs fresh `MapSchema` collections and nested singleton schemas. The module imports
-only shared `TABLE` defaults besides `@colyseus/schema`; process-wide
+only shared `TABLE` and factory-lighting defaults besides `@colyseus/schema`; process-wide
 **`Encoder.BUFFER_SIZE = 128 * 1024`** remains explicit in `server.js`, before rooms are
 created, rather than becoming an import side effect of the schema module.
 
@@ -719,6 +731,9 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
   square only — hex is centres-only), `gridColor`, `gridLift`
   (height above the felt). Durable (persisted via `saveRoomState`, **and** carried in the
   scene snapshot — see `serializeScene`).
+- **`Lighting`** — `preset`, table-relative `azimuth`/`elevation`, directional-light
+  `keyIntensity`/`keyColor`, hemisphere-light `ambientIntensity`/`ambientColor`, and
+  `shadowSoftness`. The whole object is synchronized so late joiners receive the current setup.
 - **`Overlay`** — `kind` (`ruler|circle|cone|line`), `color`, `owner` (creator
   `sessionId`, for the remove/clear gate), `x, z` (origin A), `x2, z2` (drag point
   B), `w` (line width), `ang` (cone half-angle); one flat measurement/template
@@ -737,7 +752,7 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
   `{"t":"cube","f":[…6…]}` cubemap descriptor), **`feltColor`** (table surface
   color), **`roomName`** (synced table-header label; empty in the workshop),
   **`scale`** (a `RoomScale`), **`overlays`** (map `id → Overlay`, the
-  measurement/template annotations), and the resumed-game public labels
+  measurement/template annotations), **`lighting`** (a `Lighting`), and the resumed-game public labels
   **`turnPending`** (name of an absent turn-holder) + **`unclaimed`** (map
   `userId → name` of saved hands awaiting their owner — the GM's reassign UI reads
   it; never the cards themselves).
@@ -817,16 +832,16 @@ extracted tray/table recovery → extracted transform publication; with `PERF_LO
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
 deck order + face-down fronts + finite-dispenser counts + overlays + the room **`scale`**
-(measurement + grid),
+(measurement + grid) + optional scene **`lighting`**,
 no player identity), **`serializeGame`** (a scene _plus_ account-keyed `hands` + `turn`,
 session→`userId` resolved), **`applyScene`** (delegates validated restore; rebuild pieces + overlays, **apply the
-scene's `scale`** via `applyScale`, then _stage_ the private layer into
+scene's `scale`** via `applyScale`, apply lighting when the scene carries it, then _stage_ the private layer into
 `pendingHands`/`pendingTurn` + the public `unclaimed`/`turnPending`), **`sendMembers`/`broadcastMembers`** (member-service
 facades that push the member list to current GMs), **`notifyLobby(userId,method)`** (member-service
 facade for waiting-lobby notifications), **`sendAssetList(client,kind)`** (library-service facade;
 private-inclusive for admins), **`swapBoard`**, **`saveStateNow`/`scheduleSave`**
 (persist the room's durable settings — scoreboard, notes, table size, skybox, felt
-color, and the saved game snapshot — now / debounced via `db.saveRoomState`),
+color, owner-selected default lighting, and the saved game snapshot — now / debounced via `db.saveRoomState`),
 **`releasePiece(id,velocity)`** (piece-lifecycle facade), **`closeAndDispose`** (broadcast `roomClosed`, then dispose — invoked by
 `matchMaker.remoteRoomCall`), `onJoin`/`onLeave` (on join, an account reclaims its
 `pendingHands`/`pendingTurn`; on leave, after the reconnect window, a departing
@@ -972,6 +987,12 @@ clamped), **`calibrateGrid`** (fit the grid to the board on the table — square
 `gridStyle`, per-axis cell size from the collider ÷ cell count, and the anchor; hex: keeps
 the hex style/orientation and sets the hex size from board width ÷ hexes-across),
 **`skybox`** (apply a background).
+
+Lighting handlers use strict full-object payloads. **`lightingApply`** (gm+) publishes the current
+setup; **`lightingRestore`** (gm+) restores the room default; **`lightingDefaultSave`** (owner only)
+replaces both the current setup and durable room default; and **`lightingFactoryReset`** (owner only)
+resets both to the factory Neutral setup. The browser previews drafts locally and sends only an
+Apply/default action, while synchronized changes ease into the Three.js lights over 500 ms.
 
 Dispenser handlers: **`dispense`** creates one item beside a dispenser and
 **`dispenseDrag`** creates one already owned by the caller's drag gesture. Finite

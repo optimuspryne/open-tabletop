@@ -71,6 +71,16 @@ function serializationRoom() {
       tableShape: 'rect',
       rimWood: 'mahogany',
       turn: 'live',
+      lighting: {
+        preset: 'warm',
+        azimuth: 125,
+        elevation: 48,
+        keyIntensity: 1.15,
+        keyColor: '#ffd7aa',
+        ambientIntensity: 0.72,
+        ambientColor: '#ffe8cf',
+        shadowSoftness: 0.65,
+      },
     },
     deckCards: new Map([['deck-1', ['/two']]]),
     pendingInspect: new Map([['inspect', { deckId: 'deck-1', front: '/one' }]]),
@@ -119,6 +129,13 @@ test('game serialization converts live sessions and departed hands to stable use
   assert.deepEqual(snapshot.turn, { userId: '42', name: 'Live Player' });
 });
 
+test('library scenes opt into lighting while full game snapshots always retain it', () => {
+  const room = serializationRoom();
+  assert.equal(serializeScene(room).lighting, undefined);
+  assert.deepEqual(serializeScene(room, { includeLighting: true }).lighting, room.state.lighting);
+  assert.deepEqual(serializeGame(room).lighting, room.state.lighting);
+});
+
 function restorationRoom() {
   const calls = [];
   const room = {
@@ -131,6 +148,16 @@ function restorationRoom() {
       tableZ: 0,
       turn: 'old-session',
       turnPending: 'Old',
+      lighting: {
+        preset: 'neutral',
+        azimuth: 130,
+        elevation: 55,
+        keyIntensity: 1,
+        keyColor: '#ffffff',
+        ambientIntensity: 1,
+        ambientColor: '#ffffff',
+        shadowSoftness: 0.55,
+      },
     },
     cardData: new Map(),
     hands: new Map(),

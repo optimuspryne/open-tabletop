@@ -10,6 +10,7 @@ import {
   Whiteboard,
   RoomScale,
   Overlay,
+  Lighting,
   State,
 } from '../server/game/schema.js';
 
@@ -33,6 +34,7 @@ const STATE_FIELDS = [
   'unclaimed',
   'scale',
   'overlays',
+  'lighting',
 ];
 
 test('State preserves synchronized defaults and collection construction', () => {
@@ -95,6 +97,16 @@ test('State preserves synchronized defaults and collection construction', () => 
     hexOrient: 'pointy',
     gridHidden: false,
   });
+  assert.deepEqual(state.lighting.toJSON(), {
+    preset: 'neutral',
+    azimuth: 130,
+    elevation: 55,
+    keyIntensity: 1,
+    keyColor: '#ffffff',
+    ambientIntensity: 1,
+    ambientColor: '#ffffff',
+    shadowSoftness: 0.55,
+  });
 });
 
 test('schema reflection round-trips every synchronized class and preserves field order', () => {
@@ -142,10 +154,13 @@ test('schema reflection round-trips every synchronized class and preserves field
   // Colyseus encodes `number` as float32, so non-binary fractions round slightly on the wire.
   assert.ok(Math.abs(decoded.scale.roundStep - original.scale.roundStep) < 1e-7);
   assert.ok(Math.abs(decoded.scale.gridLift - original.scale.gridLift) < 1e-7);
+  assert.ok(Math.abs(decoded.lighting.shadowSoftness - original.lighting.shadowSoftness) < 1e-7);
   decoded.scale.roundStep = original.scale.roundStep;
   decoded.scale.gridLift = original.scale.gridLift;
+  decoded.lighting.shadowSoftness = original.lighting.shadowSoftness;
   assert.deepEqual(decoded, original);
   assert.ok(state.timer instanceof Timer);
   assert.ok(state.whiteboard instanceof Whiteboard);
   assert.ok(state.scale instanceof RoomScale);
+  assert.ok(state.lighting instanceof Lighting);
 });

@@ -2,18 +2,17 @@ import { RANK } from '../../permissions.js';
 import {
   assetIdPayload,
   assetMutationPayload,
-  boundedString,
   deckAppendPayload,
   deckBeginPayload,
   deckFinishPayload,
   namedIdPayload,
-  oneField,
   saveBoardPayload,
   saveDicePayload,
   saveMatPayload,
   savePropPayload,
   loadPropPayload,
   saveSkyboxPayload,
+  sceneSavePayload,
 } from '../../message-validation.js';
 import { customAssetSnapshot } from '../../../shared/pieces.js';
 import { safeMessage } from '../safe-message.js';
@@ -285,9 +284,9 @@ export function registerLibraryHandlers(
   assetMessage('listScenes', (client) => room.sendAssetList(client, 'scene'));
   assetMessage('sceneSave', async (client, message) => {
     if (!room.isAdmin(client)) return;
-    const parsed = oneField(message, 'name', (name) => boundedString(name, { min: 1, max: 60 }));
+    const parsed = sceneSavePayload(message);
     if (!parsed || !parsed.name.trim()) return;
-    const payload = room.serializeScene();
+    const payload = room.serializeScene({ includeLighting: parsed.includeLighting });
     if (JSON.stringify(payload).length > sceneMaxBytes) {
       client.send('sceneError', {
         message:

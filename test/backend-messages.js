@@ -29,6 +29,7 @@ import {
   propRecordPayload,
   customDispenserRecord,
   loadPropPayload,
+  lightingPayload,
   recolorPayload,
   reorderHandPayload,
   saveBoardPayload,
@@ -36,6 +37,7 @@ import {
   savePropPayload,
   saveSkyboxPayload,
   saveDicePayload,
+  sceneSavePayload,
   scalePayload,
   scorePayload,
   showPayload,
@@ -49,6 +51,28 @@ import { absorbedEntry, takeTopCard } from '../server/deck-state.js';
 test('movement accepts finite numeric coordinates without coercion', () => {
   assert.deepEqual(finitePosition({ x: 1, y: -2.5, z: 0 }), { x: 1, y: -2.5, z: 0 });
   assert.equal(finitePosition({ x: '1', y: 2, z: 3 }), null);
+});
+
+test('lighting and scene-save payloads require bounded complete records', () => {
+  const lighting = {
+    preset: 'custom',
+    azimuth: 270,
+    elevation: 35,
+    keyIntensity: 1.5,
+    keyColor: '#ffaa55',
+    ambientIntensity: 0.4,
+    ambientColor: '#667799',
+    shadowSoftness: 0.25,
+  };
+  assert.deepEqual(lightingPayload(lighting), lighting);
+  assert.equal(lightingPayload({ ...lighting, elevation: 5 }), null);
+  assert.equal(lightingPayload({ ...lighting, keyColor: 'orange' }), null);
+  assert.equal(lightingPayload({ ...lighting, extra: true }), null);
+  assert.deepEqual(sceneSavePayload({ name: 'Dusk', includeLighting: true }), {
+    name: 'Dusk',
+    includeLighting: true,
+  });
+  assert.equal(sceneSavePayload({ name: 'Dusk' }), null);
 });
 
 test('movement rejects malformed and non-finite payloads', () => {

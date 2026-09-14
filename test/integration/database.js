@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 15); // 001–015 (014 = table shape, 015 = rim wood)
+  assert.equal(migrations.rows.length, 16); // 001–016 (014 = table shape, 015 = rim wood, 016 = room lighting)
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -67,6 +67,16 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
     feltColor: '#123456',
     scene: null, // no saved scene to mask missing room-setting columns
     scale: { worldPerUnit: 2 },
+    lighting: {
+      preset: 'sunset',
+      azimuth: 265,
+      elevation: 18,
+      keyIntensity: 1.35,
+      keyColor: '#ff985f',
+      ambientIntensity: 0.5,
+      ambientColor: '#866fa8',
+      shadowSoftness: 0.72,
+    },
   });
   const state = await database.getRoomState(room.id);
   assert.deepEqual(state.scoreboard, [{ id: 's1', label: 'Points', score: 4 }]);
@@ -77,6 +87,9 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
   assert.equal(state.rimWood, 'walnut');
   assert.equal(state.scene, null);
   assert.equal(state.scale.worldPerUnit, 2);
+  assert.equal(state.lighting.preset, 'sunset');
+  assert.equal(state.lighting.keyColor, '#ff985f');
+  assert.equal(state.lighting.ambientIntensity, 0.5);
 });
 
 test('library writes, reads, updates, and deletes use real constraints and JSON', async () => {

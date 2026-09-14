@@ -2,6 +2,7 @@
 // normalizer returns a fresh, trusted value or null; handlers must not continue
 // using the original message after validation.
 import { OBJECT_FINISH_KEYS } from '../shared/pieces.js';
+import { LIGHTING_PRESETS } from '../shared/lighting.js';
 import { isWorldCoordinate } from './game/physics-safety.js';
 export const isPlainObject = (value) => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -51,6 +52,58 @@ export function reorderHandPayload(message) {
 
 const hasOnlyKeys = (value, allowed) => Object.keys(value).every((key) => allowed.has(key));
 const exactObject = (value, keys) => isPlainObject(value) && hasOnlyKeys(value, new Set(keys));
+
+export function lightingPayload(message) {
+  const keys = [
+    'preset',
+    'azimuth',
+    'elevation',
+    'keyIntensity',
+    'keyColor',
+    'ambientIntensity',
+    'ambientColor',
+    'shadowSoftness',
+  ];
+  if (!exactObject(message, keys)) return null;
+  const preset =
+    message.preset === 'custom' || LIGHTING_PRESETS[message.preset] ? message.preset : null;
+  const azimuth = finiteNumber(message.azimuth, { min: 0, max: 360 });
+  const elevation = finiteNumber(message.elevation, { min: 10, max: 90 });
+  const keyIntensity = finiteNumber(message.keyIntensity, { min: 0, max: 2 });
+  const keyColor = hexColor(message.keyColor);
+  const ambientIntensity = finiteNumber(message.ambientIntensity, { min: 0, max: 1 });
+  const ambientColor = hexColor(message.ambientColor);
+  const shadowSoftness = finiteNumber(message.shadowSoftness, { min: 0, max: 1 });
+  if (
+    preset === null ||
+    azimuth === null ||
+    elevation === null ||
+    keyIntensity === null ||
+    keyColor === null ||
+    ambientIntensity === null ||
+    ambientColor === null ||
+    shadowSoftness === null
+  )
+    return null;
+  return {
+    preset,
+    azimuth,
+    elevation,
+    keyIntensity,
+    keyColor,
+    ambientIntensity,
+    ambientColor,
+    shadowSoftness,
+  };
+}
+
+export function sceneSavePayload(message) {
+  if (!exactObject(message, ['name', 'includeLighting'])) return null;
+  const name = boundedString(message.name, { min: 1, max: 60 });
+  return name && typeof message.includeLighting === 'boolean'
+    ? { name, includeLighting: message.includeLighting }
+    : null;
+}
 
 export function oneField(message, key, normalize) {
   if (!exactObject(message, [key])) return null;

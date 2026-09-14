@@ -15,7 +15,9 @@ import {
   setQuality,
   getQuality,
   deviceClass,
+  applyLighting,
 } from './core.js';
+import { LIGHTING_PRESETS, normalizeLighting } from '/shared/lighting.js';
 import { initPerf } from './perf.js';
 import {
   KIND,
@@ -400,6 +402,7 @@ const { Client, getStateCallbacks } = Colyseus;
 const meshes = new Map(); // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
 let room, mySession;
+let syncLightingPanel = () => {};
 let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
 let myRank = 0; // set by applyRole; gates scoreboard (helper+) + room notes (gm+) editing
 const heldTarget = new THREE.Vector3(); // drag target sent to the server
@@ -1102,6 +1105,21 @@ function rebuildGrid() {
       false,
     );
     cb(room.state).listen('feltColor', () => setTableColor(room.state.feltColor), false);
+    const onLighting = () => {
+      applyLighting(room.state.lighting);
+      syncLightingPanel();
+    };
+    for (const field of [
+      'preset',
+      'azimuth',
+      'elevation',
+      'keyIntensity',
+      'keyColor',
+      'ambientIntensity',
+      'ambientColor',
+      'shadowSoftness',
+    ])
+      cb(room.state).lighting.listen(field, onLighting, false);
     cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
     cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
     cb(room.state).listen('turnPending', renderPlayers, false);
@@ -1140,6 +1158,7 @@ function rebuildGrid() {
     rebuildSeats();
   } // initial size (may be default until decode)
   if (room.state.feltColor) setTableColor(room.state.feltColor); // initial felt color
+  if (room.state.lighting) applyLighting(room.state.lighting, { duration: 0 });
   setRimWood(room.state.rimWood || 'mahogany'); // initial rim wood
   rebuildGrid(); // initial grid (inert until a GM sets a cell size + square style)
   syncSkybox(room.state.skybox); // include the room's initial environment in the loading gate
@@ -1177,6 +1196,80 @@ function rebuildGrid() {
   // Room Settings modal (UI_Redesign phase 3): tabbed Table Size & Color + Scale & Grid (Whiteboard + Skybox join in 3b).
   {
     const rs = byId('roomSettingsModal');
+    let lightingDraft = null;
+    let lightingEditing = false;
+    const lightingFields = {
+      azimuth: byId('lightingAzimuth'),
+      elevation: byId('lightingElevation'),
+      keyIntensity: byId('lightingKeyIntensity'),
+      keyColor: byId('lightingKeyColor'),
+      ambientIntensity: byId('lightingAmbientIntensity'),
+      ambientColor: byId('lightingAmbientColor'),
+      shadowSoftness: byId('lightingShadowSoftness'),
+    };
+    const lightingValue = () => normalizeLighting(room.state.lighting);
+    const renderLightingGlobe = () => {
+      if (!lightingDraft) return;
+      const globe = byId('lightingGlobe');
+      const az = (lightingDraft.azimuth * Math.PI) / 180;
+      const el = (lightingDraft.elevation * Math.PI) / 180;
+      const x = 50 + Math.sin(az) * Math.cos(el) * 42;
+      const y = 50 - Math.sin(el) * 42;
+      globe?.style.setProperty('--light-x', `${x}%`);
+      globe?.style.setProperty('--light-y', `${y}%`);
+      globe?.style.setProperty('--sun-x', `${x}%`);
+      globe?.style.setProperty('--sun-y', `${y}%`);
+      globe?.style.setProperty('--key-color', lightingDraft.keyColor);
+      globe?.style.setProperty('--ambient-color', lightingDraft.ambientColor);
+      globe?.style.setProperty(
+        '--globe-brightness',
+        String(0.35 + lightingDraft.ambientIntensity * 0.35 + lightingDraft.keyIntensity * 0.3),
+      );
+      globe?.style.setProperty('--shadow-angle', `${lightingDraft.azimuth + 180}deg`);
+      globe?.style.setProperty('--shadow-blur', `${1 + lightingDraft.shadowSoftness * 8}px`);
+      globe?.style.setProperty(
+        '--shadow-opacity',
+        String(
+          Math.min(0.85, lightingDraft.keyIntensity * (1 - lightingDraft.ambientIntensity * 0.5)),
+        ),
+      );
+      globe?.setAttribute('aria-valuenow', String(Math.round(lightingDraft.azimuth)));
+      globe?.setAttribute(
+        'aria-valuetext',
+        `${Math.round(lightingDraft.azimuth)} degree heading, ${Math.round(lightingDraft.elevation)} degree elevation`,
+      );
+    };
+    const renderLightingControls = () => {
+      if (!lightingDraft || !byId('lightingPreset')) return;
+      byId('lightingPreset').value = lightingDraft.preset;
+      for (const [key, input] of Object.entries(lightingFields))
+        if (input) input.value = lightingDraft[key];
+      byId('lightingKeyOut').textContent = `${Math.round(lightingDraft.keyIntensity * 100)}%`;
+      byId('lightingAmbientOut').textContent =
+        `${Math.round(lightingDraft.ambientIntensity * 100)}%`;
+      byId('lightingShadowOut').textContent =
+        lightingDraft.shadowSoftness < 0.34
+          ? 'Hard'
+          : lightingDraft.shadowSoftness < 0.67
+            ? 'Medium'
+            : 'Soft';
+      renderLightingGlobe();
+    };
+    const previewLighting = (custom = true) => {
+      if (!lightingDraft) return;
+      if (custom) lightingDraft.preset = 'custom';
+      lightingDraft = normalizeLighting(lightingDraft);
+      renderLightingControls();
+      applyLighting(lightingDraft, { duration: 0 });
+    };
+    syncLightingPanel = () => {
+      if (lightingEditing) return;
+      lightingDraft = lightingValue();
+      const isOwner = room.state.players.get(room.sessionId)?.role === 'owner';
+      if (byId('lightingSaveDefault')) byId('lightingSaveDefault').hidden = !isOwner;
+      if (byId('lightingFactory')) byId('lightingFactory').hidden = !isOwner;
+      renderLightingControls();
+    };
     const syncRoomSettings = () => {
       byId('tableW').value = Math.round(room.state.tableX * 2);
       byId('tableD').value = Math.round(room.state.tableZ * 2);
@@ -1192,6 +1285,8 @@ function rebuildGrid() {
         );
         byId('wbAngle').value = Math.round((wb.angle * 180) / Math.PI);
       }
+      lightingEditing = false;
+      syncLightingPanel();
     };
     wire('roomSettings', () => {
       byId('roomGrp').hidden = true;
@@ -1201,7 +1296,11 @@ function rebuildGrid() {
       }
     });
     wire('roomSettingsClose', () => {
-      if (rs) rs.hidden = true;
+      if (rs) {
+        if (lightingEditing) applyLighting(lightingValue(), { duration: 0 });
+        lightingEditing = false;
+        rs.hidden = true;
+      }
     });
     rs?.querySelectorAll('.libTab').forEach(
       (t) =>
@@ -1212,6 +1311,96 @@ function rebuildGrid() {
           });
         }),
     );
+
+    const preset = byId('lightingPreset');
+    if (preset)
+      preset.onchange = () => {
+        if (preset.value === 'custom') {
+          lightingDraft.preset = 'custom';
+          lightingEditing = true;
+          return previewLighting(false);
+        }
+        if (!LIGHTING_PRESETS[preset.value]) return;
+        lightingDraft = { preset: preset.value, ...LIGHTING_PRESETS[preset.value] };
+        lightingEditing = true;
+        previewLighting(false);
+      };
+    for (const [key, input] of Object.entries(lightingFields)) {
+      if (!input) continue;
+      input.oninput = () => {
+        lightingEditing = true;
+        lightingDraft[key] = input.type === 'color' ? input.value : +input.value;
+        previewLighting();
+      };
+    }
+    const globe = byId('lightingGlobe');
+    if (globe) {
+      let drag = null;
+      globe.onpointerdown = (event) => {
+        drag = {
+          x: event.clientX,
+          y: event.clientY,
+          azimuth: lightingDraft.azimuth,
+          elevation: lightingDraft.elevation,
+        };
+        globe.setPointerCapture(event.pointerId);
+      };
+      globe.onpointermove = (event) => {
+        if (!drag) return;
+        lightingEditing = true;
+        lightingDraft.azimuth = (drag.azimuth + (event.clientX - drag.x) * 1.5 + 360) % 360;
+        lightingDraft.elevation = Math.max(
+          10,
+          Math.min(90, drag.elevation - (event.clientY - drag.y) * 0.65),
+        );
+        previewLighting();
+      };
+      globe.onpointerup = globe.onpointercancel = () => (drag = null);
+      globe.onkeydown = (event) => {
+        const fine = event.shiftKey ? 1 : 5;
+        if (event.key === 'ArrowLeft') lightingDraft.azimuth -= fine;
+        else if (event.key === 'ArrowRight') lightingDraft.azimuth += fine;
+        else if (event.key === 'ArrowUp') lightingDraft.elevation += fine;
+        else if (event.key === 'ArrowDown') lightingDraft.elevation -= fine;
+        else return;
+        event.preventDefault();
+        lightingEditing = true;
+        lightingDraft.azimuth = (lightingDraft.azimuth + 360) % 360;
+        lightingDraft.elevation = Math.max(10, Math.min(90, lightingDraft.elevation));
+        previewLighting();
+      };
+      globe.ondblclick = () => {
+        const name = LIGHTING_PRESETS[lightingDraft.preset] ? lightingDraft.preset : 'neutral';
+        lightingDraft = { preset: name, ...LIGHTING_PRESETS[name] };
+        lightingEditing = true;
+        previewLighting(false);
+      };
+    }
+    wire('lightingApply', () => {
+      room.send('lightingApply', normalizeLighting(lightingDraft));
+      lightingEditing = false;
+      if (rs) rs.hidden = true;
+    });
+    wire('lightingCancel', () => {
+      lightingEditing = false;
+      applyLighting(lightingValue(), { duration: 0 });
+      if (rs) rs.hidden = true;
+    });
+    wire('lightingRestore', () => {
+      lightingEditing = false;
+      room.send('lightingRestore');
+    });
+    wire('lightingSaveDefault', () => {
+      const lighting = normalizeLighting(lightingDraft);
+      lightingEditing = false;
+      room.send('lightingDefaultSave', lighting);
+    });
+    wire('lightingFactory', () => {
+      if (confirm('Reset the room default and current lighting to the factory setup?')) {
+        lightingEditing = false;
+        room.send('lightingFactoryReset');
+      }
+    });
   }
   // Whiteboard config now lives in the Room Settings → Whiteboard tab (GM-only); synced on open above.
   // The controls themselves (Show / style / angle) are wired below.
@@ -6140,6 +6329,7 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
 }
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
+wireDialog(byId('sceneSaveModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
 ['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
 
