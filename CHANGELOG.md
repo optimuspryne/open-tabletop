@@ -29,6 +29,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Keep the custom-object library renderable when legacy assets omit optional model metadata.
 - Keep both buttons visible on custom-dispenser scale steppers and give library quantity fields
   enough width to display multi-digit values.
 - Delete custom dispenser configurations from their library view without deleting the associated

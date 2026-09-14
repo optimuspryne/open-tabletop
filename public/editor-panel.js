@@ -772,6 +772,9 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
     return;
   }
   for (const it of list) {
+    // Older custom-object rows (and lightweight component fixtures) may omit props.
+    // Treat them like an object with default metadata instead of failing the whole library render.
+    const props = it.props || {};
     const badge = badgeGroup(
       badgeEl('src cu', 'custom'),
       badgeEl(it.isPublic ? 'pub' : 'priv', it.isPublic ? 'public' : 'private'),
@@ -838,23 +841,23 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
       ul.appendChild(
         spawnCard({
           preview:
-            asDispenser && it.props.dispenser.appearance === 'custom'
+            asDispenser && props.dispenser.appearance === 'custom'
               ? (() => {
                   const box = document.createElement('div');
                   box.className = 'libPreview';
-                  fillAsync(box, () => boardPreviewURL(it.props.dispenser.model));
+                  fillAsync(box, () => boardPreviewURL(props.dispenser.model));
                   return box;
                 })()
               : previewEl(kind, it),
           title: it.name + extra,
           badge,
           extraActs: adminActs,
-          color: kind === 'prop' && it.props.tintMaterial !== null ? 'own' : 'none', // preserve-only models have no tint variant
+          color: kind === 'prop' && props.tintMaterial !== null ? 'own' : 'none', // preserve-only models have no tint variant
           count:
-            asDispenser && !it.props.dispenser.infinite
-              ? { def: it.props.dispenser.defaultCount, max: 1000 }
+            asDispenser && !props.dispenser.infinite
+              ? { def: props.dispenser.defaultCount, max: 1000 }
               : null,
-          infinite: asDispenser && !!it.props.dispenser.infinite,
+          infinite: asDispenser && !!props.dispenser.infinite,
           stand: kind === 'prop' && !asDispenser ? true : null,
           standOn: false, // custom models: a Stand-upright toggle, off by default (free to tumble)
           send:
