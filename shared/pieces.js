@@ -392,10 +392,10 @@ export const BOARDS = {
   go: {
     name: 'Go',
     model: '/models/boards/go_board.glb',
-    modelScale: 2.8,
-    box: [4, 0.1109, 4],
+    modelScale: 2.721088,
+    box: [4,0.1109,4],
     // Nineteen printed lines make eighteen measured gaps; X/Z differ slightly in the source mesh.
-    grid: { cells: 18, anchor: 'cross', cellX: 0.4132, cellZ: 0.4137 },
+    grid: { cells: 18, anchor: 'cross', cellX: 0.41, cellZ: 0.41 },
   },
   wordy: {
     name: 'Wordy McWordface',
