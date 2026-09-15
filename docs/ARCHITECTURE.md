@@ -154,7 +154,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   piece ID. Deck-count synchronization uses it so a props-driven mesh replacement cannot leave
   later count updates attached to a detached mesh.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
-  raw events into device-neutral pointer/command intents consumed by `client.js`.
+  raw events into device-neutral pointer/command intents consumed by `client.js`. Touch holds
+  raise the same secondary-press intent as a mouse context action; a menu action that starts a
+  drag transfers pointer capture to the canvas before its temporary button is removed.
 - **`public/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
   clips pooled per logical name, played fire-and-forget) plus an HTML5 `<audio>`
   **background-music** player. Volumes/mutes/shuffle are per-player, in
@@ -207,7 +209,9 @@ mat still persists its library record even when its optional table spawn is bloc
 Rejection also restores private UI state: a blocked inspected-card placement resends
 the inspection, and a blocked hand play resends the unchanged hand. The browser reveals
 the hand as soon as its drag ends, after hit-testing the drop while the hand is hidden,
-so a rejected play cannot leave the hand bar invisible.
+so a rejected play cannot leave the hand bar invisible. On coarse-pointer layouts the private
+hand uses a horizontally scrolling 72–88 px card strip with a fixed 30 px Inspect control, leaving
+most of every card as an unambiguous play/reorder drag surface.
 
 `server/game/physics-safety.js` bounds drag and hand-placement input coordinates to
 ±10,000 per axis, well outside the playable table. Group destinations are checked again
@@ -314,10 +318,12 @@ server derivative after the tier's required reload.
 ## One action end to end: grab & throw
 
 1. Press + move past a small threshold → client distinguishes _drag_ from
-   _click_, sends `grab {id}`.
+   _click_, sends `grab {id}`. A mouse uses the exact raycast; after an exact touch miss,
+   `pickId` probes an 18 px screen-space ring so a small piece remains selectable beneath a finger.
 2. Server marks the piece `owner: you`.
-3. On move, client raycasts the cursor onto a horizontal plane (its height is
-   the scroll-adjustable grab height) and streams `move {id, x,y,z}`; the servo
+3. On move, client raycasts the pointer onto a horizontal plane (its height is
+   the scroll-adjustable grab height) and streams `move {id, x,y,z}`; touch drags project that ray
+   48 px above the contact point so the held piece and drop location stay visible. The servo
    pushes the body toward it. Meanwhile the client measures a smoothed cursor
    velocity, and a translucent ring previews the straight-down landing spot.
 4. Release → client sends `release {id, v}` with that measured hand speed; the

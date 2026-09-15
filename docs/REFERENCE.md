@@ -1345,7 +1345,8 @@ quiet for a full frame), and
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
-  tag), `ping` (attention-ping ring), `input` (click/drag thresholds), `tex`
+  tag), `ping` (attention-ping ring), `input` (click/drag thresholds plus the touch-only
+  `touchHitPx` selection radius and `touchLeadPx` held-piece offset), `tex`
   (die/board resolution), and `upload` (new card uploads use a 1024×1432 source canvas).
 - **Initial-view readiness.** The renderer canvas starts hidden. The table-appearance and seat-camera
   gates must both open before `revealReadyView()` renders the settled pose once and reveals the canvas.
@@ -1538,7 +1539,10 @@ or count changes, and follow each synchronized/interpolated transform without ch
 ### Interaction (`meshes`, `buffers`, `down`, `inspect`)
 
 - **`setPointer` / `pickId`** — pointer → NDC → raycast → id (walks up to the
-  id-stamped root so nested model meshes pick correctly).
+  id-stamped root so nested model meshes pick correctly). Fine pointers use the exact ray. A touch
+  first tries that exact point, then samples two rings within `CONFIG.input.touchHitPx`; once held,
+  `setPointer` aims `touchLeadPx` above the contact point so the piece and landing spot remain
+  visible instead of sitting beneath the finger.
 - **`pointerdown/move/up` + `endGesture`** — click vs. drag; dispatch grab/deal/
   click via `KIND`; **wheel** raises/lowers a held piece; the drag plane height is
   the scroll-adjustable grab height, and a translucent ring previews the landing.
@@ -1546,7 +1550,9 @@ or count changes, and follow each synchronized/interpolated transform without ch
   ping (`sendPing` → raycast to the table). A grid piece being dragged tracks cell-to-cell
   (`snapXZ` snaps the `move` target sent to the server). A left-drag on a piece that's _in_
   the selection sends `grabGroup`/`moveGroup`/`releaseGroup` (moves the whole clump); a drag on
-  an unselected piece clears the selection first.
+  an unselected piece clears the selection first. For deck/dispenser **Move**, the flat and radial
+  long-press menus call `beginMoveFromMenu` before hiding/removing the pressed control, allowing it
+  to transfer the active pointer capture to the canvas and continue the same gesture.
 - **Multi-select** (local; see below) — `selection` (Set of ids), the `selMode` Select tool,
   the `marquee` box, `selGesture`, and the `selRings` highlight pool. Shift-click toggles a
   piece (`selToggle`); Shift-drag or the Select tool paints a screen-space `#marquee` div and
@@ -1576,7 +1582,9 @@ or count changes, and follow each synchronized/interpolated transform without ch
 The hand's drag `pointerup` handler checks whether the drop hit the table before revealing
 the hand, then removes `hand-dragging` immediately. Cancellation also removes the class;
 visibility does not depend on a subsequent server update. Capacity-rejected plays additionally
-receive the unchanged private `hand` message, rendered through `renderHand`.
+receive the unchanged private `hand` message, rendered through `renderHand`. On a coarse pointer,
+the open tray renders cards at a responsive 72–88 px width and keeps Inspect in a fixed 30 px
+corner control; the strip scrolls horizontally rather than shrinking the primary drag target.
 
 Seat layout, standing avatar/name markers (with a public **"SHOWING n"** badge
 via `makePlayerTexture`, a `graphics.js` builder, when a player is revealing), other players' fanned hands —

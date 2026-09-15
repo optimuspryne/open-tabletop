@@ -5776,7 +5776,17 @@ body.not-gm .gm-only {
     overflow-x: auto;
     max-width: none;
     padding: 4px 0;
-    --card-w: 52px;
+    /* Keep the artwork readable and leave a generous drag surface around the Inspect control.
+       The strip already scrolls horizontally, so showing fewer full cards is the better touch
+       trade-off than shrinking every target beneath a fingertip. */
+    --card-w: calc(clamp(72px, 20vw, 88px) * var(--ui-elements-scale));
+  }
+  #handRow.trayOpen .cardEye {
+    width: 30px;
+    height: 30px;
+    padding: 5px;
+    top: 5px;
+    right: 5px;
   }
   #handRow.trayOpen #dropFlank {
     order: 4;
@@ -5801,7 +5811,7 @@ body.not-gm .gm-only {
   } /* room for words once it is a full-width pair */
   /* The seat button rides above whichever height the tray currently is. */
   body.trayOpen #seatBtn {
-    bottom: calc(var(--inset) + 232px);
+    bottom: calc(var(--inset) + 270px);
   }
 }
 

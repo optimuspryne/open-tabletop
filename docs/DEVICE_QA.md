@@ -53,6 +53,8 @@ Run it per release, or whenever a gesture or a layout branch changes.
 - [ ] Items are correct per kind: Flip / Take (cards), Roll (dice), Draw / Shuffle / Split (decks), Dispense (dispensers)
 - [ ] Every piece also offers Inspect, Stand / lay flat, Snap to grid, Delete
 - [ ] On a deck/dispenser, **Move** — press it and keep dragging carries the whole thing
+- [ ] Small pieces can be acquired near their edge; once held, they sit above the fingertip and
+      remain visible through precise placement
 - [ ] ⚠️ Long-press delay feels right (not so short a drag triggers it, not so long it feels stuck)
 - Feel notes: ______________________________________________
 
@@ -65,6 +67,8 @@ Run it per release, or whenever a gesture or a layout branch changes.
 
 #### Your private hand — *feel: the one/two-finger rule has no on-screen hint*
 - [ ] Hand sits at the bottom, only you see it; others see a face-down fan at your seat
+- [ ] Hand cards are large and horizontally scrollable; dragging the card body does not
+      accidentally activate the corner Inspect control
 - [ ] **One-finger** drag out lands **face-down**
 - [ ] ⚠️ **Two-finger** drag out lands **face-up** — and adding/lifting a finger mid-drag flips it before it lands
 - [ ] Hide hand / Show hand buttons

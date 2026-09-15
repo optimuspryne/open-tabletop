@@ -2602,21 +2602,45 @@ const leanOffset = new THREE.Vector3();
 const LEAN_AMOUNT = 0.35; // fraction of the way to the target at full lean (a knob)
 
 // Convert a pointer event to normalized device coordinates (−1..1) for raycasting.
-const setPointer = (e) => {
+const setPointer = (e, leadPx = 0) => {
   pointer.x = (e.clientX / innerWidth) * 2 - 1;
-  pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+  pointer.y = -((e.clientY - leadPx) / innerHeight) * 2 + 1;
 };
 
 // The piece id under the pointer, if any. Model children live below the
 // id-stamped group, so walk up until we reach the stamped ancestor.
-const pickId = () => {
-  ray.setFromCamera(pointer, camera);
-  let obj = ray.intersectObjects([...meshes.values()].map((m) => m.mesh))[0]?.object;
-  while (obj && obj.userData.id === undefined) obj = obj.parent;
-  const id = obj && obj.userData.id;
-  // Boards are static play surfaces, not pieces. Treat their visible mesh like empty table space
-  // so clicks can orbit/deselect and never capture a futile grab gesture.
-  return id && meshes.get(id)?.type !== 'board' ? id : null;
+const pickId = (radiusPx = 0) => {
+  const roots = [...meshes.values()].map((m) => m.mesh);
+  const pickAt = (p) => {
+    ray.setFromCamera(p, camera);
+    let obj = ray.intersectObjects(roots)[0]?.object;
+    while (obj && obj.userData.id === undefined) obj = obj.parent;
+    const id = obj && obj.userData.id;
+    // Boards are static play surfaces, not pieces. Treat their visible mesh like empty table space
+    // so clicks can orbit/deselect and never capture a futile grab gesture.
+    return id && meshes.get(id)?.type !== 'board' ? id : null;
+  };
+  const direct = pickAt(pointer);
+  if (direct || radiusPx <= 0) return direct;
+
+  // A fingertip hides small pieces and is much less precise than a cursor. Probe a small ring in
+  // screen space only after the exact ray misses; this enlarges the touch target without changing
+  // the rendered model, its collider, or accurate mouse picking. Nearest samples win.
+  const rect = renderer.domElement.getBoundingClientRect();
+  if (!(rect.width > 0 && rect.height > 0)) return null;
+  const sample = new THREE.Vector2();
+  for (const r of [radiusPx * 0.5, radiusPx]) {
+    for (let i = 0; i < 8; i++) {
+      const a = (i * Math.PI) / 4;
+      sample.set(
+        pointer.x + (2 * Math.cos(a) * r) / rect.width,
+        pointer.y - (2 * Math.sin(a) * r) / rect.height,
+      );
+      const id = pickAt(sample);
+      if (id) return id;
+    }
+  }
+  return null;
 };
 
 // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
@@ -3374,7 +3398,7 @@ const onPointerDown = (e) => {
   }
   if (!room || (!e.primary && !e.secondary)) return;
   setPointer(e);
-  const id = pickId();
+  const id = pickId(e.touch ? CONFIG.input.touchHitPx : 0);
   // Multi-select gesture: the additive modifier (Shift) or the Select tool. Click a piece → toggle
   // it in/out; drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
   if (e.primary && ((e.additive && !e.rotate) || selMode)) {
@@ -3532,7 +3556,9 @@ const onPointerMove = (e) => {
     return;
   }
   if (!down) return;
-  setPointer(e);
+  // Once a touch owns a piece, aim the drag ray above the fingertip so the hand never hides the
+  // object or its exact drop point. The initial hit-test still happens directly under the finger.
+  setPointer(e, down.touch ? CONFIG.input.touchLeadPx : 0);
   ray.setFromCamera(pointer, camera);
   ray.ray.intersectPlane(dragPlane, hit);
   hit.y = dragHeight; // XZ from the fixed ground plane; height is the independent lift offset
@@ -6169,7 +6195,7 @@ function pieceMenuItems(id, type) {
 function beginMoveFromMenu(id, e) {
   const entry = meshes.get(id);
   if (!entry || !room) return false;
-  setPointer(e);
+  setPointer(e, e.pointerType === 'touch' ? CONFIG.input.touchLeadPx : 0);
   ray.setFromCamera(pointer, camera);
   if (!ray.ray.intersectPlane(dragPlane, hit)) return false;
   dragHeight = grabHeightFor(e.pointerType === 'touch');
@@ -6256,8 +6282,11 @@ function openPieceMenu(id, p) {
       b.addEventListener('pointerdown', (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        // Transfer capture while the pressed button is still connected. Removing it first makes
+        // Safari lose the active touch after the initial lift, leaving the piece stuck in place.
+        const dragging = press(ev);
         closePieceMenu();
-        if (press(ev)) b.onclick = null; // the drag owns the gesture; don't also arm on click
+        if (dragging) b.onclick = null; // the drag owns the gesture; don't also arm on click
       });
     menu.appendChild(b);
   }
@@ -6938,8 +6967,11 @@ function openRadial(x, y, items) {
       b.addEventListener('pointerdown', (ev) => {
         ev.preventDefault();
         ev.stopPropagation(); // the scrim's pointerdown would otherwise close the radial first
+        // `press` transfers the active pointer to the canvas. Do that before closeRadial removes
+        // this button; WebKit otherwise strands the implicit touch capture on a detached element.
+        const dragging = it.press(ev);
         closeRadial();
-        if (it.press(ev)) b.onclick = null;
+        if (dragging) b.onclick = null;
       });
     el.appendChild(b);
   });

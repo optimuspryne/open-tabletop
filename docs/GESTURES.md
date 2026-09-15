@@ -54,6 +54,10 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 | `U` | Stand upright / lay flat | Radial → **Stand / lay flat** | ✅ |
 | `G` | Toggle snap-to-grid | Radial → **Snap to grid** | ✅ |
 
+Touch selection uses an invisible 18 px screen-space radius after an exact raycast miss, so small
+pieces are easier to acquire without changing their visible size or physics. Once held, a piece
+tracks 48 px above the contact point, keeping both the piece and its intended landing spot visible.
+
 **The piece menu** (`pieceMenuItems`, `client.js:4871`) is now the main verb surface on BOTH
 devices. Touch raises it by long-press (`secondaryPress`, arced around the finger on a sheet
 layout); the mouse raises the same list, as a flat menu at the cursor, by right-clicking any kind
@@ -114,6 +118,10 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 | Drag a hand card in Rearrange mode | Slots it to a new position; order saved to the server | One-finger drag | ✅ |
 | Sort · Rank / Suit (in Rearrange) | Auto-arranges the hand | Tap | ✅ |
 | ▾ / 🃏 Show hand | Hide / restore the hand | Same buttons | ✅ |
+
+On coarse-pointer layouts the open hand uses 72–88 px cards in a horizontally scrolling strip.
+Inspect occupies a fixed 30 px corner control, leaving most of each card as the play/reorder drag
+surface.
 
 The finger-count rule lives in `touchIds` (`client.js:3063`) and is read live during the drag
 (`client.js:3112`), so putting a second finger down mid-drag flips the card face-up before it

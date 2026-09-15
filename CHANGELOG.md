@@ -38,8 +38,13 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Increase generated die and board texture resolution and widen the table camera field of view.
 - Move the default player-seat camera closer to the table, and let the High graphics tier use
   sharper procedural card art plus larger cached derivatives for uploaded card images.
+- Enlarge private-hand cards on touch layouts and reduce the Inspect control's share of each card,
+  providing a much larger surface for dragging cards onto the table.
 
 ### Fixed
+- Make small tabletop pieces easier to grab on touch screens with invisible screen-space hit
+  padding, keep held pieces visible above the fingertip for precise placement, and keep
+  deck/dispenser movement tracking after choosing Move from a long-press menu.
 - Align the Go-board calibration regression test with its authored `0.41 × 0.41` cell spacing.
 - Load saved card-library preview images from standard-size WebP derivatives instead of the full
   uploaded source files.

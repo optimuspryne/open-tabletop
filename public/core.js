@@ -20,7 +20,15 @@ const CONFIG = {
   label: { lift: 0.62, w: 1.15, h: 0.36 }, // floating name tag over a held piece: height above the piece + world size
   ping: { dur: 1200, inner: 0.35, outer: 0.5, lift: 0.05, grow: 2.4 }, // attention ping: lifetime (ms), ring radii, height above surface, expansion factor
   measure: { fill: 0.14, edge: 0.08 }, // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
-  input: { dblMs: 280, clickMs: 300, dragPx: 6, inspectPx: 4, handPx: 8 }, // click/drag feel: double-click window, click-defer (ms), drag thresholds (px)
+  input: {
+    dblMs: 280,
+    clickMs: 300,
+    dragPx: 6,
+    inspectPx: 4,
+    handPx: 8,
+    touchHitPx: 18,
+    touchLeadPx: 48,
+  }, // click/drag feel plus touch-only screen-space grab padding and held-piece lead (px)
   tex: { die: 1024, board: 2048 }, // canvas texture resolutions (higher = sharper, more GPU memory)
   upload: { cardW: 1024, cardH: 1432, board: 1024, type: 'image/png', quality: 1.0 }, // keep enough source detail for the high-quality card derivative; lower tiers still download the smaller display copy
   anim: { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
