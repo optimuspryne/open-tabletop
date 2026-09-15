@@ -108,7 +108,10 @@ export function buildCollider(type, props, { cardColliderThickness }) {
       return new CANNON.Cylinder(radius, radius, Math.max(discHeight, visible * discHeight), 16);
     }
     const [hx, hy, hz] = dispenser.collider.box;
-    return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    return colliderShape(dispenser.collider.type, hx, hy, hz, {
+      sides: dispenser.collider.sides,
+      top: dispenser.collider.top,
+    });
   }
 
   if (type === 'card' || type === 'mat') {

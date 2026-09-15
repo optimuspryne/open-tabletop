@@ -435,7 +435,7 @@ The kinds:
   `back`; no `open` → secret flip).
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
   `count` scales the visible stack (`deckHeight`). A deck inherits its cards' geometry,
-  and can wear a 3D **skin** (`DECK_MODELS`, e.g. a bentwood box or a concealing **pouch**
+  and can wear a 3D **skin** (`DECK_MODELS`, e.g. a concealing **pouch**
   whose sack + drawstring recolor independently via slot `tints`) in place of the stack
   while still working as an ordinary draw pile. An `open` set also carries a runtime-only
   `cover` prop the server keeps pointed at the current top tile's back (repainted on every
@@ -480,7 +480,10 @@ train piece, and train dispenser models are original project assets.
   `modelScale` and a **precomputed collider** in `PROPS` (`{ box, type? }` — a box
   by default, or `sphere`/`cylinder`/`cone`/`flat`), so a set keeps its
   real relative sizes and the server never has to load a model. `.glb` files can
-  bake a node scale, so sizes are measured _as loaded_.
+  bake a node scale, so sizes are measured _as loaded_. `npm run assets:colliders` performs that
+  measurement directly from each registered GLB's accessor bounds and node transforms, applies
+  the registry scaling/rotation rules, and reports copyable collider/scale suggestions. This keeps
+  replacing a bundled model deterministic without pulling a 3D renderer into the server.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
   the table); the client measures the model and stores the collider box with the library record.
   Object creation can store a default standard finish and a tint policy (whole model, preserve
@@ -505,6 +508,19 @@ train piece, and train dispenser models are original project assets.
   tint slots independently. This path covers bundled/uploaded model props, modeled dispensers and
   stacks, and built-in pipped dice; low-end phones retain the dice finish fallbacks. `custom`
   remains procedural-dice-only because it requires a `finishImg` from the dice texture library.
+
+### Collider diagnostics
+
+`shared/collider-spec.js` mirrors the authoritative collider selection as renderer-neutral data.
+It covers primitive props, convex dice, boards, cards/mats, fixed model skins, and the live heights
+of decks and dispensers. The server still owns collision through Cannon; the shared descriptor is
+the inspection contract used by the browser and its focused parity tests.
+
+A GM can enable **Settings → UI → Physics diagnostics → Show colliders** locally. `client.js`
+creates translucent, non-raycastable Three.js shells from those descriptors and keeps them aligned
+with interpolated piece transforms. The overlay is not synchronized, persisted with room state, or
+fed back into physics. Rebuild/count listeners refresh variable shapes, while role changes remove
+the shells immediately for non-GMs.
 
 ### Tiles: one geometry, both sides
 
@@ -875,7 +891,7 @@ double-six dominoes, the letter bag, and the Mahjong wall. `createDeckBuilders`
 receives the existing server shuffle function and returns `buildSimpleDeck`,
 `buildDominoSet`, `buildScrabbleBag`, and `buildMahjongWall`. Each builds a fresh
 inventory, preserves its back/tile/model/snap metadata, and shuffles once. Dominoes, letters, and
-Mahjong select the shared low-poly `bag` skin rather than the bentwood box.
+Mahjong select the shared low-poly `bag` skin.
 
 `TableRoom.spawn` chooses these inventories for standalone set spawning.
 `server/game/starters.js` receives the same builder collection and chooses the
@@ -929,6 +945,9 @@ stacks and custom automatic stacks to their capped visible count; generic and cu
 keep their fixed container collider, while infinite sources keep their authored/display collider.
 Both paths refresh Cannon's bounding radius and mass properties and wake the body after replacing
 its shape. `TableRoom` retains thin forwarding methods for card, lifecycle, and dispenser callers.
+Initial built-in modeled-dispenser construction remains in `server/physics.js`; its authored
+`{box,type?,sides?,top?}` now passes through the same primitive factory as built-in props, so a bowl
+or holder can use a cylinder, sphere, cone, flat base, or default box without a special branch.
 
 On the browser, deck cover changes may replace the rendered mesh while count listeners remain
 registered. `syncDeckMeshHeight(meshes, id, count)` therefore looks up the current mesh for every
@@ -1344,4 +1363,6 @@ caps. Defense in depth, not provably safe.
   a `collider` (`{ box, type? }`, `type` = `sphere`/`cylinder`/`cone`/`flat`)
   (+ optional `team`/`tintMaterial`/`modelRot`/`stand` and one boolean default-finish flag).
 - **A built-in board:** a `BOARDS` entry (`model`, `modelScale`, precomputed
-  `box`).
+  `box`, and optional measured grid spacing). Run `npm run assets:colliders -- <key>` after replacing
+  its GLB to obtain the scale/collider recommendation, then verify the printed playing-area spacing
+  separately when the model has a decorative border.

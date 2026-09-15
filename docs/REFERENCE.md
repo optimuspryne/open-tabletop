@@ -8,6 +8,7 @@ The codebase:
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, table containment, and prop/board registries                                                                                     |
+| `shared/collider-spec.js`                                                                              | both    | Renderer-neutral descriptions of authoritative box, sphere, cylinder/cone, flat, convex-die, deck, board, prop, and dispenser colliders                                                         |
 | `shared/lighting.js`                                                                                   | both    | Factory room lighting, six authored presets, normalization/clamping, and durable snapshot shaping                                                                                               |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
@@ -26,6 +27,7 @@ The codebase:
 | `db.js`                                                                                                | Node    | Production Postgres pool composition and compatibility exports                                                                                                                                   |
 | `server/database.js`                                                                                   | Node    | Pool-injected database factory: library, users, rooms, membership                                                                                                                                |
 | `scripts/test-database.mjs`                                                                            | Node    | Guarded disposable-PostgreSQL lifecycle and integration-test runner                                                                                                                              |
+| `scripts/measure-colliders.mjs`                                                                        | Node    | Dependency-free GLB bounds scanner for validating and retuning registered bundled model scales and collider half-extents                                                                        |
 | `auth.js`                                                                                              | Node    | Password hashing (scrypt) + device-token hashing                                                                                                                                                 |
 | `migrate.js`                                                                                           | Node    | Owner-role startup migration runner for `postgres/NNN_*.sql`                                                                                                                                     |
 | `server/game/handlers/*.js`                                                                            | Node    | Extracted card, movement, piece/group, room-state/persistence, overlay/whiteboard, chat/tray/sharing, membership, and saved-library message handlers                                             |
@@ -71,6 +73,10 @@ classDiagram
     class SharedLighting["shared/lighting.js"] {
         +LIGHTING_PRESETS / FACTORY_LIGHTING
         +normalizeLighting(value) / lightingSnapshot(value)
+    }
+    class SharedColliders["shared/collider-spec.js"] {
+        +primitiveColliderSpec(type, hx, hy, hz, options)
+        +colliderSpec(type, props, options)
     }
     class Server["server.js"] {
         +SIM config
@@ -175,6 +181,8 @@ classDiagram
     Shared <.. TrayOperations
     TrayOperations <.. Server
     Shared <.. Physics
+    Shared <.. SharedColliders
+    SharedColliders <.. Client
     Shared <.. ScenePersistence
     SharedLighting <.. ScenePersistence
     Shared <.. Core
@@ -257,14 +265,18 @@ chess}` each `[color0, color1]`.
   project-authored `trainStack` uses `train_dispenser.glb`, its authored fixed collider and scale,
   and the `c01` tint slot; it dispenses the matching `train_piece` bundled prop. Modeled bodies and
   GLB-backed item stacks accept an instance `finish` override while keeping named tint slots
-  independent. Uploaded custom objects store an optional dispenser spec in their library `props`:
+  independent. A modeled built-in's `collider` accepts the same `{box,type?,sides?,top?}` primitive
+  descriptor as a prop; both server physics and the diagnostic overlay honor it. Uploaded custom
+  objects store an optional dispenser spec in their library `props`:
   `{appearance:'automatic'|'generic'|'custom',infinite,defaultCount?,model?,box?,scale?,modelRot?,collider?,tintMaterial?}`.
   `automatic` repeats the object model, `generic` uses the procedural container, and `custom` loads
   the second authored GLB.
 - **`BOARDS`** `{ key → … }` — built-in boards, either a **model** board
   (`{ name, model, modelScale, box, grid? }`, collider precomputed from
   `worldSize·scale/2`) or a **procedural** board (`{ name, proc, box, grid, paint }`)
-  whose top a `BOARD_PAINTERS` painter draws from data (no `.glb`).
+  whose top a `BOARD_PAINTERS` painter draws from data (no `.glb`). Model-board grids may pin
+  measured `cellX`/`cellZ` spacing when decorative borders make the printed area smaller than the
+  collider footprint.
 - **`BOARD_SIZE`** — target footprint width uploaded `.glb` boards normalize to.
 - **`TILES`** `{ key → { w, h, t, round } }` — named tile geometries (half-extents,
   thickness, corner radius): the standard `card`, plus `domino`, `letter`, `mahjong`.
@@ -277,8 +289,8 @@ chess}` each `[color0, color1]`.
   bundled images under `base`).
 - **`DECK_MODELS`** `{ key → { name, model, modelScale, box, modelRot?, tints?, color?, textColor? } }`
   — 3D deck _skins_ (a bag/box/pouch `.glb` a deck wears instead of the card stack); a deck opts in
-  via `props.model`. Optional `modelRot` `[x,y,z]` reorients the raw model before it is fit/centred
-  (the pouch tips onto a flat face); `tints` `{ slot → propKey }` maps a named material slot to a
+  via `props.model`. Optional `modelRot` `[x,y,z]` reorients the raw model before it is fit/centred;
+  `tints` `{ slot → propKey }` maps a named material slot to a
   deck prop (the pouch: `bag → color`, `string → textColor`), each falling back to the skin's own
   `color`/`textColor` default, so the sack and drawstring recolor independently. The bundled domino,
   letter, and Mahjong inventories use the scaled low-poly `bag` skin and its matching authored collider.
@@ -374,6 +386,17 @@ chess}` each `[color0, color1]`.
   (draw + label heights above the felt), `minDrag` (shortest drag that counts as a
   placement), `maxLen` (clamp on any overlay coordinate/dimension), `coneAngle`
   (default cone half-angle), `lineWidth` (default `line` template width).
+
+---
+
+## `shared/collider-spec.js` — collider descriptions
+
+- **`primitiveColliderSpec(type, hx, hy, hz, options?)`** returns a renderer-neutral box, sphere,
+  cylinder/cone, or flat-offset descriptor matching `server/physics.js`.
+- **`colliderSpec(type, props, {cardColliderThickness,count}?)`** resolves the current authoritative
+  primitive for every piece family, including convex dice and count-derived deck/dispenser heights.
+  The browser diagnostic consumes these descriptions without importing Cannon; server physics
+  remains authoritative.
 
 ---
 
@@ -476,7 +499,9 @@ Private values remain internal; only orphan file metadata is returned by the API
   built-in/uploaded box (by half-height) else procedural `w×d`; props run through
   one shared **`colliderShape`** builder — an uploaded `.glb` passes its measured
   box + a string `props.collider`, a built-in shape passes its authored
-  `collider.box` (× `props.scale`) + `collider.type`. Off-centre shapes (flat)
+  `collider.box` (× `props.scale`) + `collider.type`. Built-in modeled dispensers pass their
+  authored `{box,type?,sides?,top?}` through the same primitive builder; stack and custom-dispenser
+  branches retain their count/appearance-specific shapes. Off-centre shapes (flat)
   return `{shape, offset}`, which `spawn` attaches accordingly.
 - **`colliderShape(type, hx, hy, hz, opts?)`** — the single builder for prop
   colliders: `box` (default) / `sphere` / `cylinder` / `cone` / `flat` (a thin
@@ -1383,6 +1408,11 @@ quiet for a full frame), and
 - **`measureGlb(url)`** → `{ size, center }` (true loaded bounds). **`fitModel(obj,
 {scale|target})`** — centre at origin + scale (fixed or normalize). **`measureModel`**
   / **`measureBoard`** build on `measureGlb` to return collider boxes.
+- **`npm run assets:colliders [-- filter] [--json] [--check] [--tolerance=n]`** runs
+  `scripts/measure-colliders.mjs`, a dependency-free GLB v2 scanner. It applies node hierarchy,
+  matrix/TRS transforms, configured `modelRot`, and each registry's scaling rule, then reports
+  measured/suggested half-extents and board scale. `--check` exits nonzero when an authored axis
+  differs beyond the tolerance.
 - The two model-mesh builders (`propMesh`, `boardMesh`) share a single
   **`loadModelGroup`** loader, and image-backed textures a **`loadImageTexture`**.
 
@@ -1485,6 +1515,11 @@ For non-modeled decks, the synchronized `count` listener calls
 **`syncDeckMeshHeight(meshes, id, count)`** from `public/mesh-state.js`. The helper resolves the
 current mesh from the map on each update, so a preceding props/cover rebuild cannot leave later
 height changes targeting a detached mesh.
+
+The GM-only **Settings → UI → Physics diagnostics → Show colliders** preference is stored locally
+as `ott-show-colliders`. `colliderDebugGroup`, `refreshColliderDebug`, and `syncColliderDebug` turn
+the shared collider descriptors into non-raycastable cyan Three.js shells, refresh them after mesh
+or count changes, and follow each synchronized/interpolated transform without changing room state.
 
 ### Interaction (`meshes`, `buffers`, `down`, `inspect`)
 

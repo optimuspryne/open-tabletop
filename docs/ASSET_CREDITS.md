@@ -17,13 +17,12 @@ requirement is actually met.
 - **Source:** https://opengameart.org/content/chess-set-1
 - **License:** CC0 (public domain). Author's note: "Do what you want with it. Have fun :)"
 
-### Human token — `pieces/misc/token.glb`
-- **Author:** Clint Bellanger — https://opengameart.org/users/clint-bellanger
-- **Source:** https://opengameart.org/content/human-token
-- **License:** CC0 (public domain)
+### Open Tabletop original models
 
-### Open Tabletop original models — `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`,
-`pieces/misc/train_piece.glb`, `pieces/misc/train_dispenser.glb`
+`boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`,
+`pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, `pieces/misc/token.glb`,
+`pieces/misc/train_piece.glb`, and `pieces/misc/train_dispenser.glb`
+
 - **Author/source:** Original models created for Open Tabletop.
 - **License:** Distributed under the repository license.
 
@@ -31,24 +30,6 @@ requirement is actually met.
 - **Author:** mehrasaur — https://opengameart.org/users/mehrasaur
 - **Source:** https://opengameart.org/content/poker-pack
 - **License:** CC0 (public domain)
-
-### Chess / checker board — `boards/checker_chess_board.glb`
-- **Author:** pennomi — https://opengameart.org/users/pennomi
-- **Source:** https://opengameart.org/content/chess-board
-- **Texture:** by Tiziana (https://opengameart.org/node/6988), submitted by bart
-  (https://opengameart.org/users/bart) — dual-licensed LGPL 2.1 / LGPL 3.0 / CC BY 3.0
-- **License:** CC BY 3.0
-
-### Go board — `boards/go_board.glb`
-- **Author:** Jummit — https://opengameart.org/users/jummit
-- **Source:** https://opengameart.org/content/go-board
-- **Attribution notice:** © 2023 Jummit
-- **License:** CC BY 4.0 / GPL 3.0
-
-### Bentwood box (tile-deck skin) — `decks/bentwood_box.glb`
-- **Author:** bobjh — https://opengameart.org/users/bobjh
-- **Source:** https://opengameart.org/content/bentwood-box
-- **License:** CC BY 4.0 (no specific attribution wording requested)
 
 ---
 

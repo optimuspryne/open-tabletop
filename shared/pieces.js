@@ -199,7 +199,7 @@ export const PROPS = {
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.29, 0.015, 0.29], type: 'cylinder' },
+    collider: { box: [0.255, 0.0129, 0.255], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
     modelScale: 0.25,
     ownMaterial: false,
@@ -207,7 +207,7 @@ export const PROPS = {
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.4, 0.045, 0.4] },
+    collider: { box: [0.45, 0.045, 0.45], type: 'cylinder' },
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.18,
     tintMaterial: 'c1',
@@ -215,7 +215,7 @@ export const PROPS = {
   }, // color picker tints only the body; white rim kept
   token: {
     mass: 0.4,
-    collider: { box: [0.17, 0.5, 0.17] },
+    collider: { box: [0.1463, 0.4515, 0.1344], type: 'cylinder' },
     model: '/models/pieces/misc/token.glb',
     modelScale: 0.84,
     stand: true,
@@ -231,7 +231,7 @@ export const PROPS = {
   }, // ~0.4 wide, fits the go board grid
   train_piece: {
     mass: 0.4,
-    collider: { box: [0.08, 0.1, 0.3] },
+    collider: { box: [0.0858, 0.0996, 0.3252] },
     model: '/models/pieces/misc/train_piece.glb',
     modelScale: 0.12,
     ownMaterial: false,
@@ -244,7 +244,7 @@ export const PROPS = {
   // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
   'chess-pawn': {
     mass: 0.4,
-    collider: { box: [0.28, 0.5, 0.24] },
+    collider: { box: [0.2757, 0.5045, 0.2388], type: 'cylinder' },
     model: '/models/pieces/chess/pawn.glb',
     modelScale: 2.124,
     team: 'chess',
@@ -253,7 +253,7 @@ export const PROPS = {
   },
   'chess-rook': {
     mass: 0.5,
-    collider: { box: [0.31, 0.59, 0.27] },
+    collider: { box: [0.3064, 0.5858, 0.2653], type: 'cylinder' },
     model: '/models/pieces/chess/rook.glb',
     modelScale: 2.124,
     team: 'chess',
@@ -262,7 +262,7 @@ export const PROPS = {
   },
   'chess-knight': {
     mass: 0.5,
-    collider: { box: [0.32, 0.54, 0.36] },
+    collider: { box: [0.3186, 0.543, 0.3577], type: 'cylinder' },
     model: '/models/pieces/chess/knight.glb',
     modelScale: 2.124,
     team: 'chess',
@@ -271,7 +271,7 @@ export const PROPS = {
   },
   'chess-bishop': {
     mass: 0.5,
-    collider: { box: [0.31, 0.64, 0.27] },
+    collider: { box: [0.3064, 0.6359, 0.2653], type: 'cylinder' },
     model: '/models/pieces/chess/bishop.glb',
     modelScale: 2.124,
     team: 'chess',
@@ -280,7 +280,7 @@ export const PROPS = {
   },
   'chess-queen': {
     mass: 0.6,
-    collider: { box: [0.31, 0.7, 0.27] },
+    collider: { box: [0.3064, 0.6967, 0.2653], type: 'cylinder' },
     model: '/models/pieces/chess/queen.glb',
     modelScale: 2.124,
     team: 'chess',
@@ -289,7 +289,7 @@ export const PROPS = {
   },
   'chess-king': {
     mass: 0.6,
-    collider: { box: [0.31, 0.7, 0.27] },
+    collider: { box: [0.3064, 0.7001, 0.2653], type: 'cylinder' },
     model: '/models/pieces/chess/king.glb',
     modelScale: 2.124,
     team: 'chess',
@@ -383,16 +383,19 @@ export const BOARDS = {
   chess: {
     name: 'Chess / Checkers',
     model: '/models/boards/checker_chess_board.glb',
-    modelScale: 1,
-    box: [4.0, 0.15, 4.0],
-    grid: { cells: 8, anchor: 'center' },
+    modelScale: 2.962963,
+    box: [4, 0.2015, 4],
+    // The modeled squares stop inside the decorative rim, so use their measured spacing rather
+    // than deriving it from the full collider width.
+    grid: { cells: 8, anchor: 'center', cellX: 0.8741, cellZ: 0.8741 },
   },
   go: {
     name: 'Go',
     model: '/models/boards/go_board.glb',
-    modelScale: 18.9,
-    box: [4.01, 0.14, 4.29],
-    grid: { cells: 18, anchor: 'cross', cellX: 0.42, cellZ: 0.45 },
+    modelScale: 2.8,
+    box: [4, 0.1109, 4],
+    // Nineteen printed lines make eighteen measured gaps; X/Z differ slightly in the source mesh.
+    grid: { cells: 18, anchor: 'cross', cellX: 0.4132, cellZ: 0.4137 },
   },
   wordy: {
     name: 'Wordy McWordface',
@@ -413,12 +416,6 @@ export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their lar
 // is STATIC — it doesn't grow or shrink with the card count (a box looks full whether it holds 5 or 50).
 // A set builder opts a deck in via `deckModel: '<key>'`; add an entry here to offer another skin.
 export const DECK_MODELS = {
-  bentwood: {
-    name: 'Bentwood box',
-    model: '/models/decks/bentwood_box.glb',
-    modelScale: 1.5,
-    box: [0.88, 0.544, 1.3],
-  },
   // A drawstring pouch — a concealing "bag" skin for a shuffled tile set. Two tintable material
   // slots: the sack ('bag' → the deck's `color`) and the drawstring ('string' → `textColor`), each
   // defaulting to the values here when the deck carries no color.
@@ -426,10 +423,7 @@ export const DECK_MODELS = {
     name: 'Pouch',
     model: '/models/decks/bag.glb',
     modelScale: 2,
-    // The pouch is modeled upright (drawstring at +y, flattened along z); tip it a quarter-turn
-    // about X so it rests on a flat face. box = the reoriented collider half-extents (y/z swapped).
-    modelRot: [Math.PI / 2, 0, 0],
-    box: [1, 0.5, 1],
+    box: [0.9786, 0.2273, 0.8828],
     tints: { bag: 'color', string: 'textColor' },
     color: 0x7a5a3a, // sack: warm leather brown
     textColor: 0xc8b06a, // drawstring: tan
@@ -526,7 +520,7 @@ export const DISPENSERS = {
     model: '/models/pieces/misc/train_dispenser.glb',
     modelScale: 1,
     count: { def: 41, max: 100 },
-    collider: { box: [0.7, 0.5, 0.7] },
+    collider: { box: [0.8, 0.3141, 0.8], type: 'cylinder' },
     mass: 0.5,
   },
   // Go bowl: infinite, team-colored (interior stones + fill = black/white; the bowl
@@ -542,7 +536,7 @@ export const DISPENSERS = {
     modelScale: 1,
     tintMaterial: 'c01',
     pearl: true,
-    collider: { box: [0.8, 0.5, 0.8] },
+    collider: { box: [0.8, 0.4359, 0.8], type: 'cylinder' },
     mass: 0.5,
   },
 };

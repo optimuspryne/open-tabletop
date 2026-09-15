@@ -18,7 +18,7 @@ function makeHarness({ maxPieces = 250, grid = { cellX: 2, cellZ: 3 } } = {}) {
         back: 'domino-back',
         cards: ['double-six'],
         tile: 'domino',
-        deckModel: 'bentwood',
+        deckModel: 'bag',
       };
     },
     buildScrabbleBag() {
@@ -171,7 +171,7 @@ test('tile starters select the extracted builder, clear stale grids, and preserv
       back: 'domino-back',
       cards: ['double-six'],
       tile: 'domino',
-      deckModel: 'bentwood',
+      deckModel: 'bag',
     },
     undefined,
   ]);

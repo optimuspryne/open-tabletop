@@ -326,8 +326,8 @@ CI runs the same integration tests against its own PostgreSQL 16 service.
 - **Cards, decks, hands, and tiles.** Standard decks support optional jokers,
   private hands, face-down cards, shuffle/split, draw-to-hand, deal-and-drag,
   draw-to-inspect, hold-to-show, and whole-hand drops. The same hidden-information
-  system powers dominoes, letter tiles, mahjong, custom card geometry, and deck
-  skins such as the bentwood box. See the detailed section below.
+  system powers dominoes, letter tiles, mahjong, custom card geometry, and modeled
+  deck skins such as the recolorable pouch. See the detailed section below.
 - **Boards, grids, and measurement.** Built-in modeled Chess/Checkers and Go
   boards plus the procedural Wordy board can calibrate the room grid. GMs control
   cell size, offsets, snap anchor, square/hex style, visibility, color, height,

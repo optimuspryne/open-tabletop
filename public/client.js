@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import {
   CONFIG,
   clamp,
@@ -49,6 +50,7 @@ import {
 import { reanchorOffset } from './drag.js';
 import { clickRoute } from './clicks.js';
 import { syncDeckMeshHeight } from './mesh-state.js';
+import { colliderSpec } from '/shared/collider-spec.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -401,11 +403,113 @@ addEventListener('unhandledrejection', (e) =>
 const { Client, getStateCallbacks } = Colyseus;
 const meshes = new Map(); // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
+const colliderDebugs = new Map(); // id -> local-only THREE.Group matching the server collider
 let room, mySession;
 let syncLightingPanel = () => {};
 let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
 let myRank = 0; // set by applyRole; gates scoreboard (helper+) + room notes (gm+) editing
 const heldTarget = new THREE.Vector3(); // drag target sent to the server
+const COLLIDER_DEBUG_KEY = 'ott-show-colliders';
+let colliderDebugWanted = localStorage.getItem(COLLIDER_DEBUG_KEY) === '1';
+
+const disposeColliderDebug = (group) => {
+  if (!group) return;
+  scene.remove(group);
+  group.traverse((node) => {
+    if (node.geometry) node.geometry.dispose();
+    const materials = Array.isArray(node.material) ? node.material : [node.material];
+    materials.forEach((material) => material?.dispose());
+  });
+};
+
+function colliderDebugGroup(spec) {
+  let geometry;
+  if (spec.type === 'sphere') geometry = new THREE.SphereGeometry(spec.radius, 20, 12);
+  else if (spec.type === 'cylinder')
+    geometry = new THREE.CylinderGeometry(
+      spec.radiusTop,
+      spec.radiusBottom,
+      spec.height,
+      spec.sides,
+    );
+  else if (spec.type === 'convex')
+    geometry = new ConvexGeometry(spec.vertices.map((v) => new THREE.Vector3(...v)));
+  else {
+    const [hx, hy, hz] = spec.halfExtents;
+    geometry = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
+  }
+
+  const group = new THREE.Group();
+  const fill = new THREE.Mesh(
+    geometry,
+    new THREE.MeshBasicMaterial({
+      color: 0x20e0ff,
+      transparent: true,
+      opacity: 0.12,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    }),
+  );
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(geometry),
+    new THREE.LineBasicMaterial({
+      color: 0x20e0ff,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+      depthWrite: false,
+    }),
+  );
+  group.add(fill, edges);
+  group.userData.localOffset = new THREE.Vector3().fromArray(spec.offset || [0, 0, 0]);
+  group.renderOrder = 1000;
+  group.traverse((node) => {
+    node.renderOrder = 1000;
+    node.raycast = () => {}; // the diagnostic shell must never steal piece picking
+  });
+  return group;
+}
+
+function refreshColliderDebug(id, piece) {
+  const old = colliderDebugs.get(id);
+  if (old) disposeColliderDebug(old);
+  colliderDebugs.delete(id);
+  if (!colliderDebugWanted || myRank < 2 || !piece) return;
+  const props = meshPropsOf(piece, id);
+  const spec = colliderSpec(piece.type, props, { count: piece.count });
+  if (!spec) return;
+  const group = colliderDebugGroup(spec);
+  const entry = meshes.get(id);
+  if (entry) {
+    group.quaternion.copy(entry.mesh.quaternion);
+    group.position
+      .copy(group.userData.localOffset)
+      .applyQuaternion(entry.mesh.quaternion)
+      .add(entry.mesh.position);
+    group.visible = entry.mesh.visible;
+  }
+  scene.add(group);
+  colliderDebugs.set(id, group);
+}
+
+function syncColliderDebug() {
+  for (const group of colliderDebugs.values()) disposeColliderDebug(group);
+  colliderDebugs.clear();
+  if (!room || !colliderDebugWanted || myRank < 2) return;
+  room.state.pieces.forEach((piece, id) => refreshColliderDebug(id, piece));
+}
+
+function setColliderDebugWanted(on) {
+  colliderDebugWanted = !!on;
+  localStorage.setItem(COLLIDER_DEBUG_KEY, colliderDebugWanted ? '1' : '0');
+  const button = byId('colliderToggle');
+  if (button) {
+    button.classList.toggle('on', colliderDebugWanted && myRank >= 2);
+    button.setAttribute('aria-pressed', colliderDebugWanted && myRank >= 2 ? 'true' : 'false');
+  }
+  syncColliderDebug();
+}
 
 // One timestamped transform snapshot (a server state at time t), for interpolation.
 const snapshot = (t, p) => ({ t, x: p.x, y: p.y, z: p.z, qx: p.qx, qy: p.qy, qz: p.qz, qw: p.qw });
@@ -668,6 +772,7 @@ function rebuildGrid() {
     scene.add(mesh);
     meshes.set(id, { mesh, type: piece.type });
     buffers.set(id, [snapshot(performance.now(), piece)]);
+    refreshColliderDebug(id, piece);
     cb(piece).listen(
       'owner',
       () => {
@@ -689,7 +794,10 @@ function rebuildGrid() {
         }
       })();
       if (!modeled) {
-        const setDeckHeight = (count) => syncDeckMeshHeight(meshes, id, count);
+        const setDeckHeight = (count) => {
+          syncDeckMeshHeight(meshes, id, count);
+          refreshColliderDebug(id, piece);
+        };
         setDeckHeight(piece.count);
         cb(piece).listen('count', setDeckHeight);
       }
@@ -727,6 +835,8 @@ function rebuildGrid() {
     noteSceneHydration();
     const entry = meshes.get(id);
     if (entry) scene.remove(entry.mesh);
+    disposeColliderDebug(colliderDebugs.get(id));
+    colliderDebugs.delete(id);
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
     if (inspect && inspect.origId === id) releaseInspect();
     updateHeldLabel(id, ''); // drop its name tag if any
@@ -1901,6 +2011,16 @@ function rebuildGrid() {
       );
       if (applyBtn) applyBtn.onclick = () => location.reload();
       sync();
+    }
+  }
+  // Collider diagnostics (Settings → UI): a GM-only, local overlay. It reconstructs the server's
+  // current primitive from synchronized props/count and never changes room or physics state.
+  {
+    const button = byId('colliderToggle');
+    if (button) {
+      button.onclick = () => setColliderDebugWanted(!colliderDebugWanted);
+      button.classList.toggle('on', colliderDebugWanted && myRank >= 2);
+      button.setAttribute('aria-pressed', colliderDebugWanted && myRank >= 2 ? 'true' : 'false');
     }
   }
   // Skybox resolution (Settings → UI): per-viewer, applies live (no reload needed).
@@ -3746,6 +3866,7 @@ function rebuildCard(id, piece) {
   if (last) applyTransform(mesh, last);
   scene.add(mesh);
   entry.mesh = mesh;
+  refreshColliderDebug(id, piece);
 }
 
 // Rebuild a die/prop mesh from its current props (used on recolor).
@@ -3768,6 +3889,7 @@ function rebuildPiece(id, piece) {
   scene.add(mesh);
   entry.mesh = mesh;
   if (inspect && inspect.origId === id) entry.mesh.visible = false; // keep it hidden behind the inspect view
+  refreshColliderDebug(id, piece);
 }
 
 // Rebuild a deck mesh from its current props (the open-tile-set cover follows the top tile; a skin's
@@ -3793,6 +3915,7 @@ function rebuildDeck(id, piece) {
   if (last) applyTransform(mesh, last);
   scene.add(mesh);
   entry.mesh = mesh;
+  refreshColliderDebug(id, piece);
 }
 
 // hidden hand: a private bottom bar only this client ever sees
@@ -4322,6 +4445,15 @@ function applyRole(role) {
     if (room) room.send('whoami'); // re-fetch on join/reconnect — onJoin's push doesn't repeat
   }
   document.body.classList.toggle('not-gm', rank < 2); // mirrors .not-admin; gates .gm-only
+  const colliderButton = byId('colliderToggle');
+  if (colliderButton) {
+    colliderButton.classList.toggle('on', colliderDebugWanted && rank >= 2);
+    colliderButton.setAttribute(
+      'aria-pressed',
+      colliderDebugWanted && rank >= 2 ? 'true' : 'false',
+    );
+  }
+  syncColliderDebug();
   gate('memberSection', 2); // Members management (dock): GM+
   if (rank >= 2 && room) room.send('members'); // (re)fetch on join/reconnect/promotion — allowReconnection skips onJoin's push, so the dock would otherwise stay blank after a refresh
   gate('lib2Btn', 1); // Library (combined): Helper+
@@ -5836,6 +5968,15 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
     const buf = buffers.get(id);
     if (buf) sample(buf, renderTime, mesh);
     if (anims.size) applyAnim(id, mesh);
+    const colliderDebug = colliderDebugs.get(id);
+    if (colliderDebug) {
+      colliderDebug.quaternion.copy(mesh.quaternion);
+      colliderDebug.position
+        .copy(colliderDebug.userData.localOffset)
+        .applyQuaternion(mesh.quaternion)
+        .add(mesh.position);
+      colliderDebug.visible = mesh.visible;
+    }
     // Fold each caster's live transform into a frame key; a change means geometry moved and the
     // shadow map needs one redraw (renderer.shadowMap.autoUpdate is off — see core.js).
     const mp = mesh.position,

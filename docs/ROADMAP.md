@@ -140,14 +140,14 @@ Lowers the cold-start for a host who isn't going to model their own assets.
 - ✅ **Tile games + variable card geometry** (0.9.0) — `cardGeom`/`TILES` (one resolver read by both
   the mesh and the collider), custom image-deck **shapes** (rounded/square/**hexagon**, hex with a
   matching 6-gon collider) and **thickness**, a **procedural board framework** (`BOARD_PAINTERS`,
-  first used by the word grid), and **deck skins** (`DECK_MODELS`, e.g. the bentwood box). Tiles and
+  first used by the word grid), and **deck skins** (`DECK_MODELS`, e.g. the pouch). Tiles and
   their boxes also get their own sound cues. See `DESIGN_tiles.md`.
 - ✅ **Dice colors** — named dice sets (`DICE_SETS`).
 - ✅ **Model dispensers** — a colorable `trainStack` dispenser (`train_dispenser.glb`) that pays
   out `train_piece` tokens: the first built-in model-dispenser beyond the Go bowl (`shared/pieces.js`).
 - Still open: more **tokens/markers**; **RPG battlemaps** (the procedural-board framework is the
   seam — add a `BOARD_PAINTERS` painter); a **user upload path for deck skins** (only the built-in
-  bentwood box exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
+  pouch exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
   starter games and tile art.
 
 ### 3. Session tools that stay physical
@@ -284,10 +284,11 @@ Small, concrete, each completes an existing feature:
   collider), which drops onto the grid cleanly. Decoupled from **table shape** (backlog item 1, since shipped). Only **multi-cell footprints**
   (below) remains of the original hex work.
 - **Multi-cell footprints** — snap assumes 1×1; big-base minis need a per-kind `cells` hint.
-- **Free-drag group rotation** — multi-select rotates in 45° steps; a grab-and-spin handle is the
-  polish. (`DESIGN_multiselect.md`, deferred.)
-- **Scrabble scoring / Mahjong scoring** — deliberately out (physical-first; the scorepad tallies),
-  but noted so it's a decision, not an oversight.
+- **Free-drag group rotation** — ✅ **DONE via WASD, arrow keys, and two-finger mobile controls.**
+  Multi-select rotates in 45° steps; the grab-and-spin handle remains deferred polish
+  (`DESIGN_multiselect.md`).
+- **Scrabble scoring / Mahjong scoring** — ✅ **CLOSED — not in scope.** The table stays
+  physical-first and the scorepad tallies; this is a decision, not an oversight.
 - **Tile shuffle/flip sounds** — tiles got their own drop/pickup cues in 0.9.0, but shuffle and flip
   still use the generic card cues; a box-shake / tile-flip variant is a small finish.
 - **Cross-file util module** — `api()`, the button factory and the auth-token read are still
@@ -296,8 +297,8 @@ Small, concrete, each completes an existing feature:
   copied in `admin.js` and `landing.js`, `landing.js` keeps its own `mkBtn`, and the token read
   (`localStorage.getItem('tabletop.token')`) is still inline in both `client.js` and `graphics.js`.
   A real extraction, scoped in `UI_backlog.md`.
-- **ASSET_CREDITS — tile/box sound cues** — the Mahjong CC0 faces and the bentwood-box `.glb` are
-  now credited in `docs/ASSET_CREDITS.md`. Still missing: the tile and tile-box drop/pickup cues
+- **ASSET_CREDITS — tile/box sound cues** — the Mahjong faces are credited in
+  `docs/ASSET_CREDITS.md`. Still missing: the tile and tile-box drop/pickup cues
   (`public/sounds/tile-*.ogg`, `tiledeck-*.ogg`) — real audio files, not procedural, so they need a
   source line like the other sound packs.
 

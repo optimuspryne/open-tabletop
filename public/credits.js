@@ -6,7 +6,7 @@
 //
 // The credit-only arrays below (SFX / MODEL / ART / LIB) feed the same Credits panel.
 // Most bundled assets are CC0 and listed here as a courtesy; the CC BY entries
-// (bentwood box, chess/checker board, Mahjong faces) list their credit as a LICENCE
+// (currently the Mahjong faces) list their credit as a LICENCE
 // OBLIGATION — the panel must render them. See docs/ASSET_CREDITS.md for the full,
 // per-file record (source pages, sub-attributions, and license notes).
 export const MUSIC = [
@@ -94,36 +94,10 @@ export const SFX_CREDITS = [
 export const MODEL_CREDITS = [
   { title: 'Chess set', by: 'rehcub', url: 'https://opengameart.org/users/rehcub', license: 'CC0' },
   {
-    title: 'Human token',
-    by: 'Clint Bellanger',
-    url: 'https://opengameart.org/users/clint-bellanger',
-    license: 'CC0',
-  },
-  {
     title: 'Poker chip',
     by: 'mehrasaur',
     url: 'https://opengameart.org/users/mehrasaur',
     license: 'CC0',
-  },
-  {
-    title: 'Chess / checker board',
-    by: 'pennomi',
-    url: 'https://opengameart.org/users/pennomi',
-    license: 'CC BY 3.0',
-    note: 'Board texture by Tiziana, submitted by bart (also LGPL 2.1 / LGPL 3.0).',
-  },
-  {
-    title: 'Go board',
-    by: 'Jummit',
-    url: 'https://opengameart.org/users/jummit',
-    license: 'CC BY 4.0 / GPL 3.0',
-    note: '© 2023 Jummit.',
-  },
-  {
-    title: 'Bentwood box',
-    by: 'bobjh',
-    url: 'https://opengameart.org/users/bobjh',
-    license: 'CC BY 4.0',
   },
 ];
 

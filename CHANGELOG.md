@@ -9,6 +9,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Add a GM-only, device-local physics diagnostic that draws the current collider around every
+  synchronized piece, including live deck and dispenser sizes.
+- Add `npm run assets:colliders` to measure registered bundled GLBs, report suggested collider
+  half-extents/scales, and optionally validate authored registry values with `--check`.
 - Let room owners and GMs preview and apply synchronized table lighting with a draggable shaded
   globe, presets, directional and ambient colors/intensities, and shadow softness. Owners can save
   or factory-reset the durable room default, while library scenes may optionally include lighting.
@@ -27,11 +31,15 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   while retaining independently colored pips and named tint slots.
 
 ### Changed
+- Recalibrate the bundled chess/checkers and Go boards to their retuned model scales, measured
+  collider bounds, and printed playing-grid spacing.
 - Increase generated die and board texture resolution and widen the table camera field of view.
 - Move the default player-seat camera closer to the table, and let the High graphics tier use
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Honor the configured collider primitive for built-in modeled dispensers in both server physics
+  and the local collider diagnostic overlay.
 - Keep the custom-object library renderable when legacy assets omit optional model metadata.
 - Keep both buttons visible on custom-dispenser scale steppers and give library quantity fields
   enough width to display multi-digit values.

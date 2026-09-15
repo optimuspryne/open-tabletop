@@ -359,7 +359,7 @@ test('custom prop records validate model, collider, transforms, and colors', () 
 test('deck draft boundaries validate geometry, finish flags, names, and edit ids', () => {
   const refOk = (value) => typeof value === 'string' && value.length < 100;
   const sanitizeGeom = (value) => (value && value.w === 2 ? { w: 2, h: 3 } : null);
-  const deckModels = ['bentwood', 'bag'];
+  const deckModels = ['bag'];
   assert.deepEqual(
     deckBeginPayload({ back: '/back', geom: { w: 2 } }, { refOk, sanitizeGeom, deckModels }),
     {

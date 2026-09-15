@@ -126,6 +126,13 @@ test('custom dispenser colliders follow automatic, generic, and custom appearanc
   assert.ok(buildCollider('dispenser', { asset }, colliderOptions) instanceof CANNON.Sphere);
 });
 
+test('built-in modeled dispensers honor their authored collider primitive', () => {
+  for (const disp of ['trainStack', 'goBowl']) {
+    const shape = buildCollider('dispenser', { disp }, colliderOptions);
+    assert.ok(shape instanceof CANNON.Cylinder, `${disp} should use its configured cylinder`);
+  }
+});
+
 test('procedural board colliders use half width and depth', () => {
   const shape = buildCollider('board', { w: 20, d: 14 }, colliderOptions);
   assert.ok(shape instanceof CANNON.Box);

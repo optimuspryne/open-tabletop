@@ -131,16 +131,16 @@ test('custom square grids derive center and crossing spacing from the board coll
 test('built-in boards retain authored grid rules and pinned printed-line spacing', () => {
   const chess = makeRoom({ props: { board: 'chess' }, halfExtents: { x: 4, z: 4 } });
   assert.deepEqual(operations.calibrateGrid(chess), {
-    cellX: 1,
-    cellZ: 1,
+    cellX: 0.8741,
+    cellZ: 0.8741,
     gaps: 8,
     anchor: 'center',
   });
 
   const go = makeRoom({ props: { board: 'go' }, halfExtents: null });
   assert.deepEqual(operations.calibrateGrid(go), {
-    cellX: 0.42,
-    cellZ: 0.45,
+    cellX: 0.4132,
+    cellZ: 0.4137,
     gaps: 18,
     anchor: 'cross',
   });
