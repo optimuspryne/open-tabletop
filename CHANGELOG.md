@@ -38,6 +38,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Load saved card-library preview images from standard-size WebP derivatives instead of the full
+  uploaded source files.
 - Honor the configured collider primitive for built-in modeled dispensers in both server physics
   and the local collider diagnostic overlay.
 - Keep the custom-object library renderable when legacy assets omit optional model metadata.

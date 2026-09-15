@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer, deviceClass, getQuality, tableMesh, rimMat } from './core.js';
+import { assetTextureURL } from './asset-texture-url.js';
 import {
   PROPS,
   COLORS,
@@ -938,10 +939,7 @@ function loadImageTexture(url) {
 // Uploaded originals can be several megabytes and far larger than a rendered card face. Ask the
 // server for its persistent display-sized derivative while leaving external/data URLs untouched.
 function cardTextureURL(ref) {
-  const match = /^\/assets\/([a-z]+)\/([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))$/i.exec(ref);
-  if (!match) return ref;
-  const quality = HIGH_CARD_DETAIL ? '?quality=high' : '';
-  return `/asset-textures/v1/${match[1]}/${encodeURIComponent(match[2])}.webp${quality}`;
+  return assetTextureURL(ref, { high: HIGH_CARD_DETAIL });
 }
 
 // Decode a card "front" ref into a structured descriptor. The tagged-string
@@ -2617,11 +2615,12 @@ function rememberPreview(key, url) {
   }
   _prevCache.set(key, url);
 }
-// A card ref → preview image URL. Image refs pass straight through; procedural refs
-// (back / rank: / text: / tback:) are drawn to a canvas and returned as a data-URL.
+// A card ref → preview image URL. Saved images use the standard WebP derivative; external/data
+// images pass through; procedural refs (back / rank: / text: / tback:) become canvas data-URLs.
 export function cardPreviewURL(ref) {
   const r = ref || 'back';
-  if (r.startsWith('/') || r.startsWith('http') || r.startsWith('data:')) return r;
+  if (r.startsWith('/')) return assetTextureURL(r);
+  if (r.startsWith('http') || r.startsWith('data:')) return r;
   if (_prevCache.has(r)) return _prevCache.get(r);
   const wasCached = _texCache.has(r); // already resident for a placed piece?
   const tex = resolveTexture(r);

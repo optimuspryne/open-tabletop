@@ -44,6 +44,7 @@ The codebase:
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, loading gate, render loop                                                                                                                    |
 | `public/mesh-state.js`                                                                                 | browser | Current-mesh deck-height synchronization across props-driven mesh replacement                                                                                                                    |
+| `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
 | `public/controls.js`                                                                                   | browser | Mouse/touch profiles translated into device-neutral intents                                                                                                                                      |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
 | `public/credits.js`                                                                                    | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player _and_ credits panel)                                                                                                  |
@@ -1405,6 +1406,9 @@ quiet for a full frame), and
   canvas; **`imgToBlob`** and the avatar path wrap it.
 - **`uploadImage(file,…,kind)`** → POST `/upload`; **`uploadModel(file)`** → POST
   `/upload-model`.
+- **`assetTextureURL(ref, {high?})`** from `public/asset-texture-url.js` maps saved random-name
+  images onto `/asset-textures/v1/...webp`. Library/hand DOM previews use the standard derivative;
+  High-quality Three.js card faces opt into the separate High derivative. Other refs pass through.
 - **`measureGlb(url)`** → `{ size, center }` (true loaded bounds). **`fitModel(obj,
 {scale|target})`** — centre at origin + scale (fixed or normalize). **`measureModel`**
   / **`measureBoard`** build on `measureGlb` to return collider boxes.

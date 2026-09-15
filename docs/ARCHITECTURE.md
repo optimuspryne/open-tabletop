@@ -817,15 +817,16 @@ No schema migration is needed. `getProp` is exported through the production data
 definition (`props - 'dispenser'`) and preserves the object row and primary `file_url`.
 
 Large uploaded face originals are not sent directly to the renderer. For local random-name card
-and tile references, `public/graphics.js` requests the versioned
+and tile references, the pure `public/asset-texture-url.js` mapper supplies the versioned
 `/asset-textures/v1/<kind>/<file>.webp` route. Low/medium use a maximum-768-pixel WebP under
 `ASSETS_DIR/.texture-cache/v1/`; High adds `?quality=high` and uses a separate maximum-1536-pixel
 copy under `.texture-cache/v1-high/`. `server/http/routes/asset-textures.js` creates either variant
 lazily, coalesces concurrent requests for the same face, and serves the result immutably. New
 standard-aspect card uploads retain a 1024×1432 PNG source so High has detail to derive; an older
 upload remains bounded by its existing source because derivatives never enlarge. The cache variants
-leave database references and originals unchanged; orphan purge removes matching derivatives when
-it trashes an original.
+leave database references and originals unchanged; DOM library/hand previews deliberately request
+the standard derivative even on High, while Three.js card faces can request the High variant.
+Orphan purge removes matching derivatives when it trashes an original.
 The admin Storage panel can start the same encoder as a bounded, process-local background prebuild
 over all random-name JPG/JPEG/PNG uploads. Its status endpoint exposes scan/build progress and byte
 totals, repeat starts reuse the running job, and neither the originals nor database references change.
