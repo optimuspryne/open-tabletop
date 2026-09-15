@@ -15,9 +15,11 @@
 //   raiseAxis(dir)             raise (+1) / lower (-1) the held piece one step.
 //   rotateAxis(dir)            turn the selection (or held piece) one small step, either way.
 //   rotateHeld(radians)        turn the held piece by a raw angle (the profile does not snap).
+//   panCamera(right, forward)  translate the idle desktop camera relative to its current view.
 //   doubleClick(pt) -> bool    double-activation on the board (whiteboard claim); true if consumed.
 //   snapHeld() / ping(pt)      middle-click's two jobs (snap the held piece / ping the table).
 //   hasHeld() -> bool          is a piece held? (a profile uses this to disambiguate a control).
+//   hasAxisTarget(name)        should WASD/arrows transform an object, or pan the camera?
 //
 // A profile passes screen coords / semantic flags only; client.js owns any 3D projection and
 // what each intent MEANS in the current mode. Touch and gamepad are additive sibling profiles.
@@ -71,18 +73,20 @@ const LONG_PRESS_SLOP = 6; // px of finger drift before the hold becomes a drag;
 const PINCH_PX_PER_STEP = 28;
 const TWIST_MIN_SPREAD = 24; // fingers closer than this give a noisy angle — ignore the twist
 
-// Held rotate/raise keys: a keyboard slider alongside the ⟲ / ⟳ and ▲ / ▼ buttons, ticking at the
-// same rates those do, so all three paths feel the same and nothing new reaches the server. Held
-// rather than tapped, so these cannot go through the one-shot `command` bus.
+// Contextual axis keys: with a held piece (or, for rotation, a selection) they mirror the ⟲ / ⟳
+// and ▲ / ▼ buttons at those controls' tick rates. With no compatible object target they pan the
+// camera continuously. Held rather than tapped, so neither path goes through the one-shot
+// `command` bus.
 const AXIS_KEYS = {
-  a: ['rotateAxis', -1, 60],
-  arrowleft: ['rotateAxis', -1, 60],
-  d: ['rotateAxis', 1, 60],
-  arrowright: ['rotateAxis', 1, 60],
-  w: ['raiseAxis', 1, 120],
-  arrowup: ['raiseAxis', 1, 120],
-  s: ['raiseAxis', -1, 120],
-  arrowdown: ['raiseAxis', -1, 120],
+  // object intent, direction, repeat ms, camera-right, camera-forward
+  a: ['rotateAxis', -1, 60, -1, 0],
+  arrowleft: ['rotateAxis', -1, 60, -1, 0],
+  d: ['rotateAxis', 1, 60, 1, 0],
+  arrowright: ['rotateAxis', 1, 60, 1, 0],
+  w: ['raiseAxis', 1, 120, 0, 1],
+  arrowup: ['raiseAxis', 1, 120, 0, 1],
+  s: ['raiseAxis', -1, 120, 0, -1],
+  arrowdown: ['raiseAxis', -1, 120, 0, -1],
 };
 // Keystrokes belong to a focused field, not the table. client.js's command router makes the same
 // check for its own shortcuts; this path never reaches it, so it has to ask too.
@@ -278,12 +282,13 @@ export function attachControls(dom, intents) {
       // The auto-repeat is not usable as a tick either: its delay and rate are per-machine
       // settings. We run our own interval, so a repeat for a key already held is simply dropped.
       if (axisTimers.has(key)) return;
-      const [name, dir, ms] = axis;
-      intents[name](dir);
-      axisTimers.set(
-        key,
-        setInterval(() => intents[name](dir), ms),
-      );
+      const [name, dir, objectMs, panRight, panForward] = axis;
+      const objectAxis = intents.hasAxisTarget(name);
+      const tick = objectAxis
+        ? () => intents[name](dir)
+        : () => intents.panCamera(panRight, panForward);
+      tick();
+      axisTimers.set(key, setInterval(tick, objectAxis ? objectMs : 16));
       return;
     }
     intents.command(logicalKey(e));

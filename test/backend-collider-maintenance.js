@@ -91,7 +91,7 @@ test('finite stack colliders follow item radius and capped visible inventory hei
 });
 
 test('modeled and infinite dispensers retain their authored collider', () => {
-  for (const disp of ['trainStack', 'goBowl', 'unknown']) {
+  for (const disp of ['goBowl', 'unknown']) {
     const { body, original, room } = harness({ disp }, 20);
     updateStackCollider(room, 'piece');
     assert.equal(body.shapes[0], original);

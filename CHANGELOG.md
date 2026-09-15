@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Show a bottom-left desktop control guide for hovered and held table pieces and private-hand
+  cards, listing the gestures and keyboard actions available in the current context.
 - Let custom 3D objects declare an N×N grid footprint so large-base pieces align across multiple
   square cells during live dragging, release, and settle/pin while remaining centered on hexes.
 - Add a GM-only, device-local physics diagnostic that draws the current collider around every
@@ -33,6 +35,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   while retaining independently colored pips and named tint slots.
 
 ### Changed
+- Let WASD and the arrow keys pan the desktop camera relative to its current view whenever their
+  contextual held-piece or selection action does not apply.
 - Recalibrate the bundled chess/checkers and Go boards to their retuned model scales, measured
   collider bounds, and printed playing-grid spacing.
 - Increase generated die and board texture resolution and widen the table camera field of view.
@@ -40,6 +44,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 - Enlarge private-hand cards on touch layouts and reduce the Inspect control's share of each card,
   providing a much larger surface for dragging cards onto the table.
+
+### Removed
+- Remove the bundled train piece and train dispenser from the built-in object catalog; their
+  historical changelog and roadmap entries remain as the record of the earlier feature.
 
 ### Fixed
 - Make small tabletop pieces easier to grab on touch screens with invisible screen-space hit

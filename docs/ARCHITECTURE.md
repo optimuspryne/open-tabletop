@@ -149,14 +149,18 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   `meshes`, `buffers`). A full-screen Loading Table cover remains above the runtime until the local
   mesh count matches synchronized pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
-  preventing both the bootstrap camera and late hydration from appearing to end users.
+  preventing both the bootstrap camera and late hydration from appearing to end users. On desktop,
+  it also derives a bottom-left control guide from the current hovered/held piece or private-hand
+  card and translates the camera plus OrbitControls target for view-relative keyboard panning.
 - **`public/mesh-state.js`** — small browser state helpers that must resolve the current mesh by
   piece ID. Deck-count synchronization uses it so a props-driven mesh replacement cannot leave
   later count updates attached to a detached mesh.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
   raw events into device-neutral pointer/command intents consumed by `client.js`. Touch holds
   raise the same secondary-press intent as a mouse context action; a menu action that starts a
-  drag transfers pointer capture to the canvas before its temporary button is removed.
+  drag transfers pointer capture to the canvas before its temporary button is removed. Its keyboard
+  profile runs deterministic held-key intervals: WASD/arrows pan the idle camera, while compatible
+  held-piece/selection contexts retain their raise/lower and rotate meanings.
 - **`public/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
   clips pooled per logical name, played fire-and-forget) plus an HTML5 `<audio>`
   **background-music** player. Volumes/mutes/shuffle are per-player, in
@@ -457,16 +461,15 @@ The kinds:
   draw/shuffle/split), so a mixed-back stack shows a real card on top rather than a placeholder;
   the client rebuilds the deck mesh on any prop change to reflect it. The domino, letter, and Mahjong
   built-in inventories all use the enlarged low-poly pouch and its correspondingly enlarged collider.
-- **dispenser** — a reusable source for an existing prop: finite poker/coin/train stacks
+- **dispenser** — a reusable source for an existing prop: finite poker/coin stacks
   shrink as they hand out copies, while Go bowls are unlimited. An admin can also attach a
   dispenser definition to an uploaded custom object, choosing a visible automatic item stack, a
   generic container, or a second uploaded `.glb`, plus finite/default-count or infinite supply.
   A runtime custom piece carries the server-authored snapshot
   `{asset:{id,item,dispenser},color?,finish?}`; that asset identity is what permits regrouping and
-  prevents loose pieces from inventing dispensers. The project-authored train dispenser uses an
-  authored fixed collider/scale and a named tint slot, and emits the matching project-authored
-  train prop. Left-click drops one beside the source, left-drag adopts the new item into the drag,
-  and dropping a compatible item back onto a dispenser returns it.
+  prevents loose pieces from inventing dispensers. Left-click drops one beside the source,
+  left-drag adopts the new item into the drag, and dropping a compatible item back onto a dispenser
+  returns it.
 - **prop** — the workhorse. Either a **built-in shape** (`render.prim`:
   box/sphere/cone/cyl/lens) or a **`.glb` model** (`model` path). Color comes
   from a picker, a two-color **team** palette, or a per-material **tint**; a
@@ -487,11 +490,11 @@ Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
 card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
 are bundled `.glb` files under `public/models/` (see `ASSET_CREDITS.md`); the current coin, Go-bowl,
-train piece, and train dispenser models are original project assets.
+and human-token models are original project assets.
 
 ### Models: scale, orientation, color, and material
 
-- **Built-in model pieces** (chess/coin/chip/token/train) carry a fixed
+- **Built-in model pieces** (chess/coin/chip/token) carry a fixed
   `modelScale` and a **precomputed collider** in `PROPS` (`{ box, type? }` — a box
   by default, or `sphere`/`cylinder`/`cone`/`flat`), so a set keeps its
   real relative sizes and the server never has to load a model. `.glb` files can

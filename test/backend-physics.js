@@ -127,7 +127,7 @@ test('custom dispenser colliders follow automatic, generic, and custom appearanc
 });
 
 test('built-in modeled dispensers honor their authored collider primitive', () => {
-  for (const disp of ['trainStack', 'goBowl']) {
+  for (const disp of ['goBowl']) {
     const shape = buildCollider('dispenser', { disp }, colliderOptions);
     assert.ok(shape instanceof CANNON.Cylinder, `${disp} should use its configured cylinder`);
   }

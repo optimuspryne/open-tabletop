@@ -42,10 +42,10 @@ The codebase:
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
-| `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, seats, loading gate, render loop                                                                                                                    |
+| `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, contextual control guide, seats, loading gate, render loop                                                                                          |
 | `public/mesh-state.js`                                                                                 | browser | Current-mesh deck-height synchronization across props-driven mesh replacement                                                                                                                    |
 | `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
-| `public/controls.js`                                                                                   | browser | Mouse/touch profiles translated into device-neutral intents                                                                                                                                      |
+| `public/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
 | `public/credits.js`                                                                                    | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player _and_ credits panel)                                                                                                  |
 | `public/icons.js` / `public/equalize.js`                                                               | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing                                                                                                                                  |
@@ -260,16 +260,15 @@ chess}` each `[color0, color1]`.
   `matte`, `satin`, `glossy`, `metallic` (or legacy `metal`), `brushed`, `pearl`,
   `translucent`, `glow`, or `marbled`. An explicit `props.finish` set through Inspect wins over
   that definition default, including explicit `matte`. Current authored defaults are metallic for
-  the coin; pearl for checkers, poker chips, Go stones, and chess; satin for the human token and
-  train piece; and matte for unflagged primitive shapes.
+  the coin; pearl for checkers, poker chips, Go stones, and chess; satin for the human token; and
+  matte for unflagged primitive shapes.
 - **`PROP_LIST`** `[{ id, name, team? }]` — ordered spawn-picker list;
   `team:true` shows the two-color toggle, else the color picker.
-- **`DISPENSERS`** `{ dispenserId → spec }` — finite model/item stacks and infinite sources. The
-  project-authored `trainStack` uses `train_dispenser.glb`, its authored fixed collider and scale,
-  and the `c01` tint slot; it dispenses the matching `train_piece` bundled prop. Modeled bodies and
-  GLB-backed item stacks accept an instance `finish` override while keeping named tint slots
-  independent. A modeled built-in's `collider` accepts the same `{box,type?,sides?,top?}` primitive
-  descriptor as a prop; both server physics and the diagnostic overlay honor it. Uploaded custom
+- **`DISPENSERS`** `{ dispenserId → spec }` — finite model/item stacks and infinite sources.
+  Modeled bodies and GLB-backed item stacks accept an instance `finish` override while keeping
+  named tint slots independent. A modeled built-in's `collider` accepts the same
+  `{box,type?,sides?,top?}` primitive descriptor as a prop; both server physics and the diagnostic
+  overlay honor it. Uploaded custom
   objects store an optional dispenser spec in their library `props`:
   `{appearance:'automatic'|'generic'|'custom',infinite,defaultCount?,model?,box?,scale?,modelRot?,collider?,tintMaterial?}`.
   `automatic` repeats the object model, `generic` uses the procedural container, and `custom` loads
@@ -1345,8 +1344,8 @@ quiet for a full frame), and
 
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
-  tag), `ping` (attention-ping ring), `input` (click/drag thresholds plus the touch-only
-  `touchHitPx` selection radius and `touchLeadPx` held-piece offset), `tex`
+  tag), `ping` (attention-ping ring), `input` (click/drag thresholds, keyboard `panStep`, plus the
+  touch-only `touchHitPx` selection radius and `touchLeadPx` held-piece offset), `tex`
   (die/board resolution), and `upload` (new card uploads use a 1024×1432 source canvas).
 - **Initial-view readiness.** The renderer canvas starts hidden. The table-appearance and seat-camera
   gates must both open before `revealReadyView()` renders the settled pose once and reveals the canvas.
@@ -1553,6 +1552,15 @@ or count changes, and follow each synchronized/interpolated transform without ch
   an unselected piece clears the selection first. For deck/dispenser **Move**, the flat and radial
   long-press menus call `beginMoveFromMenu` before hiding/removing the pressed control, allowing it
   to transfer the active pointer capture to the canvas and continue the same gesture.
+- **Keyboard axes + `panCamera`** — `public/controls.js` owns repeat timing for WASD and the arrow
+  keys. With no compatible held-piece or selection target, it sends view-relative camera-pan
+  intents that translate the camera and OrbitControls target together. While holding a piece,
+  W/S or Up/Down retain raise/lower and A/D or Left/Right retain rotation; A/D also rotates a
+  non-empty selection. Field focus suppresses all of these table controls.
+- **`syncControlGuide`** — on fine-pointer desktop layouts, renders a non-interactive bottom-left
+  guide for the currently hovered or held table piece, hovered private-hand card, or active hand
+  drag. Rows are generated by `pieceControlRows` / `handControlRows`, include live stack counts
+  where relevant, and yield to an open bottom-left panel.
 - **Multi-select** (local; see below) — `selection` (Set of ids), the `selMode` Select tool,
   the `marquee` box, `selGesture`, and the `selRings` highlight pool. Shift-click toggles a
   piece (`selToggle`); Shift-drag or the Select tool paints a screen-space `#marquee` div and

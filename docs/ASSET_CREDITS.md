@@ -20,8 +20,7 @@ requirement is actually met.
 ### Open Tabletop original models
 
 `boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`,
-`pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, `pieces/misc/token.glb`,
-`pieces/misc/train_piece.glb`, and `pieces/misc/train_dispenser.glb`
+`pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, and `pieces/misc/token.glb`
 
 - **Author/source:** Original models created for Open Tabletop.
 - **License:** Distributed under the repository license.

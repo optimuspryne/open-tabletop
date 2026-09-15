@@ -2600,6 +2600,27 @@ let leanActive = false,
   leanT = 0;
 const leanOffset = new THREE.Vector3();
 const LEAN_AMOUNT = 0.35; // fraction of the way to the target at full lean (a knob)
+const cameraPanForward = new THREE.Vector3(),
+  cameraPanRight = new THREE.Vector3(),
+  cameraPanDelta = new THREE.Vector3();
+
+// Translate the camera and OrbitControls target together, relative to the current view. This
+// preserves orbit distance/angle and makes W/Up mean "toward the top of the table as I see it".
+function panCamera(rightAmount, forwardAmount) {
+  if (!room || inspect || wbOwning || trayView || camTween) return;
+  cameraPanForward.copy(controls.target).sub(camera.position);
+  cameraPanForward.y = 0;
+  if (cameraPanForward.lengthSq() < 1e-8) cameraPanForward.set(0, 0, -1);
+  else cameraPanForward.normalize();
+  cameraPanRight.crossVectors(cameraPanForward, camera.up).normalize();
+  cameraPanDelta
+    .copy(cameraPanRight)
+    .multiplyScalar(rightAmount)
+    .addScaledVector(cameraPanForward, forwardAmount)
+    .multiplyScalar(CONFIG.input.panStep);
+  camera.position.add(cameraPanDelta);
+  controls.target.add(cameraPanDelta);
+}
 
 // Convert a pointer event to normalized device coordinates (−1..1) for raycasting.
 const setPointer = (e, leadPx = 0) => {
@@ -3959,7 +3980,8 @@ function rebuildDeck(id, piece) {
 }
 
 // hidden hand: a private bottom bar only this client ever sees
-let handDrag = null; // dragging a card out of the hand onto the table
+let handDrag = null, // dragging a card out of the hand onto the table
+  handHoverCard = null; // desktop contextual-control guide target
 const dropPreview = (m) => {
   if (!m) return;
   scene.remove(m);
@@ -4223,6 +4245,7 @@ function sortHand(mode) {
 
 function renderHand(cards) {
   const el = byId('hand');
+  handHoverCard = null;
   el.innerHTML = '';
   el.classList.remove('collapsed');
   el.classList.remove('hand-dragging'); // a fresh render (after a play/cancel) reveals the hand
@@ -4294,6 +4317,15 @@ function renderHand(cards) {
     }
     div.title = 'Left drag/click: face-down · Right drag/click: face-up';
     div.oncontextmenu = (ev) => ev.preventDefault(); // right-click is handled by the pointer events
+    div.addEventListener('pointerenter', (ev) => {
+      if (ev.pointerType && ev.pointerType !== 'mouse') return;
+      handHoverCard = card;
+      syncControlGuide();
+    });
+    div.addEventListener('pointerleave', () => {
+      if (handHoverCard === card) handHoverCard = null;
+      syncControlGuide();
+    });
     if (selectMode && selected.has(card.hid)) div.classList.add('sel');
     div.addEventListener('pointerdown', (ev) => {
       if (handDrag) return; // a drag is already in progress (e.g. a second finger) — don't re-arm
@@ -4642,8 +4674,15 @@ const hoverTip = document.createElement('div');
 hoverTip.id = 'hoverCount';
 hoverTip.hidden = true;
 document.body.appendChild(hoverTip);
+const controlGuide = document.createElement('aside');
+controlGuide.id = 'controlGuide';
+controlGuide.setAttribute('aria-label', 'Available controls');
+controlGuide.hidden = true;
+document.body.appendChild(controlGuide);
+const controlGuidePointer = matchMedia('(hover: hover) and (pointer: fine)');
 let hoverId = null,
-  lastHover = 0;
+  lastHover = 0,
+  controlGuideSig = '';
 const hoverIdle = () =>
   !down && !inspect && !measuring && !wbOwning && !overlayMove && !handDrag && !measureDrag;
 function countLabel(piece) {
@@ -4655,9 +4694,166 @@ function countLabel(piece) {
 function hideHoverTip() {
   if (!hoverTip.hidden) hoverTip.hidden = true;
   hoverId = null;
+  syncControlGuide();
+}
+
+const PIECE_CONTROL_NAMES = {
+  card: 'Card',
+  deck: 'Deck',
+  die: 'Die',
+  prop: 'Object',
+  dispenser: 'Dispenser',
+  mat: 'Mat',
+};
+function pieceControlRows(type, held) {
+  if (held) {
+    const kind = KIND[type];
+    return [
+      ['Mouse', 'Move'],
+      ['Release', kind.grab === 2 || kind.heavy ? 'Drop' : 'Drop / throw'],
+      ['W S / ↑ ↓ / wheel', 'Raise / lower'],
+      ['A D / ← → / Alt-drag', 'Rotate'],
+      ['Shift + Alt-drag', 'Rotate freely'],
+      ['Middle-click', 'Turn 45°'],
+      ['G', 'Snap to grid'],
+      ...(type === 'mat' ? [] : [['U', 'Stand / lay flat']]),
+      ['Delete', 'Remove'],
+    ];
+  }
+  const rows = [];
+  if (type === 'deck')
+    rows.push(
+      ['Left-drag', 'Deal a card'],
+      ['Left-click', 'Draw to hand'],
+      ['Right-drag', 'Move deck'],
+      ['Double-click', 'Peek at top card'],
+      ['Right-click', 'Deck actions'],
+    );
+  else if (type === 'dispenser')
+    rows.push(
+      ['Left-drag / click', 'Dispense'],
+      ['Right-drag', 'Move dispenser'],
+      ['Double-click', 'Inspect'],
+      ['Right-click', 'Dispenser actions'],
+    );
+  else if (type === 'card')
+    rows.push(
+      ['Left-drag', 'Move'],
+      ['Left-click', 'Take to hand'],
+      ['Right-click', 'Flip'],
+      ['Double-click', 'Inspect'],
+    );
+  else {
+    rows.push(['Left-drag', 'Move']);
+    if (INSPECTABLE(type)) rows.push(['Double-click', 'Inspect']);
+    rows.push(['Right-click', 'Piece actions']);
+  }
+  if (selection.size)
+    rows.push(
+      ['W S / ↑ ↓', 'Pan camera'],
+      ['A D / ← →', `Rotate ${selection.size} selected`],
+      ['U / G', 'Stand / snap selection'],
+      ['F / R / H', 'Flip / roll / take selection'],
+      ['Delete', 'Remove selection'],
+    );
+  else
+    rows.push(
+      ['WASD / arrows', 'Pan camera'],
+      ['G', 'Snap to grid'],
+      ...(type === 'mat' ? [] : [['U', 'Stand / lay flat']]),
+      ['Delete', 'Remove'],
+    );
+  return rows;
+}
+function handControlRows(drag) {
+  if (!drag)
+    return [
+      ['Left-drag / click', 'Play face-down'],
+      ['Right-drag / click', 'Play face-up'],
+      ['Double-click / eye', 'Inspect'],
+      ['Rearrange', 'Change hand order'],
+    ];
+  return [
+    ['Mouse', 'Position card'],
+    ['Release over table', `Play face-${drag.faceDown ? 'down' : 'up'}`],
+    ['Release over UI', 'Cancel'],
+  ];
+}
+function showControlGuide(title, subtitle, rows) {
+  const sig = JSON.stringify([title, subtitle, rows]);
+  const ham = byId('hamBar');
+  if (ham && !ham.hidden) {
+    const r = ham.getBoundingClientRect();
+    if (r.height) controlGuide.style.bottom = innerHeight - r.top + 10 + 'px';
+  }
+  if (sig === controlGuideSig && !controlGuide.hidden) return;
+  controlGuideSig = sig;
+  const head = document.createElement('strong');
+  head.textContent = title;
+  controlGuide.replaceChildren(head);
+  if (subtitle) {
+    const meta = document.createElement('span');
+    meta.className = 'controlGuideMeta';
+    meta.textContent = subtitle;
+    controlGuide.appendChild(meta);
+  }
+  const list = document.createElement('div');
+  list.className = 'controlGuideList';
+  for (const [keys, action] of rows) {
+    const row = document.createElement('div'),
+      key = document.createElement('kbd'),
+      label = document.createElement('span');
+    key.textContent = keys;
+    label.textContent = action;
+    row.append(key, label);
+    list.appendChild(row);
+  }
+  controlGuide.appendChild(list);
+  controlGuide.hidden = false;
+}
+function syncControlGuide() {
+  const region = byId('regionBL');
+  if (!controlGuidePointer.matches || (region && !region.hidden)) {
+    controlGuideSig = '';
+    controlGuide.hidden = true;
+    return;
+  }
+  if (handDrag) {
+    showControlGuide('Hand card — dragging', null, handControlRows(handDrag));
+    return;
+  }
+  if (down && down.grabbed) {
+    const piece = room && room.state.pieces.get(down.id),
+      count =
+        piece && (piece.type === 'deck' || piece.type === 'dispenser') ? countLabel(piece) : null;
+    showControlGuide(
+      `${PIECE_CONTROL_NAMES[down.type] || 'Piece'} — held`,
+      count,
+      pieceControlRows(down.type, true),
+    );
+    return;
+  }
+  if (handHoverCard) {
+    showControlGuide('Hand card', null, handControlRows(null));
+    return;
+  }
+  const entry = hoverId && meshes.get(hoverId),
+    piece = hoverId && room && room.state.pieces.get(hoverId);
+  if (entry) {
+    const count =
+      piece && (piece.type === 'deck' || piece.type === 'dispenser') ? countLabel(piece) : null;
+    showControlGuide(
+      PIECE_CONTROL_NAMES[entry.type] || 'Piece',
+      count,
+      pieceControlRows(entry.type, false),
+    );
+    return;
+  }
+  controlGuideSig = '';
+  controlGuide.hidden = true;
 }
 renderer.domElement.addEventListener('pointermove', (e) => {
-  if (!room || !hoverIdle()) {
+  if (!room || !hoverIdle() || e.pointerType === 'touch') {
     hideHoverTip();
     return;
   }
@@ -4668,17 +4864,22 @@ renderer.domElement.addEventListener('pointermove', (e) => {
   lastHover = now;
   setPointer(e);
   const id = pickId();
-  const piece = id && room.state.pieces.get(id);
-  if (!piece || (piece.type !== 'deck' && piece.type !== 'dispenser')) {
-    hideHoverTip();
-    return;
-  }
-  const text = countLabel(piece);
-  if (text == null) {
+  if (!id) {
     hideHoverTip();
     return;
   }
   hoverId = id;
+  syncControlGuide();
+  const piece = room.state.pieces.get(id);
+  if (!piece || (piece.type !== 'deck' && piece.type !== 'dispenser')) {
+    hoverTip.hidden = true;
+    return;
+  }
+  const text = countLabel(piece);
+  if (text == null) {
+    hoverTip.hidden = true;
+    return;
+  }
   hoverTip.textContent = text;
   hoverTip.hidden = false;
 });
@@ -6044,11 +6245,12 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
         entry.mesh.position.z,
       );
   }
+  syncControlGuide(); // held/hovered context can change from state without another pointer move
   if (hoverId != null && !hoverTip.hidden) {
     // keep the hover count live while it's shown (deal/dispense without moving)
     const p = room && room.state.pieces.get(hoverId);
     const t = p && countLabel(p);
-    if (t == null) hideHoverTip();
+    if (t == null) hoverTip.hidden = true;
     else hoverTip.textContent = t;
   }
   for (let i = pings.length - 1; i >= 0; i--) {
@@ -6322,6 +6524,13 @@ const INPUT = {
     } // long-press empty felt → ping
   },
   hasHeld: () => !!(down && down.grabbed),
+  // Axis keys keep their object meaning only where that action has a target. Otherwise the input
+  // profile routes the same physical key to camera panning.
+  hasAxisTarget: (name) =>
+    name === 'raiseAxis'
+      ? !!(down && down.grabbed)
+      : !!(down && down.grabbed) || selection.size > 0,
+  panCamera,
   // Turn the held piece by a raw angle — the device-agnostic form of the Alt-drag dial.
   // The touch profile raises it from a two-finger twist; a gamepad stick would too.
   rotateHeld: (radians) => applyHeldRotation(radians),

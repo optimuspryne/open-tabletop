@@ -230,16 +230,6 @@ export const PROPS = {
     stand: 'flat',
     pearl: true,
   }, // ~0.4 wide, fits the go board grid
-  train_piece: {
-    mass: 0.4,
-    collider: { box: [0.0858, 0.0996, 0.3252] },
-    model: '/models/pieces/misc/train_piece.glb',
-    modelScale: 0.12,
-    ownMaterial: false,
-    tintMaterial: 'c01',
-    stand: true,
-    satin: true,
-  },
   // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
   // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
   // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
@@ -322,7 +312,6 @@ export const PROP_LIST = [
   { id: 'chess-bishop', name: 'Chess · Bishop', team: true },
   { id: 'chess-queen', name: 'Chess · Queen', team: true },
   { id: 'chess-king', name: 'Chess · King', team: true },
-  { id: 'train_piece', name: 'Train Piece' },
 ];
 // The orientation a built-in shape "stands" in — `true` (upright, e.g. chess) or `'flat'` (lies
 // down, e.g. checker/coin). Mirrors the server's naturalStand for props, so the spawn card can
@@ -511,19 +500,6 @@ export const DISPENSERS = {
     count: { def: 20, max: 100 },
     mass: 0.5,
   },
-  trainStack: {
-    name: 'Trains',
-    body: 'model',
-    item: 'train_piece',
-    color: true,
-    glossy: true,
-    tintMaterial: 'c01',
-    model: '/models/pieces/misc/train_dispenser.glb',
-    modelScale: 1,
-    count: { def: 41, max: 100 },
-    collider: { box: [0.8, 0.3141, 0.8], type: 'cylinder' },
-    mass: 0.5,
-  },
   // Go bowl: infinite, team-colored (interior stones + fill = black/white; the bowl
   // shell keeps its baked look). The .glb is normalised to MODEL_SIZE like an uploaded
   // model (modelScale multiplies that target); collider = the resulting half-extents.
@@ -541,12 +517,7 @@ export const DISPENSERS = {
     mass: 0.5,
   },
 };
-export const DISPENSER_LIST = [
-  { id: 'pokerStack' },
-  { id: 'coinStack' },
-  { id: 'trainStack' },
-  { id: 'goBowl' },
-];
+export const DISPENSER_LIST = [{ id: 'pokerStack' }, { id: 'coinStack' }, { id: 'goBowl' }];
 
 // A custom object carries this server-authored snapshot while it is on the table. Keeping the
 // source record with the piece lets saved scenes survive later library edits/deletion and lets the

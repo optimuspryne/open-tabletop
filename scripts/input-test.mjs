@@ -27,6 +27,7 @@ const FIXTURE = `<!doctype html><meta charset="utf-8">
 import { attachControls } from '/controls.js';
 const rec = [];
 let held = false;
+let axisTarget = true;
 const flags = (p) =>
   ['primary','secondary','additive','rotate','fineRotate','touch','transforming'].filter((k) => p[k]).join('+') || '-';
 attachControls(document.getElementById('surface'), {
@@ -37,6 +38,8 @@ attachControls(document.getElementById('surface'), {
   raiseAxis:(d) => rec.push(['raiseAxis', d]),
   rotateHeld:(r) => rec.push(['rotateHeld', r]),
   rotateAxis:(d) => rec.push(['rotateAxis', d]),
+  panCamera:(right, forward) => rec.push(['panCamera', right, forward]),
+  hasAxisTarget:() => axisTarget,
   doubleClick: () => { rec.push(['doubleClick']); return true; },
   snapHeld: () => rec.push(['snapHeld']),
   ping: () => rec.push(['ping']),
@@ -55,12 +58,14 @@ const M = (type, o = {}) => dom.dispatchEvent(new MouseEvent(type, {
 Object.assign(window, {
   rec, P, M,
   setHeld: (v) => { held = v; },
+  setAxisTarget: (v) => { axisTarget = v; },
   // Every case starts from a clean profile: lift any fingers the previous case left down
   // (controls.js keeps live-pointer and transform state that a bare rec.length=0 would not
   // clear), drop the held piece, then clear the recording.
   reset: () => {
     for (const id of [1, 2, 3]) P('pointercancel', { x: 0, y: 0, id });
     held = false;
+    axisTarget = true;
     rec.length = 0;
   },
   only: (...names) => rec.filter((r) => names.includes(r[0])),
@@ -347,6 +352,26 @@ const CASES = [
     '[["raiseAxis",1],["raiseAxis",-1],["raiseAxis",1],["raiseAxis",-1]]',
   ],
   [
+    'WASD pans when no object axis has a target',
+    `reset(); setAxisTarget(false);
+     for (const k of ['w','a','s','d']) { keyDown(k); keyUp(k); }`,
+    `JSON.stringify(only('panCamera'))`,
+    '[["panCamera",0,1],["panCamera",-1,0],["panCamera",0,-1],["panCamera",1,0]]',
+  ],
+  [
+    'arrow keys mirror WASD camera panning',
+    `reset(); setAxisTarget(false);
+     for (const k of ['ArrowUp','ArrowLeft','ArrowDown','ArrowRight']) { keyDown(k); keyUp(k); }`,
+    `JSON.stringify(only('panCamera'))`,
+    '[["panCamera",0,1],["panCamera",-1,0],["panCamera",0,-1],["panCamera",1,0]]',
+  ],
+  [
+    'camera routing does not also transform an object',
+    `reset(); setAxisTarget(false); keyDown('w'); keyUp('w'); keyDown('a'); keyUp('a');`,
+    `only('raiseAxis','rotateAxis').length`,
+    0,
+  ],
+  [
     'the first press acts immediately, without waiting a tick',
     `reset(); keyDown('a');`,
     `only('rotateAxis').length`,
@@ -389,7 +414,7 @@ const CASES = [
   [
     'typing in a field does not steer the table',
     `reset(); focusField(); keyDown('a'); keyDown('w'); await sleep(120); keyUp('a'); keyUp('w'); blurField();`,
-    `only('rotateAxis','raiseAxis').length`,
+    `only('rotateAxis','raiseAxis','panCamera').length`,
     0,
   ],
   [

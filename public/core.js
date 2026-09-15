@@ -28,7 +28,8 @@ const CONFIG = {
     handPx: 8,
     touchHitPx: 18,
     touchLeadPx: 48,
-  }, // click/drag feel plus touch-only screen-space grab padding and held-piece lead (px)
+    panStep: 0.1,
+  }, // click/drag feel, keyboard camera step, plus touch-only grab padding and held-piece lead
   tex: { die: 1024, board: 2048 }, // canvas texture resolutions (higher = sharper, more GPU memory)
   upload: { cardW: 1024, cardH: 1432, board: 1024, type: 'image/png', quality: 1.0 }, // keep enough source detail for the high-quality card derivative; lower tiers still download the smaller display copy
   anim: { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
