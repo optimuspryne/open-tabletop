@@ -125,7 +125,11 @@ test('maintainSnapPins sets sleep tuning, snaps settled pieces, and releases sta
   settled.sleep();
   const stale = body();
   stale.__pinned = true;
-  room.state.pieces.set('settled', { owner: '', snap: true });
+  room.state.pieces.set('settled', {
+    owner: '',
+    snap: true,
+    props: JSON.stringify({ cells: 2 }),
+  });
   room.state.pieces.set('stale', { owner: '', snap: false });
   room.bodies.set('settled', settled);
   room.bodies.set('stale', stale);
@@ -134,7 +138,7 @@ test('maintainSnapPins sets sleep tuning, snaps settled pieces, and releases sta
 
   assert.equal(settled.sleepSpeedLimit, SIM.cards.sleepSpeed);
   assert.equal(settled.sleepTimeLimit, SIM.cards.sleepTime);
-  assert.deepEqual([settled.position.x, settled.position.z], [0, 2]);
+  assert.deepEqual([settled.position.x, settled.position.z], [0.5, 1.5]);
   assert.deepEqual(events, [
     ['pin', 'settled'],
     ['unpin', 'stale'],

@@ -148,16 +148,16 @@ test('group flipping keeps hidden card fronts in private room state', async () =
   assert.deepEqual(events.at(-1), { name: 'sfx', payload: { type: 'card-flip' } });
 });
 
-test('snap toggles quantize body position and release its drag target', async () => {
+test('snap toggles honor a multi-cell footprint and release its drag target', async () => {
   const { room, handlers } = harness();
-  room.state.pieces.set('1', { type: 'prop', props: '{}' });
+  room.state.pieces.set('1', { type: 'prop', props: JSON.stringify({ cells: 2 }) });
   room.bodies.set('1', body({ x: 1.4, z: 2.6 }));
   room.targets.set('1', { x: 9, y: 9, z: 9 });
   await handlers.get('setSnap')(client, { id: '1' });
 
-  assert.deepEqual(JSON.parse(room.state.pieces.get('1').props), { snap: true });
-  assert.equal(room.bodies.get('1').position.x, 1);
-  assert.equal(room.bodies.get('1').position.z, 3);
+  assert.deepEqual(JSON.parse(room.state.pieces.get('1').props), { cells: 2, snap: true });
+  assert.equal(room.bodies.get('1').position.x, 1.5);
+  assert.equal(room.bodies.get('1').position.z, 2.5);
   assert.equal(room.targets.has('1'), false);
 });
 

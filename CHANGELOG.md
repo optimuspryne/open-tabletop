@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Let custom 3D objects declare an N×N grid footprint so large-base pieces align across multiple
+  square cells during live dragging, release, and settle/pin while remaining centered on hexes.
 - Add a GM-only, device-local physics diagnostic that draws the current collider around every
   synchronized piece, including live deck and dispenser sizes.
 - Add `npm run assets:colliders` to measure registered bundled GLBs, report suggested collider
@@ -38,6 +40,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   sharper procedural card art plus larger cached derivatives for uploaded card images.
 
 ### Fixed
+- Align the Go-board calibration regression test with its authored `0.41 × 0.41` cell spacing.
 - Load saved card-library preview images from standard-size WebP derivatives instead of the full
   uploaded source files.
 - Honor the configured collider primitive for built-in modeled dispensers in both server physics

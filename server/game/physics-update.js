@@ -1,6 +1,14 @@
 import * as CANNON from 'cannon-es';
-import { inTable, inTray, seatAngle, snapToCell, trayPlace } from '../../shared/pieces.js';
+import {
+  gridFootprintCells,
+  inTable,
+  inTray,
+  seatAngle,
+  snapToCell,
+  trayPlace,
+} from '../../shared/pieces.js';
 import { dragVelocity } from './physics-safety.js';
+import { readProps } from './props-codec.js';
 
 // Drive held bodies toward their validated cursor targets while preserving physical collisions.
 export function driveHeldPieces(room, sim) {
@@ -80,7 +88,12 @@ export function maintainSnapPins(room, sim) {
         body.sleepTimeLimit = sim.cards.sleepTime;
       }
       if (!body.__pinned && body.sleepState === CANNON.Body.SLEEPING) {
-        const position = snapToCell(body.position.x, body.position.z, room.state.scale);
+        const position = snapToCell(
+          body.position.x,
+          body.position.z,
+          room.state.scale,
+          gridFootprintCells(readProps(piece)),
+        );
         body.position.x = position.x;
         body.position.z = position.z;
         room.pinPiece(id);

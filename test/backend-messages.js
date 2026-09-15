@@ -339,6 +339,7 @@ test('custom prop records validate model, collider, transforms, and colors', () 
     collider: 'cylinder',
     color: 123,
     finish: 'satin',
+    cells: 3,
   };
   assert.deepEqual(propRecordPayload(value, { colliders: ['cylinder'] }), value);
   assert.equal(
@@ -350,6 +351,8 @@ test('custom prop records validate model, collider, transforms, and colors', () 
     null,
   );
   assert.equal(propRecordPayload({ ...value, extra: true }, { colliders: ['cylinder'] }), null);
+  assert.equal(propRecordPayload({ ...value, cells: 2.5 }, { colliders: ['cylinder'] }), null);
+  assert.equal(propRecordPayload({ ...value, cells: 13 }, { colliders: ['cylinder'] }), null);
   assert.equal(
     propRecordPayload({ ...value, finish: 'custom' }, { colliders: ['cylinder'] }),
     null,

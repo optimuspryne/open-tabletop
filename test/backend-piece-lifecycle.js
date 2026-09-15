@@ -143,15 +143,19 @@ test('release clears ownership, arms the landing cue, and caps card throws', () 
   assert.equal(body.velocity.z, 0);
 });
 
-test('release snaps flagged non-decks before applying throw velocity', () => {
+test('release snaps flagged non-decks using their multi-cell footprint', () => {
   const { lifecycle, room } = harness();
   room.state.scale = { gridStyle: 'square', cellWorld: 1 };
-  const id = lifecycle.spawn(room, 'prop', [0.2, 1, 0.2], { shape: 'box', snap: true });
+  const id = lifecycle.spawn(room, 'prop', [0.2, 1, 0.2], {
+    shape: 'box',
+    snap: true,
+    cells: 2,
+  });
   const body = room.bodies.get(id);
 
   lifecycle.releasePiece(room, id, [10, 10, 10]);
 
-  assert.deepEqual([body.position.x, body.position.z], [0.5, 0.5]);
+  assert.deepEqual([body.position.x, body.position.z], [0, 0]);
   assert.deepEqual([body.velocity.x, body.velocity.y, body.velocity.z], [0, 0, 0]);
   assert.deepEqual(
     [body.angularVelocity.x, body.angularVelocity.y, body.angularVelocity.z],

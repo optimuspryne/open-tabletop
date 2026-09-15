@@ -139,8 +139,8 @@ test('built-in boards retain authored grid rules and pinned printed-line spacing
 
   const go = makeRoom({ props: { board: 'go' }, halfExtents: null });
   assert.deepEqual(operations.calibrateGrid(go), {
-    cellX: 0.4132,
-    cellZ: 0.4137,
+    cellX: 0.41,
+    cellZ: 0.41,
     gaps: 18,
     anchor: 'cross',
   });

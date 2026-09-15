@@ -281,9 +281,12 @@ Small, concrete, each completes an existing feature:
   the new `RoomScale.hexOrient` (hex size = `cellWorld`), with `calibrateGrid` fitting hexes to a
   board by count. Snap and render share the axial math in `shared/pieces.js`, so the client preview
   and the server authority agree. Built on the 0.9.0 hex-tile groundwork (pointy-top mesh + 6-gon
-  collider), which drops onto the grid cleanly. Decoupled from **table shape** (backlog item 1, since shipped). Only **multi-cell footprints**
-  (below) remains of the original hex work.
-- **Multi-cell footprints** — snap assumes 1×1; big-base minis need a per-kind `cells` hint.
+  collider), which drops onto the grid cleanly. Decoupled from **table shape** (backlog item 1,
+  since shipped).
+- ✅ **Multi-cell footprints — DONE.** Uploaded 3D objects can declare a 1–12 cell N×N footprint.
+  Odd square footprints retain the configured centre/crossing phase; even footprints swap phase to
+  sit between their two middle lattice anchors. Larger hex footprints remain hex-centred. The
+  shared snap helper drives client drag previews and every server snap/pin path.
 - **Free-drag group rotation** — ✅ **DONE via WASD, arrow keys, and two-finger mobile controls.**
   Multi-select rotates in 45° steps; the grab-and-spin handle remains deferred polish
   (`DESIGN_multiselect.md`).

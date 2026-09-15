@@ -4,6 +4,7 @@ import {
   KINDS,
   PROPS,
   gridActive,
+  gridFootprintCells,
   itemMatchesDispenser,
   dispenserDefinition,
   snapToCell,
@@ -146,8 +147,14 @@ export function createPieceLifecycle({
 
     const body = room.bodies.get(id);
     if (body) {
-      if (piece.type !== 'deck' && gridActive(room.state.scale) && readProps(piece).snap) {
-        const point = snapToCell(body.position.x, body.position.z, room.state.scale);
+      const props = readProps(piece);
+      if (piece.type !== 'deck' && gridActive(room.state.scale) && props.snap) {
+        const point = snapToCell(
+          body.position.x,
+          body.position.z,
+          room.state.scale,
+          gridFootprintCells(props),
+        );
         body.position.x = point.x;
         body.position.z = point.z;
         body.velocity.set(0, 0, 0);

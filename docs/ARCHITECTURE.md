@@ -85,8 +85,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   `TableRoom` retains forwarding methods for piece handlers and the physics update loop.
 - **`server/game/piece-lifecycle.js`** — authoritative synchronized-piece and Cannon-body
   lifecycle. It creates both representations together, removes every existing body/state/private
-  map entry together, and owns release snapping, throw caps, landing cues, and compatible
-  deck/dispenser absorption. Physics tuning, deck builders, and small presentation rules are
+  map entry together, and owns footprint-aware release snapping, throw caps, landing cues, and
+  compatible deck/dispenser absorption. Physics tuning, deck builders, and small presentation rules are
   injected; collider maintenance remains behind the room API.
 - **`server/game/collider-maintenance.js`** — deck and finite-stack collider reconstruction.
   Ordinary decks derive their footprint from shared card/tile geometry and their height from the
@@ -97,8 +97,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   before movement, and combines the synchronized snap flag with live grid availability.
   `TableRoom` keeps stable forwarding methods so simulation ordering remains in `update`.
 - **`server/game/physics-update.js`** — the ordered physics passes around the authoritative step:
-  pre-step held-piece servoing, self-righting, snap-pin maintenance, and scripted flips; post-step
-  tray/table escape recovery and synchronized transform publication. `TableRoom.update` retains
+  pre-step held-piece servoing, self-righting, footprint-aware snap-pin maintenance, and scripted
+  flips; post-step tray/table escape recovery and synchronized transform publication. `TableRoom.update` retains
   the profiled `world.step` and makes the complete heartbeat order explicit.
 - **`server/game/dispenser-operations.js`** — dispenser child-spec and inventory lifecycle rules.
   It resolves spawned props through shared `dispensedSpec`, leaves infinite sources unchanged,
@@ -339,6 +339,15 @@ point. The one part that _does_ touch body state is **pinning**: once a snapped 
 settles (its body goes to sleep, not merely slows — the old low-speed check pinned
 pieces in mid-air), the server freezes it to a `STATIC` body so a bumped neighbour
 can't slide it off its cell. A grab, or turning the flag or the grid off, unpins it.
+
+Multi-cell footprints extend that placement layer without adding occupancy or pathfinding. An
+uploaded object can author one validated `cells` hint (`1..12`) in its saved JSON record; the
+server-authored asset snapshot carries it onto every spawned instance. `gridFootprintCells`
+resolves that hint (or a built-in `PROPS` definition hint) with a 1×1 fallback. Square grids keep
+odd N×N footprints on the configured centre/cross phase and swap the phase for even footprints;
+hex grids keep every size centred on a hex. The client stores the resolved footprint in the drag
+gesture, while `applySnap`, `releasePiece`, `maintainSnapPins`, and `spawnCardFlat` pass the same
+value through the shared quantiser. Cannon collisions remain the only overlap authority.
 
 ### Multi-select
 

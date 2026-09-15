@@ -10,6 +10,7 @@ import {
   dispenserDefinition,
   dispenserVariant,
   gridActive,
+  gridFootprintCells,
   itemMatchesDispenser,
   snapToCell,
 } from '../../../shared/pieces.js';
@@ -433,7 +434,13 @@ function applySnap(room, id, enabled) {
   const body = room.bodies.get(id);
   if (!body) return;
   if (enabled && gridActive(room.state.scale)) {
-    const position = snapToCell(body.position.x, body.position.z, room.state.scale);
+    const piece = room.state.pieces.get(id);
+    const position = snapToCell(
+      body.position.x,
+      body.position.z,
+      room.state.scale,
+      gridFootprintCells(readProps(piece)),
+    );
     body.position.x = position.x;
     body.position.z = position.z;
     body.velocity.setZero();

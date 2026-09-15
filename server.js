@@ -63,6 +63,7 @@ import {
   MEASURE,
   DISPENSERS,
   gridActive,
+  gridFootprintCells,
   snapToCell,
   STARTERS,
   sanitizeGeom,
@@ -605,7 +606,7 @@ class TableRoom extends Room {
   spawnCardFlat(pos, publicProps) {
     if (publicProps && publicProps.snap && gridActive(this.state.scale)) {
       // a word tile played onto the board snaps into its cell
-      const p = snapToCell(pos[0], pos[2], this.state.scale);
+      const p = snapToCell(pos[0], pos[2], this.state.scale, gridFootprintCells(publicProps));
       pos = [p.x, pos[1], p.z];
     }
     const id = this.spawn('card', pos, publicProps);

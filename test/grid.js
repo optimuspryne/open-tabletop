@@ -2,7 +2,7 @@
 // Run: `node --test`  (Node's built-in runner; no dependencies).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { gridActive, snapToCell } from '../shared/pieces.js';
+import { gridActive, gridFootprintCells, snapToCell } from '../shared/pieces.js';
 
 test('gridActive: true only for a real style + positive cell', () => {
   assert.equal(gridActive({ gridStyle: 'square', cellWorld: 1 }), true);
@@ -59,6 +59,24 @@ test('snapToCell (rectangular): X and Z snap on independent spacings (go board)'
   );
 });
 
+test('snapToCell: even square footprints swap centres and crossings', () => {
+  const center = { gridStyle: 'square', cellWorld: 1, cellZ: 2, snapAnchor: 'center' };
+  assert.deepEqual(snapToCell(0.2, 0.7, center, 2), { x: 0, z: 0 });
+  assert.deepEqual(snapToCell(0.2, 0.7, center, 3), { x: 0.5, z: 1 });
+
+  const cross = { ...center, snapAnchor: 'cross' };
+  assert.deepEqual(snapToCell(0.2, 0.7, cross, 2), { x: 0.5, z: 1 });
+  assert.deepEqual(snapToCell(0.2, 0.7, cross, 3), { x: 0, z: 0 });
+});
+
+test('gridFootprintCells resolves authored hints and safely defaults to one', () => {
+  assert.equal(gridFootprintCells({ cells: 4 }), 4);
+  assert.equal(gridFootprintCells({ cells: 0 }), 1);
+  assert.equal(gridFootprintCells({ cells: 2.5 }), 1);
+  assert.equal(gridFootprintCells({ cells: 13 }), 1);
+  assert.equal(gridFootprintCells({}), 1);
+});
+
 test('snapToCell: off / zero-cell are identity (safe to always call)', () => {
   assert.deepEqual(snapToCell(3.3, -1.7, { gridStyle: 'off', cellWorld: 2 }), { x: 3.3, z: -1.7 });
   assert.deepEqual(snapToCell(3.3, -1.7, { gridStyle: 'square', cellWorld: 0 }), {
@@ -97,4 +115,9 @@ test('snapToCell (hex): gridX/gridZ shift the lattice', () => {
   assert.ok(close(o.x, 0) && close(o.z, 0)); // origin is a centre with no offset
   const off = snapToCell(0.5, -0.3, { ...base, gridX: 0.5, gridZ: -0.3 });
   assert.ok(close(off.x, 0.5) && close(off.z, -0.3)); // the offset point is now a centre
+});
+
+test('snapToCell (hex): larger symmetric footprints keep a hex-centre anchor', () => {
+  const sc = { gridStyle: 'hex', cellWorld: 2, hexOrient: 'pointy' };
+  assert.deepEqual(snapToCell(3.4, 0.1, sc, 4), snapToCell(3.4, 0.1, sc, 1));
 });

@@ -7,6 +7,7 @@
 
 // --- Table ------------------------------------------------------------------
 export const TABLE = { x: 10, z: 7 }; // half-extents of the play surface
+export const GRID_FOOTPRINT_MAX = 12; // largest authored N×N snap footprint
 
 // --- Colors ----------------------------------------------------------------
 // Values are hex ints (Three.js materials) or CSS strings (canvas textures);
@@ -393,7 +394,7 @@ export const BOARDS = {
     name: 'Go',
     model: '/models/boards/go_board.glb',
     modelScale: 2.721088,
-    box: [4,0.1109,4],
+    box: [4, 0.1109, 4],
     // Nineteen printed lines make eighteen measured gaps; X/Z differ slightly in the source mesh.
     grid: { cells: 18, anchor: 'cross', cellX: 0.41, cellZ: 0.41 },
   },
@@ -1320,6 +1321,14 @@ export function gridActive(scale = {}) {
   return !!scale && scale.gridStyle !== 'off' && +scale.cellWorld > 0;
 }
 
+// The number of grid cells a piece occupies across each horizontal axis. Built-in props can carry
+// the hint on their registry entry; custom objects carry it directly in their saved/runtime props.
+// Old pieces and malformed scene data remain ordinary 1×1 pieces.
+export function gridFootprintCells(props = {}) {
+  const value = props.cells ?? (props.shape && PROPS[props.shape] && PROPS[props.shape].cells);
+  return Number.isInteger(value) && value >= 1 && value <= GRID_FOOTPRINT_MAX ? value : 1;
+}
+
 // Round fractional axial hex coords (q, r) to the nearest hex centre, via cube
 // rounding (the coordinate with the largest rounding error is recomputed from the
 // other two so the cube constraint x+y+z=0 always holds).
@@ -1361,13 +1370,13 @@ function snapToHexCentre(x, z, s, flat) {
   return { x: s * (S3 * h.q + HEX_HH * h.r), z: s * ((3 / 2) * h.r) };
 }
 
-// Snap a world XZ point to the nearest cell CENTRE, returning a new { x, z }.
+// Snap a world XZ point to the nearest footprint centre, returning a new { x, z }.
 // Handles 'square' (rectangular cells; 'center' or 'cross' anchor) and 'hex'
 // (centres only, pointy- or flat-top per hexOrient). 'off' or a zero cell size
 // returns the point unchanged, so a drop can always be routed through this safely.
 // Uses exact rounding (not roundToStep's display rounding), so any cell size lands
 // on true multiples with no float truncation.
-export function snapToCell(x, z, scale = {}) {
+export function snapToCell(x, z, scale = {}, cells = 1) {
   const cx = +scale.cellWorld;
   if (!(cx > 0)) return { x, z };
   const ox = +scale.gridX || 0,
@@ -1381,8 +1390,11 @@ export function snapToCell(x, z, scale = {}) {
   // 'cross' snaps to the line intersections (go stones sit on crossings); the default
   // 'center' snaps to mid-cell (chess/checkers pieces sit in the squares).
   const cross = scale.snapAnchor === 'cross';
+  const evenFootprint = Number.isInteger(cells) && cells >= 1 && cells % 2 === 0;
   const snap = (v, cell, o) => {
-    const h = cross ? 0 : cell / 2;
+    // Each extra cell grows equally around the piece centre. Odd N keeps the configured phase;
+    // even N swaps centres ↔ crossings to sit halfway between its two middle lattice anchors.
+    const h = cross === evenFootprint ? cell / 2 : 0;
     return Math.round((v - o - h) / cell) * cell + h + o;
   };
   return { x: snap(x, cx, ox), z: snap(z, cz, oz) };

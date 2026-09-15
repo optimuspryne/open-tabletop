@@ -265,6 +265,7 @@ test('loadProp attaches an immutable asset snapshot and can spawn its authored d
       box: [0.4, 0.2, 0.4],
       scale: 1,
       stand: false,
+      cells: 3,
       tintMaterial: 'paint',
       dispenser: { appearance: 'automatic', infinite: false, defaultCount: 20 },
     },
@@ -281,6 +282,7 @@ test('loadProp attaches an immutable asset snapshot and can spawn its authored d
   assert.equal(spawns.length, 2);
   assert.equal(spawns[0].args[0], 'prop');
   assert.equal(spawns[0].args[2].asset.id, '7');
+  assert.equal(spawns[0].args[2].cells, 3);
   assert.equal(spawns[0].args[2].asset.item.dispenser, undefined);
   assert.equal(spawns[1].args[0], 'dispenser');
   assert.equal(spawns[1].args[2].asset.dispenser.defaultCount, 20);
@@ -297,6 +299,7 @@ test('saveProp Save+Spawn uses the newly persisted id in its server-authored sna
       box: [0.4, 0.2, 0.4],
       scale: 1,
       stand: false,
+      cells: 4,
       dispenser: { appearance: 'generic', infinite: false, defaultCount: 12 },
     },
     spawn: true,
@@ -304,6 +307,7 @@ test('saveProp Save+Spawn uses the newly persisted id in its server-authored sna
   const spawn = calls.find(({ name }) => name === 'spawn');
   assert.equal(spawn.args[0], 'prop');
   assert.equal(spawn.args[2].asset.id, '42');
+  assert.equal(spawn.args[2].cells, 4);
   assert.equal(spawn.args[2].asset.dispenser.defaultCount, 12);
   assert.equal(spawn.args[2].dispenser, undefined);
 });

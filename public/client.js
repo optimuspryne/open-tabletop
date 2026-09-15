@@ -76,6 +76,7 @@ import {
   dispenserForItem,
   itemMatchesDispenser,
   gridActive,
+  gridFootprintCells,
   snapToCell,
   trayCenter,
   seatAngle,
@@ -665,6 +666,16 @@ const pieceSnap = (id) => {
     return false;
   }
 };
+// The authored N×N grid footprint for a piece (1 for every legacy/ordinary piece).
+const pieceCells = (id) => {
+  const p = room && room.state.pieces.get(id);
+  if (!p) return 1;
+  try {
+    return gridFootprintCells(JSON.parse(p.props || '{}'));
+  } catch {
+    return 1;
+  }
+};
 // Is this piece a TILE (a card/deck carrying a `tile` kind)? Drives tile-vs-card pickup sounds.
 const pieceIsTile = (id) => {
   const p = room && room.state.pieces.get(id);
@@ -678,7 +689,9 @@ const pieceIsTile = (id) => {
 // The drag target to actually send: snapped to the nearest cell for a snap-flagged piece
 // on an active grid (so it tracks cell-to-cell as you drag), else the raw cursor point.
 const snapXZ = (x, z) =>
-  down && down.snap && gridActive(room.state.scale) ? snapToCell(x, z, room.state.scale) : { x, z };
+  down && down.snap && gridActive(room.state.scale)
+    ? snapToCell(x, z, room.state.scale, down.cells)
+    : { x, z };
 // Reflect the current table shape in Customize Table: light the active chip, and for the
 // single-size shapes (round/hex) hide the depth field and relabel width as \"Size\".
 function syncTableShapeUI() {
@@ -3425,6 +3438,7 @@ const onPointerDown = (e) => {
     dragging: false,
     grabbed: false,
     snap: pieceSnap(id),
+    cells: pieceCells(id),
     group,
     rotateOnPress: e.rotate,
     rotating: false,
@@ -6173,6 +6187,7 @@ function beginMoveFromMenu(id, e) {
     dragging: true, // already past the threshold: this gesture can never be read as a click
     grabbed: true,
     snap: pieceSnap(id),
+    cells: pieceCells(id),
     group: false,
     rotateOnPress: false,
     rotating: false,

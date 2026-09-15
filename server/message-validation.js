@@ -1,7 +1,7 @@
 // Normalizers for values arriving across the WebSocket trust boundary. A
 // normalizer returns a fresh, trusted value or null; handlers must not continue
 // using the original message after validation.
-import { OBJECT_FINISH_KEYS } from '../shared/pieces.js';
+import { GRID_FOOTPRINT_MAX, OBJECT_FINISH_KEYS } from '../shared/pieces.js';
 import { LIGHTING_PRESETS } from '../shared/lighting.js';
 import { isWorldCoordinate } from './game/physics-safety.js';
 export const isPlainObject = (value) => {
@@ -484,6 +484,7 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
     'finish',
     'tintMaterial',
     'dispenser',
+    'cells',
   ];
   if (allowSpawnOptions) allowed.push('snap');
   if (!hasOnlyKeys(value, new Set(allowed))) return null;
@@ -492,6 +493,11 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
   const scale = finiteNumber(value.scale, { min: 1e-3, max: 100 });
   if (!model || !box || scale === null || typeof value.stand !== 'boolean') return null;
   const out = { model, box, stand: value.stand, scale };
+  if (value.cells !== undefined) {
+    const cells = finiteNumber(value.cells, { min: 1, max: GRID_FOOTPRINT_MAX });
+    if (cells === null || !Number.isInteger(cells)) return null;
+    out.cells = cells;
+  }
   if (value.modelRot !== undefined) {
     const rot = finiteTuple(value.modelRot, { min: -Math.PI * 2, max: Math.PI * 2 });
     if (!rot) return null;

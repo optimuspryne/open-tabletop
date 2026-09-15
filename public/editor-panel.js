@@ -73,6 +73,7 @@ import {
   geomFromImage,
   TILES,
   HEX_HH,
+  GRID_FOOTPRINT_MAX,
 } from '/shared/pieces.js';
 
 // Card/tile thickness for an image deck, as a multiple of a standard card, read from the editor's
@@ -2004,6 +2005,7 @@ function wireAddObject() {
       byId(id).value = '';
     });
     byId('adObjScale').value = '1';
+    byId('adObjCells').value = '1';
     byId('adObjStand').classList.remove('on');
     finishSelect.value = '';
     setCollider('box');
@@ -2050,6 +2052,7 @@ function wireAddObject() {
     if (!name) return alert('Name the object first.');
     const f = byId('adObjGlb').files[0];
     const scale = +byId('adObjScale').value || 1,
+      cells = Math.max(1, Math.min(GRID_FOOTPRINT_MAX, Math.round(+byId('adObjCells').value || 1))),
       stand = byId('adObjStand').classList.contains('on'),
       collider = currentCollider(),
       rot = objRot();
@@ -2058,6 +2061,7 @@ function wireAddObject() {
       if (!url) return alert('Choose a .glb file.');
       const box = await measureModel(url, scale, rot);
       const props = { model: url, box, stand, scale };
+      if (cells > 1) props.cells = cells;
       if (currentFinish()) props.finish = currentFinish();
       if (collider !== 'box') props.collider = collider;
       if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
@@ -2103,6 +2107,7 @@ function wireAddObject() {
     objSourceProps = { ...p };
     byId('adObjName').value = clone ? '' : it.name;
     byId('adObjScale').value = p.scale != null ? p.scale : 1;
+    byId('adObjCells').value = p.cells || 1;
     byId('adObjStand').classList.toggle('on', !!p.stand);
     finishSelect.value = p.finish || '';
     setCollider(p.collider || 'box');

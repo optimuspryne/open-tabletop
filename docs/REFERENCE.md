@@ -234,6 +234,7 @@ Pure constants and helpers imported by both sides.
 ### Constants
 
 - **`TABLE`** `{ x, z }` — half-extents of the play surface.
+- **`GRID_FOOTPRINT_MAX`** `12` — upper bound for an authored square N×N piece footprint.
 - **`TABLE_SHAPES`** / **`tableOutline(shape, hx, hz)`** — the shape list
   (`rect`/`round`/`oval`/`hex`/`roundedRect`) and the closed perimeter polygon for a shape +
   half-extents. One source of truth read by the extracted physics wall ring
@@ -254,7 +255,8 @@ chess}` each `[color0, color1]`.
   omitted = box), and **either** a built-in `render` (`prim`:
   box/sphere/cone/cyl/lens + params) **or** a bundled `model` path with
   `modelScale` (+ optional `modelRot`, `team`, `tintMaterial`, `ownMaterial`,
-  `stand`). A bundled object's default surface is selected by one boolean finish flag:
+  `stand`, `cells`). Optional integer `cells` is the definition's N×N grid footprint; absent means
+  1×1. A bundled object's default surface is selected by one boolean finish flag:
   `matte`, `satin`, `glossy`, `metallic` (or legacy `metal`), `brushed`, `pearl`,
   `translucent`, `glow`, or `marbled`. An explicit `props.finish` set through Inspect wins over
   that definition default, including explicit `matte`. Current authored defaults are metallic for
@@ -358,12 +360,18 @@ chess}` each `[color0, color1]`.
   measurement display and grid snapping.
 - **`gridActive(scale) → bool`** — `scale.gridStyle !== 'off' && cellWorld > 0`; the
   one guard both render and snap gate on, so the grid draws and snaps together.
-- **`snapToCell(x, z, scale) → {x, z}`** — the nearest cell position on the grid, the
-  single quantiser the client preview and the server authority both call so they can't
+- **`gridFootprintCells(props) → integer`** — resolves an explicit saved/runtime `props.cells` or
+  the built-in `PROPS[props.shape].cells` hint. Missing, fractional, and out-of-range values safely
+  fall back to `1`; accepted values are `1..GRID_FOOTPRINT_MAX`.
+- **`snapToCell(x, z, scale, cells = 1) → {x, z}`** — the nearest footprint-centre position on the
+  grid, the single quantiser the client preview and the server authority both call so they can't
   drift. **Square** honours per-axis spacing (`cellZ`), the `gridX`/`gridZ` offset, and
-  `snapAnchor` (`center` lands in cell middles, `cross` on line intersections); **hex**
+  `snapAnchor` (`center` lands in cell middles, `cross` on line intersections). Odd N×N
+  footprints retain that phase; even footprints use the opposite phase so their centre sits
+  between the two middle lattice anchors. **Hex**
   snaps to hex centres (pointy- or flat-top per `hexOrient`, size = `cellWorld`, offset
-  honoured). `off`/zero-cell return the point unchanged. Uses exact rounding, not
+  honoured) for every footprint size because hex grids have no half-cell phase.
+  `off`/zero-cell return the point unchanged. Uses exact rounding, not
   `roundToStep`'s display rounding, so a non-round cell size lands on true multiples.
 - **`formatMeasure(worldDist, scale) → string`** — a world distance as a display
   label: `worldDist ÷ scale.worldPerUnit → roundToStep(·, roundStep) → + unitLabel`
@@ -739,6 +747,8 @@ created, rather than becoming an import side effect of the schema module.
   subset while preserving their separately colored pips. A loaded custom object or custom dispenser
   carries a server-authored `asset` snapshot (`id`, base `item`, optional `dispenser`) inside this
   JSON; instance `color` and `finish` remain top-level variant fields used for exact regrouping.
+  Uploaded object records may also carry a validated `cells` integer (`1..12`), authored by the
+  library editor's **Grid footprint** field and copied into the runtime props/asset snapshot.
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
   image), **`role`** (the per-room owner/gm/helper/player rank).
