@@ -35,6 +35,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   while retaining independently colored pips and named tint slots.
 
 ### Changed
+- Replaced various built-in assets with new/custom built 3D models.  Updated credits as needed.
+- Preserve authored GLB color and normal maps when tinting built-in pieces and modeled dispensers,
+  including chips, coins, chess pieces, and Go bowls.
 - Preserve authored color textures, normal maps, and roughness when tinting the built-in pouch's
   bag and drawstring materials on spawned decks.
 - Let WASD and the arrow keys pan the desktop camera relative to its current view whenever their
@@ -52,6 +55,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   historical changelog and roadmap entries remain as the record of the earlier feature.
 
 ### Fixed
+- Prevent OrbitControls from throwing when a pointer lifts while an untracked mouse pointer
+  remains on the canvas, and prevent a first touch tap from counting as a double-tap soon after
+  page load.
 - Align the poker-stack collider test with the resized built-in poker-chip model.
 - Make small tabletop pieces easier to grab on touch screens with invisible screen-space hit
   padding, keep held pieces visible above the fingertip for precise placement, and keep

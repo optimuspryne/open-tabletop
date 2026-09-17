@@ -183,16 +183,18 @@ export const PROPS = {
   },
   checker: {
     mass: 0.6,
-    collider: { box: [0.3, 0.05, 0.3], type: 'cylinder' },
-    render: { prim: 'cyl', r: 0.3, h: 0.1 },
+    collider: { box: [0.3376, 0.039, 0.3376], type: 'cylinder' },
+    model: '/models/pieces/checkers/checker.glb',
+    modelScale: 0.45,
     team: 'checker',
     stand: 'flat',
     pearl: true,
   },
   crowned_checker: {
     mass: 0.6,
-    collider: { box: [0.3, 0.1, 0.3], type: 'cylinder' },
-    render: { prim: 'cyl', r: 0.3, h: 0.2 },
+    collider: { box: [0.3376, 0.039, 0.3376], type: 'cylinder' },
+    model: '/models/pieces/checkers/crowned_checker.glb',
+    modelScale: 0.62,
     team: 'checker',
     stand: 'flat',
     pearl: true,
@@ -200,25 +202,25 @@ export const PROPS = {
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.255, 0.0129, 0.255], type: 'cylinder' },
+    collider: { box: [0.3825, 0.02, 0.3825], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
-    modelScale: 0.25,
+    modelScale: 0.6,
     ownMaterial: false,
     metal: true,
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.45, 0.045, 0.45], type: 'cylinder' },
+    collider: { box: [0.9798, 0.1002, 0.9798], type: 'cylinder' },
     model: '/models/pieces/misc/poker_chip.glb',
-    modelScale: 0.18,
-    tintMaterial: 'c1',
+    modelScale: 0.8,
+    tintMaterial: 'accent',
     pearl: true,
   }, // color picker tints only the body; white rim kept
   token: {
     mass: 0.4,
-    collider: { box: [0.1463, 0.4515, 0.1344], type: 'cylinder' },
+    collider: { box: [0.2702, 0.3542, 0.2689], type: 'cylinder' },
     model: '/models/pieces/misc/token.glb',
-    modelScale: 0.84,
+    modelScale: 0.75,
     stand: true,
     satin: true,
   }, //Generic token to represent a player, for use in various games.
@@ -235,54 +237,54 @@ export const PROPS = {
   // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
   'chess-pawn': {
     mass: 0.4,
-    collider: { box: [0.2757, 0.5045, 0.2388], type: 'cylinder' },
+    collider: { box: [0.2301, 0.4388, 0.2301], type: 'cylinder' },
     model: '/models/pieces/chess/pawn.glb',
-    modelScale: 2.124,
+    modelScale: 15,
     team: 'chess',
     stand: true,
     pearl: true,
   },
   'chess-rook': {
     mass: 0.5,
-    collider: { box: [0.3064, 0.5858, 0.2653], type: 'cylinder' },
+    collider: { box: [0.3, 0.522, 0.3068], type: 'cylinder' },
     model: '/models/pieces/chess/rook.glb',
-    modelScale: 2.124,
+    modelScale: 15,
     team: 'chess',
     stand: true,
     pearl: true,
   },
   'chess-knight': {
     mass: 0.5,
-    collider: { box: [0.3186, 0.543, 0.3577], type: 'cylinder' },
+    collider: { box: [0.293, 0.5414, 0.296], type: 'cylinder' },
     model: '/models/pieces/chess/knight.glb',
-    modelScale: 2.124,
+    modelScale: 15,
     team: 'chess',
     stand: true,
     pearl: true,
   },
   'chess-bishop': {
     mass: 0.5,
-    collider: { box: [0.3064, 0.6359, 0.2653], type: 'cylinder' },
+    collider: { box: [0.3036, 0.664, 0.3036], type: 'cylinder' },
     model: '/models/pieces/chess/bishop.glb',
-    modelScale: 2.124,
+    modelScale: 15,
     team: 'chess',
     stand: true,
     pearl: true,
   },
   'chess-queen': {
     mass: 0.6,
-    collider: { box: [0.3064, 0.6967, 0.2653], type: 'cylinder' },
+    collider: { box: [0.3019, 0.9093, 0.3019], type: 'cylinder' },
     model: '/models/pieces/chess/queen.glb',
-    modelScale: 2.124,
+    modelScale: 15,
     team: 'chess',
     stand: true,
     pearl: true,
   },
   'chess-king': {
     mass: 0.6,
-    collider: { box: [0.3064, 0.7001, 0.2653], type: 'cylinder' },
+    collider: { box: [0.3332, 0.7339, 0.3332], type: 'cylinder' },
     model: '/models/pieces/chess/king.glb',
-    modelScale: 2.124,
+    modelScale: 15,
     team: 'chess',
     stand: true,
     pearl: true,
@@ -373,8 +375,8 @@ export const BOARDS = {
   chess: {
     name: 'Chess / Checkers',
     model: '/models/boards/checker_chess_board.glb',
-    modelScale: 2.962963,
-    box: [4, 0.2015, 4],
+    modelScale: 3.5,
+    box: [4, 0.09, 4],
     // The modeled squares stop inside the decorative rim, so use their measured spacing rather
     // than deriving it from the full collider width.
     grid: { cells: 8, anchor: 'center', cellX: 0.8741, cellZ: 0.8741 },
@@ -415,6 +417,7 @@ export const DECK_MODELS = {
     modelScale: 2,
     box: [0.9786, 0.2273, 0.8828],
     tints: { bag: 'color', string: 'textColor' },
+    matte: true,
     color: 0x7a5a3a, // sack: warm leather brown
     textColor: 0xc8b06a, // drawstring: tan
   },
@@ -481,7 +484,7 @@ export const MAHJONG = {
 // Built-in only; all config rides in the piece's props + count (no DB change). The
 // dispensed item is an existing PROP. body: 'stack' = the item's .glb cloned N high
 // (poker chips / coins); 'model' = a bundled bowl .glb (go bowl).
-export const STACK_CAP = 18; // max discs DRAWN in a stack; the real count can exceed this (visual tops out)
+export const STACK_CAP = 25; // max discs DRAWN in a stack; the real count can exceed this (visual tops out)
 export const DISPENSERS = {
   pokerStack: {
     name: 'Poker chips',

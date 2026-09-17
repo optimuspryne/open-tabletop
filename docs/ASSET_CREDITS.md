@@ -1,6 +1,6 @@
 # Asset Credits
 
-Bundled assets — 3D models, sound effects, skyboxes, tile art, textures, and UI icons — come from
+Bundled assets - 3D models, sound effects, skyboxes, tile art, textures, and UI icons - come from
 the creators below. Licenses vary: most art is **CC0** (public domain), a few are **CC BY**,
 and the UI icons are **MIT**.
 Attribution is given here in full as a courtesy for the CC0 assets and as a **licence
@@ -10,84 +10,85 @@ requirement is actually met.
 
 ---
 
-## 3D models — `public/models/`
+## 3D models - `public/models/`
 
-### Chess pieces — `pieces/chess/`
-- **Author:** rehcub — https://opengameart.org/users/rehcub
-- **Source:** https://opengameart.org/content/chess-set-1
-- **License:** CC0 (public domain). Author's note: "Do what you want with it. Have fun :)"
+### Chess pieces  - `pieces/chess/`
+- **Author:** JustinARay - https://opengameart.org/users/justinaray
+- **Source:** https://opengameart.org/content/low-poly-chess-set
+- **License:** CC-BY 4.0"
+
+### Pipped dice - `/dice/`
+- **Author:** Modanung - https://opengameart.org/users/modanung
+- **Source:** https://opengameart.org/content/low-poly-dice-with-lods
+- **License:** CC0 (public domain)"
 
 ### Open Tabletop original models
 
 `boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`,
-`pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, and `pieces/misc/token.glb`
+`pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, `pieces/checkers/checker.glb`, 
+`pieces/checkers/crowned_checker.glb`, and `pieces/misc/token.glb`
 
 - **Author/source:** Original models created for Open Tabletop.
 - **License:** Distributed under the repository license.
 
-### Poker chip — `pieces/misc/poker_chip.glb`
-- **Author:** mehrasaur — https://opengameart.org/users/mehrasaur
-- **Source:** https://opengameart.org/content/poker-pack
-- **License:** CC0 (public domain)
-
 ---
 
-## Sound effects — `public/sounds/`
+## Sound effects - `public/sounds/`
 All CC0 (public domain).
 
-- **54 Casino Sound Effects** — Kenney (https://opengameart.org/users/kenney)
-  — https://opengameart.org/content/54-casino-sound-effects-cards-dice-chips
-- **Card Game Sounds** — HaelDB (https://opengameart.org/users/haeldb)
-  — https://opengameart.org/content/card-game-sounds
-- **Playing Card Sounds** — BMacZero (https://opengameart.org/users/bmaczero)
-  — https://opengameart.org/content/playing-card-sounds
-- **Sound Effects Pack** — OwlishMedia (https://opengameart.org/users/owlishmedia)
-  — https://opengameart.org/content/sound-effects-pack
+- **54 Casino Sound Effects** - Kenney (https://opengameart.org/users/kenney)
+  - https://opengameart.org/content/54-casino-sound-effects-cards-dice-chips
+- **Card Game Sounds** - HaelDB (https://opengameart.org/users/haeldb)
+  - https://opengameart.org/content/card-game-sounds
+- **Playing Card Sounds** - BMacZero (https://opengameart.org/users/bmaczero)
+  - https://opengameart.org/content/playing-card-sounds
+- **Sound Effects Pack** - OwlishMedia (https://opengameart.org/users/owlishmedia)
+  - https://opengameart.org/content/sound-effects-pack
 
 ---
 
-## Skyboxes — `public/sky/equirect/`
+## Skyboxes - `public/sky/equirect/`
 
-- **Cloudy Skyboxes** — Screaming Brain Studios
+- **Cloudy Skyboxes** - Screaming Brain Studios
   (https://opengameart.org/users/screaming-brain-studios)
-  — https://opengameart.org/content/cloudy-skyboxes-0
+  - https://opengameart.org/content/cloudy-skyboxes-0
 - **License:** CC0 (public domain)
 
 ---
 
-## Tile art — `public/mahjong/faces/`
+## Tile art - `public/mahjong/faces/`
 
-- **Mahjong Tileset** — CodeInfernoGames
+- **Mahjong Tileset** - CodeInfernoGames
   (https://opengameart.org/users/codeinfernogames)
-  — https://opengameart.org/content/mahjong-tileset
+  - https://opengameart.org/content/mahjong-tileset
 - **License:** CC BY 3.0. Author requests a link to https://codeinferno.com
 
 ---
 
-## Table rim texture — `public/textures/`
+## Table rim texture - `public/textures/`
 
-- **5 Wood Textures** — by **Luke.RUSTLTD**, https://opengameart.org/content/5-wood-textures
-- **License:** CC0 (public domain; no attribution required — credited here as a courtesy). Four of
+- **5 Wood Textures** - by **Luke.RUSTLTD**, https://opengameart.org/content/5-wood-textures
+- **License:** CC0 (public domain; no attribution required - credited here as a courtesy). Four of
   the set are used as the selectable wooden table rim, re-encoded to JPEG:
   `public/textures/wood-mahogany.png` (default), `wood-walnut.png`, `wood-birch.png`,
   `wood-green.png`, `wood-oak.png`.
 
 ---
 
-## Felt texture — `public/textures/felt.jpg`
+## Felt texture - `public/textures/felt.jpg`
 
-- **Felt Backgrounds** — by **jbp4444**, https://opengameart.org/content/felt-backgrounds
-- **License:** CC0 (public domain; no attribution required — credited here as a courtesy). Scans of
+- **Felt Backgrounds** - by **jbp4444**, https://opengameart.org/content/felt-backgrounds
+- **License:** CC0 (public domain; no attribution required - credited here as a courtesy). Scans of
   real felt; used desaturated as the tintable felt surface (`public/textures/felt.jpg`).
 
 ---
 
-## UI icons — inline sprite in `public/table.html`, `editor.html`, `index.html`, `admin.html`
+## UI icons - inline sprite in `public/table.html`, `editor.html`, `index.html`, `admin.html`
 
 ### Tabler Icons
-- **Author:** Paweł Kuna and contributors — https://github.com/tabler/tabler-icons
+- **Author:** Paweł Kuna and contributors - https://github.com/tabler/tabler-icons
 - **Source:** https://tabler.io/icons (outline style)
 - **Usage:** ~122 outline SVGs embedded as `<symbol>` elements in the inline icon sprite,
   regenerated from a single list by `scripts/build-icons.mjs` (`npm run build:icons`).
-- **License:** MIT — Copyright (c) 2020-2026 Paweł Kuna. Full text in
+- **License:** MIT - Copyright (c) 2020-2026 Paweł Kuna. Full text in
   [`docs/licenses/tabler-icons-LICENSE`](licenses/tabler-icons-LICENSE).

@@ -92,12 +92,17 @@ export const SFX_CREDITS = [
 
 // 3D models — public/models/ (CC0 unless noted; the CC BY entries are a licence obligation).
 export const MODEL_CREDITS = [
-  { title: 'Chess set', by: 'rehcub', url: 'https://opengameart.org/users/rehcub', license: 'CC0' },
   {
-    title: 'Poker chip',
-    by: 'mehrasaur',
-    url: 'https://opengameart.org/users/mehrasaur',
-    license: 'CC0',
+    title: 'Chess Set',
+    by: 'justinaray',
+    url: 'https://opengameart.org/users/justinaray',
+    license: 'CC-BY 4.0',
+  },
+  {
+    title: 'Pipped Dice',
+    by: 'Modanung',
+    url: 'https://opengameart.org/users/modanung',
+    license: 'CC0 (Public Domain)',
   },
 ];
 

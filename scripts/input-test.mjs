@@ -90,6 +90,25 @@ Object.assign(window, {
 window.__ready = true;
 </script>`;
 
+const ORBIT_FIXTURE = `<!doctype html><meta charset="utf-8">
+<script type="importmap">{"imports":{
+  "three":"/vendor/three/three.module.js",
+  "three/addons/":"/vendor/three/addons/"
+}}</script>
+<canvas id="surface" width="400" height="400"></canvas>
+<script type="module">
+import { PerspectiveCamera } from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+const dom = document.getElementById('surface');
+// Synthetic PointerEvents have no native active pointer to capture.
+dom.setPointerCapture = dom.releasePointerCapture = () => {};
+new OrbitControls(new PerspectiveCamera(), dom);
+window.pointer = (type, pointerId, pointerType) => dom.dispatchEvent(new PointerEvent(type, {
+  bubbles: true, pointerId, pointerType, clientX: 100, clientY: 100,
+}));
+window.__ready = true;
+</script>`;
+
 // Each case: [name, setup statements, result expression, expected value].
 // The setup and the expression are separate because an async function body has no
 // implicit return — the first version of this file lost every result to that.
@@ -454,7 +473,10 @@ const CASES = [
 
 const server = await serveDir({
   root: ROOT,
-  routes: { '/__fixture.html': { body: FIXTURE } },
+  routes: {
+    '/__fixture.html': { body: FIXTURE },
+    '/__orbit-fixture.html': { body: ORBIT_FIXTURE },
+  },
 });
 const cdp = await launch();
 const page = await newPage(cdp, { url: `${server.origin}/__fixture.html`, settle: 200 });
@@ -481,7 +503,21 @@ if (page.errors.length) {
   page.errors.slice(0, 5).forEach((e) => console.log('   ' + e));
   failed++;
 }
-console.log(`\n${CASES.length - failed} of ${CASES.length} passed`);
+
+const orbitPage = await newPage(cdp, { url: `${server.origin}/__orbit-fixture.html`, settle: 200 });
+await orbitPage.evaluate(`(() => {
+  pointer('pointerdown', 1, 'touch');
+  pointer('pointerdown', 2, 'mouse');
+  pointer('pointerup', 1, 'touch');
+  pointer('pointerup', 2, 'mouse');
+})()`);
+const orbitOk = orbitPage.errors.length === 0;
+if (!orbitOk) failed++;
+console.log(
+  `  ${orbitOk ? 'ok  ' : 'FAIL'}  OrbitControls handles a touch lift with a mouse pointer remaining`,
+);
+if (!orbitOk) orbitPage.errors.forEach((e) => console.log('   ' + e));
+console.log(`\n${CASES.length + 1 - failed} of ${CASES.length + 1} passed`);
 
 await cdp.close();
 server.close();
