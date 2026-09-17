@@ -256,7 +256,7 @@ export function attachControls(dom, intents) {
     }
     const now = e.timeStamp || performance.now();
     const near = Math.hypot(e.clientX - prevTapX, e.clientY - prevTapY) < DOUBLE_TAP_SLOP;
-    if (now - prevTapAt < DOUBLE_TAP_MS && near) {
+    if (prevTapAt && now - prevTapAt < DOUBLE_TAP_MS && near) {
       prevTapAt = 0; // consumed, so a third tap starts a fresh pair
       intents.doubleClick({ x: e.clientX, y: e.clientY });
     } else {

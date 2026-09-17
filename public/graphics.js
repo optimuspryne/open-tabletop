@@ -398,7 +398,7 @@ const FINISHES = {
   matte: { roughness: 0.5, metalness: 0.0 },
   satin: { roughness: 0.3, metalness: 0.0 },
   glossy: { roughness: 0.1, metalness: 0.05 },
-  metallic: { roughness: 0.35, metalness: 0.95 }, // material.color = the die color → tinted metal
+  metallic: { roughness: 0.4, metalness: 0.75 }, // material.color = the die color → tinted metal
   pearl: {
     roughness: 0.3,
     metalness: 0.1,
@@ -712,6 +712,13 @@ function modelFinishMaterial(source, finishKey, color) {
   }
   if (f.physical) for (const [key, value] of Object.entries(f.physical)) material[key] = value;
   material.needsUpdate = true;
+  return material;
+}
+
+function tintModelMaterial(source, color) {
+  const material = source.clone();
+  if (material.color) material.color.set(color);
+  material.metalness = 0;
   return material;
 }
 
@@ -1531,22 +1538,26 @@ function loadModelGroup(url, fitOpts, onMesh, beforeFit) {
   return group;
 }
 
-// Surface for a bundled object's tinted material slot. Definitions select a default with flags such
-// as `satin: true`; props.finish is an inspector-set override. Heavy finishes use the same phone-safe
-// substitutions as dice.
-function itemSurface(spec, color, side, override) {
+// Definitions select a default with flags such as `satin: true`; props.finish overrides it.
+// Heavy finishes use the same phone-safe substitutions as dice.
+function safeObjectFinish(spec, override) {
   let finish = objectFinish(spec, override);
   if (DICE_FINISH_FALLBACK[finish] && deviceClass() === 'phone')
     finish = DICE_FINISH_FALLBACK[finish];
-  return finishMaterial(color, finish, { side });
+  return finish;
+}
+
+function itemSurface(spec, color, side, override) {
+  return finishMaterial(color, safeObjectFinish(spec, override), { side });
 }
 
 function propModelPainter(props, spec, builtin) {
   const teamTint = builtin && spec.team ? propColor(props) : null;
   const pick = !builtin || !spec.ownMaterial || spec.tintMaterial ? (props.color ?? null) : null;
-  const finish = objectFinish(spec, props.finish);
-  const surface = (color, side) => itemSurface(spec, color, side, props.finish);
+  const finish = safeObjectFinish(spec, props.finish);
   const styled = props.finish !== undefined || finish !== 'matte';
+  const surface = (material, color) =>
+    styled ? modelFinishMaterial(material, finish, color) : tintModelMaterial(material, color);
 
   const paint = (material) => {
     if (!builtin) {
@@ -1555,10 +1566,10 @@ function propModelPainter(props, spec, builtin) {
         return material;
       return pick != null || styled ? modelFinishMaterial(material, finish, pick) : material;
     }
-    if (teamTint != null) return surface(teamTint, material.side);
+    if (teamTint != null) return surface(material, teamTint);
     if (spec.tintMaterial) {
-      if (material.name === spec.tintMaterial && (pick != null || styled))
-        return surface(pick ?? material.color, material.side);
+      if (isTintSlot(material.name, spec.tintMaterial) && (pick != null || styled))
+        return surface(material, pick ?? material.color);
       material.metalness = 0;
       return material;
     }
@@ -1566,14 +1577,13 @@ function propModelPainter(props, spec, builtin) {
       material.metalness = 0;
       return material;
     }
-    return pick != null || styled ? surface(pick ?? material.color, material.side) : material;
+    return pick != null || styled ? surface(material, pick ?? material.color) : material;
   };
 
   return (node) => {
     if (node.geometry) {
       node.geometry.computeVertexNormals();
-      if (!builtin && styled && (finish === 'marbled' || finish === 'brushed'))
-        addModelFinishUV(node.geometry);
+      if (styled && (finish === 'marbled' || finish === 'brushed')) addModelFinishUV(node.geometry);
     }
     if (!node.material) return;
     node.castShadow = true;
@@ -1784,10 +1794,7 @@ function deckMesh(props = {}) {
               if (isTintSlot(m.name, slot)) {
                 const c = props[skin.tints[slot]] ?? skin[skin.tints[slot]];
                 if (c != null) {
-                  const tinted = m.clone();
-                  tinted.color.set(c);
-                  tinted.metalness = 0;
-                  return tinted;
+                  return tintModelMaterial(m, c);
                 }
               }
             }
@@ -2115,7 +2122,7 @@ function dispenserMesh(props = {}) {
   }
 
   if (spec.body === 'model') {
-    const finish = objectFinish(spec, props.finish);
+    const finish = safeObjectFinish(spec, props.finish);
     const styled = props.finish !== undefined || finish !== 'matte';
     const tint = spec.team
       ? COLORS.team[spec.team][props.team ? 1 : 0]
@@ -2126,7 +2133,7 @@ function dispenserMesh(props = {}) {
       // A named slot preserves the rest of the model's baked materials (Go bowl); without one,
       // a colorable model dispenser takes the picked color across the whole model (train stack).
       if (tint != null && (!spec.tintMaterial || isTintSlot(m.name, spec.tintMaterial)))
-        return styled ? modelFinishMaterial(m, finish, tint) : matte(tint, m.side);
+        return styled ? modelFinishMaterial(m, finish, tint) : tintModelMaterial(m, tint);
       if (styled && !spec.tintMaterial) return modelFinishMaterial(m, finish);
       m.metalness = 0;
       return m; // shell keeps its baked look
@@ -2148,12 +2155,15 @@ function dispenserMesh(props = {}) {
   const discH = stackDiscH(spec.item);
   const n = stackVisible(props.count ?? spec.count.def);
   const tint = props.color ?? null;
-  const finish = objectFinish(item, props.finish);
+  const finish = safeObjectFinish(item, props.finish);
   const styled = props.finish !== undefined || finish !== 'matte';
+  const surface = (m) =>
+    styled
+      ? modelFinishMaterial(m, finish, tint ?? m.color)
+      : tintModelMaterial(m, tint ?? m.color);
   const paint = (m) => {
     if (item.tintMaterial) {
-      if ((tint != null || styled) && isTintSlot(m.name, item.tintMaterial))
-        return itemSurface(item, tint ?? m.color, m.side, props.finish);
+      if ((tint != null || styled) && isTintSlot(m.name, item.tintMaterial)) return surface(m);
       m.metalness = 0;
       return m;
     }
@@ -2161,7 +2171,7 @@ function dispenserMesh(props = {}) {
       m.metalness = 0;
       return m;
     }
-    return tint != null || styled ? itemSurface(item, tint ?? m.color, m.side, props.finish) : m;
+    return tint != null || styled ? surface(m) : m;
   };
   // Per-disc facing jitter so a chip stack looks tumbled, not machine-aligned.
   // Deterministic in (index, seed): a given disc keeps its angle as the stack grows or

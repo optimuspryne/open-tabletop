@@ -1067,8 +1067,18 @@ class OrbitControls extends EventDispatcher {
 					const pointerId = pointers[ 0 ];
 					const position = pointerPositions[ pointerId ];
 
-					// minimal placeholder event - allows state correction on pointer-up
-					onTouchStart( { pointerId: pointerId, pageX: position.x, pageY: position.y } );
+					// Mouse pointers have no tracked touch position. Only a remaining touch
+					// can restart the touch gesture after another pointer is released.
+					if ( position !== undefined ) {
+
+						// minimal placeholder event - allows state correction on pointer-up
+						onTouchStart( { pointerId: pointerId, pageX: position.x, pageY: position.y } );
+
+					} else {
+
+						state = STATE.NONE;
+
+					}
 
 					break;
 
