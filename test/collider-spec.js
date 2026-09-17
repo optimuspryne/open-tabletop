@@ -30,9 +30,9 @@ test('collider debug specs track live boards, decks, dice, and dispensers', () =
   assert.equal(colliderSpec('die', { sides: 20 }).type, 'convex');
   assert.deepEqual(colliderSpec('dispenser', { disp: 'pokerStack' }, { count: 4 }), {
     type: 'cylinder',
-    radiusTop: 0.45,
-    radiusBottom: 0.45,
-    height: 0.36,
+    radiusTop: 0.9798,
+    radiusBottom: 0.9798,
+    height: 0.8016,
     sides: 16,
   });
   assert.deepEqual(colliderSpec('dispenser', { disp: 'goBowl' }), {

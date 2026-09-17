@@ -35,6 +35,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   while retaining independently colored pips and named tint slots.
 
 ### Changed
+- Preserve authored color textures, normal maps, and roughness when tinting the built-in pouch's
+  bag and drawstring materials on spawned decks.
 - Let WASD and the arrow keys pan the desktop camera relative to its current view whenever their
   contextual held-piece or selection action does not apply.
 - Recalibrate the bundled chess/checkers and Go boards to their retuned model scales, measured
@@ -50,6 +52,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   historical changelog and roadmap entries remain as the record of the earlier feature.
 
 ### Fixed
+- Align the poker-stack collider test with the resized built-in poker-chip model.
 - Make small tabletop pieces easier to grab on touch screens with invisible screen-space hit
   padding, keep held pieces visible above the fingertip for precise placement, and keep
   deck/dispenser movement tracking after choosing Move from a long-press menu.

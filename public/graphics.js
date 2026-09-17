@@ -1776,23 +1776,23 @@ function deckMesh(props = {}) {
         node.receiveShadow = true;
         // De-metal so the model reads under the table lights; tint any named slot the skin maps
         // (e.g. the pouch's 'bag' → color, 'string' → textColor), falling back to the skin defaults.
+        // Keep the GLB material so its authored color and normal maps survive tinting.
         const paint = (m) => {
           if (!m) return m;
-          m.metalness = 0;
           if (skin.tints) {
             for (const slot in skin.tints) {
               if (isTintSlot(m.name, slot)) {
                 const c = props[skin.tints[slot]] ?? skin[skin.tints[slot]];
-                if (c != null)
-                  return new THREE.MeshStandardMaterial({
-                    color: c,
-                    metalness: 0,
-                    roughness: 0.6,
-                    side: m.side,
-                  });
+                if (c != null) {
+                  const tinted = m.clone();
+                  tinted.color.set(c);
+                  tinted.metalness = 0;
+                  return tinted;
+                }
               }
             }
           }
+          m.metalness = 0;
           return m;
         };
         node.material = Array.isArray(node.material)
