@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-09-17
+
 ### Added
 - Show a bottom-left desktop control guide for hovered and held table pieces and private-hand
   cards, listing the gestures and keyboard actions available in the current context.
@@ -1142,6 +1144,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.17.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.0
 [0.16.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.16.0
 [0.15.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.15.0
 [0.14.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.14.0
