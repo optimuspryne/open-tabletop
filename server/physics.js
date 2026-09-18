@@ -83,7 +83,11 @@ export function buildCollider(type, props, { cardColliderThickness }) {
   }
 
   if (type === 'board') {
-    if (props.outline && props.outline.type !== 'rectangle' && !props.board) {
+    if (
+      props.outline &&
+      (props.outline.type !== 'rectangle' || props.outline.fit) &&
+      !props.board
+    ) {
       const { vertices, faces } = boardGeometry(props);
       return new CANNON.ConvexPolyhedron({
         vertices: vertices.map((v) => new CANNON.Vec3(...v)),

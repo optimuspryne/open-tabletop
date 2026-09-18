@@ -544,7 +544,19 @@ outline only for collision. Built-in boards keep their authored box colliders.
 Image artwork and orthographic GLB snapshots serve as tracing references. The canvas respects the
 board aspect ratio, supports corner-by-corner drawing with undo/clear, and restores saved outlines
 when editing or cloning. Image boards retain width/depth and ratio-lock controls and add thickness;
-GLBs expose uniform sizing through a longest-side target.
+GLBs expose uniform sizing through a longest-side target. Their outline controls independently
+adjust width, depth, and Y-axis rotation, with a live tracing overlay and a reset-fit button.
+This accommodates models exported diagonally within their enclosing box without resizing the
+visual model. The corner-cut control remains accessible after numeric stepper enhancement.
+
+Optional `outline.fit = {scale:[width,depth],rotation}` preserves the selected preset or custom
+points. The shared normalizer accepts scales of 0.01–2 and rotations of -2π–2π radians.
+`boardOutlinePoints(outline, aspect)` scales points, rotates in physical X/Z space, and converts
+back to normalized coordinates; both the preview and `boardGeometry` supply the board aspect
+ratio. Custom corner clicks apply the inverse transform. Fitted rectangles use convex geometry
+in physics and diagnostics, while unchanged rectangles retain the existing box path. Fit settings
+persist with the outline through library editing/loading and scene props. The image-board UI
+continues to use its existing dimension controls.
 
 The WebSocket boundary validates outlines through `normalizeBoardOutline` before either saving
 or spawning. Custom polygons are limited to 3–32 points and must be nondegenerate, strictly convex,

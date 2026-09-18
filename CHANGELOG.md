@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Let uploaded GLB board outlines adjust width, depth, and rotation independently of the model,
+  with a live tracing overlay and saved fit settings.
 - Add a 3D custom collider editor for uploaded objects and GLB boards, with box, sphere,
   cylinder, cone and thin-slab shapes, drag/numeric transforms, duplicate/delete, undo, and
   apply/cancel. Save up to 16 shapes as one compound body that scales with the model.
@@ -27,6 +29,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Remove custom-collider helper text and wrap object scale controls to prevent clipping.
 
 ### Fixed
+- Keep the clipped-corner amount visible after number inputs receive their stepper wrappers.
 - Keep stand/lay-flat self-righting and dragging height independent of custom collider child
   offsets, including single-shape custom layouts, while preserving legacy flat-collider behavior.
 

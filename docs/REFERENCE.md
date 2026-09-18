@@ -10,7 +10,7 @@ The codebase:
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, table containment, and prop/board registries                                                                                     |
 | `shared/collider-spec.js`                                                                              | both    | Renderer-neutral descriptions of authoritative box, sphere, cylinder/cone, flat, convex-die, deck, board, prop, and dispenser colliders                                                         |
 | `shared/board-geometry.js` | both | Board outline validation, presets, dimensions, and shared convex-prism geometry |
-| `public/board-outline-editor.js` | browser | Top-down board outline tracing, aspect-correct previews, undo/clear, and form state |
+| `public/board-outline-editor.js` | browser | Top-down board outline tracing, GLB outline fitting, aspect-correct previews, undo/clear, and form state |
 | `shared/lighting.js`                                                                                   | both    | Factory room lighting, six authored presets, normalization/clamping, and durable snapshot shaping                                                                                               |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
@@ -408,18 +408,32 @@ chess}` each `[color0, color1]`.
   Custom outlines use `{type:'custom', points:[[x,z],...]}` with 3–32 finite points in
   `[-0.5,0.5]`. Validation rejects degenerate edges, crossings, collinear corners, and concavity,
   and normalizes winding. Presets other than clipped corners need only `{type}`.
-- **`boardOutlinePoints(outline)`** resolves normalized footprint points; circles use 32 segments.
+  All outline types optionally accept `fit:{scale:[width,depth],rotation}`: scale components
+  must be finite values from 0.01 to 2, and rotation is a finite Y-axis angle from -2π to 2π
+  radians. Omission preserves the full-size, unrotated outline.
+- **`boardOutlinePoints(outline, aspect=1)`** resolves normalized footprint points; circles use
+  32 segments. Fitting scales the footprint first, then rotates in physical X/Z space using
+  the board's width/depth aspect ratio before returning normalized points.
   Missing/invalid outlines fall back to a rectangle for geometry construction.
 - **`boardHalfExtents(props)`** resolves built-in bounds, uploaded GLB `box`, or image-board
   `[w/2, thickness/2, d/2]`. Image thickness defaults to `0.1`.
 - **`boardGeometry(props)`** returns `{vertices, faces}` for a solid convex prism shared by the
   image-board renderer and Cannon collider. GLB rendering retains the uploaded mesh.
+  Fitted rectangles use the convex-prism path in both physics and diagnostic rendering.
 
 Uploaded board records are `{model, modelScale, box, outline?}` or
 `{w, d, tex?, thickness?, outline?}`; built-ins remain `{board}`. `boardRecordPayload` validates
 both save and spawn requests, with image thickness bounded to `0.02–5`. Existing JSONB board
 props store the new fields without a schema migration. Library load, edit, clone, and scene
 persistence retain these fields; omitted outlines preserve rectangular behavior.
+
+The GLB outline form exposes **Outline width (%)**, **Outline depth (%)**, and **Rotation (°)**
+with a live top-down overlay. Width/depth accept 1–200%; rotation accepts -360–360°.
+**Reset outline fit** restores 100% / 100% / 0° without changing the selected preset or its
+corner cut. These controls change collision only; **Longest side** scales the model and its
+collider together. `wireBoardOutline` reads/fills the saved fit and inversely transforms custom
+corner clicks into the original outline coordinates. Image-board forms retain their existing
+width/depth controls.
 
 ---
 

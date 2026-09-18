@@ -124,3 +124,50 @@ test('GLB size and outline survive serialization without old collider clamping',
   assert.equal(Math.max(...shape.vertices.map((v) => v.x)), 35);
   assert.deepEqual(boardRecordPayload({ w: 8, d: 6 }), { w: 8, d: 6 });
 });
+
+test('fitted GLB outlines preserve preset and use matching rotated collision/debug geometry', () => {
+  for (const type of ['rectangle', 'clipped']) {
+    const record = {
+      model: '/assets/boards/test.glb',
+      modelScale: 1,
+      box: [6, 0.2, 3],
+      outline: {
+        type,
+        ...(type === 'clipped' ? { cut: 0.2 } : {}),
+        fit: { scale: [0.7, 0.5], rotation: Math.PI / 2 },
+      },
+    };
+    const parsed = boardRecordPayload(JSON.parse(JSON.stringify(record)));
+    assert.deepEqual(parsed, record);
+    const geometry = boardGeometry(parsed);
+    const shape = buildCollider('board', parsed, options);
+    assert.deepEqual(
+      shape.vertices.map((v) => v.toArray()),
+      geometry.vertices,
+    );
+    assert.deepEqual(colliderSpec('board', parsed).vertices, geometry.vertices);
+    assert.ok(Math.abs(Math.max(...geometry.vertices.map((v) => v[0])) - 1.5) < 1e-8);
+    assert.ok(Math.abs(Math.max(...geometry.vertices.map((v) => v[2])) - 4.2) < 1e-8);
+  }
+});
+
+test('outline fit rejects invalid scale and rotation at the message boundary', () => {
+  for (const fit of [
+    null,
+    {},
+    { scale: [0, 1], rotation: 0 },
+    { scale: [1, 3], rotation: 0 },
+    { scale: [1, 1], rotation: Infinity },
+    { scale: [1, 1], rotation: 7 },
+  ]) {
+    assert.equal(
+      boardRecordPayload({
+        model: '/assets/boards/test.glb',
+        modelScale: 1,
+        box: [4, 0.1, 4],
+        outline: { type: 'rectangle', fit },
+      }),
+      null,
+    );
+  }
+});

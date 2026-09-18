@@ -74,7 +74,7 @@ export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, c
   }
 
   if (type === 'board') {
-    if (props.outline && props.outline.type !== 'rectangle' && !props.board)
+    if (props.outline && (props.outline.type !== 'rectangle' || props.outline.fit) && !props.board)
       return { type: 'convex', vertices: boardGeometry(props).vertices };
     return { type: 'box', halfExtents: boardHalfExtents(props) };
   }

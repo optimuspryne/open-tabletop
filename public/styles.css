@@ -6865,3 +6865,16 @@ body.not-gm .gm-only {
   padding-top: 8px;
   font-size: 12px;
 }
+
+.boardOutlineFit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+.boardOutlineFit .stepper {
+  width: 100%;
+}
+.boardOutlineFit input {
+  min-width: 0;
+  width: 100%;
+}
