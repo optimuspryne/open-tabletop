@@ -9,6 +9,8 @@ The codebase:
 | ------------------------------------------------------------------------------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, table containment, and prop/board registries                                                                                     |
 | `shared/collider-spec.js`                                                                              | both    | Renderer-neutral descriptions of authoritative box, sphere, cylinder/cone, flat, convex-die, deck, board, prop, and dispenser colliders                                                         |
+| `shared/board-geometry.js` | both | Board outline validation, presets, dimensions, and shared convex-prism geometry |
+| `public/board-outline-editor.js` | browser | Top-down board outline tracing, aspect-correct previews, undo/clear, and form state |
 | `shared/lighting.js`                                                                                   | both    | Factory room lighting, six authored presets, normalization/clamping, and durable snapshot shaping                                                                                               |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
@@ -279,7 +281,7 @@ chess}` each `[color0, color1]`.
   whose top a `BOARD_PAINTERS` painter draws from data (no `.glb`). Model-board grids may pin
   measured `cellX`/`cellZ` spacing when decorative borders make the printed area smaller than the
   collider footprint.
-- **`BOARD_SIZE`** — target footprint width uploaded `.glb` boards normalize to.
+- **`BOARD_SIZE`** — default longest horizontal side (8) for uploaded `.glb` boards; the editor can choose a different target size.
 - **`TILES`** `{ key → { w, h, t, round } }` — named tile geometries (half-extents,
   thickness, corner radius): the standard `card`, plus `domino`, `letter`, `mahjong`.
   A card resolves to one of these (or an explicit `props.geom`) via `cardGeom`.
@@ -397,12 +399,36 @@ chess}` each `[color0, color1]`.
 
 ---
 
+## `shared/board-geometry.js` — uploaded board outlines
+
+- **`BOARD_OUTLINES`** — `rectangle`, `circle` (ellipse for unequal dimensions), `hexagon`,
+  `clipped`, and `custom`.
+- **`normalizeBoardOutline(value)`** returns a copied, normalized outline or `null`. Clipped
+  corners use `{type:'clipped', cut}` with `0 < cut < 0.5`; the editor offers 1–49 percent.
+  Custom outlines use `{type:'custom', points:[[x,z],...]}` with 3–32 finite points in
+  `[-0.5,0.5]`. Validation rejects degenerate edges, crossings, collinear corners, and concavity,
+  and normalizes winding. Presets other than clipped corners need only `{type}`.
+- **`boardOutlinePoints(outline)`** resolves normalized footprint points; circles use 32 segments.
+  Missing/invalid outlines fall back to a rectangle for geometry construction.
+- **`boardHalfExtents(props)`** resolves built-in bounds, uploaded GLB `box`, or image-board
+  `[w/2, thickness/2, d/2]`. Image thickness defaults to `0.1`.
+- **`boardGeometry(props)`** returns `{vertices, faces}` for a solid convex prism shared by the
+  image-board renderer and Cannon collider. GLB rendering retains the uploaded mesh.
+
+Uploaded board records are `{model, modelScale, box, outline?}` or
+`{w, d, tex?, thickness?, outline?}`; built-ins remain `{board}`. `boardRecordPayload` validates
+both save and spawn requests, with image thickness bounded to `0.02–5`. Existing JSONB board
+props store the new fields without a schema migration. Library load, edit, clone, and scene
+persistence retain these fields; omitted outlines preserve rectangular behavior.
+
+---
+
 ## `shared/collider-spec.js` — collider descriptions
 
 - **`primitiveColliderSpec(type, hx, hy, hz, options?)`** returns a renderer-neutral box, sphere,
   cylinder/cone, or flat-offset descriptor matching `server/physics.js`.
 - **`colliderSpec(type, props, {cardColliderThickness,count}?)`** resolves the current authoritative
-  primitive for every piece family, including convex dice and count-derived deck/dispenser heights.
+  primitive for every piece family, including convex dice, shaped board prisms, and count-derived deck/dispenser heights.
   The browser diagnostic consumes these descriptions without importing Cannon; server physics
   remains authoritative.
 
@@ -504,7 +530,8 @@ Private values remain internal; only orphan file metadata is returned by the API
 ### `server/physics.js` — physics construction
 
 - **`buildCollider(type, props) → CANNON.Shape`** — dice → `dieShape`; boards →
-  built-in/uploaded box (by half-height) else procedural `w×d`; props run through
+  a box from `boardHalfExtents`, or a `CANNON.ConvexPolyhedron` from `boardGeometry` for
+  non-rectangular uploaded outlines; props run through
   one shared **`colliderShape`** builder — an uploaded `.glb` passes its measured
   box + a string `props.collider`, a built-in shape passes its authored
   `collider.box` (× `props.scale`) + `collider.type`. Built-in modeled dispensers pass their
@@ -599,7 +626,7 @@ state persistence, scene serialization/restoration, settings handlers, and start
 `scaleSnapshot` emits the established durable `RoomScale` field set without leaking future/runtime
 properties. `applyScale` accepts old or partial snapshots, retaining the existing per-field enums,
 string length, numeric coercion, and clamps. `calibrateGrid` finds the current board and reads its
-Cannon box: custom and ordinary built-in square grids derive independent X/Z cell spacing and their
+Cannon box (falling back to `boardHalfExtents` for convex board colliders): custom and ordinary built-in square grids derive independent X/Z cell spacing and their
 center/cross anchor, while built-ins such as Go may pin printed-line spacing. Hex calibration preserves
 pointy/flat orientation and derives the centre-to-vertex size from board width and requested columns.
 Successful calibration recentres grid offsets and schedules the same durable room save; invalid or
@@ -1421,7 +1448,11 @@ quiet for a full frame), and
   High-quality Three.js card faces opt into the separate High derivative. Other refs pass through.
 - **`measureGlb(url)`** → `{ size, center }` (true loaded bounds). **`fitModel(obj,
 {scale|target})`** — centre at origin + scale (fixed or normalize). **`measureModel`**
-  / **`measureBoard`** build on `measureGlb` to return collider boxes.
+  / **`measureBoard(url, targetSize = BOARD_SIZE)`** build on `measureGlb` to return collider boxes.
+  The board helper returns `{scale, box}` fitted uniformly to the requested longest X/Z side.
+- **`boardOutlinePreviewURL(url)`** returns `{url, aspect}` (or `null` for empty bounds): an
+  orthographic top-down GLB snapshot aligned with its X/Z bounds for collider tracing. It disposes
+  the temporary model resources after rendering.
 - **`npm run assets:colliders [-- filter] [--json] [--check] [--tolerance=n]`** runs
   `scripts/measure-colliders.mjs`, a dependency-free GLB v2 scanner. It applies node hierarchy,
   matrix/TRS transforms, configured `modelRot`, and each registry's scaling rule, then reports
@@ -1446,7 +1477,8 @@ quiet for a full frame), and
   real sides, e.g. dominoes). **`deckMesh`** — the matching stack (rounded/hex extrude, top cap textured from
   `props.cover ?? props.back`), **or a `DECK_MODELS` skin** (a `.glb` bag/box/pouch, `modelRot`-
   reoriented and its `tints` slots painted from the deck's props) when `props.model` is set. **`boardMesh`** — a
-  loaded model, a **procedural** painter (`BOARDS[·].proc`), or a plain textured box. Shared
+  loaded model, a **procedural** painter (`BOARDS[·].proc`), or an outlined textured slab built
+  from `boardGeometry`, with top artwork mapped across the full width/depth and solid side walls. Shared
   extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**
   (true circular-arc corners; the hex matches its 6-gon collider).
 - **`finishMaterial`** — constructs the shared standard/physical material used by dice and
@@ -1739,6 +1771,14 @@ device token lives in `localStorage`.
   needed, and stores finite default amount or infinite supply. Library quantity/amount steppers
   reserve enough width for multi-digit values, and the custom-model Scale stepper cannot collapse
   away either button.
+- **`public/board-outline-editor.js`** — `wireBoardOutline(prefix)` connects the board form's
+  preset selector, corner-cut field, canvas, and undo/clear controls. Its `read`, `fill`, `image`,
+  and `aspect` methods validate/save outlines, restore edits, and align reference imagery with the
+  board dimensions. Custom corners are added in edge order by clicking/tapping the top-down view.
+  `wireAddBoard` in `editor-panel.js` connects this to both board forms: image boards retain their
+  width/depth ratio lock and add thickness; GLBs expose a longest-side target of `0.1–100`, subject
+  to the existing model-scale/bounds validation. Scaling updates the model and collider together.
+  GLB outlines affect collision only; image outlines affect both visible geometry and collision.
 - **`public/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
   `.actions` group, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an

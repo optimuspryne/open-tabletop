@@ -318,8 +318,19 @@ export function registerLibraryHandlers(
     const props = rec.board
       ? { board: rec.board }
       : rec.model
-        ? { model: rec.model, modelScale: rec.modelScale, box: rec.box }
-        : { w: rec.w, d: rec.d, tex: rec.tex || undefined };
+        ? {
+            model: rec.model,
+            modelScale: rec.modelScale,
+            box: rec.box,
+            ...(rec.outline ? { outline: rec.outline } : {}),
+          }
+        : {
+            w: rec.w,
+            d: rec.d,
+            tex: rec.tex || undefined,
+            ...(rec.outline ? { outline: rec.outline } : {}),
+            ...(rec.thickness ? { thickness: rec.thickness } : {}),
+          };
     if (
       ![...room.state.pieces.values()].some((piece) => piece.type === 'board') &&
       !ensurePieceCapacity(room, client)

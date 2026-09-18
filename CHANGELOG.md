@@ -8,6 +8,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- Add rectangle, circle/oval, hexagon, clipped-corner and custom convex outlines for uploaded
+  image and GLB boards, with a top-down tracing preview and matching physics/debug colliders.
+- Add image-board thickness and adjustable GLB longest-side sizing; preserve outline and sizing
+  through library save, edit, clone and load, and support grid calibration on shaped boards.
+
 ## [0.17.0] — 2026-09-17
 
 ### Added

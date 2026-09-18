@@ -425,3 +425,26 @@ test('mat persistence can finish after admin access is lost without spawning a m
     );
   }
 });
+
+for (const rec of [
+  {
+    w: 12,
+    d: 9,
+    thickness: 0.3,
+    tex: '/assets/boards/art.png',
+    outline: { type: 'clipped', cut: 0.2 },
+  },
+  {
+    model: '/assets/boards/model.glb',
+    modelScale: 3,
+    box: [12, 0.4, 8],
+    outline: { type: 'hexagon' },
+  },
+]) {
+  test(`loadBoard retains authored outline and dimensions: ${rec.model ? 'GLB' : 'image'}`, async () => {
+    const { db, handlers, calls } = harness();
+    db.getBoard = async () => ({ isPublic: true, rec });
+    await handlers.get('loadBoard')(client(), { id: '1' });
+    assert.deepEqual(calls.find(({ name }) => name === 'swapBoard').args[0], rec);
+  });
+}

@@ -1,3 +1,4 @@
+import { wireBoardOutline } from './board-outline-editor.js';
 // editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
 // on the table engine's room connection, handed over by client.js via
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
@@ -14,6 +15,7 @@ import {
   uploadModel,
   measureImage,
   measureBoard,
+  boardOutlinePreviewURL,
   measureModel,
   glbFilePreviewURL,
   modelMaterialNames,
@@ -1670,6 +1672,8 @@ function wireAddDeck() {
 const BOARD_TEX = 1024; // board texture size (square; matches CONFIG.upload.board)
 
 function wireAddBoard() {
+  const glbOutline = wireBoardOutline('adBoardGlb');
+  const imgOutline = wireBoardOutline('adBoardImg');
   // saveBoard inserts to the library (no spawn); Save + Spawn also swaps it onto the table.
   const save = (spec, name, spawn) => {
     ROOM.send('saveBoard', { name, board: spec, editId: editCtx && editCtx.id });
@@ -1681,12 +1685,39 @@ function wireAddBoard() {
     });
     byId('adBoardW').value = '10';
     byId('adBoardD').value = '10';
+    byId('adBoardGlbSize').value = '8';
+    byId('adBoardThickness').value = '0.1';
+    glbPreviewGeneration++;
+    glbOutline.image(null);
+    glbOutline.fill();
+    imgOutline.aspect(1);
+    imgOutline.fill();
+    imgOutline.image(null);
     clearSq('adBoardGlb');
     clearSq('adBoardImg');
     editCtx = null;
   };
 
-  wireUploadSq('adBoardGlb', true); // model tile renders the local .glb
+  let glbPreviewGeneration = 0;
+  const refreshGlbOutline = async (url) => {
+    const generation = ++glbPreviewGeneration;
+    glbOutline.image(null);
+    try {
+      const preview = await boardOutlinePreviewURL(url);
+      if (generation === glbPreviewGeneration && preview) {
+        glbOutline.aspect(preview.aspect);
+        glbOutline.image(preview.url);
+      }
+    } catch {
+      /* Save reports invalid model files. */
+    }
+  };
+  wireUploadSq('adBoardGlb', true, () => {
+    const file = byId('adBoardGlb').files[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    refreshGlbOutline(url).finally(() => URL.revokeObjectURL(url));
+  });
   const saveGlb = async (spawn) => {
     const name = byId('adBoardGlbName').value.trim();
     if (!name) return alert('Name the board first.');
@@ -1694,12 +1725,18 @@ function wireAddBoard() {
     try {
       const url = f ? await uploadModel(f) : editCtx && editCtx.model; // keep the existing model when editing/cloning
       if (!url) return alert('Choose a .glb file.');
-      const { scale, box } = await measureBoard(url);
-      save({ model: url, modelScale: scale, box }, name, spawn);
+      const target = +byId('adBoardGlbSize').value;
+      if (!Number.isFinite(target) || target < 0.1 || target > 100)
+        throw new Error('Longest side must be between 0.1 and 100.');
+      const outline = glbOutline.read();
+      const { scale, box } = await measureBoard(url, target);
+      if (scale < 0.001 || scale > 1000 || box.some((v) => v < 0.001 || v > 100))
+        throw new Error('This model cannot be scaled to that size.');
+      save({ model: url, modelScale: scale, box, outline }, name, spawn);
       clearBoard();
       closeAddModal();
     } catch (e) {
-      alert('Board model upload/load failed — make sure it is a .glb file.');
+      alert(e.message || 'Board model upload/load failed — make sure it is a .glb file.');
     }
   };
   byId('adBoardGlbSave').onclick = () => saveGlb(false);
@@ -1721,10 +1758,12 @@ function wireAddBoard() {
   if (wIn)
     wIn.oninput = () => {
       if (locked() && imgAspect > 0) dIn.value = clampWD((+wIn.value || 0) / imgAspect, 32);
+      imgOutline.aspect(+wIn.value / +dIn.value);
     };
   if (dIn)
     dIn.oninput = () => {
       if (locked() && imgAspect > 0) wIn.value = clampWD((+dIn.value || 0) * imgAspect, 40);
+      imgOutline.aspect(+wIn.value / +dIn.value);
     };
   const onImgPicked = () => {
     const f = byId('adBoardImg').files[0];
@@ -1737,6 +1776,8 @@ function wireAddBoard() {
         if (lk) lk.checked = true; // fresh image → lock on
         dIn.value = clampWD((+wIn.value || 10) / imgAspect, 32); // derive Depth from Width + aspect
       }
+      imgOutline.aspect(+wIn.value / +dIn.value);
+      imgOutline.image(img);
       URL.revokeObjectURL(img.src);
     };
     img.src = URL.createObjectURL(f);
@@ -1748,7 +1789,18 @@ function wireAddBoard() {
     const w = +byId('adBoardW').value || 10,
       d = +byId('adBoardD').value || 10;
     try {
-      const spec = { w, d };
+      const thickness = +byId('adBoardThickness').value;
+      if (
+        w < 0.1 ||
+        w > 100 ||
+        d < 0.1 ||
+        d > 100 ||
+        !Number.isFinite(thickness) ||
+        thickness < 0.02 ||
+        thickness > 5
+      )
+        throw new Error('Check the board dimensions and thickness.');
+      const spec = { w, d, thickness, outline: imgOutline.read() };
       const f = byId('adBoardImg').files[0];
       if (f) spec.tex = await uploadImage(f, BOARD_TEX, BOARD_TEX, 'stretch', 'boards');
       else if (editCtx && editCtx.tex) spec.tex = editCtx.tex; // keep the existing image when editing/cloning
@@ -1756,7 +1808,7 @@ function wireAddBoard() {
       clearBoard();
       closeAddModal();
     } catch (e) {
-      alert('Image upload failed.');
+      alert(e.message || 'Image upload failed.');
     }
   };
   byId('adBoardImgSave').onclick = () => saveImgBoard(false);
@@ -1766,19 +1818,26 @@ function wireAddBoard() {
     if (it.model) {
       // uploaded .glb board
       byId('adBoardGlbName').value = clone ? '' : it.name;
+      byId('adBoardGlbSize').value = it.box ? Math.max(it.box[0], it.box[2]) * 2 : 8;
+      glbOutline.fill(it.outline);
+      refreshGlbOutline(it.model);
       clearSq('adBoardGlb');
-      boardPreviewURL(it).then((u) => {
+      boardPreviewURL(it.model || it.tex).then((u) => {
         if (u) byId('adBoardGlb').parentElement.style.backgroundImage = `url("${u}")`;
       });
     } else {
       // image / flat board
       byId('adBoardImgName').value = clone ? '' : it.name;
+      byId('adBoardThickness').value = it.thickness || 0.1;
+      imgOutline.fill(it.outline);
+      imgOutline.image(it.tex);
       byId('adBoardW').value = it.w != null ? it.w : 10;
       byId('adBoardD').value = it.d != null ? it.d : 10;
+      imgOutline.aspect(+wIn.value / +dIn.value);
       imgAspect = it.w > 0 && it.d > 0 ? it.w / it.d : 1; // lock keeps this asset's existing proportions
       clearSq('adBoardImg');
       if (it.tex)
-        boardPreviewURL(it).then((u) => {
+        boardPreviewURL(it.model || it.tex).then((u) => {
           if (u) byId('adBoardImg').parentElement.style.backgroundImage = `url("${u}")`;
         });
     }

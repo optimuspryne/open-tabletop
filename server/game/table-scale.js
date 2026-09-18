@@ -1,3 +1,4 @@
+import { boardHalfExtents } from '../../shared/board-geometry.js';
 import { BOARDS } from '../../shared/pieces.js';
 import { readProps } from './props-codec.js';
 
@@ -61,8 +62,9 @@ export function createTableScale({ gridLiftMax }) {
     const body = room.bodies.get(boardId);
     const shape = body && body.shapes[0];
     const halfExtents = shape && shape.halfExtents;
-    const width = halfExtents ? halfExtents.x * 2 : 0;
-    const depth = halfExtents ? halfExtents.z * 2 : 0;
+    const bounds = boardHalfExtents(readProps(room.state.pieces.get(boardId)));
+    const width = halfExtents ? halfExtents.x * 2 : bounds[0] * 2;
+    const depth = halfExtents ? halfExtents.z * 2 : bounds[2] * 2;
 
     // A hex cell is expressed as its centre-to-vertex size. Adjacent column spacing depends on
     // orientation, so fit the requested number of columns to the board width using that step.

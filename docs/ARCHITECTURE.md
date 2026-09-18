@@ -52,6 +52,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`shared/pieces.js`** — the single source of truth for physics dimensions,
   masses, colors, dice vertices, and the prop/board registries. Imported by
   _both_ sides so a collider and its mesh are built from the same numbers.
+- **`shared/board-geometry.js`** — validated normalized board outlines, half-extents, and convex-prism
+  vertices/faces shared by image-board rendering, physics, and collider diagnostics.
 - **`server.js`** — the authority and composition root: the cannon-es world,
   Colyseus room classes, remaining table-message handlers, HTTP/security setup,
   and the private (non-synced) memory that holds secrets. Card, movement, and
@@ -477,8 +479,8 @@ The kinds:
   finish, and `props.finish` carries a synchronized Inspect override. Universal `props.scale`.
 - **board** — static (mass 0) but removable. A built-in model (`BOARDS`
   registry), an uploaded `.glb`, a **procedural** board drawn from data (a
-  `BOARD_PAINTERS` painter, e.g. the word grid), or a plain flat box with an optional
-  image. One board at a time; it's sat on the table by its half-height.
+  `BOARD_PAINTERS` painter, e.g. the word grid), or an outlined slab with an optional
+  image and configurable thickness. One board at a time; it's sat on the table by its half-height.
 - **mat** — a player mat: a large, single-faced, **movable** SURFACE that tiles and pieces rest on
   (per-player profession boards). Unlike the singleton `board`, every seat can have one. It reuses
   the tile image/geometry pipeline — `cardGeom`/`cardMesh`'s solid-slab path + the card box collider
@@ -502,8 +504,10 @@ and human-token models are original project assets.
   measurement directly from each registered GLB's accessor bounds and node transforms, applies
   the registry scaling/rotation rules, and reports copyable collider/scale suggestions. This keeps
   replacing a bundled model deterministic without pulling a 3D renderer into the server.
-- **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to fit
-  the table); the client measures the model and stores the collider box with the library record.
+- **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to a user-selected
+  longest X/Z side, defaulting to `BOARD_SIZE`). The client measures the model and stores its
+  uniform `modelScale` and collider half-extents `box` with the library record. Changing board
+  size updates both together; it does not refit automatically to the table.
   Object creation can store a default standard finish and a tint policy (whole model, preserve
   authored colors, or one material name discovered from the GLB), previews it before upload, and
   later accepts the same synchronized Inspect override as bundled model props. Spawning goes
@@ -526,6 +530,34 @@ and human-token models are original project assets.
   tint slots independently. This path covers bundled/uploaded model props, modeled dispensers and
   stacks, and built-in pipped dice; low-end phones retain the dice finish fallbacks. `custom`
   remains procedural-dice-only because it requires a `finishImg` from the dice texture library.
+
+### Uploaded board outlines
+
+Image boards store `{w,d,tex?,thickness?,outline?}`; GLB boards store
+`{model,modelScale,box,outline?}`. The optional outline selects rectangle, circle/oval, hexagon,
+clipped corners, or a custom convex polygon. `shared/board-geometry.js` keeps outline coordinates
+in normalized local X/Z space, so one authored outline scales with the board. The image mesh and
+Cannon body use the same prism vertices/faces; GLBs retain their original visual mesh and use the
+outline only for collision. Built-in boards keep their authored box colliders.
+
+`public/board-outline-editor.js` provides a top-down canvas shared by both upload/edit forms.
+Image artwork and orthographic GLB snapshots serve as tracing references. The canvas respects the
+board aspect ratio, supports corner-by-corner drawing with undo/clear, and restores saved outlines
+when editing or cloning. Image boards retain width/depth and ratio-lock controls and add thickness;
+GLBs expose uniform sizing through a longest-side target.
+
+The WebSocket boundary validates outlines through `normalizeBoardOutline` before either saving
+or spawning. Custom polygons are limited to 3–32 points and must be nondegenerate, strictly convex,
+and non-self-intersecting. Circles use a 32-sided approximation. These are single solid prisms:
+there is no automatic image-alpha/model-hull extraction, hole subtraction, concave decomposition,
+or compound collider editor in this stage.
+
+Existing board JSONB props and piece/scene props carry outlines and thickness without a database
+migration. The library load handler explicitly retains the new fields. `swapBoard` places the body
+at its resolved half-height, while grid calibration falls back to shared board dimensions when a
+convex collider has no Cannon box half-extents. Legacy records default to rectangular outlines and
+image thickness `0.1`. Regression tests cover geometry/debug parity, outward face winding, actual
+piece contact versus removed corners, record validation, library loading, and shaped-board calibration.
 
 ### Collider diagnostics
 
@@ -1033,7 +1065,7 @@ finishes by calling `room.buildTrays()`, keeping personal trays aligned with the
 `createTableScale({ gridLiftMax })` returns room-oriented snapshot, restoration, and calibration
 operations. It owns the durable `RoomScale` field list and restoration clamps, so room-row and scene
 loads apply the same compatibility rules. Calibration reads the active board's synchronized metadata
-and Cannon half-extents: square grids derive per-axis spacing and center/cross anchoring, built-ins may
+and Cannon half-extents (or shared board dimensions for convex colliders): square grids derive per-axis spacing and center/cross anchoring, built-ins may
 pin printed-line spacing, and hex grids retain pointy/flat orientation while deriving hex size from
 board width. Only successful calibration resets offsets and schedules a save.
 

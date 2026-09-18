@@ -1,3 +1,4 @@
+import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -1868,9 +1869,9 @@ function deckMesh(props = {}) {
 
 // Normalize an uploaded board so its footprint is BOARD_SIZE wide; returns
 // { scale, box:[hx,hy,hz] } for the server-side collider.
-function measureBoard(url) {
+function measureBoard(url, targetSize = BOARD_SIZE) {
   return measureGlb(url).then(({ size }) => {
-    const scale = BOARD_SIZE / (Math.max(size.x, size.z) || 1); // fit the X/Z footprint
+    const scale = targetSize / (Math.max(size.x, size.z) || 1); // fit the X/Z footprint
     return { scale, box: [(size.x * scale) / 2, (size.y * scale) / 2, (size.z * scale) / 2] };
   });
 }
@@ -2003,7 +2004,26 @@ function boardMesh(props = {}) {
   if (props.tex) map = loadImageTexture(props.tex); // a full uploaded image, stretched across the top
   const top = new THREE.MeshStandardMaterial({ map, roughness: 0.8 });
   const edge = new THREE.MeshStandardMaterial({ color: COLORS.boardEdge });
-  return new THREE.Mesh(new THREE.BoxGeometry(w, 0.1, d), [edge, edge, top, edge, edge, edge]);
+  const { vertices, faces } = boardGeometry(props);
+  const positions = [],
+    uvs = [];
+  const geometry = new THREE.BufferGeometry();
+  for (let f = 0; f < faces.length; f++) {
+    const face = faces[f],
+      start = positions.length / 3;
+    for (let i = 1; i < face.length - 1; i++) {
+      for (const index of [face[0], face[i], face[i + 1]]) {
+        const v = vertices[index];
+        positions.push(...v);
+        uvs.push(v[0] / w + 0.5, 0.5 - v[2] / d);
+      }
+    }
+    geometry.addGroup(start, positions.length / 3 - start, f === 1 ? 0 : 1);
+  }
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeVertexNormals();
+  return new THREE.Mesh(geometry, [top, edge]);
 }
 
 // --- Dispensers: a body that hands out copies of a child piece --------------
@@ -2674,6 +2694,36 @@ export async function propPreviewURL(props = {}) {
   if (url) rememberPreview(key, url);
   return url;
 }
+// Orthographic image aligned exactly with the model's X/Z bounds for tracing colliders.
+export async function boardOutlinePreviewURL(url) {
+  const gltf = await gltfLoader.loadAsync(url);
+  const obj = gltf.scene;
+  const { renderer, scene } = thumbRig();
+  try {
+    const box = new THREE.Box3().setFromObject(obj);
+    if (box.isEmpty()) return null;
+    const size = box.getSize(new THREE.Vector3());
+    obj.position.sub(box.getCenter(new THREE.Vector3()));
+    const camera = new THREE.OrthographicCamera(
+      -size.x / 2,
+      size.x / 2,
+      size.z / 2,
+      -size.z / 2,
+      0.001,
+      Math.max(size.y, 1) * 4,
+    );
+    camera.position.set(0, Math.max(size.y, 1) * 2, 0);
+    camera.up.set(0, 0, -1);
+    camera.lookAt(0, 0, 0);
+    scene.add(obj);
+    renderer.render(scene, camera);
+    return { url: renderer.domElement.toDataURL('image/png'), aspect: size.x / size.z };
+  } finally {
+    scene.remove(obj);
+    disposeHierarchy(obj);
+  }
+}
+
 // A board preview: an image URL passes through; a .glb is rendered; else null.
 export async function boardPreviewURL(fileUrl) {
   if (!fileUrl) return null;

@@ -1,10 +1,9 @@
+import { boardGeometry, boardHalfExtents } from '../shared/board-geometry.js';
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
 import {
-  BOARDS,
   KINDS,
   PROPS,
-  TABLE,
   cardGeom,
   dieR,
   dieVerts,
@@ -67,19 +66,14 @@ export function buildCollider(type, props, { cardColliderThickness }) {
   }
 
   if (type === 'board') {
-    const builtin = props.board && BOARDS[props.board];
-    const box = builtin?.box || (props.model && Array.isArray(props.box) ? props.box : null);
-    if (box) {
-      const [hx, hy, hz] = box.map((value) => clamp(+value || 0.05, 0.02, 2 * TABLE.x));
-      return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
+    if (props.outline && props.outline.type !== 'rectangle' && !props.board) {
+      const { vertices, faces } = boardGeometry(props);
+      return new CANNON.ConvexPolyhedron({
+        vertices: vertices.map((v) => new CANNON.Vec3(...v)),
+        faces,
+      });
     }
-    if (props.w || props.d) {
-      // `w`/`d` are the rendered board's full dimensions. Keep the physics footprint identical;
-      // shrinking it to the table minus a margin leaves a collider-free rim on large boards.
-      const width = clamp(props.w || 8, 0.1, 100);
-      const depth = clamp(props.d || 8, 0.1, 100);
-      return new CANNON.Box(new CANNON.Vec3(width / 2, 0.05, depth / 2));
-    }
+    return new CANNON.Box(new CANNON.Vec3(...boardHalfExtents(props)));
   }
 
   if (shape === 'dispenser') {

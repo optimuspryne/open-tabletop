@@ -1,3 +1,4 @@
+import { boardHalfExtents } from './shared/board-geometry.js';
 import { createDeckBuilders } from './server/game/deck-builders.js';
 import {
   afterDispense as consumeDispensedItem,
@@ -651,9 +652,7 @@ class TableRoom extends Room {
     });
     oldBoards.forEach((id) => this.removePiece(id));
 
-    const builtin = props.board && BOARDS[props.board];
-    const box = builtin ? builtin.box : props.model && Array.isArray(props.box) ? props.box : null;
-    return this.spawn('board', [0, box ? box[1] : 0.05, 0], props);
+    return this.spawn('board', [0, boardHalfExtents(props)[1], 0], props);
   }
 
   // Set the room's square grid from the current board's real size: cell = board width ÷ gaps.

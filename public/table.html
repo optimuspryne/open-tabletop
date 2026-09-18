@@ -1889,6 +1889,32 @@
             <div class="addCol">
               <label for="adBoardGlbName">Board name</label>
               <input id="adBoardGlbName" type="text" placeholder="Name this board" />
+              <label for="adBoardGlbOutline">Board outline</label>
+              <select id="adBoardGlbOutline">
+                <option value="rectangle">Rectangle</option>
+                <option value="circle">Circle / oval</option>
+                <option value="hexagon">Hexagon</option>
+                <option value="clipped">Clipped corners</option>
+                <option value="custom">Custom convex outline</option>
+              </select>
+              <label hidden
+                >Corner cut (%) <input id="adBoardGlbCut" type="number" min="1" max="49" value="15"
+              /></label>
+              <canvas
+                id="adBoardGlbCanvas"
+                width="320"
+                height="240"
+                style="max-width: 100%; cursor: crosshair"
+                aria-label="Top-down board outline; click to add custom corners"
+              ></canvas>
+              <div id="adBoardGlbTools" hidden>
+                <button type="button" id="adBoardGlbUndo">Undo corner</button
+                ><button type="button" id="adBoardGlbClear">Clear outline</button>
+              </div>
+              <p id="adBoardGlbStatus" role="status"></p>
+              <label for="adBoardGlbSize">Longest side</label
+              ><input id="adBoardGlbSize" type="number" min="0.1" max="100" step="0.5" value="8" />
+              <p>Scales the model and collider together. The outline changes collision only.</p>
               <div class="saveFoot">
                 <p class="destNote">
                   Saved boards land in <b>Library → Boards → Custom</b> for every room you host.
@@ -1923,6 +1949,38 @@
             <div class="addCol">
               <label for="adBoardImgName">Board name</label>
               <input id="adBoardImgName" type="text" placeholder="Name this board" />
+              <label for="adBoardImgOutline">Board outline</label>
+              <select id="adBoardImgOutline">
+                <option value="rectangle">Rectangle</option>
+                <option value="circle">Circle / oval</option>
+                <option value="hexagon">Hexagon</option>
+                <option value="clipped">Clipped corners</option>
+                <option value="custom">Custom convex outline</option>
+              </select>
+              <label hidden
+                >Corner cut (%) <input id="adBoardImgCut" type="number" min="1" max="49" value="15"
+              /></label>
+              <canvas
+                id="adBoardImgCanvas"
+                width="320"
+                height="240"
+                style="max-width: 100%; cursor: crosshair"
+                aria-label="Top-down board outline; click to add custom corners"
+              ></canvas>
+              <div id="adBoardImgTools" hidden>
+                <button type="button" id="adBoardImgUndo">Undo corner</button
+                ><button type="button" id="adBoardImgClear">Clear outline</button>
+              </div>
+              <p id="adBoardImgStatus" role="status"></p>
+              <label for="adBoardThickness">Thickness</label
+              ><input
+                id="adBoardThickness"
+                type="number"
+                min="0.02"
+                max="5"
+                step="0.02"
+                value="0.1"
+              />
               <label>Size</label>
               <div class="sizeRow">
                 <label for="adBoardW">Width:</label

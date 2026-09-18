@@ -1,9 +1,8 @@
+import { boardGeometry, boardHalfExtents } from './board-geometry.js';
 import {
-  BOARDS,
   DECK_MODELS,
   KINDS,
   PROPS,
-  TABLE,
   cardGeom,
   deckHeight,
   dieR,
@@ -70,17 +69,9 @@ export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, c
   }
 
   if (type === 'board') {
-    const builtin = props.board && BOARDS[props.board];
-    const box = builtin?.box || (props.model && Array.isArray(props.box) ? props.box : null);
-    if (box) {
-      const halfExtents = box.map((value) => clamp(+value || 0.05, 0.02, 2 * TABLE.x));
-      return { type: 'box', halfExtents };
-    }
-    if (props.w || props.d) {
-      const width = clamp(props.w || 8, 0.1, 100);
-      const depth = clamp(props.d || 8, 0.1, 100);
-      return { type: 'box', halfExtents: [width / 2, 0.05, depth / 2] };
-    }
+    if (props.outline && props.outline.type !== 'rectangle' && !props.board)
+      return { type: 'convex', vertices: boardGeometry(props).vertices };
+    return { type: 'box', halfExtents: boardHalfExtents(props) };
   }
 
   if (shape === 'dispenser') {

@@ -1,3 +1,4 @@
+import { normalizeBoardOutline } from '../shared/board-geometry.js';
 // Normalizers for values arriving across the WebSocket trust boundary. A
 // normalizer returns a fresh, trusted value or null; handlers must not continue
 // using the original message after validation.
@@ -446,15 +447,24 @@ export function boardRecordPayload(value, { boardKeys = [] } = {}) {
       ? { board: value.board }
       : null;
   }
+  const extra = {};
+  if (value.outline !== undefined) {
+    extra.outline = normalizeBoardOutline(value.outline);
+    if (!extra.outline) return null;
+  }
+  if (value.thickness !== undefined) {
+    extra.thickness = finiteNumber(value.thickness, { min: 0.02, max: 5 });
+    if (extra.thickness === null || value.model) return null;
+  }
   if (value.model !== undefined) {
-    if (!exactObject(value, ['model', 'modelScale', 'box'])) return null;
+    if (!hasOnlyKeys(value, new Set(['model', 'modelScale', 'box', 'outline']))) return null;
     const model = localAssetRef(value.model, { extension: '.glb' });
     const modelScale = finiteNumber(value.modelScale, { min: 1e-3, max: 1e3 });
     const box = finiteTuple(value.box, { min: 1e-3, max: 100 });
-    return model && modelScale !== null && box ? { model, modelScale, box } : null;
+    return model && modelScale !== null && box ? { model, modelScale, box, ...extra } : null;
   }
   if (
-    !hasOnlyKeys(value, new Set(['w', 'd', 'tex'])) ||
+    !hasOnlyKeys(value, new Set(['w', 'd', 'tex', 'outline', 'thickness'])) ||
     !Object.hasOwn(value, 'w') ||
     !Object.hasOwn(value, 'd')
   )
@@ -462,7 +472,7 @@ export function boardRecordPayload(value, { boardKeys = [] } = {}) {
   const w = finiteNumber(value.w, { min: 0.1, max: 100 });
   const d = finiteNumber(value.d, { min: 0.1, max: 100 });
   if (w === null || d === null) return null;
-  const out = { w, d };
+  const out = { w, d, ...extra };
   if (value.tex !== undefined && value.tex !== null) {
     const tex = localAssetRef(value.tex);
     if (!tex) return null;

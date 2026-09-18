@@ -164,3 +164,14 @@ test('hex calibration preserves orientation and rejects unusable requests withou
   invalid.state.pieces.clear();
   assert.equal(operations.calibrateGrid(invalid, { cells: 6 }), null);
 });
+
+test('grid calibration accepts a shaped board without box half extents', () => {
+  const room = makeRoom({
+    props: { w: 12, d: 8, outline: { type: 'clipped', cut: 0.2 } },
+    halfExtents: null,
+  });
+  const result = operations.calibrateGrid(room, { cells: 4, anchor: 'center' });
+  assert.ok(result);
+  assert.equal(room.state.scale.cellWorld, 3);
+  assert.equal(room.state.scale.cellZ, 2);
+});
