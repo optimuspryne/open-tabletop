@@ -162,3 +162,23 @@ test('release snaps flagged non-decks using their multi-cell footprint', () => {
     [0, 0, 0],
   );
 });
+
+test('spawn preserves all compound shapes and the saved layout on a single piece', () => {
+  const { room, lifecycle } = harness();
+  const shape = (x) => ({
+    type: 'box',
+    position: [x, 0, 0],
+    size: [0.2, 0.2, 0.2],
+    rotation: [0, 0, 0],
+  });
+  const props = {
+    model: '/assets/props/bridge.glb',
+    box: [1, 1, 1],
+    scale: 1,
+    stand: false,
+    compoundCollider: { version: 1, shapes: [shape(-0.4), shape(0.4)] },
+  };
+  const id = lifecycle.spawn(room, 'prop', [0, 2, 0], props, [0, 0, 0, 1]);
+  assert.equal(room.bodies.get(id).shapes.length, 2);
+  assert.deepEqual(readProps(room.state.pieces.get(id)).compoundCollider, props.compoundCollider);
+});

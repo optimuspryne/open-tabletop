@@ -1,3 +1,4 @@
+import { compoundColliderSpec } from '../shared/compound-collider.js';
 import { boardGeometry, boardHalfExtents } from '../shared/board-geometry.js';
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
@@ -52,6 +53,22 @@ export function colliderShape(type, hx, hy, hz, options = {}) {
 
 export function buildCollider(type, props, { cardColliderThickness }) {
   const shape = KINDS[type].shape;
+  if ((type === 'prop' || type === 'board') && props.model && props.compoundCollider) {
+    const spec = compoundColliderSpec(props.compoundCollider, props.box);
+    if (spec)
+      return {
+        shapes: spec.shapes.map((part) => ({
+          shape:
+            part.type === 'sphere'
+              ? new CANNON.Sphere(part.radius)
+              : part.type === 'cylinder'
+                ? new CANNON.Cylinder(part.radiusTop, part.radiusBottom, part.height, part.sides)
+                : new CANNON.Box(new CANNON.Vec3(...part.halfExtents)),
+          offset: new CANNON.Vec3(...part.offset),
+          orientation: new CANNON.Quaternion().setFromEuler(...part.rotation, 'XYZ'),
+        })),
+      };
+  }
   if (shape === 'die') return dieShape(props.sides || 6);
 
   if (shape === 'prop') {
@@ -187,3 +204,26 @@ const averagePoint = (points) => {
   );
   return sum.map((component) => component / points.length);
 };
+
+// Attach every component to one rigid body, preserving local offsets and rotations.
+export function attachCollider(body, collider) {
+  if (collider.shapes) {
+    for (const part of collider.shapes) body.addShape(part.shape, part.offset, part.orientation);
+  } else if (collider.shape) body.addShape(collider.shape, collider.offset, collider.orientation);
+  else body.addShape(collider);
+}
+
+// Keep both the visual model and any authored shapes above the table at spawn.
+export function boardSpawnHeight(props) {
+  const visualHeight = boardHalfExtents(props)[1];
+  if (!props.compoundCollider) return visualHeight;
+  const collider = buildCollider('board', props, { cardColliderThickness: 0.04 });
+  let height = visualHeight;
+  for (const part of collider.shapes || []) {
+    const min = new CANNON.Vec3(),
+      max = new CANNON.Vec3();
+    part.shape.calculateWorldAABB(part.offset, part.orientation, min, max);
+    height = Math.max(height, -min.y);
+  }
+  return height;
+}

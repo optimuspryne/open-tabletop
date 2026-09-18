@@ -10,7 +10,7 @@ import {
   snapToCell,
 } from '../../shared/pieces.js';
 import { absorbedEntry, cardBackRef, cardCompatibilityKey } from '../deck-state.js';
-import { buildCollider } from '../physics.js';
+import { buildCollider, attachCollider } from '../physics.js';
 import { assertPieceCapacity } from './piece-capacity.js';
 import { readProps, writeProps } from './props-codec.js';
 import { Piece } from './schema.js';
@@ -32,8 +32,7 @@ export function createPieceLifecycle({
     const collider = buildCollider(type, props, {
       cardColliderThickness: sim.cards.colliderThick,
     });
-    if (collider.shape) body.addShape(collider.shape, collider.offset);
-    else body.addShape(collider);
+    attachCollider(body, collider);
     body.position.set(pos[0], pos[1], pos[2]);
 
     if (quat && quat.length === 4) {

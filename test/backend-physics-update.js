@@ -1,3 +1,5 @@
+import { buildCollider, attachCollider } from '../server/physics.js';
+import { standOf } from '../server/game/piece-operations.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
@@ -324,3 +326,49 @@ test('publishTransforms writes matching bodies and ignores missing bodies', () =
 
   assert.deepEqual(writes, [[present, presentBody]]);
 });
+
+// A compound with one displaced primitive is still compound; child ordering must
+// not change either self-righting or the position used by the drag servo.
+for (const offsets of [[0.3], [0.3, -0.2], [-0.2, 0.3]]) {
+  for (const stand of [true, 'flat', false]) {
+    test(`compound standing=${stand}, offsets=${offsets}: rights and drags about the body origin`, () => {
+      const { room } = harness();
+      room.standOf = standOf;
+      const props = {
+        model: '/assets/props/custom.glb',
+        box: [0.5, 0.5, 0.5],
+        stand,
+        compoundCollider: {
+          version: 1,
+          shapes: offsets.map((y) => ({
+            type: 'box',
+            position: [0, y, 0],
+            size: [0.2, 0.2, 0.2],
+            rotation: [0, 0, 0],
+          })),
+        },
+      };
+      const piece = { type: 'prop', owner: '', props: JSON.stringify(props) };
+      const physical = body({ position: [0, 1, 0] });
+      attachCollider(physical, buildCollider('prop', props, { cardColliderThickness: 0.04 }));
+      physical.quaternion.setFromEuler(0.4, 0, 0);
+      room.state.pieces.set('custom', piece);
+      room.bodies.set('custom', physical);
+
+      selfRightPieces(room, SIM);
+      if (stand) assert.ok(physical.angularVelocity.x < 0, 'stand/flat must correct the tilt');
+      else assert.equal(physical.angularVelocity.length(), 0, 'off must remain free to tumble');
+      assert.equal(JSON.parse(piece.props).stand, stand);
+
+      piece.owner = 'session';
+      room.targets.set('custom', { x: 0, y: 2, z: 0 });
+      driveHeldPieces(room, SIM);
+      assert.equal(physical.velocity.y, 25, 'child offsets must not shift the held body');
+      if (stand) {
+        assert.equal(physical.quaternion.x, 0);
+        assert.equal(physical.quaternion.z, 0);
+        assert.equal(physical.angularVelocity.length(), 0);
+      } else assert.ok(physical.quaternion.x > 0, 'off must preserve the held tilt');
+    });
+  }
+}

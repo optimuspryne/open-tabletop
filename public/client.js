@@ -424,6 +424,17 @@ const disposeColliderDebug = (group) => {
 };
 
 function colliderDebugGroup(spec) {
+  if (spec.type === 'compound') {
+    const group = new THREE.Group();
+    group.userData.localOffset = new THREE.Vector3();
+    for (const part of spec.shapes) {
+      const child = colliderDebugGroup(part);
+      child.position.copy(child.userData.localOffset);
+      child.rotation.set(...part.rotation);
+      group.add(child);
+    }
+    return group;
+  }
   let geometry;
   if (spec.type === 'sphere') geometry = new THREE.SphereGeometry(spec.radius, 20, 12);
   else if (spec.type === 'cylinder')

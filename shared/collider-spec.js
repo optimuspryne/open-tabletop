@@ -1,3 +1,4 @@
+import { compoundColliderSpec } from './compound-collider.js';
 import { boardGeometry, boardHalfExtents } from './board-geometry.js';
 import {
   DECK_MODELS,
@@ -45,6 +46,10 @@ export function primitiveColliderSpec(type, hx, hy, hz, options = {}) {
 export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, count } = {}) {
   const shape = KINDS[type]?.shape;
   if (!shape) return null;
+  if ((type === 'prop' || type === 'board') && props.model && props.compoundCollider) {
+    const compound = compoundColliderSpec(props.compoundCollider, props.box);
+    if (compound) return compound;
+  }
 
   if (shape === 'die') {
     const sides = props.sides || 6;

@@ -25,7 +25,9 @@ export function driveHeldPieces(room, sim) {
     const velocity = dragVelocity(
       body.position,
       target,
-      body.shapeOffsets[0]?.y ?? 0,
+      // Legacy flat colliders shift the whole collision surface below the model.
+      // Compound child offsets describe parts of the body, not a drag-origin shift.
+      readProps(piece).compoundCollider ? 0 : (body.shapeOffsets[0]?.y ?? 0),
       stiffness,
       maxSpeed,
     );
@@ -59,7 +61,9 @@ export function selfRightPieces(room, sim) {
     if (!standMode) return;
     const body = room.bodies.get(id);
     if (!body || body.sleepState === CANNON.Body.SLEEPING) return;
-    if (body.shapeOffsets[0] && Math.abs(body.shapeOffsets[0].y) > 0.01) return;
+    // Preserve the legacy flat-collider exception without treating an arbitrary
+    // first compound child as the body's origin or a reason to disable standing.
+    if (!readProps(piece).compoundCollider && Math.abs(body.shapeOffsets[0]?.y ?? 0) > 0.01) return;
 
     body.quaternion.vmult(worldUp, pieceUp);
     pieceUp.cross(worldUp, axis);

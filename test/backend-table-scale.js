@@ -175,3 +175,17 @@ test('grid calibration accepts a shaped board without box half extents', () => {
   assert.equal(room.state.scale.cellWorld, 3);
   assert.equal(room.state.scale.cellZ, 2);
 });
+
+test('compound board calibration uses the model bounds rather than its first small shape', () => {
+  const room = makeRoom({
+    props: {
+      model: '/assets/boards/test.glb',
+      box: [6, 0.1, 4],
+      compoundCollider: { version: 1, shapes: [] },
+    },
+    halfExtents: { x: 0.1, z: 0.1 },
+  });
+  assert.ok(operations.calibrateGrid(room, { cells: 4, anchor: 'center' }));
+  assert.equal(room.state.scale.cellWorld, 3);
+  assert.equal(room.state.scale.cellZ, 2);
+});

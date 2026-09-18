@@ -14,6 +14,21 @@ const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html'];
 
 // The full set of icons used across the app, grouped loosely by where they first appeared.
 const ICONS = [
+  // Custom collider editor
+  'hexagon-3d',
+  'mood-neutral',
+  'mood-look-down',
+  'mood-look-left',
+  'library-minus',
+  'view-360-number',
+  'chart-scatter-3d',
+  'rotate-3d',
+  'scan-cube',
+  'cube-plus',
+  'sphere-plus',
+  'cylinder-plus',
+  'cone-plus',
+  'square-plus-2',
   // Tools menu
   'notes',
   'message-dots',

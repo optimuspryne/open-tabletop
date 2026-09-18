@@ -1,3 +1,4 @@
+import { normalizeCompoundCollider } from '../shared/compound-collider.js';
 import { normalizeBoardOutline } from '../shared/board-geometry.js';
 // Normalizers for values arriving across the WebSocket trust boundary. A
 // normalizer returns a fresh, trusted value or null; handlers must not continue
@@ -457,7 +458,12 @@ export function boardRecordPayload(value, { boardKeys = [] } = {}) {
     if (extra.thickness === null || value.model) return null;
   }
   if (value.model !== undefined) {
-    if (!hasOnlyKeys(value, new Set(['model', 'modelScale', 'box', 'outline']))) return null;
+    if (value.compoundCollider !== undefined) {
+      extra.compoundCollider = normalizeCompoundCollider(value.compoundCollider);
+      if (!extra.compoundCollider || value.outline !== undefined) return null;
+    }
+    if (!hasOnlyKeys(value, new Set(['model', 'modelScale', 'box', 'outline', 'compoundCollider'])))
+      return null;
     const model = localAssetRef(value.model, { extension: '.glb' });
     const modelScale = finiteNumber(value.modelScale, { min: 1e-3, max: 1e3 });
     const box = finiteTuple(value.box, { min: 1e-3, max: 100 });
@@ -490,6 +496,7 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
     'scale',
     'modelRot',
     'collider',
+    'compoundCollider',
     'color',
     'finish',
     'tintMaterial',
@@ -512,6 +519,10 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
     const rot = finiteTuple(value.modelRot, { min: -Math.PI * 2, max: Math.PI * 2 });
     if (!rot) return null;
     out.modelRot = rot;
+  }
+  if (value.compoundCollider !== undefined) {
+    out.compoundCollider = normalizeCompoundCollider(value.compoundCollider);
+    if (!out.compoundCollider || value.collider !== undefined) return null;
   }
   if (value.collider !== undefined) {
     if (!colliders.includes(value.collider)) return null;

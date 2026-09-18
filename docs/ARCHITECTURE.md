@@ -550,7 +550,7 @@ The WebSocket boundary validates outlines through `normalizeBoardOutline` before
 or spawning. Custom polygons are limited to 3–32 points and must be nondegenerate, strictly convex,
 and non-self-intersecting. Circles use a 32-sided approximation. These are single solid prisms:
 there is no automatic image-alpha/model-hull extraction, hole subtraction, concave decomposition,
-or compound collider editor in this stage.
+or mesh-collider generation. GLB assets can instead use the compound editor described below.
 
 Existing board JSONB props and piece/scene props carry outlines and thickness without a database
 migration. The library load handler explicitly retains the new fields. `swapBoard` places the body
@@ -559,10 +559,50 @@ convex collider has no Cannon box half-extents. Legacy records default to rectan
 image thickness `0.1`. Regression tests cover geometry/debug parity, outward face winding, actual
 piece contact versus removed corners, record validation, library loading, and shaped-board calibration.
 
+### Custom compound colliders
+
+Uploaded objects and GLB boards may store a `compoundCollider` instead of the object's primitive
+`collider` or the board's `outline`. Image boards continue to use outlines. No database migration
+is required: library records and piece/scene JSON props retain the layout through save, edit,
+clone, load, and snapshots.
+
+`shared/compound-collider.js` validates version-1 layouts of 1–16 box, sphere, cylinder, cone,
+or flat-slab shapes. Each child has a position, full dimensions, and XYZ Euler rotation.
+Positions and sizes are relative to the model's longest side (`2 * max(box)`); rotations are
+radians. Uniform asset scaling therefore preserves the authored layout. Spheres require equal
+dimensions; cylinders/cones require equal X/Z diameters. Flat slabs are boxes and cones use
+16-sided tapered cylinders with a small top radius.
+
+`public/compound-collider-editor.js` owns a Three.js preview, orbit controls, and a private
+draft. Drag-mode buttons select orbit, move, rotate, or uniform resize; labeled camera controls
+select perspective, top, front, or side views. Shape buttons add primitives directly.
+Numeric position/dimension fields display table units and rotation fields display degrees.
+Typing and mouse-wheel edits update the preview immediately; Shift makes wheel steps finer and
+Ctrl/Command makes them larger. Duplicate, delete, clear all, and undo operate on the draft.
+Clear all is undoable; Apply is disabled until the draft contains a valid shape. Apply returns
+the layout to the upload form, while Cancel discards changes. The editor disposes its renderer,
+geometry, materials, textures, and controls on close. The upload form also rotates child
+positions/orientations when the model's orientation changes.
+
+The WebSocket boundary rejects invalid layouts and conflicting collider/outline fields.
+`compoundColliderSpec` resolves normalized data for both physics and diagnostic rendering.
+`buildCollider` creates the child shapes, and `attachCollider` attaches their offsets and
+orientations to one Cannon body. This permits gaps between solids without triangle-mesh collision
+or boolean subtraction. `boardSpawnHeight` uses rotated child bounds as well as visual model
+bounds to place boards above the table. Grid calibration uses the board's overall dimensions,
+rather than the first child's dimensions. Stand/lay-flat self-righting and held-piece movement
+do not treat a compound child's Y offset as the legacy flat-collider origin shift.
+
+Regression coverage includes validation, primitive geometry, offsets/rotations, scaling, gaps,
+library loading, body creation, board placement/calibration, and stand/lay-flat behavior.
+The optional browser smoke test runs with
+`CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs` and exercises desktop/mobile
+controls, numeric edits, wheel modifiers, drag, clear/undo, cancel, and object/board saving.
+
 ### Collider diagnostics
 
 `shared/collider-spec.js` mirrors the authoritative collider selection as renderer-neutral data.
-It covers primitive props, convex dice, boards, cards/mats, fixed model skins, and the live heights
+It covers primitive and compound props/boards, convex dice, cards/mats, fixed model skins, and the live heights
 of decks and dispensers. The server still owns collision through Cannon; the shared descriptor is
 the inspection contract used by the browser and its focused parity tests.
 

@@ -323,6 +323,7 @@ export function registerLibraryHandlers(
             modelScale: rec.modelScale,
             box: rec.box,
             ...(rec.outline ? { outline: rec.outline } : {}),
+            ...(rec.compoundCollider ? { compoundCollider: rec.compoundCollider } : {}),
           }
         : {
             w: rec.w,

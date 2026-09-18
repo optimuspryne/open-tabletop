@@ -423,14 +423,58 @@ persistence retain these fields; omitted outlines preserve rectangular behavior.
 
 ---
 
+## `shared/compound-collider.js` — custom collision layouts
+
+- **`COMPOUND_SHAPE_LIMIT`** is 16; **`COMPOUND_TYPES`** contains `box`, `sphere`,
+  `cylinder`, `cone`, and `flat`.
+- **`normalizeCompoundCollider(value)`** returns a fresh validated
+  `{version:1, shapes:[{type,position,size,rotation},...]}` or `null`.
+  All vector fields are finite triples. Position components range from -2 to 2, full-size
+  components from 0.001 to 2, and XYZ Euler rotation components from -2π to 2π radians.
+  Spheres require equal sizes on all axes; cylinders/cones require equal X/Z sizes.
+  Empty layouts, unknown types, and more than 16 children are rejected.
+- **`compoundColliderSpec(value, box)`** scales positions and full dimensions by
+  `2 * max(box)`, returning `{type:'compound', shapes:[...]}` with renderer-neutral
+  primitives, local offsets, and rotations. Flat shapes resolve to boxes; cylinders and cones
+  use 16 sides. Cone top radius is 5% of its bottom radius.
+
+Uploaded GLB object and board records accept `compoundCollider`. Object records cannot combine
+it with `collider`; board records cannot combine it with `outline`. Image boards use outlines.
+The layout persists in existing library and piece/scene JSON props without a schema migration.
+
+## `public/compound-collider-editor.js` — 3D authoring
+
+**`openColliderEditor({source, rotation=[0,0,0], box, value})`** returns a promise resolving to
+the applied layout or `null` on cancel. It owns and disposes its preview resources.
+The editor provides orbit/move/rotate/resize modes, perspective/top/front/side cameras,
+direct shape-add buttons, duplicate/delete/clear-all/undo, and live numeric transforms.
+Fields display table units or degrees; wheel adjustments support Shift for 0.1× steps and
+Ctrl/Command for 10× steps. Clear all is undoable and empty drafts cannot be applied.
+
+**`scripts/collider-editor-test.mjs`** exercises the editor at desktop/mobile widths.
+Run with `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs`.
+
+---
+
 ## `shared/collider-spec.js` — collider descriptions
 
 - **`primitiveColliderSpec(type, hx, hy, hz, options?)`** returns a renderer-neutral box, sphere,
   cylinder/cone, or flat-offset descriptor matching `server/physics.js`.
 - **`colliderSpec(type, props, {cardColliderThickness,count}?)`** resolves the current authoritative
-  primitive for every piece family, including convex dice, shaped board prisms, and count-derived deck/dispenser heights.
+  descriptor for every piece family, including compound layouts, convex dice, shaped board prisms, and count-derived deck/dispenser heights.
   The browser diagnostic consumes these descriptions without importing Cannon; server physics
   remains authoritative.
+
+---
+
+## `server/physics.js` — compound body construction
+
+- **`buildCollider(type, props, options)`** returns `{shapes:[{shape,offset,orientation},...]}`
+  for uploaded model props/boards with valid custom layouts, preserving legacy return forms.
+- **`attachCollider(body, collider)`** attaches either all compound children or a legacy
+  primitive/offset shape to one Cannon rigid body.
+- **`boardSpawnHeight(props)`** returns the larger of visual half-height and the downward
+  extent of any rotated/offset compound child, keeping new boards above the table.
 
 ---
 

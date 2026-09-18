@@ -448,3 +448,19 @@ for (const rec of [
     assert.deepEqual(calls.find(({ name }) => name === 'swapBoard').args[0], rec);
   });
 }
+
+test('loadBoard preserves a compound collider', async () => {
+  const { db, handlers, calls } = harness();
+  const rec = {
+    model: '/assets/boards/custom.glb',
+    modelScale: 2,
+    box: [4, 0.5, 4],
+    compoundCollider: {
+      version: 1,
+      shapes: [{ type: 'box', position: [0, 0, 0], size: [1, 0.1, 1], rotation: [0, 0, 0] }],
+    },
+  };
+  db.getBoard = async () => ({ isPublic: true, rec });
+  await handlers.get('loadBoard')(client(), { id: '1' });
+  assert.deepEqual(calls.find(({ name }) => name === 'swapBoard').args[0], rec);
+});

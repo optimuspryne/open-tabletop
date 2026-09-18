@@ -1,3 +1,4 @@
+import { openColliderEditor } from './compound-collider-editor.js';
 import { wireBoardOutline } from './board-outline-editor.js';
 // editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
 // on the table engine's room connection, handed over by client.js via
@@ -1671,9 +1672,57 @@ function wireAddDeck() {
 // ---- Add-to-Library: board tab ---------------------------------------------
 const BOARD_TEX = 1024; // board texture size (square; matches CONFIG.upload.board)
 
+async function withModelSource(source, callback) {
+  if (!source) throw new Error('Choose a .glb file first.');
+  const url = typeof source === 'string' ? source : URL.createObjectURL(source);
+  try {
+    return await callback(url);
+  } finally {
+    if (typeof source !== 'string') URL.revokeObjectURL(url);
+  }
+}
+
 function wireAddBoard() {
   const glbOutline = wireBoardOutline('adBoardGlb');
   const imgOutline = wireBoardOutline('adBoardImg');
+  let boardCompound = null;
+  const boardMode = byId('adBoardColliderMode');
+  const syncBoardCollider = () => {
+    const custom = boardMode.value === 'custom';
+    byId('adBoardOutlineFields').hidden = custom;
+    byId('adBoardCustomEdit').hidden = !custom;
+    byId('adBoardCustomStatus').hidden = !custom;
+    byId('adBoardCustomStatus').textContent = boardCompound
+      ? `${boardCompound.shapes.length} shapes. Scales with the board.`
+      : 'Create a custom collider before saving.';
+  };
+  const editBoardCollider = async () => {
+    const button = byId('adBoardCustomEdit');
+    if (button.disabled) return;
+    button.disabled = true;
+    try {
+      const source = byId('adBoardGlb').files[0] || editCtx?.model;
+      const size = +byId('adBoardGlbSize').value;
+      if (!Number.isFinite(size) || size < 0.1 || size > 100)
+        throw new Error('Choose a longest side between 0.1 and 100.');
+      const box = await withModelSource(source, async (url) => (await measureBoard(url, size)).box);
+      const value = await openColliderEditor({ source, box, value: boardCompound });
+      if (value) boardCompound = value;
+      if (!boardCompound) boardMode.value = 'outline';
+    } catch (error) {
+      alert(error.message);
+      if (!boardCompound) boardMode.value = 'outline';
+    } finally {
+      button.disabled = false;
+      syncBoardCollider();
+    }
+  };
+  byId('adBoardCustomEdit').onclick = editBoardCollider;
+  boardMode.onchange = () => {
+    syncBoardCollider();
+    if (boardMode.value === 'custom' && !boardCompound) editBoardCollider();
+  };
+  syncBoardCollider();
   // saveBoard inserts to the library (no spawn); Save + Spawn also swaps it onto the table.
   const save = (spec, name, spawn) => {
     ROOM.send('saveBoard', { name, board: spec, editId: editCtx && editCtx.id });
@@ -1685,6 +1734,9 @@ function wireAddBoard() {
     });
     byId('adBoardW').value = '10';
     byId('adBoardD').value = '10';
+    boardCompound = null;
+    boardMode.value = 'outline';
+    syncBoardCollider();
     byId('adBoardGlbSize').value = '8';
     byId('adBoardThickness').value = '0.1';
     glbPreviewGeneration++;
@@ -1715,6 +1767,9 @@ function wireAddBoard() {
   wireUploadSq('adBoardGlb', true, () => {
     const file = byId('adBoardGlb').files[0];
     if (!file) return;
+    boardCompound = null;
+    boardMode.value = 'outline';
+    syncBoardCollider();
     const url = URL.createObjectURL(file);
     refreshGlbOutline(url).finally(() => URL.revokeObjectURL(url));
   });
@@ -1728,11 +1783,16 @@ function wireAddBoard() {
       const target = +byId('adBoardGlbSize').value;
       if (!Number.isFinite(target) || target < 0.1 || target > 100)
         throw new Error('Longest side must be between 0.1 and 100.');
-      const outline = glbOutline.read();
+      if (boardMode.value === 'custom' && !boardCompound)
+        throw new Error('Create a custom collider before saving.');
+      const collision =
+        boardMode.value === 'custom'
+          ? { compoundCollider: boardCompound }
+          : { outline: glbOutline.read() };
       const { scale, box } = await measureBoard(url, target);
       if (scale < 0.001 || scale > 1000 || box.some((v) => v < 0.001 || v > 100))
         throw new Error('This model cannot be scaled to that size.');
-      save({ model: url, modelScale: scale, box, outline }, name, spawn);
+      save({ model: url, modelScale: scale, box, ...collision }, name, spawn);
       clearBoard();
       closeAddModal();
     } catch (e) {
@@ -1819,6 +1879,9 @@ function wireAddBoard() {
       // uploaded .glb board
       byId('adBoardGlbName').value = clone ? '' : it.name;
       byId('adBoardGlbSize').value = it.box ? Math.max(it.box[0], it.box[2]) * 2 : 8;
+      boardCompound = it.compoundCollider ? structuredClone(it.compoundCollider) : null;
+      boardMode.value = boardCompound ? 'custom' : 'outline';
+      syncBoardCollider();
       glbOutline.fill(it.outline);
       refreshGlbOutline(it.model);
       clearSq('adBoardGlb');
@@ -1928,6 +1991,8 @@ function wireAddMat() {
 
 // ---- Add-to-Library: object tab (uploaded .glb models) ---------------------
 function wireAddObject() {
+  let objectCompound = null;
+
   // saveProp inserts to the library (no spawn); Save + Spawn also drops one on the table.
   const save = (props, name, spawn) => {
     ROOM.send('saveProp', { name, props, editId: editCtx && editCtx.id, spawn });
@@ -1966,13 +2031,46 @@ function wireAddObject() {
   };
   // collider is a single-select toggle group of icon buttons
   const colliderBtns = [...document.querySelectorAll('#adObjColliders .colliderBtn')];
-  const setCollider = (which) =>
+  const setCollider = (which) => {
     colliderBtns.forEach((b) => b.classList.toggle('on', b.dataset.collider === which));
+  };
   const currentCollider = () => {
     const on = colliderBtns.find((b) => b.classList.contains('on'));
     return on ? on.dataset.collider : 'box';
   };
-  colliderBtns.forEach((b) => (b.onclick = () => setCollider(b.dataset.collider)));
+  const editObjectCollider = async () => {
+    const button = byId('adObjCustomEdit');
+    if (button.disabled) return;
+    button.disabled = true;
+    const previous = currentCollider();
+    try {
+      const source = byId('adObjGlb').files[0] || objSourceProps?.model;
+      const scale = +byId('adObjScale').value;
+      if (!Number.isFinite(scale) || scale <= 0 || scale > 100)
+        throw new Error('Choose a valid object scale.');
+      const box = await withModelSource(source, (url) => measureModel(url, scale, objRot()));
+      const value = await openColliderEditor({
+        source,
+        rotation: objRot(),
+        box,
+        value: objectCompound,
+      });
+      if (value) {
+        objectCompound = value;
+        setCollider('custom');
+      } else setCollider(previous);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  };
+  byId('adObjCustomEdit').onclick = editObjectCollider;
+  colliderBtns.forEach(
+    (b) =>
+      (b.onclick = () =>
+        b.dataset.collider === 'custom' ? editObjectCollider() : setCollider(b.dataset.collider)),
+  );
   const finishSelect = byId('adObjFinish');
   for (const finish of OBJECT_FINISHES) {
     const option = document.createElement('option');
@@ -2006,7 +2104,24 @@ function wireAddObject() {
         byId('adObjGlb').parentElement.style.backgroundImage = u ? `url("${u}")` : 'none';
       });
   };
+  const rotateCompound = (delta) => {
+    if (!objectCompound) return;
+    for (const shape of objectCompound.shapes) {
+      shape.position = new THREE.Vector3(...shape.position)
+        .applyQuaternion(delta)
+        .toArray()
+        .map((v) => Math.max(-2, Math.min(2, v)));
+      const q = new THREE.Quaternion()
+        .setFromEuler(new THREE.Euler(...shape.rotation))
+        .premultiply(delta);
+      const e = new THREE.Euler().setFromQuaternion(q);
+      shape.rotation = [e.x, e.y, e.z];
+    }
+  };
   const rotBy = (x, y, z) => {
+    rotateCompound(
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(x, y, z), Math.PI / 2),
+    );
     objQuat.premultiply(
       new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(x, y, z), Math.PI / 2),
     );
@@ -2016,6 +2131,7 @@ function wireAddObject() {
   byId('adObjRotY').onclick = () => rotBy(0, 1, 0);
   byId('adObjRotZ').onclick = () => rotBy(0, 0, 1);
   byId('adObjRotReset').onclick = () => {
+    rotateCompound(objQuat.clone().invert());
     objQuat.identity();
     refreshObjPreview();
   };
@@ -2067,6 +2183,7 @@ function wireAddObject() {
     byId('adObjCells').value = '1';
     byId('adObjStand').classList.remove('on');
     finishSelect.value = '';
+    objectCompound = null;
     setCollider('box');
     objQuat.identity();
     dispQuat.identity();
@@ -2089,6 +2206,8 @@ function wireAddObject() {
     true,
     () => {
       objQuat.identity();
+      objectCompound = null;
+      setCollider('box');
       const file = byId('adObjGlb').files[0];
       fillMaterials(byId('adObjTint'), file);
     },
@@ -2122,7 +2241,10 @@ function wireAddObject() {
       const props = { model: url, box, stand, scale };
       if (cells > 1) props.cells = cells;
       if (currentFinish()) props.finish = currentFinish();
-      if (collider !== 'box') props.collider = collider;
+      if (collider === 'custom') {
+        if (!objectCompound) throw new Error('Create a custom collider before saving.');
+        props.compoundCollider = objectCompound;
+      } else if (collider !== 'box') props.collider = collider;
       if (rot.some((v) => Math.abs(v) > 1e-4)) props.modelRot = rot;
       const tintMaterial = tintValue(byId('adObjTint'));
       if (tintMaterial !== undefined) props.tintMaterial = tintMaterial;
@@ -2155,7 +2277,7 @@ function wireAddObject() {
       clearObj();
       closeAddModal();
     } catch (e) {
-      alert('Model upload/load failed — make sure it is a .glb file.');
+      alert(e.message || 'Model upload/load failed — make sure it is a .glb file.');
     }
   };
   byId('adObjSave').onclick = () => saveObj(false);
@@ -2169,7 +2291,8 @@ function wireAddObject() {
     byId('adObjCells').value = p.cells || 1;
     byId('adObjStand').classList.toggle('on', !!p.stand);
     finishSelect.value = p.finish || '';
-    setCollider(p.collider || 'box');
+    objectCompound = p.compoundCollider ? structuredClone(p.compoundCollider) : null;
+    setCollider(objectCompound ? 'custom' : p.collider || 'box');
     fillMaterials(byId('adObjTint'), p.model, p.tintMaterial);
     objQuat.identity();
     if (Array.isArray(p.modelRot))

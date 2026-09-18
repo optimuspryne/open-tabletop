@@ -6731,3 +6731,137 @@ body.not-gm .gm-only {
   flex: 0 0 auto;
   opacity: 0.6;
 }
+
+/* Custom collider authoring runs in the dialog top layer above the asset form. */
+.compoundEditor {
+  font: var(--fs)/1.4 var(--font);
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  width: min(1100px, 94vw);
+  max-height: 94dvh;
+  padding: 20px;
+  overflow: auto;
+}
+.compoundEditor::backdrop {
+  background: rgba(0, 0, 0, 0.72);
+}
+.compoundEditor header,
+.compoundEditor footer,
+.compoundToolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.compoundEditor header,
+.compoundEditor footer {
+  justify-content: space-between;
+}
+.compoundEditor h2 {
+  margin: 0;
+}
+.compoundLayout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 18px;
+}
+.compoundViewport {
+  height: 420px;
+  width: 100%;
+}
+.compoundViewport canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+.compoundEditor aside select {
+  width: 100%;
+}
+.compoundNumbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.compoundNumbers input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.compoundEditor p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+@media (max-width: 720px) {
+  .compoundLayout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .compoundViewport {
+    height: 300px;
+  }
+  .compoundEditor {
+    padding: 12px;
+  }
+}
+
+.compoundNumbers input {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  padding: 7px;
+  min-height: 36px;
+  font: inherit;
+}
+.compoundNumbers input:disabled {
+  opacity: 0.45;
+}
+.compoundEditor select[size] {
+  background-image: none;
+  padding: 6px;
+}
+.compoundEditor select[size] option {
+  padding: 4px;
+}
+.compoundEditor footer {
+  position: sticky;
+  bottom: -12px;
+  background: var(--panel-solid);
+  padding: 10px 0;
+  z-index: 1;
+}
+
+.objectColliderRow,
+.objectColliderRow .colliderRow {
+  flex-wrap: wrap;
+}
+.objectColliderRow .stepper {
+  flex-shrink: 0;
+}
+.compoundIconButtons {
+  display: flex;
+  gap: 6px;
+}
+.compoundIconButtons button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 6px;
+}
+.compoundIconButtons button[aria-pressed='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(91, 156, 255, 0.18);
+}
+
+.compoundControlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 8px;
+  font-size: 12px;
+}

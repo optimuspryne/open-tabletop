@@ -9,10 +9,26 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Add a 3D custom collider editor for uploaded objects and GLB boards, with box, sphere,
+  cylinder, cone and thin-slab shapes, drag/numeric transforms, duplicate/delete, undo, and
+  apply/cancel. Save up to 16 shapes as one compound body that scales with the model.
+- Preserve custom collider layouts through library save/edit/clone/load and piece snapshots;
+  display all parts in physics diagnostics and account for compound board bounds at placement.
 - Add rectangle, circle/oval, hexagon, clipped-corner and custom convex outlines for uploaded
   image and GLB boards, with a top-down tracing preview and matching physics/debug colliders.
 - Add image-board thickness and adjustable GLB longest-side sizing; preserve outline and sizing
   through library save, edit, clone and load, and support grid calibration on shaped boards.
+
+### Changed
+- Label collider drag and camera controls; use camera/action icons (including hexagon-3d for perspective) and add an undoable
+  Clear all shapes button with warning styling.
+- Use icon buttons for collider drag modes and adding shapes. Update the 3D preview while
+  typing or scrolling numeric transforms, with Shift for fine and Ctrl/Command for coarse steps.
+- Remove custom-collider helper text and wrap object scale controls to prevent clipping.
+
+### Fixed
+- Keep stand/lay-flat self-righting and dragging height independent of custom collider child
+  offsets, including single-shape custom layouts, while preserving legacy flat-collider behavior.
 
 ## [0.17.0] — 2026-09-17
 

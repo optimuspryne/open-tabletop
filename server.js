@@ -1,4 +1,3 @@
-import { boardHalfExtents } from './shared/board-geometry.js';
 import { createDeckBuilders } from './server/game/deck-builders.js';
 import {
   afterDispense as consumeDispensedItem,
@@ -112,7 +111,7 @@ import { FACTORY_LIGHTING, normalizeLighting } from './shared/lighting.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
 import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
-import { buildWorld, COLLIDER_TYPES } from './server/physics.js';
+import { buildWorld, COLLIDER_TYPES, boardSpawnHeight } from './server/physics.js';
 import {
   applyScene as applyPersistedScene,
   clearGameTable,
@@ -652,7 +651,7 @@ class TableRoom extends Room {
     });
     oldBoards.forEach((id) => this.removePiece(id));
 
-    return this.spawn('board', [0, boardHalfExtents(props)[1], 0], props);
+    return this.spawn('board', [0, boardSpawnHeight(props), 0], props);
   }
 
   // Set the room's square grid from the current board's real size: cell = board width ÷ gaps.

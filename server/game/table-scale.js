@@ -61,7 +61,8 @@ export function createTableScale({ gridLiftMax }) {
     const scale = room.state.scale;
     const body = room.bodies.get(boardId);
     const shape = body && body.shapes[0];
-    const halfExtents = shape && shape.halfExtents;
+    const halfExtents =
+      !readProps(room.state.pieces.get(boardId)).compoundCollider && shape && shape.halfExtents;
     const bounds = boardHalfExtents(readProps(room.state.pieces.get(boardId)));
     const width = halfExtents ? halfExtents.x * 2 : bounds[0] * 2;
     const depth = halfExtents ? halfExtents.z * 2 : bounds[2] * 2;
