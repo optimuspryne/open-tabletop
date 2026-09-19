@@ -6807,7 +6807,8 @@ body.not-gm .gm-only {
 }
 
 .compoundNumbers input,
-.compoundEditor input[type='number'] {
+.compoundEditor input[type='number'],
+.compoundPresets input[type='text'] {
   color: var(--text);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -6886,4 +6887,91 @@ body.not-gm .gm-only {
 
 #compoundShapeCut {
   max-width: 80px;
+}
+
+/* Keep the preview and footer stationary while the controls scroll. */
+.compoundEditor[open] {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  height: min(850px, 94dvh);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.compoundLayout {
+  min-height: 0;
+}
+.compoundLayout > div {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+.compoundLayout .compoundViewport {
+  flex: 1 1 auto;
+  min-height: 100px;
+  height: auto;
+}
+.compoundLayout > aside {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding-right: 6px;
+}
+.compoundOutline {
+  margin: 8px 0;
+}
+.compoundOutline summary {
+  cursor: pointer;
+  padding: 6px 0;
+}
+.compoundEditor footer {
+  position: static;
+}
+@media (max-width: 720px) {
+  .compoundLayout {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+.compoundIconButtons [data-add-shape] {
+  width: 34px;
+}
+@media (max-width: 720px) {
+  .compoundControlGroup .compoundIconButtons button {
+    width: 32px;
+    height: 32px;
+    padding: 4px;
+  }
+  .compoundLayout > div > p {
+    display: none;
+  }
+}
+
+.compoundPresets {
+  margin: 12px 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.compoundPresets summary {
+  cursor: pointer;
+}
+.compoundPresets label {
+  display: block;
+  margin: 8px 0;
+}
+.compoundPresets input,
+.compoundPresets select {
+  width: 100%;
+  box-sizing: border-box;
+}
+.compoundPresets canvas {
+  width: 100%;
+  max-width: 280px;
+  background: #171c23;
+}
+.compoundPresetActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }

@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–016, meant for a FRESH
+-- This is the flattened end state of migrations 001–017, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -174,8 +174,22 @@ CREATE TABLE custom_mats (
 );
 CREATE INDEX custom_mats_owner_idx ON custom_mats (owner_id);
 
+-- Reusable collider collections contain geometry only; inserted copies are independent.
+CREATE TABLE collider_presets (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  owner_id bigint REFERENCES users(id) ON DELETE SET NULL,
+  name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 120),
+  layout jsonb NOT NULL CHECK (jsonb_typeof(layout->'shapes') = 'array'
+    AND jsonb_array_length(layout->'shapes') BETWEEN 1 AND 16),
+  size double precision NOT NULL CHECK (size BETWEEN 0.001 AND 400),
+  is_public boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX collider_presets_owner_idx ON collider_presets(owner_id);
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–016, so record them as
+-- This baseline IS the flattened result of migrations 001–017, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -191,6 +205,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('010_room_scale.sql'),       ('011_user_sessions.sql'),
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
-  ('016_room_lighting.sql');
+  ('016_room_lighting.sql'), ('017_collider_presets.sql');
 
 COMMIT;

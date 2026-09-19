@@ -35,6 +35,18 @@ try {
       const sent=[];window.onOttRoom(new Proxy({}, {get:(t,k)=>k==='sessionId'?'test':k==='state'?new Proxy({}, {get:()=>undefined}):k==='send'?((...args)=>sent.push(args)):(()=>{})}));
       const actualFetch=window.fetch;let uploadTarget='/models/pieces/chess/rook.glb';
       window.fetch=(url,options)=>options?.method==='POST'&&String(url).startsWith('/upload-model')?Promise.resolve(new Response(JSON.stringify({url:uploadTarget}),{headers:{'content-type':'application/json'}})):actualFetch(url,options);
+      const modelFetch=window.fetch;let presets=[],nextPresetId=1;
+      window.fetch=async(url,options={})=>{
+        if(!String(url).startsWith('/collider-presets'))return modelFetch(url,options);
+        (window.presetNetwork||=[]).push([String(url),options.method]);
+        const id=String(url).split('/')[2], method=options.method||'GET';
+        let body={};
+        if(method==='POST') {const preset={...JSON.parse(options.body),id:String(nextPresetId++),canEdit:true};presets.push(preset);body={preset};}
+        else if(method==='PUT') {const index=presets.findIndex(p=>p.id===id);presets[index]={...presets[index],...JSON.parse(options.body)};body={preset:presets[index]};}
+        else if(method==='DELETE') {presets=presets.filter(p=>p.id!==id);body={ok:true};}
+        else body=id?{preset:presets.find(p=>p.id===id)}:{presets,nextOffset:null};
+        return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
+      };
       const choose=async(id,url)=>{const blob=await (await actualFetch(url)).blob();const files=new DataTransfer();files.items.add(new File([blob],'model.glb',{type:'model/gltf-binary'}));const input=document.getElementById(id);input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));};
       const openTab=tab=>{document.getElementById('addModal').hidden=false;document.querySelector('#addModal .libTab[data-tab="'+tab+'"]').click();};
       const modal=()=>document.querySelector('.compoundEditor');
@@ -135,6 +147,19 @@ try {
       near(colliderSurfaceHeight(prism,0,0,3),0.2);
       near(colliderSurfaceHeight(prism,0.95,0.95,3),0);
       disposeColliderSurface(prism);
+      const {captureGroup,insertGroup,transformGroup}=await import('/collider-groups.js');
+      const layout={version:1,shapes:[
+        {type:'box',position:[-0.3,0,0],rotation:[0,0,0],size:[0.1,0.4,0.4]},
+        {type:'box',position:[0.3,0,0],rotation:[0,0,0],size:[0.1,0.4,0.4]}]};
+      const turned=transformGroup(layout,[0,1],{rotation:[0,Math.PI/2,0],scale:2});
+      near(turned.shapes[0].position[2],0.6);near(turned.shapes[1].position[2],-0.6);
+      near(turned.shapes[0].size[0],0.2);
+      assert(!transformGroup(layout,[0,1],{scale:100}),'Out-of-range group accepted');
+      const captured=captureGroup(layout.shapes,2);
+      const inserted=insertGroup({version:1,shapes:[]},captured,captured.size,2);
+      near(inserted.shapes[0].position[0],-0.3);near(inserted.shapes[1].position[0],0.3);
+      inserted.shapes[0].position[0]=1;
+      near(layout.shapes[0].position[0],-0.3);
       // Reopen a real 3D preview for visual QA; no uploaded file or server needed.
       const module=await import('/compound-collider-editor.js');
       window.previewResult=module.openColliderEditor({source:uploadTarget,box:board.box,value:board.compoundCollider});
@@ -144,6 +169,37 @@ try {
     assert.equal(result.objectShapes, 2);
     assert.equal(result.boardShapes, 2);
     assert.deepEqual(page.errors, []);
+    await page.evaluate(`(async()=>{
+      const dialog=document.querySelector('.compoundEditor');
+      const action=name=>dialog.querySelector('[data-action="'+name+'"]');
+      const field=name=>dialog.querySelector('[data-preset="'+name+'"]');
+      const wait=async test=>{for(let i=0;i<100;i++){if(test())return;await new Promise(r=>setTimeout(r,20));}throw Error('Preset UI not ready: '+JSON.stringify({status:field('status').textContent,refresh:field('refresh').disabled,save:field('save').disabled,name:field('name').value,list:field('list').innerHTML,network:window.presetNetwork}));};
+      action('select-all').click();
+      if(dialog.querySelector('[data-field="list"]').selectedOptions.length!==2)throw Error('Select all failed');
+      const move=dialog.querySelector('[aria-label="group position 0"]');move.value='0.2';move.dispatchEvent(new Event('input'));
+      action('undo').click();action('select-all').click();
+      dialog.querySelector('.compoundPresets').open=true;
+      await wait(()=>window.presetNetwork?.length && !field('refresh').disabled);
+      field('name').value='Hollow board';field('visibility').value='public';field('save').click();
+      await wait(()=>field('status').textContent.includes('saved'));
+      if(field('list').options.length!==2||field('visibility').value!=='public')throw Error('Preset save failed');
+      field('insert').click();await wait(()=>field('status').textContent.includes('inserted'));
+      if(dialog.querySelector('[data-field="list"]').options.length!==4||dialog.querySelector('[data-field="list"]').selectedOptions.length!==2)throw Error('Preset insert failed');
+      action('undo').click();
+      field('visibility').value='private';field('metadata').click();await wait(()=>field('status').textContent.includes('updated'));
+      if(field('visibility').value!=='private')throw Error('Visibility update failed');
+      dialog.querySelector('.compoundPresets').open=false;
+      const list=dialog.querySelector('[data-field="list"]');list.value='0';list.dispatchEvent(new Event('change'));
+      dialog.querySelector('aside').scrollTop=0;
+    })()`);
+    await page.evaluate(`(() => {
+      const dialog=document.querySelector('.compoundEditor');
+      dialog.querySelector('.compoundPresets').open=true;
+      dialog.querySelector('aside').scrollTop=dialog.querySelector('.compoundPresets').offsetTop-dialog.querySelector('aside').offsetTop;
+    })()`);
+    const libraryShot = await cdp.send('Page.captureScreenshot', { format: 'png' }, page.sessionId);
+    await writeFile(`/tmp/collider-library-${width}.png`, Buffer.from(libraryShot.data, 'base64'));
+    await page.evaluate(`document.querySelector('.compoundEditor .compoundPresets').open=false`);
     const dragPoint = await page.evaluate(`(() => {
       const dialog=document.querySelector('.compoundEditor');
       dialog.querySelector('[data-view="top"]').click();
@@ -177,10 +233,28 @@ try {
       const list=document.querySelector('.compoundEditor [data-field="list"]');
       list.value='1';list.dispatchEvent(new Event('change'));
     })()`);
+    await page.evaluate(`(async () => {
+      const dialog=document.querySelector('.compoundEditor');
+      const aside=dialog.querySelector('aside');
+      const canvas=dialog.querySelector('.compoundViewport');
+      const before=canvas.getBoundingClientRect().top;
+      aside.scrollTop=aside.scrollHeight;
+      if(!aside.scrollTop)throw Error('Controls must scroll independently');
+      if(canvas.getBoundingClientRect().top!==before||dialog.scrollTop!==0)throw Error('Controls scrolled the preview');
+      aside.scrollTop=0;
+      const details=dialog.querySelector('.compoundOutline');
+      details.querySelector('summary').click();
+      await new Promise(r=>setTimeout(r,30));
+      if(details.open)throw Error('Outline did not collapse');
+      dialog.querySelector('[data-action="duplicate"]').click();
+      if(dialog.querySelector('.compoundOutline').open)throw Error('Collapse state lost on rebuild');
+      dialog.querySelector('[data-action="delete"]').click();
+      aside.scrollTop=0;
+    })()`);
     const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png' }, page.sessionId);
     await writeFile(`/tmp/compound-editor-${width}.png`, Buffer.from(screenshot.data, 'base64'));
     console.log(
-      `PASS collider editor at ${width}px: object/board save, transforms, duplicate/delete/undo, cancel`,
+      `PASS collider editor at ${width}px: object/board save, groups, preset save/insert/visibility, transforms, undo, cancel`,
     );
     await page.evaluate(`(() => {
       const dialog=document.querySelector('.compoundEditor');

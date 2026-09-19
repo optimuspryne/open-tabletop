@@ -9,6 +9,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Save reusable collider collections to an account-backed library with private/public visibility,
+  owner/admin editing, geometry previews, and independent copies when inserted into objects or boards.
+- Select multiple collider shapes (or select all), then move, rotate, uniformly resize, duplicate,
+  delete, or save the group. Keep the existing 16-component limit and undo support.
+- Add PostgreSQL migration 017 for persistent collider presets and authenticated library endpoints.
 - Add outline-prism components to custom colliders, with clipped corners, triangle/hexagon
   presets, custom convex tracing, and conversion from existing box/flat components.
 - Let uploaded GLB board outlines adjust width, depth, and rotation independently of the model,
@@ -24,6 +29,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   through library save, edit, clone and load, and support grid calibration on shaped boards.
 
 ### Changed
+- Scroll custom collider controls independently of the 3D preview and footer, and allow
+  the outline editor to collapse while preserving its state during editing.
 - Label collider drag and camera controls; use camera/action icons (including hexagon-3d for perspective) and add an undoable
   Clear all shapes button with warning styling.
 - Use icon buttons for collider drag modes and adding shapes. Update the 3D preview while
@@ -31,6 +38,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Remove custom-collider helper text and wrap object scale controls to prevent clipping.
 
 ### Fixed
+- Export collider preset operations through the production database module so library
+  requests can list and save collections without returning HTTP 500 errors.
 - Place the held-piece drop marker on the board collider directly beneath it, respecting
   raised platforms, openings, board transforms, and the bare table outside the board.
 - Keep the clipped-corner amount visible after number inputs receive their stepper wrappers.

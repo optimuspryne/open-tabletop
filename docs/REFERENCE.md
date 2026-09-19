@@ -478,6 +478,41 @@ Run with `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs`.
 
 ---
 
+## Reusable collider collections
+
+- **`public/collider-groups.js`**: `groupBounds` computes transformed component bounds;
+  `transformGroup` applies shared translation, rotation, and uniform scale atomically;
+  `captureGroup` recenters/normalizes selected components and preserves their table-unit size;
+  `insertGroup` returns independent copied components subject to the 16-shape cap;
+  `drawGroupThumbnail` renders a disposable geometry-based canvas preview.
+- **`public/collider-presets.js`**: `wireColliderPresets(host,{capture,insert})` wires the saved
+  collections panel, paginated loading, previews, create/replace, metadata updates, deletion,
+  and insertion. It uses the signed-in bearer token. Saving to the library is immediate;
+  Apply/Cancel still controls only the collider draft. New insertions select the copied group.
+- **`public/compound-collider-editor.js`**: `openColliderEditor` supports multi-selection and
+  select-all, group numeric/drag transforms, group duplicate/delete, and undo. The controls
+  scroll separately from the preview/footer; the embedded outline editor is collapsible.
+- **`server/collider-preset-queries.js`**: `createColliderPresetQueries(query)` returns
+  `list(user,offset)`, `get(user,id)`, `save(user,id,value)`, and `remove(user,id)`.
+  SQL enforces public/owner/admin reads and owner/admin writes. `createDatabase` exposes these
+  as `colliderPresets`, also exported by the production `db.js` module.
+- **`server/http/routes/collider-presets.js`**: `normalizePreset` validates a trimmed name
+  (1–120 characters), boolean visibility, size (0.001–400 table units), and a version-1 compound
+  layout. `createColliderPresetsRouter` authenticates every request and implements:
+  `GET /collider-presets?offset=0` → `{presets,nextOffset}` (50 per page);
+  `GET /collider-presets/:id` → `{preset}`;
+  `POST /collider-presets` → `{preset}` (201);
+  `PUT /collider-presets/:id` → `{preset}` (full replacement);
+  `DELETE /collider-presets/:id` → `{ok:true}`.
+  POST/PUT bodies are `{name,layout,size,isPublic}` with a 64 KB limit. Ownership comes from
+  the authenticated user. Inaccessible IDs return 404. Records include `canEdit` for UI controls.
+- **`postgres/017_collider_presets.sql`** creates the persistent collection table. Layouts are
+  normalized JSONB, with owner, visibility, default size, and creation/update timestamps.
+  Deleted accounts leave collections with null ownership; admins can still manage them.
+  No GLB or thumbnail files are stored. Inserted asset layouts have no live preset reference.
+
+---
+
 ## `public/collider-surface.js` — drop-marker surface queries
 
 - **`createColliderSurface(spec)`** builds an unrendered Three.js tree for a shared primitive,

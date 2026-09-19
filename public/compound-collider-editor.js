@@ -1,3 +1,5 @@
+import { captureGroup, insertGroup, transformGroup } from './collider-groups.js';
+import { wireColliderPresets } from './collider-presets.js';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { wireBoardOutline } from './board-outline-editor.js';
 import * as THREE from 'three';
@@ -44,8 +46,14 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     dragMode = 'orbit',
     outlineEditor = null,
     outlineValid = true,
+    outlineExpanded = true,
     finished = false,
     ready = false;
+  let selection = new Set([0]);
+  const selectOnly = (index) => {
+    selected = index;
+    selection = new Set(index < 0 ? [] : [index]);
+  };
   const previousFocus = document.activeElement;
   const dialog = document.createElement('dialog');
   dialog.className = 'compoundEditor';
@@ -67,10 +75,12 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     .join('')}</div></div>
   <div class="compoundControlGroup"><span>Camera</span><div class="compoundIconButtons" role="group" aria-label="Camera controls">
   <button type="button" data-view="perspective" data-icon="hexagon-3d" aria-label="Perspective view"></button><button type="button" data-view="top" data-icon="mood-look-down" aria-label="Top view"></button><button type="button" data-view="front" data-icon="mood-neutral" aria-label="Front view"></button><button type="button" data-view="side" data-icon="mood-look-left" aria-label="Side view"></button></div></div></div>
-  <p>Click a shape to select it. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
-  <aside><label>Shapes <select data-field="list" size="5" aria-label="Collider shapes"></select></label>
+  <p>Click a shape to select it. Ctrl/⌘-click to select multiple shapes. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
+  <aside tabindex="0" aria-label="Collider controls"><label>Shapes <select data-field="list" multiple size="5" aria-label="Collider shapes"></select></label>
   <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Add shape">${COMPOUND_TYPES.map((type) => `<button type="button" data-add-shape="${type}" data-icon="${{ box: 'cube-plus', sphere: 'sphere-plus', cylinder: 'cylinder-plus', cone: 'cone-plus', flat: 'square-plus-2', outline: 'hexagon-3d' }[type]}" aria-label="Add ${type === 'flat' ? 'flat slab' : type}"></button>`).join('')}</div>
   <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Shape actions"><button type="button" data-action="duplicate" data-icon="copy" aria-label="Duplicate shape"></button><button type="button" data-action="delete" data-icon="library-minus" aria-label="Delete shape"></button><button type="button" data-action="undo" data-icon="arrow-back-up" aria-label="Undo"></button><button type="button" data-action="clear" data-icon="trash" class="danger" aria-label="Clear all shapes"></button></div>
+  <button type="button" data-action="select-all">Select all shapes</button>
+  <details class="compoundPresets" data-field="presets"></details>
   <div data-field="properties"></div>
   <p>Scroll over a value to adjust it. Shift: finer steps. Ctrl/⌘: larger steps.</p>
   <p data-field="count"></p></aside></div>
@@ -136,13 +146,13 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
                   part.sides,
                 )
               : new THREE.BoxGeometry(...part.halfExtents.map((v) => v * 2));
-      const color = i === selected ? 0xffcd70 : 0x56d3ff;
+      const color = selection.has(i) ? 0xffcd70 : 0x56d3ff;
       const mesh = new THREE.Mesh(
         geometry,
         new THREE.MeshBasicMaterial({
           color,
           transparent: true,
-          opacity: i === selected ? 0.32 : 0.16,
+          opacity: selection.has(i) ? 0.32 : 0.16,
           depthWrite: false,
           depthTest: false,
         }),
@@ -158,19 +168,21 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       mesh.add(edges);
       shapes.add(mesh);
     }
-    find('list').replaceChildren(
-      ...draft.shapes.map((shape, i) => {
-        const option = document.createElement('option');
-        option.value = i;
-        option.textContent = `${i + 1}. ${shape.type === 'flat' ? 'Thin slab' : shape.type}`;
-        return option;
-      }),
-    );
-    find('list').value = selected;
-    find('count').textContent = `${draft.shapes.length} / ${COMPOUND_SHAPE_LIMIT} shapes`;
+    const list = find('list');
+    // Keep existing options so native Shift-selection keeps its range anchor.
+    while (list.options.length > draft.shapes.length) list.remove(list.options.length - 1);
+    draft.shapes.forEach((shape, i) => {
+      if (!list.options[i]) list.add(new Option('', String(i)));
+      const option = list.options[i];
+      option.textContent = `${i + 1}. ${shape.type === 'flat' ? 'Thin slab' : shape.type}`;
+      option.selected = selection.has(i);
+    });
+    find('count').textContent =
+      `${draft.shapes.length} / ${COMPOUND_SHAPE_LIMIT} shapes · ${selection.size} selected`;
     for (const button of dialog.querySelectorAll('[data-add-shape]'))
       button.disabled = draft.shapes.length >= COMPOUND_SHAPE_LIMIT;
-    action('duplicate').disabled = selected < 0 || draft.shapes.length >= COMPOUND_SHAPE_LIMIT;
+    action('duplicate').disabled =
+      !selection.size || draft.shapes.length + selection.size > COMPOUND_SHAPE_LIMIT;
     action('delete').disabled = selected < 0;
     action('clear').disabled = !draft.shapes.length;
     action('undo').disabled = !history.length;
@@ -185,6 +197,10 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     host.replaceChildren();
     const shape = draft.shapes[selected];
     if (!shape) return;
+    if (selection.size > 1) {
+      groupProperties(host);
+      return;
+    }
     if (['box', 'flat'].includes(shape.type)) {
       const convert = document.createElement('button');
       convert.type = 'button';
@@ -199,8 +215,13 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       host.append(convert);
     }
     if (shape.type === 'outline') {
-      const panel = document.createElement('div');
-      panel.innerHTML = `<label>Outline <select id="compoundShapeOutline">
+      const panel = document.createElement('details');
+      panel.className = 'compoundOutline';
+      panel.open = outlineExpanded;
+      panel.addEventListener('toggle', () => {
+        if (panel.isConnected) outlineExpanded = panel.open;
+      });
+      panel.innerHTML = `<summary>Edit outline</summary><label>Outline <select id="compoundShapeOutline">
         <option value="rectangle">Rectangle</option><option value="clipped">Clipped corners</option>
         <option value="triangle">Triangle</option><option value="hexagon">Hexagon</option>
         <option value="circle">Circle / oval</option><option value="custom">Custom convex outline</option>
@@ -315,12 +336,108 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       }
     }
   }
+  function groupProperties(host) {
+    const hint = document.createElement('p');
+    hint.textContent = `${selection.size} shapes selected. Transform the group around its shared center, or select one shape to edit it individually.`;
+    host.append(hint);
+    const base = structuredClone(draft),
+      indices = [...selection];
+    const transform = { position: [0, 0, 0], rotation: [0, 0, 0], scale: 1 };
+    let editing = false;
+    for (const key of ['position', 'rotation', 'scale']) {
+      const label = document.createElement('p');
+      label.textContent = {
+        position: 'Move group (table units)',
+        rotation: 'Rotate group (degrees)',
+        scale: 'Uniform group scale',
+      }[key];
+      host.append(label);
+      const row = document.createElement('div');
+      row.className = 'compoundNumbers';
+      host.append(row);
+      for (let axis = 0; axis < (key === 'scale' ? 1 : 3); axis++) {
+        const wrap = document.createElement('label');
+        wrap.textContent = key === 'scale' ? 'Factor' : ['X', 'Y', 'Z'][axis];
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.step = key === 'rotation' ? '1' : '0.01';
+        input.value = key === 'scale' ? '1' : '0';
+        input.setAttribute('aria-label', `group ${key} ${axis}`);
+        const update = () => {
+          const value = Number(input.value);
+          if (!input.value || !Number.isFinite(value)) return;
+          const candidate = structuredClone(transform);
+          if (key === 'scale') candidate.scale = value;
+          else candidate[key][axis] = value / (key === 'rotation' ? 180 / Math.PI : unit);
+          const next = transformGroup(base, indices, candidate);
+          if (!next) {
+            find('status').textContent = 'Group transformation exceeds the supported range.';
+            return;
+          }
+          if (!editing) remember();
+          editing = true;
+          Object.assign(transform, candidate);
+          draft = next;
+          rebuild(true);
+          find('status').textContent = 'Group updated in this draft.';
+        };
+        input.oninput = update;
+        input.onblur = () => {
+          editing = false;
+          input.value =
+            key === 'scale'
+              ? transform.scale
+              : +(transform[key][axis] * (key === 'rotation' ? 180 / Math.PI : unit)).toFixed(6);
+        };
+        input.addEventListener(
+          'wheel',
+          (event) => {
+            if (!event.deltaY) return;
+            event.preventDefault();
+            input.focus({ preventScroll: true });
+            input.value = +(
+              Number(input.value) -
+              Math.sign(event.deltaY) *
+                Number(input.step) *
+                (event.shiftKey ? 0.1 : event.ctrlKey || event.metaKey ? 10 : 1)
+            ).toFixed(6);
+            update();
+          },
+          { passive: false },
+        );
+        wrap.append(input);
+        row.append(wrap);
+      }
+    }
+  }
   function constrainRound(shape) {
     if (shape.type === 'sphere') shape.size[1] = shape.size[0];
     if (['sphere', 'cylinder', 'cone'].includes(shape.type)) shape.size[2] = shape.size[0];
   }
+  wireColliderPresets(find('presets'), {
+    capture: () =>
+      captureGroup(
+        [...selection].map((i) => draft.shapes[i]),
+        unit,
+      ),
+    insert: (preset, size) => {
+      if (finished) return;
+      const next = insertGroup(draft, preset, size, unit);
+      remember();
+      selection = new Set(next.shapes.map((_, i) => i).slice(draft.shapes.length));
+      selected = [...selection][0];
+      draft = next;
+      rebuild();
+    },
+  });
   find('list').onchange = () => {
-    selected = +find('list').value;
+    selection = new Set([...find('list').selectedOptions].map((option) => +option.value));
+    selected = [...selection][0] ?? -1;
+    rebuild();
+  };
+  action('select-all').onclick = () => {
+    selection = new Set(draft.shapes.map((_, i) => i));
+    selected = selection.size ? 0 : -1;
     rebuild();
   };
   for (const button of dialog.querySelectorAll('[data-drag-mode]')) {
@@ -343,37 +460,37 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
         ...(type === 'outline' ? { outline: { type: 'clipped', cut: 0.15 } } : {}),
         size: ['flat', 'outline'].includes(type) ? [0.5, 0.02, 0.5] : [0.3, 0.3, 0.3],
       });
-      selected = draft.shapes.length - 1;
+      selectOnly(draft.shapes.length - 1);
       rebuild();
     };
   }
   action('duplicate').onclick = () => {
-    if (selected < 0 || draft.shapes.length >= COMPOUND_SHAPE_LIMIT) return;
+    if (!selection.size || draft.shapes.length + selection.size > COMPOUND_SHAPE_LIMIT) return;
     remember();
-    const copy = structuredClone(draft.shapes[selected]);
-    copy.position[0] = Math.min(2, copy.position[0] + 0.05);
-    draft.shapes.push(copy);
-    selected = draft.shapes.length - 1;
+    const copies = [...selection].map((i) => structuredClone(draft.shapes[i]));
+    selection = new Set(copies.map((_, i) => draft.shapes.length + i));
+    draft.shapes.push(...copies);
+    selected = [...selection][0];
     rebuild();
   };
   action('delete').onclick = () => {
-    if (selected < 0) return;
+    if (!selection.size) return;
     remember();
-    draft.shapes.splice(selected, 1);
-    selected = Math.min(selected, draft.shapes.length - 1);
+    draft.shapes = draft.shapes.filter((_, i) => !selection.has(i));
+    selectOnly(Math.min(selected, draft.shapes.length - 1));
     rebuild();
   };
   action('clear').onclick = () => {
     if (!draft.shapes.length) return;
     remember();
     draft.shapes = [];
-    selected = -1;
+    selectOnly(-1);
     rebuild();
   };
   action('undo').onclick = () => {
     if (!history.length) return;
     draft = JSON.parse(history.pop());
-    selected = Math.min(Math.max(0, selected), draft.shapes.length - 1);
+    selectOnly(Math.min(Math.max(0, selected), draft.shapes.length - 1));
     rebuild();
   };
   for (const button of dialog.querySelectorAll('[data-view]'))
@@ -409,7 +526,15 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     updateRay(event);
     const hit = ray.intersectObjects(shapes.children, false)[0];
     if (!hit) return;
-    selected = hit.object.userData.index;
+    const index = hit.object.userData.index;
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      if (selection.has(index)) selection.delete(index);
+      else selection.add(index);
+      selected = [...selection][0] ?? -1;
+      rebuild();
+      return;
+    }
+    if (!selection.has(index)) selectOnly(index);
     rebuild();
     if (dragMode === 'orbit') return;
     const normal = camera.getWorldDirection(new THREE.Vector3());
@@ -425,39 +550,30 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       start,
       x: event.clientX,
       y: event.clientY,
-      shape: structuredClone(draft.shapes[selected]),
+      layout: structuredClone(draft),
+      indices: [...selection],
       mode: dragMode,
     };
     renderer.domElement.setPointerCapture(event.pointerId);
   });
   renderer.domElement.addEventListener('pointermove', (event) => {
     if (!drag) return;
-    const shape = structuredClone(drag.shape);
     const dx = event.clientX - drag.x,
       dy = event.clientY - drag.y;
+    const transform = {};
     if (drag.mode === 'move') {
       updateRay(event);
       const point = ray.ray.intersectPlane(drag.plane, new THREE.Vector3());
       if (!point) return;
-      shape.position = new THREE.Vector3(...drag.shape.position)
-        .add(point.sub(drag.start))
-        .toArray()
-        .map((v) => Math.max(-2, Math.min(2, v)));
+      transform.position = point.sub(drag.start).toArray();
     } else if (drag.mode === 'rotate') {
-      shape.rotation[0] = Math.max(
-        -Math.PI * 2,
-        Math.min(Math.PI * 2, shape.rotation[0] + dy * 0.01),
-      );
-      shape.rotation[1] = Math.max(
-        -Math.PI * 2,
-        Math.min(Math.PI * 2, shape.rotation[1] + dx * 0.01),
-      );
+      transform.rotation = [dy * 0.01, dx * 0.01, 0];
     } else {
-      const factor = Math.exp((dx - dy) * 0.005);
-      shape.size = shape.size.map((v) => Math.max(0.001, Math.min(2, v * factor)));
-      constrainRound(shape);
+      transform.scale = Math.exp((dx - dy) * 0.005);
     }
-    draft.shapes[selected] = shape;
+    const next = transformGroup(drag.layout, drag.indices, transform);
+    if (!next) return;
+    draft = next;
     rebuild();
   });
   const endDrag = () => {

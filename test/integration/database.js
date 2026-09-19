@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 16); // 001–016 (014 = table shape, 015 = rim wood, 016 = room lighting)
+  assert.equal(migrations.rows.length, 17); // Includes reusable collider collections.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -257,4 +257,53 @@ test('account purge preserves every asset category and rolls back atomically on 
       owner_id: row.owner_id === owner.id ? null : row.owner_id,
     });
   }
+});
+
+test('collider collections persist with owner/admin writes and scoped private reads', async () => {
+  const owner = await database.createUser({
+    username: 'collider-owner',
+    email: 'collider-owner@example.test',
+  });
+  const other = await database.createUser({
+    username: 'collider-other',
+    email: 'collider-other@example.test',
+  });
+  const admin = { ...other, isAdmin: true };
+  const layout = {
+    version: 1,
+    shapes: [
+      {
+        type: 'outline',
+        outline: { type: 'hexagon' },
+        position: [0, 0, 0],
+        size: [1, 0.1, 1],
+        rotation: [0, 0, 0],
+      },
+    ],
+  };
+  const value = { name: 'Hexagon', layout, size: 5, isPublic: false };
+  const queries = database.colliderPresets;
+  const created = await queries.save(owner, null, value);
+  assert.equal(created.ownerId, owner.id);
+  assert.equal(created.canEdit, true);
+  assert.deepEqual((await queries.get(owner, created.id)).layout, layout);
+  assert.equal(await queries.get(other, created.id), undefined);
+  assert.ok(!(await queries.list(other)).presets.some((r) => r.id === created.id));
+  assert.equal((await queries.get(admin, created.id)).canEdit, true);
+  assert.equal(await queries.save(other, created.id, { ...value, isPublic: true }), undefined);
+  assert.equal(await queries.remove(other, created.id), false);
+  await queries.save(owner, created.id, { ...value, isPublic: true });
+  const copy = structuredClone((await queries.get(other, created.id)).layout);
+  assert.equal((await queries.get(other, created.id)).canEdit, false);
+  assert.ok((await queries.list(other)).presets.some((r) => r.id === created.id));
+  await queries.save(admin, created.id, { ...value, name: 'Renamed' });
+  assert.equal(await queries.get(other, created.id), undefined);
+  assert.equal((await queries.get(owner, created.id)).name, 'Renamed');
+  assert.equal(await queries.remove(admin, created.id), true);
+  assert.equal(await queries.get(owner, created.id), undefined);
+  assert.deepEqual(copy, layout);
+  const retained = await queries.save(owner, null, { ...value, isPublic: true });
+  await database.purgeUser(owner.id);
+  assert.equal((await queries.get(admin, retained.id)).ownerId, null);
+  assert.deepEqual((await queries.get(other, retained.id)).layout, layout);
 });

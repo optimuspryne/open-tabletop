@@ -182,7 +182,7 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   panels, `.field` inputs, `.chip`, `.miniLabel`, `.tile`, `.actions` — over the
   per-page layouts. Restyling a control means editing its one class, not every
   `#id` that uses it).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`016`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`017`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -600,7 +600,31 @@ geometry, materials, textures, and controls on close. The upload form also rotat
 positions/orientations when the model's orientation changes. Existing box/flat components can
 be converted through **Edit outline / clip corners**, preserving their dimensions and transform.
 The embedded top-down outline editor updates the 3D draft as presets, corner cuts, and custom
-corners change; incomplete custom outlines disable Apply.
+corners change; incomplete custom outlines disable Apply. Controls scroll independently of the
+preview/footer, and the outline editor can collapse while preserving its state.
+
+Multi-selection uses the shape list, Ctrl/Command-click in the preview, or Select all.
+Selected components move, rotate around a shared bounds center, and scale uniformly together;
+duplicate/delete affect the whole selection. Individual selection restores per-component editing.
+`public/collider-groups.js` handles group bounds, rigid transforms, normalized capture, insertion,
+and disposable geometry thumbnails. Out-of-range transforms or insertions are rejected atomically.
+
+Saved collider collections are separate from layouts embedded in asset props. Migration **017**
+adds `collider_presets` with owner, name, normalized JSONB layout, default longest-side size,
+public/private visibility, and timestamps. Account deletion clears ownership while retaining
+collections. `server/collider-preset-queries.js` scopes reads to public/owned/admin-visible rows
+and restricts writes to owners/admins directly in SQL. `server/database.js` composes these queries;
+`db.js` exports `colliderPresets` for the production HTTP router.
+
+`server/http/routes/collider-presets.js` exposes authenticated list/get/create/replace/delete
+operations at `/collider-presets`; list pages contain up to 50 records. The boundary validates
+names, visibility, sizes, and compound layouts. `public/collider-presets.js` provides the editor's
+Saved collider collections panel with previews, save-selection, name/visibility updates,
+replacement, deletion, and insertion at a chosen size. Library saves take effect immediately,
+independently of the editor's Apply/Cancel draft. Insertion fetches the current accessible preset
+and copies its components into the draft, selecting the new group. Asset layouts retain no preset
+reference, so later preset edits, deletion, or visibility changes cannot modify existing copies.
+The final compound retains the total 16-component limit.
 
 The WebSocket boundary rejects invalid layouts and conflicting collider/outline fields.
 `compoundColliderSpec` resolves normalized data for both physics and diagnostic rendering.
@@ -615,7 +639,9 @@ Regression coverage includes validation, primitive geometry, offsets/rotations, 
 library loading, body creation, board placement/calibration, and stand/lay-flat behavior.
 The optional browser smoke test runs with
 `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs` and exercises desktop/mobile
-controls, numeric edits, wheel modifiers, drag, clear/undo, cancel, and object/board saving.
+controls, numeric edits, wheel modifiers, drag, clear/undo, cancel, object/board saving, group
+transforms, and preset save/insert/visibility. API validation and production database exports have
+unit coverage; PostgreSQL integration tests verify persistence and owner/admin visibility rules.
 
 ### Drop-marker surface placement
 
