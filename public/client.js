@@ -1,3 +1,8 @@
+import {
+  createColliderSurface,
+  disposeColliderSurface,
+  colliderSurfaceHeight,
+} from './collider-surface.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import {
@@ -866,6 +871,9 @@ function rebuildGrid() {
     updateHeldLabel(id, ''); // drop its name tag if any
     selection.delete(id); // never keep a removed piece selected
     meshes.delete(id);
+    const surface = boardDropSurfaces.get(id);
+    if (surface) disposeColliderSurface(surface.root);
+    boardDropSurfaces.delete(id);
     buffers.delete(id);
   });
 
@@ -5818,7 +5826,33 @@ function sample(buf, renderTime, mesh) {
   qb.set(b.qx, b.qy, b.qz, b.qw);
   mesh.quaternion.copy(qa).slerp(qb, fraction);
 }
-let boardTopY = 0; // top surface of the current board (0 = bare table) — where the drop marker sits
+const boardDropSurfaces = new Map();
+function boardDropHeight(x, z, fromY) {
+  let height = 0;
+  for (const [id, entry] of meshes) {
+    if (entry.type !== 'board' || !entry.mesh.visible) continue;
+    const piece = room?.state.pieces.get(id);
+    if (!piece) continue;
+    let cached = boardDropSurfaces.get(id);
+    if (!cached || cached.props !== piece.props) {
+      if (cached) disposeColliderSurface(cached.root);
+      const spec = colliderSpec('board', meshPropsOf(piece, id));
+      if (!spec) {
+        boardDropSurfaces.delete(id);
+        continue;
+      }
+      const root = new THREE.Group();
+      root.add(createColliderSurface(spec));
+      cached = { root, props: piece.props };
+      boardDropSurfaces.set(id, cached);
+    }
+    cached.root.position.copy(entry.mesh.position);
+    cached.root.quaternion.copy(entry.mesh.quaternion);
+    height = Math.max(height, colliderSurfaceHeight(cached.root, x, z, fromY));
+  }
+  return height;
+}
+let boardTopY = 0; // legacy board-wide plane for measurements and pings (0 = bare table)
 
 // ===== Cosmetic animation layer =============================================
 // Purely visual, event-driven flourishes (e.g. a deck riffle on shuffle). They
@@ -6292,7 +6326,8 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
     if (me && me.color) dropMarker.material.color.set(me.color);
     dropMarker.position.set(
       held.mesh.position.x,
-      boardTopY + CONFIG.marker.lift,
+      boardDropHeight(held.mesh.position.x, held.mesh.position.z, held.mesh.position.y) +
+        CONFIG.marker.lift,
       held.mesh.position.z,
     );
     dropMarker.visible = true;

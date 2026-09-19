@@ -402,7 +402,7 @@ chess}` each `[color0, color1]`.
 ## `shared/board-geometry.js` — uploaded board outlines
 
 - **`BOARD_OUTLINES`** — `rectangle`, `circle` (ellipse for unequal dimensions), `hexagon`,
-  `clipped`, and `custom`.
+  `triangle`, `clipped`, and `custom`.
 - **`normalizeBoardOutline(value)`** returns a copied, normalized outline or `null`. Clipped
   corners use `{type:'clipped', cut}` with `0 < cut < 0.5`; the editor offers 1–49 percent.
   Custom outlines use `{type:'custom', points:[[x,z],...]}` with 3–32 finite points in
@@ -440,17 +440,20 @@ width/depth controls.
 ## `shared/compound-collider.js` — custom collision layouts
 
 - **`COMPOUND_SHAPE_LIMIT`** is 16; **`COMPOUND_TYPES`** contains `box`, `sphere`,
-  `cylinder`, `cone`, and `flat`.
+  `cylinder`, `cone`, `flat`, and `outline`.
 - **`normalizeCompoundCollider(value)`** returns a fresh validated
   `{version:1, shapes:[{type,position,size,rotation},...]}` or `null`.
   All vector fields are finite triples. Position components range from -2 to 2, full-size
   components from 0.001 to 2, and XYZ Euler rotation components from -2π to 2π radians.
   Spheres require equal sizes on all axes; cylinders/cones require equal X/Z sizes.
-  Empty layouts, unknown types, and more than 16 children are rejected.
+  An `outline` child also requires a valid `outline` object accepted by
+  `normalizeBoardOutline`; its dimensions set width, thickness, and depth.
+  Empty layouts, unknown types, invalid outlines, and more than 16 children are rejected.
 - **`compoundColliderSpec(value, box)`** scales positions and full dimensions by
   `2 * max(box)`, returning `{type:'compound', shapes:[...]}` with renderer-neutral
   primitives, local offsets, and rotations. Flat shapes resolve to boxes; cylinders and cones
-  use 16 sides. Cone top radius is 5% of its bottom radius.
+  use 16 sides. Cone top radius is 5% of its bottom radius. Outline children produce
+  `{type:'convex',vertices,faces,offset,rotation}` using shared board-prism geometry.
 
 Uploaded GLB object and board records accept `compoundCollider`. Object records cannot combine
 it with `collider`; board records cannot combine it with `outline`. Image boards use outlines.
@@ -464,9 +467,31 @@ The editor provides orbit/move/rotate/resize modes, perspective/top/front/side c
 direct shape-add buttons, duplicate/delete/clear-all/undo, and live numeric transforms.
 Fields display table units or degrees; wheel adjustments support Shift for 0.1× steps and
 Ctrl/Command for 10× steps. Clear all is undoable and empty drafts cannot be applied.
+The outline component supports rectangle, clipped corners, triangle, hexagon, circle/oval,
+and custom convex footprints. **Edit outline / clip corners** converts an existing box or
+flat slab while preserving size and transform. The embedded `wireBoardOutline(prefix,onChange)`
+reports live normalized outlines (or `null` for unfinished/invalid drafts); invalid drafts
+disable Apply. Y size controls prism thickness.
 
 **`scripts/collider-editor-test.mjs`** exercises the editor at desktop/mobile widths.
 Run with `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs`.
+
+---
+
+## `public/collider-surface.js` — drop-marker surface queries
+
+- **`createColliderSurface(spec)`** builds an unrendered Three.js tree for a shared primitive,
+  convex, or compound collider description, preserving local offsets/rotations.
+- **`colliderSurfaceHeight(root,x,z,fromY)`** returns the nearest downward ray hit between
+  `fromY` and table height zero, or zero if nothing is hit. Update the root's board transform
+  before calling; the helper updates world matrices. Sphere surfaces are triangulated.
+- **`disposeColliderSurface(root)`** releases tree geometry and materials.
+
+The client's `boardDropHeight` caches board-only trees by board ID and serialized props,
+copies interpolated board transforms for each query, and picks the highest surface below the
+held origin. Removal disposes the cached tree. The held piece and other pieces are excluded;
+raised areas, cut corners, holes, and off-board positions are resolved locally. Pings and
+measurements retain their existing board-wide plane.
 
 ---
 

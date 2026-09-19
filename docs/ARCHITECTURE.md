@@ -579,11 +579,14 @@ is required: library records and piece/scene JSON props retain the layout throug
 clone, load, and snapshots.
 
 `shared/compound-collider.js` validates version-1 layouts of 1–16 box, sphere, cylinder, cone,
-or flat-slab shapes. Each child has a position, full dimensions, and XYZ Euler rotation.
+flat-slab, or outline-prism shapes. Each child has a position, full dimensions, and XYZ Euler rotation.
 Positions and sizes are relative to the model's longest side (`2 * max(box)`); rotations are
 radians. Uniform asset scaling therefore preserves the authored layout. Spheres require equal
 dimensions; cylinders/cones require equal X/Z diameters. Flat slabs are boxes and cones use
-16-sided tapered cylinders with a small top radius.
+16-sided tapered cylinders with a small top radius. Outline components carry their own
+validated `outline` and reuse `boardGeometry` to extrude a convex prism; their size's Y component
+sets thickness. Rectangle, clipped-corner, triangle, hexagon, circle/oval, and custom convex
+footprints are available. `buildCollider` constructs these children as Cannon convex polyhedra.
 
 `public/compound-collider-editor.js` owns a Three.js preview, orbit controls, and a private
 draft. Drag-mode buttons select orbit, move, rotate, or uniform resize; labeled camera controls
@@ -594,7 +597,10 @@ Ctrl/Command makes them larger. Duplicate, delete, clear all, and undo operate o
 Clear all is undoable; Apply is disabled until the draft contains a valid shape. Apply returns
 the layout to the upload form, while Cancel discards changes. The editor disposes its renderer,
 geometry, materials, textures, and controls on close. The upload form also rotates child
-positions/orientations when the model's orientation changes.
+positions/orientations when the model's orientation changes. Existing box/flat components can
+be converted through **Edit outline / clip corners**, preserving their dimensions and transform.
+The embedded top-down outline editor updates the 3D draft as presets, corner cuts, and custom
+corners change; incomplete custom outlines disable Apply.
 
 The WebSocket boundary rejects invalid layouts and conflicting collider/outline fields.
 `compoundColliderSpec` resolves normalized data for both physics and diagnostic rendering.
@@ -610,6 +616,21 @@ library loading, body creation, board placement/calibration, and stand/lay-flat 
 The optional browser smoke test runs with
 `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs` and exercises desktop/mobile
 controls, numeric edits, wheel modifiers, drag, clear/undo, cancel, and object/board saving.
+
+### Drop-marker surface placement
+
+`public/collider-surface.js` builds invisible Three.js collision geometry from the shared
+collider descriptors. The client caches one surface tree per board and serialized props value,
+rebuilds it when props change, and disposes it when the board is removed. Each query copies the
+board mesh's interpolated position/quaternion, keeping compound child offsets and rotations local.
+
+The held-piece drop marker casts downward from the held mesh's origin at its X/Z location.
+The nearest board surface below that origin determines marker height, with the usual small
+visual lift. Structures above the held origin and other pieces do not participate. With multiple
+boards, the highest hit below the origin wins; gaps and locations outside all boards fall back
+to table height zero. Sphere surfaces use triangulated preview geometry; other primitives and
+convex outlines use their corresponding collision geometry. This changes only marker placement:
+measurement and ping overlays still use the legacy board-wide height plane.
 
 ### Collider diagnostics
 

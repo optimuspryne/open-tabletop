@@ -2,7 +2,7 @@ import { boardOutlinePoints, normalizeBoardOutline } from '/shared/board-geometr
 
 // A small top-down editor shared by image and model boards. Points use asset-local
 // coordinates so changing board dimensions also scales its authored collider.
-export function wireBoardOutline(prefix) {
+export function wireBoardOutline(prefix, onChange = () => {}) {
   const el = (suffix) => document.getElementById(prefix + suffix);
   const select = el('Outline'),
     cut = el('Cut'),
@@ -72,6 +72,7 @@ export function wireBoardOutline(prefix) {
       ctx.fillStyle = '#ffffff';
       ctx.fill();
     }
+    onChange(value());
     el('Status').textContent =
       select.value === 'custom' && !value()
         ? 'Add 3–32 corners around the edge, without inward bends or crossing lines.'

@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Add outline-prism components to custom colliders, with clipped corners, triangle/hexagon
+  presets, custom convex tracing, and conversion from existing box/flat components.
 - Let uploaded GLB board outlines adjust width, depth, and rotation independently of the model,
   with a live tracing overlay and saved fit settings.
 - Add a 3D custom collider editor for uploaded objects and GLB boards, with box, sphere,
@@ -29,6 +31,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Remove custom-collider helper text and wrap object scale controls to prevent clipping.
 
 ### Fixed
+- Place the held-piece drop marker on the board collider directly beneath it, respecting
+  raised platforms, openings, board transforms, and the bare table outside the board.
 - Keep the clipped-corner amount visible after number inputs receive their stepper wrappers.
 - Keep stand/lay-flat self-righting and dragging height independent of custom collider child
   offsets, including single-shape custom layouts, while preserving legacy flat-collider behavior.

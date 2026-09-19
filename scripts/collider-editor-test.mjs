@@ -47,7 +47,7 @@ try {
       await wait(()=>modal()&&!button('apply').disabled);
       add('cylinder');edit('position X',0.24);edit('rotation Z',45);
       assert(modal().querySelectorAll('[data-drag-mode]').length===4,'Missing drag modes');
-      assert(modal().querySelectorAll('[data-add-shape]').length===5,'Missing add buttons');
+      assert(modal().querySelectorAll('[data-add-shape]').length===6,'Missing add buttons');
       assert(!modal().querySelector('.ico-missing'),'Missing icon');
       const x=modal().querySelector('[aria-label="position X"]');
       x.focus();x.value='0.3';x.dispatchEvent(new Event('input'));
@@ -60,6 +60,16 @@ try {
       assert(Math.abs(+x.value-0.211)<1e-6,'Coarse wheel step failed');
       x.blur();button('undo').click();
       assert(Math.abs(+modal().querySelector('[aria-label="position X"]').value-0.24)<1e-6,'Numeric undo failed');
+      add('outline');
+      const preset=modal().querySelector('#compoundShapeOutline');
+      preset.value='hexagon';preset.dispatchEvent(new Event('change'));
+      preset.value='custom';preset.dispatchEvent(new Event('change'));
+      assert(button('apply').disabled,'Invalid outline can be applied');
+      preset.value='hexagon';preset.dispatchEvent(new Event('change'));
+      assert(!button('apply').disabled,'Returning to valid outline remains disabled');
+      edit('size Y',0.1);
+      assert(modal().querySelector('#compoundShapeOutline').value==='hexagon','Outline preset lost');
+      button('duplicate').click();button('delete').click();button('delete').click();
       button('clear').click();
       assert(field('list').options.length===0&&button('clear').disabled&&button('apply').disabled,'Clear all failed');
       button('undo').click();
@@ -85,11 +95,46 @@ try {
       openTab('modelboards');uploadTarget='/models/boards/go_board.glb';await choose('adBoardGlb',uploadTarget);
       const mode=document.getElementById('adBoardColliderMode');mode.value='custom';mode.dispatchEvent(new Event('change'));
       await wait(()=>modal()&&!button('apply').disabled);
-      add('flat');edit('rotation X',20);button('apply').click();await wait(()=>!modal()&&document.getElementById('adBoardCustomStatus').textContent.startsWith('2 shapes'));
+      add('flat');edit('rotation X',20);
+      const beforeSize=modal().querySelector('[aria-label="size Y"]').value;
+      button('outline').click();
+      assert(modal().querySelector('[aria-label="size Y"]').value===beforeSize,'Conversion changed thickness');
+      const outline=modal().querySelector('#compoundShapeOutline');outline.value='clipped';outline.dispatchEvent(new Event('change'));
+      const cut=modal().querySelector('#compoundShapeCut');cut.value=25;cut.dispatchEvent(new Event('input'));
+      button('apply').click();await wait(()=>!modal()&&document.getElementById('adBoardCustomStatus').textContent.startsWith('2 shapes'));
       document.getElementById('adBoardGlbName').value='Compound board';document.getElementById('adBoardGlbSave').click();
       await wait(()=>sent.some(item=>item[0]==='saveBoard'));
       const board=sent.find(item=>item[0]==='saveBoard')[1].board;
       assert(board.compoundCollider.shapes.length===2&&!board.outline,'Board save lost custom collider');
+      assert(board.compoundCollider.shapes[1].outline.cut===0.25,'Board save lost component outline');
+      const THREE=await import('three');
+      const {createColliderSurface,colliderSurfaceHeight,disposeColliderSurface}=await import('/collider-surface.js');
+      const root=new THREE.Group();
+      root.add(createColliderSurface({type:'compound',shapes:[
+        {type:'box',halfExtents:[2,0.1,2],offset:[0,0.1,0]},
+        {type:'cylinder',radiusTop:0.4,radiusBottom:0.4,height:2,sides:16,offset:[0,1.2,0]},
+        {type:'box',halfExtents:[0.4,0.1,0.4],offset:[1,3,0]}
+      ]}));
+      const near=(actual,expected)=>assert(Math.abs(actual-expected)<0.001,'Surface height '+actual+' != '+expected);
+      near(colliderSurfaceHeight(root,1,1,4),0.2);
+      near(colliderSurfaceHeight(root,0,0,4),2.2);
+      near(colliderSurfaceHeight(root,1,0,2),0.2);
+      near(colliderSurfaceHeight(root,3,0,4),0);
+      root.position.set(3,0.5,1);root.rotation.y=Math.PI/4;
+      near(colliderSurfaceHeight(root,3,1,5),2.7);
+      disposeColliderSurface(root);
+      const {compoundColliderSpec}=await import('/shared/compound-collider.js');
+      const bridge=createColliderSurface({type:'compound',shapes:[
+        {type:'box',halfExtents:[0.2,0.5,1],offset:[-0.8,0.5,0]},
+        {type:'box',halfExtents:[0.2,0.5,1],offset:[0.8,0.5,0]}]});
+      near(colliderSurfaceHeight(bridge,0,0,4),0);
+      near(colliderSurfaceHeight(bridge,0.8,0,4),1);
+      disposeColliderSurface(bridge);
+      const prism=createColliderSurface(compoundColliderSpec({version:1,shapes:[{type:'outline',
+        outline:{type:'clipped',cut:0.3},position:[0,0.05,0],size:[1,0.1,1],rotation:[0,0,0]}]},[1,1,1]));
+      near(colliderSurfaceHeight(prism,0,0,3),0.2);
+      near(colliderSurfaceHeight(prism,0.95,0.95,3),0);
+      disposeColliderSurface(prism);
       // Reopen a real 3D preview for visual QA; no uploaded file or server needed.
       const module=await import('/compound-collider-editor.js');
       window.previewResult=module.openColliderEditor({source:uploadTarget,box:board.box,value:board.compoundCollider});
@@ -128,6 +173,10 @@ try {
     await page.evaluate(
       `document.querySelector('.compoundEditor [data-view="perspective"]').click()`,
     );
+    await page.evaluate(`(() => {
+      const list=document.querySelector('.compoundEditor [data-field="list"]');
+      list.value='1';list.dispatchEvent(new Event('change'));
+    })()`);
     const screenshot = await cdp.send('Page.captureScreenshot', { format: 'png' }, page.sessionId);
     await writeFile(`/tmp/compound-editor-${width}.png`, Buffer.from(screenshot.data, 'base64'));
     console.log(

@@ -6806,7 +6806,8 @@ body.not-gm .gm-only {
   }
 }
 
-.compoundNumbers input {
+.compoundNumbers input,
+.compoundEditor input[type='number'] {
   color: var(--text);
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.18);
@@ -6877,4 +6878,12 @@ body.not-gm .gm-only {
 .boardOutlineFit input {
   min-width: 0;
   width: 100%;
+}
+.compoundIconButtons [data-add-shape] {
+  width: 36px;
+  height: 36px;
+}
+
+#compoundShapeCut {
+  max-width: 80px;
 }

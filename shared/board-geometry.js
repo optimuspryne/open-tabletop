@@ -1,6 +1,6 @@
 import { BOARDS } from './pieces.js';
 
-export const BOARD_OUTLINES = ['rectangle', 'circle', 'hexagon', 'clipped', 'custom'];
+export const BOARD_OUTLINES = ['rectangle', 'circle', 'hexagon', 'triangle', 'clipped', 'custom'];
 
 // Normalized X/Z points, counterclockwise in the top-down editor. Reject concavity,
 // crossings, duplicate edges and degenerate outlines rather than silently changing them.
@@ -78,8 +78,8 @@ export function boardOutlinePoints(outline, aspect = 1) {
 function baseOutlinePoints(outline) {
   const spec = normalizeBoardOutline(outline) || { type: 'rectangle' };
   if (spec.type === 'custom') return spec.points;
-  if (spec.type === 'circle' || spec.type === 'hexagon') {
-    const n = spec.type === 'circle' ? 32 : 6;
+  if (spec.type === 'circle' || spec.type === 'hexagon' || spec.type === 'triangle') {
+    const n = spec.type === 'circle' ? 32 : spec.type === 'triangle' ? 3 : 6;
     return Array.from({ length: n }, (_, i) => [
       Math.cos((i * 2 * Math.PI) / n) / 2,
       Math.sin((i * 2 * Math.PI) / n) / 2,

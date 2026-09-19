@@ -1,3 +1,5 @@
+import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import { wireBoardOutline } from './board-outline-editor.js';
 import * as THREE from 'three';
 import { applyIcons } from './icons.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -40,6 +42,8 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   let draft = structuredClone(initial),
     selected = 0,
     dragMode = 'orbit',
+    outlineEditor = null,
+    outlineValid = true,
     finished = false,
     ready = false;
   const previousFocus = document.activeElement;
@@ -65,7 +69,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   <button type="button" data-view="perspective" data-icon="hexagon-3d" aria-label="Perspective view"></button><button type="button" data-view="top" data-icon="mood-look-down" aria-label="Top view"></button><button type="button" data-view="front" data-icon="mood-neutral" aria-label="Front view"></button><button type="button" data-view="side" data-icon="mood-look-left" aria-label="Side view"></button></div></div></div>
   <p>Click a shape to select it. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
   <aside><label>Shapes <select data-field="list" size="5" aria-label="Collider shapes"></select></label>
-  <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Add shape">${COMPOUND_TYPES.map((type) => `<button type="button" data-add-shape="${type}" data-icon="${{ box: 'cube-plus', sphere: 'sphere-plus', cylinder: 'cylinder-plus', cone: 'cone-plus', flat: 'square-plus-2' }[type]}" aria-label="Add ${type === 'flat' ? 'flat slab' : type}"></button>`).join('')}</div>
+  <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Add shape">${COMPOUND_TYPES.map((type) => `<button type="button" data-add-shape="${type}" data-icon="${{ box: 'cube-plus', sphere: 'sphere-plus', cylinder: 'cylinder-plus', cone: 'cone-plus', flat: 'square-plus-2', outline: 'hexagon-3d' }[type]}" aria-label="Add ${type === 'flat' ? 'flat slab' : type}"></button>`).join('')}</div>
   <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Shape actions"><button type="button" data-action="duplicate" data-icon="copy" aria-label="Duplicate shape"></button><button type="button" data-action="delete" data-icon="library-minus" aria-label="Delete shape"></button><button type="button" data-action="undo" data-icon="arrow-back-up" aria-label="Undo"></button><button type="button" data-action="clear" data-icon="trash" class="danger" aria-label="Clear all shapes"></button></div>
   <div data-field="properties"></div>
   <p>Scroll over a value to adjust it. Shift: finer steps. Ctrl/⌘: larger steps.</p>
@@ -120,11 +124,18 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     const spec = compoundColliderSpec(draft, [0.5, 0.5, 0.5]);
     for (const [i, part] of (spec?.shapes || []).entries()) {
       const geometry =
-        part.type === 'sphere'
-          ? new THREE.SphereGeometry(part.radius, 20, 12)
-          : part.type === 'cylinder'
-            ? new THREE.CylinderGeometry(part.radiusTop, part.radiusBottom, part.height, part.sides)
-            : new THREE.BoxGeometry(...part.halfExtents.map((v) => v * 2));
+        part.type === 'convex'
+          ? new ConvexGeometry(part.vertices.map((v) => new THREE.Vector3(...v)))
+          : part.type === 'sphere'
+            ? new THREE.SphereGeometry(part.radius, 20, 12)
+            : part.type === 'cylinder'
+              ? new THREE.CylinderGeometry(
+                  part.radiusTop,
+                  part.radiusBottom,
+                  part.height,
+                  part.sides,
+                )
+              : new THREE.BoxGeometry(...part.halfExtents.map((v) => v * 2));
       const color = i === selected ? 0xffcd70 : 0x56d3ff;
       const mesh = new THREE.Mesh(
         geometry,
@@ -163,14 +174,63 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     action('delete').disabled = selected < 0;
     action('clear').disabled = !draft.shapes.length;
     action('undo').disabled = !history.length;
-    action('apply').disabled = !ready || !normalizeCompoundCollider(draft);
+    action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
     if (!keepInputs) properties();
+    action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
   }
   function properties() {
+    outlineEditor = null;
+    outlineValid = true;
     const host = find('properties');
     host.replaceChildren();
     const shape = draft.shapes[selected];
     if (!shape) return;
+    if (['box', 'flat'].includes(shape.type)) {
+      const convert = document.createElement('button');
+      convert.type = 'button';
+      convert.dataset.action = 'outline';
+      convert.textContent = 'Edit outline / clip corners';
+      convert.onclick = () => {
+        remember();
+        draft.shapes[selected].type = 'outline';
+        draft.shapes[selected].outline = { type: 'rectangle' };
+        rebuild();
+      };
+      host.append(convert);
+    }
+    if (shape.type === 'outline') {
+      const panel = document.createElement('div');
+      panel.innerHTML = `<label>Outline <select id="compoundShapeOutline">
+        <option value="rectangle">Rectangle</option><option value="clipped">Clipped corners</option>
+        <option value="triangle">Triangle</option><option value="hexagon">Hexagon</option>
+        <option value="circle">Circle / oval</option><option value="custom">Custom convex outline</option>
+        </select></label>
+        <label>Corner cut (%) <input id="compoundShapeCut" type="number" min="1" max="49" value="15"></label>
+        <canvas id="compoundShapeCanvas" width="320" height="240" style="max-width:100%;cursor:crosshair" aria-label="Outline corners"></canvas>
+        <div id="compoundShapeTools"><button type="button" id="compoundShapeUndo">Undo corner</button>
+        <button type="button" id="compoundShapeClear">Clear outline</button></div>
+        <p id="compoundShapeStatus" role="status"></p>`;
+      host.append(panel);
+      let active = false;
+      const editor = wireBoardOutline('compoundShape', (outline) => {
+        if (!active) return;
+        outlineValid = !!outline;
+        if (!outline) {
+          action('apply').disabled = true;
+          return;
+        }
+        if (JSON.stringify(outline) !== JSON.stringify(draft.shapes[selected].outline)) {
+          remember();
+          draft.shapes[selected].outline = outline;
+          rebuild(true);
+        }
+        action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
+      });
+      editor.fill(shape.outline);
+      editor.aspect(shape.size[0] / shape.size[2]);
+      outlineEditor = editor;
+      active = true;
+    }
     for (const key of ['position', 'rotation', 'size']) {
       const label = document.createElement('p');
       label.textContent =
@@ -218,6 +278,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
           }
           find('status').textContent = 'Changes are kept in this draft until you apply.';
           rebuild(true);
+          outlineEditor?.aspect(draft.shapes[selected].size[0] / draft.shapes[selected].size[2]);
           for (const linked of host.querySelectorAll('input:disabled')) {
             linked.value = +(
               draft.shapes[selected][linked.dataset.property][+linked.dataset.axis] * unit
@@ -229,7 +290,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
         input.onblur = () => {
           editing = false;
           input.value = +(draft.shapes[selected][key][axis] * factor).toFixed(4);
-          action('apply').disabled = !ready || !normalizeCompoundCollider(draft);
+          action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
         };
         input.addEventListener(
           'wheel',
@@ -279,7 +340,8 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
         type,
         position: [0, 0, 0],
         rotation: [0, 0, 0],
-        size: type === 'flat' ? [0.5, 0.02, 0.5] : [0.3, 0.3, 0.3],
+        ...(type === 'outline' ? { outline: { type: 'clipped', cut: 0.15 } } : {}),
+        size: ['flat', 'outline'].includes(type) ? [0.5, 0.02, 0.5] : [0.3, 0.3, 0.3],
       });
       selected = draft.shapes.length - 1;
       rebuild();
@@ -435,7 +497,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     button.onclick = () => finish(null);
   action('apply').onclick = () => {
     const value = normalizeCompoundCollider(draft);
-    if (ready && value) finish(value);
+    if (ready && outlineValid && value) finish(value);
   };
   dialog.addEventListener('cancel', (event) => {
     event.preventDefault();

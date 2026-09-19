@@ -126,3 +126,57 @@ test('board placement accounts for shapes below the visible model', () => {
   assert.equal(boardSpawnHeight(board), 1.2);
   assert.equal(boardSpawnHeight({ ...props, box: [1, 0.1, 1] }), 0.1);
 });
+
+test('outline components preserve presets and construct convex compound children', () => {
+  for (const type of ['rectangle', 'triangle', 'hexagon', 'clipped', 'custom']) {
+    const outline = {
+      type,
+      ...(type === 'clipped' ? { cut: 0.2 } : {}),
+      ...(type === 'custom'
+        ? {
+            points: [
+              [-0.5, -0.5],
+              [0.5, -0.5],
+              [0, 0.5],
+            ],
+          }
+        : {}),
+    };
+    const child = { ...part('outline', [0.1, 0.2, 0], [0.8, 0.05, 0.6], [0, 0.4, 0]), outline };
+    const record = { ...props, compoundCollider: layout(child) };
+    assert.deepEqual(propRecordPayload(record).compoundCollider, layout(child));
+    const spec = compoundColliderSpec(record.compoundCollider, record.box).shapes[0];
+    const physics = buildCollider('prop', record, options).shapes[0];
+    assert.equal(spec.type, 'convex');
+    assert.deepEqual(
+      physics.shape.vertices.map((v) => v.toArray()),
+      spec.vertices,
+    );
+    assert.deepEqual(physics.shape.faces, spec.faces);
+    assert.deepEqual(colliderSpec('prop', record).shapes[0], spec);
+    for (let i = 0; i < physics.shape.faces.length; i++) {
+      const face = physics.shape.faces[i];
+      const center = face
+        .reduce((v, j) => v.vadd(physics.shape.vertices[j]), new CANNON.Vec3())
+        .scale(1 / face.length);
+      assert.ok(center.dot(physics.shape.faceNormals[i]) > 0);
+    }
+  }
+  assert.equal(normalizeCompoundCollider(layout(part('outline'))), null);
+  assert.equal(
+    normalizeCompoundCollider(
+      layout({
+        ...part('outline'),
+        outline: {
+          type: 'custom',
+          points: [
+            [0, 0],
+            [0, 0],
+            [0, 0],
+          ],
+        },
+      }),
+    ),
+    null,
+  );
+});

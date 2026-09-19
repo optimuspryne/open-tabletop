@@ -1,7 +1,8 @@
+import { boardGeometry, normalizeBoardOutline } from './board-geometry.js';
 // Shapes use full dimensions and offsets relative to the model's longest side.
 // This keeps uniform asset scaling independent of the authored collision layout.
 export const COMPOUND_SHAPE_LIMIT = 16;
-export const COMPOUND_TYPES = ['box', 'sphere', 'cylinder', 'cone', 'flat'];
+export const COMPOUND_TYPES = ['box', 'sphere', 'cylinder', 'cone', 'flat', 'outline'];
 const tuple = (v, min, max) =>
   Array.isArray(v) && v.length === 3 && v.every((n) => Number.isFinite(n) && n >= min && n <= max);
 export function normalizeCompoundCollider(value) {
@@ -23,11 +24,14 @@ export function normalizeCompoundCollider(value) {
       !tuple(shape.rotation, -Math.PI * 2, Math.PI * 2)
     )
       return null;
+    const outline = shape.type === 'outline' ? normalizeBoardOutline(shape.outline) : null;
+    if (shape.type === 'outline' && !outline) return null;
     const size = [...shape.size];
     if (shape.type === 'sphere' && (size[0] !== size[1] || size[0] !== size[2])) return null;
     if (['cylinder', 'cone'].includes(shape.type) && size[0] !== size[2]) return null;
     shapes.push({
       type: shape.type,
+      ...(outline ? { outline } : {}),
       position: [...shape.position],
       size,
       rotation: [...shape.rotation],
@@ -45,6 +49,12 @@ export function compoundColliderSpec(value, box) {
     shapes: normalized.shapes.map((shape) => {
       const [x, y, z] = shape.size.map((v) => v * unit);
       const transform = { offset: shape.position.map((v) => v * unit), rotation: shape.rotation };
+      if (shape.type === 'outline')
+        return {
+          type: 'convex',
+          ...boardGeometry({ w: x, d: z, thickness: y, outline: shape.outline }),
+          ...transform,
+        };
       if (shape.type === 'sphere') return { type: 'sphere', radius: x / 2, ...transform };
       if (shape.type === 'cylinder' || shape.type === 'cone')
         return {

@@ -59,11 +59,16 @@ export function buildCollider(type, props, { cardColliderThickness }) {
       return {
         shapes: spec.shapes.map((part) => ({
           shape:
-            part.type === 'sphere'
-              ? new CANNON.Sphere(part.radius)
-              : part.type === 'cylinder'
-                ? new CANNON.Cylinder(part.radiusTop, part.radiusBottom, part.height, part.sides)
-                : new CANNON.Box(new CANNON.Vec3(...part.halfExtents)),
+            part.type === 'convex'
+              ? new CANNON.ConvexPolyhedron({
+                  vertices: part.vertices.map((v) => new CANNON.Vec3(...v)),
+                  faces: part.faces,
+                })
+              : part.type === 'sphere'
+                ? new CANNON.Sphere(part.radius)
+                : part.type === 'cylinder'
+                  ? new CANNON.Cylinder(part.radiusTop, part.radiusBottom, part.height, part.sides)
+                  : new CANNON.Box(new CANNON.Vec3(...part.halfExtents)),
           offset: new CANNON.Vec3(...part.offset),
           orientation: new CANNON.Quaternion().setFromEuler(...part.rotation, 'XYZ'),
         })),
