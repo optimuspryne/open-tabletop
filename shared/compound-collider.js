@@ -1,4 +1,5 @@
-import { boardGeometry, normalizeBoardOutline } from './board-geometry.js';
+import { normalizeColliderOutline, decomposeOutline, outlinePrism } from './collider-outline.js';
+import { boardGeometry } from './board-geometry.js';
 // Shapes use full dimensions and offsets relative to the model's longest side.
 // This keeps uniform asset scaling independent of the authored collision layout.
 export const COMPOUND_SHAPE_LIMIT = 16;
@@ -15,6 +16,7 @@ export function normalizeCompoundCollider(value) {
   )
     return null;
   const shapes = [];
+  let count = 0;
   for (const shape of value.shapes) {
     if (
       !shape ||
@@ -24,8 +26,10 @@ export function normalizeCompoundCollider(value) {
       !tuple(shape.rotation, -Math.PI * 2, Math.PI * 2)
     )
       return null;
-    const outline = shape.type === 'outline' ? normalizeBoardOutline(shape.outline) : null;
+    const outline = shape.type === 'outline' ? normalizeColliderOutline(shape.outline) : null;
     if (shape.type === 'outline' && !outline) return null;
+    const parts = outline ? decomposeOutline(outline) : [null];
+    if (!parts || (count += parts.length) > COMPOUND_SHAPE_LIMIT) return null;
     const size = [...shape.size];
     if (shape.type === 'sphere' && (size[0] !== size[1] || size[0] !== size[2])) return null;
     if (['cylinder', 'cone'].includes(shape.type) && size[0] !== size[2]) return null;
@@ -46,15 +50,54 @@ export function compoundColliderSpec(value, box) {
   const unit = Math.max(...box) * 2;
   return {
     type: 'compound',
-    shapes: normalized.shapes.map((shape) => {
+    shapes: normalized.shapes.flatMap((shape, sourceIndex) => {
       const [x, y, z] = shape.size.map((v) => v * unit);
-      const transform = { offset: shape.position.map((v) => v * unit), rotation: shape.rotation };
+      const transform = {
+        sourceIndex,
+        offset: shape.position.map((v) => v * unit),
+        rotation: shape.rotation,
+      };
       if (shape.type === 'outline')
-        return {
-          type: 'convex',
-          ...boardGeometry({ w: x, d: z, thickness: y, outline: shape.outline }),
-          ...transform,
-        };
+        return decomposeOutline(shape.outline).map((outline) => {
+          let geometry;
+          if (outline.type !== 'custom')
+            geometry = boardGeometry({ w: x, d: z, thickness: y, outline });
+          else {
+            let points = outline.points;
+            if (outline.fit) {
+              const { scale, rotation } = outline.fit,
+                c = Math.cos(rotation),
+                s = Math.sin(rotation);
+              points = points.map(([a, b]) => [
+                a * scale[0] * c + (b * scale[1] * s * z) / x,
+                (-a * scale[0] * s * x) / z + b * scale[1] * c,
+              ]);
+            }
+            geometry = outlinePrism(points, x, z, y);
+          }
+          // Each convex hull has its own interior origin (Cannon expects outward face normals).
+          const center = [0, 1, 2].map(
+            (axis) =>
+              geometry.vertices.reduce((sum, v) => sum + v[axis], 0) / geometry.vertices.length,
+          );
+          geometry.vertices = geometry.vertices.map((v) => v.map((n, i) => n - center[i]));
+          const [rx, ry, rz] = shape.rotation;
+          const a = center[0] * Math.cos(rz) - center[1] * Math.sin(rz),
+            b = center[0] * Math.sin(rz) + center[1] * Math.cos(rz);
+          const c = a * Math.cos(ry) + center[2] * Math.sin(ry),
+            d = -a * Math.sin(ry) + center[2] * Math.cos(ry);
+          const shifted = [
+            c,
+            b * Math.cos(rx) - d * Math.sin(rx),
+            b * Math.sin(rx) + d * Math.cos(rx),
+          ];
+          return {
+            type: 'convex',
+            ...geometry,
+            ...transform,
+            offset: transform.offset.map((v, i) => v + shifted[i]),
+          };
+        });
       if (shape.type === 'sphere') return { type: 'sphere', radius: x / 2, ...transform };
       if (shape.type === 'cylinder' || shape.type === 'cone')
         return {

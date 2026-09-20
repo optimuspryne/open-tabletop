@@ -439,7 +439,7 @@ width/depth controls.
 
 ## `shared/compound-collider.js` — custom collision layouts
 
-- **`COMPOUND_SHAPE_LIMIT`** is 16; **`COMPOUND_TYPES`** contains `box`, `sphere`,
+- **`COMPOUND_SHAPE_LIMIT`** is 16 for both authored shapes and generated physics parts; **`COMPOUND_TYPES`** contains `box`, `sphere`,
   `cylinder`, `cone`, `flat`, and `outline`.
 - **`normalizeCompoundCollider(value)`** returns a fresh validated
   `{version:1, shapes:[{type,position,size,rotation},...]}` or `null`.
@@ -447,13 +447,16 @@ width/depth controls.
   components from 0.001 to 2, and XYZ Euler rotation components from -2π to 2π radians.
   Spheres require equal sizes on all axes; cylinders/cones require equal X/Z sizes.
   An `outline` child also requires a valid `outline` object accepted by
-  `normalizeBoardOutline`; its dimensions set width, thickness, and depth.
-  Empty layouts, unknown types, invalid outlines, and more than 16 children are rejected.
+  `normalizeColliderOutline`; its dimensions set width, thickness, and depth.
+  Empty layouts, unknown types, invalid outlines, and layouts exceeding either 16 authored
+  children or 16 decomposed physics sections are rejected.
 - **`compoundColliderSpec(value, box)`** scales positions and full dimensions by
   `2 * max(box)`, returning `{type:'compound', shapes:[...]}` with renderer-neutral
   primitives, local offsets, and rotations. Flat shapes resolve to boxes; cylinders and cones
   use 16 sides. Cone top radius is 5% of its bottom radius. Outline children produce
-  `{type:'convex',vertices,faces,offset,rotation}` using shared board-prism geometry.
+  `{type:'convex',vertices,faces,offset,rotation,sourceIndex}` sections. Convex presets remain
+  single sections; concave custom outlines decompose into multiple convex prisms. Every part
+  carries its authored `sourceIndex`; recentered vertices and rotated offsets preserve placement.
 
 Uploaded GLB object and board records accept `compoundCollider`. Object records cannot combine
 it with `collider`; board records cannot combine it with `outline`. Image boards use outlines.
@@ -468,13 +471,47 @@ direct shape-add buttons, duplicate/delete/clear-all/undo, and live numeric tran
 Fields display table units or degrees; wheel adjustments support Shift for 0.1× steps and
 Ctrl/Command for 10× steps. Clear all is undoable and empty drafts cannot be applied.
 The outline component supports rectangle, clipped corners, triangle, hexagon, circle/oval,
-and custom convex footprints. **Edit outline / clip corners** converts an existing box or
-flat slab while preserving size and transform. The embedded `wireBoardOutline(prefix,onChange)`
+and custom simple concave footprints. **Edit outline / clip corners** converts an existing box or
+flat slab while preserving size and transform. The embedded `wireBoardOutline(prefix,onChange,options)`
 reports live normalized outlines (or `null` for unfinished/invalid drafts); invalid drafts
-disable Apply. Y size controls prism thickness.
+disable Apply. Its optional `normalizeOutline` and `allowConcave` settings enable concave
+compound components while preserving convex-only validation for ordinary board forms.
+Y size controls prism thickness. The part count distinguishes authored shapes from the generated
+physics sections; selecting any decomposed section selects its original authored outline.
 
 **`scripts/collider-editor-test.mjs`** exercises the editor at desktop/mobile widths.
 Run with `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs`.
+
+---
+
+## `shared/collider-outline.js` — concave compound outlines
+
+- **`normalizeColliderOutline(value)`** validates presets using the board-outline contract and
+  permits simple concave custom loops of 3–32 normalized corners. Coordinates stay within ±0.5;
+  invalid, degenerate, crossing, touching, or backtracking loops return `null`. Straight corners
+  are simplified and winding is normalized. Optional fit settings retain existing validation.
+- **`decomposeOutline(outline)`** returns convex outline sections or `null`. Deterministic ear
+  clipping followed by greedy convex merging preserves the original area and open recesses.
+  No automatic enclosed-hole or self-intersection repair is performed.
+- **`outlinePrism(points,width,depth,thickness)`** extrudes validated convex sections into
+  vertices/faces for shared physics and preview descriptors.
+
+## `public/collider-outline-drawing.js` — main-viewport drawing
+
+**`createOutlineDrawing({scene,camera,controls,canvas,host,unit,onCommit,onState,validate})`**
+returns `start({shape,position})`, `dispose()`, and an `active` getter. New drawings select a
+Top/Front/Side plane through `position`; edits use the shape's transformed local plane. It owns
+point placement/dragging, model-relative 0.1-grid snapping, wheel zoom, thickness in table units,
+point undo/clear, and a live preview of generated convex sections. Clicking the first point or
+Finish outline closes the loop. `validate` checks the complete destination layout's budget.
+Finish invokes `onCommit` with one normalized outline component; cancel leaves it unchanged.
+The controller restores the camera and releases preview geometry/listeners on disposal.
+`openColliderEditor` exposes Draw outline in 3D / Edit outline in 3D, hides existing shells during
+drawing, disables Apply until drawing ends, and makes successful drawing commits undoable.
+
+**`test/collider-outline.js`** verifies geometry, validation, budgets, persistence normalization,
+and Cannon collision behavior. Run the pointer/UI regression with
+`CHROME_BIN=/path/to/chromium node scripts/outline-drawing-test.mjs` (desktop and mobile).
 
 ---
 
@@ -483,7 +520,7 @@ Run with `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs`.
 - **`public/collider-groups.js`**: `groupBounds` computes transformed component bounds;
   `transformGroup` applies shared translation, rotation, and uniform scale atomically;
   `captureGroup` recenters/normalizes selected components and preserves their table-unit size;
-  `insertGroup` returns independent copied components subject to the 16-shape cap;
+  `insertGroup` returns independent copied components subject to the 16-physics-part budget;
   `drawGroupThumbnail` renders a disposable geometry-based canvas preview.
 - **`public/collider-presets.js`**: `wireColliderPresets(host,{capture,insert})` wires the saved
   collections panel, paginated loading, previews, create/replace, metadata updates, deletion,

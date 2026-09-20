@@ -2,7 +2,11 @@ import { boardOutlinePoints, normalizeBoardOutline } from '/shared/board-geometr
 
 // A small top-down editor shared by image and model boards. Points use asset-local
 // coordinates so changing board dimensions also scales its authored collider.
-export function wireBoardOutline(prefix, onChange = () => {}) {
+export function wireBoardOutline(
+  prefix,
+  onChange = () => {},
+  { normalizeOutline = normalizeBoardOutline, allowConcave = false } = {},
+) {
   const el = (suffix) => document.getElementById(prefix + suffix);
   const select = el('Outline'),
     cut = el('Cut'),
@@ -37,7 +41,7 @@ export function wireBoardOutline(prefix, onChange = () => {}) {
     const transform = fit();
     if (transform && (transform.scale.some((v) => v !== 1) || transform.rotation !== 0))
       raw.fit = transform;
-    return normalizeBoardOutline(raw);
+    return normalizeOutline(raw);
   }
   function draw() {
     cut.closest('label').hidden = select.value !== 'clipped';
@@ -52,7 +56,9 @@ export function wireBoardOutline(prefix, onChange = () => {}) {
       ctx.globalAlpha = 1;
     }
     const outline =
-      select.value === 'custom' && !value() ? points : boardOutlinePoints(value(), aspect);
+      select.value === 'custom' && (!value() || allowConcave)
+        ? points
+        : boardOutlinePoints(value(), aspect);
     ctx.beginPath();
     outline.forEach(([x, z], i) => {
       const px = rect.x + (x + 0.5) * rect.w,
@@ -75,7 +81,9 @@ export function wireBoardOutline(prefix, onChange = () => {}) {
     onChange(value());
     el('Status').textContent =
       select.value === 'custom' && !value()
-        ? 'Add 3–32 corners around the edge, without inward bends or crossing lines.'
+        ? allowConcave
+          ? 'Add 3–32 corners without crossing lines. Inward bends are allowed.'
+          : 'Add 3–32 corners around the edge, without inward bends or crossing lines.'
         : fitWidth
           ? 'Adjust the outline to match the model. These controls change collision only.'
           : 'Outline viewed from above. Size follows the board dimensions.';
@@ -138,12 +146,14 @@ export function wireBoardOutline(prefix, onChange = () => {}) {
       const result = value();
       if (!result)
         throw new Error(
-          'Check outline size/rotation and draw 3–32 convex corners for a custom outline.',
+          allowConcave
+            ? 'Draw 3–32 corners without crossing lines for a custom outline.'
+            : 'Check outline size/rotation and draw 3–32 convex corners for a custom outline.',
         );
       return result;
     },
     fill(outline) {
-      const spec = normalizeBoardOutline(outline) || { type: 'rectangle' };
+      const spec = normalizeOutline(outline) || { type: 'rectangle' };
       if (fitWidth) {
         fitWidth.value = (spec.fit?.scale[0] ?? 1) * 100;
         fitDepth.value = (spec.fit?.scale[1] ?? 1) * 100;

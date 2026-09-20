@@ -584,9 +584,22 @@ Positions and sizes are relative to the model's longest side (`2 * max(box)`); r
 radians. Uniform asset scaling therefore preserves the authored layout. Spheres require equal
 dimensions; cylinders/cones require equal X/Z diameters. Flat slabs are boxes and cones use
 16-sided tapered cylinders with a small top radius. Outline components carry their own
-validated `outline` and reuse `boardGeometry` to extrude a convex prism; their size's Y component
-sets thickness. Rectangle, clipped-corner, triangle, hexagon, circle/oval, and custom convex
-footprints are available. `buildCollider` constructs these children as Cannon convex polyhedra.
+validated `outline`; their size's Y component sets thickness. Rectangle, clipped-corner,
+triangle, hexagon, circle/oval, and custom simple concave footprints are available.
+`shared/collider-outline.js` validates custom loops of 3–32 corners, rejects crossings,
+self-touching/backtracking edges and degenerate outlines, and simplifies redundant straight
+corners. Deterministic ear clipping followed by greedy convex merging generates solid sections.
+Each section is extruded and recentered around an interior origin; its rotated offset preserves
+the original geometry. `buildCollider` constructs those sections as Cannon convex polyhedra.
+The editable outline remains one authored item in asset props and saved collections, while
+`compoundColliderSpec` flattens its sections and records `sourceIndex` for editor selection.
+Ordinary image/GLB board outlines retain their separate convex-only contract.
+
+The 16 limit is an application performance budget, not a Cannon engine restriction. Validation
+limits both authored components and total generated physics parts to 16. The editor displays
+both counts; creation, duplicate, insertion, and outline edits must fit the same budget.
+A concave outline can therefore consume several parts while remaining one editable item.
+Enclosed holes and self-crossing loops are unsupported; an inward opening is supported.
 
 `public/compound-collider-editor.js` owns a Three.js preview, orbit controls, and a private
 draft. Drag-mode buttons select orbit, move, rotate, or uniform resize; labeled camera controls
@@ -602,6 +615,17 @@ be converted through **Edit outline / clip corners**, preserving their dimension
 The embedded top-down outline editor updates the 3D draft as presets, corner cuts, and custom
 corners change; incomplete custom outlines disable Apply. Controls scroll independently of the
 preview/footer, and the outline editor can collapse while preserving its state.
+
+`public/collider-outline-drawing.js` provides **Draw outline in 3D** and **Edit outline in 3D**.
+New outlines use a top/front/side plane through the selected component's center (or model origin).
+Existing outlines use their own local plane and retain orientation. The camera aligns to the
+plane, model geometry stays visible, and existing collider shells are temporarily hidden.
+Click to place points and click the first point or Finish outline to close; drag points to edit,
+scroll to zoom, optionally snap to the model-relative 0.1-unit grid, and enter thickness in table
+units. Point undo/clear operate on a separate drawing draft. A live preview shows the generated
+sections; invalid or over-budget outlines cannot finish. Finish inserts/replaces one component
+as an undoable editor operation, while Cancel drawing preserves the collider draft. Camera and
+controls are restored on exit, and Apply collider stays disabled during drawing.
 
 Multi-selection uses the shape list, Ctrl/Command-click in the preview, or Select all.
 Selected components move, rotate around a shared bounds center, and scale uniformly together;
@@ -624,7 +648,7 @@ replacement, deletion, and insertion at a chosen size. Library saves take effect
 independently of the editor's Apply/Cancel draft. Insertion fetches the current accessible preset
 and copies its components into the draft, selecting the new group. Asset layouts retain no preset
 reference, so later preset edits, deletion, or visibility changes cannot modify existing copies.
-The final compound retains the total 16-component limit.
+The final compound retains the total 16-physics-part budget, including decomposed sections.
 
 The WebSocket boundary rejects invalid layouts and conflicting collider/outline fields.
 `compoundColliderSpec` resolves normalized data for both physics and diagnostic rendering.
@@ -642,6 +666,10 @@ The optional browser smoke test runs with
 controls, numeric edits, wheel modifiers, drag, clear/undo, cancel, object/board saving, group
 transforms, and preset save/insert/visibility. API validation and production database exports have
 unit coverage; PostgreSQL integration tests verify persistence and owner/admin visibility rules.
+`test/collider-outline.js` covers decomposition, invalid loops, part budgets, fitted/rotated
+geometry, preset preservation, and actual Cannon contact/fall-through behavior.
+`CHROME_BIN=/path/to/chromium node scripts/outline-drawing-test.mjs` exercises viewport drawing,
+point edits, plane selection, snapping, and undo/cancel with real desktop/mobile pointer input.
 
 ### Drop-marker surface placement
 

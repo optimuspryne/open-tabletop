@@ -6975,3 +6975,22 @@ body.not-gm .gm-only {
   flex-wrap: wrap;
   gap: 6px;
 }
+
+.compoundDrawing label {
+  display: block;
+  margin: 10px 0;
+}
+.compoundDrawing input[type='number'],
+.compoundDrawing select {
+  width: 100%;
+}
+.compoundDrawing button {
+  margin: 3px;
+}
+.compoundDrawing p {
+  line-height: 1.5;
+}
+.compoundLayout > div > [data-action='draw'] {
+  align-self: flex-start;
+  margin-top: 8px;
+}

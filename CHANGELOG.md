@@ -9,6 +9,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Added
+- Draw and edit custom collider outlines directly in the main 3D viewport on top/front/side
+  planes, with draggable corners, grid snapping, thickness, point undo, and cancel.
+- Automatically split simple concave collider outlines into merged convex physics sections,
+  preserving the editable outline and its openings through saved collections and asset layouts.
+  Display the generated physics-part count and enforce the existing 16-part budget.
 - Save reusable collider collections to an account-backed library with private/public visibility,
   owner/admin editing, geometry previews, and independent copies when inserted into objects or boards.
 - Select multiple collider shapes (or select all), then move, rotate, uniformly resize, duplicate,

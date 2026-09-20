@@ -1,3 +1,5 @@
+import { createOutlineDrawing } from './collider-outline-drawing.js';
+import { normalizeColliderOutline } from '/shared/collider-outline.js';
 import { captureGroup, insertGroup, transformGroup } from './collider-groups.js';
 import { wireColliderPresets } from './collider-presets.js';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
@@ -75,8 +77,8 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     .join('')}</div></div>
   <div class="compoundControlGroup"><span>Camera</span><div class="compoundIconButtons" role="group" aria-label="Camera controls">
   <button type="button" data-view="perspective" data-icon="hexagon-3d" aria-label="Perspective view"></button><button type="button" data-view="top" data-icon="mood-look-down" aria-label="Top view"></button><button type="button" data-view="front" data-icon="mood-neutral" aria-label="Front view"></button><button type="button" data-view="side" data-icon="mood-look-left" aria-label="Side view"></button></div></div></div>
-  <p>Click a shape to select it. Ctrl/⌘-click to select multiple shapes. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
-  <aside tabindex="0" aria-label="Collider controls"><label>Shapes <select data-field="list" multiple size="5" aria-label="Collider shapes"></select></label>
+  <button type="button" data-action="draw">Draw outline in 3D</button><p>Click a shape to select it. Ctrl/⌘-click to select multiple shapes. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
+  <aside tabindex="0" aria-label="Collider controls"><div data-field="drawing" class="compoundDrawing" hidden></div><label>Shapes <select data-field="list" multiple size="5" aria-label="Collider shapes"></select></label>
   <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Add shape">${COMPOUND_TYPES.map((type) => `<button type="button" data-add-shape="${type}" data-icon="${{ box: 'cube-plus', sphere: 'sphere-plus', cylinder: 'cylinder-plus', cone: 'cone-plus', flat: 'square-plus-2', outline: 'hexagon-3d' }[type]}" aria-label="Add ${type === 'flat' ? 'flat slab' : type}"></button>`).join('')}</div>
   <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Shape actions"><button type="button" data-action="duplicate" data-icon="copy" aria-label="Duplicate shape"></button><button type="button" data-action="delete" data-icon="library-minus" aria-label="Delete shape"></button><button type="button" data-action="undo" data-icon="arrow-back-up" aria-label="Undo"></button><button type="button" data-action="clear" data-icon="trash" class="danger" aria-label="Clear all shapes"></button></div>
   <button type="button" data-action="select-all">Select all shapes</button>
@@ -126,13 +128,63 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     history.push(JSON.stringify(draft));
     if (history.length > 40) history.shift();
   };
+  let drawingIndex = null;
+  let hiddenControls = [];
+  const withDrawing = (shape) => {
+    const next = structuredClone(draft);
+    if (drawingIndex === null) next.shapes.push(shape);
+    else next.shapes[drawingIndex] = shape;
+    return normalizeCompoundCollider(next);
+  };
+  const drawing = createOutlineDrawing({
+    scene,
+    camera,
+    controls,
+    canvas: renderer.domElement,
+    host: find('drawing'),
+    unit,
+    validate: withDrawing,
+    onCommit: (shape) => {
+      const next = withDrawing(shape);
+      if (!next) return;
+      remember();
+      draft = next;
+      selectOnly(drawingIndex ?? draft.shapes.length - 1);
+      rebuild();
+    },
+    onState: (active) => {
+      controls.enabled = !active && dragMode === 'orbit';
+      shapes.visible = grid.visible = axes.visible = !active;
+      action('apply').disabled =
+        active || !ready || !outlineValid || !normalizeCompoundCollider(draft);
+      for (const button of dialog.querySelectorAll(
+        '[data-drag-mode], [data-view], [data-action="draw"]',
+      ))
+        button.disabled = active;
+      if (active) {
+        hiddenControls = [...dialog.querySelector('aside').children]
+          .filter((el) => el !== find('drawing'))
+          .map((el) => [el, el.hidden]);
+        for (const [el] of hiddenControls) el.hidden = true;
+        dialog.querySelector('aside').scrollTop = 0;
+      } else {
+        for (const [el, hidden] of hiddenControls) el.hidden = hidden;
+      }
+    },
+  });
+  action('draw').onclick = () => {
+    drawingIndex = null;
+    drawing.start({ position: draft.shapes[selected]?.position || [0, 0, 0] });
+  };
   function rebuild(keepInputs = false) {
     disposeTree(shapes);
     scene.remove(shapes);
     shapes = new THREE.Group();
     scene.add(shapes);
+    shapes.visible = !drawing.active;
     const spec = compoundColliderSpec(draft, [0.5, 0.5, 0.5]);
-    for (const [i, part] of (spec?.shapes || []).entries()) {
+    for (const part of spec?.shapes || []) {
+      const i = part.sourceIndex;
       const geometry =
         part.type === 'convex'
           ? new ConvexGeometry(part.vertices.map((v) => new THREE.Vector3(...v)))
@@ -178,17 +230,22 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       option.selected = selection.has(i);
     });
     find('count').textContent =
-      `${draft.shapes.length} / ${COMPOUND_SHAPE_LIMIT} shapes · ${selection.size} selected`;
+      `${draft.shapes.length} editable shapes · ${spec?.shapes.length || 0} / ${COMPOUND_SHAPE_LIMIT} physics parts · ${selection.size} selected`;
     for (const button of dialog.querySelectorAll('[data-add-shape]'))
-      button.disabled = draft.shapes.length >= COMPOUND_SHAPE_LIMIT;
+      button.disabled = (spec?.shapes.length || 0) >= COMPOUND_SHAPE_LIMIT;
     action('duplicate').disabled =
-      !selection.size || draft.shapes.length + selection.size > COMPOUND_SHAPE_LIMIT;
+      !selection.size ||
+      (spec?.shapes.length || 0) +
+        (spec?.shapes.filter((part) => selection.has(part.sourceIndex)).length || 0) >
+        COMPOUND_SHAPE_LIMIT;
     action('delete').disabled = selected < 0;
     action('clear').disabled = !draft.shapes.length;
     action('undo').disabled = !history.length;
-    action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
-    if (!keepInputs) properties();
-    action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
+    action('apply').disabled =
+      drawing.active || !ready || !outlineValid || !normalizeCompoundCollider(draft);
+    if (!keepInputs && !drawing.active) properties();
+    action('apply').disabled =
+      drawing.active || !ready || !outlineValid || !normalizeCompoundCollider(draft);
   }
   function properties() {
     outlineEditor = null;
@@ -215,6 +272,15 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       host.append(convert);
     }
     if (shape.type === 'outline') {
+      const draw = document.createElement('button');
+      draw.type = 'button';
+      draw.dataset.action = 'draw-edit';
+      draw.textContent = 'Edit outline in 3D';
+      draw.onclick = () => {
+        drawingIndex = selected;
+        drawing.start({ shape: draft.shapes[selected] });
+      };
+      host.append(draw);
       const panel = document.createElement('details');
       panel.className = 'compoundOutline';
       panel.open = outlineExpanded;
@@ -224,7 +290,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       panel.innerHTML = `<summary>Edit outline</summary><label>Outline <select id="compoundShapeOutline">
         <option value="rectangle">Rectangle</option><option value="clipped">Clipped corners</option>
         <option value="triangle">Triangle</option><option value="hexagon">Hexagon</option>
-        <option value="circle">Circle / oval</option><option value="custom">Custom convex outline</option>
+        <option value="circle">Circle / oval</option><option value="custom">Custom outline (concave allowed)</option>
         </select></label>
         <label>Corner cut (%) <input id="compoundShapeCut" type="number" min="1" max="49" value="15"></label>
         <canvas id="compoundShapeCanvas" width="320" height="240" style="max-width:100%;cursor:crosshair" aria-label="Outline corners"></canvas>
@@ -233,20 +299,33 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
         <p id="compoundShapeStatus" role="status"></p>`;
       host.append(panel);
       let active = false;
-      const editor = wireBoardOutline('compoundShape', (outline) => {
-        if (!active) return;
-        outlineValid = !!outline;
-        if (!outline) {
-          action('apply').disabled = true;
-          return;
-        }
-        if (JSON.stringify(outline) !== JSON.stringify(draft.shapes[selected].outline)) {
-          remember();
-          draft.shapes[selected].outline = outline;
-          rebuild(true);
-        }
-        action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
-      });
+      const editor = wireBoardOutline(
+        'compoundShape',
+        (outline) => {
+          if (!active) return;
+          outlineValid = !!outline;
+          if (!outline) {
+            action('apply').disabled = true;
+            return;
+          }
+          if (JSON.stringify(outline) !== JSON.stringify(draft.shapes[selected].outline)) {
+            const next = structuredClone(draft);
+            next.shapes[selected].outline = outline;
+            if (!normalizeCompoundCollider(next)) {
+              outlineValid = false;
+              action('apply').disabled = true;
+              find('status').textContent = 'This outline exceeds the remaining 16-part budget.';
+              return;
+            }
+            remember();
+            draft = next;
+            rebuild(true);
+          }
+          action('apply').disabled =
+            drawing.active || !ready || !outlineValid || !normalizeCompoundCollider(draft);
+        },
+        { normalizeOutline: normalizeColliderOutline, allowConcave: true },
+      );
       editor.fill(shape.outline);
       editor.aspect(shape.size[0] / shape.size[2]);
       outlineEditor = editor;
@@ -311,7 +390,8 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
         input.onblur = () => {
           editing = false;
           input.value = +(draft.shapes[selected][key][axis] * factor).toFixed(4);
-          action('apply').disabled = !ready || !outlineValid || !normalizeCompoundCollider(draft);
+          action('apply').disabled =
+            drawing.active || !ready || !outlineValid || !normalizeCompoundCollider(draft);
         };
         input.addEventListener(
           'wheel',
@@ -450,7 +530,10 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   }
   for (const button of dialog.querySelectorAll('[data-add-shape]')) {
     button.onclick = () => {
-      if (draft.shapes.length >= COMPOUND_SHAPE_LIMIT) return;
+      if (
+        (compoundColliderSpec(draft, [0.5, 0.5, 0.5])?.shapes.length || 0) >= COMPOUND_SHAPE_LIMIT
+      )
+        return;
       remember();
       const type = button.dataset.addShape;
       draft.shapes.push({
@@ -466,8 +549,12 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   }
   action('duplicate').onclick = () => {
     if (!selection.size || draft.shapes.length + selection.size > COMPOUND_SHAPE_LIMIT) return;
-    remember();
     const copies = [...selection].map((i) => structuredClone(draft.shapes[i]));
+    if (!normalizeCompoundCollider({ version: 1, shapes: [...draft.shapes, ...copies] })) {
+      find('status').textContent = 'Duplicate exceeds the 16-part budget.';
+      return;
+    }
+    remember();
     selection = new Set(copies.map((_, i) => draft.shapes.length + i));
     draft.shapes.push(...copies);
     selected = [...selection][0];
@@ -598,6 +685,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   function finish(value) {
     if (finished) return;
     finished = true;
+    drawing.dispose();
     cancelAnimationFrame(frame);
     resize.disconnect();
     controls.dispose();
@@ -613,7 +701,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     button.onclick = () => finish(null);
   action('apply').onclick = () => {
     const value = normalizeCompoundCollider(draft);
-    if (ready && outlineValid && value) finish(value);
+    if (!drawing.active && ready && outlineValid && value) finish(value);
   };
   dialog.addEventListener('cancel', (event) => {
     event.preventDefault();

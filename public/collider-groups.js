@@ -60,7 +60,8 @@ export function insertGroup(draft, preset, size, unit) {
     size: shape.size.map((v) => v * factor),
   }));
   const next = normalizeCompoundCollider({ version: 1, shapes: [...draft.shapes, ...copies] });
-  if (!next) throw new Error('The preset exceeds the 16-shape limit or supported size range.');
+  if (!next)
+    throw new Error('The preset exceeds the 16-physics-part budget or supported size range.');
   return next;
 }
 
