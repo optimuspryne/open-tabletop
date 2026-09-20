@@ -202,7 +202,7 @@ export const PROPS = {
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.3825, 0.02, 0.3825], type: 'cylinder' },
+    collider: { box: [0.5947, 0.0485, 0.5947], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
     modelScale: 0.6,
     ownMaterial: false,
