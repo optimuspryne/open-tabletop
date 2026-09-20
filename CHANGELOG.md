@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.17.2] — 2026-09-17
+
 ### Added
 - Draw and edit custom collider outlines directly in the main 3D viewport on top/front/side
   planes, with draggable corners, grid snapping, thickness, point undo, and cancel.
@@ -34,6 +36,7 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   through library save, edit, clone and load, and support grid calibration on shaped boards.
 
 ### Changed
+- Replaced built-in coin and token models.
 - Scroll custom collider controls independently of the 3D preview and footer, and allow
   the outline editor to collapse while preserving its state during editing.
 - Label collider drag and camera controls; use camera/action icons (including hexagon-3d for perspective) and add an undoable
@@ -1187,6 +1190,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.17.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.2
 [0.17.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.0
 [0.16.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.16.0
 [0.15.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.15.0
