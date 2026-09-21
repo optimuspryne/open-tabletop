@@ -363,12 +363,12 @@
         </div>
       </div>
       <div id="toolsDock">
-        <div id="settingsModal" hidden>
-          <div class="modalCard libraryCard roomSettingsCard">
-            <div class="libSticky">
-              <div class="panel-head">
-                <b class="panel-title">Settings</b
-                ><button type="button" id="settingsClose" class="close-x" aria-label="Close">
+        <div id="settingsModal" class="modal-backdrop" hidden>
+          <div class="modal modalCard libraryCard roomSettingsCard">
+            <div class="modal__header-stack libSticky">
+              <div class="modal__header panel-head">
+                <b class="modal__title panel-title">Settings</b
+                ><button type="button" id="settingsClose" class="modal__close close-x" aria-label="Close">
                   ✕
                 </button>
               </div>
@@ -378,7 +378,7 @@
                 <button class="libTab" data-tab="credits">Credits</button>
               </div>
             </div>
-            <div class="libPane" data-pane="ui">
+            <div class="modal__body libPane" data-pane="ui">
               <div class="showLabel"><b>Interface</b></div>
               <div class="chipRow">
                 <button id="uiModeToggle" class="chip" data-icon="arrows-minimize">
@@ -454,7 +454,7 @@
                 </button>
               </div>
             </div>
-            <div class="libPane" data-pane="sounds" hidden>
+            <div class="modal__body libPane" data-pane="sounds" hidden>
               <div class="showLabel"><b>Effects</b></div>
               <div class="volRow">
                 <button id="sfxMute" class="volMute" title="Mute effects">🔊</button
@@ -466,7 +466,7 @@
                 ><input id="musicVol" type="range" min="0" max="100" step="1" />
               </div>
             </div>
-            <div class="libPane" data-pane="credits" hidden>
+            <div class="modal__body libPane" data-pane="credits" hidden>
               <div class="showLabel"><b>Credits &amp; Licenses</b></div>
               <div id="creditsBody"></div>
             </div>
@@ -648,12 +648,12 @@
       </div>
     </div>
 
-    <div id="roomSettingsModal" hidden>
-      <div class="modalCard libraryCard roomSettingsCard">
-        <div class="libSticky">
-          <div class="panel-head">
-            <b class="panel-title">Room Settings</b
-            ><button type="button" id="roomSettingsClose" class="close-x" aria-label="Close">
+    <div id="roomSettingsModal" class="modal-backdrop" hidden>
+      <div class="modal modalCard libraryCard roomSettingsCard">
+        <div class="modal__header-stack libSticky">
+          <div class="modal__header panel-head">
+            <b class="modal__title panel-title">Room Settings</b
+            ><button type="button" id="roomSettingsClose" class="modal__close close-x" aria-label="Close">
               ✕
             </button>
           </div>
@@ -664,7 +664,7 @@
             <button class="libTab" data-tab="wb">Whiteboard</button>
           </div>
         </div>
-        <div class="libPane" data-pane="table">
+        <div class="modal__body libPane" data-pane="table">
           <div class="tableBody">
             <div class="sizeRow" id="tableShapeRow">
               <label>Shape</label>
@@ -721,7 +721,7 @@
             </div>
           </div>
         </div>
-        <div class="libPane" data-pane="lighting" hidden>
+        <div class="modal__body libPane" data-pane="lighting" hidden>
           <div class="tableBody lightingBody">
             <div class="sizeRow">
               <label for="lightingPreset">Preset</label>
@@ -799,7 +799,7 @@
             </div>
           </div>
         </div>
-        <div class="libPane" data-pane="grid" hidden>
+        <div class="modal__body libPane" data-pane="grid" hidden>
           <div class="tableBody">
             <div class="secLabel">Scale / Measurement</div>
             <div class="sizeRow">
@@ -947,7 +947,7 @@
             </div>
           </div>
         </div>
-        <div class="libPane" data-pane="wb" hidden>
+        <div class="modal__body libPane" data-pane="wb" hidden>
           <div class="tableBody">
             <div id="wbVisibility" class="showLabel"><b>Visibility</b></div>
             <div class="chipRow">
@@ -971,12 +971,12 @@
       </div>
     </div>
 
-    <div id="controlsModal" hidden>
-      <div class="modalCard helpCard">
-        <div class="libSticky">
-          <div class="panel-head">
-            <b class="panel-title">How to Play</b
-            ><button type="button" id="controlsClose" class="close-x" aria-label="Close">✕</button>
+    <div id="controlsModal" class="modal-backdrop" hidden>
+      <div class="modal modalCard helpCard">
+        <div class="modal__header-stack libSticky">
+          <div class="modal__header panel-head">
+            <b class="modal__title panel-title">How to Play</b
+            ><button type="button" id="controlsClose" class="modal__close close-x" aria-label="Close">✕</button>
           </div>
           <div class="libTabs">
             <button class="libTab on" data-tab="mkb">Mouse &amp; Keyboard</button>
@@ -986,7 +986,7 @@
           </div>
         </div>
 
-        <div class="libPane helpScroll" data-pane="mkb">
+        <div class="modal__body libPane helpScroll" data-pane="mkb">
           <div class="helpSec">
             <h4>Getting Around</h4>
             <ul>
@@ -1110,7 +1110,7 @@
           </div>
         </div>
 
-        <div class="libPane helpScroll" data-pane="touch" hidden>
+        <div class="modal__body libPane helpScroll" data-pane="touch" hidden>
           <div class="helpSec">
             <h4>Getting Around</h4>
             <ul>
@@ -1222,7 +1222,7 @@
           </div>
         </div>
 
-        <div class="libPane helpScroll" data-pane="table" hidden>
+        <div class="modal__body libPane helpScroll" data-pane="table" hidden>
           <div class="helpSec">
             <h4>Your Seat Button</h4>
             <ul>
@@ -1333,7 +1333,7 @@
             </ul>
           </div>
         </div>
-        <div class="libPane helpScroll" data-pane="soon" hidden>
+        <div class="modal__body libPane helpScroll" data-pane="soon" hidden>
           <div class="helpSec">
             <h4>On the way</h4>
             <ul>
@@ -1377,12 +1377,12 @@
 
     <!-- Colyseus client (UMD global `Colyseus`) -->
     <!-- library management panel (editor only) -->
-    <div id="libraryModal" hidden>
-      <div class="modalCard libraryCard lib2Card">
-        <div class="libSticky">
-          <div class="panel-head">
-            <b class="panel-title">Library</b
-            ><button type="button" id="lib2Close" class="close-x" aria-label="Close">✕</button>
+    <div id="libraryModal" class="modal-backdrop" hidden>
+      <div class="modal modalCard libraryCard lib2Card">
+        <div class="modal__header-stack libSticky">
+          <div class="modal__header panel-head">
+            <b class="modal__title panel-title">Library</b
+            ><button type="button" id="lib2Close" class="modal__close close-x" aria-label="Close">✕</button>
           </div>
           <div class="chipRow" id="lib2Source">
             <button class="chip on" data-src="all">All</button>
@@ -1401,37 +1401,37 @@
             <button class="libTab" data-tab="scenes">Scenes</button>
           </div>
         </div>
-        <div class="libPane" data-pane="dice">
+        <div class="modal__body libPane" data-pane="dice">
           <ul id="nlb_dice" class="libList lib2-bi"></ul>
           <ul id="nlc_dice" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="decks" hidden>
+        <div class="modal__body libPane" data-pane="decks" hidden>
           <ul id="nlb_decks" class="libList lib2-bi"></ul>
           <ul id="nlc_deck" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="boards" hidden>
+        <div class="modal__body libPane" data-pane="boards" hidden>
           <ul id="nlb_boards" class="libList lib2-bi"></ul>
           <ul id="nlc_board" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="mats" hidden>
+        <div class="modal__body libPane" data-pane="mats" hidden>
           <ul id="nlc_mat" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="objects" hidden>
+        <div class="modal__body libPane" data-pane="objects" hidden>
           <ul id="nlb_objects" class="libList lib2-bi"></ul>
           <ul id="nlc_prop" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="games" hidden>
+        <div class="modal__body libPane" data-pane="games" hidden>
           <ul id="nlb_games" class="libList lib2-bi"></ul>
         </div>
-        <div class="libPane" data-pane="dispensers" hidden>
+        <div class="modal__body libPane" data-pane="dispensers" hidden>
           <ul id="nlb_dispensers" class="libList lib2-bi"></ul>
           <ul id="nlc_dispenser" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="sky" hidden>
+        <div class="modal__body libPane" data-pane="sky" hidden>
           <ul id="nlb_sky" class="libList lib2-bi"></ul>
           <ul id="nlc_sky" class="libList lib2-cu"></ul>
         </div>
-        <div class="libPane" data-pane="scenes" hidden>
+        <div class="modal__body libPane" data-pane="scenes" hidden>
           <ul id="nlc_scene" class="libList lib2-cu"></ul>
         </div>
       </div>
@@ -1442,18 +1442,19 @@
     <!-- add-to-library builder — create + save new assets (admins only) -->
     <div
       id="addModal"
+      class="modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="addTitle"
       tabindex="-1"
       hidden
     >
-      <div class="modalCard libraryCard addCard">
-        <div class="libSticky">
-          <div id="addHead" class="panel-head">
-            <b id="addTitle" class="panel-title">Add to Library</b
+      <div class="modal modalCard libraryCard addCard">
+        <div class="modal__header-stack libSticky">
+          <div id="addHead" class="modal__header panel-head">
+            <b id="addTitle" class="modal__title panel-title">Add to Library</b
             ><span class="libBadge src">Admin</span
-            ><button type="button" id="addClose" class="close-x" aria-label="Close">✕</button>
+            ><button type="button" id="addClose" class="modal__close close-x" aria-label="Close">✕</button>
           </div>
           <div class="libTabs" role="tablist" aria-label="Asset type">
             <button
@@ -1567,7 +1568,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-imgdecks"
           aria-labelledby="addtab-imgdecks"
@@ -1651,7 +1652,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-tiles"
           aria-labelledby="addtab-tiles"
@@ -1772,7 +1773,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-txtdecks"
           aria-labelledby="addtab-txtdecks"
@@ -1867,7 +1868,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-modelboards"
           aria-labelledby="addtab-modelboards"
@@ -1943,7 +1944,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-imgboards"
           aria-labelledby="addtab-imgboards"
@@ -2028,7 +2029,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-mats"
           aria-labelledby="addtab-mats"
@@ -2075,7 +2076,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-objects"
           aria-labelledby="addtab-objects"
@@ -2323,7 +2324,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-sky"
           aria-labelledby="addtab-sky"
@@ -2395,7 +2396,7 @@
           </div>
         </div>
         <div
-          class="libPane"
+          class="modal__body libPane"
           role="tabpanel"
           id="addpane-dice"
           aria-labelledby="addtab-dice"
@@ -2432,22 +2433,24 @@
       </div>
     </div>
 
-    <div id="sceneSaveModal" hidden>
-      <div class="modalCard sceneSaveCard">
-        <div class="panel-head">
-          <b class="panel-title">Save Scene</b
-          ><button type="button" id="sceneSaveClose" class="close-x" aria-label="Close">✕</button>
+    <div id="sceneSaveModal" class="modal-backdrop" hidden>
+      <div class="modal modalCard sceneSaveCard">
+        <div class="modal__header panel-head">
+          <b class="modal__title panel-title">Save Scene</b
+          ><button type="button" id="sceneSaveClose" class="modal__close close-x" aria-label="Close">✕</button>
         </div>
-        <label for="sceneSaveName">Scene name</label>
-        <input id="sceneSaveName" class="field" type="text" maxlength="60" />
-        <label class="checkRow" for="sceneIncludeLighting">
-          <input id="sceneIncludeLighting" class="checkbox__input" type="checkbox" />
-          <span
-            ><b>Include current lighting</b
-            ><small>Loading this scene will apply its lighting.</small></span
-          >
-        </label>
-        <div class="row">
+        <div class="modal__body">
+          <label for="sceneSaveName">Scene name</label>
+          <input id="sceneSaveName" class="field" type="text" maxlength="60" />
+          <label class="checkRow" for="sceneIncludeLighting">
+            <input id="sceneIncludeLighting" class="checkbox__input" type="checkbox" />
+            <span
+              ><b>Include current lighting</b
+              ><small>Loading this scene will apply its lighting.</small></span
+            >
+          </label>
+        </div>
+        <div class="modal__footer row">
           <button id="sceneSaveCancel" type="button">Cancel</button>
           <button id="sceneSaveConfirm" type="button" class="primary">Save scene</button>
         </div>

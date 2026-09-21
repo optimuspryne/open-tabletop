@@ -184,7 +184,8 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   shared component primitives the pages compose from — `.panel`/`.popout` pop-out
   panels; `.button` with primary/danger/icon variants; `.control` with
   select/multiselect/compact variants; `.checkbox`; `.chip`; `.miniLabel`; `.tile`;
-  and `.actions` — over the per-page layouts. Native buttons and text-like fields plus
+  `.actions`; and `.modal-backdrop`/`.modal` with shared header, title, body, close, and
+  footer anatomy — over the per-page layouts. Native buttons and text-like fields plus
   the legacy `.btn`, `.primary`, `.danger`, `.icon-only`, and `.field` names remain
   compatibility aliases while generated UI migrates to the component classes. Control
   colors, borders, radii, height, and padding come from the shared `--control-*` tokens,
@@ -612,6 +613,9 @@ Enclosed holes and self-crossing loops are unsupported; an inward opening is sup
 `public/compound-collider-editor.js` owns a Three.js preview, orbit controls, and a private
 draft. Drag-mode buttons select orbit, move, rotate, or uniform resize; labeled camera controls
 select perspective, top, front, or side views. Shape buttons add primitives directly.
+It remains a native top-layer `<dialog>`, but composes the same `.modal`, `.modal__header`,
+`.modal__title`, `.modal__body`, `.modal__close`, and `.modal__footer` primitives as the HTML
+overlay modals; only its viewport grid and native `::backdrop` remain feature-specific.
 Numeric position/dimension fields display table units and rotation fields display degrees.
 Typing and mouse-wheel edits update the preview immediately; Shift makes wheel steps finer and
 Ctrl/Command makes them larger. Duplicate, delete, clear all, and undo operate on the draft.

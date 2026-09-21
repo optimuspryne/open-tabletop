@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Give every overlay and the native custom-collider dialog one shared modal anatomy for backdrops,
+  headers, titles, close actions, bodies, and footers while retaining their feature-specific layouts.
 - Unify buttons, text fields, dropdowns, multiselects, and native checkboxes behind shared
   component classes and design tokens, including consistent hover, focus, pressed, disabled, and
   busy states. Migrate the custom collider editor and existing dropdowns to the shared controls.

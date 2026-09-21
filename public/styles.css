@@ -2030,13 +2030,10 @@ input[type='range']::-moz-range-thumb {
   border: 1px solid var(--border);
 }
 
-/* ===== modal overlays ===== */
-#controlsModal,
-#addModal,
-#settingsModal,
-#roomSettingsModal,
-#libraryModal,
-#sceneSaveModal {
+/* ===== shared modal anatomy =====
+   HTML overlays use `.modal-backdrop > .modal`; native <dialog> elements use
+   `.modal` directly and get their backdrop from `::backdrop`. */
+.modal-backdrop {
   position: fixed;
   inset: 0;
   background: var(--overlay);
@@ -2205,6 +2202,10 @@ input[type='range']::-moz-range-thumb {
   gap: 12px;
   width: min(390px, 92vw);
 }
+.sceneSaveCard .modal__body {
+  display: grid;
+  gap: 12px;
+}
 .sceneSaveCard .checkRow {
   display: flex;
   gap: 10px;
@@ -2223,7 +2224,7 @@ input[type='range']::-moz-range-thumb {
     grid-template-columns: 100px 1fr 38px;
   }
 }
-.modalCard {
+:where(.modal, .modalCard) {
   background: var(--panel-solid);
   color: var(--text);
   border: 1px solid var(--border);
@@ -2231,6 +2232,35 @@ input[type='range']::-moz-range-thumb {
   padding: 20px 22px;
   width: min(340px, 92vw);
   font: var(--fs)/1.5 var(--font);
+}
+.modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+.modal__title {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.modal__close {
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+.modal__body {
+  min-width: 0;
+}
+.modal__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
 }
 /* Room Settings: a see-through tabbed modal so the table & grid stay visible for live preview (UI_Redesign phase 3) */
 #roomSettingsModal {
@@ -6511,7 +6541,7 @@ body.not-gm .gm-only {
    ========================================================================= */
 
 /* ---- the window --------------------------------------------------------- */
-.modalCard.libraryCard {
+:where(.modal, .modalCard).libraryCard {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -6526,7 +6556,7 @@ body.not-gm .gm-only {
 }
 
 /* ---- sticky header: title row over the tab row ------------------------- */
-.modalCard .libSticky {
+:where(.modal__header-stack, .modalCard .libSticky) {
   position: sticky;
   top: 0;
   z-index: 2;
@@ -6537,6 +6567,7 @@ body.not-gm .gm-only {
   background: color-mix(in srgb, var(--panel-solid) 92%, transparent);
   border-bottom: 1px solid var(--border);
 }
+.modal__header-stack > .modal__header,
 .libraryCard .libSticky .panel-head {
   display: flex;
   align-items: center;
@@ -6547,11 +6578,12 @@ body.not-gm .gm-only {
 }
 /* Modal header title. One class on the <b>, rather than three id- and
    descendant-scoped rules saying the same thing. */
-.panel-title {
+:where(.modal__title, .panel-title) {
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
 }
+.modal__header .modal__close,
 .libraryCard .libSticky .panel-head .close-x {
   margin-left: auto;
 }
@@ -6583,6 +6615,7 @@ body.not-gm .gm-only {
 }
 
 /* ---- the pane ----------------------------------------------------------- */
+.modal:has(> .modal__header-stack) > .modal__body,
 .modalCard:has(.libSticky) .libPane {
   padding: 14px 18px 18px;
   overflow-y: auto;
@@ -6762,11 +6795,7 @@ body.not-gm .gm-only {
    enough that a few of them outran the screen.
    ========================================================================= */
 @media (max-width: 900px), (pointer: coarse) {
-  #libraryModal,
-  #addModal,
-  #roomSettingsModal,
-  #settingsModal,
-  #controlsModal {
+  .modal-backdrop {
     align-items: flex-start;
     padding: 8px 0;
     overflow-y: auto;
@@ -6887,11 +6916,7 @@ body.not-gm .gm-only {
 
 /* Custom collider authoring runs in the dialog top layer above the asset form. */
 .compoundEditor {
-  font: var(--fs)/1.4 var(--font);
-  color: var(--text);
-  background: var(--panel-solid);
   border: 1px solid var(--accent);
-  border-radius: 12px;
   width: min(1100px, 94vw);
   max-height: 94dvh;
   padding: 20px;
@@ -6900,20 +6925,17 @@ body.not-gm .gm-only {
 .compoundEditor::backdrop {
   background: rgba(0, 0, 0, 0.72);
 }
-.compoundEditor header,
-.compoundEditor footer,
 .compoundToolbar {
   display: flex;
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
-.compoundEditor header,
-.compoundEditor footer {
-  justify-content: space-between;
-}
-.compoundEditor h2 {
-  margin: 0;
+.compoundEditorBody {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-height: 0;
+  overflow: hidden;
 }
 .compoundLayout {
   display: grid;
@@ -6959,7 +6981,7 @@ body.not-gm .gm-only {
   }
 }
 
-.compoundEditor footer {
+.compoundEditor .modal__footer {
   position: sticky;
   bottom: -12px;
   background: var(--panel-solid);
@@ -7024,7 +7046,7 @@ body.not-gm .gm-only {
 /* Keep the preview and footer stationary while the controls scroll. */
 .compoundEditor[open] {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   height: min(850px, 94dvh);
   overflow: hidden;
   box-sizing: border-box;
@@ -7057,7 +7079,7 @@ body.not-gm .gm-only {
   cursor: pointer;
   padding: 6px 0;
 }
-.compoundEditor footer {
+.compoundEditor .modal__footer {
   position: static;
 }
 @media (max-width: 720px) {

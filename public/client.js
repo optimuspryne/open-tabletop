@@ -6695,7 +6695,7 @@ function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
   panel.setAttribute('role', 'dialog');
   if (modal) panel.setAttribute('aria-modal', 'true');
   if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
-  const title = panel.querySelector('.panel-head b, h3');
+  const title = panel.querySelector('.modal__title, .panel-head b, h3');
   if (title && !panel.hasAttribute('aria-label'))
     panel.setAttribute('aria-label', title.textContent.trim());
   const focusables = () =>

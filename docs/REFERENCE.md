@@ -1931,10 +1931,16 @@ device token lives in `localStorage`.
   replacing an embedded image.
 - **Checkboxes:** use `.checkbox__input`, with an optional `.checkbox` label wrapper for spacing.
   Native checkbox inputs are included in the same rule so existing forms remain consistent.
+- **Modals:** HTML overlays use `.modal-backdrop > .modal`; native `<dialog>` implementations use
+  `.modal` directly. Compose `.modal__header`, `.modal__title`, `.modal__close`, `.modal__body`, and
+  `.modal__footer`; tabbed windows may group their title row and tabs in
+  `.modal__header-stack`. Feature CSS should control dimensions and internal layout without
+  rebuilding the shell, typography, header alignment, or action-row behavior.
 
 The custom collider editor is the first fully migrated generated UI consumer. Existing static
-dropdowns and native checkboxes also carry the canonical classes; feature CSS should now describe
-layout only, not recreate control colors, typography, borders, or interaction states.
+dropdowns, native checkboxes, and all six table overlays also carry the canonical classes; feature
+CSS should now describe layout only, not recreate control colors, typography, borders, or
+interaction states.
 
 - **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
 'home')` switches between quick-join (passwordless signup + join), login/

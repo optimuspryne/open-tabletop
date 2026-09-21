@@ -127,6 +127,23 @@ const SCENES = [
     drive: `void 0;`, // the fixture renders itself on import
   },
   {
+    name: 'modal-anatomy',
+    root: '#settingsModal',
+    expect: { selector: '.modal__header, .modal__body', min: 2 },
+    drive: `
+      const ids = ['settingsModal', 'roomSettingsModal', 'controlsModal',
+        'libraryModal', 'addModal', 'sceneSaveModal'];
+      for (const id of ids) {
+        const backdrop = document.getElementById(id);
+        const modal = backdrop.querySelector(':scope > .modal');
+        if (!backdrop.classList.contains('modal-backdrop') || !modal ||
+            !modal.querySelector('.modal__header') || !modal.querySelector('.modal__title') ||
+            !modal.querySelector('.modal__close') || !modal.querySelector('.modal__body'))
+          throw new Error(id + ' does not use the shared modal anatomy');
+      }
+      document.getElementById('settingsModal').hidden = false;`,
+  },
+  {
     name: 'library',
     root: '#libraryModal',
     expect: { selector: '.libCard', min: 40 },

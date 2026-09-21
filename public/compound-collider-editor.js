@@ -58,9 +58,10 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   };
   const previousFocus = document.activeElement;
   const dialog = document.createElement('dialog');
-  dialog.className = 'compoundEditor';
+  dialog.className = 'modal compoundEditor';
   dialog.setAttribute('aria-label', 'Custom collider editor');
-  dialog.innerHTML = `<header><h2>Custom collider</h2><button type="button" class="button" data-action="cancel" aria-label="Close collider editor">Close</button></header>
+  dialog.innerHTML = `<header class="modal__header"><h2 class="modal__title">Custom collider</h2><button type="button" class="modal__close close-x" data-action="cancel" aria-label="Close collider editor">✕</button></header>
+  <div class="modal__body compoundEditorBody">
   <p>Build a solid collision shape around your model. Leave gaps between shapes for holes and recesses.</p>
   <div class="compoundLayout"><div><div class="compoundViewport" aria-label="3D collider preview"></div>
   <div class="compoundToolbar"><div class="compoundControlGroup"><span>Drag mode</span><div class="compoundIconButtons" role="group" aria-label="Drag mode">
@@ -87,7 +88,8 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   <p>Scroll over a value to adjust it. Shift: finer steps. Ctrl/⌘: larger steps.</p>
   <p data-field="count"></p></aside></div>
   <p data-field="status" role="status">Loading model…</p>
-  <footer><button type="button" class="button" data-action="cancel">Cancel</button><button type="button" data-action="apply" class="button button--primary" disabled>Apply collider</button></footer>`;
+  </div>
+  <footer class="modal__footer"><button type="button" class="button" data-action="cancel">Cancel</button><button type="button" data-action="apply" class="button button--primary" disabled>Apply collider</button></footer>`;
   document.body.append(dialog);
   applyIcons(dialog);
   for (const button of dialog.querySelectorAll('[data-icon]'))
