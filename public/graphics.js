@@ -399,7 +399,7 @@ const FINISHES = {
   matte: { roughness: 0.5, metalness: 0.0 },
   satin: { roughness: 0.3, metalness: 0.0 },
   glossy: { roughness: 0.1, metalness: 0.05 },
-  metallic: { roughness: 0.4, metalness: 0.75 }, // material.color = the die color → tinted metal
+  metallic: { roughness: 0.15, metalness: 1 }, // material.color = the die color → tinted metal
   pearl: {
     roughness: 0.3,
     metalness: 0.1,
