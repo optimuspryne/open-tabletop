@@ -1,5 +1,6 @@
 import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
-import { KINDS, MEASURE, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
+import { KINDS, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
+import { MEASURE } from '../../shared/overlays.js';
 import { appendAccountHand } from './hand-state.js';
 import { readProps } from './props-codec.js';
 import { lightingSnapshot, normalizeLighting } from '../../shared/lighting.js';

@@ -15,6 +15,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   double-sided-tile library workflows.
 - Build server physics and live deck/stack collider updates from the shared renderer-neutral
   collider specification, keeping collision and debug geometry on one set of rules.
+- Centralize overlay kinds, measurement settings, room caps, and whiteboard protocol limits so
+  browser rendering, server validation, scene restoration, and history retention share one policy.
 
 ## [0.17.2] — 2026-09-17
 

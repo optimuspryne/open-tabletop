@@ -28,6 +28,8 @@ source and the MCP memory graph before starting each step.
   `server/game/physics-update.js`, leaving the profiled `world.step` visible in `TableRoom.update`.
 - [x] Make `shared/collider-spec.js` authoritative for server physics, browser diagnostics, and
   live deck/stack resizing through the focused Cannon adapter in `server/physics.js`.
+- [x] Centralize overlay kinds, measurement defaults, overlay capacity, and whiteboard protocol
+  limits in `shared/overlays.js`, with the browser registry checked against the shared kind list.
 
 ## Working rules
 

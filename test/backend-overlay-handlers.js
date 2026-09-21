@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerOverlayHandlers } from '../server/game/handlers/overlays.js';
+import { MEASURE, OVERLAY_KINDS, OVERLAY_LIMITS } from '../shared/overlays.js';
 
 const MESSAGE_NAMES = [
   'overlayAdd',
@@ -17,7 +18,12 @@ const MESSAGE_NAMES = [
   'wbStrokes',
 ];
 
-function harness({ rank = 0, maxOverlays = 200, maxPerPlayer = 40, maxStrokes = 2 } = {}) {
+function harness({
+  rank = 0,
+  maxOverlays = OVERLAY_LIMITS.maxRoom,
+  maxPerPlayer = OVERLAY_LIMITS.maxPerPlayer,
+  maxStrokes = 2,
+} = {}) {
   const handlers = new Map();
   const events = [];
   const room = {
@@ -43,8 +49,8 @@ function harness({ rank = 0, maxOverlays = 200, maxPerPlayer = 40, maxStrokes = 
   };
   registerOverlayHandlers(room, {
     createOverlay: () => ({}),
-    kinds: new Set(['ruler', 'line']),
-    maxLength: 100,
+    kinds: new Set(OVERLAY_KINDS),
+    maxLength: MEASURE.maxLen,
     maxOverlays,
     maxPerPlayer,
     maxStrokes,

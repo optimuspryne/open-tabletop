@@ -60,7 +60,6 @@ import {
   BOARDS,
   TABLE_SHAPES,
   RIM_WOODS,
-  MEASURE,
   DISPENSERS,
   gridActive,
   gridFootprintCells,
@@ -71,6 +70,7 @@ import {
   SEAT_ANGLES,
   DECK_MODELS,
 } from './shared/pieces.js';
+import { MEASURE, OVERLAY_KINDS, OVERLAY_LIMITS, WHITEBOARD_LIMITS } from './shared/overlays.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
 import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
@@ -274,13 +274,7 @@ const TABLE_LIMIT = { minX: 4, maxX: 20, minZ: 3, maxZ: 16 };
 // Backstop against a scene inlining raw image data (the normal flow stores card/
 // model art as file refs, so a real scene is tiny; this only catches the edge case).
 const SCENE_MAX_BYTES = 2_000_000;
-// Whiteboard: cap the server-held stroke history (a knob — raise/lower freely).
-const WHITEBOARD_MAX_STROKES = 2000;
-// Overlays: cap the room total and each player's share, so the map can't be spammed
-// unbounded (mirrors the whiteboard/score caps). Both are free knobs.
-const OVERLAY_MAX = 200;
-const OVERLAY_MAX_PER_PLAYER = 40;
-const OVERLAY_KINDS = new Set(['ruler', 'circle', 'cone', 'line']); // valid overlay kinds (add here + in the client OVERLAY registry)
+const OVERLAY_KIND_SET = new Set(OVERLAY_KINDS);
 
 const rnd = () => [(Math.random() - 0.5) * 8, SIM.spawnY, (Math.random() - 0.5) * 6];
 // The landing/drop cue for a piece. A TILE (a card/deck carrying a `tile` kind — domino/letter/mahjong)
@@ -578,11 +572,11 @@ class TableRoom extends Room {
     });
     registerOverlayHandlers(this, {
       createOverlay: () => new Overlay(),
-      kinds: OVERLAY_KINDS,
+      kinds: OVERLAY_KIND_SET,
       maxLength: MEASURE.maxLen,
-      maxOverlays: OVERLAY_MAX,
-      maxPerPlayer: OVERLAY_MAX_PER_PLAYER,
-      maxStrokes: WHITEBOARD_MAX_STROKES,
+      maxOverlays: OVERLAY_LIMITS.maxRoom,
+      maxPerPlayer: OVERLAY_LIMITS.maxPerPlayer,
+      maxStrokes: WHITEBOARD_LIMITS.maxStrokes,
     });
 
     registerRoomFeatureHandlers(this, {
@@ -859,8 +853,8 @@ class TableRoom extends Room {
     applyPersistedScene(this, scene, {
       createOverlay: () => new Overlay(),
       maxPieces: SIM.maxPieces,
-      overlayKinds: OVERLAY_KINDS,
-      overlayMax: OVERLAY_MAX,
+      overlayKinds: OVERLAY_KIND_SET,
+      overlayMax: OVERLAY_LIMITS.maxRoom,
       tableLimits: TABLE_LIMIT,
     });
   }

@@ -8,6 +8,7 @@ import {
   serializeScene,
 } from '../server/game/scene-persistence.js';
 import { saveFinalRoomState, saveRoomStateNow } from '../server/game/handlers/room-state.js';
+import { OVERLAY_LIMITS } from '../shared/overlays.js';
 
 const geoOf = (props) => ({ ...(props.tile ? { tile: props.tile } : {}) });
 
@@ -247,7 +248,7 @@ test('scene restoration validates bounds and keeps face-down fronts private', ()
       createOverlay: () => ({}),
       maxPieces: 80,
       overlayKinds: new Set(['line']),
-      overlayMax: 200,
+      overlayMax: OVERLAY_LIMITS.maxRoom,
       tableLimits: { minX: 4, maxX: 20, minZ: 3, maxZ: 16 },
     },
   );
@@ -275,7 +276,7 @@ const restoreOptions = {
   createOverlay: () => ({}),
   maxPieces: 250,
   overlayKinds: new Set(['line']),
-  overlayMax: 200,
+  overlayMax: OVERLAY_LIMITS.maxRoom,
   tableLimits: { minX: 4, maxX: 20, minZ: 3, maxZ: 16 },
 };
 

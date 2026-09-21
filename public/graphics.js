@@ -18,7 +18,6 @@ import {
   BOARD_SIZE,
   DECK_MODELS,
   TABLE,
-  MEASURE,
   dispenserDefinition,
   DICE_FINISH_FALLBACK,
   DICE_MODELS,
@@ -29,6 +28,7 @@ import {
   tableOutline,
   trayParts,
 } from '/shared/pieces.js';
+import { MEASURE, OVERLAY_KINDS } from '/shared/overlays.js';
 
 // ===== Shared helpers =======================================================
 
@@ -2566,14 +2566,23 @@ function lineTemplate(o) {
   return g;
 }
 
-// A registry parallel to KIND (see the block above): kind → mesh builder. Adding
-// an overlay kind is one entry here + one string in the server's OVERLAY_KINDS.
-const OVERLAY = {
-  ruler: { build: rulerMesh },
-  circle: { build: circleTemplate },
-  cone: { build: coneTemplate },
-  line: { build: lineTemplate },
+const OVERLAY_BUILDERS = {
+  ruler: rulerMesh,
+  circle: circleTemplate,
+  cone: coneTemplate,
+  line: lineTemplate,
 };
+const missingOverlayBuilders = OVERLAY_KINDS.filter((kind) => !OVERLAY_BUILDERS[kind]);
+const extraOverlayBuilders = Object.keys(OVERLAY_BUILDERS).filter(
+  (kind) => !OVERLAY_KINDS.includes(kind),
+);
+if (missingOverlayBuilders.length || extraOverlayBuilders.length)
+  throw new Error(
+    `Overlay builder mismatch (missing: ${missingOverlayBuilders.join(', ') || 'none'}; extra: ${extraOverlayBuilders.join(', ') || 'none'})`,
+  );
+const OVERLAY = Object.fromEntries(
+  OVERLAY_KINDS.map((kind) => [kind, { build: OVERLAY_BUILDERS[kind] }]),
+);
 
 // ---- Library preview thumbnails (editor) -----------------------------------
 // A tiny offscreen renderer that snapshots a mesh/model to a PNG data-URL, so the

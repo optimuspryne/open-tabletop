@@ -47,6 +47,7 @@ import {
   whiteboardStroke,
 } from '../server/message-validation.js';
 import { absorbedEntry, takeTopCard } from '../server/deck-state.js';
+import { WHITEBOARD_LIMITS } from '../shared/overlays.js';
 
 test('movement accepts finite numeric coordinates without coercion', () => {
   assert.deepEqual(finitePosition({ x: 1, y: -2.5, z: 0 }), { x: 1, y: -2.5, z: 0 });
@@ -216,7 +217,13 @@ test('whiteboard strokes are copied and reject malformed or oversized paths', ()
   assert.notEqual(parsed.pts, raw.pts);
   assert.equal(whiteboardStroke({ ...raw, pts: [0, 0.5, 1] }), null);
   assert.equal(whiteboardStroke({ ...raw, pts: [0, Infinity] }), null);
-  assert.equal(whiteboardStroke({ ...raw, pts: Array(2002).fill(0) }), null);
+  assert.equal(
+    whiteboardStroke({
+      ...raw,
+      pts: Array(WHITEBOARD_LIMITS.maxCoordinatesPerStroke + 2).fill(0),
+    }),
+    null,
+  );
   assert.equal(whiteboardStroke({ ...raw, sid: 'forged' }), null);
   assert.deepEqual(whiteboardStroke({ ...raw, erase: false }), { ...raw, erase: false });
   assert.deepEqual(whiteboardStroke({ ...raw, erase: true }), { ...raw, erase: true });

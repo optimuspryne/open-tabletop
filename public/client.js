@@ -72,7 +72,6 @@ import {
   recolorPalette,
   deckHeight,
   timerLive,
-  MEASURE,
   formatMeasure,
   dispenserDefinition,
   dispenserVariant,
@@ -86,6 +85,7 @@ import {
   trayCenter,
   seatAngle,
 } from '/shared/pieces.js';
+import { MEASURE, WHITEBOARD_LIMITS } from '/shared/overlays.js';
 import {
   playSfx,
   resumeAudio,
@@ -5265,7 +5265,6 @@ function updateMyPreview(avatar) {
 // Slice 1: placement only — a blank chalkboard/whiteboard the GM can show, slide
 // around the track, and style. It carries no physics; drawing comes next.
 const WHITEBOARD_RES = 1024; // drawing-canvas resolution (a knob)
-const WHITEBOARD_MAX_STROKES = 2000; // local stroke-mirror cap (match the server knob)
 const WB = { w: 8, h: 4.5, margin: 5, gap: 0.5 }; // board size + track clearance
 let wbGroup = null,
   wbCanvas = null,
@@ -5515,7 +5514,7 @@ function redrawStrokes() {
 } // clear bg + replay all (dark-flip / late-join)
 function pushStroke(s) {
   wbStrokesLocal.push(s);
-  if (wbStrokesLocal.length > WHITEBOARD_MAX_STROKES) wbStrokesLocal.shift();
+  if (wbStrokesLocal.length > WHITEBOARD_LIMITS.maxStrokes) wbStrokesLocal.shift();
   drawStroke(s); // just ink the new stroke — cheap, and needsUpdate re-uploads fine
 }
 
@@ -5533,7 +5532,7 @@ function endWbStroke() {
     // >= 2 points
     room.send('wbStroke', wbCur);
     wbStrokesLocal.push(wbCur); // already drawn live; just keep it for replay
-    if (wbStrokesLocal.length > WHITEBOARD_MAX_STROKES) wbStrokesLocal.shift();
+    if (wbStrokesLocal.length > WHITEBOARD_LIMITS.maxStrokes) wbStrokesLocal.shift();
   }
   wbCur = null;
 }

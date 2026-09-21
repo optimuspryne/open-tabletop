@@ -395,10 +395,20 @@ chess}` each `[color0, color1]`.
 - **`inTray(x, z, center, angle, slack?) → bool`** — is a world point inside a tray's footprint
   (+ slack)? The out-of-bounds net uses it to contain tray dice in the tray rather than yanking
   them home.
-- **`MEASURE`** — overlay-layer constants both sides agree on: `lift`/`labelLift`
-  (draw + label heights above the felt), `minDrag` (shortest drag that counts as a
-  placement), `maxLen` (clamp on any overlay coordinate/dimension), `coneAngle`
-  (default cone half-angle), `lineWidth` (default `line` template width).
+
+---
+
+## `shared/overlays.js` — overlay and whiteboard protocol policy
+
+- **`OVERLAY_KINDS`** — immutable ordered overlay-kind list: `ruler`, `circle`, `cone`, and
+  `line`. The server derives its validation `Set` from this list; the browser derives the
+  `OVERLAY` registry and verifies that every kind has exactly one renderer.
+- **`OVERLAY_LIMITS`** — immutable room and creator caps: `maxRoom` and `maxPerPlayer`.
+- **`WHITEBOARD_LIMITS`** — immutable streamed-drawing bounds: `maxStrokes`,
+  `maxCoordinatesPerStroke`, `maxColorLength`, and `maxStrokeWidth`. History retention and
+  single-message validation remain separate settings even when their numeric values match.
+- **`MEASURE`** — immutable overlay geometry/render defaults: `lift`/`labelLift`, `minDrag`,
+  `maxLen`, `coneAngle`, and `lineWidth`.
 
 ---
 
@@ -963,8 +973,8 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
   annotation in the `overlays` map. Two points + two optional scalars cover all four
   kinds. Public geometry: wiped on reset, but **persisted** in the scene snapshot
   (`serializeScene` includes them by value, sans `owner`; `applyScene` restores them
-  as table-owned `owner:''`). Capped `OVERLAY_MAX` per room / `OVERLAY_MAX_PER_PLAYER`
-  per creator. Rendered via the client's `OVERLAY` registry.
+  as table-owned `owner:''`). Capped by `OVERLAY_LIMITS.maxRoom` per room and
+  `OVERLAY_LIMITS.maxPerPlayer` per creator. Rendered via the client's `OVERLAY` registry.
 - **`State`** — `pieces`, `players`, `turn`, **`timer`**, **`scores`** (map),
   **`notes`** (GM room notes), **`tableX`/`tableZ`** (table half-extents), **`tableShape`**
   (surface shape: `rect`/`round`/`oval`/`hex`/`roundedRect`), **`rimWood`** (wooden-rim texture:
@@ -1039,8 +1049,8 @@ Private (never-synced) maps: `bodies`, `targets`, `flips`, `deckCards`,
 `cardData`, `hands`, `drafts`, **`groups`** (a group drag: `sessionId → Map(id → offset)`,
 each selected piece's offset from the anchor), **`pendingInspect`** (a drawn-but-unplaced card),
 **`notebooks`** (per-player private notes), **`shows`** (an active hold-to-show:
-`{ to:Set, cards }`), **`strokes`** (the whiteboard's stroke history, capped
-at `WHITEBOARD_MAX_STROKES`, replayed to late joiners), **`chatLog`** (the rolling
+`{ to:Set, cards }`), **`strokes`** (the whiteboard's stroke history, capped by
+`WHITEBOARD_LIMITS.maxStrokes` and replayed to late joiners), **`chatLog`** (the rolling
 public-chat history, last 80, replayed to late joiners), and — for resumable games —
 **`pendingHands`** (map `userId → {name,cards}`: saved hands awaiting their owner's
 return) + **`pendingTurn`** (the `userId` whose turn a loaded game paused on).
@@ -1293,8 +1303,9 @@ it off-cell; a grab, or turning the flag/grid off, unpins it.
 
 Overlay handlers (measurement/templates; persisted in the scene snapshot):
 **`overlayAdd`** (`{kind, x, z, x2, z2, w?, ang?}` — any seated player places one;
-server validates the kind against `OVERLAY_KINDS`, enforces the `OVERLAY_MAX` /
-`OVERLAY_MAX_PER_PLAYER` caps, clamps coords to `MEASURE.maxLen`, stamps
+server validates the kind against `OVERLAY_KINDS`, enforces the
+`OVERLAY_LIMITS.maxRoom` / `OVERLAY_LIMITS.maxPerPlayer` caps, clamps coords to
+`MEASURE.maxLen`, stamps
 `owner`+`color`), **`overlayMove`** (`{id, x?, z?, x2?, z2?, w?, ang?}` — reposition,
 owner or gm+), **`overlayRemove`** (`{id}` — owner or gm+), **`overlayClear`**
 (`{scope}` — `'all'` is GM-gated and wipes the map; anything else clears only your
@@ -1304,9 +1315,9 @@ joiner gets them in the initial state; `overlayDrag` is the only direct down-mes
 
 Whiteboard handlers: **`wbEnable`** (raise/lower the surface, gm+),
 **`wbClaim`/`wbRelease`** (take/free the single drawing owner), **`wbSet`**
-(tilt angle / dark toggle), **`wbStroke`** (one stroke — appended to `strokes`,
-capped, and broadcast to everyone else to replay), **`wbClear`** (wipe),
-**`wbStrokes`** (a late joiner requests the full history).
+(tilt angle / dark toggle), **`wbStroke`** (one validated stroke — appended to `strokes`,
+capped by `WHITEBOARD_LIMITS.maxStrokes`, and broadcast to everyone else to replay),
+**`wbClear`** (wipe), **`wbStrokes`** (a late joiner requests the full history).
 
 Scene & skybox library handlers: **`sceneSave`/`sceneLoad`/`listScenes`** (a whole
 table snapshot — pieces + settings — as an admin-curated library asset) and
@@ -1668,8 +1679,9 @@ lclick, rclick }`; the interaction layer dispatches off this, no type switches.
   (disc + ring, radius `|A→B|`), `coneTemplate` (a flat `sectorGeometry` sector, apex
   A, half-angle `ang`), `lineTemplate` (a width-`w` band + centre line). Fill opacity
   and edge weight come from `CONFIG.measure`. The measure _label_ is not built here —
-  it's a client sprite (needs the room scale). Adding a kind = one entry here + one
-  string in the server's `OVERLAY_KINDS`.
+  it's a client sprite (needs the room scale). The registry is derived from shared
+  `OVERLAY_KINDS` and throws during module loading if its browser-only builder map has
+  a missing or extra kind.
 - **`gridMesh(scale, tableX, tableZ, shape) → THREE.LineSegments | null`** — the table grid: a
   single line mesh drawn from the same lattice `snapToCell` quantises to (per-axis
   `cellWorld`/`cellZ`, `gridX`/`gridZ` offset), tinted `scale.gridColor`, `depthWrite:false`

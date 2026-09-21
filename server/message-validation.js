@@ -5,6 +5,7 @@ import { normalizeBoardOutline } from '../shared/board-geometry.js';
 // using the original message after validation.
 import { GRID_FOOTPRINT_MAX, OBJECT_FINISH_KEYS } from '../shared/pieces.js';
 import { LIGHTING_PRESETS } from '../shared/lighting.js';
+import { WHITEBOARD_LIMITS } from '../shared/overlays.js';
 import { isWorldCoordinate } from './game/physics-safety.js';
 export const isPlainObject = (value) => {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -259,13 +260,16 @@ export function whiteboardStroke(message) {
   if (
     !Array.isArray(message.pts) ||
     message.pts.length < 2 ||
-    message.pts.length > 2000 ||
+    message.pts.length > WHITEBOARD_LIMITS.maxCoordinatesPerStroke ||
     message.pts.length % 2
   )
     return null;
   if (!message.pts.every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) return null;
-  const color = boundedString(message.color, { min: 1, max: 24 });
-  const width = finiteNumber(message.width, { min: Number.MIN_VALUE, max: 0.2 });
+  const color = boundedString(message.color, { min: 1, max: WHITEBOARD_LIMITS.maxColorLength });
+  const width = finiteNumber(message.width, {
+    min: Number.MIN_VALUE,
+    max: WHITEBOARD_LIMITS.maxStrokeWidth,
+  });
   if (
     color === null ||
     width === null ||

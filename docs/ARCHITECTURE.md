@@ -52,6 +52,9 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
 - **`shared/pieces.js`** — the single source of truth for physics dimensions,
   masses, colors, dice vertices, and the prop/board registries. Imported by
   _both_ sides so a collider and its mesh are built from the same numbers.
+- **`shared/overlays.js`** — the shared protocol policy for overlay kinds,
+  measurement defaults, overlay capacity, and whiteboard validation/history limits.
+  The server remains authoritative and the browser still owns Three.js builders.
 - **`shared/board-geometry.js`** — validated normalized board outlines, half-extents, and convex-prism
   vertices/faces shared by image-board rendering, physics, and collider diagnostics.
 - **`server.js`** — the authority and composition root: the cannon-es world,
@@ -900,9 +903,10 @@ the server needs no per-kind branches. `ruler` draws a bar A→B and reads the d
 `cone` fans a flat sector from apex A toward B with half-angle `ang` (default
 `MEASURE.coneAngle`); `line` lays a lane of width `w` (default `MEASURE.lineWidth`)
 along A→B. The **`OVERLAY` registry** in `graphics.js` (parallel to `KIND`) maps each
-kind string to a mesh builder; adding a kind is one registry entry plus one string in
-the server's `OVERLAY_KINDS` set — nothing else in the place/move/remove/sync path
-changes.
+shared `OVERLAY_KINDS` value to its browser-only mesh builder. The registry is built
+from that shared list and fails at module load if a builder is missing or extra, so
+adding a kind means updating the protocol list and implementing its renderer — nothing
+else in the place/move/remove/sync path changes.
 
 Two things stay deliberately _out_ of the synced overlay. The **measure label** (the
 floating "5 in") is a client-owned sprite, not schema, because it depends on the
@@ -915,14 +919,20 @@ same registry builder; only the committed placement is sent (`overlayAdd`), the 
 The **Measure tool** is a modal client mode (like whiteboard draw): entering it
 disables OrbitControls and piece-grab, a kind-picker row selects which overlay the
 drag lays, and release fires `overlayAdd` with the kind's scalars. The server
-validates the kind, enforces the per-room (`OVERLAY_MAX`) and per-player
-(`OVERLAY_MAX_PER_PLAYER`) caps so the map can't be spammed, clamps coordinates to
-`MEASURE.maxLen`, stamps `owner` (the creator's `sessionId`, for the remove/clear
+validates the kind, enforces the per-room (`OVERLAY_LIMITS.maxRoom`) and per-player
+(`OVERLAY_LIMITS.maxPerPlayer`) caps so the map can't be spammed, clamps coordinates
+to `MEASURE.maxLen`, stamps `owner` (the creator's `sessionId`, for the remove/clear
 permission gate) and `color` (copied from the creator's seat color so it survives
 them leaving), and drops it in the `overlays` map; Colyseus delta-sync does the rest,
 so a late joiner gets every overlay in its initial state with no replay. Clearing is
 scoped: `overlayClear { scope }` wipes only your own by default, and `scope: 'all'`
 (GM-gated server-side) wipes the whole map.
+
+`shared/overlays.js` owns those protocol names and limits, including the separate
+whiteboard history and per-stroke coordinate caps. `server.js` converts the shared
+kind array to a `Set` for authoritative validation; `message-validation.js`, scene
+restoration, and the client history mirror consume the same policy without importing
+renderer or room-state implementation details.
 
 Overlays are wiped on table reset, but they **do ride the scene snapshot**: because
 they're public geometry, `serializeScene` includes the `overlays` array (by value, and
