@@ -202,17 +202,17 @@ export const PROPS = {
   // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.5947, 0.0485, 0.5947], type: 'cylinder' },
+    collider: { box: [0.4033,0.0285,0.4033], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
-    modelScale: 0.6,
+    modelScale: 0.4,
     ownMaterial: false,
     metal: true,
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.9798, 0.1002, 0.9798], type: 'cylinder' },
+    collider: { box: [0.8485,0.0751,0.8485], type: 'cylinder' },
     model: '/models/pieces/misc/poker_chip.glb',
-    modelScale: 0.8,
+    modelScale: 0.6,
     tintMaterial: 'accent',
     pearl: true,
   }, // color picker tints only the body; white rim kept
