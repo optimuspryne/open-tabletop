@@ -1,17 +1,10 @@
-import * as CANNON from 'cannon-es';
-import {
-  DECK_MODELS,
-  PROPS,
-  cardGeom,
-  deckHeight,
-  stackVisible,
-  dispenserDefinition,
-} from '../../shared/pieces.js';
+import { dispenserDefinition } from '../../shared/pieces.js';
+import { attachCollider, buildCollider } from '../physics.js';
 import { readProps } from './props-codec.js';
 
-const replaceShape = (body, shape) => {
+const replaceCollider = (body, collider) => {
   while (body.shapes.length) body.removeShape(body.shapes[0]);
-  body.addShape(shape);
+  attachCollider(body, collider);
   body.updateBoundingRadius();
   body.updateMassProperties();
   body.wakeUp();
@@ -24,21 +17,7 @@ export function updateDeckCollider(room, deckId) {
   const piece = room.state.pieces.get(deckId);
   if (!body || !piece) return;
   const props = readProps(piece);
-  const skin = props.model && DECK_MODELS[props.model];
-  if (skin) {
-    const [x, y, z] = skin.box;
-    replaceShape(body, new CANNON.Box(new CANNON.Vec3(x, y, z)));
-    return;
-  }
-
-  const geometry = cardGeom(props);
-  const halfHeight = deckHeight(piece.count) / 2;
-  replaceShape(
-    body,
-    geometry.shape === 'hex'
-      ? new CANNON.Cylinder(geometry.hh, geometry.hh, halfHeight * 2, 6)
-      : new CANNON.Box(new CANNON.Vec3(geometry.hw, halfHeight, geometry.hh)),
-  );
+  replaceCollider(body, buildCollider('deck', props, { count: piece.count }));
 }
 
 // Rebuild only finite chip/coin stack dispensers. Bowls and modeled dispensers keep their authored
@@ -50,32 +29,9 @@ export function updateStackCollider(room, id) {
   const props = readProps(piece);
   const dispenser = dispenserDefinition(props);
   if (!dispenser) return;
-  if (props.asset) {
-    if (dispenser.appearance !== 'automatic') return;
-    const [hx, hy, hz] = props.asset.item.box || [0.4, 0.2, 0.4];
-    replaceShape(
-      body,
-      new CANNON.Box(
-        new CANNON.Vec3(
-          hx,
-          Math.max(hy, stackVisible(dispenser.infinite ? 8 : piece.count) * hy),
-          hz,
-        ),
-      ),
-    );
-    return;
-  }
-  if (dispenser.body !== 'stack') return;
-  const box = PROPS[dispenser.item].collider.box;
-  const radius = box[0];
-  const itemHeight = box[1] * 2;
-  replaceShape(
-    body,
-    new CANNON.Cylinder(
-      radius,
-      radius,
-      Math.max(itemHeight, stackVisible(piece.count) * itemHeight),
-      16,
-    ),
-  );
+  const changesWithCount = props.asset
+    ? dispenser.appearance === 'automatic'
+    : dispenser.body === 'stack';
+  if (!changesWithCount) return;
+  replaceCollider(body, buildCollider('dispenser', props, { count: piece.count }));
 }

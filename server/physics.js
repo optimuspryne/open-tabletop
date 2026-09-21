@@ -1,18 +1,9 @@
-import { compoundColliderSpec } from '../shared/compound-collider.js';
-import { boardGeometry, boardHalfExtents } from '../shared/board-geometry.js';
+import { boardHalfExtents } from '../shared/board-geometry.js';
+import { COLLIDER_TYPES, colliderSpec, primitiveColliderSpec } from '../shared/collider-spec.js';
 import * as CANNON from 'cannon-es';
 import convexHull from 'convex-hull';
-import {
-  KINDS,
-  PROPS,
-  cardGeom,
-  dieR,
-  dieVerts,
-  stackVisible,
-  dispenserDefinition,
-} from '../shared/pieces.js';
 
-export const COLLIDER_TYPES = ['sphere', 'cylinder', 'cone', 'flat'];
+export { COLLIDER_TYPES };
 
 export function buildWorld(simulation) {
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, simulation.gravity, 0) });
@@ -32,169 +23,41 @@ export function buildWorld(simulation) {
   return world;
 }
 
-export function colliderShape(type, hx, hy, hz, options = {}) {
-  if (type === 'sphere') return new CANNON.Sphere(Math.max(hx, hy, hz));
-  if (type === 'cylinder' || type === 'cone') {
-    const radius = Math.max(hx, hz);
-    const sides = Math.max(3, options.sides | 0 || 16);
-    const top =
-      type === 'cone' ? radius * 0.05 : options.top != null ? radius * options.top : radius;
-    return new CANNON.Cylinder(top, radius, hy * 2, sides);
-  }
-  if (type === 'flat') {
-    const thickness = 0.06;
-    return {
-      shape: new CANNON.Box(new CANNON.Vec3(hx, thickness, hz)),
-      offset: new CANNON.Vec3(0, -(hy - thickness), 0),
-    };
-  }
-  return new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
-}
-
-export function buildCollider(type, props, { cardColliderThickness }) {
-  const shape = KINDS[type].shape;
-  if ((type === 'prop' || type === 'board') && props.model && props.compoundCollider) {
-    const spec = compoundColliderSpec(props.compoundCollider, props.box);
-    if (spec)
-      return {
-        shapes: spec.shapes.map((part) => ({
-          shape:
-            part.type === 'convex'
-              ? new CANNON.ConvexPolyhedron({
-                  vertices: part.vertices.map((v) => new CANNON.Vec3(...v)),
-                  faces: part.faces,
-                })
-              : part.type === 'sphere'
-                ? new CANNON.Sphere(part.radius)
-                : part.type === 'cylinder'
-                  ? new CANNON.Cylinder(part.radiusTop, part.radiusBottom, part.height, part.sides)
-                  : new CANNON.Box(new CANNON.Vec3(...part.halfExtents)),
-          offset: new CANNON.Vec3(...part.offset),
-          orientation: new CANNON.Quaternion().setFromEuler(...part.rotation, 'XYZ'),
-        })),
-      };
-  }
-  if (shape === 'die') return dieShape(props.sides || 6);
-
-  if (shape === 'prop') {
-    if (props.model && Array.isArray(props.box)) {
-      const [hx, hy, hz] = props.box.map((value) => clamp(+value || 0.5, 0.05, 4));
-      return colliderShape(props.collider, hx, hy, hz);
+function convexFaces(vertices) {
+  const faceGroups = [];
+  for (const [a, b, c] of convexHull(vertices)) {
+    const normal = normalize(
+      cross(subtract(vertices[b], vertices[a]), subtract(vertices[c], vertices[a])),
+    );
+    let group = faceGroups.find((candidate) => dot(candidate.normal, normal) > 0.999);
+    if (!group) {
+      group = { normal, indices: new Set() };
+      faceGroups.push(group);
     }
-    const spec = (PROPS[props.shape] || PROPS.box).collider;
-    const scale = clamp(+props.scale || 1, 0.3, 3);
-    const [hx, hy, hz] = spec.box.map((value) => value * scale);
-    return colliderShape(spec.type, hx, hy, hz, { sides: spec.sides, top: spec.top });
+    group.indices.add(a);
+    group.indices.add(b);
+    group.indices.add(c);
   }
-
-  if (type === 'board') {
-    if (
-      props.outline &&
-      (props.outline.type !== 'rectangle' || props.outline.fit) &&
-      !props.board
-    ) {
-      const { vertices, faces } = boardGeometry(props);
-      return new CANNON.ConvexPolyhedron({
-        vertices: vertices.map((v) => new CANNON.Vec3(...v)),
-        faces,
-      });
-    }
-    return new CANNON.Box(new CANNON.Vec3(...boardHalfExtents(props)));
-  }
-
-  if (shape === 'dispenser') {
-    const dispenser = dispenserDefinition(props);
-    if (!dispenser) return new CANNON.Box(new CANNON.Vec3(0.4, 0.2, 0.4));
-    if (props.asset) {
-      if (dispenser.appearance === 'automatic') {
-        const [hx, hy, hz] = props.asset.item.box || [0.4, 0.2, 0.4];
-        const visible = stackVisible(
-          dispenser.infinite ? 8 : (props.count ?? dispenser.defaultCount ?? 1),
-        );
-        return new CANNON.Box(new CANNON.Vec3(hx, Math.max(hy, visible * hy), hz));
-      }
-      if (dispenser.appearance === 'custom' && Array.isArray(dispenser.box)) {
-        const [hx, hy, hz] = dispenser.box;
-        return colliderShape(dispenser.collider, hx, hy, hz);
-      }
-      const [hx, , hz] = props.asset.item.box || [0.6, 0.4, 0.6];
-      return new CANNON.Cylinder(Math.max(hx, hz, 0.55), Math.max(hx, hz, 0.55), 0.7, 20);
-    }
-    if (dispenser.body === 'stack') {
-      const box = PROPS[dispenser.item].collider.box;
-      const radius = box[0];
-      const discHeight = box[1] * 2;
-      const visible = stackVisible(props.count ?? dispenser.count.def);
-      return new CANNON.Cylinder(radius, radius, Math.max(discHeight, visible * discHeight), 16);
-    }
-    const [hx, hy, hz] = dispenser.collider.box;
-    return colliderShape(dispenser.collider.type, hx, hy, hz, {
-      sides: dispenser.collider.sides,
-      top: dispenser.collider.top,
-    });
-  }
-
-  if (type === 'card' || type === 'mat') {
-    // A mat is a big single-faced tile: same solid box, sized from its `geom` — its real top face is
-    // the surface pieces rest on. (A mat's own thickness already exceeds cardColliderThickness.)
-    const geometry = cardGeom(props);
-    const halfThickness = Math.max(geometry.th, cardColliderThickness);
-    return geometry.shape === 'hex'
-      ? new CANNON.Cylinder(geometry.hh, geometry.hh, halfThickness * 2, 6)
-      : new CANNON.Box(new CANNON.Vec3(geometry.hw, halfThickness, geometry.hh));
-  }
-
-  return new CANNON.Box(new CANNON.Vec3(...shape.box));
-}
-
-export function dieShape(sides) {
-  const cube = () => new CANNON.Box(new CANNON.Vec3(dieR(6), dieR(6), dieR(6)));
-  if (sides === 6) return cube();
-  const vertices = dieVerts(sides);
-  if (!vertices) return cube();
-  try {
-    const faceGroups = [];
-    for (const [a, b, c] of convexHull(vertices)) {
-      const normal = normalize(
-        cross(subtract(vertices[b], vertices[a]), subtract(vertices[c], vertices[a])),
+  return faceGroups.map((group) => {
+    const indices = [...group.indices];
+    const centroid = averagePoint(indices.map((index) => vertices[index]));
+    const reference = normalize(subtract(vertices[indices[0]], centroid));
+    const perpendicular = cross(group.normal, reference);
+    const angleOf = (index) =>
+      Math.atan2(
+        dot(subtract(vertices[index], centroid), perpendicular),
+        dot(subtract(vertices[index], centroid), reference),
       );
-      let group = faceGroups.find((candidate) => dot(candidate.normal, normal) > 0.999);
-      if (!group) {
-        group = { normal, indices: new Set() };
-        faceGroups.push(group);
-      }
-      group.indices.add(a);
-      group.indices.add(b);
-      group.indices.add(c);
-    }
-    const faces = faceGroups.map((group) => {
-      const indices = [...group.indices];
-      const centroid = averagePoint(indices.map((index) => vertices[index]));
-      const reference = normalize(subtract(vertices[indices[0]], centroid));
-      const perpendicular = cross(group.normal, reference);
-      const angleOf = (index) =>
-        Math.atan2(
-          dot(subtract(vertices[index], centroid), perpendicular),
-          dot(subtract(vertices[index], centroid), reference),
-        );
-      indices.sort((left, right) => angleOf(left) - angleOf(right));
-      const woundNormal = cross(
-        subtract(vertices[indices[1]], vertices[indices[0]]),
-        subtract(vertices[indices[2]], vertices[indices[0]]),
-      );
-      if (dot(woundNormal, group.normal) < 0) indices.reverse();
-      return indices;
-    });
-    return new CANNON.ConvexPolyhedron({
-      vertices: vertices.map((vertex) => new CANNON.Vec3(...vertex)),
-      faces,
-    });
-  } catch {
-    return cube();
-  }
+    indices.sort((left, right) => angleOf(left) - angleOf(right));
+    const woundNormal = cross(
+      subtract(vertices[indices[1]], vertices[indices[0]]),
+      subtract(vertices[indices[2]], vertices[indices[0]]),
+    );
+    if (dot(woundNormal, group.normal) < 0) indices.reverse();
+    return indices;
+  });
 }
 
-const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const subtract = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 const cross = (a, b) => [
   a[1] * b[2] - a[2] * b[1],
@@ -213,6 +76,53 @@ const averagePoint = (points) => {
   );
   return sum.map((component) => component / points.length);
 };
+
+function cannonShapeFromSpec(spec) {
+  if (spec.type === 'box') return new CANNON.Box(new CANNON.Vec3(...spec.halfExtents));
+  if (spec.type === 'sphere') return new CANNON.Sphere(spec.radius);
+  if (spec.type === 'cylinder')
+    return new CANNON.Cylinder(spec.radiusTop, spec.radiusBottom, spec.height, spec.sides);
+  if (spec.type === 'convex')
+    return new CANNON.ConvexPolyhedron({
+      vertices: spec.vertices.map((vertex) => new CANNON.Vec3(...vertex)),
+      faces: spec.faces || convexFaces(spec.vertices),
+    });
+  throw new TypeError(`Unsupported collider spec: ${spec.type}`);
+}
+
+const cannonPartFromSpec = (spec) => ({
+  shape: cannonShapeFromSpec(spec),
+  ...(spec.offset ? { offset: new CANNON.Vec3(...spec.offset) } : {}),
+  ...(spec.rotation
+    ? { orientation: new CANNON.Quaternion().setFromEuler(...spec.rotation, 'XYZ') }
+    : {}),
+});
+
+// Convert a renderer-neutral shared collider spec into the shape/compound contract consumed by
+// attachCollider. Keeping this adapter here isolates Cannon objects from shared browser code.
+export function colliderFromSpec(spec) {
+  if (!spec) throw new TypeError('Missing collider spec');
+  if (spec.type === 'compound') return { shapes: spec.shapes.map(cannonPartFromSpec) };
+  const part = cannonPartFromSpec(spec);
+  return part.offset || part.orientation ? part : part.shape;
+}
+
+export function colliderShape(type, hx, hy, hz, options = {}) {
+  return colliderFromSpec(primitiveColliderSpec(type, hx, hy, hz, options));
+}
+
+export function dieShape(sides) {
+  try {
+    return colliderFromSpec(colliderSpec('die', { sides }));
+  } catch {
+    return colliderFromSpec(colliderSpec('die', { sides: 6 }));
+  }
+}
+
+export function buildCollider(type, props, options = {}) {
+  if (type === 'die') return dieShape(props.sides || 6);
+  return colliderFromSpec(colliderSpec(type, props, options));
+}
 
 // Attach every component to one rigid body, preserving local offsets and rotations.
 export function attachCollider(body, collider) {

@@ -7,12 +7,16 @@ import {
   pieceReleasePayload,
 } from '../../message-validation.js';
 import { safeMessage } from '../safe-message.js';
+import { MAX_PIECES } from '../piece-capacity.js';
 import { isWorldCoordinate } from '../physics-safety.js';
 
 // Exclusive piece ownership is the authority boundary for dragging. A client may
 // move/release only pieces it successfully claimed; group movement applies the
 // same rule independently to every selected piece.
-export function registerMovementHandlers(room, { isMovable, maxPieces = 250, logger = console }) {
+export function registerMovementHandlers(
+  room,
+  { isMovable, maxPieces = MAX_PIECES, logger = console },
+) {
   const movementMessage = (type, handler) => safeMessage(room, type, handler, { logger });
 
   movementMessage('grab', (client, message) => {

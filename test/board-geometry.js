@@ -27,7 +27,8 @@ for (const type of ['rectangle', 'circle', 'hexagon', 'clipped', 'custom']) {
         shape.vertices.map((v) => v.toArray()),
         geometry.vertices,
       );
-      assert.deepEqual(colliderSpec('board', props).vertices, geometry.vertices);
+      assert.deepEqual(shape.faces, geometry.faces);
+      assert.deepEqual(colliderSpec('board', props), { type: 'convex', ...geometry });
       for (let i = 0; i < shape.faces.length; i++) {
         const face = shape.faces[i];
         const center = face

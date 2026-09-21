@@ -423,9 +423,10 @@ what's selected, the same way **Combine** unified loose cards and decks.
 
 Each **kind** is defined in two registries keyed by the same type id:
 
-- `shared/pieces.js` → `KINDS`: the physics half, `{ mass, shape }`. The server's
-  `buildCollider(type, props)` reads this; there are no per-type branches in
-  `spawn`.
+- `shared/pieces.js` → `KINDS`: piece identity, mass, and base shape metadata. Shared
+  `colliderSpec(type, props)` interprets it with the piece's authored/live properties, and server
+  `buildCollider` converts that renderer-neutral result to Cannon; `spawn` has no per-type collider
+  branches.
 - client `KIND` (in `graphics.js`): the render + interaction half, `{ mesh,
 grab, ldrag, lclick, rclick }`. The pointer handler looks up `KIND[type]` and
   dispatches, instead of switching on type.
@@ -652,12 +653,14 @@ The final compound retains the total 16-physics-part budget, including decompose
 
 The WebSocket boundary rejects invalid layouts and conflicting collider/outline fields.
 `compoundColliderSpec` resolves normalized data for both physics and diagnostic rendering.
-`buildCollider` creates the child shapes, and `attachCollider` attaches their offsets and
-orientations to one Cannon body. This permits gaps between solids without triangle-mesh collision
-or boolean subtraction. `boardSpawnHeight` uses rotated child bounds as well as visual model
-bounds to place boards above the table. Grid calibration uses the board's overall dimensions,
-rather than the first child's dimensions. Stand/lay-flat self-righting and held-piece movement
-do not treat a compound child's Y offset as the legacy flat-collider origin shift.
+`colliderSpec` selects that compound description as the authoritative collider, while
+`colliderFromSpec` performs the only Cannon conversion. `buildCollider` coordinates those two
+steps, and `attachCollider` attaches child offsets/orientations to one body. This permits gaps
+between solids without triangle-mesh collision or boolean subtraction and keeps editor/debug
+geometry identical to server collision rules. `boardSpawnHeight` uses rotated child bounds as well
+as visual model bounds to place boards above the table. Grid calibration uses the board's overall
+dimensions, rather than the first child's dimensions. Stand/lay-flat self-righting and held-piece
+movement do not treat a compound child's Y offset as the legacy flat-collider origin shift.
 
 Regression coverage includes validation, primitive geometry, offsets/rotations, scaling, gaps,
 library loading, body creation, board placement/calibration, and stand/lay-flat behavior.
@@ -1116,16 +1119,14 @@ hidden inside the lifecycle boundary.
 ## Collider maintenance boundary
 
 `server/game/collider-maintenance.js` owns shape replacement for deck and finite-stack count
-changes. `updateDeckCollider(room, id)` uses the same shared card/tile geometry and deck-height
-calculation as rendering; hex decks receive a matching six-sided cylinder. Modeled decks keep the
-fixed collider declared by their deck skin. `updateStackCollider(room, id)` resizes ordinary finite
-stacks and custom automatic stacks to their capped visible count; generic and custom-model bodies
-keep their fixed container collider, while infinite sources keep their authored/display collider.
-Both paths refresh Cannon's bounding radius and mass properties and wake the body after replacing
-its shape. `TableRoom` retains thin forwarding methods for card, lifecycle, and dispenser callers.
-Initial built-in modeled-dispenser construction remains in `server/physics.js`; its authored
-`{box,type?,sides?,top?}` now passes through the same primitive factory as built-in props, so a bowl
-or holder can use a cylinder, sphere, cone, flat base, or default box without a special branch.
+changes. `updateDeckCollider(room, id)` and count-dependent `updateStackCollider(room, id)` call
+`buildCollider` with the synchronized count, so initial construction, live resizing, browser debug
+geometry, and drop-surface queries share `colliderSpec`. Modeled decks keep the fixed collider
+declared by their skin. Ordinary finite stacks and custom automatic stacks follow capped visible
+count; generic/custom-model and infinite sources retain their fixed authored/display collider and
+are not needlessly awakened. `replaceCollider` reattaches the returned primitive or compound
+contract, then refreshes Cannon's bounding radius and mass properties. `TableRoom` retains thin
+forwarding methods for card, lifecycle, and dispenser callers.
 
 On the browser, deck cover changes may replace the rendered mesh while count listeners remain
 registered. `syncDeckMeshHeight(meshes, id, count)` therefore looks up the current mesh for every

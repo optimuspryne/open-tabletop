@@ -14,6 +14,8 @@ import {
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
+export const COLLIDER_TYPES = Object.freeze(['sphere', 'cylinder', 'cone', 'flat']);
+
 // A renderer-neutral description of the collider the server builds. The browser uses this for
 // the GM debug overlay; keeping Cannon/Three objects out of this module also makes the mapping
 // cheap to test. Dimensions are world half-extents unless a field says otherwise.
@@ -41,8 +43,8 @@ export function primitiveColliderSpec(type, hx, hy, hz, options = {}) {
   return { type: 'box', halfExtents: [hx, hy, hz] };
 }
 
-// Mirror buildCollider() plus the live deck/stack collider maintenance. `count` is separate because
-// it is a synchronized Piece field rather than part of props.
+// Authoritative renderer-neutral collider definition for both Cannon physics and browser debug
+// geometry. `count` is separate because it is a synchronized Piece field rather than part of props.
 export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, count } = {}) {
   const shape = KINDS[type]?.shape;
   if (!shape) return null;
@@ -75,7 +77,7 @@ export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, c
 
   if (type === 'board') {
     if (props.outline && (props.outline.type !== 'rectangle' || props.outline.fit) && !props.board)
-      return { type: 'convex', vertices: boardGeometry(props).vertices };
+      return { type: 'convex', ...boardGeometry(props) };
     return { type: 'box', halfExtents: boardHalfExtents(props) };
   }
 

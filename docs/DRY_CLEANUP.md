@@ -26,6 +26,8 @@ source and the MCP memory graph before starting each step.
   `server/game/physics-update.js` while retaining their position before `world.step`.
 - [x] Extract post-step table/tray escape recovery and synchronized transform publication into
   `server/game/physics-update.js`, leaving the profiled `world.step` visible in `TableRoom.update`.
+- [x] Make `shared/collider-spec.js` authoritative for server physics, browser diagnostics, and
+  live deck/stack resizing through the focused Cannon adapter in `server/physics.js`.
 
 ## Working rules
 

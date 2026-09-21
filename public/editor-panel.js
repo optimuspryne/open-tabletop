@@ -96,8 +96,8 @@ const setImgShape = (s) =>
     .forEach((b) => b.classList.toggle('on', b.dataset.shape === (s || 'rounded')));
 // Fold the picked shape into a fitted geom: square = no corner radius; hexagon = a regular POINTY-TOP
 // hex (circumradius R stored as `h`, half-width pinned to R·√3/2); rounded = keep the measured radius.
-const applyShapeToGeom = (geom) => {
-  const s = imgShape();
+const applyShapeToGeom = (geom, shape = imgShape()) => {
+  const s = shape;
   if (s === 'square') return { ...geom, shape: 'rect', round: 0 };
   if (s === 'hex') {
     const R = geom.w;
@@ -1221,7 +1221,7 @@ function sendTileSet(back, cards, name, spawn, editId, geom, skin) {
   ROOM.send('deckFinish', { name, spawn, editId });
 }
 
-// Fill a thumbnail grid from a file input (fronts / backs preview in the Tiles tab).
+// Fill a thumbnail grid from a multi-file input (image-deck fronts or tile fronts / backs).
 function paintTileGrid(inputId, gridId, capId) {
   const grid = byId(gridId),
     cap = byId(capId),
@@ -1256,15 +1256,6 @@ function wireAddTiles() {
   // A tinted skin (the pouch) reveals its two color pickers; Open hides them.
   const syncSkinTints = () => {
     byId('adTileSkinTints').hidden = skinOf() !== 'bag';
-  };
-  const applyShape = (geom) => {
-    const sh = shapeOf();
-    if (sh === 'square') return { ...geom, shape: 'rect', round: 0 };
-    if (sh === 'hex') {
-      const R = geom.w;
-      return { ...geom, shape: 'hex', round: 0, w: +(R * HEX_HH).toFixed(4), h: R };
-    }
-    return { ...geom, shape: 'rect' };
   };
   wireUploadSq('adTileFronts', false, () =>
     paintTileGrid('adTileFronts', 'adTileFrontsGrid', 'adTileFrontsCount'),
@@ -1369,12 +1360,15 @@ function wireAddTiles() {
         const size = +byId('adTileSize').value || 0.6; // physical size multiplier for small tiles
         const t = +(TILES.card.t * (+byId('adTileThick').value || 1)).toFixed(4);
         const fitted = geomFromImage(dim.w, dim.h, dim.round); // fit the tile to the art's aspect
-        geom = applyShape({
-          ...fitted,
-          w: +(fitted.w * size).toFixed(4),
-          h: +(fitted.h * size).toFixed(4),
-          t,
-        });
+        geom = applyShapeToGeom(
+          {
+            ...fitted,
+            w: +(fitted.w * size).toFixed(4),
+            h: +(fitted.h * size).toFixed(4),
+            t,
+          },
+          shapeOf(),
+        );
         const MAX = 1200,
           sc = Math.min(1, MAX / Math.max(dim.w, dim.h));
         uw = Math.max(1, Math.round(dim.w * sc));
@@ -1457,29 +1451,7 @@ const clearSq = (inputId) => {
 // count badge on its caption — instead of the first file's preview. Only the shown thumbs are read.
 const MAX_FRONT_THUMBS = 7;
 function paintFronts() {
-  const grid = byId('adFrontsGrid'),
-    cap = byId('adFrontsCount'),
-    files = [...(byId('adImgFronts').files || [])];
-  if (!grid) return;
-  grid.textContent = '';
-  grid.hidden = !files.length;
-  if (cap) {
-    cap.hidden = !files.length;
-    cap.textContent = files.length ? files.length + ' selected' : '';
-  }
-  files.slice(0, MAX_FRONT_THUMBS).forEach((f) => {
-    const t = grid.appendChild(document.createElement('i')),
-      r = new FileReader();
-    r.onload = () => {
-      t.style.backgroundImage = `url("${r.result}")`;
-    };
-    r.readAsDataURL(f);
-  });
-  if (files.length > MAX_FRONT_THUMBS) {
-    const more = grid.appendChild(document.createElement('i'));
-    more.className = 'more';
-    more.textContent = '+' + (files.length - MAX_FRONT_THUMBS);
-  }
+  paintTileGrid('adImgFronts', 'adFrontsGrid', 'adFrontsCount');
 }
 
 function wireAddDeck() {

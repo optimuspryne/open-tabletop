@@ -8,6 +8,14 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Changed
+- Reuse the shared table-piece limit as the default movement-handler group size, keeping movement
+  validation aligned with the authoritative piece-capacity policy.
+- Share thumbnail-grid rendering and image-shape conversion between the image-deck and
+  double-sided-tile library workflows.
+- Build server physics and live deck/stack collider updates from the shared renderer-neutral
+  collider specification, keeping collision and debug geometry on one set of rules.
+
 ## [0.17.2] — 2026-09-17
 
 ### Added

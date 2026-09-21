@@ -78,6 +78,7 @@ classDiagram
         +normalizeLighting(value) / lightingSnapshot(value)
     }
     class SharedColliders["shared/collider-spec.js"] {
+        +COLLIDER_TYPES[]
         +primitiveColliderSpec(type, hx, hy, hz, options)
         +colliderSpec(type, props, options)
     }
@@ -108,6 +109,8 @@ classDiagram
     class Physics["server/physics.js"] {
         +buildWorld(simulation)
         +buildCollider(type, props, options)
+        +colliderFromSpec(spec)
+        +attachCollider(body, collider)
         +colliderShape(type, hx, hy, hz, options)
         +dieShape(sides)
     }
@@ -569,19 +572,26 @@ measurements retain their existing board-wide plane.
 
 ## `shared/collider-spec.js` — collider descriptions
 
+- **`COLLIDER_TYPES`** is the shared public primitive allowlist (`sphere`, `cylinder`, `cone`,
+  `flat`) re-exported by `server/physics.js` for the existing room/upload boundary.
 - **`primitiveColliderSpec(type, hx, hy, hz, options?)`** returns a renderer-neutral box, sphere,
-  cylinder/cone, or flat-offset descriptor matching `server/physics.js`.
+  cylinder/cone, or flat-offset descriptor.
 - **`colliderSpec(type, props, {cardColliderThickness,count}?)`** resolves the current authoritative
-  descriptor for every piece family, including compound layouts, convex dice, shaped board prisms, and count-derived deck/dispenser heights.
-  The browser diagnostic consumes these descriptions without importing Cannon; server physics
-  remains authoritative.
+  descriptor for every piece family, including compound layouts, convex dice, shaped board prisms
+  with authored faces, and count-derived deck/dispenser heights. Browser diagnostics and server
+  physics consume the same descriptions without sharing Three.js or Cannon objects.
 
 ---
 
 ## `server/physics.js` — compound body construction
 
-- **`buildCollider(type, props, options)`** returns `{shapes:[{shape,offset,orientation},...]}`
-  for uploaded model props/boards with valid custom layouts, preserving legacy return forms.
+- **`colliderFromSpec(spec)`** is the sole renderer adapter from shared primitive, convex, or
+  compound descriptions to Cannon shapes. It preserves child offsets/XYZ rotations and computes
+  convex faces only when a spec (currently a polyhedral die) does not already supply them.
+- **`buildCollider(type, props, options)`** asks `colliderSpec` for the authoritative description,
+  then delegates to `colliderFromSpec`, preserving the existing primitive, offset-shape, and
+  `{shapes:[{shape,offset,orientation},...]}` return contracts. Dice retain their d6 fallback if
+  convex construction fails.
 - **`attachCollider(body, collider)`** attaches either all compound children or a legacy
   primitive/offset shape to one Cannon rigid body.
 - **`boardSpawnHeight(props)`** returns the larger of visual half-height and the downward
@@ -605,6 +615,8 @@ measurements retain their existing board-wide plane.
   `SIM.maxPieces`. **`hasPieceCapacity`** checks for a free slot;
   **`ensurePieceCapacity`** also sends the caller the full-table warning;
   **`assertPieceCapacity`** guards `TableRoom.spawn` before any body or state is created.
+  `registerMovementHandlers` also defaults its bounded group size to `MAX_PIECES`, while retaining
+  an injected override for focused tests.
 - **`server/game/handlers/placement.js`** — **`registerPlacementHandlers`** registers
   `dispense`, `dispenseDrag`, `playCard`, and `handToTable`. Capacity is checked before
   inventory is consumed, with no intervening await. A rejected `playCard` resends the
@@ -684,24 +696,18 @@ Private values remain internal; only orphan file metadata is returned by the API
 
 ### `server/physics.js` — physics construction
 
-- **`buildCollider(type, props) → CANNON.Shape`** — dice → `dieShape`; boards →
-  a box from `boardHalfExtents`, or a `CANNON.ConvexPolyhedron` from `boardGeometry` for
-  non-rectangular uploaded outlines; props run through
-  one shared **`colliderShape`** builder — an uploaded `.glb` passes its measured
-  box + a string `props.collider`, a built-in shape passes its authored
-  `collider.box` (× `props.scale`) + `collider.type`. Built-in modeled dispensers pass their
-  authored `{box,type?,sides?,top?}` through the same primitive builder; stack and custom-dispenser
-  branches retain their count/appearance-specific shapes. Off-centre shapes (flat)
-  return `{shape, offset}`, which `spawn` attaches accordingly.
-- **`colliderShape(type, hx, hy, hz, opts?)`** — the single builder for prop
-  colliders: `box` (default) / `sphere` / `cylinder` / `cone` / `flat` (a thin
-  base-offset footprint so pieces slide over it). For cylinder/cone, `opts.sides`
-  sets the segment count (`3`/`6`/… → prisms & N-gon pyramids; default `16` = round)
-  and `opts.top` a partial top radius (truncated cone). Shared by the uploaded and
-  built-in paths, so a new built-in shape is just
-  `collider: { box:[...], type:'cylinder', sides:6 }` — no `buildCollider` change.
+- **`buildCollider(type, props, options)`** resolves the piece through the shared
+  `colliderSpec` rules and converts the resulting descriptor through `colliderFromSpec`. Cards,
+  decks, boards, props, dispensers, primitive offsets, and custom compound layouts therefore use
+  the same dimensions as browser diagnostics and drop-surface queries.
+- **`colliderFromSpec(spec)`** converts box/sphere/cylinder/convex descriptions and compound child
+  transforms into Cannon objects. Off-centre shapes such as `flat` retain `{shape,offset}`; compound
+  layouts retain `{shapes:[{shape,offset,orientation},...]}` for `attachCollider`.
+- **`colliderShape(type, hx, hy, hz, opts?)`** remains the primitive compatibility entry point,
+  delegating through `primitiveColliderSpec` and `colliderFromSpec`. Cylinder/cone segment count,
+  truncated-top radius, and flat-base offsets are consequently defined only in shared code.
 - **`dieShape(sides)`** — convex hull of `dieVerts`, coplanar triangles merged,
-  windings outward. d6 ⇒ box.
+  windings outward. The vertices come from `colliderSpec`; d6 and failed hull construction ⇒ box.
 - **`geoOf(o)`** — the public geometry/behavior a card/tile inherits from its deck (`tile`, `geom`,
   `snap`), threaded through deck → hand → played tile so a face-down tile keeps its true shape while
   its face stays private. **`dropSfx(type, props)`** picks the tile vs. card/deck drop cue.
@@ -1103,14 +1109,14 @@ Piece lifecycle methods forward to the operations returned by
 
 Collider methods forward to `server/game/collider-maintenance.js`:
 
-- **`replaceShape(body, shape)`** replaces all existing Cannon shapes, refreshes the bounding
-  radius and mass properties, and wakes the body.
-- **`updateDeckCollider(room, id)`** rebuilds an ordinary deck from shared card/tile geometry and
-  its live count-derived height, including a six-sided cylinder for hex tiles. A modeled deck uses
-  its skin's authored fixed box instead.
-- **`updateStackCollider(room, id)`** resizes an ordinary finite stack cylinder to the capped
-  visible item count and rebuilds a custom automatic stack from its saved item box. Modeled/generic,
-  infinite, unknown, or missing sources retain their fixed collider.
+- **`replaceCollider(body, collider)`** replaces all existing Cannon shapes through
+  `attachCollider`, refreshes the bounding radius and mass properties, and wakes the body.
+- **`updateDeckCollider(room, id)`** rebuilds from `buildCollider('deck', props, {count})`, so live
+  height, hex footprints, and modeled skins use the same shared specification as initial physics
+  construction and browser diagnostics.
+- **`updateStackCollider(room, id)`** rebuilds count-dependent finite/automatic stacks through
+  `buildCollider('dispenser', props, {count})`. Modeled/generic, infinite, unknown, or missing
+  sources retain their fixed collider without being awakened.
 
 Placement methods forward to `server/game/placement-operations.js`:
 
