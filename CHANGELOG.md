@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Unify buttons, text fields, dropdowns, multiselects, and native checkboxes behind shared
+  component classes and design tokens, including consistent hover, focus, pressed, disabled, and
+  busy states. Migrate the custom collider editor and existing dropdowns to the shared controls.
 - Reuse the shared table-piece limit as the default movement-handler group size, keeping movement
   validation aligned with the authoritative piece-capacity policy.
 - Share thumbnail-grid rendering and image-shape conversion between the image-deck and

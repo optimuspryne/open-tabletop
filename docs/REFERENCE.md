@@ -52,7 +52,7 @@ The codebase:
 | `public/credits.js`                                                                                    | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player _and_ credits panel)                                                                                                  |
 | `public/icons.js` / `public/equalize.js`                                                               | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing                                                                                                                                  |
 | `public/{landing,admin,editor-panel}.js`                                                               | browser | Lobby, admin console, library-editor UI (HTTP + room)                                                                                                                                            |
-| `public/*.html` + `styles.css`                                                                         | browser | Page shells (table/editor/index/admin) + UI styling                                                                                                                                              |
+| `public/*.html` + `styles.css`                                                                         | browser | Page shells plus token-driven shared button, form-control, checkbox, panel, and feature styling                                                                                                  |
 
 The main client import chain has no cycles: `shared ← core ← graphics ← client`,
 with `client` also importing `controls` and `audio ← credits`.
@@ -1913,6 +1913,28 @@ The lobby and admin use `fetch`; the lobby also opens a small Colyseus `lobby`
 socket while a join request is pending. The workshop panel rides the full Three.js /
 Colyseus table client. API helpers attach the Bearer token and unwrap errors; the
 device token lives in `localStorage`.
+
+### Shared UI controls (`public/styles.css`)
+
+- **Buttons:** use `.button`; add `.button--primary`, `.button--danger`, or
+  `.button--icon` for semantic emphasis. Hover, active, pressed (`aria-pressed`), disabled,
+  busy (`aria-busy`), focus, type, and touch-target behavior live in the shared button rules.
+  Native `<button>` elements and the older `.btn`, `.primary`, `.danger`, and `.icon-only`
+  names are supported compatibility selectors.
+- **Text-like fields:** use `.control`; add `.control--compact` for dense rows. Shared
+  `--control-*` tokens own the background, border, radius, minimum height, and padding.
+  Native text/email/password/search/url/tel/number inputs, textareas, and the older `.field`
+  class inherit the same appearance and focus/disabled states during migration.
+- **Dropdowns:** add `.control--select`; add `.control--multiselect` to list boxes. All native
+  `<select>` elements share the same token-driven arrow, option colors, focus state, and disabled
+  state. The arrow is CSS-generated from `--accent`, so changing the user accent does not require
+  replacing an embedded image.
+- **Checkboxes:** use `.checkbox__input`, with an optional `.checkbox` label wrapper for spacing.
+  Native checkbox inputs are included in the same rule so existing forms remain consistent.
+
+The custom collider editor is the first fully migrated generated UI consumer. Existing static
+dropdowns and native checkboxes also carry the canonical classes; feature CSS should now describe
+layout only, not recreate control colors, typography, borders, or interaction states.
 
 - **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
 'home')` switches between quick-join (passwordless signup + join), login/

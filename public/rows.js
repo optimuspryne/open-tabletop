@@ -175,7 +175,7 @@ export function unclaimedRow(userId, name, { present = [], on = {} } = {}) {
   label.textContent = name || 'A player';
   row.appendChild(label);
   const sel = document.createElement('select');
-  sel.className = 'unclaimed-assign';
+  sel.className = 'control control--select control--compact unclaimed-assign';
   const def = document.createElement('option');
   def.value = '';
   def.textContent = 'Give to…';

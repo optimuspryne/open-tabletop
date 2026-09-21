@@ -15,11 +15,11 @@ export function createOutlineDrawing({
   onState,
   validate,
 }) {
-  host.innerHTML = `<label>Drawing plane <select data-draw="plane"><option value="top">Top</option><option value="front">Front</option><option value="side">Side</option><option value="local" hidden disabled>Selected shape plane</option></select></label>
-    <label>Thickness <input data-draw="thickness" aria-label="Outline thickness" type="number" step="0.01" min="${unit * 0.001}" max="${unit * 2}" value="${+(unit * 0.02).toFixed(4)}"></label>
-    <label><input type="checkbox" data-draw="snap"> Snap to grid</label>
-    <button type="button" data-draw="undo">Undo point edit</button><button type="button" data-draw="clear">Clear points</button>
-    <button type="button" data-draw="finish">Finish outline</button><button type="button" data-draw="cancel">Cancel drawing</button>
+  host.innerHTML = `<label>Drawing plane <select class="control control--select" data-draw="plane"><option value="top">Top</option><option value="front">Front</option><option value="side">Side</option><option value="local" hidden disabled>Selected shape plane</option></select></label>
+    <label>Thickness <input class="control control--compact" data-draw="thickness" aria-label="Outline thickness" type="number" step="0.01" min="${unit * 0.001}" max="${unit * 2}" value="${+(unit * 0.02).toFixed(4)}"></label>
+    <label class="checkbox"><input class="checkbox__input" type="checkbox" data-draw="snap"> Snap to grid</label>
+    <button type="button" class="button" data-draw="undo">Undo point edit</button><button type="button" class="button" data-draw="clear">Clear points</button>
+    <button type="button" class="button button--primary" data-draw="finish">Finish outline</button><button type="button" class="button" data-draw="cancel">Cancel drawing</button>
     <p data-draw="status" role="status"></p>`;
   const field = (key) => host.querySelector(`[data-draw="${key}"]`);
   let active = false,

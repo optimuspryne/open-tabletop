@@ -182,9 +182,13 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   `admin.html` + `admin.js` (the admin console), and
   `styles.css` (all UI styling: the design-token `:root` block, then a layer of
   shared component primitives the pages compose from — `.panel`/`.popout` pop-out
-  panels, `.field` inputs, `.chip`, `.miniLabel`, `.tile`, `.actions` — over the
-  per-page layouts. Restyling a control means editing its one class, not every
-  `#id` that uses it).
+  panels; `.button` with primary/danger/icon variants; `.control` with
+  select/multiselect/compact variants; `.checkbox`; `.chip`; `.miniLabel`; `.tile`;
+  and `.actions` — over the per-page layouts. Native buttons and text-like fields plus
+  the legacy `.btn`, `.primary`, `.danger`, `.icon-only`, and `.field` names remain
+  compatibility aliases while generated UI migrates to the component classes. Control
+  colors, borders, radii, height, and padding come from the shared `--control-*` tokens,
+  so restyling does not require editing per-feature `#id` rules).
 - **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`017`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these

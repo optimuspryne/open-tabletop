@@ -725,7 +725,7 @@
           <div class="tableBody lightingBody">
             <div class="sizeRow">
               <label for="lightingPreset">Preset</label>
-              <select id="lightingPreset" class="field">
+              <select id="lightingPreset" class="control control--select">
                 <option value="neutral">Neutral</option>
                 <option value="warm">Warm</option>
                 <option value="cool">Cool</option>
@@ -1890,12 +1890,15 @@
               <label for="adBoardGlbName">Board name</label>
               <input id="adBoardGlbName" type="text" placeholder="Name this board" />
               <label for="adBoardColliderMode">Collision</label>
-              <select id="adBoardColliderMode"><option value="outline">Board outline</option><option value="custom">Custom 3D collider</option></select>
+              <select id="adBoardColliderMode" class="control control--select">
+                <option value="outline">Board outline</option>
+                <option value="custom">Custom 3D collider</option>
+              </select>
               <button type="button" id="adBoardCustomEdit" hidden>Edit custom collider</button>
               <p id="adBoardCustomStatus" role="status" hidden></p>
               <div id="adBoardOutlineFields">
               <label for="adBoardGlbOutline">Board outline</label>
-              <select id="adBoardGlbOutline">
+              <select id="adBoardGlbOutline" class="control control--select">
                 <option value="rectangle">Rectangle</option>
                 <option value="circle">Circle / oval</option>
                 <option value="hexagon">Hexagon</option>
@@ -1962,7 +1965,7 @@
               <label for="adBoardImgName">Board name</label>
               <input id="adBoardImgName" type="text" placeholder="Name this board" />
               <label for="adBoardImgOutline">Board outline</label>
-              <select id="adBoardImgOutline">
+              <select id="adBoardImgOutline" class="control control--select">
                 <option value="rectangle">Rectangle</option>
                 <option value="circle">Circle / oval</option>
                 <option value="hexagon">Hexagon</option>
@@ -2006,6 +2009,7 @@
                 <label for="adBoardLock">Lock ratio:</label
                 ><input
                   id="adBoardLock"
+                  class="checkbox__input"
                   type="checkbox"
                   checked
                   title="Keep Width×Depth matched to the image's proportions so it isn't stretched"
@@ -2097,11 +2101,11 @@
               <label for="adObjName">Object name</label>
               <input id="adObjName" type="text" placeholder="Name this object" />
               <label for="adObjFinish">Default material</label>
-              <select id="adObjFinish">
+              <select id="adObjFinish" class="control control--select">
                 <option value="">Use model material</option>
               </select>
               <label for="adObjTint">Recolor material</label>
-              <select id="adObjTint">
+              <select id="adObjTint" class="control control--select">
                 <option value="__all__">Entire model</option>
                 <option value="__none__">Preserve model colors</option>
               </select>
@@ -2247,13 +2251,13 @@
               </div>
               <div id="adObjDispFields" hidden>
                 <label for="adObjDispAppearance">Appearance</label>
-                <select id="adObjDispAppearance">
+                <select id="adObjDispAppearance" class="control control--select">
                   <option value="automatic">Automatic stack</option>
                   <option value="generic">Generic container</option>
                   <option value="custom">Custom model</option>
                 </select>
                 <label for="adObjDispSupply">Supply</label>
-                <select id="adObjDispSupply">
+                <select id="adObjDispSupply" class="control control--select">
                   <option value="finite">Finite</option>
                   <option value="infinite">Infinite</option>
                 </select>
@@ -2274,7 +2278,7 @@
                     </div>
                   </div>
                   <label for="adObjDispTint">Recolor material</label>
-                  <select id="adObjDispTint">
+                  <select id="adObjDispTint" class="control control--select">
                     <option value="__all__">Entire model</option>
                     <option value="__none__">Preserve model colors</option>
                   </select>
@@ -2289,7 +2293,7 @@
                       value="1"
                     />
                     <label for="adObjDispCollider">Collider</label>
-                    <select id="adObjDispCollider">
+                    <select id="adObjDispCollider" class="control control--select">
                       <option value="box">Box</option>
                       <option value="sphere">Sphere</option>
                       <option value="cylinder">Cylinder</option>
@@ -2437,7 +2441,7 @@
         <label for="sceneSaveName">Scene name</label>
         <input id="sceneSaveName" class="field" type="text" maxlength="60" />
         <label class="checkRow" for="sceneIncludeLighting">
-          <input id="sceneIncludeLighting" type="checkbox" />
+          <input id="sceneIncludeLighting" class="checkbox__input" type="checkbox" />
           <span
             ><b>Include current lighting</b
             ><small>Loading this scene will apply its lighting.</small></span

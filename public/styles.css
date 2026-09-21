@@ -21,6 +21,14 @@
   --track: #0a0b0d; /* range-slider track */
   --shadow-soft: rgba(0, 0, 0, 0.35); /* soft shadow ring (slider thumbs, cards) */
 
+  /* controls — buttons, fields, selects, and checkboxes all consume these */
+  --control-bg: var(--field);
+  --control-border: var(--border);
+  --control-radius: var(--r-sm);
+  --control-min-height: calc(30px * var(--ui-elements-scale));
+  --control-pad-block: calc(6px * var(--ui-elements-scale));
+  --control-pad-inline: calc(9px * var(--ui-elements-scale));
+
   /* shape */
   --r-sm: 6px; /* corner radii, small → extra-large */
   --r: 8px;
@@ -195,27 +203,82 @@
   white-space: nowrap;
 }
 
-/* ---- Shared text-field look (var(--field) surface + border + small radius) ----
-   Reusable: add class="field" to a new input; existing inputs are matched by selector below. */
-.field,
-#notesText,
-#timerDur,
-.modalCard input[type='text'],
-.modalCard textarea,
-.modalCard input[type='number'],
-.modalCard select,
-#landing input[type='text'],
-#landing input[type='email'],
-#landing input[type='password'],
-.scoreName input,
-.scoreAddRow input,
-#chatInput,
-.libSearch,
-#roomNotes {
-  background: var(--field);
+/* ---- Shared form controls -------------------------------------------------
+   `.control` is the canonical opt-in for generated UI. Native text-like fields
+   and selects are included as a compatibility bridge, so older markup gets the
+   same states while it is migrated. `.field` remains a supported legacy alias. */
+:where(
+    .control,
+    .field,
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='search'],
+    input[type='url'],
+    input[type='tel'],
+    input[type='number'],
+    textarea,
+    select
+  ) {
+  box-sizing: border-box;
+  min-height: var(--control-min-height);
+  padding: var(--control-pad-block) var(--control-pad-inline);
   color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
+  background-color: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: var(--control-radius);
+  font: var(--fs)/1.2 var(--font);
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background-color 0.15s ease,
+    opacity 0.15s ease;
+}
+:where(
+    .control,
+    .field,
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='search'],
+    input[type='url'],
+    input[type='tel'],
+    input[type='number'],
+    textarea,
+    select
+  ):focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+:where(
+    .control,
+    .field,
+    input[type='text'],
+    input[type='email'],
+    input[type='password'],
+    input[type='search'],
+    input[type='url'],
+    input[type='tel'],
+    input[type='number'],
+    textarea,
+    select
+  ):disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+:where(input, textarea)::placeholder {
+  color: color-mix(in srgb, var(--text) 48%, transparent);
+}
+textarea.control,
+textarea.field,
+textarea {
+  resize: vertical;
+}
+.control--compact {
+  min-height: calc(26px * var(--ui-elements-scale));
+  padding: calc(4px * var(--ui-elements-scale)) calc(7px * var(--ui-elements-scale));
+  font-size: var(--fs-sm);
 }
 
 /* ---- Pop-out panel skeleton — every edge-docked/floating panel shares this
@@ -695,37 +758,72 @@ a {
   backdrop-filter: var(--blur);
   z-index: 5;
 }
-button,
-.btn {
+:where(button, .button, .btn) {
+  appearance: none;
+  -webkit-appearance: none;
+  box-sizing: border-box;
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--r);
   padding: calc(9px * var(--ui-elements-scale)) calc(14px * var(--ui-elements-scale));
-  font-size: var(--fs);
+  font: 500 var(--fs)/1.2 var(--font);
   cursor: pointer;
   text-decoration: none; /* .btn is used on <a> — keep it looking like a button */
   backdrop-filter: var(--blur);
   transition:
     border-color 0.15s,
+    background-color 0.15s,
+    color 0.15s,
+    opacity 0.15s,
     transform 0.05s;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none; /* a long-press shouldn't select the label or pop a callout */
 }
-button:hover,
-.btn:hover {
+:where(button, .button, .btn):not(:disabled, [aria-disabled='true']):hover {
   border-color: var(--accent);
 }
-button:active,
-.btn:active {
+:where(button, .button, .btn):not(:disabled, [aria-disabled='true']):active {
   transform: translateY(1px);
 }
-button.danger,
-.btn.danger {
+:where(.button--primary, button.primary, .btn.primary) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+:where(.button--primary, button.primary, .btn.primary):not(:disabled, [aria-disabled='true']):hover {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+:where(.button--danger, button.danger, .btn.danger) {
   border-color: var(--danger-border);
   color: var(--danger);
 } /* reusable danger button */
+:where(.button--danger, button.danger, .btn.danger):not(:disabled, [aria-disabled='true']):hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: var(--danger);
+}
+:where(button, .button, .btn)[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+:where(button, .button, .btn):disabled,
+:where(.button, .btn)[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+:where(button, .button, .btn)[aria-busy='true'] {
+  cursor: progress;
+}
+:where(.button--icon, button.icon-only, .btn.icon-only) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  aspect-ratio: 1;
+  padding: calc(7px * var(--ui-elements-scale));
+}
 #status {
   font: var(--fs-sm) var(--font);
   padding: 8px 12px;
@@ -1119,25 +1217,90 @@ button.danger,
   border-color: var(--accent);
 }
 
-/* Themed dropdowns — any <select> matches the app instead of the browser default */
-select {
-  background: var(--field);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 5px 26px 5px 10px;
-  font: var(--fs)/1 var(--font);
+/* Select variants share the field primitive. The arrow is built from gradients
+   so it follows --accent instead of embedding a fixed colour in an SVG URL. */
+:where(select, .control--select) {
+  padding-right: calc(25px * var(--ui-elements-scale));
   cursor: pointer;
   appearance: none;
   -webkit-appearance: none;
   -moz-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%23c9a25a' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E");
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--accent) 50%),
+    linear-gradient(135deg, var(--accent) 50%, transparent 50%);
   background-repeat: no-repeat;
-  background-position: right 9px center;
+  background-position:
+    right calc(12px * var(--ui-elements-scale)) center,
+    right calc(8px * var(--ui-elements-scale)) center;
+  background-size: calc(4px * var(--ui-elements-scale)) calc(4px * var(--ui-elements-scale));
 }
-select:focus {
-  outline: none;
+:where(select, .control--select) option {
+  color: var(--text);
+  background: var(--panel-solid);
+}
+:where(select[multiple], select[size]:not([size='1']), .control--multiselect) {
+  padding-right: var(--control-pad-inline);
+  background-image: none;
+  cursor: default;
+}
+:where(select[multiple], select[size]:not([size='1']), .control--multiselect) option {
+  padding: calc(4px * var(--ui-elements-scale)) calc(6px * var(--ui-elements-scale));
+  border-radius: calc(var(--control-radius) - 2px);
+}
+:where(select[multiple], select[size]:not([size='1']), .control--multiselect) option:checked {
+  color: var(--text);
+  background: linear-gradient(var(--accent-soft), var(--accent-soft));
+}
+
+/* Native checkboxes use the same tokens and focus/disabled states as fields. */
+:where(input[type='checkbox'], .checkbox__input) {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-content: center;
+  width: calc(17px * var(--ui-elements-scale));
+  height: calc(17px * var(--ui-elements-scale));
+  margin: 0;
+  color: var(--text);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+  border-radius: calc(var(--control-radius) - 2px);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease;
+}
+:where(input[type='checkbox'], .checkbox__input)::before {
+  content: '';
+  width: 62%;
+  height: 62%;
+  background: var(--panel-solid);
+  clip-path: polygon(14% 44%, 0 59%, 42% 100%, 100% 20%, 83% 6%, 40% 67%);
+  transform: scale(0);
+  transition: transform 0.12s ease;
+}
+:where(input[type='checkbox'], .checkbox__input):checked {
+  background: var(--accent);
   border-color: var(--accent);
+}
+:where(input[type='checkbox'], .checkbox__input):checked::before {
+  transform: scale(1);
+}
+:where(input[type='checkbox'], .checkbox__input):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:where(input[type='checkbox'], .checkbox__input):disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: calc(7px * var(--ui-elements-scale));
+  cursor: pointer;
 }
 
 /* Number stepper — a themed field flanked by − / + buttons. Any input[type=number]
@@ -2193,24 +2356,15 @@ input[type='range']::-moz-range-thumb {
 .modalCard input[type='number'],
 .modalCard select {
   width: 100%;
-  padding: 6px 8px;
-  font: var(--fs-sm) var(--font);
 }
 .modalCard input[type='text'],
 .modalCard textarea,
 .modalCard input[type='number'] {
   flex: 1;
 } /* inputs stretch in their row; select sizes to content */
-.modalCard textarea {
-  resize: vertical;
-}
 .modalCard input[type='file'] {
   width: 100%;
   font: var(--fs-sm) var(--font);
-  color: var(--text);
-}
-.modalCard select option {
-  background: var(--panel-solid);
   color: var(--text);
 }
 .modalCard .row {
@@ -2468,10 +2622,6 @@ body.landing {
 #landing .grow {
   flex: 1;
 } /* an input that shares a .row with a button */
-#landing button.primary {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
 #landing a {
   color: var(--accent);
   cursor: pointer;
@@ -3180,6 +3330,8 @@ label:has(.ico) {
 /* Touch: enlarge tap targets. Scoped to coarse pointers, so the desktop layout is byte-identical. */
 @media (pointer: coarse) {
   button,
+  .button,
+  .btn,
   .chip,
   .stepBtn {
     min-height: 40px;
@@ -3438,6 +3590,7 @@ button:hover .ico,
 }
 button.danger .ico,
 .btn.danger .ico,
+.button--danger .ico,
 .chip.danger .ico {
   color: var(--danger);
 }
@@ -6806,27 +6959,6 @@ body.not-gm .gm-only {
   }
 }
 
-.compoundNumbers input,
-.compoundEditor input[type='number'],
-.compoundPresets input[type='text'] {
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 6px;
-  padding: 7px;
-  min-height: 36px;
-  font: inherit;
-}
-.compoundNumbers input:disabled {
-  opacity: 0.45;
-}
-.compoundEditor select[size] {
-  background-image: none;
-  padding: 6px;
-}
-.compoundEditor select[size] option {
-  padding: 4px;
-}
 .compoundEditor footer {
   position: sticky;
   bottom: -12px;
@@ -6857,7 +6989,7 @@ body.not-gm .gm-only {
 .compoundIconButtons button[aria-pressed='true'] {
   color: var(--accent);
   border-color: var(--accent);
-  background: rgba(91, 156, 255, 0.18);
+  background: var(--accent-soft);
 }
 
 .compoundControlGroup {
