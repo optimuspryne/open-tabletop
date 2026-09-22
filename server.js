@@ -36,7 +36,7 @@ import {
   returnInspectedCard,
   recoverPendingInspections,
 } from './server/game/inspection-recovery.js';
-// server.js  —  node server.js   (Node 20.9+; production uses Node 22)
+// server.js  —  node server.js   (Node 20.9+; production uses Node 24)
 // Authoritative physics server. One cannon-es world is the single source of
 // truth for every piece. Clients send intent (grab / move-target / release /
 // flip / spawn); the server simulates and Colyseus syncs the resulting

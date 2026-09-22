@@ -46,7 +46,7 @@ paths are below.
 
 ## Run via NPM
 
-Direct installs require **Node.js 20.9 or newer**. The production container uses Node.js 22.
+Direct installs require **Node.js 20.9 or newer**. The production container uses Node.js 24.
 
 ```bash
 # Set up Postgres and Redis first — see "Database" and "Redis" below
@@ -189,29 +189,49 @@ docker exec open-tabletop-app npm run admin:grant -- your@email.example
 ```
 Once an admin account has been created, it can be used to promote other accounts to admin status.
 
-### Deploying via 'Stack' in Portainer
+### Deploying via a stack in Portainer or Dockhand
 
-#### Web Editor ####
+#### Web editor
 
 There's no custom database image — deploy against **stock `postgres`**. The app builds
 and migrates its own schema on boot (via `MIGRATE_DATABASE_URL`). Database setup requires
-the least-privilege `tabletop_app` role; administrator provisioning is described after
-the stack. Since the web editor can't
-mount local files, the stack below injects that role setup as an inline `config`. Set
-`DB_PASSWORD` and `APP_DB_PASSWORD` in the stack's environment.
+the least-privilege `tabletop_app` role and an explicit bootstrap administrator. Since the
+web editor can't mount local files, the stack below injects both the role setup and bootstrap
+password as inline `config` files.
+
+Before deploying, add these values to the stack's environment-variable editor. In Dockhand,
+mark the three password values as secrets so their saved values remain masked. These are stack
+variables used while Compose renders the YAML; the example explicitly passes only the values the
+running containers need.
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `DB_PASSWORD` | Yes | Password for the database owner/migration role. |
+| `APP_DB_PASSWORD` | Yes | Password for the least-privilege runtime role. |
+| `BOOTSTRAP_ADMIN_USERNAME` | Yes on first deployment | Initial admin username; 3–20 letters, numbers, `_`, or `-`. |
+| `BOOTSTRAP_ADMIN_EMAIL` | Yes on first deployment | Initial admin sign-in email. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Yes on first deployment | Initial admin password; 12–1024 characters. |
+| `SESSION_TTL_DAYS` | No | Login lifetime in days; defaults to `30`. |
+| `TRUST_PROXY_HOPS` | No | Exact reverse-proxy hop count; defaults to `0`. |
+| `AUTO_MIGRATE` | No | Apply pending migrations at startup; defaults to `true`. |
 
 ```yml
-# Open Tabletop — app + stock Postgres (Portainer stack)
+# Open Tabletop — app + stock Postgres (Portainer/Dockhand stack)
 configs:
   app_role_init:                     # runs once on first DB init — creates the app role
     content: |
       CREATE ROLE tabletop_app LOGIN PASSWORD '${APP_DB_PASSWORD}';
+      GRANT CONNECT ON DATABASE tabletop TO tabletop_app;
+      GRANT USAGE ON SCHEMA public TO tabletop_app;
       GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO tabletop_app;
       GRANT USAGE, SELECT               ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
       ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
         GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES    TO tabletop_app;
       ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
         GRANT USAGE, SELECT               ON SEQUENCES TO tabletop_app;
+  bootstrap_admin_password:          # mounted read-only; read during first-user bootstrap
+    content: |
+      ${BOOTSTRAP_ADMIN_PASSWORD:?set BOOTSTRAP_ADMIN_PASSWORD in the stack environment}
 
 services:
   db:
@@ -226,7 +246,7 @@ services:
       - source: app_role_init
         target: /docker-entrypoint-initdb.d/02-app-role.sql
     volumes:
-      - ./db-data:/var/lib/postgresql/data
+      - db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U tabletop -d tabletop"]
       interval: 5s
@@ -245,6 +265,7 @@ services:
 
   app:
     image: optimuspryne/open-tabletop:0.17.2
+    user: appuser                         # matches the image's non-root runtime user
     restart: unless-stopped
     container_name: open-tabletop-app
     depends_on:
@@ -253,42 +274,104 @@ services:
       redis:
         condition: service_healthy
     environment:
+      NODE_ENV: production
       DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
       # Owner (DDL) role — the app builds & migrates the schema on boot (migrate.js).
       MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
-      ASSETS_DIR: /data/assets
+      AUTO_MIGRATE: "${AUTO_MIGRATE:-true}"
       REDIS_URL: redis://redis:6379
-      # PORT: 2567
+      RATE_LIMIT_STORE: redis
+      BOOTSTRAP_ADMIN_USERNAME: "${BOOTSTRAP_ADMIN_USERNAME:?set BOOTSTRAP_ADMIN_USERNAME in the stack environment}"
+      BOOTSTRAP_ADMIN_EMAIL: "${BOOTSTRAP_ADMIN_EMAIL:?set BOOTSTRAP_ADMIN_EMAIL in the stack environment}"
+      BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/bootstrap_admin_password
+      ASSETS_DIR: /data/assets
+      SESSION_TTL_DAYS: "${SESSION_TTL_DAYS:-30}"
+      # Set this to the exact number of reverse proxies in front of the app.
+      TRUST_PROXY_HOPS: "${TRUST_PROXY_HOPS:-0}"
+      PORT: "2567"
     ports:
       - "2567:2567"
     volumes:
-      - ./assets:/data/assets                  # uploaded decks/boards/props/skyboxes
+      - assets:/data/assets                    # uploaded decks/boards/props/skyboxes
+    configs:
+      - source: bootstrap_admin_password
+        target: /run/secrets/bootstrap_admin_password
+
+volumes:
+  db-data:
+  assets:
 ```
-Open **http://localhost:2567**, create an account, then explicitly promote it to
-administrator status:
+Open **http://localhost:2567** and sign in with the bootstrap administrator configured in the
+stack environment. Bootstrap provisioning runs only when the users table is empty; later stack
+deployments and container restarts never reset that account or its password.
+
+You do not create `bootstrap_admin_password` on the Docker host. The top-level Compose `config`
+renders `BOOTSTRAP_ADMIN_PASSWORD` into a read-only file, mounts it inside the app container at
+`/run/secrets/bootstrap_admin_password`, and sets `BOOTSTRAP_ADMIN_PASSWORD_FILE` to that path.
+The app reads the file, removes trailing line endings, validates the password length, and hashes
+the password before storing it. The `/run/secrets` path is only the mount location here; this
+particular value is supplied by an inline Compose config.
+
+After changing a stack variable, use **Deploy**, **Update**, or **Recreate** in the stack manager
+so Compose regenerates the config and container. A plain container restart keeps the previously
+rendered config. When editing a masked Dockhand variable, retain the saved secret or enter the real
+value again—do not replace it with the displayed mask.
+
+The startup message `.env not found. Continuing without it.` is expected in this deployment:
+the stack manager supplies the environment instead. If startup reports that the bootstrap password
+is too short, check the mounted value's length without displaying the secret:
 
 ```bash
-docker exec open-tabletop-app npm run admin:grant -- your@email.example
+docker exec open-tabletop-app node -e "const fs=require('fs'); const p=fs.readFileSync(process.env.BOOTSTRAP_ADMIN_PASSWORD_FILE,'utf8').replace(/[\\r\\n]+$/,''); console.log(p.length)"
 ```
-Once an admin account has been created, it can be used to promote other accounts to admin status.
+
+The result must be at least `12`. A result of `0` means the stack variable was empty; a result such
+as `3` usually means a UI mask like `***` was saved literally. Correct the variable in the stack
+manager and redeploy/recreate the stack.
 
 On first boot the db creates `tabletop_app` from the inline config, and the app builds the
-full schema via `MIGRATE_DATABASE_URL` (adopting an existing schema if you're pointing at
-an old volume). The `assets` volume holds uploaded **files**; library **metadata** lives in
-Postgres.
+full schema via `MIGRATE_DATABASE_URL` (adopting an existing schema if you're pointing at an
+old volume), then provisions the bootstrap administrator. The `assets` volume holds uploaded
+**files**; library **metadata** lives in Postgres.
 
-**Older Portainer/Compose without inline-`config` support?** Drop the `configs:` block and
-the `db.configs:` entry, bring the stack up, then create the role once by hand:
+The official image pins `appuser` to UID **100** and `appgroup` to GID **101**. To store uploads
+on NFS, provision the exported assets directory with that numeric ownership and writable directory
+permissions on the NFS server (for example, `chown 100:101` and `chmod 2770`). Then replace the
+empty `assets:` definition at the bottom of the stack with an NFS-backed named volume:
+
+```yml
+  assets:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=${NFS_SERVER},rw,nfsvers=4"
+      device: ":${NFS_ASSETS_PATH}"
+```
+
+Set `NFS_SERVER` to the server address and `NFS_ASSETS_PATH` to its exported path. Ownership must
+be prepared server-side, especially when the export uses root squashing; the non-root app container
+cannot repair NFS ownership itself.
+
+**Older Portainer, Dockhand, or Compose without inline-`config` support?** Drop the top-level
+`configs:` block, both service-level `configs:` entries, and the three `BOOTSTRAP_ADMIN_*` entries.
+Bring the stack up, then create the role once by hand:
 
 ```bash
 docker exec -i open-tabletop-db psql -U tabletop -d tabletop <<'SQL'
 CREATE ROLE tabletop_app LOGIN PASSWORD 'your-APP_DB_PASSWORD';
+GRANT CONNECT ON DATABASE tabletop TO tabletop_app;
+GRANT USAGE ON SCHEMA public TO tabletop_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO tabletop_app;
 GRANT USAGE, SELECT               ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tabletop_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO tabletop_app;
 SQL
 docker restart open-tabletop-app
+```
+After the app starts, create an account and promote it explicitly:
+
+```bash
+docker exec open-tabletop-app npm run admin:grant -- your@email.example
 ```
 
 ## Testing
@@ -390,7 +473,7 @@ scripts/               admin roles, icon generation, secret migration, DB integr
 test/                  unit/harness tests plus PostgreSQL integration tests
 docs/                  architecture, code reference, credits, release, and design notes
 docker/                first-start least-privilege Postgres role setup
-Dockerfile             production Node 22 image
+Dockerfile             production Node 24 image
 docker-compose.yml     app + Postgres + Redis with Docker secret files
 
 public/

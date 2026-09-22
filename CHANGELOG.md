@@ -9,6 +9,14 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Pin the container's non-root `appuser`/`appgroup` identity to UID 100 and GID 101 for stable
+  NFS and bind-mount ownership, and document an NFS-backed Portainer/Dockhand assets volume.
+- Bring the Portainer/Dockhand stack example into production-config parity with bootstrap
+  administrator provisioning, migration and rate-limit controls, session lifetime, trusted-proxy
+  settings, named storage that preserves the non-root application user's write access, and
+  password-file setup and troubleshooting guidance.
+- Move the production Docker image from Node.js 22 to Node.js 24 while retaining the Node.js
+  20.9 minimum for direct installations.
 - Begin the browser-client decomposition with table feature modules for piece mesh replacement,
   buffered interpolation, safe piece-property access, and local collider diagnostics.
 - Extend component parity coverage with real desktop/mobile custom-collider scenes and a shared
