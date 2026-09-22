@@ -374,6 +374,84 @@ After the app starts, create an account and promote it explicitly:
 docker exec open-tabletop-app npm run admin:grant -- your@email.example
 ```
 
+### Local Proxmox LXC installer
+
+The scripts in [`proxmox/`](proxmox/) provide a local, Community Scripts-style deployment while
+the app is not listed in the Proxmox VE Community Scripts catalog. On a **Proxmox VE 9 or newer
+host**, download only `open-tabletop.sh`. It fetches the app source from
+`https://github.com/optimuspryne/open-tabletop.git` at `main` by default and extracts its companion
+`proxmox/install.sh` from that same source revision. It creates an unprivileged Debian 13 LXC;
+the companion installs Node.js 26, PostgreSQL 16, Redis, and the app directly inside it and enables
+a non-root systemd service. Docker is not used. The Proxmox host needs `git` for this fetch.
+
+After this code is pushed, sign in to the Proxmox host and download the host script from a specific
+commit. Set `SOURCE_REF` to that commit too, so the fetched app and companion match the host script.
+Find the commit SHA with `git rev-parse HEAD` on your workstation after committing. Replace `REV`,
+email, storage, and CTID with your values. For NFS-backed uploads, mount the export
+on the Proxmox host first and set `ASSETS_HOST_PATH` to a directory on it; omit that variable if
+uploads should live inside the container.
+
+```bash
+ssh root@YOUR-PVE-HOST
+REV=PASTE_FULL_PUSHED_COMMIT_SHA
+curl -fsSLo /root/open-tabletop.sh \
+  "https://raw.githubusercontent.com/optimuspryne/open-tabletop/$REV/proxmox/open-tabletop.sh"
+SOURCE_REF="$REV" CTID=123 ROOTFS_STORAGE=local-lvm BOOTSTRAP_ADMIN_EMAIL=you@example.com \
+  ASSETS_HOST_PATH=/mnt/open-tabletop-assets \
+  bash /root/open-tabletop.sh install
+```
+
+Inspect the downloaded script before executing it as root. The app and container installer come
+from the selected Git revision, not from the downloaded script's URL; pinning both to the same
+commit keeps them in sync. Only pushed commits can be fetched this way.
+
+The script offers the next free CTID when `CTID` is unset and prompts for storage and the admin
+email when those values are unset. Other optional settings are `TEMPLATE_STORAGE` (default `local`),
+`BRIDGE` (`vmbr0`), `IP` (`dhcp`, or an IPv4 CIDR with `GATEWAY`), `CORES` (`2`), `RAM_MB` (`2048`),
+`DISK_GB` (`12`), `CT_HOSTNAME` (`open-tabletop`), and `BOOTSTRAP_ADMIN_USERNAME` (`admin`).
+The installer creates database passwords and a strong initial admin password; read them inside the
+container with `pct exec 123 -- cat /root/open-tabletop-credentials.txt`. Keep that root-only file
+private. The service listens on port `2567`; use a reverse proxy with TLS for internet access and
+set `TRUST_PROXY_HOPS` in `/etc/open-tabletop/open-tabletop.env` to the actual proxy hop count.
+
+Set `SOURCE_REF` to a branch, tag, or commit to deploy something other than `main`; `SOURCE_REPO`
+can point at another Git remote. To test committed app code that you have **not pushed**, copy
+the host script and a source archive from your workstation instead:
+
+```bash
+git archive --format=tar --output=open-tabletop-source.tar HEAD
+scp proxmox/open-tabletop.sh open-tabletop-source.tar root@YOUR-PVE-HOST:/root/
+```
+
+```bash
+SOURCE_ARCHIVE=/root/open-tabletop-source.tar CTID=123 ROOTFS_STORAGE=local-lvm \
+  BOOTSTRAP_ADMIN_EMAIL=you@example.com bash /root/open-tabletop.sh install
+```
+
+`SOURCE_ARCHIVE` takes precedence over the Git fetch and must include `proxmox/install.sh`.
+Uncommitted files are not included in a Git archive. To test an uncommitted companion script,
+copy it separately and set `INSTALLER_PATH=/root/install.sh` when running the host script.
+
+To put uploads on NFS, mount the export on the **Proxmox host** first and set
+`ASSETS_HOST_PATH=/path/to/mounted/assets` at initial installation. The script bind-mounts that
+directory into the LXC at `/var/lib/open-tabletop/assets` and checks that the app can write to it.
+It verifies the path is currently on an NFS filesystem so a missing host mount cannot quietly put
+uploads on the Proxmox host's local disk. Ensure that NFS mount is available before the LXC starts
+after a host reboot.
+
+The LXC app user is UID/GID `1000:1000`. With Proxmox's default unprivileged mapping, that is
+`101000:101000` on the host and NFS server, so prepare the export for those numeric IDs.
+This differs from the Docker image's `100:101`. A custom LXC ID map changes the host IDs. Proxmox
+container backups do not include bind-mounted NFS data; back up that export separately.
+
+To deploy a newer pushed commit, run `bash /root/open-tabletop.sh update 123` on the Proxmox host
+(or pass a new `SOURCE_ARCHIVE`). The update creates a PostgreSQL dump under
+`/var/backups/open-tabletop/`, installs dependencies into a new release directory, switches the
+service to it, and checks HTTP readiness. Older release directories remain available. Database
+migrations may not be reversible, so restore the database dump along with an older release if an
+upgrade must be rolled back. For logs, run
+`pct exec 123 -- journalctl -u open-tabletop -n 100 --no-pager`.
+
 ## Testing
 
 ```bash
@@ -475,6 +553,7 @@ docs/                  architecture, code reference, credits, release, and desig
 docker/                first-start least-privilege Postgres role setup
 Dockerfile             production Node 24 image
 docker-compose.yml     app + Postgres + Redis with Docker secret files
+proxmox/               host LXC launcher and in-container bare-metal installer
 
 public/
   index.html/landing.js lobby, authentication, room list, and host requests

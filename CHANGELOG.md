@@ -8,6 +8,11 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+### Added
+- Add a local Proxmox VE LXC installer and updater for bare-metal Node.js 26, PostgreSQL 16,
+  Redis, non-root systemd operation, optional NFS-backed assets, and fetching a selected Git ref
+  directly from the application repository, including the matching in-container installer.
+
 ### Changed
 - Extract reusable dialog focus, responsive sheet, cluster, drawer, radial-menu, and hold-repeat
   mechanics from the table client into a dedicated UI-surfaces module, with desktop/touch

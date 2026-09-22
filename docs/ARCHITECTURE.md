@@ -203,7 +203,9 @@ importing a room singleton:
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
-  role on first DB start; the `Dockerfile` itself lives at the repo root).
+  role on first DB start; the `Dockerfile` itself lives at the repo root), and
+  `proxmox/` (the host-side LXC launcher and matching in-container bare-metal
+  installer, extracted from the same selected source revision).
 
 ## Trust and failure boundaries
 
