@@ -366,7 +366,26 @@ const SCENES = [
     drive: `
       ${BE_ADMIN}
       window.onOttRoom(${STUB_ROOM});
-      (await import('/icons.js')).applyIcons();
+      const { applyIcons, setIcon } = await import('/icons.js');
+      applyIcons();
+      document.body.classList.remove('ui-full');
+      document.getElementById('roomGrp').hidden = false;
+      const timerLabel = document.querySelector('#timerBtn .lbl');
+      if (getComputedStyle(timerLabel).display === 'none')
+        throw new Error('Compact UI hides the timer value');
+      const reset = document.getElementById('roomReset');
+      const resetStyle = getComputedStyle(reset);
+      const divider = getComputedStyle(reset, '::before');
+      if (resetStyle.borderTopColor !== resetStyle.borderRightColor ||
+          divider.position !== 'absolute' || divider.height !== '1px')
+        throw new Error('Reset divider is part of the danger button border');
+      const saveButton = document.getElementById('roomSaveState');
+      if (!saveButton.querySelector(':scope > .ico'))
+        throw new Error('Save Table is missing its Tabler icon');
+      setIcon(saveButton, 'square-check');
+      if (saveButton.querySelector(':scope > .ico > use')?.getAttribute('href') !== '#i-square-check' ||
+          document.getElementById('i-square-check') === null)
+        throw new Error('Save Table success icon is unavailable');
       await new Promise((r) => setTimeout(r, 60));`,
   },
   {

@@ -3762,8 +3762,18 @@ body.not-gm .gm-only {
 }
 /* Reset sits last and needs the same separation. */
 #roomGrp #roomReset {
-  margin-top: calc(4px * var(--ui-elements-scale));
-  border-top: 1px solid var(--border);
+  position: relative;
+  margin-top: calc(8px * var(--ui-elements-scale));
+}
+#roomGrp #roomReset::before {
+  content: '';
+  position: absolute;
+  top: calc(-5px * var(--ui-elements-scale));
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
 }
 /* The overflow trigger is an icon button, not a labelled one. */
 #moreBtn .lbl {
@@ -4663,6 +4673,9 @@ body.not-gm .gm-only {
 }
 #timerBtn {
   padding-inline: calc(10px * var(--ui-elements-scale));
+}
+#timerBtn .lbl {
+  display: inline;
 }
 
 /* ---- the dock: three legible groups ------------------------------------- */

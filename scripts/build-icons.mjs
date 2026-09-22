@@ -57,6 +57,7 @@ const ICONS = [
   'movie',
   'users',
   'device-floppy',
+  'square-check',
   'brand-airtable',
   'geometry',
   'grid-4x4',

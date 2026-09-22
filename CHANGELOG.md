@@ -32,6 +32,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   browser rendering, server validation, scene restoration, and history retention share one policy.
 
 ### Fixed
+- Give Save Table a temporary checked icon and label after saving without losing its original icon,
+  render the Reset menu divider independently from the danger button, and keep the timer value
+  visible in compact UI mode.
 - Keep the poker-stack collider regression expectation aligned with the resized poker-chip model.
 
 ## [0.17.2] — 2026-09-17

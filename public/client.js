@@ -1913,10 +1913,14 @@ function rebuildGrid() {
   room.onMessage('stateSaved', () => {
     const b = byId('roomSaveState');
     if (!b) return;
-    const t = b.textContent;
-    b.textContent = '💾 Saved ✓';
-    setTimeout(() => {
-      b.textContent = t;
+    const label = b._saveLabel || b.querySelector('.lbl')?.textContent || 'Save Table';
+    b._saveLabel = label;
+    clearTimeout(b._saveFeedbackTimer);
+    setIcon(b, 'square-check');
+    setBtnLabel(b, 'Saved ✓');
+    b._saveFeedbackTimer = setTimeout(() => {
+      setIcon(b, 'device-floppy');
+      setBtnLabel(b, label);
     }, 1500);
   });
   room.onMessage('boardList', (boards) => {
@@ -2384,7 +2388,7 @@ function rebuildGrid() {
   setInterval(() => {
     const t = room.state.timer;
     const btnLbl = byId('timerBtn') && byId('timerBtn').querySelector('.lbl');
-    if (btnLbl) btnLbl.textContent = t && t.running ? fmtTime(timerLive(t, Date.now())) : 'Timer'; // live value in the button
+    if (btnLbl) btnLbl.textContent = t ? fmtTime(timerLive(t, Date.now())) : '00:00';
     const mini = byId('timerMini'); // touch top bar (7e slice 2): the value only, and only while running
     if (mini) {
       mini.hidden = !(t && t.running);
