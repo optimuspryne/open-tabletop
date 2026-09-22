@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Extend component parity coverage with real desktop/mobile custom-collider scenes and a shared
+  component-state gallery that asserts button, field, dropdown, multiselect, and checkbox states.
 - Finish the shared UI migration by replacing legacy button, field, icon, and action-row class
   names in static and generated interfaces with the canonical component classes, then remove the
   compatibility selectors from the stylesheet.
@@ -28,6 +30,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   collider specification, keeping collision and debug geometry on one set of rules.
 - Centralize overlay kinds, measurement settings, room caps, and whiteboard protocol limits so
   browser rendering, server validation, scene restoration, and history retention share one policy.
+
+### Fixed
+- Keep the poker-stack collider regression expectation aligned with the resized poker-chip model.
 
 ## [0.17.2] — 2026-09-17
 

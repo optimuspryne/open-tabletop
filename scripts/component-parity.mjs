@@ -116,6 +116,41 @@ applyIcons(document);
 window.__rowsReady = true;
 </script></body>`;
 
+// A compact specimen page makes visual states deterministic. Product scenes usually contain
+// whichever states happen to occur after setup, which left hover-adjacent variants such as
+// pressed, busy and disabled effectively untested even after they became shared primitives.
+const COMPONENT_STATES_FIXTURE = `<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="/styles.css">
+<body><main id="componentStates" class="panel">
+  <div class="field-group"><span class="field-label">Buttons</span>
+    <div class="button-row">
+      <button class="button" id="stateButton">Default</button>
+      <button class="button button--primary" id="statePrimary">Primary</button>
+      <button class="button button--danger" id="stateDanger">Danger</button>
+      <button class="button button--icon" id="stateIcon" aria-label="Icon button">⋯</button>
+      <button class="button" id="statePressed" aria-pressed="true">Pressed</button>
+      <button class="button" id="stateBusy" aria-busy="true">Busy</button>
+      <button class="button" id="stateDisabled" disabled>Disabled</button>
+    </div>
+  </div>
+  <div class="field-group"><label class="field-label" for="stateText">Controls</label>
+    <input class="control" id="stateText" type="text" value="Text field">
+    <input class="control control--compact" id="stateCompact" type="number" value="12">
+    <select class="control control--select" id="stateSelect"><option>Dropdown</option></select>
+    <select class="control control--select control--multiselect" id="stateMulti" multiple size="3">
+      <option selected>Selected</option><option>Second</option><option>Third</option>
+    </select>
+    <input class="control" id="stateControlDisabled" type="text" value="Disabled" disabled>
+  </div>
+  <div class="button-row">
+    <label class="checkbox"><input class="checkbox__input" id="stateCheckbox" type="checkbox">Unchecked</label>
+    <label class="checkbox"><input class="checkbox__input" id="stateChecked" type="checkbox" checked>Checked</label>
+    <label class="checkbox"><input class="checkbox__input" id="stateCheckboxDisabled" type="checkbox" disabled>Disabled</label>
+  </div>
+  <p class="help-text">Shared supporting text</p>
+  <p class="status-text" role="status">Shared live status</p>
+</main></body>`;
+
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
@@ -125,6 +160,111 @@ const SCENES = [
     expect: { selector: '.memberRow', min: 11 },
     settle: 250,
     drive: `void 0;`, // the fixture renders itself on import
+  },
+  {
+    name: 'component-states',
+    page: '/__component-states.html',
+    root: '#componentStates',
+    expect: { selector: '.button, .control, .checkbox__input', min: 15 },
+    settle: 250,
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const style = (id) => getComputedStyle(document.getElementById(id));
+      const normal = style('stateButton');
+      const primary = style('statePrimary');
+      const danger = style('stateDanger');
+      const icon = style('stateIcon');
+      const pressed = style('statePressed');
+      const busy = style('stateBusy');
+      const disabled = style('stateDisabled');
+      assert(normal.fontFamily === style('stateText').fontFamily,
+        'Buttons and controls do not share typography');
+      assert(primary.borderTopColor !== normal.borderTopColor,
+        'Primary button does not have a distinct border');
+      assert(danger.color !== normal.color, 'Danger button does not have a distinct color');
+      assert(icon.minWidth === '0px' && icon.paddingTop !== normal.paddingTop,
+        'Icon button does not use the compact icon treatment');
+      assert(pressed.borderTopColor === primary.borderTopColor,
+        'Pressed state does not use the primary accent');
+      assert(busy.cursor === 'progress', 'Busy button does not use the progress cursor');
+      assert(disabled.cursor === 'not-allowed' && +disabled.opacity < +normal.opacity,
+        'Disabled button is not visibly disabled');
+      const input = style('stateText');
+      const select = style('stateSelect');
+      const multi = style('stateMulti');
+      assert(input.backgroundColor === select.backgroundColor &&
+        input.borderTopColor === select.borderTopColor,
+        'Text fields and dropdowns do not share their base treatment');
+      assert(select.backgroundImage !== 'none' && multi.backgroundImage === 'none',
+        'Dropdown or multiselect indicator treatment regressed');
+      assert(parseFloat(style('stateCompact').minHeight) < parseFloat(input.minHeight),
+        'Compact control is not smaller than the base control');
+      assert(style('stateControlDisabled').cursor === 'not-allowed' &&
+        +style('stateControlDisabled').opacity < +input.opacity,
+        'Disabled control is not visibly disabled');
+      assert(style('stateChecked').backgroundColor !== style('stateCheckbox').backgroundColor,
+        'Checked checkbox is not visually distinct');
+      assert(style('stateCheckboxDisabled').cursor === 'not-allowed' &&
+        +style('stateCheckboxDisabled').opacity < +style('stateCheckbox').opacity,
+        'Disabled checkbox is not visibly disabled');`,
+  },
+  {
+    name: 'collider-editor',
+    root: '.compoundEditor',
+    expect: { selector: '.compoundEditor .button, .compoundEditor .control', min: 20 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const wait = async (test) => {
+        for (let i = 0; i < 200; i++) {
+          if (test()) return;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        throw new Error('Collider editor did not become ready');
+      };
+      const { openColliderEditor } = await import('/compound-collider-editor.js');
+      window.__componentParityCollider = openColliderEditor({
+        source: '/models/pieces/chess/rook.glb',
+        box: [0.5, 0.5, 0.5],
+        value: { version: 1, shapes: [
+          { type: 'box', position: [0, 0, 0], rotation: [0, 0, 0], size: [0.7, 0.8, 0.7] },
+          { type: 'outline', position: [0, -0.4, 0], rotation: [0, 0, 0],
+            size: [0.9, 0.05, 0.9], outline: { type: 'clipped', cut: 0.18 } },
+        ] },
+      });
+      await wait(() => document.querySelector('.compoundEditor [data-action="apply"]:not(:disabled)'));
+      const dialog = document.querySelector('.compoundEditor');
+      assert(dialog.matches('dialog.modal'), 'Collider editor does not use the shared modal shell');
+      for (const selector of ['.modal__header', '.modal__title', '.modal__close',
+        '.modal__body', '.modal__footer', '.button-row', '.field-group', '.field-label',
+        '.help-text', '.status-text'])
+        assert(dialog.querySelector(selector), 'Collider editor is missing ' + selector);
+      for (const button of dialog.querySelectorAll('button:not(.modal__close)'))
+        assert(button.classList.contains('button'),
+          'Generated button lacks .button: ' + button.outerHTML.slice(0, 160));
+      for (const button of dialog.querySelectorAll('button[data-icon]'))
+        assert(button.classList.contains('button--icon'), 'Icon button lacks .button--icon');
+      assert(dialog.querySelector('[data-action="apply"]').classList.contains('button--primary'),
+        'Apply action lacks .button--primary');
+      assert(dialog.querySelector('[data-action="clear"]').classList.contains('button--danger'),
+        'Clear action lacks .button--danger');
+      for (const control of dialog.querySelectorAll('input:not([type="checkbox"]), select'))
+        assert(control.classList.contains('control'), 'Generated field lacks .control');
+      for (const select of dialog.querySelectorAll('select:not([multiple])'))
+        assert(select.classList.contains('control--select'), 'Dropdown lacks .control--select');
+      const list = dialog.querySelector('select[multiple]');
+      assert(list.classList.contains('control--select') &&
+        list.classList.contains('control--multiselect'),
+        'Shape list lacks the shared multiselect variants');
+      const orbit = dialog.querySelector('[data-drag-mode="orbit"]');
+      const move = dialog.querySelector('[data-drag-mode="move"]');
+      assert(orbit.getAttribute('aria-pressed') === 'true', 'Default drag mode is not pressed');
+      move.click();
+      assert(move.getAttribute('aria-pressed') === 'true' &&
+        orbit.getAttribute('aria-pressed') === 'false', 'Pressed drag mode did not move');
+      const undo = dialog.querySelector('[data-action="undo"]');
+      assert(undo.disabled && getComputedStyle(undo).cursor === 'not-allowed',
+        'Initial undo action is not visibly disabled');
+      assert(!dialog.querySelector('.ico-missing'), 'Collider editor contains a missing icon');`,
   },
   {
     name: 'modal-anatomy',
@@ -277,7 +417,10 @@ const server = await serveDir({
   root: ROOT,
   stubOnly: ['/client.js'], // the engine; editor-panel is what we are exercising
   mounts: { '/shared/': SHARED },
-  routes: { '/__rows.html': { body: ROWS_FIXTURE } },
+  routes: {
+    '/__rows.html': { body: ROWS_FIXTURE },
+    '/__component-states.html': { body: COMPONENT_STATES_FIXTURE },
+  },
 });
 const cdp = await launch({ webgl: true });
 
