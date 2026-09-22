@@ -60,6 +60,8 @@ try {
       assert(modal().matches('dialog.modal.compoundEditor'),'Collider editor is not a shared native modal');
       for(const selector of ['.modal__header','.modal__title','.modal__close','.modal__body','.modal__footer'])
         assert(modal().querySelector(selector),'Collider editor is missing '+selector);
+      for(const selector of ['.button-row','.field-group','.field-label','.help-text','.status-text'])
+        assert(modal().querySelector(selector),'Collider editor is missing shared layout primitive '+selector);
       add('cylinder');edit('position X',0.24);edit('rotation Z',45);
       assert(modal().querySelectorAll('[data-drag-mode]').length===4,'Missing drag modes');
       assert(modal().querySelectorAll('[data-add-shape]').length===6,'Missing add buttons');

@@ -62,9 +62,9 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   dialog.setAttribute('aria-label', 'Custom collider editor');
   dialog.innerHTML = `<header class="modal__header"><h2 class="modal__title">Custom collider</h2><button type="button" class="modal__close close-x" data-action="cancel" aria-label="Close collider editor">✕</button></header>
   <div class="modal__body compoundEditorBody">
-  <p>Build a solid collision shape around your model. Leave gaps between shapes for holes and recesses.</p>
+  <p class="help-text">Build a solid collision shape around your model. Leave gaps between shapes for holes and recesses.</p>
   <div class="compoundLayout"><div><div class="compoundViewport" aria-label="3D collider preview"></div>
-  <div class="compoundToolbar"><div class="compoundControlGroup"><span>Drag mode</span><div class="compoundIconButtons" role="group" aria-label="Drag mode">
+  <div class="compoundToolbar"><div class="field-group"><span class="field-label">Drag mode</span><div class="button-row compoundIconButtons" role="group" aria-label="Drag mode">
   ${Object.entries({
     orbit: 'view-360-number',
     move: 'chart-scatter-3d',
@@ -76,20 +76,20 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
         `<button type="button" class="button button--icon" data-drag-mode="${mode}" data-icon="${icon}" aria-label="${mode === 'orbit' ? 'Orbit view' : mode[0].toUpperCase() + mode.slice(1) + ' shape'}" aria-pressed="${mode === 'orbit'}"></button>`,
     )
     .join('')}</div></div>
-  <div class="compoundControlGroup"><span>Camera</span><div class="compoundIconButtons" role="group" aria-label="Camera controls">
+  <div class="field-group"><span class="field-label">Camera</span><div class="button-row compoundIconButtons" role="group" aria-label="Camera controls">
   <button type="button" class="button button--icon" data-view="perspective" data-icon="hexagon-3d" aria-label="Perspective view"></button><button type="button" class="button button--icon" data-view="top" data-icon="mood-look-down" aria-label="Top view"></button><button type="button" class="button button--icon" data-view="front" data-icon="mood-neutral" aria-label="Front view"></button><button type="button" class="button button--icon" data-view="side" data-icon="mood-look-left" aria-label="Side view"></button></div></div></div>
-  <button type="button" class="button" data-action="draw">Draw outline in 3D</button><p>Click a shape to select it. Ctrl/⌘-click to select multiple shapes. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
-  <aside tabindex="0" aria-label="Collider controls"><div data-field="drawing" class="compoundDrawing" hidden></div><label>Shapes <select class="control control--select control--multiselect" data-field="list" multiple size="5" aria-label="Collider shapes"></select></label>
-  <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Add shape">${COMPOUND_TYPES.map((type) => `<button type="button" class="button button--icon" data-add-shape="${type}" data-icon="${{ box: 'cube-plus', sphere: 'sphere-plus', cylinder: 'cylinder-plus', cone: 'cone-plus', flat: 'square-plus-2', outline: 'hexagon-3d' }[type]}" aria-label="Add ${type === 'flat' ? 'flat slab' : type}"></button>`).join('')}</div>
-  <div class="compoundToolbar compoundIconButtons" role="group" aria-label="Shape actions"><button type="button" class="button button--icon" data-action="duplicate" data-icon="copy" aria-label="Duplicate shape"></button><button type="button" class="button button--icon" data-action="delete" data-icon="library-minus" aria-label="Delete shape"></button><button type="button" class="button button--icon" data-action="undo" data-icon="arrow-back-up" aria-label="Undo"></button><button type="button" data-action="clear" data-icon="trash" class="button button--icon button--danger" aria-label="Clear all shapes"></button></div>
+  <button type="button" class="button" data-action="draw">Draw outline in 3D</button><p class="help-text">Click a shape to select it. Ctrl/⌘-click to select multiple shapes. Drag in the chosen mode, or enter exact values. Use Orbit view to rotate the camera and scroll to zoom.</p></div>
+  <aside tabindex="0" aria-label="Collider controls"><div data-field="drawing" class="compoundDrawing" hidden></div><label class="field-group"><span class="field-label">Shapes</span><select class="control control--select control--multiselect" data-field="list" multiple size="5" aria-label="Collider shapes"></select></label>
+  <div class="button-row compoundToolbar compoundIconButtons" role="group" aria-label="Add shape">${COMPOUND_TYPES.map((type) => `<button type="button" class="button button--icon" data-add-shape="${type}" data-icon="${{ box: 'cube-plus', sphere: 'sphere-plus', cylinder: 'cylinder-plus', cone: 'cone-plus', flat: 'square-plus-2', outline: 'hexagon-3d' }[type]}" aria-label="Add ${type === 'flat' ? 'flat slab' : type}"></button>`).join('')}</div>
+  <div class="button-row compoundToolbar compoundIconButtons" role="group" aria-label="Shape actions"><button type="button" class="button button--icon" data-action="duplicate" data-icon="copy" aria-label="Duplicate shape"></button><button type="button" class="button button--icon" data-action="delete" data-icon="library-minus" aria-label="Delete shape"></button><button type="button" class="button button--icon" data-action="undo" data-icon="arrow-back-up" aria-label="Undo"></button><button type="button" data-action="clear" data-icon="trash" class="button button--icon button--danger" aria-label="Clear all shapes"></button></div>
   <button type="button" class="button" data-action="select-all">Select all shapes</button>
   <details class="compoundPresets" data-field="presets"></details>
   <div data-field="properties"></div>
-  <p>Scroll over a value to adjust it. Shift: finer steps. Ctrl/⌘: larger steps.</p>
-  <p data-field="count"></p></aside></div>
-  <p data-field="status" role="status">Loading model…</p>
+  <p class="help-text">Scroll over a value to adjust it. Shift: finer steps. Ctrl/⌘: larger steps.</p>
+  <p class="status-text" data-field="count"></p></aside></div>
+  <p class="status-text" data-field="status" role="status">Loading model…</p>
   </div>
-  <footer class="modal__footer"><button type="button" class="button" data-action="cancel">Cancel</button><button type="button" data-action="apply" class="button button--primary" disabled>Apply collider</button></footer>`;
+  <footer class="modal__footer button-row button-row--end"><button type="button" class="button" data-action="cancel">Cancel</button><button type="button" data-action="apply" class="button button--primary" disabled>Apply collider</button></footer>`;
   document.body.append(dialog);
   applyIcons(dialog);
   for (const button of dialog.querySelectorAll('[data-icon]'))
@@ -291,16 +291,16 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       panel.addEventListener('toggle', () => {
         if (panel.isConnected) outlineExpanded = panel.open;
       });
-      panel.innerHTML = `<summary>Edit outline</summary><label>Outline <select id="compoundShapeOutline" class="control control--select">
+      panel.innerHTML = `<summary>Edit outline</summary><label class="field-group"><span class="field-label">Outline</span><select id="compoundShapeOutline" class="control control--select">
         <option value="rectangle">Rectangle</option><option value="clipped">Clipped corners</option>
         <option value="triangle">Triangle</option><option value="hexagon">Hexagon</option>
         <option value="circle">Circle / oval</option><option value="custom">Custom outline (concave allowed)</option>
         </select></label>
-        <label>Corner cut (%) <input id="compoundShapeCut" class="control control--compact" type="number" min="1" max="49" value="15"></label>
+        <label class="field-group"><span class="field-label">Corner cut (%)</span><input id="compoundShapeCut" class="control control--compact" type="number" min="1" max="49" value="15"></label>
         <canvas id="compoundShapeCanvas" width="320" height="240" style="max-width:100%;cursor:crosshair" aria-label="Outline corners"></canvas>
-        <div id="compoundShapeTools"><button type="button" class="button" id="compoundShapeUndo">Undo corner</button>
+        <div id="compoundShapeTools" class="button-row"><button type="button" class="button" id="compoundShapeUndo">Undo corner</button>
         <button type="button" class="button" id="compoundShapeClear">Clear outline</button></div>
-        <p id="compoundShapeStatus" role="status"></p>`;
+        <p id="compoundShapeStatus" class="status-text" role="status"></p>`;
       host.append(panel);
       let active = false;
       const editor = wireBoardOutline(
@@ -337,6 +337,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     }
     for (const key of ['position', 'rotation', 'size']) {
       const label = document.createElement('p');
+      label.className = 'field-label';
       label.textContent =
         key === 'size'
           ? 'Full dimensions (table units)'
@@ -349,7 +350,10 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       host.append(row);
       for (let axis = 0; axis < 3; axis++) {
         const wrap = document.createElement('label');
-        wrap.textContent = ['X', 'Y', 'Z'][axis];
+        wrap.className = 'field-group';
+        const caption = document.createElement('span');
+        caption.className = 'field-label';
+        caption.textContent = ['X', 'Y', 'Z'][axis];
         const input = document.createElement('input');
         input.type = 'number';
         input.className = 'control control--compact';
@@ -416,13 +420,14 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
           },
           { passive: false },
         );
-        wrap.append(input);
+        wrap.append(caption, input);
         row.append(wrap);
       }
     }
   }
   function groupProperties(host) {
     const hint = document.createElement('p');
+    hint.className = 'help-text';
     hint.textContent = `${selection.size} shapes selected. Transform the group around its shared center, or select one shape to edit it individually.`;
     host.append(hint);
     const base = structuredClone(draft),
@@ -431,6 +436,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
     let editing = false;
     for (const key of ['position', 'rotation', 'scale']) {
       const label = document.createElement('p');
+      label.className = 'field-label';
       label.textContent = {
         position: 'Move group (table units)',
         rotation: 'Rotate group (degrees)',
@@ -442,7 +448,10 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
       host.append(row);
       for (let axis = 0; axis < (key === 'scale' ? 1 : 3); axis++) {
         const wrap = document.createElement('label');
-        wrap.textContent = key === 'scale' ? 'Factor' : ['X', 'Y', 'Z'][axis];
+        wrap.className = 'field-group';
+        const caption = document.createElement('span');
+        caption.className = 'field-label';
+        caption.textContent = key === 'scale' ? 'Factor' : ['X', 'Y', 'Z'][axis];
         const input = document.createElement('input');
         input.type = 'number';
         input.className = 'control control--compact';
@@ -491,7 +500,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
           },
           { passive: false },
         );
-        wrap.append(input);
+        wrap.append(caption, input);
         row.append(wrap);
       }
     }

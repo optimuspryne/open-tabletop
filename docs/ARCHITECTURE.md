@@ -615,7 +615,9 @@ draft. Drag-mode buttons select orbit, move, rotate, or uniform resize; labeled 
 select perspective, top, front, or side views. Shape buttons add primitives directly.
 It remains a native top-layer `<dialog>`, but composes the same `.modal`, `.modal__header`,
 `.modal__title`, `.modal__body`, `.modal__close`, and `.modal__footer` primitives as the HTML
-overlay modals; only its viewport grid and native `::backdrop` remain feature-specific.
+overlay modals. Generated controls additionally compose `.field-group`, `.field-label`,
+`.help-text`, `.status-text`, and `.button-row`, leaving only viewport/grid geometry and native
+`::backdrop` behavior feature-specific.
 Numeric position/dimension fields display table units and rotation fields display degrees.
 Typing and mouse-wheel edits update the preview immediately; Shift makes wheel steps finer and
 Ctrl/Command makes them larger. Duplicate, delete, clear all, and undo operate on the draft.

@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Standardize action rows, field groups, labels, helper copy, and live status lines with shared
+  layout primitives; migrate custom-collider workflows, library save actions, lighting actions,
+  and scene naming to those primitives.
 - Give every overlay and the native custom-collider dialog one shared modal anatomy for backdrops,
   headers, titles, close actions, bodies, and footers while retaining their feature-specific layouts.
 - Unify buttons, text fields, dropdowns, multiselects, and native checkboxes behind shared

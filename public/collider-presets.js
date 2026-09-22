@@ -3,20 +3,20 @@ import { drawGroupThumbnail } from './collider-groups.js';
 // The library is account-backed. Insertion returns a snapshot, never a live reference.
 export function wireColliderPresets(host, { capture, insert }) {
   host.innerHTML = `<summary>Saved collider collections</summary>
-    <p>Select shapes, then save a reusable collection. Ctrl/⌘-click or Shift-click to select more than one.</p>
+    <p class="help-text">Select shapes, then save a reusable collection. Ctrl/⌘-click or Shift-click to select more than one.</p>
     <button type="button" class="button" data-preset="refresh">Refresh library</button>
-    <label>Collection <select class="control control--select" data-preset="list" aria-label="Saved collider collection"><option value="">Choose a collection</option></select></label>
+    <label class="field-group"><span class="field-label">Collection</span><select class="control control--select" data-preset="list" aria-label="Saved collider collection"><option value="">Choose a collection</option></select></label>
     <button type="button" class="button" data-preset="more" hidden>Load more</button>
     <canvas data-preset="preview" width="280" height="150" aria-label="Collection preview"></canvas>
-    <label>Name <input class="control" type="text" data-preset="name" maxlength="120" placeholder="Hollow hexagon"></label>
-    <label>Visibility <select class="control control--select" data-preset="visibility"><option value="private">Private</option><option value="public">Public</option></select></label>
-    <label>Insert size (longest side, table units) <input class="control control--compact" data-preset="size" type="number" min="0.001" max="400" step="0.1" value="1"></label>
-    <div class="compoundPresetActions"><button type="button" class="button button--primary" data-preset="insert" disabled>Insert copy</button>
+    <label class="field-group"><span class="field-label">Name</span><input class="control" type="text" data-preset="name" maxlength="120" placeholder="Hollow hexagon"></label>
+    <label class="field-group"><span class="field-label">Visibility</span><select class="control control--select" data-preset="visibility"><option value="private">Private</option><option value="public">Public</option></select></label>
+    <label class="field-group"><span class="field-label">Insert size (longest side, table units)</span><input class="control control--compact" data-preset="size" type="number" min="0.001" max="400" step="0.1" value="1"></label>
+    <div class="button-row compoundPresetActions"><button type="button" class="button button--primary" data-preset="insert" disabled>Insert copy</button>
     <button type="button" class="button" data-preset="save">Save selection as new</button>
     <button type="button" class="button" data-preset="metadata" disabled>Save name / visibility</button>
     <button type="button" class="button" data-preset="replace" disabled>Replace with selection</button>
     <button type="button" class="button button--danger" data-preset="delete" disabled>Delete collection</button></div>
-    <p data-preset="status" role="status"></p>`;
+    <p class="status-text" data-preset="status" role="status"></p>`;
   const field = (name) => host.querySelector(`[data-preset="${name}"]`);
   let records = [],
     current = null,

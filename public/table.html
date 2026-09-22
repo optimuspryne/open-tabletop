@@ -786,14 +786,14 @@
               ></label>
               <input id="lightingShadowSoftness" type="range" min="0" max="1" step="0.01" />
             </div>
-            <div class="lightingDefaults">
+            <div class="button-row lightingDefaults">
               <button id="lightingRestore" type="button">Restore room default</button>
               <button id="lightingSaveDefault" type="button" hidden>Save as room default</button>
               <button id="lightingFactory" type="button" class="danger" hidden>
                 Reset to factory
               </button>
             </div>
-            <div class="row lightingActions">
+            <div class="button-row button-row--end lightingActions">
               <button id="lightingCancel" type="button">Cancel</button>
               <button id="lightingApply" type="button" class="primary">Apply</button>
             </div>
@@ -1643,7 +1643,7 @@
                 <p class="destNote">
                   Saved decks land in <b>Library → Decks → Custom</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adImgSave" type="button">Save</button
                   ><button id="adImgSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -1764,7 +1764,7 @@
                   Double-sided tiles — flip turns them over. Saved to
                   <b>Library → Decks → Custom</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adTileSave" type="button">Save</button
                   ><button id="adTileSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -1859,7 +1859,7 @@
                 <p class="destNote">
                   Saved decks land in <b>Library → Decks → Custom</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adTxtSave" type="button">Save</button
                   ><button id="adTxtSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -1935,7 +1935,7 @@
                 <p class="destNote">
                   Saved boards land in <b>Library → Boards → Custom</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adBoardGlbSave" type="button">Save</button
                   ><button id="adBoardGlbSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -2020,7 +2020,7 @@
                 <p class="destNote">
                   Saved boards land in <b>Library → Boards → Custom</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adBoardImgSave" type="button">Save</button
                   ><button id="adBoardImgSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -2067,7 +2067,7 @@
                   A large flat surface other tiles rest on — drag it in front of a player. Saved to
                   <b>Library → Player Mats</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adMatSave" type="button">Save</button
                   ><button id="adMatSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -2315,7 +2315,7 @@
                 <p class="destNote">
                   Saved objects land in <b>Library → Objects → Custom</b> for every room you host.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adObjSave" type="button">Save</button
                   ><button id="adObjSpawn" type="button" class="primary">Save + Spawn</button>
                 </div>
@@ -2344,7 +2344,7 @@
                 <input id="adSkyEqName" type="text" placeholder="Name this skybox" />
               </div>
               <p class="destNote">Lands in <b>Library → Skyboxes → Custom</b>.</p>
-              <div class="row">
+              <div class="row button-row button-row--end">
                 <button id="adSkyEqSave" type="button">Save</button
                 ><button id="adSkyEqApply" type="button" class="primary">Save + Apply</button>
               </div>
@@ -2388,7 +2388,7 @@
                 <input id="adSkyCubeName" type="text" placeholder="Name this skybox" />
               </div>
               <p class="destNote">Lands in <b>Library → Skyboxes → Custom</b>.</p>
-              <div class="row">
+              <div class="row button-row button-row--end">
                 <button id="adSkyCubeSave" type="button">Save</button
                 ><button id="adSkyCubeApply" type="button" class="primary">Save + Apply</button>
               </div>
@@ -2423,7 +2423,7 @@
                   Lands in <b>Library &rarr; Dice &rarr; Custom</b>. Apply it from the
                   <b>Custom</b> menu on a die or in the dice box.
                 </p>
-                <div class="row">
+                <div class="row button-row button-row--end">
                   <button id="adDiceSave" type="button" class="primary">Save</button>
                 </div>
               </div>
@@ -2440,8 +2440,10 @@
           ><button type="button" id="sceneSaveClose" class="modal__close close-x" aria-label="Close">✕</button>
         </div>
         <div class="modal__body">
-          <label for="sceneSaveName">Scene name</label>
-          <input id="sceneSaveName" class="field" type="text" maxlength="60" />
+          <label class="field-group" for="sceneSaveName">
+            <span class="field-label">Scene name</span>
+            <input id="sceneSaveName" class="field" type="text" maxlength="60" />
+          </label>
           <label class="checkRow" for="sceneIncludeLighting">
             <input id="sceneIncludeLighting" class="checkbox__input" type="checkbox" />
             <span
@@ -2450,7 +2452,7 @@
             >
           </label>
         </div>
-        <div class="modal__footer row">
+        <div class="modal__footer button-row button-row--end">
           <button id="sceneSaveCancel" type="button">Cancel</button>
           <button id="sceneSaveConfirm" type="button" class="primary">Save scene</button>
         </div>

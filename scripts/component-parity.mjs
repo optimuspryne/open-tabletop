@@ -141,6 +141,12 @@ const SCENES = [
             !modal.querySelector('.modal__close') || !modal.querySelector('.modal__body'))
           throw new Error(id + ' does not use the shared modal anatomy');
       }
+      const sceneName = document.getElementById('sceneSaveName');
+      if (!sceneName.closest('.field-group')?.querySelector('.field-label'))
+        throw new Error('Scene save name does not use the shared field layout');
+      for (const row of document.querySelectorAll('#addModal .saveFoot .row, .lightingActions'))
+        if (!row.classList.contains('button-row') || !row.classList.contains('button-row--end'))
+          throw new Error('Action row does not use the shared button-row layout');
       document.getElementById('settingsModal').hidden = false;`,
   },
   {

@@ -1931,16 +1931,22 @@ device token lives in `localStorage`.
   replacing an embedded image.
 - **Checkboxes:** use `.checkbox__input`, with an optional `.checkbox` label wrapper for spacing.
   Native checkbox inputs are included in the same rule so existing forms remain consistent.
+- **Content layout:** use `.field-group` around a label/control pair and `.field-label` for its
+  caption. Use `.help-text` for supporting instructions and `.status-text` for live or reserved
+  feedback lines. Use `.button-row` for wrapping action groups and add `.button-row--end` when the
+  group should align to the trailing edge. The older `.actions` row remains a compatibility alias.
 - **Modals:** HTML overlays use `.modal-backdrop > .modal`; native `<dialog>` implementations use
   `.modal` directly. Compose `.modal__header`, `.modal__title`, `.modal__close`, `.modal__body`, and
   `.modal__footer`; tabbed windows may group their title row and tabs in
   `.modal__header-stack`. Feature CSS should control dimensions and internal layout without
   rebuilding the shell, typography, header alignment, or action-row behavior.
 
-The custom collider editor is the first fully migrated generated UI consumer. Existing static
-dropdowns, native checkboxes, and all six table overlays also carry the canonical classes; feature
-CSS should now describe layout only, not recreate control colors, typography, borders, or
-interaction states.
+The custom collider editor is the first fully migrated generated UI consumer. Its generated
+property editor, outline-drawing flow, and saved-collection form use the same field, helper,
+status, and action-row primitives as static UI. Existing dropdowns, native checkboxes, all six
+table overlays, library save actions, lighting actions, and scene naming also carry canonical
+classes; feature CSS should now describe layout only, not recreate shared control colors,
+typography, borders, interaction states, or form rhythm.
 
 - **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
 'home')` switches between quick-join (passwordless signup + join), login/

@@ -182,14 +182,17 @@
 .close-x:hover {
   opacity: 1;
 }
-/* Universal action-button row — uniform compact buttons that wrap cleanly */
-.actions {
+/* ---- Shared content layout -------------------------------------------------
+   Keep form rhythm and action alignment independent from feature containers.
+   `.actions` remains a supported legacy alias while generated/static UI moves
+   to the descriptive primitives below. */
+:where(.button-row, .actions) {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-.actions.end {
+:where(.button-row--end, .actions.end) {
   justify-content: flex-end;
 }
 .actions .ico {
@@ -201,6 +204,32 @@
   padding: 4px 9px;
   font-size: var(--fs-sm);
   white-space: nowrap;
+}
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.field-label {
+  display: block;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.35;
+}
+.help-text,
+.status-text {
+  margin: 6px 0;
+  font-size: var(--fs-sm);
+  line-height: 1.5;
+}
+.help-text {
+  opacity: 0.65;
+}
+.status-text {
+  min-height: 1.5em;
 }
 
 /* ---- Shared form controls -------------------------------------------------
@@ -2189,13 +2218,7 @@ input[type='range']::-moz-range-thumb {
 }
 .lightingDefaults,
 .lightingActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
   margin-top: 14px;
-}
-.lightingActions {
-  justify-content: flex-end;
 }
 .sceneSaveCard {
   display: grid;
@@ -2398,9 +2421,6 @@ input[type='range']::-moz-range-thumb {
   color: var(--text);
 }
 .modalCard .row {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
   margin-top: 18px;
 }
 .modalCard .note {
@@ -6452,7 +6472,6 @@ body.not-gm .gm-only {
 }
 #addModal .addSplit .addCol .saveFoot .row {
   margin-top: 0;
-  justify-content: flex-end;
 }
 #addModal .destNote {
   margin: 0;
@@ -6965,9 +6984,8 @@ body.not-gm .gm-only {
   min-width: 0;
   box-sizing: border-box;
 }
-.compoundEditor p {
-  font-size: 12px;
-  line-height: 1.5;
+.compoundEditor [data-field='properties'] > .field-label {
+  margin: 10px 0 4px;
 }
 @media (max-width: 720px) {
   .compoundLayout {
@@ -6997,7 +7015,6 @@ body.not-gm .gm-only {
   flex-shrink: 0;
 }
 .compoundIconButtons {
-  display: flex;
   gap: 6px;
 }
 .compoundIconButtons button {
@@ -7014,12 +7031,8 @@ body.not-gm .gm-only {
   background: var(--accent-soft);
 }
 
-.compoundControlGroup {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.compoundToolbar > .field-group {
   padding-top: 8px;
-  font-size: 12px;
 }
 
 .boardOutlineFit {
@@ -7091,7 +7104,7 @@ body.not-gm .gm-only {
   width: 34px;
 }
 @media (max-width: 720px) {
-  .compoundControlGroup .compoundIconButtons button {
+  .compoundToolbar .field-group .compoundIconButtons button {
     width: 32px;
     height: 32px;
     padding: 4px;
@@ -7110,8 +7123,7 @@ body.not-gm .gm-only {
 .compoundPresets summary {
   cursor: pointer;
 }
-.compoundPresets label {
-  display: block;
+.compoundPresets .field-group {
   margin: 8px 0;
 }
 .compoundPresets input,
@@ -7124,25 +7136,12 @@ body.not-gm .gm-only {
   max-width: 280px;
   background: #171c23;
 }
-.compoundPresetActions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.compoundDrawing label {
-  display: block;
+.compoundDrawing .field-group {
   margin: 10px 0;
 }
 .compoundDrawing input[type='number'],
 .compoundDrawing select {
   width: 100%;
-}
-.compoundDrawing button {
-  margin: 3px;
-}
-.compoundDrawing p {
-  line-height: 1.5;
 }
 .compoundLayout > div > [data-action='draw'] {
   align-self: flex-start;
