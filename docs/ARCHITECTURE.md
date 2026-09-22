@@ -46,8 +46,10 @@ reads `props.shape` (or a `.glb` `model`) and `props.scale/color/team`.
 
 ## Files
 
-The client used to be one inline module; it is now a small **linear import
-chain** (`shared ← core ← graphics ← client`) so the codebase stays navigable:
+The client used to be one inline module; it is now an acyclic composition rooted in
+`public/client.js`. Shared policy feeds core rendering and mesh builders, while focused
+`public/table/` feature modules receive mutable runtime dependencies explicitly instead of
+importing a room singleton:
 
 - **`shared/pieces.js`** — the single source of truth for physics dimensions,
   masses, colors, dice vertices, and the prop/board registries. Imported by
@@ -148,18 +150,25 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   the `.glb` model loading/measuring helpers, and the `KIND` registry. Immutable thin-card,
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
   does not repeatedly triangulate identical pieces.
-- **`public/client.js`** — the tightly-coupled runtime: networking, interaction
-  (click vs. drag, inspect, scroll-height), seats/markers, and the interpolating
-  render loop. Holds the mutable session state (`room`, `down`, `inspect`,
-  `meshes`, `buffers`). A full-screen Loading Table cover remains above the runtime until the local
+- **`public/client.js`** — the browser composition root and remaining table runtime: networking,
+  controller construction, interaction (click vs. drag, inspect, scroll-height), seats/markers,
+  and the ordered render loop. It deliberately retains mutable session state (`room`, `down`,
+  `inspect`, `meshes`, `buffers`) while injecting only the narrow lookups and callbacks needed by
+  table feature modules. A full-screen Loading Table cover remains above the runtime until the local
   mesh count matches synchronized pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
   preventing both the bootstrap camera and late hydration from appearing to end users. On desktop,
   it also derives a bottom-left control guide from the current hovered/held piece or private-hand
   card and translates the camera plus OrbitControls target for view-relative keyboard panning.
-- **`public/mesh-state.js`** — small browser state helpers that must resolve the current mesh by
-  piece ID. Deck-count synchronization uses it so a props-driven mesh replacement cannot leave
-  later count updates attached to a detached mesh.
+- **`public/table/piece-view.js`** — the first extracted table feature boundary. It owns defensive
+  piece-property parsing, dispenser mesh props, transform snapshots/interpolation, current-mesh deck
+  height synchronization, and the common remove/build/configure/restore/add/replace lifecycle used
+  by card, piece, and deck rebuilds. `client.js` retains the `meshes` and `buffers` maps and injects
+  builders, physics policy, inspection visibility, collider refresh, and quaternion construction.
+- **`public/table/collider-debug.js`** — local-only collider diagnostic ownership. It constructs and
+  disposes non-raycastable Three.js shells from the shared collider specification, stores the
+  device preference, enforces the GM rank gate, refreshes variable shapes, and follows live mesh
+  transforms through injected piece/mesh/rank lookups. It never mutates room state or physics.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
   raw events into device-neutral pointer/command intents consumed by `client.js`. Touch holds
   raise the same secondary-press intent as a mouse context action; a menu action that starts a
@@ -300,7 +309,8 @@ resting pieces cost ~nothing.
 **Client, each frame:** as state patches arrive, push a timestamped snapshot of
 every piece into a small per-piece buffer. To draw, render each piece as it was
 **~60 ms ago** (`CONFIG.render.delay`), interpolating between the two real
-snapshots bracketing that moment (lerp position, slerp rotation).
+snapshots bracketing that moment (lerp position, slerp rotation). The buffer maps and frame order
+remain visible in `client.js`; `public/table/piece-view.js` owns the snapshot/apply/sample mechanics.
 
 That deliberate delay is what makes motion smooth: rendering slightly in the past
 guarantees two real samples to interpolate _between_, so fast pieces glide
@@ -709,11 +719,14 @@ It covers primitive and compound props/boards, convex dice, cards/mats, fixed mo
 of decks and dispensers. The server still owns collision through Cannon; the shared descriptor is
 the inspection contract used by the browser and its focused parity tests.
 
-A GM can enable **Settings → UI → Physics diagnostics → Show colliders** locally. `client.js`
-creates translucent, non-raycastable Three.js shells from those descriptors and keeps them aligned
-with interpolated piece transforms. The overlay is not synchronized, persisted with room state, or
-fed back into physics. Rebuild/count listeners refresh variable shapes, while role changes remove
-the shells immediately for non-GMs.
+A GM can enable **Settings → UI → Physics diagnostics → Show colliders** locally.
+`public/table/collider-debug.js` creates translucent, non-raycastable Three.js shells from those
+descriptors and keeps them aligned with interpolated piece transforms. Its factory receives the
+scene, piece/mesh/rank lookups, shared `colliderSpec`, and local storage; its public controller API
+is `refresh`, `remove`, `sync`, `setEnabled`, `isEnabled`, `update`, and `dispose`. The overlay is
+not synchronized, persisted with room state, or fed back into physics. Piece rebuild/count listeners
+refresh variable shapes, the render loop calls `update`, and role changes remove the shells
+immediately for non-GMs.
 
 ### Tiles: one geometry, both sides
 
@@ -1149,7 +1162,8 @@ contract, then refreshes Cannon's bounding radius and mass properties. `TableRoo
 forwarding methods for card, lifecycle, and dispenser callers.
 
 On the browser, deck cover changes may replace the rendered mesh while count listeners remain
-registered. `syncDeckMeshHeight(meshes, id, count)` therefore looks up the current mesh for every
+registered. `public/table/piece-view.js`'s
+`syncDeckMeshHeight(meshes, id, count, deckHeight)` therefore looks up the current mesh for every
 count update instead of retaining the original mesh reference, keeping the visual deck height in
 step with the authoritative collider after deals and rebuilds.
 

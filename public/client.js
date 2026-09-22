@@ -4,7 +4,6 @@ import {
   colliderSurfaceHeight,
 } from './collider-surface.js';
 import * as THREE from 'three';
-import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import {
   CONFIG,
   clamp,
@@ -54,8 +53,17 @@ import {
 } from './rows.js';
 import { reanchorOffset } from './drag.js';
 import { clickRoute } from './clicks.js';
-import { syncDeckMeshHeight } from './mesh-state.js';
 import { colliderSpec } from '/shared/collider-spec.js';
+import { createColliderDebug } from './table/collider-debug.js';
+import {
+  applyTransform,
+  createPieceView,
+  meshPropsOf,
+  pieceProperty,
+  piecePropsOf,
+  snapshot,
+  syncDeckMeshHeight,
+} from './table/piece-view.js';
 import {
   KINDS as PHYS,
   BOARDS,
@@ -409,132 +417,38 @@ addEventListener('unhandledrejection', (e) =>
 const { Client, getStateCallbacks } = Colyseus;
 const meshes = new Map(); // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
-const colliderDebugs = new Map(); // id -> local-only THREE.Group matching the server collider
 let room, mySession;
 let syncLightingPanel = () => {};
 let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
 let myRank = 0; // set by applyRole; gates scoreboard (helper+) + room notes (gm+) editing
 const heldTarget = new THREE.Vector3(); // drag target sent to the server
-const COLLIDER_DEBUG_KEY = 'ott-show-colliders';
-let colliderDebugWanted = localStorage.getItem(COLLIDER_DEBUG_KEY) === '1';
+const colliderDebug = createColliderDebug({
+  scene,
+  getPieces: () => room?.state.pieces,
+  getMesh: (id) => meshes.get(id)?.mesh,
+  getRank: () => myRank,
+  colliderSpec,
+  storage: localStorage,
+});
+const { rebuildCard, rebuildPiece, rebuildDeck, sample } = createPieceView({
+  scene,
+  meshes,
+  buffers,
+  kinds: KIND,
+  physics: PHYS,
+  deckHeight,
+  createQuaternion: () => new THREE.Quaternion(),
+  refreshCollider: (id, piece) => colliderDebug.refresh(id, piece),
+  isInspected: (id) => inspect?.origId === id,
+});
 
-const disposeColliderDebug = (group) => {
-  if (!group) return;
-  scene.remove(group);
-  group.traverse((node) => {
-    if (node.geometry) node.geometry.dispose();
-    const materials = Array.isArray(node.material) ? node.material : [node.material];
-    materials.forEach((material) => material?.dispose());
-  });
-};
-
-function colliderDebugGroup(spec) {
-  if (spec.type === 'compound') {
-    const group = new THREE.Group();
-    group.userData.localOffset = new THREE.Vector3();
-    for (const part of spec.shapes) {
-      const child = colliderDebugGroup(part);
-      child.position.copy(child.userData.localOffset);
-      child.rotation.set(...part.rotation);
-      group.add(child);
-    }
-    return group;
-  }
-  let geometry;
-  if (spec.type === 'sphere') geometry = new THREE.SphereGeometry(spec.radius, 20, 12);
-  else if (spec.type === 'cylinder')
-    geometry = new THREE.CylinderGeometry(
-      spec.radiusTop,
-      spec.radiusBottom,
-      spec.height,
-      spec.sides,
-    );
-  else if (spec.type === 'convex')
-    geometry = new ConvexGeometry(spec.vertices.map((v) => new THREE.Vector3(...v)));
-  else {
-    const [hx, hy, hz] = spec.halfExtents;
-    geometry = new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2);
-  }
-
-  const group = new THREE.Group();
-  const fill = new THREE.Mesh(
-    geometry,
-    new THREE.MeshBasicMaterial({
-      color: 0x20e0ff,
-      transparent: true,
-      opacity: 0.12,
-      depthTest: false,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-  );
-  const edges = new THREE.LineSegments(
-    new THREE.EdgesGeometry(geometry),
-    new THREE.LineBasicMaterial({
-      color: 0x20e0ff,
-      transparent: true,
-      opacity: 0.9,
-      depthTest: false,
-      depthWrite: false,
-    }),
-  );
-  group.add(fill, edges);
-  group.userData.localOffset = new THREE.Vector3().fromArray(spec.offset || [0, 0, 0]);
-  group.renderOrder = 1000;
-  group.traverse((node) => {
-    node.renderOrder = 1000;
-    node.raycast = () => {}; // the diagnostic shell must never steal piece picking
-  });
-  return group;
-}
-
-function refreshColliderDebug(id, piece) {
-  const old = colliderDebugs.get(id);
-  if (old) disposeColliderDebug(old);
-  colliderDebugs.delete(id);
-  if (!colliderDebugWanted || myRank < 2 || !piece) return;
-  const props = meshPropsOf(piece, id);
-  const spec = colliderSpec(piece.type, props, { count: piece.count });
-  if (!spec) return;
-  const group = colliderDebugGroup(spec);
-  const entry = meshes.get(id);
-  if (entry) {
-    group.quaternion.copy(entry.mesh.quaternion);
-    group.position
-      .copy(group.userData.localOffset)
-      .applyQuaternion(entry.mesh.quaternion)
-      .add(entry.mesh.position);
-    group.visible = entry.mesh.visible;
-  }
-  scene.add(group);
-  colliderDebugs.set(id, group);
-}
-
-function syncColliderDebug() {
-  for (const group of colliderDebugs.values()) disposeColliderDebug(group);
-  colliderDebugs.clear();
-  if (!room || !colliderDebugWanted || myRank < 2) return;
-  room.state.pieces.forEach((piece, id) => refreshColliderDebug(id, piece));
-}
-
-function setColliderDebugWanted(on) {
-  colliderDebugWanted = !!on;
-  localStorage.setItem(COLLIDER_DEBUG_KEY, colliderDebugWanted ? '1' : '0');
+function syncColliderDebugButton() {
   const button = byId('colliderToggle');
-  if (button) {
-    button.classList.toggle('on', colliderDebugWanted && myRank >= 2);
-    button.setAttribute('aria-pressed', colliderDebugWanted && myRank >= 2 ? 'true' : 'false');
-  }
-  syncColliderDebug();
+  if (!button) return;
+  const active = colliderDebug.isEnabled() && myRank >= 2;
+  button.classList.toggle('on', active);
+  button.setAttribute('aria-pressed', active ? 'true' : 'false');
 }
-
-// One timestamped transform snapshot (a server state at time t), for interpolation.
-const snapshot = (t, p) => ({ t, x: p.x, y: p.y, z: p.z, qx: p.qx, qy: p.qy, qz: p.qz, qw: p.qw });
-// Copy a snapshot's (or piece's) position + orientation onto a mesh.
-const applyTransform = (mesh, s) => {
-  mesh.position.set(s.x, s.y, s.z);
-  mesh.quaternion.set(s.qx, s.qy, s.qz, s.qw);
-};
 // My saved default color per die type — a LOCAL, per-device preference (like the lobby
 // accent), never synced. Shape in localStorage['ott-dice']: { "20": {color, textColor}, ... }
 // as ints. An absent type just means "no default" → the die spawns plain ivory/ink.
@@ -652,17 +566,6 @@ function refreshTextureChips() {
   if (dg && !has) dg.hidden = true;
 }
 
-// Mesh-build props for a piece. Dispensers stack their body to the live `count`,
-// which lives in its own schema field (not props), so fold it in for the mesh.
-const meshPropsOf = (piece, id) => {
-  const p = JSON.parse(piece.props || '{}');
-  if (piece.type === 'dispenser') {
-    p.count = piece.count;
-    p._seed = id;
-  } // _seed → per-stack facing jitter
-  return p;
-};
-
 // The table grid (a flat LineSegments on the felt) or null when gridStyle is 'off'.
 // Rebuilt whenever the grid fields (cell size / style / colour) or the table size
 // change; reads everything from the synced room scale, so every seat draws the same.
@@ -674,33 +577,18 @@ const gridY = () => {
 };
 // Whether a piece carries the per-piece snap-to-grid flag (like keep-upright).
 const pieceSnap = (id) => {
-  const p = room && room.state.pieces.get(id);
-  if (!p) return false;
-  try {
-    return !!JSON.parse(p.props || '{}').snap;
-  } catch {
-    return false;
-  }
+  const piece = room?.state.pieces.get(id);
+  return piece ? !!pieceProperty(piece, 'snap', false) : false;
 };
 // The authored N×N grid footprint for a piece (1 for every legacy/ordinary piece).
 const pieceCells = (id) => {
-  const p = room && room.state.pieces.get(id);
-  if (!p) return 1;
-  try {
-    return gridFootprintCells(JSON.parse(p.props || '{}'));
-  } catch {
-    return 1;
-  }
+  const piece = room?.state.pieces.get(id);
+  return piece ? gridFootprintCells(piecePropsOf(piece)) : 1;
 };
 // Is this piece a TILE (a card/deck carrying a `tile` kind)? Drives tile-vs-card pickup sounds.
 const pieceIsTile = (id) => {
-  const p = room && room.state.pieces.get(id);
-  if (!p) return false;
-  try {
-    return !!JSON.parse(p.props || '{}').tile;
-  } catch {
-    return false;
-  }
+  const piece = room?.state.pieces.get(id);
+  return piece ? !!pieceProperty(piece, 'tile', false) : false;
 };
 // The drag target to actually send: snapped to the nearest cell for a snap-flagged piece
 // on an active grid (so it tracks cell-to-cell as you drag), else the raw cursor point.
@@ -801,7 +689,7 @@ function rebuildGrid() {
     scene.add(mesh);
     meshes.set(id, { mesh, type: piece.type });
     buffers.set(id, [snapshot(performance.now(), piece)]);
-    refreshColliderDebug(id, piece);
+    colliderDebug.refresh(id, piece);
     cb(piece).listen(
       'owner',
       () => {
@@ -815,17 +703,11 @@ function rebuildGrid() {
     if (piece.type === 'deck') {
       // The extruded prism is unit-height; scale Y to reflect how many cards remain. A modeled deck
       // skin (bag/box) is a fixed shape, so leave it alone — it looks the same whatever the count.
-      const modeled = !!(() => {
-        try {
-          return JSON.parse(piece.props || '{}').model;
-        } catch {
-          return false;
-        }
-      })();
+      const modeled = !!pieceProperty(piece, 'model', false);
       if (!modeled) {
         const setDeckHeight = (count) => {
-          syncDeckMeshHeight(meshes, id, count);
-          refreshColliderDebug(id, piece);
+          syncDeckMeshHeight(meshes, id, count, deckHeight);
+          colliderDebug.refresh(id, piece);
         };
         setDeckHeight(piece.count);
         cb(piece).listen('count', setDeckHeight);
@@ -864,8 +746,7 @@ function rebuildGrid() {
     noteSceneHydration();
     const entry = meshes.get(id);
     if (entry) scene.remove(entry.mesh);
-    disposeColliderDebug(colliderDebugs.get(id));
-    colliderDebugs.delete(id);
+    colliderDebug.remove(id);
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
     if (inspect && inspect.origId === id) releaseInspect();
     updateHeldLabel(id, ''); // drop its name tag if any
@@ -2054,9 +1935,11 @@ function rebuildGrid() {
   {
     const button = byId('colliderToggle');
     if (button) {
-      button.onclick = () => setColliderDebugWanted(!colliderDebugWanted);
-      button.classList.toggle('on', colliderDebugWanted && myRank >= 2);
-      button.setAttribute('aria-pressed', colliderDebugWanted && myRank >= 2 ? 'true' : 'false');
+      button.onclick = () => {
+        colliderDebug.setEnabled(!colliderDebug.isEnabled());
+        syncColliderDebugButton();
+      };
+      syncColliderDebugButton();
     }
   }
   // Skybox resolution (Settings → UI): per-viewer, applies live (no reload needed).
@@ -3935,73 +3818,6 @@ const onKeyDown = (e) => {
   }
 };
 
-// Rebuild a card's mesh when it's revealed/hidden (props gain/lose the front),
-// keeping its last known transform so it doesn't jump.
-function rebuildCard(id, piece) {
-  const entry = meshes.get(id);
-  if (!entry) return;
-  scene.remove(entry.mesh);
-  const mesh = KIND.card.mesh(JSON.parse(piece.props || '{}'));
-  mesh.castShadow = true;
-  mesh.receiveShadow = true;
-  mesh.userData.id = id;
-  const buf = buffers.get(id),
-    last = buf && buf[buf.length - 1];
-  if (last) applyTransform(mesh, last);
-  scene.add(mesh);
-  entry.mesh = mesh;
-  refreshColliderDebug(id, piece);
-}
-
-// Rebuild a die/prop mesh from its current props (used on recolor).
-function rebuildPiece(id, piece) {
-  const entry = meshes.get(id);
-  if (!entry) return;
-  scene.remove(entry.mesh);
-  const mesh = KIND[piece.type].mesh(meshPropsOf(piece, id));
-  const casts = PHYS[piece.type].mass > 0;
-  mesh.traverse((node) => {
-    node.userData.id = id;
-    if (node.isMesh) {
-      node.castShadow = casts;
-      node.receiveShadow = true;
-    }
-  });
-  const buf = buffers.get(id),
-    last = buf && buf[buf.length - 1];
-  if (last) applyTransform(mesh, last);
-  scene.add(mesh);
-  entry.mesh = mesh;
-  if (inspect && inspect.origId === id) entry.mesh.visible = false; // keep it hidden behind the inspect view
-  refreshColliderDebug(id, piece);
-}
-
-// Rebuild a deck mesh from its current props (the open-tile-set cover follows the top tile; a skin's
-// tints can change). Unlike a die/prop, a non-modeled deck also carries a count-based height scale,
-// so re-apply it — otherwise the rebuilt stack would snap back to a single card's thickness.
-function rebuildDeck(id, piece) {
-  const entry = meshes.get(id);
-  if (!entry) return;
-  scene.remove(entry.mesh);
-  const props = JSON.parse(piece.props || '{}');
-  const mesh = KIND.deck.mesh(props);
-  const casts = PHYS.deck.mass > 0;
-  mesh.traverse((node) => {
-    node.userData.id = id;
-    if (node.isMesh) {
-      node.castShadow = casts;
-      node.receiveShadow = true;
-    }
-  });
-  if (!props.model) mesh.scale.y = deckHeight(piece.count); // a modeled skin is a fixed shape
-  const buf = buffers.get(id),
-    last = buf && buf[buf.length - 1];
-  if (last) applyTransform(mesh, last);
-  scene.add(mesh);
-  entry.mesh = mesh;
-  refreshColliderDebug(id, piece);
-}
-
 // hidden hand: a private bottom bar only this client ever sees
 let handDrag = null, // dragging a card out of the hand onto the table
   handHoverCard = null; // desktop contextual-control guide target
@@ -4540,15 +4356,8 @@ function applyRole(role) {
     if (room) room.send('whoami'); // re-fetch on join/reconnect — onJoin's push doesn't repeat
   }
   document.body.classList.toggle('not-gm', rank < 2); // mirrors .not-admin; gates .gm-only
-  const colliderButton = byId('colliderToggle');
-  if (colliderButton) {
-    colliderButton.classList.toggle('on', colliderDebugWanted && rank >= 2);
-    colliderButton.setAttribute(
-      'aria-pressed',
-      colliderDebugWanted && rank >= 2 ? 'true' : 'false',
-    );
-  }
-  syncColliderDebug();
+  syncColliderDebugButton();
+  colliderDebug.sync();
   gate('memberSection', 2); // Members management (dock): GM+
   if (rank >= 2 && room) room.send('members'); // (re)fetch on join/reconnect/promotion — allowReconnection skips onJoin's push, so the dock would otherwise stay blank after a refresh
   gate('lib2Btn', 1); // Library (combined): Helper+
@@ -5797,38 +5606,6 @@ function renderMembers(list) {
 // server states bracketing that time. Smooth at any speed; one path for all
 // pieces (held, thrown, resting) so there are no prediction seams to jutter.
 const DELAY = CONFIG.render.delay; // render this far behind live state (interpolation buffer)
-const qa = new THREE.Quaternion(),
-  qb = new THREE.Quaternion();
-
-// Position `mesh` at time `renderTime` by interpolating its buffered snapshots.
-// Before the first / after the last snapshot, clamp to that endpoint.
-function sample(buf, renderTime, mesh) {
-  const count = buf.length;
-  if (!count) return;
-  if (count === 1 || renderTime <= buf[0].t) {
-    applyTransform(mesh, buf[0]);
-    return;
-  }
-  if (renderTime >= buf[count - 1].t) {
-    applyTransform(mesh, buf[count - 1]);
-    return;
-  }
-
-  // Find the pair of snapshots (a, b) bracketing renderTime, then lerp/slerp between them.
-  let i = count - 2;
-  while (i > 0 && buf[i].t > renderTime) i--;
-  const a = buf[i],
-    b = buf[i + 1];
-  const fraction = (renderTime - a.t) / (b.t - a.t || 1);
-  mesh.position.set(
-    a.x + (b.x - a.x) * fraction,
-    a.y + (b.y - a.y) * fraction,
-    a.z + (b.z - a.z) * fraction,
-  );
-  qa.set(a.qx, a.qy, a.qz, a.qw);
-  qb.set(b.qx, b.qy, b.qz, b.qw);
-  mesh.quaternion.copy(qa).slerp(qb, fraction);
-}
 const boardDropSurfaces = new Map();
 function boardDropHeight(x, z, fromY) {
   let height = 0;
@@ -6257,15 +6034,7 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
     const buf = buffers.get(id);
     if (buf) sample(buf, renderTime, mesh);
     if (anims.size) applyAnim(id, mesh);
-    const colliderDebug = colliderDebugs.get(id);
-    if (colliderDebug) {
-      colliderDebug.quaternion.copy(mesh.quaternion);
-      colliderDebug.position
-        .copy(colliderDebug.userData.localOffset)
-        .applyQuaternion(mesh.quaternion)
-        .add(mesh.position);
-      colliderDebug.visible = mesh.visible;
-    }
+    colliderDebug.update(id, mesh);
     // Fold each caster's live transform into a frame key; a change means geometry moved and the
     // shadow map needs one redraw (renderer.shadowMap.autoUpdate is off — see core.js).
     const mp = mesh.position,

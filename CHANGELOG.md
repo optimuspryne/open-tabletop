@@ -9,6 +9,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Begin the browser-client decomposition with table feature modules for piece mesh replacement,
+  buffered interpolation, safe piece-property access, and local collider diagnostics.
 - Extend component parity coverage with real desktop/mobile custom-collider scenes and a shared
   component-state gallery that asserts button, field, dropdown, multiselect, and checkbox states.
 - Finish the shared UI migration by replacing legacy button, field, icon, and action-row class

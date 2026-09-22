@@ -44,8 +44,9 @@ The codebase:
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
-| `public/client.js`                                                                                     | browser | Game-table runtime: networking, interaction, contextual control guide, seats, loading gate, render loop                                                                                          |
-| `public/mesh-state.js`                                                                                 | browser | Current-mesh deck-height synchronization across props-driven mesh replacement                                                                                                                    |
+| `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, seats, loading gate, render loop                                                             |
+| `public/table/piece-view.js`                                                                           | browser | Safe piece props, mesh replacement, transform snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
+| `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
 | `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
 | `public/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
@@ -54,8 +55,10 @@ The codebase:
 | `public/{landing,admin,editor-panel}.js`                                                               | browser | Lobby, admin console, library-editor UI (HTTP + room)                                                                                                                                            |
 | `public/*.html` + `styles.css`                                                                         | browser | Page shells plus token-driven shared button, form-control, checkbox, panel, and feature styling                                                                                                  |
 
-The main client import chain has no cycles: `shared ← core ← graphics ← client`,
-with `client` also importing `controls` and `audio ← credits`.
+The main client composition has no cycles: `shared` feeds `core`/`graphics`, `client` imports the
+focused `table` modules and injects their mutable dependencies, and the remaining side branches are
+`controls` plus `audio ← credits`. `collider-debug` imports only static rendering dependencies and
+the safe mesh-props helper from `piece-view`; neither feature module imports `client` or a room.
 
 ---
 
@@ -159,9 +162,19 @@ classDiagram
     }
     class Client["public/client.js"] {
         room, meshes, buffers, down, inspect, myIsAdmin
-        +networking + UI wiring (whoami-gated)
+        +controller composition + networking + UI wiring
         +interaction (pointer/inspect/wheel/keys)
         +seats/markers + render loop
+    }
+    class PieceView["public/table/piece-view.js"] {
+        +piecePropsOf() / meshPropsOf() / pieceProperty()
+        +snapshot() / applyTransform() / syncDeckMeshHeight()
+        +createPieceView() → rebuildCard/rebuildPiece/rebuildDeck/sample
+    }
+    class ColliderDebug["public/table/collider-debug.js"] {
+        +createColliderDebug()
+        +refresh/remove/sync/update/dispose
+        +setEnabled/isEnabled
     }
     class Audio["public/audio.js"] {
         +playSfx() resumeAudio()
@@ -198,6 +211,10 @@ classDiagram
     Core <.. Graphics
     Core <.. Client
     Graphics <.. Client
+    PieceView <.. Client
+    PieceView <.. ColliderDebug
+    SharedColliders <.. ColliderDebug
+    ColliderDebug <.. Client
     Credits <.. Audio
     Audio <.. Client
     Server *-- TableRoom
@@ -1697,6 +1714,52 @@ lclick, rclick }`; the interaction layer dispatches off this, no type switches.
 
 ---
 
+## `public/table/piece-view.js` — piece mesh lifecycle
+
+Pure property/transform exports:
+
+- **`piecePropsOf(piece)`** parses `piece.props` and returns only an ordinary object; malformed,
+  null, array, or missing payloads safely become `{}`.
+- **`pieceProperty(piece, name, fallback)`** reads one authored property through that safe boundary.
+- **`meshPropsOf(piece, id)`** additionally folds a dispenser's synchronized `count` and stable
+  `_seed` into its mesh-build props.
+- **`snapshot(time, piece)`** copies the timestamp, position, and quaternion fields, while
+  **`applyTransform(mesh, transform)`** applies position and orientation to a live mesh.
+- **`syncDeckMeshHeight(meshes, id, count, deckHeight)`** resolves the current mesh on every count
+  update, preventing a preceding props/cover rebuild from resizing a detached mesh.
+
+**`createPieceView({scene, meshes, buffers, kinds, physics, deckHeight, createQuaternion,
+refreshCollider, isInspected})`** returns `{rebuildCard, rebuildPiece, rebuildDeck, sample}`.
+The rebuild methods share one remove/build/configure/restore/add/replace sequence while retaining
+their type-specific builders and shadow policy. Piece replacements keep an inspected original
+hidden; procedural decks reapply count-derived height, while modeled deck skins remain fixed.
+Every successful replacement refreshes collider diagnostics through the injected callback.
+`sample(buffer, renderTime, mesh)` clamps outside the buffer and otherwise lerps position and
+slerps orientation between the snapshots bracketing the requested render time.
+
+The module receives the live maps rather than owning them during this first extraction. It imports
+neither `client.js` nor a mutable room, so later ownership moves can happen without a service
+locator or circular dependency.
+
+## `public/table/collider-debug.js` — local collider diagnostics
+
+**`createColliderDebug({scene, getPieces, getMesh, getRank, colliderSpec, storage})`** owns the
+local debug-group map and the `ott-show-colliders` preference. It returns:
+
+- **`refresh(id, piece)`** — dispose any prior shell, enforce enabled + GM rank, rebuild from the
+  shared collider descriptor, align it to the live mesh, and add it to the scene.
+- **`remove(id)`** / **`dispose()`** — remove and dispose one or all shell geometries/materials.
+- **`sync()`** — rebuild all synchronized pieces after enablement or role changes.
+- **`setEnabled(on)`** / **`isEnabled()`** — persist and read the device-local preference.
+- **`update(id, mesh?)`** — copy the interpolated mesh quaternion/position/visibility each frame.
+
+Primitive box, sphere, cylinder/cone, convex, and recursively compound descriptors become cyan,
+depth-independent fill/edge groups. Every node has a no-op raycast, so diagnostics cannot steal
+piece picking. The injected rank and state lookups keep room ownership in the composition root;
+the module never sends a message or changes authoritative physics.
+
+---
+
 ## `public/client.js` — runtime
 
 ### Networking
@@ -1726,19 +1789,19 @@ grab/inspect, whiteboard, table size, scene load, skybox apply, plus the
 notebook / timer / show-cards panels); asset **creation** and the View Library /
 Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
 `window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
-**`renderSavedList`** (the scenes list). Snapshot buffering runs through
-**`snapshot`** (build a timestamped record) and **`applyTransform`** (copy it onto
-a mesh), shared by the add, card-rebuild, and render paths.
+**`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,
+transform application, interpolation, and replacement restoration to the composed
+`public/table/piece-view.js` controller while `client.js` retains buffer ownership and frame order.
 
 For non-modeled decks, the synchronized `count` listener calls
-**`syncDeckMeshHeight(meshes, id, count)`** from `public/mesh-state.js`. The helper resolves the
-current mesh from the map on each update, so a preceding props/cover rebuild cannot leave later
-height changes targeting a detached mesh.
+**`syncDeckMeshHeight(meshes, id, count, deckHeight)`** from `public/table/piece-view.js`. The
+helper resolves the current mesh from the map on each update, so a preceding props/cover rebuild
+cannot leave later height changes targeting a detached mesh.
 
 The GM-only **Settings → UI → Physics diagnostics → Show colliders** preference is stored locally
-as `ott-show-colliders`. `colliderDebugGroup`, `refreshColliderDebug`, and `syncColliderDebug` turn
-the shared collider descriptors into non-raycastable cyan Three.js shells, refresh them after mesh
-or count changes, and follow each synchronized/interpolated transform without changing room state.
+as `ott-show-colliders`. The composed `public/table/collider-debug.js` controller turns the shared
+collider descriptors into non-raycastable cyan Three.js shells, refreshes them after mesh or count
+changes, and follows each synchronized/interpolated transform without changing room state.
 
 ### Interaction (`meshes`, `buffers`, `down`, `inspect`)
 
