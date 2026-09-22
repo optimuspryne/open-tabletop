@@ -22,18 +22,32 @@ config_dir=/etc/open-tabletop
 assets_dir=/var/lib/open-tabletop/assets
 release_dir="$app_root/releases/$SOURCE_ID"
 
+apt_update() {
+  local attempt
+  for attempt in 1 2 3; do
+    if apt-get --error-on=any update; then
+      return 0
+    fi
+    if (( attempt < 3 )); then
+      sleep 5
+    fi
+  done
+  printf 'APT index update failed after three attempts; check container network and DNS.\n' >&2
+  return 1
+}
+
 if [[ "$mode" == install ]]; then
   [[ ! -e "$config_dir/open-tabletop.env" ]] || { printf 'Open Tabletop is already installed\n' >&2; exit 1; }
   [[ "${BOOTSTRAP_ADMIN_USERNAME:-}" =~ ^[a-zA-Z0-9_-]{3,20}$ ]] || { printf 'Invalid admin username\n' >&2; exit 1; }
   [[ "${BOOTSTRAP_ADMIN_EMAIL:-}" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] || { printf 'Invalid admin email\n' >&2; exit 1; }
 
   export DEBIAN_FRONTEND=noninteractive
-  apt-get update
+  apt_update
   apt-get install -y ca-certificates curl gnupg openssl redis-server postgresql-common
 
   install -d -m 0755 /etc/apt/keyrings /usr/share/postgresql-common/pgdg
   curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key -o /etc/apt/keyrings/nodesource.gpg.key
-  gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg /etc/apt/keyrings/nodesource.gpg.key
+  gpg --batch --yes --dearmor -o /etc/apt/keyrings/nodesource.gpg /etc/apt/keyrings/nodesource.gpg.key
   curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
     -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
   chmod 0644 /etc/apt/keyrings/nodesource.gpg /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
@@ -52,7 +66,7 @@ Components: main
 Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
 EOF
   chmod 0644 /etc/apt/sources.list.d/nodesource.sources /etc/apt/sources.list.d/pgdg.sources
-  apt-get update
+  apt_update
   apt-get install -y nodejs postgresql-16
   [[ $(node -p "process.versions.node.split('.')[0]") == 26 ]] || { printf 'Node.js 26 installation failed\n' >&2; exit 1; }
   systemctl enable --now postgresql redis-server

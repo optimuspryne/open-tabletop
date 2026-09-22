@@ -380,9 +380,12 @@ The scripts in [`proxmox/`](proxmox/) provide a local, Community Scripts-style d
 the app is not listed in the Proxmox VE Community Scripts catalog. On a **Proxmox VE 9 or newer
 host**, download only `open-tabletop.sh`. It fetches the app source from
 `https://github.com/optimuspryne/open-tabletop.git` at `main` by default and extracts its companion
-`proxmox/install.sh` from that same source revision. It creates an unprivileged Debian 13 LXC;
+`proxmox/install.sh` from that same source revision. It creates an unprivileged Debian 13 LXC with
+nesting enabled so Debian's Redis systemd service can create its user namespace;
 the companion installs Node.js 26, PostgreSQL 16, Redis, and the app directly inside it and enables
 a non-root systemd service. Docker is not used. The Proxmox host needs `git` for this fetch.
+Nesting does not make the container privileged, but it relaxes isolation by exposing some host
+`/proc` and `/sys` information to the guest.
 
 After this code is pushed, sign in to the Proxmox host and download the host script from a specific
 commit. Set `SOURCE_REF` to that commit too, so the fetched app and companion match the host script.
@@ -413,6 +416,10 @@ The installer creates database passwords and a strong initial admin password; re
 container with `pct exec 123 -- cat /root/open-tabletop-credentials.txt`. Keep that root-only file
 private. The service listens on port `2567`; use a reverse proxy with TLS for internet access and
 set `TRUST_PROXY_HOPS` in `/etc/open-tabletop/open-tabletop.env` to the actual proxy hop count.
+The container installer retries APT index updates and fails on transient fetch errors instead of
+using stale package lists. If a first install stops during package setup or while starting PostgreSQL
+or Redis, it can be retried after fixing the underlying problem; its NodeSource key import allows an
+existing key. This does not make arbitrary later installation failures automatically recoverable.
 
 Set `SOURCE_REF` to a branch, tag, or commit to deploy something other than `main`; `SOURCE_REPO`
 can point at another Git remote. To test committed app code that you have **not pushed**, copy

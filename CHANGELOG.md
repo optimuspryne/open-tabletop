@@ -14,6 +14,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Enable nesting on new unprivileged Proxmox Debian 13 LXCs so the packaged Redis service can
+  create its systemd user namespace, fail and retry APT index updates on transient fetch errors,
+  and allow retrying the NodeSource key import after a partial installation.
 - Extract reusable dialog focus, responsive sheet, cluster, drawer, radial-menu, and hold-repeat
   mechanics from the table client into a dedicated UI-surfaces module, with desktop/touch
   component-parity coverage.

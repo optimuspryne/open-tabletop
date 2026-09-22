@@ -205,7 +205,8 @@ importing a room singleton:
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
   role on first DB start; the `Dockerfile` itself lives at the repo root), and
   `proxmox/` (the host-side LXC launcher and matching in-container bare-metal
-  installer, extracted from the same selected source revision).
+  installer, extracted from the same selected source revision; the unprivileged
+  Debian 13 LXC enables nesting for Redis's systemd user namespace).
 
 ## Trust and failure boundaries
 

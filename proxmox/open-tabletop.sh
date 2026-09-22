@@ -144,7 +144,7 @@ if [[ "$mode" == install ]]; then
   [[ -z "$GATEWAY" ]] || net0+=",gw=$GATEWAY"
   printf 'Creating unprivileged Debian 13 container %s from %s\n' "$CTID" "$template"
   pct create "$CTID" "$TEMPLATE_STORAGE:vztmpl/$template" \
-    --ostype debian --hostname "$CT_HOSTNAME" --unprivileged 1 \
+    --ostype debian --hostname "$CT_HOSTNAME" --unprivileged 1 --features nesting=1 \
     --rootfs "$ROOTFS_STORAGE:$DISK_GB" --memory "$RAM_MB" --cores "$CORES" \
     --net0 "$net0" --onboot 1 --start 0
   if [[ -n "$ASSETS_HOST_PATH" ]]; then
