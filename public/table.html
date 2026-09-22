@@ -56,7 +56,7 @@
             <button id="sceneSaveBtn" class="admin-only" data-icon="movie">
               <span class="lbl">Save Scene</span>
             </button>
-            <button id="roomReset" class="gm-only danger" data-icon="trash">
+            <button id="roomReset" class="gm-only button button--danger" data-icon="trash">
               <span class="lbl">Reset</span>
             </button>
           </div>
@@ -74,10 +74,10 @@
         </span>
       </div>
       <div class="uiRow2">
-        <button id="chatBtn" class="icon-only" data-icon="message-dots">
+        <button id="chatBtn" class="button button--icon" data-icon="message-dots">
           <span class="lbl">Chat</span>
         </button>
-        <button id="notesBtn" class="icon-only" data-icon="notes">
+        <button id="notesBtn" class="button button--icon" data-icon="notes">
           <span class="lbl">Notes</span>
         </button>
       </div>
@@ -147,7 +147,7 @@
       <span class="da-note">Whiteboard</span>
       <button id="wbPen" class="on" data-icon="highlight"><span class="lbl">Marker</span></button>
       <button id="wbEraser" data-icon="eraser"><span class="lbl">Eraser</span></button>
-      <button id="wbClearBtn" class="danger" data-icon="recycle">
+      <button id="wbClearBtn" class="button button--danger" data-icon="recycle">
         <span class="lbl">Clear</span>
       </button>
       <button id="wbDone" data-icon="u-turn-left"><span class="lbl">Return</span></button>
@@ -162,22 +162,22 @@
       <div class="pop-group">
         <button class="pop-trigger" data-icon="dice-5"><span class="lbl">Add</span></button>
         <div class="pop-menu" hidden>
-          <button class="trayDie icon-only" data-sides="4" data-icon="plus number-4-small">
+          <button class="trayDie button button--icon" data-sides="4" data-icon="plus number-4-small">
             <span class="lbl">d4</span>
           </button>
-          <button class="trayDie icon-only" data-sides="6" data-icon="plus number-6-small">
+          <button class="trayDie button button--icon" data-sides="6" data-icon="plus number-6-small">
             <span class="lbl">d6</span>
           </button>
-          <button class="trayDie icon-only" data-sides="8" data-icon="plus number-8-small">
+          <button class="trayDie button button--icon" data-sides="8" data-icon="plus number-8-small">
             <span class="lbl">d8</span>
           </button>
-          <button class="trayDie icon-only" data-sides="10" data-icon="plus number-10-small">
+          <button class="trayDie button button--icon" data-sides="10" data-icon="plus number-10-small">
             <span class="lbl">d10</span>
           </button>
-          <button class="trayDie icon-only" data-sides="12" data-icon="plus number-12-small">
+          <button class="trayDie button button--icon" data-sides="12" data-icon="plus number-12-small">
             <span class="lbl">d12</span>
           </button>
-          <button class="trayDie icon-only" data-sides="20" data-icon="plus number-20-small">
+          <button class="trayDie button button--icon" data-sides="20" data-icon="plus number-20-small">
             <span class="lbl">d20</span>
           </button>
           <button class="trayDie" data-sides="6" data-model="pip-round" data-icon="dice-5">
@@ -214,7 +214,7 @@
       </div>
       <button id="trayRoll" data-icon="dice-5"><span class="lbl">Roll</span></button>
       <button id="trayScoop" data-icon="refresh-dot"><span class="lbl">Scoop</span></button>
-      <button id="trayClearBtn" class="danger" data-icon="recycle">
+      <button id="trayClearBtn" class="button button--danger" data-icon="recycle">
         <span class="lbl">Clear</span>
       </button>
       <button id="trayAway" data-icon="package-off"><span class="lbl">Put Away</span></button>
@@ -234,7 +234,7 @@
         <button id="selSnap" data-icon="grid-3x3"><span class="lbl">Snap</span></button>
         <button id="selFlip" data-icon="eye-up"><span class="lbl">Flip</span></button>
         <button id="sel2Sided" data-icon="copy"><span class="lbl">2-Sided</span></button>
-        <button id="selRoll" class="icon-only" data-icon="dice-5">
+        <button id="selRoll" class="button button--icon" data-icon="dice-5">
           <span class="lbl">Roll</span>
         </button>
         <button id="selCombine" data-icon="cards" hidden><span class="lbl">Combine</span></button>
@@ -242,7 +242,7 @@
           <span class="lbl">Gather</span>
         </button>
         <button id="selTake" data-icon="hand-grab"><span class="lbl">Take</span></button>
-        <button id="selDelete" class="danger" data-icon="trash">
+        <button id="selDelete" class="button button--danger" data-icon="trash">
           <span class="lbl">Delete</span>
         </button>
         <button id="selClear" data-icon="deselect"><span class="lbl">Clear</span></button>
@@ -482,7 +482,7 @@
             <div id="chatInputRow">
               <input id="chatInput" type="text" placeholder="Message…" maxlength="400" /><button
                 id="chatSend"
-                class="icon-only"
+                class="button button--icon"
                 data-icon="send-2"
               >
                 <span class="lbl">Send</span>
@@ -524,7 +524,7 @@
                   maxlength="40"
                 /><button id="scoreAdd" data-icon="user-plus"><span class="lbl">Add</span></button>
               </div>
-              <button id="scoreClear" class="danger" data-icon="trash">
+              <button id="scoreClear" class="button button--danger" data-icon="trash">
                 <span class="lbl">Clear all</span>
               </button>
             </div>
@@ -539,10 +539,10 @@
                 <button id="musicToggle" class="chip" data-icon="player-play">
                   <span class="lbl">Play</span>
                 </button>
-                <button id="musicNext" class="chip icon-only" data-icon="player-track-next">
+                <button id="musicNext" class="chip button button--icon" data-icon="player-track-next">
                   <span class="lbl">Next</span>
                 </button>
-                <button id="musicShuffle" class="chip chk icon-only" data-icon="arrows-shuffle">
+                <button id="musicShuffle" class="chip chk button button--icon" data-icon="arrows-shuffle">
                   <span class="lbl">Shuffle</span>
                 </button>
               </div>
@@ -789,13 +789,13 @@
             <div class="button-row lightingDefaults">
               <button id="lightingRestore" type="button">Restore room default</button>
               <button id="lightingSaveDefault" type="button" hidden>Save as room default</button>
-              <button id="lightingFactory" type="button" class="danger" hidden>
+              <button id="lightingFactory" type="button" class="button button--danger" hidden>
                 Reset to factory
               </button>
             </div>
             <div class="button-row button-row--end lightingActions">
               <button id="lightingCancel" type="button">Cancel</button>
-              <button id="lightingApply" type="button" class="primary">Apply</button>
+              <button id="lightingApply" type="button" class="button button--primary">Apply</button>
             </div>
           </div>
         </div>
@@ -808,7 +808,7 @@
                 <button class="chip" data-unit="in" data-step="0.5">in</button>
                 <button class="chip" data-unit="cm" data-step="1">cm</button>
                 <button class="chip" data-unit="mm" data-step="1">mm</button>
-                <button class="chip icon-only" data-unit="__custom__" data-icon="dots">
+                <button class="chip button button--icon" data-unit="__custom__" data-icon="dots">
                   <span class="lbl">Other</span>
                 </button>
               </div>
@@ -818,7 +818,7 @@
               ><input
                 id="scaleUnitCustom"
                 aria-label="Custom unit label"
-                class="field"
+                class="control"
                 type="text"
                 maxlength="8"
                 placeholder="unit label, e.g. hex"
@@ -835,7 +835,7 @@
               <label for="scaleWidthVal">Calibrate</label
               ><input
                 id="scaleWidthVal"
-                class="field"
+                class="control"
                 type="text"
                 inputmode="decimal"
                 placeholder="e.g. 48"
@@ -1645,7 +1645,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adImgSave" type="button">Save</button
-                  ><button id="adImgSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adImgSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -1766,7 +1766,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adTileSave" type="button">Save</button
-                  ><button id="adTileSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adTileSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -1861,7 +1861,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adTxtSave" type="button">Save</button
-                  ><button id="adTxtSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adTxtSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -1937,7 +1937,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adBoardGlbSave" type="button">Save</button
-                  ><button id="adBoardGlbSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adBoardGlbSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -2022,7 +2022,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adBoardImgSave" type="button">Save</button
-                  ><button id="adBoardImgSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adBoardImgSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -2069,7 +2069,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adMatSave" type="button">Save</button
-                  ><button id="adMatSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adMatSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -2317,7 +2317,7 @@
                 </p>
                 <div class="row button-row button-row--end">
                   <button id="adObjSave" type="button">Save</button
-                  ><button id="adObjSpawn" type="button" class="primary">Save + Spawn</button>
+                  ><button id="adObjSpawn" type="button" class="button button--primary">Save + Spawn</button>
                 </div>
               </div>
             </div>
@@ -2346,7 +2346,7 @@
               <p class="destNote">Lands in <b>Library → Skyboxes → Custom</b>.</p>
               <div class="row button-row button-row--end">
                 <button id="adSkyEqSave" type="button">Save</button
-                ><button id="adSkyEqApply" type="button" class="primary">Save + Apply</button>
+                ><button id="adSkyEqApply" type="button" class="button button--primary">Save + Apply</button>
               </div>
             </div>
             <div class="addCol">
@@ -2390,7 +2390,7 @@
               <p class="destNote">Lands in <b>Library → Skyboxes → Custom</b>.</p>
               <div class="row button-row button-row--end">
                 <button id="adSkyCubeSave" type="button">Save</button
-                ><button id="adSkyCubeApply" type="button" class="primary">Save + Apply</button>
+                ><button id="adSkyCubeApply" type="button" class="button button--primary">Save + Apply</button>
               </div>
             </div>
           </div>
@@ -2424,7 +2424,7 @@
                   <b>Custom</b> menu on a die or in the dice box.
                 </p>
                 <div class="row button-row button-row--end">
-                  <button id="adDiceSave" type="button" class="primary">Save</button>
+                  <button id="adDiceSave" type="button" class="button button--primary">Save</button>
                 </div>
               </div>
             </div>
@@ -2442,7 +2442,7 @@
         <div class="modal__body">
           <label class="field-group" for="sceneSaveName">
             <span class="field-label">Scene name</span>
-            <input id="sceneSaveName" class="field" type="text" maxlength="60" />
+            <input id="sceneSaveName" class="control" type="text" maxlength="60" />
           </label>
           <label class="checkRow" for="sceneIncludeLighting">
             <input id="sceneIncludeLighting" class="checkbox__input" type="checkbox" />
@@ -2454,7 +2454,7 @@
         </div>
         <div class="modal__footer button-row button-row--end">
           <button id="sceneSaveCancel" type="button">Cancel</button>
-          <button id="sceneSaveConfirm" type="button" class="primary">Save scene</button>
+          <button id="sceneSaveConfirm" type="button" class="button button--primary">Save scene</button>
         </div>
       </div>
     </div>

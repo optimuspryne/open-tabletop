@@ -22,7 +22,7 @@ try {
   }
 } catch (e) {}
 
-// Equalize button widths within every `.actions` group to the group's widest
+// Equalize button widths within every compact action group to the group's widest
 // button, so grouped actions render as a tidy, aligned set (CSS min-width gives
 // a floor; this matches the rest up to the widest). Runs on load, on resize
 // (the fluid font rescales widths), and whenever the DOM changes (re-renders).
@@ -40,7 +40,7 @@ try {
   let queued = false;
   function run() {
     queued = false;
-    document.querySelectorAll('.actions').forEach(equalizeGroup);
+    document.querySelectorAll('.button-row--compact').forEach(equalizeGroup);
   }
   function schedule() {
     if (!queued) {

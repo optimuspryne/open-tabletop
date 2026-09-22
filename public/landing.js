@@ -258,12 +258,14 @@ function renderRoomList(rooms) {
   const mkBtn = (label, fn, cls) => {
     const button = document.createElement('button');
     button.type = 'button';
+    button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
+      .filter(Boolean)
+      .join(' ');
     const ic = ROOM_ICON[label];
     if (ic) {
       button.dataset.icon = ic;
       button.innerHTML = '<span class="lbl">' + label + '</span>';
     } else button.textContent = label;
-    if (cls) button.className = cls;
     button.onclick = fn;
     return button;
   };
@@ -291,7 +293,7 @@ function renderRoomList(rooms) {
       info.append(wait);
     }
     const actions = document.createElement('div');
-    actions.className = 'actions end';
+    actions.className = 'button-row button-row--compact button-row--end';
     const enter = mkBtn('Enter', () => enterRoom(room.code));
     enter.disabled = room.status === 'pending';
     actions.appendChild(enter);

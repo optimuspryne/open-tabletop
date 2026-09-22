@@ -7285,7 +7285,7 @@ addEventListener('keydown', (e) => {
       if (proxyGated(src)) return null;
       const row = document.createElement('button');
       row.type = 'button';
-      row.className = 'drawerRow' + (src.classList.contains('danger') ? ' danger' : '');
+      row.className = 'drawerRow' + (src.classList.contains('button--danger') ? ' danger' : '');
       const icon = src.dataset.icon;
       if (icon) {
         const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

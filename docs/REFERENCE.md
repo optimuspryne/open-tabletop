@@ -1919,12 +1919,12 @@ device token lives in `localStorage`.
 - **Buttons:** use `.button`; add `.button--primary`, `.button--danger`, or
   `.button--icon` for semantic emphasis. Hover, active, pressed (`aria-pressed`), disabled,
   busy (`aria-busy`), focus, type, and touch-target behavior live in the shared button rules.
-  Native `<button>` elements and the older `.btn`, `.primary`, `.danger`, and `.icon-only`
-  names are supported compatibility selectors.
+  Native `<button>` elements receive the base appearance automatically; add `.button` explicitly
+  to generated controls and button-styled links so their component role remains visible in markup.
 - **Text-like fields:** use `.control`; add `.control--compact` for dense rows. Shared
   `--control-*` tokens own the background, border, radius, minimum height, and padding.
-  Native text/email/password/search/url/tel/number inputs, textareas, and the older `.field`
-  class inherit the same appearance and focus/disabled states during migration.
+  Native text/email/password/search/url/tel/number inputs and textareas inherit the same appearance
+  and focus/disabled states; generated controls use `.control` explicitly.
 - **Dropdowns:** add `.control--select`; add `.control--multiselect` to list boxes. All native
   `<select>` elements share the same token-driven arrow, option colors, focus state, and disabled
   state. The arrow is CSS-generated from `--accent`, so changing the user accent does not require
@@ -1934,7 +1934,8 @@ device token lives in `localStorage`.
 - **Content layout:** use `.field-group` around a label/control pair and `.field-label` for its
   caption. Use `.help-text` for supporting instructions and `.status-text` for live or reserved
   feedback lines. Use `.button-row` for wrapping action groups and add `.button-row--end` when the
-  group should align to the trailing edge. The older `.actions` row remains a compatibility alias.
+  group should align to the trailing edge. Add `.button-row--compact` for dense generated lists;
+  `public/equalize.js` equalizes buttons within those compact rows.
 - **Modals:** HTML overlays use `.modal-backdrop > .modal`; native `<dialog>` implementations use
   `.modal` directly. Compose `.modal__header`, `.modal__title`, `.modal__close`, `.modal__body`, and
   `.modal__footer`; tabbed windows may group their title row and tabs in
@@ -1947,6 +1948,8 @@ status, and action-row primitives as static UI. Existing dropdowns, native check
 table overlays, library save actions, lighting actions, and scene naming also carry canonical
 classes; feature CSS should now describe layout only, not recreate shared control colors,
 typography, borders, interaction states, or form rhythm.
+`npm run css:lint` also rejects production markup, generated class assignments, and DOM queries
+that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.field` vocabulary.
 
 - **`public/landing.js`** (index.html) — the lobby. `setView('quick'|'auth'|
 'home')` switches between quick-join (passwordless signup + join), login/
@@ -1987,6 +1990,6 @@ typography, borders, interaction states, or form rhythm.
   to the existing model-scale/bounds validation. Scaling updates the model and collider together.
   GLB outlines affect collision only; image outlines affect both visible geometry and collision.
 - **`public/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
-  `.actions` group, and applies the saved interface preference on load: reads
+  `.button-row--compact` group, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an
   external file because CSP hash-gates inline scripts (see ARCHITECTURE › CSP).

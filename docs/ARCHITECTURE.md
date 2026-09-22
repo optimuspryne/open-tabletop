@@ -184,12 +184,12 @@ chain** (`shared ← core ← graphics ← client`) so the codebase stays naviga
   shared component primitives the pages compose from — `.panel`/`.popout` pop-out
   panels; `.button` with primary/danger/icon variants; `.control` with
   select/multiselect/compact variants; `.checkbox`; `.chip`; `.miniLabel`; `.tile`;
-  `.actions`; and `.modal-backdrop`/`.modal` with shared header, title, body, close, and
-  footer anatomy — over the per-page layouts. Native buttons and text-like fields plus
-  the legacy `.btn`, `.primary`, `.danger`, `.icon-only`, and `.field` names remain
-  compatibility aliases while generated UI migrates to the component classes. Control
-  colors, borders, radii, height, and padding come from the shared `--control-*` tokens,
-  so restyling does not require editing per-feature `#id` rules).
+  `.button-row` with end/compact modifiers; `.field-group`, `.field-label`, `.help-text`, and
+  `.status-text`; and `.modal-backdrop`/`.modal` with shared header, title, body, close, and footer
+  anatomy — over the per-page layouts. Static and generated UI use those canonical names rather
+  than maintaining a second compatibility vocabulary. Control colors, borders, radii, height,
+  padding, and form rhythm come from the shared tokens and primitives, so restyling does not
+  require editing per-feature `#id` rules).
 - **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`017`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these

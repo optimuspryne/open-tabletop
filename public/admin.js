@@ -32,8 +32,10 @@ async function api(path, { method = 'GET', body } = {}) {
 const btn = (label, fn, cls) => {
   const button = document.createElement('button');
   button.type = 'button';
+  button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
+    .filter(Boolean)
+    .join(' ');
   button.textContent = label;
-  if (cls) button.className = cls;
   button.onclick = fn;
   return button;
 };
@@ -68,7 +70,7 @@ async function loadRooms() {
       cell(room.deletedAt ? 'deleted' : 'active'),
     );
     const acts = document.createElement('div');
-    acts.className = 'actions';
+    acts.className = 'button-row button-row--compact';
     if (!room.deletedAt) {
       acts.append(
         btn('Rename', () => renameRoom(room)),
@@ -119,7 +121,7 @@ async function loadUsers() {
       );
     tr.append(cell(user.username), cell(user.email), cell(tags.join(', ')));
     const acts = document.createElement('div');
-    acts.className = 'actions';
+    acts.className = 'button-row button-row--compact';
     if (String(user.id) === String(myId)) {
       // Your own row: no action buttons — you can't demote or delete yourself.
       const you = document.createElement('span');

@@ -183,23 +183,21 @@
   opacity: 1;
 }
 /* ---- Shared content layout -------------------------------------------------
-   Keep form rhythm and action alignment independent from feature containers.
-   `.actions` remains a supported legacy alias while generated/static UI moves
-   to the descriptive primitives below. */
-:where(.button-row, .actions) {
+   Keep form rhythm and action alignment independent from feature containers. */
+.button-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
-:where(.button-row--end, .actions.end) {
+.button-row--end {
   justify-content: flex-end;
 }
-.actions .ico {
+.button-row--compact .ico {
   width: var(--ico-size-sm);
   height: var(--ico-size-sm);
 }
-.actions button {
+.button-row--compact button {
   min-width: 4.5em;
   padding: 4px 9px;
   font-size: var(--fs-sm);
@@ -234,11 +232,9 @@
 
 /* ---- Shared form controls -------------------------------------------------
    `.control` is the canonical opt-in for generated UI. Native text-like fields
-   and selects are included as a compatibility bridge, so older markup gets the
-   same states while it is migrated. `.field` remains a supported legacy alias. */
+   and selects share the same states without requiring a feature selector. */
 :where(
     .control,
-    .field,
     input[type='text'],
     input[type='email'],
     input[type='password'],
@@ -265,7 +261,6 @@
 }
 :where(
     .control,
-    .field,
     input[type='text'],
     input[type='email'],
     input[type='password'],
@@ -282,7 +277,6 @@
 }
 :where(
     .control,
-    .field,
     input[type='text'],
     input[type='email'],
     input[type='password'],
@@ -300,7 +294,6 @@
   color: color-mix(in srgb, var(--text) 48%, transparent);
 }
 textarea.control,
-textarea.field,
 textarea {
   resize: vertical;
 }
@@ -640,7 +633,7 @@ canvas.selecting {
   text-align: left;
   min-height: 40px; /* comfortable finger target */
 }
-#pieceMenu button.danger {
+#pieceMenu .button--danger {
   color: var(--danger);
 }
 /* Right-click raises this menu on desktop now, where 40px rows read as a panel rather than a
@@ -787,7 +780,7 @@ a {
   backdrop-filter: var(--blur);
   z-index: 5;
 }
-:where(button, .button, .btn) {
+:where(button, .button) {
   appearance: none;
   -webkit-appearance: none;
   box-sizing: border-box;
@@ -798,7 +791,7 @@ a {
   padding: calc(9px * var(--ui-elements-scale)) calc(14px * var(--ui-elements-scale));
   font: 500 var(--fs)/1.2 var(--font);
   cursor: pointer;
-  text-decoration: none; /* .btn is used on <a> — keep it looking like a button */
+  text-decoration: none;
   backdrop-filter: var(--blur);
   transition:
     border-color 0.15s,
@@ -810,42 +803,42 @@ a {
   -webkit-user-select: none;
   -webkit-touch-callout: none; /* a long-press shouldn't select the label or pop a callout */
 }
-:where(button, .button, .btn):not(:disabled, [aria-disabled='true']):hover {
+:where(button, .button):not(:disabled, [aria-disabled='true']):hover {
   border-color: var(--accent);
 }
-:where(button, .button, .btn):not(:disabled, [aria-disabled='true']):active {
+:where(button, .button):not(:disabled, [aria-disabled='true']):active {
   transform: translateY(1px);
 }
-:where(.button--primary, button.primary, .btn.primary) {
+.button--primary {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
-:where(.button--primary, button.primary, .btn.primary):not(:disabled, [aria-disabled='true']):hover {
+.button--primary:not(:disabled, [aria-disabled='true']):hover {
   background: color-mix(in srgb, var(--accent) 34%, transparent);
 }
-:where(.button--danger, button.danger, .btn.danger) {
+.button--danger {
   border-color: var(--danger-border);
   color: var(--danger);
 } /* reusable danger button */
-:where(.button--danger, button.danger, .btn.danger):not(:disabled, [aria-disabled='true']):hover {
+.button--danger:not(:disabled, [aria-disabled='true']):hover {
   background: color-mix(in srgb, var(--danger) 14%, transparent);
   border-color: var(--danger);
 }
-:where(button, .button, .btn)[aria-pressed='true'] {
+:where(button, .button)[aria-pressed='true'] {
   color: var(--accent);
   background: var(--accent-soft);
   border-color: var(--accent);
 }
-:where(button, .button, .btn):disabled,
-:where(.button, .btn)[aria-disabled='true'] {
+:where(button, .button):disabled,
+.button[aria-disabled='true'] {
   cursor: not-allowed;
   opacity: 0.45;
   transform: none;
 }
-:where(button, .button, .btn)[aria-busy='true'] {
+:where(button, .button)[aria-busy='true'] {
   cursor: progress;
 }
-:where(.button--icon, button.icon-only, .btn.icon-only) {
+.button--icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1459,7 +1452,7 @@ a {
 .libList.selecting .libCard {
   cursor: pointer;
 }
-.libList.selecting .actions {
+.libList.selecting .button-row--compact {
   display: none;
 } /* per-card Spawn hides while selecting */
 .libCard.sel {
@@ -1485,7 +1478,7 @@ a {
   min-width: 0;
 }
 .libSearch {
-  /* surface + radius via .field group */
+  /* surface + radius via the shared control rules */
   width: 100%;
   box-sizing: border-box;
   padding: 6px 10px;
@@ -1524,7 +1517,7 @@ a {
   word-break: break-word;
 }
 #chatInput {
-  /* surface + radius via .field group */
+  /* surface + radius via the shared control rules */
   padding: 6px 8px;
   font: var(--fs)/1 var(--font);
 }
@@ -2591,7 +2584,7 @@ body.not-admin .admin-only {
     display: block;
   }
 }
-#topbar a:not(.btn) {
+#topbar a:not(.button) {
   color: var(--accent);
   text-decoration: none;
   font-size: var(--fs-sm);
@@ -3263,7 +3256,7 @@ body.admin {
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-:is(button, .btn):has(.ico) {
+:is(button, .button):has(.ico) {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3280,16 +3273,16 @@ body.admin {
 #trayRoll .ico {
   transform: rotate(45deg);
 } /* tilt "roll" dice so they look like they're rolling */
-body:not(.ui-full) :is(button, .btn):has(.ico) .lbl {
+body:not(.ui-full) :is(button, .button):has(.ico) .lbl {
   display: none;
 } /* icon-only: the label lives in the hover hint + aria-label */
 
-/* UI roles that never show text (even in full mode) — keyed off the icon, plus an .icon-only opt-in. */
-.icon-only .lbl {
+/* UI roles that never show text (even in full mode) use the icon-button variant. */
+.button--icon .lbl {
   display: none;
 }
 /* every trash button is red */
-.memberRow .actions .lbl {
+.memberRow .button-row--compact .lbl {
   display: inline !important;
 } /* member role buttons always show text (icons alone are ambiguous) */
 label:has(.ico) {
@@ -3381,7 +3374,6 @@ label:has(.ico) {
 @media (pointer: coarse) {
   button,
   .button,
-  .btn,
   .chip,
   .stepBtn {
     min-height: 40px;
@@ -3567,7 +3559,7 @@ label:has(.ico) {
   border-top: 1px solid var(--border);
 }
 #ui > button,
-#ui > .btn,
+#ui > .button,
 #ui .menu > button,
 .grp > button,
 .uiRow2 > button,
@@ -3583,7 +3575,7 @@ label:has(.ico) {
 /* Hover becomes a tint rather than a border colour change — a border that only
    appears on hover makes the whole row twitch. */
 #ui > button:hover,
-#ui > .btn:hover,
+#ui > .button:hover,
 #ui .menu > button:hover,
 .grp > button:hover,
 .uiRow2 > button:hover,
@@ -3605,9 +3597,9 @@ label:has(.ico) {
   background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 /* Danger keeps red on hover — the accent tint must not overwrite it. */
-#ui .danger:hover,
-.grp > .danger:hover,
-#clusterTR .danger:hover {
+#ui .button--danger:hover,
+.grp > .button--danger:hover,
+#clusterTR .button--danger:hover {
   background: color-mix(in srgb, var(--danger) 18%, transparent);
   color: var(--danger);
 }
@@ -3635,11 +3627,9 @@ label:has(.ico) {
   color: var(--accent);
 }
 button:hover .ico,
-.btn:hover .ico {
+.button:hover .ico {
   color: var(--accent);
 }
-button.danger .ico,
-.btn.danger .ico,
 .button--danger .ico,
 .chip.danger .ico {
   color: var(--danger);
@@ -4149,18 +4139,18 @@ body.not-gm .gm-only {
 #landing .roomRow {
   align-items: center;
 }
-#landing .roomRow .actions {
+#landing .roomRow .button-row--compact {
   flex: 0 0 auto;
   flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
 }
-/* The real cause of the giant room-row buttons: .actions button carries
+/* The compact action-row button carries
    min-width: 4.5em (line ~129) for labelled buttons, which an icon-only button
    inherits — three of them overflowed the row and pushed Enter over the text.
    An icon button is sized by its icon, everywhere. */
-.actions button.icon-only,
-.actions .overflowTrigger {
+.button-row--compact .button--icon,
+.button-row--compact .overflowTrigger {
   min-width: 0;
   width: calc(30px * var(--ui-elements-scale));
   height: calc(30px * var(--ui-elements-scale));
@@ -4187,7 +4177,7 @@ body.not-gm .gm-only {
 #admin tbody tr:hover {
   background: color-mix(in srgb, var(--text) 4%, transparent);
 }
-#admin td .actions {
+#admin td .button-row--compact {
   justify-content: flex-end;
   gap: 4px;
 }
@@ -4285,7 +4275,7 @@ body.not-gm .gm-only {
 #landing .lcard .check .chip {
   font-size: var(--fs-sm);
 }
-#landing button.primary {
+#landing .button--primary {
   min-width: 0;
 }
 
@@ -4321,7 +4311,7 @@ body.not-gm .gm-only {
 /* The room row's ••• matches Enter exactly: same padding and font metrics, and
    align-self: stretch pins its height to the row's tallest item (Enter) rather
    than to an icon-derived square. Library cards keep the compact square. */
-#landing .roomRow .actions .overflowTrigger {
+#landing .roomRow .button-row--compact .overflowTrigger {
   align-self: stretch;
   width: auto;
   height: auto;
@@ -4385,11 +4375,11 @@ body.not-gm .gm-only {
   margin: 0;
   gap: 5px;
 }
-.libCard .actions {
+.libCard .button-row--compact {
   grid-area: acts;
   gap: 5px;
 }
-.libCard .actions button {
+.libCard .button-row--compact button {
   min-width: 0;
   padding: 5px 10px;
 }
@@ -4513,7 +4503,7 @@ body.not-gm .gm-only {
   line-height: 1.2;
 }
 #libraryModal .cardCtrls .chip .ico,
-#libraryModal .libCard .actions .ico {
+#libraryModal .libCard .button-row--compact .ico {
   width: var(--ico-size-sm);
   height: var(--ico-size-sm);
 }
@@ -4584,7 +4574,7 @@ body.not-gm .gm-only {
 }
 
 /* Spawn / Edit: one compact row, not a stack of full-width buttons. */
-#libraryModal .libCard .actions button {
+#libraryModal .libCard .button-row--compact button {
   padding: 4px 10px;
   font-size: var(--fs-sm);
 }
@@ -4726,8 +4716,8 @@ body.not-gm .gm-only {
   border-color: var(--accent);
 }
 
-/* Members: the Helper / GM / Kick row was wrapping one button per line —
-   .actions button's 4.5em min-width again, plus toolbar-sized icons. */
+/* Members: the Helper / GM / Kick row was wrapping one button per line because
+   compact actions carried a 4.5em minimum plus toolbar-sized icons. */
 #memberList,
 .unclaimed {
   gap: 5px;
@@ -4790,8 +4780,8 @@ body.not-gm .gm-only {
   background: color-mix(in srgb, var(--text) 4%, transparent);
   border-color: color-mix(in srgb, var(--text) 8%, transparent);
 }
-#memberList .actions,
-.memberRow .actions {
+#memberList .button-row--compact,
+.memberRow .button-row--compact {
   flex: 0 0 auto;
   flex-wrap: nowrap;
   margin-left: auto;
@@ -4799,12 +4789,12 @@ body.not-gm .gm-only {
 }
 /* The labels are explicit (Helper / GM / Kick), so the person-icons are
    redundant here — dropping them is what buys the single line. */
-#memberList .actions .ico,
-.memberRow .actions .ico {
+#memberList .button-row--compact .ico,
+.memberRow .button-row--compact .ico {
   display: none;
 }
-#memberList .actions button,
-.memberRow .actions button {
+#memberList .button-row--compact button,
+.memberRow .button-row--compact button {
   padding: 3px 7px;
   font-size: var(--fs-sm);
 }

@@ -125,6 +125,7 @@ async function diff(aFile, bFile) {
 // Selectors intentionally defined without a reference (applied by an external script,
 // kept for a documented reason). Entries carry their sigil: '.foo' or '#bar'.
 const LINT_ALLOW = new Set([]);
+const LEGACY_UI_CLASSES = new Set(['actions', 'btn', 'primary', 'icon-only', 'field']);
 
 const SCAN_EXT = ['.js', '.mjs', '.html', '.json', '.md', '.sql'];
 const SCAN_SKIP = new Set(['.git', 'node_modules', 'saved-assets', 'vendor', '.idea', '.claude']);
@@ -185,6 +186,25 @@ async function lint() {
     files.filter((f) => f !== cssPath).map((f) => readFile(f, 'utf8').catch(() => '')),
   );
 
+  // Canonical component names are intentionally the only vocabulary emitted by production UI.
+  // Catch both markup/className assignments and DOM selector/classList lookups so a legacy alias
+  // cannot silently return after its compatibility selector has been removed from the stylesheet.
+  const legacy = [];
+  for (const file of files.filter(
+    (f) => f.startsWith(ROOT + '/') && ['.html', '.js'].includes(extname(f)),
+  )) {
+    const source = await readFile(file, 'utf8');
+    const candidates = [
+      ...source.matchAll(/\bclass(?:Name)?\s*=\s*(["'`])([^"'`]*)\1/g),
+      ...source.matchAll(/(?:querySelector(?:All)?|closest|matches)\(\s*(["'`])([^"'`]*)\1/g),
+      ...source.matchAll(/classList\.(?:add|remove|toggle|contains)\(\s*(["'`])([^"'`]*)\1/g),
+    ];
+    for (const match of candidates)
+      for (const name of LEGACY_UI_CLASSES)
+        if (new RegExp(`(?:^|[.\\s])${name}(?![\\w-])`).test(match[2]))
+          legacy.push(`${file.slice(ROOT.length + 1)}: .${name}`);
+  }
+
   const dead = { class: [], id: [] };
   for (const kind of ['class', 'id'])
     for (const name of [...defined[kind]].sort()) {
@@ -195,23 +215,30 @@ async function lint() {
     }
 
   const total = dead.class.length + dead.id.length;
-  if (total === 0) {
+  if (total === 0 && legacy.length === 0) {
     console.log(
-      `css-lint: ${defined.class.size} classes and ${defined.id.size} ids defined, all referenced.`,
+      `css-lint: ${defined.class.size} classes and ${defined.id.size} ids defined, all referenced; canonical UI classes only.`,
     );
     return;
   }
-  console.error(
-    `css-lint: ${total} selector(s) defined in public/styles.css but referenced nowhere:\n`,
-  );
-  for (const d of dead.class) console.error(`  .${d}`);
-  for (const d of dead.id) console.error(`  #${d}`);
-  console.error(
-    '\nRemove them, or add to LINT_ALLOW in scripts/css-parity.mjs with a reason' +
-      "\n(entries carry their sigil, e.g. '.foo' or '#bar')." +
-      '\nNote: some may share a comma group with live selectors — remove the dead' +
-      '\nselector, not the whole rule.',
-  );
+  if (total) {
+    console.error(
+      `css-lint: ${total} selector(s) defined in public/styles.css but referenced nowhere:\n`,
+    );
+    for (const d of dead.class) console.error(`  .${d}`);
+    for (const d of dead.id) console.error(`  #${d}`);
+    console.error(
+      '\nRemove them, or add to LINT_ALLOW in scripts/css-parity.mjs with a reason' +
+        "\n(entries carry their sigil, e.g. '.foo' or '#bar')." +
+        '\nNote: some may share a comma group with live selectors — remove the dead' +
+        '\nselector, not the whole rule.',
+    );
+  }
+  if (legacy.length) {
+    console.error('\ncss-lint: legacy UI classes remain in production source:');
+    for (const use of legacy) console.error(`  ${use}`);
+    console.error('Use the canonical .button, .control, and .button-row component classes.');
+  }
   process.exitCode = 1;
 }
 

@@ -19,12 +19,14 @@ const MEMBER_ICON = { Helper: 'user-up', Player: 'user-down', GM: 'user-cog', Ki
 /** A <button> from label + click handler (+ optional class / icon) — the shared factory. */
 export function makeButton(label, fn, cls, icon) {
   const button = document.createElement('button');
+  button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
+    .filter(Boolean)
+    .join(' ');
   const ic = icon || MEMBER_ICON[label];
   if (ic) {
     button.dataset.icon = ic;
     button.innerHTML = '<span class="lbl">' + label + '</span>';
   } else button.textContent = label;
-  if (cls) button.className = cls;
   button.onclick = fn;
   return button;
 }
@@ -76,7 +78,7 @@ export function memberRow(m, { isSelf = false, myRank = 0, on = {} } = {}) {
   li.appendChild(info);
 
   const acts = document.createElement('span');
-  acts.className = 'actions';
+  acts.className = 'button-row button-row--compact';
   if (m.status === 'pending') {
     acts.append(
       makeButton('Admit', () => admit(m)),

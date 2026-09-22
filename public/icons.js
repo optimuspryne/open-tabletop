@@ -83,7 +83,13 @@ const coarsePointer = () => matchMedia('(pointer: coarse)').matches;
 function overflowRow(item, done) {
   const row = document.createElement('button');
   row.type = 'button';
-  row.className = 'sheetItem' + (item.cls ? ' ' + item.cls : '');
+  row.className = [
+    'button',
+    'sheetItem',
+    item.cls === 'danger' ? 'button--danger danger' : item.cls,
+  ]
+    .filter(Boolean)
+    .join(' ');
   if (item.icon) row.dataset.icon = item.icon;
   row.innerHTML =
     '<span class="lbl">' +
@@ -131,7 +137,7 @@ export function openActionSheet(subject, items, host) {
     cancel.onclick = () => wrap.classList.remove('confirming');
     const go = document.createElement('button');
     go.type = 'button';
-    go.className = 'danger';
+    go.className = 'button button--danger';
     go.textContent = item.label;
     go.onclick = () => {
       item.fn();
@@ -154,7 +160,7 @@ export function overflowMenu(subject, items, opts = {}) {
   group.className = 'pop-group overflowGroup';
   const trigger = document.createElement('button');
   trigger.type = 'button';
-  trigger.className = 'pop-trigger overflowTrigger icon-only';
+  trigger.className = 'button button--icon pop-trigger overflowTrigger';
   trigger.dataset.icon = 'dots';
   trigger.setAttribute('aria-label', 'More actions');
   trigger.innerHTML = '<span class="lbl">More actions</span>';
@@ -162,7 +168,7 @@ export function overflowMenu(subject, items, opts = {}) {
   menu.className = 'pop-menu overflowMenu';
   menu.hidden = true;
   menu.addEventListener('click', (e) => e.stopPropagation());
-  // The menu lives inside .actions (spawnBar's click handler needs it to), and that sits inside a
+  // The menu lives inside .button-row (spawnBar's click handler needs it to), and that sits inside a
   // scrolling pane inside an overflow:hidden window — so an absolute menu is clipped on the first
   // and last rows. A fixed one cannot escape either: .lib2Card carries backdrop-filter, which makes
   // it the containing block for fixed descendants (the same trap as #rightStack in 7e). So while it
@@ -303,7 +309,7 @@ export function initTip() {
     if (e.pointerType === 'mouse') return;
     fired = false;
     swallowClick = false;
-    const btn = e.target.closest('button[aria-label], a.btn[aria-label]');
+    const btn = e.target.closest('button[aria-label], a.button[aria-label]');
     if (!btn || !btn.querySelector('.ico')) return cancelPress();
     downAt = { x: e.clientX, y: e.clientY };
     tipBtn = btn;

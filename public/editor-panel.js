@@ -123,12 +123,14 @@ const ICON_FOR = {
 const btn = (label, fn, cls) => {
   const button = document.createElement('button');
   button.type = 'button';
+  button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
+    .filter(Boolean)
+    .join(' ');
   const ic = ICON_FOR[label];
   if (ic) {
     button.dataset.icon = ic;
     button.innerHTML = '<span class="lbl">' + label + '</span>';
   } else button.textContent = label;
-  if (cls) button.className = cls;
   button.onclick = fn;
   return button;
 };
@@ -645,7 +647,7 @@ function spawnCard({
   };
 
   const acts = document.createElement('div');
-  acts.className = 'actions';
+  acts.className = 'button-row button-row--compact';
   acts.append(
     btn('Spawn', () => li._spawn()),
     ...extraActs,
@@ -661,7 +663,7 @@ function spawnBar(ul) {
   ul._selWired = true; // the Select/Spawn buttons live in the sticky controls row now
   ul.addEventListener('click', (e) => {
     if (!ul.classList.contains('selecting')) return;
-    if (e.target.closest('.cardCtrls') || e.target.closest('.actions')) return; // let qty/color clicks through
+    if (e.target.closest('.cardCtrls') || e.target.closest('.button-row')) return; // let qty/color clicks through
     const card = e.target.closest('.libCard');
     if (card && card._spawn) card.classList.toggle('sel');
   });
@@ -887,7 +889,7 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
       meta.className = 'libMeta';
       meta.append(name, badge);
       const acts = document.createElement('div');
-      acts.className = 'actions';
+      acts.className = 'button-row button-row--compact';
       const primary =
         kind === 'scene'
           ? btn('Load', () => {
@@ -940,7 +942,7 @@ function builtinCard(previewNode, title, label, fn) {
   name.textContent = title;
   meta.append(name, badgeGroup(badgeEl('src bi', 'built-in'))); // always public, never curatable
   const acts = document.createElement('div');
-  acts.className = 'actions';
+  acts.className = 'button-row button-row--compact';
   acts.append(btn(label, fn));
   li.append(previewNode, meta, acts);
   return li;

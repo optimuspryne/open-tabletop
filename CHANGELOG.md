@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Finish the shared UI migration by replacing legacy button, field, icon, and action-row class
+  names in static and generated interfaces with the canonical component classes, then remove the
+  compatibility selectors from the stylesheet.
 - Standardize action rows, field groups, labels, helper copy, and live status lines with shared
   layout primitives; migrate custom-collider workflows, library save actions, lighting actions,
   and scene naming to those primitives.
