@@ -55,6 +55,7 @@ import { reanchorOffset } from './drag.js';
 import { clickRoute } from './clicks.js';
 import { colliderSpec } from '/shared/collider-spec.js';
 import { createColliderDebug } from './table/collider-debug.js';
+import { createUiSurfaces } from './table/ui-surfaces.js';
 import {
   applyTransform,
   createPieceView,
@@ -6428,326 +6429,27 @@ applyIcons();
 document.querySelectorAll('.close-x').forEach((el) => setIcon(el, 'x')); // every modal's ✕ → an icon, universally
 document.querySelectorAll('label[data-icon]').forEach((el) => setIcon(el, el.dataset.icon)); // icon-only dimension labels (Width/Depth)
 
-// ---- shared dialog focus management ----------------------------------------------------
-// Layers keyboard/focus behavior onto panels that already toggle via [hidden], WITHOUT
-// touching their bespoke open/close handlers. On open: remember what had focus and move it
-// into the panel (unless the panel already self-focuses a control, e.g. chat/notes). On
-// close: return focus to whatever opened the panel. True modals also get aria-modal + a Tab
-// focus-trap; non-modal popouts don't trap (you can still work at the table while they're open).
-// esc:false leaves Escape to the table's own handler (whiteboard release / exit-measure).
-let lastFocusOutsideDialog = null;
-document.addEventListener('focusin', (e) => {
-  if (!e.target.closest || !e.target.closest('[role="dialog"]')) lastFocusOutsideDialog = e.target;
-});
-// Esc fallback: if focus drifts out of an open dialog (e.g. a panel re-renders its body and
-// drops focus), Escape still closes the most-recently-opened esc-enabled dialog. When focus IS
-// inside a dialog, its own keydown handler runs instead — this guard avoids double-firing.
-const openEscDialogs = []; // stack of { panel, close } for esc-enabled dialogs currently open
-document.addEventListener(
-  'keydown',
-  (e) => {
-    if (e.key !== 'Escape' || !openEscDialogs.length) return;
-    if (
-      document.activeElement &&
-      document.activeElement.closest &&
-      document.activeElement.closest('[role="dialog"]')
-    )
-      return;
-    const top = openEscDialogs[openEscDialogs.length - 1];
-    const x = top.close || top.panel.querySelector('.close-x');
-    if (x) {
-      e.preventDefault();
-      e.stopPropagation();
-      x.click();
-    }
+// Reusable surface mechanics; table-specific panel/button wiring stays here.
+const {
+  isSheet,
+  clearSheet,
+  openAsSheet,
+  wireDialog,
+  wireCluster,
+  holdRepeat,
+  wireDrawer,
+  createRadialMenu,
+} = createUiSurfaces({
+  onSheetStop: (region) => {
+    const log = region.querySelector('#chatLog');
+    if (log) log.scrollTop = log.scrollHeight;
   },
-  true,
-); // capture: take Escape before the table's own handler when a dialog is open
-function wireDialog(panel, { modal = false, esc = true, close = null } = {}) {
-  if (!panel) return;
-  panel.setAttribute('role', 'dialog');
-  if (modal) panel.setAttribute('aria-modal', 'true');
-  if (!panel.hasAttribute('tabindex')) panel.tabIndex = -1;
-  const title = panel.querySelector('.modal__title, .panel-head b, h3');
-  if (title && !panel.hasAttribute('aria-label'))
-    panel.setAttribute('aria-label', title.textContent.trim());
-  const focusables = () =>
-    [...panel.querySelectorAll('a[href], button, input, textarea, select, [tabindex]')].filter(
-      (n) => !n.disabled && n.tabIndex !== -1 && n.type !== 'hidden' && n.getClientRects().length,
-    );
-  let returnTo = null;
-  new MutationObserver(() => {
-    const at = openEscDialogs.findIndex((d) => d.panel === panel);
-    if (panel.hidden) {
-      // closed → restore focus only if the panel had it
-      const r = returnTo;
-      returnTo = null;
-      if (
-        r &&
-        r.focus &&
-        document.contains(r) &&
-        (document.activeElement === document.body || panel.contains(document.activeElement))
-      )
-        r.focus();
-      if (at >= 0) openEscDialogs.splice(at, 1);
-    } else {
-      // opened → remember opener, then move focus in unless the panel self-focused
-      returnTo =
-        lastFocusOutsideDialog && document.contains(lastFocusOutsideDialog)
-          ? lastFocusOutsideDialog
-          : document.activeElement;
-      if (!panel.contains(document.activeElement)) {
-        const f = focusables();
-        // Same rule as the sheets: on touch, never open a dialog straight into a text
-        // field — the keyboard would cover the dialog before it has been read.
-        const isText = (el) =>
-          el &&
-          (el.tagName === 'TEXTAREA' ||
-            (el.tagName === 'INPUT' &&
-              !/^(button|checkbox|radio|range|color|file|submit)$/i.test(el.type)));
-        const target = isSheet() ? f.find((el) => !isText(el)) || panel : f[0] || panel;
-        if (isSheet() && target === panel && !panel.hasAttribute('tabindex'))
-          panel.setAttribute('tabindex', '-1');
-        target.focus({ preventScroll: true });
-      }
-      if (esc) {
-        if (at >= 0) openEscDialogs.splice(at, 1);
-        openEscDialogs.push({ panel, close });
-      } // move to top
-    }
-  }).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
-  panel.addEventListener('keydown', (e) => {
-    if (esc && e.key === 'Escape') {
-      const x = close || panel.querySelector('.close-x');
-      if (x) {
-        e.preventDefault();
-        e.stopPropagation();
-        x.click();
-      }
-    } else if (e.key === 'Tab' && modal) {
-      const f = focusables();
-      if (!f.length) return;
-      const first = f[0],
-        last = f[f.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-  });
-}
+});
 wireDialog(byId('settingsModal'), { modal: true });
 wireDialog(byId('roomSettingsModal'), { modal: true });
 wireDialog(byId('sceneSaveModal'), { modal: true });
 wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
-['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true })); // library modals (content wired in editor-panel.js)
-
-// ---- mobile sheet presentation (7e slice 1; mockups 10b/10d) ---------------------------
-// Below 720px a region stops being an anchored overlay and becomes a bottom sheet with
-// three stops. The stop is a height in px written to --sheet-h; CSS owns the look. Only
-// one sheet may be open at a time on a phone — the deliberate break from desktop.
-const SHEET_MQ = '(max-width: 900px), (pointer: coarse)'; // keep in step with styles.css
-const isSheet = () => matchMedia(SHEET_MQ).matches;
-const PEEK_H = 196; // enough for header + the tail of the body + a pinned footer
-const openSheets = new Set();
-const stopPx = (name) => {
-  const full = Math.max(320, innerHeight - 56); // clear of the top bar
-  if (name === 'peek') return Math.min(PEEK_H, full);
-  if (name === 'full') return full;
-  return Math.min(Math.round(innerHeight * 0.66), full);
-};
-// Nearest stop to a height, with a flick overriding proximity: a fast drag goes one stop
-// the way it was thrown rather than snapping back to where it started.
-const nearestStop = (h, vy) => {
-  const order = ['peek', 'two', 'full'];
-  let best = order[0],
-    bestD = Infinity;
-  for (const s of order) {
-    const d = Math.abs(stopPx(s) - h);
-    if (d < bestD) {
-      bestD = d;
-      best = s;
-    }
-  }
-  if (Math.abs(vy) > 0.6) {
-    const i = order.indexOf(best);
-    const next = vy < 0 ? Math.min(i + 1, 2) : Math.max(i - 1, 0);
-    return order[next];
-  }
-  return best;
-};
-function setStop(region, name, animate = true) {
-  region._stop = name;
-  region.classList.toggle('sheetAnim', !!animate);
-  region.classList.remove('at-peek', 'at-two', 'at-full');
-  region.classList.add('at-' + name);
-  region.style.setProperty('--sheet-h', stopPx(name) + 'px');
-  const log = region.querySelector('#chatLog');
-  if (log) log.scrollTop = log.scrollHeight; // peek should show the newest, not the oldest
-}
-function clearSheet(region) {
-  openSheets.delete(region);
-  region.classList.remove('sheetAnim', 'sheetDrag', 'at-peek', 'at-two', 'at-full');
-  region.style.removeProperty('--sheet-h');
-}
-function initSheet(region) {
-  if (region._sheetReady) return;
-  region._sheetReady = true;
-  const grab = document.createElement('div');
-  grab.className = 'sheetGrab';
-  grab.setAttribute('aria-hidden', 'true'); // decorative: Esc and the ✕ are the accessible paths
-  region.insertBefore(grab, region.firstChild);
-  let startY = 0,
-    startH = 0,
-    lastY = 0,
-    lastT = 0,
-    vy = 0,
-    dragging = false;
-  grab.addEventListener('pointerdown', (e) => {
-    if (!isSheet()) return;
-    dragging = true;
-    startY = lastY = e.clientY;
-    lastT = performance.now();
-    vy = 0;
-    startH = region.getBoundingClientRect().height;
-    region.classList.add('sheetDrag');
-    region.classList.remove('sheetAnim');
-    grab.setPointerCapture(e.pointerId);
-  });
-  grab.addEventListener('pointermove', (e) => {
-    if (!dragging) return;
-    const now = performance.now();
-    if (now > lastT) vy = (lastY - e.clientY) / (now - lastT); // px/ms, up is positive
-    lastY = e.clientY;
-    lastT = now;
-    const h = Math.max(80, Math.min(startH + (startY - e.clientY), stopPx('full')));
-    region.style.setProperty('--sheet-h', h + 'px');
-  });
-  const end = () => {
-    if (!dragging) return;
-    dragging = false;
-    region.classList.remove('sheetDrag');
-    const h = region.getBoundingClientRect().height;
-    // Dragged below peek, or flicked down from peek: dismiss rather than snap back.
-    if (h < PEEK_H * 0.6 || (vy < -0.8 && region._stop === 'peek')) {
-      if (region._close) region._close();
-      return;
-    }
-    setStop(region, nearestStop(h, vy));
-  };
-  grab.addEventListener('pointerup', end);
-  grab.addEventListener('pointercancel', end);
-}
-function openAsSheet(region) {
-  for (const other of openSheets) if (other !== region && other._close) other._close();
-  initSheet(region);
-  openSheets.add(region);
-  setStop(region, 'two', false);
-  requestAnimationFrame(() => region.classList.add('sheetAnim'));
-}
-addEventListener('resize', () => {
-  for (const region of [...openSheets]) {
-    if (!isSheet()) clearSheet(region);
-    else setStop(region, region._stop || 'two', false);
-  }
-});
-
-// ---- shared-region cluster primitive (UI_Redesign phase 1) -----------------------------
-// N hamburger buttons share ONE region. Accordion within the cluster: one pane open at a
-// time; clicking the active ham collapses it. Desktop: the region is an overlay anchored
-// under the first ham (position set here); mobile (≤720px): CSS reshapes it into a bottom
-// sheet. Esc, or the region's own ✕, closes it and returns focus to the opener.
-function wireCluster(region, hams, opts = {}) {
-  if (!region || !hams.length) return;
-  const anchor = hams[0].btn;
-  const sheet = () => isSheet(); // one definition of "this is a sheet, not an overlay"
-  const place = (h) => {
-    if (sheet()) {
-      region.style.left = region.style.top = '';
-      return;
-    } // bottom sheet: let CSS own it
-    const a = (opts.perHam && h && h.btn) || anchor; // per-ham clusters (mirrored corners) anchor to the clicked ham
-    const r = a.getBoundingClientRect();
-    const clampX = (x) => Math.round(Math.max(8, Math.min(x, innerWidth - region.offsetWidth - 8)));
-    const clampY = (y) =>
-      Math.round(Math.max(8, Math.min(y, innerHeight - region.offsetHeight - 8)));
-    if (opts.open === 'right') {
-      const openLeft = r.right + 8 + region.offsetWidth > innerWidth - 8; // no room to the right → open toward center
-      region.style.left = clampX(openLeft ? r.left - region.offsetWidth - 8 : r.right + 8) + 'px';
-      region.style.top = clampY(r.bottom - region.offsetHeight) + 'px';
-    } else if (opts.open === 'above') {
-      region.style.left = clampX(r.left) + 'px';
-      region.style.top = clampY(r.top - region.offsetHeight - 8) + 'px';
-    } // above the ham
-    else {
-      region.style.left = clampX(r.left) + 'px';
-      region.style.top = Math.round(r.bottom + 8) + 'px';
-    } // below (default)
-  };
-  let current = null;
-  const deactivate = () => {
-    const c = current;
-    current = null;
-    if (c && c.onClose) c.onClose();
-  }; // null first — onClose may re-enter
-  const close = () => {
-    deactivate();
-    region.hidden = true;
-    clearSheet(region);
-    hams.forEach((h) => h.btn.classList.remove('on'));
-  };
-  const open = (h) => {
-    if (current && current !== h) deactivate(); // switching panes: close the outgoing one
-    hams.forEach((x) => x.btn.classList.remove('on'));
-    region
-      .querySelectorAll('.pane')
-      .forEach((p) => p.classList.toggle('on', p.dataset.pane === h.pane));
-    h.btn.classList.add('on');
-    region.hidden = false;
-    if (sheet()) openAsSheet(region);
-    else clearSheet(region);
-    place(h);
-    current = h;
-    // On a sheet, focusing a text field summons the keyboard over the content you just
-    // opened — so touch gets focus on the pane itself (screen readers still land in it)
-    // and the field waits to be tapped. Precise pointers keep the type-immediately habit.
-    const f = sheet()
-      ? region.querySelector('.pane.on')
-      : region.querySelector('.pane.on textarea, .pane.on input:not([type=hidden])') ||
-        region.querySelector('.pane.on button:not(.regionClose), .pane.on [tabindex]');
-    if (f) {
-      if (sheet() && !f.hasAttribute('tabindex')) f.setAttribute('tabindex', '-1');
-      f.focus({ preventScroll: true });
-    }
-    if (h.onOpen) h.onOpen(); // per-pane hook (e.g. chat: clear unread + scroll to bottom)
-  };
-  region._close = close; // let external code collapse the region (e.g. measure's global-Esc handler)
-  hams.forEach((h) =>
-    h.btn.addEventListener('click', () => {
-      current === h ? close() : open(h);
-    }),
-  );
-  region.querySelectorAll('.regionClose').forEach((b) =>
-    b.addEventListener('click', () => {
-      close();
-      anchor.focus();
-    }),
-  );
-  region.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      e.preventDefault();
-      e.stopPropagation();
-      close();
-      anchor.focus();
-    }
-  });
-  addEventListener('resize', () => {
-    if (!region.hidden) place(current);
-  });
-}
+['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true }));
 // Top-left cluster (UI_Redesign phase 2): Chat + Notes share one region (accordion).
 {
   const r = byId('regionTL'),
@@ -6810,26 +6512,6 @@ initTip(); // themed hover-hint (icons.js)
 // Also the selection rotation buttons: hold ⟲ / ⟳ to spin the selection continuously (server
 // rotateGroup with an angle delta), the continuous complement to the [ / ] 45° steps.
 {
-  const holdRepeat = (btn, fn, ms = 100) => {
-    if (!btn) return;
-    let iv = null;
-    const start = (e) => {
-      e.preventDefault();
-      fn();
-      iv = setInterval(fn, ms);
-    };
-    const stop = () => {
-      if (iv) {
-        clearInterval(iv);
-        iv = null;
-      }
-    };
-    btn.addEventListener('pointerdown', start);
-    btn.addEventListener('pointerup', stop);
-    btn.addEventListener('pointerleave', stop);
-    btn.addEventListener('pointercancel', stop);
-    btn.addEventListener('contextmenu', (e) => e.preventDefault()); // a sustained hold shouldn't pop the browser menu
-  };
   document
     .querySelectorAll('.heightUp')
     .forEach((b) => holdRepeat(b, () => INPUT.raiseAxis(1), 120));
@@ -6912,102 +6594,9 @@ const RADIAL_ICONS = {
   Delete: 'trash',
 };
 const RADIAL_MAX = 7; // beyond this an arc stops being readable — callers fall back to a list
-function closeRadial() {
-  const el = byId('radial');
-  if (!el) return;
-  el.classList.remove('on');
-  el.hidden = true;
-  el.replaceChildren();
-  const fab = byId('fabBtn');
-  if (fab) fab.classList.remove('on');
-}
-// items: [{ label, icon, fn, cls }]
-function openRadial(x, y, items) {
-  const el = byId('radial');
-  if (!el || !items.length) return false;
-  el.replaceChildren();
-  const scrim = document.createElement('div');
-  scrim.className = 'radialScrim';
-  scrim.addEventListener('pointerdown', closeRadial);
-  el.appendChild(scrim);
-  // Chord between neighbours must clear the 48px dots with air to spare:
-  // chord = 2·R·sin(STEP/2) ≈ 78px at four items, ~100px at seven.
-  const STEP = 0.68; // radians (~39°)
-  const R0 = Math.min(150, Math.max(104, 52 + 16 * items.length));
-  const spread = Math.min(Math.PI * 1.35, (items.length - 1) * STEP);
-  // The fan's centre line points at the middle of the screen, so a press in a corner
-  // opens inward; the search below rotates from here if that still doesn't fit.
-  const dir = Math.atan2(innerHeight / 2 - y, innerWidth / 2 - x);
-  const M = 38; // keep every dot fully on screen
-  const fits = (px, py) => px >= M && px <= innerWidth - M && py >= M && py <= innerHeight - M;
-  const layout = (dir, R) =>
-    items.map((_, i) => {
-      const a = items.length === 1 ? dir : dir - spread / 2 + (spread * i) / (items.length - 1);
-      return [x + Math.cos(a) * R, y + Math.sin(a) * R];
-    });
-  // Clamping each dot independently is what made them pile up near an edge, so rotate
-  // and then shrink the WHOLE fan until it fits — the spacing between dots is preserved.
-  let best = null;
-  for (const R of [R0, R0 * 0.86, R0 * 0.72]) {
-    for (let k = 0; k <= 16 && !best; k++) {
-      for (const s of k ? [1, -1] : [0]) {
-        const pts = layout(dir + s * k * 0.16, R);
-        if (pts.every(([px, py]) => fits(px, py))) {
-          best = pts;
-          break;
-        }
-      }
-    }
-    if (best) break;
-  }
-  if (!best)
-    best = layout(dir, R0 * 0.72).map(([px, py]) => [
-      Math.max(M, Math.min(px, innerWidth - M)),
-      Math.max(M, Math.min(py, innerHeight - M)),
-    ]);
-  items.forEach((it, i) => {
-    const [bx, by] = best[i];
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'radialItem' + (it.cls ? ' ' + it.cls : '');
-    b.style.left = Math.round(bx) + 'px';
-    b.style.top = Math.round(by) + 'px';
-    b.style.transitionDelay = i * 18 + 'ms';
-    const dot = document.createElement('span');
-    dot.className = 'radialDot';
-    const icon = it.icon || RADIAL_ICONS[it.label] || 'circle';
-    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('class', 'ico ico-' + icon);
-    svg.setAttribute('aria-hidden', 'true');
-    const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-    use.setAttribute('href', '#i-' + icon);
-    svg.appendChild(use);
-    dot.appendChild(svg);
-    b.setAttribute('aria-label', it.label);
-    b.title = it.label;
-    b.appendChild(dot);
-    b.addEventListener('click', () => {
-      closeRadial();
-      it.fn();
-    });
-    if (it.press)
-      b.addEventListener('pointerdown', (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation(); // the scrim's pointerdown would otherwise close the radial first
-        // `press` transfers the active pointer to the canvas. Do that before closeRadial removes
-        // this button; WebKit otherwise strands the implicit touch capture on a detached element.
-        const dragging = it.press(ev);
-        closeRadial();
-        if (dragging) b.onclick = null;
-      });
-    el.appendChild(b);
-  });
-  el.hidden = false;
-  requestAnimationFrame(() => el.classList.add('on'));
-  return true;
-}
-addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') closeRadial();
+const { open: openRadial, close: closeRadial } = createRadialMenu(byId('radial'), {
+  icons: RADIAL_ICONS,
+  onClose: () => byId('fabBtn')?.classList.remove('on'),
 });
 
 // ---- ⊕ table actions (mockup 10j left) -------------------------------------------------
@@ -7122,31 +6711,7 @@ addEventListener('keydown', (e) => {
         drawer.appendChild(foot);
       }
     };
-    function close() {
-      drawer.hidden = true;
-      clearSheet(drawer);
-      btn.classList.remove('on');
-      btn.setAttribute('aria-expanded', 'false');
-      btn.focus({ preventScroll: true });
-    }
-    const open = () => {
-      build();
-      drawer.hidden = false;
-      openAsSheet(drawer);
-      btn.classList.add('on');
-      btn.setAttribute('aria-expanded', 'true');
-      drawer.setAttribute('tabindex', '-1');
-      drawer.focus({ preventScroll: true });
-    };
-    drawer._close = close; // slice 1's one-sheet-at-a-time rule closes us the same way
-    btn.addEventListener('click', () => (drawer.hidden ? open() : close()));
-    drawer.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        close();
-      }
-    });
+    const close = wireDrawer(drawer, btn, build);
   }
 }
 

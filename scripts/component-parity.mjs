@@ -151,6 +151,55 @@ const COMPONENT_STATES_FIXTURE = `<!doctype html><meta charset="utf-8">
   <p class="status-text" role="status">Shared live status</p>
 </main></body>`;
 
+// Exercise the extracted surface mechanics without booting the table engine. The specimen
+// keeps table-specific actions out of the utility while testing both precise and touch layouts.
+const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
+<link rel="stylesheet" href="/styles.css">
+<body>
+  <button id="opener">Open dialog</button>
+  <section id="testDialog" class="panel" hidden>
+    <h3>Test dialog</h3><input id="dialogInput"><button class="close-x">Close</button>
+  </section>
+  <button id="clusterButton">Open cluster</button>
+  <section id="testCluster" class="region" hidden>
+    <button class="regionClose">Close</button>
+    <div class="pane" data-pane="sample"><input id="clusterInput"></div>
+  </section>
+  <button id="drawerButton" aria-expanded="false">Menu</button>
+  <section id="testDrawer" class="sheet" hidden></section>
+  <button id="repeatButton">Hold</button>
+  <div id="testRadial" hidden></div>
+  <script type="module">
+    import { createUiSurfaces } from '/table/ui-surfaces.js';
+    const ui = createUiSurfaces();
+    const byId = (id) => document.getElementById(id);
+    const dialog = byId('testDialog');
+    ui.wireDialog(dialog, { modal: true });
+    byId('opener').onclick = () => { dialog.hidden = false; };
+    dialog.querySelector('.close-x').onclick = () => { dialog.hidden = true; };
+    ui.wireCluster(byId('testCluster'), [{ btn: byId('clusterButton'), pane: 'sample' }]);
+    const closeDrawer = ui.wireDrawer(byId('testDrawer'), byId('drawerButton'), () => {
+      byId('testDrawer').replaceChildren();
+      byId('testDrawer')._sheetReady = false;
+      const row = document.createElement('button');
+      row.className = 'drawerRow';
+      row.textContent = 'Action';
+      row.onclick = () => { closeDrawer(); window.drawerActions++; };
+      byId('testDrawer').append(row);
+    });
+    const radial = ui.createRadialMenu(byId('testRadial'), {
+      icons: { Action: 'dice-5' },
+      onClose: () => { window.radialCloses++; },
+    });
+    window.drawerActions = 0;
+    window.radialActions = 0;
+    window.radialCloses = 0;
+    window.repeatActions = 0;
+    ui.holdRepeat(byId('repeatButton'), () => { window.repeatActions++; }, 30);
+    window.surfaceFixture = { ui, radial };
+  </script>
+</body>`;
+
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
@@ -207,6 +256,68 @@ const SCENES = [
       assert(style('stateCheckboxDisabled').cursor === 'not-allowed' &&
         +style('stateCheckboxDisabled').opacity < +style('stateCheckbox').opacity,
         'Disabled checkbox is not visibly disabled');`,
+  },
+  {
+    name: 'ui-surfaces',
+    page: '/__ui-surfaces.html',
+    root: 'body',
+    expect: { selector: '#testDialog[role="dialog"], #testRadial .radialItem', min: 3 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const { ui, radial } = window.surfaceFixture;
+      const byId = (id) => document.getElementById(id);
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+      byId('opener').focus();
+      byId('opener').click();
+      await tick();
+      assert(byId('testDialog').getAttribute('aria-modal') === 'true', 'Dialog is not modal');
+      assert(document.activeElement.id === (ui.isSheet() ? '' : 'dialogInput') ||
+        (ui.isSheet() && document.activeElement.classList.contains('close-x')),
+        'Dialog did not choose the appropriate first focus target');
+      const dialogClose = byId('testDialog').querySelector('.close-x');
+      dialogClose.focus();
+      dialogClose.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true,
+        cancelable: true }));
+      assert(document.activeElement.id === 'dialogInput', 'Modal Tab did not wrap to first control');
+      byId('dialogInput').dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab',
+        shiftKey: true, bubbles: true, cancelable: true }));
+      assert(document.activeElement === dialogClose, 'Modal Shift-Tab did not wrap to last control');
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown',
+        { key: 'Escape', bubbles: true }));
+      await tick();
+      assert(byId('testDialog').hidden && document.activeElement.id === 'opener',
+        'Escape did not close the dialog and restore focus');
+      byId('clusterButton').click();
+      assert(!byId('testCluster').hidden && byId('testCluster')._close,
+        'Cluster did not open');
+      assert(byId('testCluster').classList.contains('at-two') === ui.isSheet(),
+        'Cluster sheet mode does not match viewport');
+      byId('testCluster').dispatchEvent(new KeyboardEvent('keydown',
+        { key: 'Escape', bubbles: true }));
+      assert(byId('testCluster').hidden, 'Cluster Escape did not close');
+      byId('drawerButton').click();
+      assert(!byId('testDrawer').hidden &&
+        byId('drawerButton').getAttribute('aria-expanded') === 'true' &&
+        byId('testDrawer').querySelector('.sheetGrab'), 'Drawer did not open as a sheet');
+      byId('testDrawer').querySelector('.drawerRow').click();
+      assert(byId('testDrawer').hidden && window.drawerActions === 1,
+        'Drawer action did not close and dispatch');
+      byId('repeatButton').dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      byId('repeatButton').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
+      assert(window.repeatActions >= 2, 'Hold-repeat did not repeat');
+      assert(radial.open(innerWidth / 2, innerHeight / 2, [
+        { label: 'Action', fn: () => { window.radialActions++; } },
+        { label: 'Other', icon: 'circle', fn: () => {} },
+      ]), 'Radial menu did not open');
+      assert(byId('testRadial').querySelectorAll('.radialItem').length === 2 &&
+        byId('testRadial').querySelector('.ico-dice-5'), 'Radial items were not built');
+      byId('testRadial').querySelector('.radialItem').click();
+      assert(byId('testRadial').hidden && window.radialActions === 1 &&
+        window.radialCloses === 1, 'Radial action did not close and dispatch');
+      radial.open(innerWidth / 2, innerHeight / 2, [
+        { label: 'Action', fn: () => {} }, { label: 'Other', fn: () => {} },
+      ]);`,
   },
   {
     name: 'collider-editor',
@@ -439,6 +550,7 @@ const server = await serveDir({
   routes: {
     '/__rows.html': { body: ROWS_FIXTURE },
     '/__component-states.html': { body: COMPONENT_STATES_FIXTURE },
+    '/__ui-surfaces.html': { body: UI_SURFACES_FIXTURE },
   },
 });
 const cdp = await launch({ webgl: true });

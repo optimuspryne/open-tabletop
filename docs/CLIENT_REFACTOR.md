@@ -392,7 +392,7 @@ are attached through DOM APIs and are genuinely used.
 1. Consolidate mesh replacement and interpolation helpers in `piece-view.js`. **Completed
    2026-09-22.**
 2. Extract collider diagnostics. **Completed 2026-09-22.**
-3. Extract generic dialog and responsive-surface primitives.
+3. Extract generic dialog and responsive-surface primitives. **Completed 2026-09-22.**
 
 ### Phase 2: cohesive feature controllers
 

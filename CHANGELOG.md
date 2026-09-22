@@ -9,6 +9,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ## [Unreleased]
 
 ### Changed
+- Extract reusable dialog focus, responsive sheet, cluster, drawer, radial-menu, and hold-repeat
+  mechanics from the table client into a dedicated UI-surfaces module, with desktop/touch
+  component-parity coverage.
 - Pin the container's non-root `appuser`/`appgroup` identity to UID 100 and GID 101 for stable
   NFS and bind-mount ownership, and document an NFS-backed Portainer/Dockhand assets volume.
 - Bring the Portainer/Dockhand stack example into production-config parity with bootstrap
