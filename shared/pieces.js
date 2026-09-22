@@ -210,7 +210,7 @@ export const PROPS = {
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.8485, 0.0751, 0.8485], type: 'cylinder' },
+    collider: { box: [0.64, 0.0751, 0.64], type: 'cylinder' },
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.6,
     tintMaterial: 'accent',
