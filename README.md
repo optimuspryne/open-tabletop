@@ -412,6 +412,19 @@ The script offers the next free CTID when `CTID` is unset and prompts for storag
 email when those values are unset. Other optional settings are `TEMPLATE_STORAGE` (default `local`),
 `BRIDGE` (`vmbr0`), `IP` (`dhcp`, or an IPv4 CIDR with `GATEWAY`), `CORES` (`2`), `RAM_MB` (`2048`),
 `DISK_GB` (`12`), `CT_HOSTNAME` (`open-tabletop`), and `BOOTSTRAP_ADMIN_USERNAME` (`admin`).
+For a new LXC, the launcher waits for an IPv4 address and default route before package setup. If
+they do not appear after about 30 seconds, it reboots the LXC once and waits again. A second
+failure stops the install without deleting the container so you can inspect its DHCP and bridge
+configuration. The source and installer have already been copied into the LXC, so after fixing its
+network you can resume without recreating it:
+
+```bash
+SOURCE_ID=$(pct exec 123 -- sha256sum /root/open-tabletop-source.tar | cut -c1-40)
+pct exec 123 -- env SOURCE_ID="$SOURCE_ID" BOOTSTRAP_ADMIN_USERNAME=admin \
+  BOOTSTRAP_ADMIN_EMAIL=you@example.com bash /root/open-tabletop-install.sh install
+```
+
+The same network check also applies when `IP` and `GATEWAY` specify a static address.
 The installer creates database passwords and a strong initial admin password; read them inside the
 container with `pct exec 123 -- cat /root/open-tabletop-credentials.txt`. Keep that root-only file
 private. The service listens on port `2567`; use a reverse proxy with TLS for internet access and

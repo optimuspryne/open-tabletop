@@ -243,7 +243,8 @@ importing a room singleton:
   role on first DB start; the `Dockerfile` itself lives at the repo root), and
   `proxmox/` (the host-side LXC launcher and matching in-container bare-metal
   installer, extracted from the same selected source revision; the unprivileged
-  Debian 13 LXC enables nesting for Redis's systemd user namespace).
+  Debian 13 LXC enables nesting for Redis's systemd user namespace and waits for
+  an IPv4 address and default route before starting package setup).
 
 ## Trust and failure boundaries
 

@@ -15,6 +15,29 @@ fail() {
   exit 1
 }
 
+ensure_container_network() {
+  local boot attempt address
+  for boot in 1 2; do
+    for attempt in {1..15}; do
+      address=$(pct exec "$CTID" -- ip -4 -o addr show dev eth0 scope global 2>/dev/null \
+        | awk 'NR == 1 { print $4 }') || address=
+      if [[ -n "$address" ]] \
+        && pct exec "$CTID" -- ip -4 route show default 2>/dev/null | grep -q .; then
+        printf 'Container %s network ready: %s\n' "$CTID" "${address%%/*}"
+        return 0
+      fi
+      if (( attempt < 15 )); then
+        sleep 2
+      fi
+    done
+    if (( boot == 1 )); then
+      printf 'Container %s has no IPv4 address and default route yet; rebooting it once\n' "$CTID"
+      pct reboot "$CTID"
+    fi
+  done
+  fail "container $CTID still has no IPv4 address and default route after reboot; check DHCP, bridge, and container network settings"
+}
+
 if [[ "$mode" == --help || "$mode" == -h ]]; then
   usage
   exit 0
@@ -157,6 +180,7 @@ printf 'Sending app source and installer to container %s\n' "$CTID"
 pct push "$CTID" "$archive" /root/open-tabletop-source.tar
 pct push "$CTID" "$installer" /root/open-tabletop-install.sh
 if [[ "$mode" == install ]]; then
+  ensure_container_network
   pct exec "$CTID" -- env SOURCE_ID="$source_id" \
     BOOTSTRAP_ADMIN_USERNAME="$BOOTSTRAP_ADMIN_USERNAME" \
     BOOTSTRAP_ADMIN_EMAIL="$BOOTSTRAP_ADMIN_EMAIL" \
