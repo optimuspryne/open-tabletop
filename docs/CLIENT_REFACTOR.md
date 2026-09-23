@@ -1,19 +1,19 @@
 # Client decomposition plan
 
 Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, measurement
-overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified; the private
-hand is next.
+overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified. The private
+hand has also been extracted and manually verified; inspection is next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
 feature-module structure that the server gained during its breakup, while preserving current
 behavior and avoiding a large rewrite.
 
-## Current state
+## Original sweep and current boundaries
 
-`public/client.js` is currently 7,650 lines and contains approximately 311 function symbols and
-150 variable symbols. Its size is only the visible symptom. The deeper issue is that it currently
-performs several different jobs:
+At the 2026-09-21 sweep, `public/client.js` was 7,650 lines with approximately 311 function
+symbols and 150 variable symbols. Its size was only the visible symptom; it then performed
+several different jobs:
 
 - joins and reconnects to the Colyseus room;
 - registers nearly every state listener and server-message handler;
@@ -38,6 +38,7 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/whiteboard.js` owns whiteboard placement, drawing, and room synchronization.
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
 - `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
+- `public/table/hand.js` owns the private hand, Show controls, sorting, and card gestures.
 
 The remaining work continues this pattern: make `client.js` coordinate modules like these rather
 than continuing to own their internal state and implementation.
@@ -149,6 +150,10 @@ be small: `refresh(id, piece)`, `remove(id)`, `sync()`, `setEnabled(on)`, and `d
 
 The private-hand subsystem begins near `public/client.js:4002`; `renderHand` alone spans roughly
 167 lines and has many call sites.
+
+It now lives in `public/table/hand.js`; `client.js` forwards private-hand messages and supplies
+room, inspection, scene, pointer, and control-guide dependencies. The inventory below records the
+original extraction scope.
 
 Move the state and behavior together:
 
@@ -299,7 +304,7 @@ These utilities should be added to the component-parity harness as they move.
 
 Extract the semantic input router last.
 
-The highest-complexity functions in the current file are:
+The highest-complexity functions at the original sweep were:
 
 | Function | Approximate range | Cyclomatic | Cognitive |
 | --- | ---: | ---: | ---: |
@@ -405,7 +410,7 @@ are attached through DOM APIs and are genuinely used.
    collider.**
 6. Extract trays. **Completed 2026-09-22; manually verified.** Follow-up tray collision-height
    tuning and non-overlapping Scoop placement were also manually verified.
-7. Extract hand.
+7. Extract hand. **Completed 2026-09-22; manually verified.**
 8. Extract inspection.
 
 ### Phase 3: broad state owners

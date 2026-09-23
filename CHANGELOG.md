@@ -14,6 +14,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Extract private-hand rendering, Show selection, rearrangement and sorting, collapse persistence,
+  card inspection entry, and play/drag gestures into a dedicated client controller.
 - Raise the dice tray's invisible collision walls and ceiling to 1.5× their visual-wall height
   while keeping the visible walls unchanged, and collect tray geometry, placement, spawn, recovery,
   and Scoop tuning values in shared knobs.

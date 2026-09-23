@@ -169,6 +169,10 @@ importing a room singleton:
   disposes non-raycastable Three.js shells from the shared collider specification, stores the
   device preference, enforces the GM rank gate, refreshes variable shapes, and follows live mesh
   transforms through injected piece/mesh/rank lookups. It never mutates room state or physics.
+- **`public/table/hand.js`** — the private-hand controller. It owns local cards, Show selection
+  and audience, reveal data used by public fans, sorting/rearrangement, collapse preference, and
+  hand-specific pointer gestures. `client.js` injects room access, card builders, scene/raycast
+  helpers, inspection entry, and control-guide updates instead of sharing mutable hand globals.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
   raw events into device-neutral pointer/command intents consumed by `client.js`. Touch holds
   raise the same secondary-press intent as a mouse context action; a menu action that starts a
@@ -1381,6 +1385,22 @@ face-down backs (from the public count — you see how many, never which), and
 stands a marker (avatar or silhouette + name) at each seat. Each player also has a
 GM-reorderable `order` independent of their physical seat. `state.turn` holds a
 session id, highlighted in the panel; "Next turn" walks that shared order.
+
+## Private-hand controller boundary
+
+The server still keeps card faces outside synchronized room state and sends each player their
+own hand through the private `hand` message. `public/client.js` forwards that message to
+`hand.setCards()` and requests `handSync` after reconnect; the extraction does not change the
+protocol or where hidden information lives.
+
+Within one browser, `createHand()` owns the private bar and its local modes: Show audience and
+picked-card scope, hide/show preference, rearrangement and Sort, hover guidance, and play gestures.
+The global hand pointer hooks moved with that state, including the live two-finger face-up choice,
+unsynced drag preview, drop hit test, and cancellation cleanup. Hand-card inspection requests the
+existing `inspectMesh` callback; the inspection controller is still a separate planned extraction.
+Other players' public fans remain laid out by `client.js`, but their temporary face-up cards are
+stored behind `hand.setRevealed()`/`revealedFor()`. That keeps Show data with the hand feature while
+leaving seat layout and public presence in the composition root.
 
 ## Identity & reconnection
 

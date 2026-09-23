@@ -571,6 +571,7 @@ public/
   admin.html/admin.js   site administration UI
   core.js               Three.js scene/camera/renderer plus CONFIG and LIGHTING
   graphics.js           textures, meshes, model loading, and the KIND registry
+  table/hand.js         private hand rendering, Show controls, sorting, and card gestures
   controls.js           mouse/touch profiles converted to device-neutral intents
   audio.js/credits.js   local SFX/music playback and attribution manifests
   icons.js/equalize.js  shared icon behavior and early UI preference restoration
@@ -612,9 +613,10 @@ Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus a
   resolution and physical size/placement. `WHITEBOARD_MAX_STROKES` exists in both
   `server.js` and `public/client.js`; keep the two values equal so server history
   and the client's replay mirror have the same cap.
-- **Input and cameras** in `public/client.js` — `LEAN_AMOUNT` controls the Lean In
-  offset, `HAND_HOVER` the whole-hand drop preview height, `VIEW` the normal seat
-  camera, and `TRAY_CAM` the dice-tray camera and transition. In
+- **Input and cameras** — `LEAN_AMOUNT` and `VIEW` in `public/client.js` control the
+  Lean In offset and normal seat camera. `HAND_HOVER` in `public/table/hand.js`
+  controls a dragged hand card's preview height; the tray camera and transition
+  live in `public/table/trays.js`. In
   `public/controls.js`, `LONG_PRESS_MS` / `LONG_PRESS_SLOP` control touch
   long-press timing and movement tolerance; keep the slop aligned with
   `CONFIG.input.dragPx`.

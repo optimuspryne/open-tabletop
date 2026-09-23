@@ -47,6 +47,7 @@ The codebase:
 | `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, seats, loading gate, render loop                                                             |
 | `public/table/piece-view.js`                                                                           | browser | Safe piece props, mesh replacement, transform snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
 | `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
+| `public/table/hand.js`                                                                                 | browser | Private hand state, rendering, Show audience/selection, rearrangement/sorting, collapse preference, inspection entry, and card pointer gestures                                                  |
 | `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
 | `public/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
@@ -177,6 +178,12 @@ classDiagram
         +refresh/remove/sync/update/dispose
         +setEnabled/isEnabled
     }
+    class Hand["public/table/hand.js"] {
+        +createHand(dependencies)
+        +setCards/setRevealed/revealedFor/clearRevealed
+        +render/cancelGesture/bindShowControls
+        +isDragging/drag/hoverCard/controlRows
+    }
     class Audio["public/audio.js"] {
         +playSfx() resumeAudio()
         +SFX + music volume/mute (localStorage)
@@ -216,6 +223,7 @@ classDiagram
     PieceView <.. ColliderDebug
     SharedColliders <.. ColliderDebug
     ColliderDebug <.. Client
+    Hand <.. Client
     Credits <.. Audio
     Audio <.. Client
     Server *-- TableRoom
@@ -1773,6 +1781,27 @@ the module never sends a message or changes authoritative physics.
 
 ---
 
+## `public/table/hand.js` — private hand controller
+
+**`createHand(dependencies)`** owns `myHand`, selected card IDs, revealed fan cards by sender,
+Show audience/scope, reorder and play gestures, hover state, and the persisted collapse preference.
+The browser composition root injects room/session access, scene and card builders, ray/pointer
+helpers, inspection entry, and the control-guide refresh callback; the module does not import a
+room singleton or the client runtime.
+
+- **`setCards(cards)`** receives the private `hand` message and calls the controller's
+  `renderHand` helper. **`render()`** restores the bar after closing a hand-card inspection.
+- **`setRevealed(sid, cards)`**, **`revealedFor(sid)`**, and **`clearRevealed(sid)`** maintain the
+  face-up cards shown in another player's public fan. `client.js` still places those fan meshes.
+- **`bindShowControls()`** wires the audience strip and picked-card scope. Show sends
+  `showStart`/`showStop`; rearrangement and Sort send `reorderHand`, with local optimistic order
+  until the next private hand message.
+- Hand-only pointer handlers own click-to-play, face-down/face-up drag previews (including a
+  second touch for face-up), table-drop hit testing, cancel cleanup, reorder drag auto-scroll,
+  and double-click/eye inspection entry. **`cancelGesture()`** clears an active preview or
+  reorder gesture; **`drag()`**, **`hoverCard()`**, and **`controlRows()`** supply the desktop
+  control guide without exposing the controller's mutable state.
+
 ## `public/client.js` — runtime
 
 ### Networking
@@ -1786,11 +1815,11 @@ marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
 `syncScalePanel`), `trays` (→ `syncTrays` — one tray mesh per enabled seat), and
 `roomName` (→ the Room Info header), plus
 `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
-list and the "Waiting on {name}" turn row). Direct messages: `hand` → `renderHand`,
+list and the "Waiting on {name}" turn row). Direct messages: `hand` → `hand.setCards`,
 `dealt` (adopt a dealt card), `inspectCard` → open draw-to-inspect, `notebook`
-(restore your private notes), `showFan` (cards someone is showing you → face-up in
-their fan), `ping` (spawn an attention marker), **`sfx`** (a shared sound cue →
-`playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
+(restore your private notes), `showFan` → `hand.setRevealed` and `refreshFan` (cards someone is
+showing you → face-up in their fan), `ping` (spawn an attention marker), **`sfx`** (a shared
+sound cue → `playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
 a chat line) / **`chatLog`** (replay the backlog), **`stateSaved`** (flash the Save
 Table State button), `notice` (a server-pushed toast — e.g. the piece cap is full), `memberList` → the Members panel (with the pending-join pulse),
 `whoami` → sets `myIsAdmin` and toggles `body.not-admin` (hides library-creation
@@ -1798,8 +1827,8 @@ UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList
 (library listings, keyed by **id**; also fanned out to the editor panel via
 `window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
 reshape/reset/members gm+). Game-play + Room Controls wiring lives here (spawn,
-grab/inspect, whiteboard, table size, scene load, skybox apply, plus the
-notebook / timer / show-cards panels); asset **creation** and the View Library /
+grab/inspect, whiteboard, table size, scene load, skybox apply, plus the notebook and timer
+panels); Show controls belong to the hand controller. Asset **creation** and the View Library /
 Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
 `window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
 **`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,
@@ -1840,7 +1869,7 @@ changes, and follows each synchronized/interpolated transform without changing r
   non-empty selection. Field focus suppresses all of these table controls.
 - **`syncControlGuide`** — on fine-pointer desktop layouts, renders a non-interactive bottom-left
   guide for the currently hovered or held table piece, hovered private-hand card, or active hand
-  drag. Rows are generated by `pieceControlRows` / `handControlRows`, include live stack counts
+  drag. Rows are generated by `pieceControlRows` / `hand.controlRows`, include live stack counts
   where relevant, and yield to an open bottom-left panel.
 - **Multi-select** (local; see below) — `selection` (Set of ids), the `selMode` Select tool,
   the `marquee` box, `selGesture`, and the `selRings` highlight pool. Shift-click toggles a
@@ -1868,20 +1897,20 @@ changes, and follows each synchronized/interpolated transform without changing r
 
 ### Seats, hands, turns
 
-The hand's drag `pointerup` handler checks whether the drop hit the table before revealing
-the hand, then removes `hand-dragging` immediately. Cancellation also removes the class;
-visibility does not depend on a subsequent server update. Capacity-rejected plays additionally
-receive the unchanged private `hand` message, rendered through `renderHand`. On a coarse pointer,
-the open tray renders cards at a responsive 72–88 px width and keeps Inspect in a fixed 30 px
-corner control; the strip scrolls horizontally rather than shrinking the primary drag target.
+The injected hand controller checks whether a drag ended over the table before revealing the
+hand and removes `hand-dragging` immediately on release or cancellation. Visibility does not
+depend on a subsequent server update. Capacity-rejected plays receive the unchanged private
+`hand` message, routed through `hand.setCards`. On a coarse pointer, the open tray renders cards
+at a responsive 72–88 px width and keeps Inspect in a fixed 30 px corner control; the strip
+scrolls horizontally rather than shrinking the primary drag target.
 
 Seat layout, standing avatar/name markers (with a public **"SHOWING n"** badge
 via `makePlayerTexture`, a `graphics.js` builder, when a player is revealing), other players' fanned hands —
 face-down using the player's own **`handBack`**, with any **revealed** cards drawn
-face-up in the leading fan slots (`refreshFan` + the `revealed` map), height-
-staggered to avoid z-fighting. The turn panel, and **`renderHand(cards)`** for
-your own bar (left = face-down, right = face-up; also a **select mode** while the
-show panel is picking cards). Held-piece labels and pings share the **`nameTag`**
+face-up in the leading fan slots (`refreshFan` reads `hand.revealedFor(sid)`), height-
+staggered to avoid z-fighting. The private bar itself is rendered by the hand controller
+(left = face-down, right = face-up; also a **select mode** while the Show panel is picking
+cards). The turn panel remains in `client.js`. Held-piece labels and pings share the **`nameTag`**
 pill texture (a `graphics.js` builder). **`renderPlayers`** also draws a **"⏳
 Waiting on {name}"** row when `turnPending` is set (a resumed turn whose owner
 hasn't returned), and **`renderUnclaimed`** builds the Members panel's **Unclaimed
