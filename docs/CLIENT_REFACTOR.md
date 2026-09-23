@@ -2,7 +2,8 @@
 
 Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, measurement
 overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified. The private
-hand and inspection have also been extracted and manually verified.
+hand and inspection have also been extracted and manually verified. Phase 3 selection was
+completed and manually verified on 2026-09-23. Player presence is next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -39,6 +40,8 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
 - `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
 - `public/table/hand.js` owns the private hand, Show controls, sorting, and card gestures.
+- `public/table/selection.js` owns local selection, marquee gestures, highlight rings, batch actions,
+  recoloring, and compose/gather planning.
 - `public/table/inspection.js` owns enlarged previews, their appearance controls, drawn-card
   placement, deferred double-clicks, and pointer rotation.
 
@@ -238,9 +241,12 @@ placement calculation is reasonable; sharing feature state is not.
 
 ### 8. Local selection
 
-The selection subsystem begins near `public/client.js:5900`.
+The selection subsystem now lives in `public/table/selection.js`. The client forwards semantic
+selection input, removes stale IDs on piece removal/remote grabs, and updates highlights in the
+render loop. Compatibility and planning helpers operate on plain piece data for direct testing.
+Pointer capture, camera-control arbitration, and input priority remain in the client.
 
-Move:
+The extraction moved:
 
 - selection, mode, marquee, and highlight-ring state;
 - selection signatures and compatibility checks;
@@ -249,8 +255,9 @@ Move:
 - selection-toolbar synchronization; and
 - marquee gesture handling.
 
-The eligibility and planning functions are good candidates for direct unit tests because much of
-their logic can operate on plain piece data without DOM or Three.js state.
+The eligibility and planning functions now have direct unit coverage on plain piece data.
+Controller tests cover selection gestures, batch commands, and ring cleanup; component parity
+checks the real selection toolbar in desktop and touch layouts.
 
 ### 9. Player presence
 
@@ -419,7 +426,9 @@ are attached through DOM APIs and are genuinely used.
 
 ### Phase 3: broad state owners
 
-9. Extract selection.
+9. Extract selection. **Completed 2026-09-23; manually verified.** `npm run check`,
+   `npm run test:input`, and `npm run test:components` pass. The user reported no regressions
+   during manual smoke testing.
 10. Extract player presence.
 11. Extract room settings and skybox.
 

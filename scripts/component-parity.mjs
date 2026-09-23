@@ -203,6 +203,83 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'selection-toolbar',
+    root: '#selActions',
+    expect: { selector: '#selSwatches .swatch', min: 2 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const THREE = await import('three');
+      const { createSelection } = await import('/table/selection.js');
+      const byId = (id) => document.getElementById(id);
+      const scene = new THREE.Scene();
+      const pieces = new Map();
+      const meshes = new Map();
+      const sent = [];
+      const room = { state: { pieces }, send: (...args) => sent.push(args) };
+      const selection = createSelection({
+        THREE, scene, camera: new THREE.PerspectiveCamera(), canvas: document.createElement('canvas'),
+        meshes, marker: { inner: 0.8, outer: 1, lift: 0.01 },
+        getRoom: () => room, getBoardTopY: () => 0, byId,
+      });
+      selection.bindModeControls();
+      selection.bindActions();
+      const set = (id, type, props = {}) => {
+        pieces.set(id, { type, props: JSON.stringify(props) });
+        meshes.set(id, { type, mesh: new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1)) });
+      };
+      const select = (...ids) => {
+        selection.clear();
+        for (const id of ids) {
+          selection.beginPointer({ primary: true, additive: true }, id);
+          selection.endPointer({});
+        }
+        selection.update();
+      };
+      set('a', 'die'); set('b', 'prop', { shape: 'poker_chip' });
+      select('a', 'b');
+      assert(!byId('selActions').hidden && !byId('selRecolor').hidden, 'Selection toolbar is hidden');
+      const first = byId('selSwatches').firstElementChild;
+      selection.update();
+      assert(byId('selSwatches').firstElementChild === first, 'Unchanged palette rebuilt the DOM');
+      first.click();
+      assert(sent.at(-1)[0] === 'recolorGroup' && sent.at(-1)[1].ids.length === 2 &&
+        'textColor' in sent.at(-1)[1], 'Color swatch did not recolor the selection');
+      for (const [id, msg] of [
+        ['selStand', 'setStandGroup'], ['selSnap', 'setSnapGroup'], ['selFlip', 'flipGroup'],
+        ['sel2Sided', 'setOpenGroup'], ['selRoll', 'rollGroup'], ['selTake', 'takeGroup'],
+      ]) {
+        byId(id).click();
+        assert(sent.at(-1)[0] === msg && selection.size === 2, 'Wrong batch action: ' + id);
+      }
+      set('b', 'prop', { shape: 'coin' }); selection.update();
+      assert(byId('selRecolor').classList.contains('disabled') && !byId('selSwatches').children.length,
+        'Mixed palette should disable recoloring');
+      set('a', 'card', { back: 'a' }); set('b', 'deck', { back: 'b' }); selection.update();
+      assert(byId('selRecolor').hidden && byId('selCombine').disabled, 'Mixed card families should not combine');
+      set('a', 'card', { open: true, back: 'a' }); set('b', 'deck', { open: true, back: 'b' }); selection.update();
+      assert(!byId('selCombine').disabled && byId('sel2Sided').querySelector('.lbl').textContent === 'Secret',
+        'Open cards did not update compatibility and visibility label');
+      byId('selCombine').click();
+      assert(sent.at(-1)[0] === 'combineIntoDeck' && selection.size === 0, 'Combine did not send and clear');
+      set('a', 'prop', { shape: 'poker_chip' }); set('b', 'prop', { shape: 'poker_chip' }); select('a', 'b');
+      byId('selGather').click();
+      assert(sent.at(-1)[0] === 'dispenseFromPieces' && selection.size === 0, 'Gather did not send and clear');
+      select('a', 'b'); byId('selDelete').click();
+      assert(sent.at(-1)[0] === 'removeGroup' && selection.size === 0, 'Delete did not send and clear');
+      select('a'); byId('selClear').click(); selection.update();
+      assert(byId('selActions').hidden && scene.children.length === 0, 'Clear left toolbar or rings visible');
+      document.querySelector('.selectTool').click();
+      assert(selection.isActive() && [...document.querySelectorAll('.selectTool')].every((b) => b.classList.contains('on')),
+        'Select controls did not synchronize');
+      assert(selection.beginPointer({ primary: true, touch: true }, 'a'), 'Touch Select tool did not select');
+      selection.endPointer({}); selection.escape();
+      assert(!selection.isActive() && selection.has('a'), 'Escape did not leave selection intact after tool exit');
+      set('a', 'prop', { shape: 'go' }); set('b', 'prop', { shape: 'go', team: 1 }); select('a', 'b');
+      byId('selSwatches').children[1].click();
+      assert(sent.at(-1)[0] === 'recolorGroup' && sent.at(-1)[1].team === 1, 'Team swatch did not switch team');
+      byId('selRecolor').classList.add('open');`,
+  },
+  {
     name: 'rows',
     page: '/__rows.html',
     root: '#gallery',

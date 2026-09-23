@@ -61,6 +61,7 @@ import { createOverlays } from './table/overlays.js';
 import { createTrays } from './table/trays.js';
 import { createHand } from './table/hand.js';
 import { createInspection } from './table/inspection.js';
+import { createSelection } from './table/selection.js';
 import {
   applyTransform,
   createPieceView,
@@ -77,19 +78,11 @@ import {
   DICE_SETS,
   DICE_FINISHES,
   DICE_FINISH_FALLBACK,
-  PALETTE,
-  COLORS,
   readableInk,
-  recolorPalette,
   deckHeight,
   timerLive,
   formatMeasure,
   dispenserDefinition,
-  dispenserVariant,
-  customDispenserForItem,
-  dispensedSpec,
-  dispenserForItem,
-  itemMatchesDispenser,
   gridActive,
   gridFootprintCells,
   snapToCell,
@@ -685,7 +678,7 @@ function rebuildGrid() {
       () => {
         // name tag while held; also drop it from my selection if someone else grabs it
         updateHeldLabel(id, piece.owner);
-        if (piece.owner && piece.owner !== mySession && selection.has(id)) selection.delete(id);
+        if (piece.owner && piece.owner !== mySession && selection.has(id)) selection.remove(id);
       },
       false,
     );
@@ -740,7 +733,7 @@ function rebuildGrid() {
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
     if (inspection.isInspecting(id)) inspection.releaseInspect();
     updateHeldLabel(id, ''); // drop its name tag if any
-    selection.delete(id); // never keep a removed piece selected
+    selection.remove(id); // never keep a removed piece selected
     meshes.delete(id);
     const surface = boardDropSurfaces.get(id);
     if (surface) disposeColliderSurface(surface.root);
@@ -1672,8 +1665,7 @@ function rebuildGrid() {
   room.onMessage('matList', (mats) => {
     if (window.onLibraryList) window.onLibraryList('mat', mats);
   });
-  document.querySelectorAll('.selectTool').forEach((b) => (b.onclick = () => setSelMode(!selMode))); // Select tool: felt-drag boxes a selection
-  // (the #selSwatches row is built per-selection by refreshSelTools — it depends on what's selected)
+  selection.bindModeControls();
   trays.bindControls(); // visit/leave the tray, spawn dice, roll, scoop, and clear
   {
     const setRow = byId('traySetSwatches'); // named dice sets: one click = a matching set for all my dice
@@ -2173,7 +2165,7 @@ function applyHeldRotation(raw, fine = false) {
     delta = angle - down.rotateSent,
     now = performance.now();
   if (Math.abs(delta) > 1e-4 && (!fine || now - down.lastRotateSent > 16)) {
-    room.send('rotateGroup', { ids: down.group ? [...selection] : [down.id], angle: delta });
+    room.send('rotateGroup', { ids: down.group ? selection.ids() : [down.id], angle: delta });
     down.rotateSent = angle;
     down.lastRotateSent = now;
   }
@@ -2570,16 +2562,9 @@ const onPointerDown = (e) => {
   const id = pickId(e.touch ? CONFIG.input.touchHitPx : 0);
   // Multi-select gesture: the additive modifier (Shift) or the Select tool. Click a piece → toggle
   // it in/out; drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
-  if (e.primary && ((e.additive && !e.rotate) || selMode)) {
-    selGesture = true;
+  if (selection.beginPointer(e, id)) {
     controls.enabled = false;
     renderer.domElement.setPointerCapture(e.pointerId);
-    if (id) {
-      selToggle(id);
-    } else {
-      marquee = { sx: e.clientX, sy: e.clientY, add: e.additive || selMode };
-      showMarquee(e.clientX, e.clientY, e.clientX, e.clientY);
-    } // Select tool (touch) adds by default; Shift adds on desktop
     down = null;
     return;
   }
@@ -2594,7 +2579,7 @@ const onPointerDown = (e) => {
         return;
       }
       overlays.select(null); // left-click empty felt → deselect
-      clearSelection(); // …and drop any multi-selection (design-tool convention)
+      selection.clear(); // …and drop any multi-selection (design-tool convention)
     }
     down = null;
     return; // empty felt → let OrbitControls orbit/pan
@@ -2603,7 +2588,7 @@ const onPointerDown = (e) => {
   // A left-drag on a SELECTED piece moves the whole selection; dragging an unselected piece drops
   // the selection first (design-tool convention). Right-drag (decks) is never a group move.
   const group = e.primary && selection.has(id);
-  if (e.primary && !selection.has(id)) clearSelection();
+  if (e.primary && !selection.has(id)) selection.clear();
   down = {
     id,
     type,
@@ -2636,10 +2621,7 @@ const onPointerDown = (e) => {
 // wheel (raise/lower a held piece) → public/controls.js → INPUT.raiseAxis
 
 const onPointerMove = (e) => {
-  if (marquee) {
-    showMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY);
-    return;
-  } // painting a selection box
+  if (selection.movePointer(e)) return;
   if (overlays.isMeasuring()) {
     // live local preview of the overlay being dragged out
     overlays.updateMeasure(e);
@@ -2685,7 +2667,7 @@ const onPointerMove = (e) => {
       prevThrowTime = performance.now();
       throwVel.set(0, 0, 0);
       if (down.group)
-        room.send('grabGroup', { ids: [...selection], anchor: down.id }); // claim the whole selection
+        room.send('grabGroup', { ids: selection.ids(), anchor: down.id }); // claim the whole selection
       else room.send('grab', { id: down.id });
       playSfx(
         pieceIsTile(down.id)
@@ -2780,14 +2762,7 @@ const onPointerMove = (e) => {
   }
 };
 const endGesture = (e) => {
-  if (selGesture) {
-    // finish a shift/select gesture: commit the marquee box, then hand control back
-    if (marquee) {
-      finalizeMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY, marquee.add);
-      hideMarquee();
-      marquee = null;
-    }
-    selGesture = false;
+  if (selection.endPointer(e)) {
     try {
       renderer.domElement.releasePointerCapture(e.pointerId);
     } catch {}
@@ -2854,14 +2829,7 @@ const onKeyDown = (e) => {
     trays.close();
     return;
   }
-  if (e.key === 'Escape' && selMode) {
-    setSelMode(false);
-    return;
-  } // exit the Select tool first
-  if (e.key === 'Escape' && selection.size) {
-    clearSelection();
-    return;
-  } // …then clear a selection
+  if (e.key === 'Escape' && selection.escape()) return;
   if (e.key === 'Escape' && overlays.isMeasuring()) {
     const r = byId('regionTR');
     if (r && r._close) r._close();
@@ -2895,48 +2863,12 @@ const onKeyDown = (e) => {
     }
   }
 
-  // Multi-select batch ops — act on the whole selection (dice/cards ops hit only the matching kind).
-  if (selection.size) {
-    const ids = [...selection],
-      k = e.key.toLowerCase();
-    if (k === 'u') {
-      room.send('setStandGroup', { ids });
-      return;
-    } // stand / lie flat, as a unit
-    if (k === 'g') {
-      room.send('setSnapGroup', { ids });
-      return;
-    } // snap-to-grid, as a unit
-    if (e.key === '[') {
-      room.send('rotateGroup', { ids, dir: -1 });
-      return;
-    } // rotate the formation −45°
-    if (e.key === ']') {
-      room.send('rotateGroup', { ids, dir: 1 });
-      return;
-    } // rotate the formation +45°
-    if (k === 'r') {
-      room.send('rollGroup', { ids });
-      return;
-    } // roll every die in the selection
-    if (k === 'f') {
-      room.send('flipGroup', { ids });
-      return;
-    } // flip every card in the selection
-    if (k === 'h') {
-      room.send('takeGroup', { ids });
-      return;
-    } // take every card into your hand
-  }
+  if (selection.command(e.key)) return;
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (e.key === 'Backspace') e.preventDefault();
     if (overlays.removeSelected()) return; // a selected overlay takes priority
-    if (selection.size) {
-      room.send('removeGroup', { ids: [...selection] });
-      clearSelection();
-      return;
-    } // delete the whole multi-selection
+    if (selection.removeSelected()) return;
     const id = heldOrHoveredId();
     if (id) {
       room.send('remove', { id });
@@ -3938,350 +3870,17 @@ scene.add(dropMarker);
 const _dropBox = new THREE.Box3(),
   _dropSize = new THREE.Vector3(); // reused each frame to size the ring to the held piece
 
-// ===== Multi-select (Phase 1): a LOCAL selection set + on-felt highlight. Two gestures feed it —
-// a Shift modifier and a Select tool — and neither touches synced state (selection is personal,
-// like a cursor). Moving/deleting the group comes in later phases.
-const selection = new Set(); // selected piece ids (mine only)
-let selMode = false; // the Select tool is active → a felt drag boxes instead of orbiting
-let marquee = null; // { sx, sy, add } while boxing; null otherwise
-let selGesture = false; // a shift/select pointer gesture is in progress (so pointerup finalizes it)
-const selRings = new Map(); // id -> highlight ring mesh (pooled)
-const SEL_COLOR = '#c9a25a'; // fallback if the accent var isn't a valid hex
-// MY UI accent colour (the one chosen in the lobby, stored as the `--accent` CSS var). The
-// selection is private to me, so it's tinted with my own accent.
-const selColor = () => {
-  const v = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-  return /^#[0-9a-f]{6}$/i.test(v) ? v : SEL_COLOR;
-};
-
-const selectable = (id) => {
-  const e = meshes.get(id);
-  return !!e && PHYS[e.type].mass > 0;
-}; // static boards can't be selected
-function selToggle(id) {
-  if (!selectable(id)) return;
-  if (selection.has(id)) selection.delete(id);
-  else selection.add(id);
-}
-function clearSelection() {
-  selection.clear();
-}
-// The color options for ONE selected piece: dice + general props are freeform (the general
-// palette); coins are metals; team pieces pick a set. Returns { sig, team, swatches } — `sig`
-// is a canonical string so a whole selection can be checked for agreement — or null if the
-// piece isn't recolorable (cards). Dice fold in with general props (any color, 'free').
-function selColorDesc(piece) {
-  if (piece.type === 'die') return { sig: 'free', team: false, swatches: PALETTE };
-  if (piece.type !== 'prop' && piece.type !== 'dispenser') return null; // cards, etc.
-  let props;
-  try {
-    props = JSON.parse(piece.props || '{}');
-  } catch {
-    props = {};
-  }
-  const dispDef = piece.type === 'dispenser' ? dispenserDefinition(props) : null;
-  const opt = recolorPalette(piece.type, props, dispDef);
-  if (!opt) return null;
-  const key = opt.swatches.map((s) => s.hex).join(',');
-  const sig = opt.team ? 'team:' + key : opt.free ? 'free' : 'pal:' + key;
-  return { sig, team: opt.team, swatches: opt.swatches };
-}
-// --- Compose (multi-select -> one composite piece) -------------------------------------------
-// Eligibility mirrors selectionPalette: a signature fn maps each piece to a compatibility key (or
-// null if the op can't touch it), and the selection is 'ok' when 2+ agree, 'mixed' when 2+
-// disagree, or hidden when fewer than 2 apply. The server re-checks authoritatively.
-// Match geometry, snap and visibility; only secret cards require a shared back.
-function cardFamilySig(piece) {
-  if (piece.type !== 'card' && piece.type !== 'deck') return null;
-  let props;
-  try {
-    props = JSON.parse(piece.props || '{}');
-  } catch {
-    props = {};
-  }
-  return JSON.stringify([
-    props.open ? null : props.back || 'back',
-    props.tile ?? null,
-    props.geom ?? null,
-    !!props.open,
-    !!props.snap,
-  ]);
-}
-// A dispenser key = same kind + tint/team; infinite bowls are excluded (nothing to pour).
-function dispenserSig(piece) {
-  if (piece.type !== 'dispenser') return null;
-  let props;
-  try {
-    props = JSON.parse(piece.props || '{}');
-  } catch {
-    props = {};
-  }
-  const def = dispenserDefinition(props);
-  if (!def || def.infinite) return null;
-  return dispenserVariant(props);
-}
-// Fold the selection through a signature fn: 'ok' | 'mixed' | null.
-function composeState(sigOf) {
-  let sig = null;
-  let n = 0;
-  for (const id of selection) {
-    const piece = room?.state.pieces.get(id);
-    if (!piece) continue;
-    const s = sigOf(piece);
-    if (s == null) continue;
-    n++;
-    if (sig == null) sig = s;
-    else if (s !== sig) return 'mixed';
-  }
-  return n >= 2 ? 'ok' : null;
-}
-// Reflect a compose state onto its button: hidden when it doesn't apply, greyed when the
-// selection is mixed, enabled when it agrees.
-function setComposeBtn(el, state, okTitle, mixedTitle) {
-  if (!el) return;
-  el.hidden = state == null;
-  const mixed = state === 'mixed';
-  el.disabled = mixed;
-  el.classList.toggle('disabled', mixed);
-  el.title = mixed ? mixedTitle : okTitle;
-}
-// The Gather button is one verb over three dispenser cases, chosen by what's selected:
-//   2+ dispensers                       -> merge them           (gatherDispensers)
-//   1 dispenser + matching loose pieces -> pour the pieces in   (absorbIntoDispenser)
-//   2+ matching loose pieces, no disp   -> mint a new dispenser (dispenseFromPieces)
-// Returns { state:'ok'|'mixed'|null, msg, okTitle }; the server re-checks authoritatively.
-function gatherPlan() {
-  const disps = [];
-  const items = [];
-  for (const id of selection) {
-    const piece = room?.state.pieces.get(id);
-    if (!piece) continue;
-    if (piece.type === 'dispenser') disps.push(piece);
-    else if (piece.type === 'prop') {
-      let props;
-      try {
-        props = JSON.parse(piece.props || '{}');
-      } catch {
-        props = {};
-      }
-      if (dispenserForItem(props.shape) || customDispenserForItem(props)) items.push(props);
-    }
-  }
-  if (disps.length >= 2)
-    return {
-      state: composeState(dispenserSig),
-      msg: 'gatherDispensers',
-      okTitle: 'Merge into one dispenser',
-    };
-  if (disps.length === 1) {
-    let dp;
-    try {
-      dp = JSON.parse(disps[0].props || '{}');
-    } catch {
-      dp = {};
-    }
-    const want = dispensedSpec(dp);
-    if (items.some((p) => itemMatchesDispenser(want, p)))
-      return { state: 'ok', msg: 'absorbIntoDispenser', okTitle: 'Add the loose pieces to it' };
-    return { state: null };
-  }
-  if (items.length >= 2) {
-    const sig = (p) =>
-      p.asset
-        ? JSON.stringify([String(p.asset.id), p.color ?? null, p.finish ?? null])
-        : JSON.stringify([p.shape, p.color ?? null, p.team ?? null]);
-    const s0 = sig(items[0]);
-    if (items.some((p) => sig(p) !== s0))
-      return { state: 'mixed', msg: 'dispenseFromPieces', okTitle: '' };
-    return { state: 'ok', msg: 'dispenseFromPieces', okTitle: 'Gather into a new dispenser' };
-  }
-  return { state: null };
-}
-// The palette shared by the WHOLE selection, for the recolor bar:
-//   null            → nothing recolorable is selected (all cards) → hide the bar
-//   { mixed:true }  → recolorable pieces disagree (e.g. a coin + a token) → show the bar disabled
-//   { sig,team,swatches } → they all share one palette → show those swatches
-function selectionPalette() {
-  let common = null;
-  for (const id of selection) {
-    const piece = room.state.pieces.get(id);
-    if (!piece) continue;
-    const desc = selColorDesc(piece);
-    if (!desc) continue; // ignore non-colorable (they'd be skipped anyway)
-    if (!common) common = desc;
-    else if (desc.sig !== common.sig) return { mixed: true };
-  }
-  return common;
-}
-// Recolor the whole selection to a freeform/palette color (Neutral → the neutral tint). Dice
-// numbers auto-contrast; the server applies the color only where it fits.
-function recolorSelColor(hex) {
-  if (!selection.size || !room) return;
-  const color = hex == null ? COLORS.neutralProp : hex;
-  room.send('recolorGroup', { ids: [...selection], color, textColor: readableInk(color) });
-}
-// Recolor a team-only selection by switching every piece to set 0/1.
-function recolorSelTeam(i) {
-  if (!selection.size || !room) return;
-  room.send('recolorGroup', { ids: [...selection], team: i ? 1 : 0 });
-}
-// Rebuild the recolor bar to match the current selection: the shared palette's swatches when the
-// selection agrees, a disabled "mixed" state when it doesn't, hidden when nothing's recolorable.
-let selBarSig = null; // last-rendered state, to avoid rebuilding every frame
-function refreshSelTools() {
-  const abar = byId('selActions');
-  if (abar) abar.hidden = !selection.size; // batch-op bar shows for any selection (also in the editor, which has no recolor bar)
-  setComposeBtn(
-    byId('selCombine'),
-    composeState(cardFamilySig),
-    'Combine into one deck',
-    'Match shape, snap and double-sided settings; secret cards must also share a back',
-  );
-  const gplan = gatherPlan();
-  setComposeBtn(byId('selGather'), gplan.state, gplan.okTitle, 'This selection can’t be gathered');
-  // The 2-Sided toggle reflects the selection's current mode: it reads "Secret" once anything in the
-  // selection is already double-sided (pressing it then makes them secret again), else "2-Sided".
-  const twoBtn = byId('sel2Sided');
-  if (twoBtn) {
-    let anyOpen = false;
-    for (const id of selection) {
-      const piece = room?.state.pieces.get(id);
-      if (!piece || (piece.type !== 'card' && piece.type !== 'deck')) continue;
-      try {
-        if (JSON.parse(piece.props || '{}').open) {
-          anyOpen = true;
-          break;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-    const lbl = twoBtn.querySelector('.lbl');
-    if (lbl) lbl.textContent = anyOpen ? 'Secret' : '2-Sided';
-    twoBtn.title = anyOpen
-      ? 'Make secret (flip conceals the front)'
-      : 'Make double-sided (flip turns it over)';
-  }
-  const bar = byId('selRecolor');
-  if (!bar) return;
-  const desc = selection.size ? selectionPalette() : null;
-  const sig = !selection.size ? '' : !desc ? 'none' : desc.mixed ? 'mixed' : desc.sig;
-  bar.hidden = !selection.size || sig === 'none'; // no selection, or nothing colorable → hide
-  if (bar.hidden) {
-    selBarSig = null;
-    return;
-  }
-  if (sig === selBarSig) return; // unchanged → keep the DOM
-  selBarSig = sig;
-  const row = byId('selSwatches'),
-    note = byId('selNote');
-  if (row) row.innerHTML = '';
-  if (sig === 'mixed') {
-    bar.classList.add('disabled');
-    if (note) note.textContent = 'Mixed selection — recolor unavailable';
-    return;
-  }
-  bar.classList.remove('disabled');
-  if (note) note.textContent = 'Recolor selection';
-  if (row)
-    desc.swatches.forEach((s, i) => {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'swatch' + (s.hex == null ? ' neutral' : '');
-      chip.title = s.name;
-      if (s.hex != null)
-        chip.style.background = '#' + ((s.hex >>> 0) & 0xffffff).toString(16).padStart(6, '0');
-      chip.onclick = desc.team ? () => recolorSelTeam(i) : () => recolorSelColor(s.hex);
-      row.appendChild(chip);
-    });
-}
-function setSelMode(on) {
-  selMode = on;
-  document.querySelectorAll('.selectTool').forEach((b) => b.classList.toggle('on', on));
-  renderer.domElement.classList.toggle('selecting', on);
-}
-// A flat ring under a selected piece, styled like dropMarker but tinted + opaque.
-function makeSelRing() {
-  const m = new THREE.Mesh(
-    new THREE.RingGeometry(CONFIG.marker.inner, CONFIG.marker.outer, 40),
-    new THREE.MeshBasicMaterial({
-      color: selColor(),
-      transparent: true,
-      opacity: 0.95,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  );
-  m.rotation.x = -Math.PI / 2;
-  m.renderOrder = 3;
-  scene.add(m);
-  return m;
-}
-const _selBox = new THREE.Box3(),
-  _selSize = new THREE.Vector3();
-function updateSelectionRings() {
-  for (const [id, ring] of selRings)
-    if (!selection.has(id) || !meshes.get(id)) {
-      // drop stale rings
-      scene.remove(ring);
-      ring.geometry.dispose();
-      ring.material.dispose();
-      selRings.delete(id);
-    }
-  for (const id of selection) {
-    const entry = meshes.get(id);
-    if (!entry) continue;
-    let ring = selRings.get(id);
-    if (!ring) {
-      ring = makeSelRing();
-      selRings.set(id, ring);
-    } // tinted with my accent at creation
-    _selBox.setFromObject(entry.mesh);
-    _selBox.getSize(_selSize);
-    ring.scale.setScalar((Math.max(_selSize.x, _selSize.z) / 2 + 0.15) / CONFIG.marker.outer);
-    ring.position.set(
-      entry.mesh.position.x,
-      boardTopY + CONFIG.marker.lift + 0.012,
-      entry.mesh.position.z,
-    );
-  }
-  refreshSelTools(); // the recolor bar: shown/hidden + its swatches match what's selected
-}
-// Screen-space marquee: a fixed-position div the drag paints, then every piece whose projected
-// centre lands inside joins the selection (replace, or add when Shift-held).
-const _selV = new THREE.Vector3();
-function showMarquee(x0, y0, x1, y1) {
-  const el = byId('marquee');
-  if (!el) return;
-  const c = selColor();
-  el.style.borderColor = c;
-  el.style.background = c + '24'; // my colour + ~14% alpha (8-digit hex)
-  el.style.left = Math.min(x0, x1) + 'px';
-  el.style.top = Math.min(y0, y1) + 'px';
-  el.style.width = Math.abs(x1 - x0) + 'px';
-  el.style.height = Math.abs(y1 - y0) + 'px';
-  el.hidden = false;
-}
-function hideMarquee() {
-  const el = byId('marquee');
-  if (el) el.hidden = true;
-}
-function finalizeMarquee(x0, y0, x1, y1, add) {
-  if (!add) clearSelection();
-  const rect = renderer.domElement.getBoundingClientRect();
-  const minX = Math.min(x0, x1),
-    maxX = Math.max(x0, x1),
-    minY = Math.min(y0, y1),
-    maxY = Math.max(y0, y1);
-  for (const [id, entry] of meshes) {
-    if (PHYS[entry.type].mass <= 0) continue; // skip static boards
-    _selV.copy(entry.mesh.position).project(camera);
-    if (_selV.z > 1) continue; // behind the camera
-    const sx = rect.left + (_selV.x * 0.5 + 0.5) * rect.width;
-    const sy = rect.top + (-_selV.y * 0.5 + 0.5) * rect.height;
-    if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) selection.add(id);
-  }
-}
+const selection = createSelection({
+  THREE,
+  scene,
+  camera,
+  canvas: renderer.domElement,
+  meshes,
+  marker: CONFIG.marker,
+  getRoom: () => room,
+  getBoardTopY: () => boardTopY,
+  byId,
+});
 
 const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window.ottPerf(true)
 (function animate() {
@@ -4367,7 +3966,7 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
   } else {
     dropMarker.visible = false;
   }
-  updateSelectionRings(); // keep a highlight ring under each selected piece
+  selection.update(); // keep a highlight ring under each selected piece
   if (!trays.updateCamera()) {
     camera.position.sub(leanOffset); // undo last frame's lean so controls sees the true orbit position
     controls.update();
@@ -4586,7 +4185,7 @@ const INPUT = {
       overlays.isMeasuring() ||
       whiteboard.isOwning() ||
       inspection.isActive() ||
-      selMode
+      selection.isActive()
     )
       return; // a modal tool owns the gesture
     const id = down && down.id; // the piece the press landed on (null on empty felt)
@@ -4619,7 +4218,7 @@ const INPUT = {
   // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.
   rotateAxis: (dir) => {
     if (!room || inspection.isActive()) return; // a peek/inspect view owns the keyboard
-    const ids = selection.size ? [...selection] : down && down.grabbed ? [down.id] : [];
+    const ids = selection.size ? selection.ids() : down && down.grabbed ? [down.id] : [];
     if (ids.length) room.send('rotateGroup', { ids, angle: dir * ROT_STEP });
   },
   raiseAxis: (dir) => {
@@ -4765,44 +4364,7 @@ initTip(); // themed hover-hint (icons.js)
     .forEach((b) => holdRepeat(b, () => INPUT.rotateAxis(1), 60));
 }
 
-// Selection batch-op bar: touch-accessible equivalents of the U/G/R/F/H/Delete group keys.
-// (Rotation lives in the edge clusters; recolor stays in #selTools.)
-{
-  const send = (msg) => () => {
-    if (room && selection.size) room.send(msg, { ids: [...selection] });
-  };
-  const on = (id, fn) => {
-    const el = byId(id);
-    if (el) el.onclick = fn;
-  };
-  on('selStand', send('setStandGroup'));
-  on('selSnap', send('setSnapGroup'));
-  on('selFlip', send('flipGroup'));
-  on('sel2Sided', send('setOpenGroup'));
-  on('selRoll', send('rollGroup'));
-  on('selTake', send('takeGroup'));
-  const compose = (msg) => () => {
-    if (room && selection.size) {
-      room.send(msg, { ids: [...selection] });
-      clearSelection();
-    }
-  };
-  on('selCombine', compose('combineIntoDeck'));
-  on('selGather', () => {
-    const plan = gatherPlan();
-    if (room && selection.size && plan.state === 'ok' && plan.msg) {
-      room.send(plan.msg, { ids: [...selection] });
-      clearSelection();
-    }
-  });
-  on('selDelete', () => {
-    if (room && selection.size) {
-      room.send('removeGroup', { ids: [...selection] });
-      clearSelection();
-    }
-  });
-  on('selClear', () => clearSelection());
-}
+selection.bindActions();
 
 // Role gating here is by class, not by `hidden`: body.not-gm / body.not-admin hide
 // .gm-only / .admin-only in CSS. A collapsed container (.grp menu, closed #regionBL)
