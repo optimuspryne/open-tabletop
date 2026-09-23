@@ -403,7 +403,8 @@ are attached through DOM APIs and are genuinely used.
 4. Extract whiteboard. **Completed 2026-09-22.**
 5. Extract overlays. **Completed 2026-09-22; manually verified on a 3D board with a tall custom
    collider.**
-6. Extract trays. **Completed 2026-09-22; manually verified.**
+6. Extract trays. **Completed 2026-09-22; manually verified.** Follow-up tray collision-height
+   tuning and non-overlapping Scoop placement were also manually verified.
 7. Extract hand.
 8. Extract inspection.
 

@@ -34,12 +34,17 @@ function vector() {
 function dieBody(seat = 0) {
   return {
     __traySeat: seat,
+    boundingRadius: 0.6,
     position: vector(),
     velocity: vector(),
     angularVelocity: vector(),
     wakeCount: 0,
+    sleepCount: 0,
     wakeUp() {
       this.wakeCount++;
+    },
+    sleep() {
+      this.sleepCount++;
     },
   };
 }
@@ -154,8 +159,10 @@ test('tray actions affect only the caller seat and its dice', async () => {
 
   assert.equal(room.state.trays.get('0'), true);
   assert.equal(mine.velocity.y, 0); // scoop settles the die after the roll
-  assert.equal(mine.wakeCount, 2);
+  assert.equal(mine.wakeCount, 1);
+  assert.equal(mine.sleepCount, 1);
   assert.equal(theirs.wakeCount, 0);
+  assert.equal(theirs.sleepCount, 0);
   assert.equal(events.filter(({ name }) => name === 'clearTray').length, 1);
 });
 

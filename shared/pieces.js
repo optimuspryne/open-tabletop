@@ -1045,17 +1045,26 @@ export function dieVerts(sides, radius = dieR(sides)) {
 
 // --- Dice tray --------------------------------------------------------------
 // A walled rolling area that rides the same circular track as the whiteboard (angle), one
-// gap past the table edge. The geometry lives here so the server (cannon-es floor+walls), the
-// client (Three.js mesh), and the tests all build the SAME box from one source — the tray can
-// never look one size and collide at another. Everything in world units.
+// gap past the table edge. Edit these knobs to tune its size and placement. The visible tray
+// and physics tray share one footprint; collision walls deliberately rise higher than the mesh
+// so dice stay contained without blocking the player's view. Everything is in world units.
 export const TRAY = {
-  hx: 4.5,
-  hz: 3.3, // floor half-extents (X across the track, Z radial) — a roomy roll area
-  wall: 1.65, // wall half-height (base at y=0, so walls stand 2×this tall); the lid caps the wall tops, so this sets the roll headroom
-  thick: 0.0625, // wall half-thickness (thin rails)
-  floorThick: 0.0625, // floor half-height (its TOP sits at y=0, level with the table surface)
-  lid: 0.3, // half-thickness of an INVISIBLE ceiling that caps the box so nothing bounces out
-  margin: 15, // gap between the table edge and the track the tray centre rides
+  hx: 4.5, // floor half-width, across the track
+  hz: 3.3, // floor half-depth, toward/away from the table
+  wall: 1.65, // visible wall half-height; its top is at 2 × wall = 3.3
+  collisionWallScale: 1.5, // collision-wall height / visible-wall height; ceiling follows their top
+  thick: 0.0625, // wall half-thickness
+  floorThick: 0.0625, // floor half-thickness; its top stays at y=0
+  lid: 0.3, // invisible ceiling half-thickness
+  margin: 15, // gap from the table edge to the tray-centre track
+  spawnInset: 0.7, // keep newly rolled dice this far inside the floor edges
+  spawnY: 1.3, // initial dice height above the tray floor
+  recoveryY: 1, // height for dice returned to their tray after a table resize
+  recoverySlack: 0.2, // tolerance when deciding whether a die left its tray
+  scoopGap: 0.15, // empty space between dice after Scoop
+  scoopGridStep: 0.2, // search resolution for Scoop positions near the tray centre
+  scoopFloorLift: 0.01, // tiny clearance above the floor when scooped dice are put to sleep
+  scoopRadiusFallback: 0.8, // clearance radius if a die body has no measured bounding radius
 };
 // Each seat's angle on the track, derived from its outward direction in seatLayoutFor()
 // (θ = atan2(outX, outZ), matching the track's (sin, cos) convention). A personal tray sits
@@ -1227,6 +1236,12 @@ export function trayParts(T = TRAY) {
     { hx: t, hy: wy, hz: T.hz + t, x: T.hx + t, y: wy, z: 0 }, // right
     { hx: T.hx + t, hy: lid, hz: T.hz + t, x: 0, y: top + lid, z: 0, noMesh: true }, // invisible lid (physics only) — bottom flush with the wall tops
   ];
+}
+
+// Physics uses the same footprint and floor, but taller invisible walls and a lid whose
+// bottom is flush with those collision-wall tops. The rendered tray still uses trayParts().
+export function trayCollisionParts(T = TRAY) {
+  return trayParts({ ...T, wall: T.wall * T.collisionWallScale });
 }
 // Rotate a local (x,z) by `angle` about Y and offset to a centre — the transform both the
 // physics bodies and the render meshes apply so they land in the same place.

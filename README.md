@@ -484,7 +484,8 @@ CI runs the same integration tests against its own PostgreSQL 16 service.
 - **Dice and personal trays.** Numbered d4, d6, d8, d10, d12, and d20 share their
   mesh/collider geometry. Body and number colors are independent. Each seat can
   open a private-positioned tray, stock dice into it, roll or re-rack only that
-  seat's dice, and clear it.
+  seat's dice, and clear it. Re-racking spaces dice by collider size near the
+  center and settles them without an overlap-induced bounce.
 - **Props and dispensers.** Built-ins include primitive solids, checkers, Go
   stones, coins, poker chips, a generic token, and a complete modeled chess set.
   Finite chip/coin stacks dispense matching pieces and shrink; Go bowls dispense
@@ -587,6 +588,11 @@ Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus a
 
 ## Tuning knobs (edit and reload)
 
+- **`TRAY`** in `shared/pieces.js` — personal dice-tray footprint, visual wall,
+  collision-wall scale, ceiling thickness, track placement, die spawn/recovery,
+  and Scoop spacing. The default `collisionWallScale: 1.5` raises the invisible
+  collision walls and ceiling without raising the visible walls. `trayParts()`
+  builds the visible mesh; `trayCollisionParts()` builds the server collider.
 - **`SIM`** in `server.js` — simulation feel: gravity, damping, card-stack stability
   (`SIM.cards.colliderThick` is the main dial), solver iterations, timestep,
   throw/roll behavior, collision sounds, spawn/bounds behavior, self-righting,

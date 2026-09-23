@@ -7,6 +7,7 @@ import {
   TRAY,
   trayCenter,
   trayParts,
+  trayCollisionParts,
   trayPlace,
   inTray,
   dieR,
@@ -20,7 +21,7 @@ function buildSeatTray(world, seat, tableX, tableZ, mat) {
     center = trayCenter(angle, tableX, tableZ);
   const spin = new CANNON.Quaternion();
   spin.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
-  for (const part of trayParts()) {
+  for (const part of trayCollisionParts()) {
     const b = new CANNON.Body({ mass: 0, material: mat });
     b.addShape(new CANNON.Box(new CANNON.Vec3(part.hx, part.hy, part.hz)));
     const p = trayPlace(part, center, angle);
@@ -58,6 +59,20 @@ test('trayParts: a floor (top at y=0) + four walls + an invisible lid', () => {
   );
 });
 
+test('collision walls scale independently of visible walls and carry the ceiling with them', () => {
+  const visual = trayParts();
+  const collision = trayCollisionParts();
+  assert.deepEqual(collision[0], visual[0], 'floor stays at the same height');
+  for (let i = 1; i <= 4; i++) {
+    assert.equal(collision[i].hy, visual[i].hy * TRAY.collisionWallScale);
+    assert.equal(collision[i].y, visual[i].y * TRAY.collisionWallScale);
+    assert.equal(collision[i].hx, visual[i].hx);
+    assert.equal(collision[i].hz, visual[i].hz);
+  }
+  assert.equal(collision[5].y - collision[5].hy, 2 * TRAY.wall * TRAY.collisionWallScale);
+  assert.equal(collision[5].hy, visual[5].hy);
+});
+
 test('trayPlace / inTray: the tray centre is inside; the table centre is not', () => {
   for (const angle of [0, 0.7, Math.PI, 2.5]) {
     const c = trayCenter(angle, 10, 7);
@@ -92,7 +107,7 @@ test('physics: a die dropped into the walled tray stays contained', () => {
     center = trayCenter(angle, 10, 7);
   const spin = new CANNON.Quaternion();
   spin.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
-  for (const part of trayParts()) {
+  for (const part of trayCollisionParts()) {
     // build the tray exactly as the server does
     const b = new CANNON.Body({ mass: 0 });
     b.addShape(new CANNON.Box(new CANNON.Vec3(part.hx, part.hy, part.hz)));
@@ -116,7 +131,7 @@ test('physics: a die dropped into the walled tray stays contained', () => {
     'die stayed within the walls',
   );
   assert.ok(
-    die.position.y > -0.1 && die.position.y < 2 * TRAY.wall + 1,
+    die.position.y > -0.1 && die.position.y < 2 * TRAY.wall * TRAY.collisionWallScale + 1,
     'die rests on the floor, not through it or over the wall',
   );
 });
@@ -128,7 +143,7 @@ test('physics: a "Roll all" of several tray dice keeps them all in the tray', ()
     center = trayCenter(angle, 12, 8);
   const spin = new CANNON.Quaternion();
   spin.setFromAxisAngle(new CANNON.Vec3(0, 1, 0), angle);
-  for (const part of trayParts()) {
+  for (const part of trayCollisionParts()) {
     const b = new CANNON.Body({ mass: 0 });
     b.addShape(new CANNON.Box(new CANNON.Vec3(part.hx, part.hy, part.hz)));
     const p = trayPlace(part, center, angle);
@@ -158,7 +173,10 @@ test('physics: a "Roll all" of several tray dice keeps them all in the tray', ()
       true,
       'a rolled die stayed in the tray',
     );
-    assert.ok(d.position.y < 2 * TRAY.wall + 1.2, 'a rolled die did not leap the wall');
+    assert.ok(
+      d.position.y < 2 * TRAY.wall * TRAY.collisionWallScale + 1.2,
+      'a rolled die did not leap the wall',
+    );
   }
 });
 

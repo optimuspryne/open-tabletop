@@ -1,7 +1,7 @@
-import { seatAngle, trayPlace } from '../../../shared/pieces.js';
 import { RANK } from '../../permissions.js';
 import { boundedString, oneField, pointPayload, showPayload } from '../../message-validation.js';
 import { safeMessage } from '../safe-message.js';
+import { scoopTrayDice } from '../trays.js';
 
 export function registerRoomFeatureHandlers(
   room,
@@ -25,27 +25,7 @@ export function registerRoomFeatureHandlers(
   featureMessage('trayScoop', (client) => {
     const seat = room.seatOf(client);
     if (seat == null || !room.state.trays.get(String(seat))) return;
-    const center = room.trayCenterFor(seat);
-    const angle = seatAngle(seat);
-    let count = 0;
-    room.state.pieces.forEach((piece, id) => {
-      const body = room.bodies.get(id);
-      if (piece.type !== 'die' || !body || body.__traySeat !== seat) return;
-      const position = trayPlace(
-        {
-          x: (random() - 0.5) * 1.4,
-          y: 0.6,
-          z: (random() - 0.5) * 1,
-        },
-        center,
-        angle,
-      );
-      body.position.set(position.x, position.y, position.z);
-      body.velocity.setZero();
-      body.angularVelocity.setZero();
-      body.wakeUp();
-      count++;
-    });
+    const count = scoopTrayDice(room, seat);
     if (count) room.broadcast('sfx', { type: 'die-roll' });
   });
 

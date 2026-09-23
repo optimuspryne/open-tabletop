@@ -14,6 +14,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Raise the dice tray's invisible collision walls and ceiling to 1.5× their visual-wall height
+  while keeping the visible walls unchanged, and collect tray geometry, placement, spawn, recovery,
+  and Scoop tuning values in shared knobs.
 - Extract personal dice-tray rendering, placement, camera travel, die lookup, and tray actions
   into a dedicated client controller.
 - Extract measurement overlay construction, selection, previews, permission checks, drag state,
@@ -59,6 +62,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   browser rendering, server validation, scene restoration, and history retention share one policy.
 
 ### Fixed
+- Space scooped dice by their collider size and settle them on the tray floor so they no longer
+  spawn overlapping at the center and scatter when physics resolves the collision.
 - Keep every Dice Box add-die choice on the same compact grid footprint instead of mixing square
   icon buttons with differently sized model-die buttons.
 - Place measurement shapes and labels on the rendered board surface instead of a board-wide

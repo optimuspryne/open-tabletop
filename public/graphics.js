@@ -2420,9 +2420,9 @@ export function gridMesh(scale = {}, tableX = TABLE.x, tableZ = TABLE.z, shape =
   return lines;
 }
 
-// ---- Dice tray: the visual box (floor + 4 walls), matching the server's physics ----
-// Built from the SAME trayParts() the collider uses, in tray-LOCAL space, so the mesh and the
-// walls line up exactly. The client parks the group at the tray's track position and rotates
+// ---- Dice tray: visible floor + 4 walls; collision walls extend higher --------
+// trayParts() shares the physics footprint and floor, but leaves the upper wall extension
+// and ceiling invisible. The client parks the group at the tray's track position and rotates
 // it by the tray angle (Three's rotation.y matches the server's trayPlace transform).
 function trayMesh() {
   const g = new THREE.Group();
