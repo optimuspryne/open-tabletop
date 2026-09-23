@@ -203,6 +203,85 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'player-presence',
+    root: '#players',
+    expect: { selector: '#players .prow', min: 3 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const THREE = await import('three');
+      const { createPresence } = await import('/table/presence.js');
+      const { seatAngle } = await import('/shared/pieces.js');
+      const byId = (id) => document.getElementById(id);
+      const me = { name: '<img src=x onerror=alert(1)>', role: 'gm', seat: 0, order: 0,
+        color: '#c9a25a', avatar: '', hand: 2, showing: 0 };
+      const other = { name: 'Bob', role: 'owner', seat: 1, order: 1,
+        color: '#55aaff', avatar: 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg"/%3E', hand: 3, showing: 1 };
+      const third = { ...other, name: 'Carol', role: 'player', seat: 2, order: 2, avatar: '' };
+      const state = { players: new Map([['me', me], ['bob', other], ['carol', third]]),
+        tableX: 10, tableZ: 7, turn: 'me', turnPending: '', roomName: '' };
+      const sent = [], listeners = new Map(), messages = new Map();
+      const room = { state, send: (...args) => sent.push(args), onMessage: (key, fn) => messages.set(key, fn) };
+      let rank = 2, removed;
+      const cb = (object) => ({
+        players: { onAdd: (fn) => state.players.forEach(fn), onRemove: (fn) => { removed = fn; } },
+        listen(key, fn) {
+          if (!listeners.has(object)) listeners.set(object, new Map());
+          listeners.get(object).set(key, fn);
+        },
+      });
+      const change = (object, key, value) => { object[key] = value; listeners.get(object).get(key)(); };
+      const presence = createPresence({
+        THREE, scene: new THREE.Scene(), camera: new THREE.PerspectiveCamera(),
+        controls: { target: new THREE.Vector3(), update() {} },
+        cardMesh: () => new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1.5)),
+        makePlayerTexture: () => new THREE.Texture(), makeYouChipTexture: () => new THREE.Texture(),
+        nameTag: () => new THREE.Texture(), disposeSprite: () => {}, resizeToCanvas: () => {},
+        seatAngle, setSeatCameraReady: () => {}, label: { w: 2, h: 0.5, lift: 1 },
+        getRoom: () => room, getSessionId: () => 'me', getRank: () => rank,
+        getPieceVisual: () => null, getRevealed: () => [], setRevealed: () => {}, clearRevealed: () => {},
+        onLocalRole: (role) => { rank = role === 'gm' ? 2 : 0; },
+        onPlayersChanged: () => {}, onPlayerRemoved: () => {}, onHydration: () => {}, byId,
+      });
+      presence.bindMessages(room); presence.bindRoom(room, cb); presence.bindControls();
+      const rows = () => [...byId('players').querySelectorAll('.prow[data-sid]')];
+      assert(rows().map((row) => row.dataset.sid).join() === 'me,bob,carol', 'Roster order is wrong');
+      assert(!byId('players').querySelector('[onerror]') && rows()[0].textContent.includes(me.name),
+        'Player name was interpreted as HTML');
+      assert(rows()[1].querySelector('.pav') && rows()[2].querySelector('.dot'), 'Avatar/color fallback is missing');
+      assert(rows()[0].querySelector('.rolebadge').textContent === 'gm' && !rows()[2].querySelector('.rolebadge'),
+        'Role badges are wrong');
+      assert(byId('turnMini').textContent === 'Your Turn' && byId('turnBtn').classList.contains('myturn'),
+        'Local turn is not emphasized');
+      assert(byId('roomTitle').textContent === 'Bob’s Table', 'Owner-based room title is missing');
+      const firstButtons = rows()[0].querySelectorAll('.turnOrderControls button');
+      assert(firstButtons[0].disabled && !firstButtons[1].disabled, 'First row move limits are wrong');
+      firstButtons[1].click();
+      assert(sent.at(-1)[0] === 'turnOrder' && sent.at(-1)[1].order.join() === 'bob,me,carol',
+        'Touch-accessible reorder button sent the wrong order');
+      const transfer = new DataTransfer();
+      rows()[2].dispatchEvent(new DragEvent('dragstart', { dataTransfer: transfer, bubbles: true }));
+      rows()[0].dispatchEvent(new DragEvent('drop', { dataTransfer: transfer, bubbles: true, cancelable: true }));
+      assert(sent.at(-1)[1].order.join() === 'carol,me,bob', 'Drag reorder sent the wrong order');
+      change(me, 'role', 'player');
+      assert(!byId('players').querySelector('.turnOrderControls') && rows().every((r) => !r.draggable),
+        'Demotion left turn-order controls enabled');
+      change(me, 'role', 'gm');
+      change(state, 'turn', 'bob');
+      assert(rows()[1].classList.contains('turn') && !byId('turnBtn').classList.contains('myturn') &&
+        byId('turnBtn').getAttribute('aria-label').startsWith("Bob's turn"), 'Remote turn state is wrong');
+      change(state, 'turnPending', 'Offline player');
+      assert(byId('players').querySelector('.turn-waiting').textContent.includes('Offline player'),
+        'Pending turn is missing');
+      change(state, 'roomName', 'Friday game');
+      assert(byId('roomTitle').textContent === 'Friday game', 'Room title did not update');
+      byId('turnBtn').click();
+      assert(sent.at(-1)[0] === 'nextTurn', 'Turn button did not advance');
+      state.players.delete('carol'); removed(third, 'carol');
+      assert(rows().length === 2, 'Departed player remained in roster');
+      byId('roomInfo').classList.remove('collapsed');
+      byId('roomInfo').hidden = false;`,
+  },
+  {
     name: 'selection-toolbar',
     root: '#selActions',
     expect: { selector: '#selSwatches .swatch', min: 2 },

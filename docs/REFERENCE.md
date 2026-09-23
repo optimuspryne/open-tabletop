@@ -44,11 +44,12 @@ The codebase:
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
-| `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, seats, loading gate, render loop                                                             |
+| `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, loading gate, render loop                                                             |
 | `public/table/piece-view.js`                                                                           | browser | Safe piece props, mesh replacement, transform snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
 | `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
 | `public/table/hand.js`                                                                                 | browser | Private hand state, rendering, Show audience/selection, rearrangement/sorting, collapse preference, inspection entry, and card pointer gestures                                                  |
 | `public/table/inspection.js`                                                                           | browser | Enlarged-piece/card previews, appearance controls, deferred double-clicks, placement, and pointer rotation |
+| `public/table/presence.js`                                                                            | browser | Seats/cameras, public fans, markers, held labels, roster/turn display, avatar controls, and player bindings |
 | `public/table/selection.js`                                                                            | browser | Local selection, marquee gestures, highlight rings, batch commands, recolor toolbar, and compose/gather planning |
 | `public/table/overlays.js`                                                                             | browser | Measurement shapes, board-surface height, selection, previews, movement, and room bindings |
 | `public/table/whiteboard.js`                                                                           | browser | Whiteboard mesh, strokes, ownership, camera/drawing mode, controls, and room messages |
@@ -172,7 +173,7 @@ classDiagram
         room, meshes, buffers, down, myIsAdmin
         +controller composition + networking + UI wiring
         +input dispatch + piece drag/wheel/keys
-        +seats/markers + render loop
+        +table/track resize orchestration + render loop
     }
     class PieceView["public/table/piece-view.js"] {
         +piecePropsOf() / meshPropsOf() / pieceProperty()
@@ -199,6 +200,13 @@ classDiagram
     class Overlays["public/table/overlays.js"] {
         +createOverlays(dependencies)
         +bindRoom/bindControls + measure/move/select
+    }
+    class Presence["public/table/presence.js"] {
+        +seatLayoutFor(hx, hz)
+        +createPresence(dependencies)
+        +bindRoom/bindMessages/bindControls/rebuildSeats
+        +getSeat/seatName/handDropPosition
+        +updateHeldLabel/update
     }
     class Selection["public/table/selection.js"] {
         +createSelection(dependencies)
@@ -261,6 +269,8 @@ classDiagram
     ColliderDebug <.. Client
     Hand <.. Client
     Inspection <.. Client
+    Presence <.. Client
+    Presence ..> Hand : reveal-data callbacks
     Selection <.. Client
     Shared <.. Selection
     Overlays <.. Client
@@ -1619,7 +1629,7 @@ fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`wa
 `oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`),
 **`setTableVisible(visible)`** (toggle the felt and rim together; initial room join reveals them
 only after synchronized appearance is applied), **`setSeatCameraReady()`** (open the second
-initial-view gate after `client.js` applies the synchronized seat camera),
+initial-view gate after the presence controller applies the synchronized seat camera),
 **`waitForVisualAssets()`** (resolve after the shared Three.js loading manager is empty and remains
 quiet for a full frame), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
@@ -1636,7 +1646,7 @@ quiet for a full frame), and
   the current player's seat to exist, Three.js visual assets to be idle, and piece/player/overlay
   hydration to remain unchanged for 300 ms. It renders two more frames before fading and removing
   the cover, preventing both the constructor camera and late object hydration from appearing. The
-  table-scaled seat pose comes from `client.js`'s `VIEW`; its default `zoom` is 0.65.
+  table-scaled seat pose comes from `public/table/presence.js`'s `VIEW`; its default `zoom` is 0.65.
 - **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
   scales the baked `RoomEnvironment` for the env-map strength.
 - **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off; the render loop sets
@@ -1689,7 +1699,7 @@ quiet for a full frame), and
 - **`makePlayerTexture(player)` / `nameTag(name,color)` / `makeYouChipTexture(color)`**
   (+ the `roundRect` path helper) — the table's player chrome: the standing seat-marker
   card (avatar + name + a "SHOWING n" badge), the floating held-piece name-tag pill, and
-  the flat "YOU" felt chip. `client.js` imports these and places the sprites/planes they
+  the flat "YOU" felt chip. The client and presence controller place the sprites/planes they
   return; the drawing lives here with the other canvas texture builders.
 
 ### Models & uploads
@@ -1840,7 +1850,8 @@ room singleton or the client runtime.
 - **`setCards(cards)`** receives the private `hand` message and calls the controller's
   `renderHand` helper. **`render()`** restores the bar after closing a hand-card inspection.
 - **`setRevealed(sid, cards)`**, **`revealedFor(sid)`**, and **`clearRevealed(sid)`** maintain the
-  face-up cards shown in another player's public fan. `client.js` still places those fan meshes.
+  face-up cards shown in public fans. The presence controller places those fan meshes through
+  injected reveal-data callbacks.
 - **`bindShowControls()`** wires the audience strip and picked-card scope. Show sends
   `showStart`/`showStop`; rearrangement and Sort send `reorderHand`, with local optimistic order
   until the next private hand message.
@@ -1867,6 +1878,39 @@ and hand-restoration callback; it does not import `client.js` or hand state.
 - **`isActive()`**, **`isDrawn()`**, **`isInspecting(id)`**, and **`isInspectable(type)`** give the
   composition root read-only mode checks. **`setDiceTextures(textures)`** refreshes the
   inspector's custom-finish chips after a late `diceList` message.
+
+## `public/table/presence.js` — player presence
+
+**`createPresence(dependencies)`** owns the local seat, seat layouts, public-fan groups, standing
+markers, YOU chip, and held-piece label map. Scene/camera/controls, graphics builders, room/session/
+rank accessors, piece lookup, and DOM helpers are explicit dependencies. Hand reveal operations and
+cross-feature effects are injected callbacks; member administration and general role gating remain
+in `client.js`.
+
+- **`seatLayoutFor(hx, hz)`** is a pure exported helper producing the eight hand positions, outward
+  vectors, and camera poses. Internal `VIEW` knobs retain the default seat framing (`zoom: 0.65`).
+- **`bindRoom(room, cb)`** handles player add/remove and hand, seat, name, role, order, avatar,
+  color, showing, and hand-back changes, plus turn, pending-turn, and room-name presentation.
+  Local seat hydration applies the camera and signals readiness; local role changes invoke the
+  shell's role gate. Membership callbacks refresh unclaimed hands and clean up overlay previews.
+- **`bindMessages(room)`** handles `showFan`, updating the hand-owned reveal data and redrawing
+  public fans. Fans display at most twelve cards, preserve public backs, and use supplied revealed
+  faces only in leading slots. Departures remove fans/markers and clear reveal data.
+- **`bindControls()`** wires My Seat, Birds Eye, next turn, and avatar upload. Avatar images are
+  resized to 96×96 and sent with the existing `setAvatar` message. Roster rendering keeps names
+  inert with `textContent`, shows role/hand/turn state, and offers GM+ drag or arrow-button turn
+  reordering through `turnOrder`.
+- **`rebuildSeats()`** follows table size and redraws presence without moving the camera.
+  **`getSeat()`**, **`seatName()`**, and **`handDropPosition()`** supply tray placement, seat-popover
+  text, and hand-drop coordinates without exposing the mutable seat layout.
+- **`updateHeldLabel(id, owner)`** creates/replaces/removes the remote holder's name tag;
+  **`update()`** follows current mesh positions after interpolation. Local or unknown owners
+  receive no label. Replacing/removing a label uses the injected sprite-disposal helper.
+
+`test/presence.js` covers initial/replayed player hydration, resize and seat framing, fans/reveals,
+property changes, turn/title presentation, departures, labels, and avatar messages. Component parity
+checks the real roster and turn-order controls in desktop and touch layouts. The client retains
+room joining, track resize orchestration, Lean In, and generic seat-popover mechanics.
 
 ## `public/table/selection.js` — local multi-selection
 
@@ -1937,17 +1981,17 @@ responsive presentation, and interaction mechanics without owning feature-specif
 
 Connects to the `table` room — or the admin-only **`editor`** room when
 `table.html?workshop=1` sets `window.OTT_EDITOR`, handing the live room to the panel via
-`window.onOttRoom`. Reconnect token in `sessionStorage`. State listeners
-create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
-marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
+`window.onOttRoom`. Reconnect token in `sessionStorage`. The client state listeners
+create/update/remove `meshes` and track `boardTopY` (for the drop marker); `presence.bindRoom`
+owns player and turn presentation. The client listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
 (→ `resizeTable` + `rebuildGrid`), **`tableShape`** (→ the same, plus the shape-picker UI), **`rimWood`** (→ `setRimWood`), the `scale` grid fields (→ `rebuildGrid` /
 `syncScalePanel`), `trays` (→ `trays.sync` — one tray mesh per enabled seat), and
 `roomName` (→ the Room Info header), plus
 `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
 list and the "Waiting on {name}" turn row). Direct messages: `hand` → `hand.setCards`,
 `dealt` (adopt a dealt card), `inspectCard` → `inspection.inspectMesh`, `notebook`
-(restore your private notes), `showFan` → `hand.setRevealed` and `refreshFan` (cards someone is
-showing you → face-up in their fan), `ping` (spawn an attention marker), **`sfx`** (a shared
+(restore your private notes), `showFan` → `presence.bindMessages` (updates hand-owned reveal data
+and redraws the public fan), `ping` (spawn an attention marker), **`sfx`** (a shared
 sound cue → `playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
 a chat line) / **`chatLog`** (replay the backlog), **`stateSaved`** (flash the Save
 Table State button), `notice` (a server-pushed toast — e.g. the piece cap is full), `memberList` → the Members panel (with the pending-join pulse),
@@ -1957,7 +2001,7 @@ UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList
 `window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
 reshape/reset/members gm+). Game-play + Room Controls wiring lives here (spawn,
 grab, table size, scene load, skybox apply, plus the notebook and timer panels); inspection,
-selection, whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
+presence, selection, whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
 and the View Library / Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
 `window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
 **`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,
@@ -2029,18 +2073,16 @@ depend on a subsequent server update. Capacity-rejected plays receive the unchan
 at a responsive 72–88 px width and keeps Inspect in a fixed 30 px corner control; the strip
 scrolls horizontally rather than shrinking the primary drag target.
 
-Seat layout, standing avatar/name markers (with a public **"SHOWING n"** badge
-via `makePlayerTexture`, a `graphics.js` builder, when a player is revealing), other players' fanned hands —
-face-down using the player's own **`handBack`**, with any **revealed** cards drawn
-face-up in the leading fan slots (`refreshFan` reads `hand.revealedFor(sid)`), height-
-staggered to avoid z-fighting. The private bar itself is rendered by the hand controller
-(left = face-down, right = face-up; also a **select mode** while the Show panel is picking
-cards). The turn panel remains in `client.js`. Held-piece labels and pings share the **`nameTag`**
-pill texture (a `graphics.js` builder). **`renderPlayers`** also draws a **"⏳
-Waiting on {name}"** row when `turnPending` is set (a resumed turn whose owner
-hasn't returned), and **`renderUnclaimed`** builds the Members panel's **Unclaimed
-hands** list — each saved player gets a **"Give to…"** picker that sends
-`reassignHand`.
+The presence controller owns seat layout, standing avatar/name markers (including the public
+**"SHOWING n"** badge built by `makePlayerTexture`), the local YOU chip, public fans, and the turn
+panel. Fans use the player's public **`handBack`** with supplied revealed cards face-up in leading
+slots, staggered to avoid z-fighting. The private bar remains in the hand controller. Held-piece
+labels and client-owned pings share the `nameTag` texture builder.
+
+Presence also renders the **"⏳ Waiting on {name}"** row for a resumed turn whose owner has not
+returned. `renderUnclaimed` stays in the client and builds the Members panel's Unclaimed hands
+list, including the **"Give to…"** picker that sends `reassignHand`; presence invokes its refresh
+callback when players join or leave.
 
 ### Chat, sound & music
 
@@ -2059,7 +2101,7 @@ Each piece keeps a small `buffers` queue of timestamped snapshots; the loop
 renders every piece as it was `CONFIG.render.delay` in the past (lerp/slerp
 between the bracketing snapshots), parks the drop-marker ring under a held piece
 at the current board's surface height, keeps each held-piece **name tag**
-(`heldLabels`) hovering over its mesh, and expands + fades + disposes active
+(through `presence.update()`) hovering over its mesh, and expands + fades + disposes active
 **pings**. One uniform path for held, thrown, and resting pieces.
 
 With `?perf=1` on the table URL (or `window.ottPerf(true)` at runtime), `public/perf.js`

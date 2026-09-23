@@ -151,9 +151,9 @@ importing a room singleton:
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
   does not repeatedly triangulate identical pieces.
 - **`public/client.js`** — the browser composition root and remaining table runtime: networking,
-  controller construction, input dispatch, piece dragging, seats/markers, and the ordered render
+  controller construction, input dispatch, piece dragging, and the ordered render
   loop. It retains shared session and scene state (`room`, `down`, `meshes`, `buffers`) while
-  selection, inspection, private hand, overlays, whiteboard, and trays own their feature state. A full-screen
+  presence, selection, inspection, private hand, overlays, whiteboard, and trays own feature state. A full-screen
   Loading Table cover remains above the runtime until the local mesh count matches synchronized
   pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
@@ -178,6 +178,12 @@ importing a room singleton:
   the preview, color/team/finish controls, deferred click timing, drawn-card placement, and pointer
   rotation. The hand requests inspection through an injected callback; the composition root
   forwards room messages and supplies the piece-view visibility callback.
+- **`public/table/presence.js`** — seats and seat-camera framing, public hand fans, player markers,
+  the local YOU chip, held-piece labels, roster/turn presentation, and avatar/seat controls. It owns
+  player state listeners and Show-fan messages, with explicit callbacks into the hand, hydration,
+  local role gating, and departure cleanup. The client keeps member administration, general role
+  gates, table/track resize orchestration, and Lean In; the render loop calls `presence.update()`
+  after interpolation so held-piece labels follow the current meshes.
 - **`public/table/selection.js`** — local selection, Select-tool mode, marquee gestures, highlight
   rings, batch commands, and toolbar/recolor state. Compatibility and compose/gather planning
   operate on plain piece data. The composition root supplies room access, meshes, scene/camera,
@@ -1401,11 +1407,12 @@ maps and each hand is delivered privately via `sendHand`, exactly as in a live g
 ## Seats, presence, turns
 
 On join the server assigns the lowest free seat, a color, and a name, and
-creates a public `Player` (seat, hand count, name, color, avatar). The client
+creates a public `Player` (seat, hand count, name, color, avatar). The presence controller
 parks _your_ camera at _your_ seat using the table-scaled `VIEW` pose (the default `zoom: 0.65`
-keeps the near rail and hand close while retaining the play surface), draws every _other_ player's hand as N fanned
-face-down backs (from the public count — you see how many, never which), and
-stands a marker (avatar or silhouette + name) at each seat. Each player also has a
+keeps the near rail and hand close while retaining the play surface), draws public fans from
+hand counts and backs, and stands a marker (avatar or silhouette + name) at each remote seat.
+The local seat has a flat YOU chip instead. Explicitly revealed cards occupy leading fan slots;
+all other faces remain private. Each player also has a
 GM-reorderable `order` independent of their physical seat. `state.turn` holds a
 session id, highlighted in the panel; "Next turn" walks that shared order.
 
@@ -1422,9 +1429,10 @@ The global hand pointer hooks moved with that state, including the live two-fing
 unsynced drag preview, drop hit test, and cancellation cleanup. Hand-card inspection requests the
 injected `inspection.inspectMesh` callback. Inspection owns the preview and its controls; it uses
 the composition root's piece-view callback to hide or reveal the original table mesh.
-Other players' public fans remain laid out by `client.js`, but their temporary face-up cards are
-stored behind `hand.setRevealed()`/`revealedFor()`. That keeps Show data with the hand feature while
-leaving seat layout and public presence in the composition root.
+`public/table/presence.js` lays out public fans, including the local player's face-down fan.
+Temporary face-up cards remain stored behind `hand.setRevealed()`/`revealedFor()`; presence receives
+those functions as callbacks and clears a departed player's reveals through `hand.clearRevealed()`.
+This keeps Show data with the hand feature while presence owns seat layout and public visuals.
 
 ## Identity & reconnection
 

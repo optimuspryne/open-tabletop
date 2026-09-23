@@ -14,6 +14,12 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Expand project agent guidance with an existing-code-first feature workflow, architecture and
+  privacy boundaries, verification requirements, and preservation of user edits; reconcile the
+  DRY cleanup plan with current documentation timing and client progress tracking.
+- Extract player presence into a dedicated client controller: seats and camera framing, public
+  hand fans, player markers and held-piece labels, roster/turn presentation, avatar controls,
+  and player room bindings, with hydration and desktop/touch roster coverage.
 - Extract local multi-selection, marquee gestures, highlight rings, batch actions, recoloring,
   and compose/gather planning into a dedicated client controller with selection-rule and
   desktop/touch toolbar coverage, and document its API and ownership boundaries in the client

@@ -3,7 +3,8 @@
 Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, measurement
 overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified. The private
 hand and inspection have also been extracted and manually verified. Phase 3 selection was
-completed and manually verified on 2026-09-23. Player presence is next.
+completed and manually verified on 2026-09-23. Player presence was also completed and manually
+verified on 2026-09-23. Room settings and skybox are next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -40,6 +41,8 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
 - `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
 - `public/table/hand.js` owns the private hand, Show controls, sorting, and card gestures.
+- `public/table/presence.js` owns seats and camera framing, public fans, player markers, held-piece
+  labels, roster/turn presentation, avatar controls, and player room bindings.
 - `public/table/selection.js` owns local selection, marquee gestures, highlight rings, batch actions,
   recoloring, and compose/gather planning.
 - `public/table/inspection.js` owns enlarged previews, their appearance controls, drawn-card
@@ -261,10 +264,13 @@ checks the real selection toolbar in desktop and touch layouts.
 
 ### 9. Player presence
 
-The broad presence subsystem starts around `public/client.js:4433` and continues through player
-markers and roster rendering.
+The presence subsystem now lives in `public/table/presence.js`. `createPresence` owns local seat
+and visual state, player/turn listeners, and the Show-fan message binding. The client supplies
+callbacks for private-hand reveal data, local role changes, hydration, unclaimed hands, and
+overlay cleanup. Table resizing still coordinates presence, whiteboard, and trays in the client;
+member administration, general role gates, and Lean In remain there as well.
 
-Move:
+The extraction moved:
 
 - seats and seat-camera framing;
 - public hand fans;
@@ -429,7 +435,8 @@ are attached through DOM APIs and are genuinely used.
 9. Extract selection. **Completed 2026-09-23; manually verified.** `npm run check`,
    `npm run test:input`, and `npm run test:components` pass. The user reported no regressions
    during manual smoke testing.
-10. Extract player presence.
+10. Extract player presence. **Completed 2026-09-23; manually verified.** `npm run check`,
+    `npm run test:input`, and `npm run test:components` pass. Manual tests reported no regressions.
 11. Extract room settings and skybox.
 
 ### Phase 4: composition cleanup
