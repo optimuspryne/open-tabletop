@@ -1,7 +1,8 @@
 # Client decomposition plan
 
-Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard and measurement
-overlay controllers were extracted on 2026-09-22 and manually verified; dice trays are next.
+Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, measurement
+overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified; the private
+hand is next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -36,6 +37,7 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/ui-surfaces.js` owns reusable dialogs, sheets, clusters, drawer, and radial controls.
 - `public/table/whiteboard.js` owns whiteboard placement, drawing, and room synchronization.
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
+- `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
 
 The remaining work continues this pattern: make `client.js` coordinate modules like these rather
 than continuing to own their internal state and implementation.
@@ -401,7 +403,7 @@ are attached through DOM APIs and are genuinely used.
 4. Extract whiteboard. **Completed 2026-09-22.**
 5. Extract overlays. **Completed 2026-09-22; manually verified on a 3D board with a tall custom
    collider.**
-6. Extract trays.
+6. Extract trays. **Completed 2026-09-22; manually verified.**
 7. Extract hand.
 8. Extract inspection.
 

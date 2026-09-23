@@ -14,6 +14,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Extract personal dice-tray rendering, placement, camera travel, die lookup, and tray actions
+  into a dedicated client controller.
 - Extract measurement overlay construction, selection, previews, permission checks, drag state,
   room bindings, and measure controls into a dedicated client controller.
 - Enable nesting on new unprivileged Proxmox Debian 13 LXCs so the packaged Redis service can

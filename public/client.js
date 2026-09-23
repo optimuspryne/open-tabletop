@@ -58,6 +58,7 @@ import { createColliderDebug } from './table/collider-debug.js';
 import { createUiSurfaces } from './table/ui-surfaces.js';
 import { createWhiteboard } from './table/whiteboard.js';
 import { createOverlays } from './table/overlays.js';
+import { createTrays } from './table/trays.js';
 import {
   applyTransform,
   createPieceView,
@@ -506,25 +507,13 @@ function clearDiceDefault(sides) {
     localStorage.setItem('ott-dice', JSON.stringify(all));
   } catch {}
 }
-// The ids of the dice currently in MY tray (so a dice-set pick can recolor them live).
-function myTrayDieIds() {
-  const ids = [];
-  if (!room) return ids;
-  room.state.pieces.forEach((piece, id) => {
-    if (piece.type !== 'die') return;
-    try {
-      if (JSON.parse(piece.props || '{}').traySeat === mySeat) ids.push(id);
-    } catch {}
-  });
-  return ids;
-}
 // Apply a dice set as my default across EVERY die type, and live-recolor the dice already in
 // my tray. Numbers are auto-contrasted from the body color. Local-only for the defaults; the
 // tray recolor goes through the normal (synced) recolor message so everyone sees it.
 function applyDiceSet(color) {
   const textColor = readableInk(color);
   for (const s of DIE_SIDES) saveDiceDefault(s, color, textColor);
-  for (const id of myTrayDieIds()) room.send('recolor', { id, color, textColor });
+  for (const id of trays.dieIds()) room.send('recolor', { id, color, textColor });
 }
 
 // Apply a finish as my default across EVERY die type, and live-apply it to the dice already in my
@@ -532,7 +521,7 @@ function applyDiceSet(color) {
 function applyDiceFinish(finish, finishImg) {
   for (const s of DIE_SIDES) saveDiceDefault(s, undefined, undefined, finish, finishImg);
   const extra = finish === 'custom' ? { finish, finishImg } : { finish };
-  for (const id of myTrayDieIds()) room.send('recolor', { id, ...extra });
+  for (const id of trays.dieIds()) room.send('recolor', { id, ...extra });
 }
 
 // Custom dice textures (host-uploaded, ROADMAP §9 phase 2). The library list arrives via the
@@ -776,7 +765,7 @@ function rebuildGrid() {
       if (buf.length > 24) buf.shift();
     });
     whiteboard.sync(state.whiteboard); // board visual, ownership, and holder status
-    syncTrays(state.trays); // reflect personal trays appearing / being put away
+    trays.sync(state.trays); // reflect personal trays appearing / being put away
     syncSkybox(state.skybox); // reflect the room's skybox
   });
 
@@ -1689,27 +1678,7 @@ function rebuildGrid() {
   });
   document.querySelectorAll('.selectTool').forEach((b) => (b.onclick = () => setSelMode(!selMode))); // Select tool: felt-drag boxes a selection
   // (the #selSwatches row is built per-selection by refreshSelTools — it depends on what's selected)
-  document.querySelectorAll('.rollBtn').forEach((b) => (b.onclick = () => openTray())); // Dice Box (both corners): hops to YOUR tray (placing it if it isn't out)
-  {
-    const b = byId('trayBack');
-    if (b) b.onclick = () => closeTray();
-  } // leave the view, tray stays
-  {
-    const b = byId('trayAway');
-    if (b) b.onclick = () => putTrayAway();
-  } // put my tray away (clears its dice)
-  qsa('#trayTools .trayDie').forEach(
-    (b) =>
-      (b.onclick = () =>
-        room.send('spawn', {
-          type: 'die',
-          props: {
-            ...myDieProps(+b.dataset.sides),
-            ...(b.dataset.model ? { model: b.dataset.model } : {}), // a pipped built-in d6
-            tray: true,
-          },
-        })),
-  ); // add a die to MY tray (in my saved color)
+  trays.bindControls(); // visit/leave the tray, spawn dice, roll, scoop, and clear
   {
     const setRow = byId('traySetSwatches'); // named dice sets: one click = a matching set for all my dice
     if (setRow)
@@ -1741,18 +1710,6 @@ function rebuildGrid() {
       refreshTextureChips(); // Custom textures live in their own #trayTextures menu
     }
   }
-  {
-    const b = byId('trayRoll');
-    if (b) b.onclick = () => room.send('roll');
-  } // fling every die in MY tray
-  {
-    const b = byId('trayScoop');
-    if (b) b.onclick = () => room.send('trayScoop');
-  } // gather MY dice back to the middle
-  {
-    const b = byId('trayClearBtn');
-    if (b) b.onclick = () => room.send('trayClear');
-  } // remove MY dice
   wire('mySeatBtn', () => applySeat(mySeat)); // snap the camera back to your seat
   wire('birdsEyeBtn', applyBirdsEye); // fit the whole table into a straight-down view
   byId('turnBtn').onclick = () => room.send('nextTurn'); // the Your Turn pill advances the turn (server enforces who may)
@@ -2390,7 +2347,8 @@ const cameraPanForward = new THREE.Vector3(),
 // Translate the camera and OrbitControls target together, relative to the current view. This
 // preserves orbit distance/angle and makes W/Up mean "toward the top of the table as I see it".
 function panCamera(rightAmount, forwardAmount) {
-  if (!room || inspect || whiteboard.isOwning() || trayView || camTween) return;
+  if (!room || inspect || whiteboard.isOwning() || trays.isViewing() || trays.isCameraMoving())
+    return;
   cameraPanForward.copy(controls.target).sub(camera.position);
   cameraPanForward.y = 0;
   if (cameraPanForward.lengthSq() < 1e-8) cameraPanForward.set(0, 0, -1);
@@ -3497,8 +3455,8 @@ const heldOrHoveredId = () => (down && down.id) || pickId();
 // held, so the keyboard profile in controls.js owns them and raises rotateAxis / raiseAxis.
 const onKeyDown = (e) => {
   if (!room) return;
-  if (e.key === 'Escape' && trayView) {
-    closeTray();
+  if (e.key === 'Escape' && trays.isViewing()) {
+    trays.close();
     return;
   }
   if (e.key === 'Escape' && selMode) {
@@ -4099,7 +4057,7 @@ function rebuildSeats() {
   });
   refreshMyChip();
   whiteboard.position(); // the track radius scales with the table
-  positionTrays(); // personal trays ride the same track — keep them glued to the edge on resize
+  trays.position(); // personal trays ride the same track — keep them glued to the edge on resize
 }
 const handGroups = new Map(); // sid -> THREE.Group of face-down backs
 
@@ -4703,132 +4661,20 @@ const whiteboard = createWhiteboard({
   toast,
 });
 
-// --- Dice tray (Phase 1: placement) — a physics-backed box on the same track as the ---
-// whiteboard. This is only the visual + placement; the walls/dice live server-side. Built
-// from the shared trayMesh so the picture matches the collider; parked at the tray's track
-// position and rotated by its angle (Three's rotation.y matches the server's trayPlace).
-// Personal trays: one mesh per enabled seat, on the track behind that seat. `state.trays`
-// (seat → true) drives which are shown; each sits at its seat angle (matching the server walls).
-const trayGroups = new Map(); // seat -> THREE.Group
-function trayGroupFor(seat) {
-  const g = trayMesh(room.state.feltColor);
-  const a = seatAngle(seat),
-    c = trayCenter(a, room.state.tableX, room.state.tableZ);
-  g.position.set(c.x, 0, c.z);
-  g.rotation.y = a; // Three's rotation.y matches the server's trayPlace
-  scene.add(g);
-  return g;
-}
-function positionTrays() {
-  // keep every tray glued to the track on table resize
-  if (!room) return;
-  for (const [seat, g] of trayGroups) {
-    const a = seatAngle(seat),
-      c = trayCenter(a, room.state.tableX, room.state.tableZ);
-    g.position.set(c.x, 0, c.z);
-    g.rotation.y = a;
-  }
-}
-function syncTrays(trays) {
-  if (!room) return;
-  const want = new Set();
-  if (trays)
-    trays.forEach((on, seat) => {
-      if (on) want.add(+seat);
-    });
-  for (const seat of want) if (!trayGroups.has(seat)) trayGroups.set(seat, trayGroupFor(seat)); // add newly-shown
-  for (const [seat, g] of [...trayGroups])
-    if (!want.has(seat)) {
-      scene.remove(g);
-      trayGroups.delete(seat);
-    } // drop put-away
-  const mineOut = want.has(mySeat);
-  if (mineOut && pendingTrayOpen) {
-    pendingTrayOpen = false;
-    openTray();
-  } // my tray just appeared (I pressed Roll) → hop in
-  if (!mineOut && trayView) closeTray(); // my tray was put away → leave the view
-}
-
-// --- Camera transport: the Roll button hops YOUR view to a top-down look at YOUR tray; Back ---
-// (or Esc) returns. Purely local — nobody else's camera or the play field moves.
-const TRAY_CAM = { height: 12, back: 5, dur: 550 }; // height over the tray, how far back toward the player, tween ms
-let trayView = false,
-  trayCamSave = null,
-  camTween = null,
-  pendingTrayOpen = false;
-// The camera pose looking down into MY tray, approached from BEHIND my seat (the outward
-// direction) so the view is oriented the same way I see the table — left/right and near/far
-// match my seat for every seat, instead of a fixed world orientation (which read 180°/90° off
-// for anyone not facing +Z). The slight `back` offset gives the look vector a horizontal
-// component, so screen-up lands on the table side consistently.
-function trayCamPose() {
-  const a = seatAngle(mySeat);
-  const c = trayCenter(a, room.state.tableX, room.state.tableZ);
-  const ox = Math.sin(a),
-    oz = Math.cos(a); // outward: from table centre toward my seat/tray
-  return {
-    pos: new THREE.Vector3(c.x + ox * TRAY_CAM.back, TRAY_CAM.height, c.z + oz * TRAY_CAM.back),
-    target: new THREE.Vector3(c.x, 0, c.z),
-  };
-}
-function startCamTween(pose, onDone) {
-  camTween = {
-    fromPos: camera.position.clone(),
-    toPos: pose.pos.clone(),
-    fromTarget: controls.target.clone(),
-    toTarget: pose.target.clone(),
-    start: performance.now(),
-    dur: TRAY_CAM.dur,
-    onDone,
-  };
-  controls.enabled = false; // the tween drives the camera; hand control back when it lands
-}
-function aimTray(instant) {
-  const pose = trayCamPose();
-  if (instant) {
-    camera.position.copy(pose.pos);
-    controls.target.copy(pose.target);
-    controls.update();
-  } else
-    startCamTween(pose, () => {
-      controls.enabled = true;
-      controls.target.copy(pose.target);
-      controls.update();
-    });
-}
-function openTray() {
-  if (!room || !room.state.trays) return;
-  if (!room.state.trays.get(String(mySeat))) {
-    // my tray isn't out yet → place my own, then hop in
-    pendingTrayOpen = true;
-    room.send('trayShow', { on: true });
-    return;
-  }
-  if (!trayView) trayCamSave = { pos: camera.position.clone(), target: controls.target.clone() };
-  trayView = true;
-  const tt = byId('trayTools');
-  if (tt) tt.hidden = false;
-  aimTray(false);
-}
-function putTrayAway() {
-  if (room) room.send('trayShow', { on: false });
-} // removes my tray + its dice (closeTray fires when it's gone)
-function closeTray() {
-  if (!trayView) return;
-  trayView = false;
-  const tt = byId('trayTools');
-  if (tt) tt.hidden = true;
-  const save = trayCamSave;
-  if (save)
-    startCamTween({ pos: save.pos, target: save.target }, () => {
-      controls.enabled = true;
-      controls.target.copy(save.target);
-      controls.update();
-      trayCamSave = null;
-    });
-  else controls.enabled = true;
-}
+// Personal tray visuals, controls, and camera travel stay behind one controller.
+const trays = createTrays({
+  THREE,
+  scene,
+  camera,
+  controls,
+  trayMesh,
+  trayCenter,
+  seatAngle,
+  getRoom: () => room,
+  getSeat: () => mySeat,
+  getDieProps: myDieProps,
+  byId,
+});
 
 function renderPlayers() {
   // built with DOM + textContent so a player's name can never inject HTML
@@ -5529,19 +5375,7 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
     dropMarker.visible = false;
   }
   updateSelectionRings(); // keep a highlight ring under each selected piece
-  if (camTween) {
-    // tray camera hop: drive pos+target directly, no orbit input
-    const raw = Math.min(1, (performance.now() - camTween.start) / camTween.dur);
-    const e = raw < 0.5 ? 2 * raw * raw : 1 - Math.pow(-2 * raw + 2, 2) / 2; // easeInOutQuad
-    camera.position.lerpVectors(camTween.fromPos, camTween.toPos, e);
-    controls.target.lerpVectors(camTween.fromTarget, camTween.toTarget, e);
-    camera.lookAt(controls.target);
-    if (raw >= 1) {
-      const done = camTween.onDone;
-      camTween = null;
-      if (done) done();
-    }
-  } else {
+  if (!trays.updateCamera()) {
     camera.position.sub(leanOffset); // undo last frame's lean so controls sees the true orbit position
     controls.update();
     leanT += ((leanActive ? 1 : 0) - leanT) * 0.18; // ease toward held / released
