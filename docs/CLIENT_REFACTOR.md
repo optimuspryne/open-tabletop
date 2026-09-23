@@ -6,7 +6,8 @@ hand and inspection have also been extracted and manually verified. Phase 3 sele
 completed and manually verified on 2026-09-23. Player presence was also completed and manually
 verified on 2026-09-23. Room settings and skybox were completed and manually verified on
 2026-09-23. Phase 3 is complete. Phase 4 feature-specific bootstrap binders were completed and
-manually verified on 2026-09-23. The input-router extraction is next.
+manually verified on 2026-09-23. Step 13 input-router and piece-drag extraction is complete and
+manually verified on 2026-09-23. Step 14 composition cleanup is next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -92,6 +93,7 @@ public/
     library-bindings.js     asset lists/errors and Save Table feedback
     ui-surfaces.js          dialogs, sheets, clusters, drawer, and radial primitives
     input-router.js         semantic pointer and keyboard routing
+    piece-drag.js           piece gestures, transforms, throws, and dealt-response adoption
 ```
 
 These should use explicit factory dependencies, following the server's `create...` and
@@ -352,22 +354,29 @@ The highest-complexity functions at the original sweep were:
 | `onKeyDown` | 3819-3932 | 31 | 57 |
 | `inspectMesh` | 3138-3260 | 19 | 50 |
 
-`onPointerMove` currently routes marquee selection, measurement, whiteboard drawing, inspection
-rotation, overlay movement, piece dragging, dealing, dispensing, and touch transforms. Moving it
-before the feature modules would only transplant all of its dependencies.
+Step 13 extracts `createInputRouter` into `public/table/input-router.js`. It returns the existing
+intent vocabulary consumed by `attachControls` and the on-screen hold buttons. Device translation
+and repeat timing stay in `public/controls.js`; the router owns mode priority, Escape/typing guards,
+long-press routing, axis targeting, and camera-pan gating through explicit controller dependencies.
 
-After the feature controllers exist, it should become a readable dispatcher:
+Move routing preserves the original order: selection marquee, measurement, whiteboard drawing,
+inspection, overlay movement, then piece drag. Press and release retain their own existing order.
+Escape checks tray, selection, measure, whiteboard, inspection, then overlay selection before the
+typing guard; drawn-card placement and ordinary commands remain below that guard.
 
-```js
-if (selection.handleMove(pointer)) return;
-if (overlays.handleMove(pointer)) return;
-if (whiteboard.handleMove(pointer)) return;
-if (inspection.handleMove(pointer)) return;
-pieceDrag.handleMove(pointer);
-```
+To make the router a dispatcher, `createPieceDrag` in `public/table/piece-drag.js` owns the related
+piece state and behavior together: press classification, armed menu Move, grab/deal/dispense,
+`dealt` adoption or late release, group movement, grid targets, rotation, touch re-anchoring, and
+throw estimation. It reuses `clickRoute`, `reanchorOffset`, shared snapping, and piece-property
+readers. `current()` exposes a small copied gesture summary for the guide and landing marker;
+mutable gesture internals stay private. The root retains raycast helpers, menus, camera pan math,
+the shared hand/drag projection scratch, and frame ordering, and constructs the drag controller
+before the first render.
 
-`public/controls.js` should continue translating devices into intents. `input-router.js` should
-decide what those intents mean in the application's current mode.
+Regression tests exercise routing priority and actual piece gestures; browser component checks
+also import the production composition root with joining held pending, covering startup, the first
+frames, and dialog wiring in desktop and touch layouts. This does not replace live-room/manual
+gesture verification. No gesture mappings, protocol messages, or server authority change.
 
 ## Room bootstrap and message bindings
 
@@ -382,9 +391,9 @@ Handlers precede `handSync`, `chatLog`, `notebookSync`, and `listDice` replay re
 response routing is installed before the editor-panel handoff. The root still registers session
 errors, notices, admin identity, and exits, and coordinates patch delivery in the same order:
 piece snapshots, whiteboard, trays, then skybox. Cross-feature piece-removal effects remain
-explicit injected callbacks. Local `bindPieceDrag`, `bindPings`, and `bindTableEffects` functions
-keep registrations beside the interaction/effect state that will be considered during later
-composition cleanup. General shell, audio preferences, and responsive UI composition remain.
+explicit injected callbacks. Step 13 moves `dealt` registration into `pieceDrag.bindRoom`. Local
+`bindPings` and `bindTableEffects` keep effect registrations beside their root-owned state for
+later composition cleanup. General shell, audio preferences, and responsive UI composition remain.
 
 This is an ownership refactor: no message, saved-state, privacy, or server authorization changes.
 Regression coverage exercises replay ordering, piece lifecycle/cleanup, library responses, notes
@@ -484,7 +493,11 @@ are attached through DOM APIs and are genuinely used.
     manually verified.** `npm run check` passes (604 tests), `test:input` passes
     (57 checks), and `test:components` passes in desktop and touch layouts.
     Manual smoke tests reported no regressions.
-13. Simplify and extract the input router.
+13. Simplify and extract the input router. **Completed 2026-09-23; manually verified.**
+    `createInputRouter` dispatches semantic intents; `createPieceDrag` owns piece gestures and
+    `dealt` adoption. `npm run check` passes (622 tests), `test:input` passes (57 checks),
+    and `test:components` passes in desktop and touch layouts, including production bootstrap.
+    Manual smoke tests reported no regressions.
 14. Reduce `client.js` to joining, composing, binding, and rendering.
 
 Make each numbered item its own cohesive change where practical. A feature can be split into two

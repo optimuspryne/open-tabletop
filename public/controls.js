@@ -1,10 +1,9 @@
 // public/controls.js — the input seam.
 //
 // Device PROFILES translate raw input (mouse buttons + wheel today; touch and, later,
-// a gamepad) into a small, device-agnostic INTENT vocabulary. public/client.js
-// implements the intents and decides what each one MEANS in the current mode; it
-// never reads a raw DOM event or a button number itself. Adding a device = a new
-// profile that raises the same intents, with no change in client.js.
+// a gamepad) into a small, device-agnostic INTENT vocabulary. table/input-router.js
+// dispatches the intents to feature controllers in the current mode. Adding a device =
+// a new profile that raises the same intents, with no change in the semantic router.
 //
 // Intent vocabulary (Phase 0 — the mouse + keyboard reference profile):
 //   press / move / release     the pointer lifecycle: grab/deal, marquee, overlay + modal
@@ -21,12 +20,12 @@
 //   hasHeld() -> bool          is a piece held? (a profile uses this to disambiguate a control).
 //   hasAxisTarget(name)        should WASD/arrows transform an object, or pan the camera?
 //
-// A profile passes screen coords / semantic flags only; client.js owns any 3D projection and
+// A profile passes screen coords / semantic flags only; the router and its controllers own 3D projection and
 // what each intent MEANS in the current mode. Touch and gamepad are additive sibling profiles.
 
 const pt = (e) => ({ x: e.clientX, y: e.clientY });
 
-// A device-agnostic "logical pointer": exactly the fields client.js's dispatcher reads.
+// A device-agnostic "logical pointer": exactly the fields the semantic dispatcher reads.
 // `button`/`shiftKey` pass through raw on mouse; a touch profile will synthesize them
 // (e.g. long-press → button 2, the Select tool → shiftKey). No event METHODS are exposed
 // because the dispatcher bodies don't call any.
@@ -43,7 +42,7 @@ const logical = (e) => ({
   transforming: false, // set true while a two-finger twist/pinch owns the held piece
 });
 
-// A device-agnostic key command: exactly the fields client.js's command router reads.
+// A device-agnostic key command: exactly the fields the command router reads.
 const logicalKey = (e) => ({
   key: e.key,
   repeat: e.repeat,
@@ -88,7 +87,7 @@ const AXIS_KEYS = {
   s: ['raiseAxis', -1, 120, 0, -1],
   arrowdown: ['raiseAxis', -1, 120, 0, -1],
 };
-// Keystrokes belong to a focused field, not the table. client.js's command router makes the same
+// Keystrokes belong to a focused field, not the table. the command router makes the same
 // check for its own shortcuts; this path never reaches it, so it has to ask too.
 const typingInAField = () => {
   const el = document.activeElement;

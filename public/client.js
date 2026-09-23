@@ -39,8 +39,6 @@ import {
 } from './graphics.js';
 import { applyIcons, setIcon, initTip, wirePopGroups } from './icons.js';
 import { makeButton, rankOf, toastContent } from './rows.js';
-import { reanchorOffset } from './drag.js';
-import { clickRoute } from './clicks.js';
 import { colliderSpec } from '/shared/collider-spec.js';
 import { createColliderDebug } from './table/collider-debug.js';
 import { createUiSurfaces } from './table/ui-surfaces.js';
@@ -59,7 +57,7 @@ import { createMembership } from './table/membership.js';
 import { bindLibraryMessages } from './table/library-bindings.js';
 import { createRoomSettings } from './table/room-settings.js';
 import { BUILTIN_SKIES, createSkybox } from './table/skybox.js';
-import { createPieceView, meshPropsOf, pieceProperty, piecePropsOf } from './table/piece-view.js';
+import { createPieceView, meshPropsOf } from './table/piece-view.js';
 import {
   KINDS as PHYS,
   DIE_SIDES,
@@ -70,9 +68,6 @@ import {
   deckHeight,
   formatMeasure,
   dispenserDefinition,
-  gridActive,
-  gridFootprintCells,
-  snapToCell,
   trayCenter,
   seatAngle,
 } from '/shared/pieces.js';
@@ -106,6 +101,8 @@ import {
   LIB_CREDITS,
 } from './credits.js';
 import { attachControls } from './controls.js';
+import { createInputRouter } from './table/input-router.js';
+import { createPieceDrag } from './table/piece-drag.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
 
 // ===== Tiny DOM helpers =====================================================
@@ -365,7 +362,6 @@ let room, mySession;
 let inspection;
 let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
 let myRank = 0; // set by applyRole; gates scoreboard (helper+) + room notes (gm+) editing
-const heldTarget = new THREE.Vector3(); // drag target sent to the server
 const colliderDebug = createColliderDebug({
   scene,
   getPieces: () => room?.state.pieces,
@@ -497,27 +493,6 @@ function refreshTextureChips() {
   if (dg && !has) dg.hidden = true;
 }
 
-// Whether a piece carries the per-piece snap-to-grid flag (like keep-upright).
-const pieceSnap = (id) => {
-  const piece = room?.state.pieces.get(id);
-  return piece ? !!pieceProperty(piece, 'snap', false) : false;
-};
-// The authored N×N grid footprint for a piece (1 for every legacy/ordinary piece).
-const pieceCells = (id) => {
-  const piece = room?.state.pieces.get(id);
-  return piece ? gridFootprintCells(piecePropsOf(piece)) : 1;
-};
-// Is this piece a TILE (a card/deck carrying a `tile` kind)? Drives tile-vs-card pickup sounds.
-const pieceIsTile = (id) => {
-  const piece = room?.state.pieces.get(id);
-  return piece ? !!pieceProperty(piece, 'tile', false) : false;
-};
-// The drag target to actually send: snapped to the nearest cell for a snap-flagged piece
-// on an active grid (so it tracks cell-to-cell as you drag), else the raw cursor point.
-const snapXZ = (x, z) =>
-  down && down.snap && gridActive(room.state.scale)
-    ? snapToCell(x, z, room.state.scale, down.cells)
-    : { x, z };
 const skybox = createSkybox({ THREE, scene, renderer, deviceClass, byId });
 window.OTT_BUILTIN_SKIES = BUILTIN_SKIES;
 const roomSettings = createRoomSettings({
@@ -719,7 +694,7 @@ const membership = createMembership({
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
   bindTableEffects(room);
   inspection.bindRoom(room);
-  bindPieceDrag(room);
+  pieceDrag.bindRoom(room);
 
   presence.bindRoom(room, cb);
 
@@ -1101,75 +1076,11 @@ function showExit(msg) {
 }
 
 // ===== Interaction — click vs. drag; the meaning depends on the piece ========
-// Adoption must read the current gesture when the server responds, including after release.
-function bindPieceDrag(room) {
-  room.onMessage('dealt', ({ id }) => {
-    // a card you dragged off a deck — adopt it as the dragged piece
-    if (down && down.pendingDeal) {
-      down.id = id;
-      down.type = down.adoptType || 'card'; // 'card' from a deck, 'prop' from a dispenser
-      down.kind = KIND[down.type];
-      down.grabbed = true;
-      down.pendingDeal = false;
-      room.send('move', { id, x: hit.x, y: hit.y, z: hit.z });
-    } else {
-      room.send('release', { id, v: [0, 0, 0] }); // gesture already ended — just drop it
-    }
-  });
-}
-
 const ray = new THREE.Raycaster(),
   pointer = new THREE.Vector2();
-const GRAB_HEIGHT = CONFIG.grab.height; // float height when a piece is first grabbed (scroll to raise/lower)
-// A finger sits ON the piece it is holding, where a cursor only points at it, so a touch grab
-// starts higher — enough to clear the fingertip without changing where anything lands. Keyed off
-// the gesture, not the device: a laptop with a touchscreen gets the right lift for each grab.
-const grabHeightFor = (touch) => GRAB_HEIGHT * (touch ? CONFIG.grab.touchLift : 1);
-const DRAG_MIN = CONFIG.grab.min,
-  DRAG_MAX = CONFIG.grab.max,
-  DRAG_STEP = CONFIG.grab.step;
-const DECK_DRAG_HEIGHT = CONFIG.grab.deckHeight; // dealt cards ride this high to clear the deck
-const DRAG_ROTATE_RAD_PER_PX = 0.01,
-  DRAG_ROTATE_SNAP = Math.PI / 12; // Alt-drag: ~0.57°/px, snapped to 15° unless Shift is held
-const ROT_STEP = Math.PI / 24; // ~7.5° per tick for the held ⟲ / ⟳ buttons and the A/D keys
-
-// Turn the held piece (or the whole selection) by `raw` radians. Shared by the mouse's Alt-drag
-// dial and the touch two-finger twist, so both snap identically and neither loses sub-step
-// motion: the raw angle accumulates, and only the *applied* delta goes to the server.
-// Unsnapped mode is capped near the move send rate; snapped steps send the moment they land,
-// and the 15° quantum doubles as the dead zone that keeps a stray finger from nudging a piece.
-function applyHeldRotation(raw, fine = false) {
-  if (!(down && down.grabbed) || !room) return;
-  down.rotateRaw += raw;
-  const angle = fine
-      ? down.rotateRaw
-      : Math.round(down.rotateRaw / DRAG_ROTATE_SNAP) * DRAG_ROTATE_SNAP,
-    delta = angle - down.rotateSent,
-    now = performance.now();
-  if (Math.abs(delta) > 1e-4 && (!fine || now - down.lastRotateSent > 16)) {
-    room.send('rotateGroup', { ids: down.group ? selection.ids() : [down.id], angle: delta });
-    down.rotateSent = angle;
-    down.lastRotateSent = now;
-  }
-}
-let dragHeight = GRAB_HEIGHT;
-let holdSig = -1; // visibility signature for the clustered height/rotate controls (synced each frame)
-// XZ correction applied to the drag raycast. A two-finger transform holds the piece still while
-// the fingers travel, so when it ends the finger no longer points at the piece. Without this the
-// piece snaps to the finger — and, because that jump lands inside the throw estimator's window,
-// gets flung at the speed of the jump. Re-anchoring keeps the piece put and preserves the offset
-// for the rest of the drag.
-const dragOffset = new THREE.Vector3();
 const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0),
   hit = new THREE.Vector3(); // fixed ground plane (y=0); drag height is applied as a separate Y offset
-const prevTarget = new THREE.Vector3(),
-  throwVel = new THREE.Vector3(); // hand speed → throw velocity
-let lastMoveSent = 0,
-  prevThrowTime = 0,
-  down = null;
-let armedMove = null; // touch: a piece id whose next drag repositions it (the deck/dispenser "Move" menu item) instead of dealing
-const sfxKind = (t) =>
-  t === 'card' ? 'card' : t === 'die' ? 'die' : t === 'deck' ? 'deck' : 'object'; // pickup family
+let holdSig = -1; // clustered height/rotate control visibility
 // "Lean in": a Tools toggle that dollies the camera toward the orbit target for a
 // closer look. Applied as a per-frame visual offset (undone before controls.update)
 // so it never corrupts the real orbit distance; toggle off and it eases back.
@@ -1184,14 +1095,6 @@ const cameraPanForward = new THREE.Vector3(),
 // Translate the camera and OrbitControls target together, relative to the current view. This
 // preserves orbit distance/angle and makes W/Up mean "toward the top of the table as I see it".
 function panCamera(rightAmount, forwardAmount) {
-  if (
-    !room ||
-    inspection.isActive() ||
-    whiteboard.isOwning() ||
-    trays.isViewing() ||
-    trays.isCameraMoving()
-  )
-    return;
   cameraPanForward.copy(controls.target).sub(camera.position);
   cameraPanForward.y = 0;
   if (cameraPanForward.lengthSq() < 1e-8) cameraPanForward.set(0, 0, -1);
@@ -1312,404 +1215,6 @@ const pickId = (radiusPx = 0) => {
   });
 }
 
-// Map a click-action name to the server message it sends.
-const sendAction = (action, id) => {
-  if (action === 'takeCard') {
-    room.send('takeCard', { id });
-    playSfx(pieceIsTile(id) ? 'tile-pickup' : 'card-pickup');
-  } else if (action === 'drawToHand') {
-    room.send('drawToHand', { deckId: id });
-    playSfx(pieceIsTile(id) ? 'tile-pickup' : 'card-pickup');
-  } else if (action === 'deal') room.send('dealToTable', { deckId: id });
-  else if (action === 'dispense') {
-    room.send('dispense', { id });
-    playSfx('object-pickup');
-  } else if (action === 'flip') room.send('flip', { id });
-  else if (action === 'shuffle') room.send('shuffle', { deckId: id });
-  else if (action === 'roll') room.send('rollOne', { id });
-};
-
-// Handle a click (no drag). A left-click on an inspectable piece or a deck waits
-// briefly for a possible double-click (inspect / draw); everything else fires now.
-function handleClick(gesture) {
-  const { id, type } = gesture;
-
-  // Right-click raises the piece's menu — the same list the touch long-press builds — for every
-  // kind BUT a card. A card's whole vocabulary is take / move / flip, so a menu is more work than
-  // the gesture it replaces. Everything else has verbs that were otherwise keys-only or
-  // undiscoverable, and a prop or a board had no right-click action at all (KIND gives them no
-  // `rclick`), so the menu is what right-click means there now.
-  //
-  // A right-DRAG is unaffected: handleClick only runs when the gesture never became a drag, so a
-  // deck or dispenser still moves on right-drag. The menu also absorbs the two deck shortcuts it
-  // replaces — Shuffle was the single right-click, Split the double — which is why secondary no
-  // longer takes part in the deferred double-click below.
-  const route = clickRoute(type, gesture.secondary, inspection.isInspectable(type));
-  if (route === 'menu') {
-    openPieceMenu(id, { x: gesture.sx, y: gesture.sy });
-    return;
-  }
-  if (route === 'verb') {
-    sendAction(gesture.primary ? gesture.kind.lclick : gesture.kind.rclick, id);
-    return;
-  }
-
-  inspection.handleDeferredClick(id, type, gesture.kind.lclick);
-}
-const onPointerDown = (e) => {
-  const wasArmed = armedMove;
-  armedMove = null; // Move is one-shot: this press consumes it (if on that piece) or cancels it
-  if (overlays.isMeasuring()) {
-    // Measure mode: left-drag lays the selected overlay (A = press)
-    if (overlays.beginMeasure(e)) {
-      controls.enabled = false;
-      renderer.domElement.setPointerCapture(e.pointerId);
-    }
-    return;
-  }
-  if (whiteboard.isOwning()) {
-    // drawing on the whiteboard: start a stroke
-    if (e.primary) {
-      setPointer(e);
-      if (whiteboard.beginStroke()) renderer.domElement.setPointerCapture(e.pointerId);
-    }
-    return;
-  }
-  if (inspection.beginPointer(e)) return;
-  if (!room || (!e.primary && !e.secondary)) return;
-  setPointer(e);
-  const id = pickId(e.touch ? CONFIG.input.touchHitPx : 0);
-  // Multi-select gesture: the additive modifier (Shift) or the Select tool. Click a piece → toggle
-  // it in/out; drag empty felt → marquee box. Consumes the gesture so it never grabs or orbits.
-  if (selection.beginPointer(e, id)) {
-    controls.enabled = false;
-    renderer.domElement.setPointerCapture(e.pointerId);
-    down = null;
-    return;
-  }
-  if (!id) {
-    // no piece under the cursor
-    if (e.primary) {
-      if (overlays.beginMove(e)) {
-        // left-click an overlay you own (or GM) → select + drag to move
-        controls.enabled = false;
-        renderer.domElement.setPointerCapture(e.pointerId);
-        down = null;
-        return;
-      }
-      overlays.select(null); // left-click empty felt → deselect
-      selection.clear(); // …and drop any multi-selection (design-tool convention)
-    }
-    down = null;
-    return; // empty felt → let OrbitControls orbit/pan
-  }
-  const type = meshes.get(id).type;
-  // A left-drag on a SELECTED piece moves the whole selection; dragging an unselected piece drops
-  // the selection first (design-tool convention). Right-drag (decks) is never a group move.
-  const group = e.primary && selection.has(id);
-  if (e.primary && !selection.has(id)) selection.clear();
-  down = {
-    id,
-    type,
-    kind: KIND[type],
-    touch: e.touch,
-    forceMove: wasArmed === id,
-    primary: e.primary,
-    secondary: e.secondary,
-    sx: e.clientX,
-    sy: e.clientY,
-    dragging: false,
-    grabbed: false,
-    snap: pieceSnap(id),
-    cells: pieceCells(id),
-    group,
-    rotateOnPress: e.rotate,
-    rotating: false,
-    rotateX: e.clientX,
-    rotateRaw: 0,
-    rotateSent: 0,
-    lastRotateSent: 0,
-    transformed: false,
-  };
-  dragOffset.set(0, 0, 0); // each grab starts anchored to its own finger
-  controls.enabled = false; // this gesture belongs to the piece
-  dragHeight = grabHeightFor(e.touch); // the lift offset; XZ tracks the fixed ground plane
-  renderer.domElement.setPointerCapture(e.pointerId);
-};
-
-// wheel (raise/lower a held piece) → public/controls.js → INPUT.raiseAxis
-
-const onPointerMove = (e) => {
-  if (selection.movePointer(e)) return;
-  if (overlays.isMeasuring()) {
-    // live local preview of the overlay being dragged out
-    overlays.updateMeasure(e);
-    return;
-  }
-  if (whiteboard.isOwning()) {
-    // extend the current stroke along the board surface
-    if (whiteboard.isDrawing()) {
-      setPointer(e);
-      whiteboard.extendStroke();
-    }
-    return;
-  }
-  if (inspection.movePointer(e)) return;
-  if (overlays.isMoving()) {
-    // dragging a selected overlay: translate both ends, synced (throttled)
-    overlays.updateMove(e);
-    return;
-  }
-  if (!down) return;
-  // Once a touch owns a piece, aim the drag ray above the fingertip so the hand never hides the
-  // object or its exact drop point. The initial hit-test still happens directly under the finger.
-  setPointer(e, down.touch ? CONFIG.input.touchLeadPx : 0);
-  ray.setFromCamera(pointer, camera);
-  ray.ray.intersectPlane(dragPlane, hit);
-  hit.y = dragHeight; // XZ from the fixed ground plane; height is the independent lift offset
-  if (down.grabbed) {
-    hit.x += dragOffset.x; // zero until a two-finger transform re-anchors the drag
-    hit.z += dragOffset.z;
-  }
-
-  // First move past the click threshold decides what this drag means.
-  if (!down.dragging) {
-    if (Math.hypot(e.clientX - down.sx, e.clientY - down.sy) < CONFIG.input.dragPx) return; // still a click
-    down.dragging = true;
-    const kind = down.kind;
-    const movesThis = down.forceMove || (kind.grab === 2 ? down.secondary : down.primary); // this kind's move button — or an armed touch "Move"
-    if (movesThis) {
-      // the button that moves this kind (2 = deck, 0 = most)
-      down.grabbed = true;
-      heldTarget.copy(hit);
-      prevTarget.copy(hit);
-      prevThrowTime = performance.now();
-      throwVel.set(0, 0, 0);
-      if (down.group)
-        room.send('grabGroup', { ids: selection.ids(), anchor: down.id }); // claim the whole selection
-      else room.send('grab', { id: down.id });
-      playSfx(
-        pieceIsTile(down.id)
-          ? down.type === 'deck'
-            ? 'tiledeck-pickup'
-            : 'tile-pickup'
-          : sfxKind(down.type) + '-pickup',
-      ); // local, per object type (tiles/tile-boxes get their own)
-      {
-        const t = snapXZ(hit.x, hit.z);
-        if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z });
-        else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z });
-      }
-    } else if (down.primary && (kind.ldrag === 'deal' || kind.ldrag === 'dispense')) {
-      // Left-drag spawns one item and carries it out: a card off a deck, or a chip/stone
-      // off a dispenser. Both reuse the server's "adopt the spawned piece" flow (see 'dealt').
-      const dealing = kind.ldrag === 'deal';
-      down.pendingDeal = true;
-      down.adoptType = dealing ? 'card' : 'prop'; // what the carried piece becomes on adoption
-      dragHeight = DECK_DRAG_HEIGHT; // lift above the source so the new piece doesn't fight its collider
-      ray.setFromCamera(pointer, camera);
-      ray.ray.intersectPlane(dragPlane, hit);
-      hit.y = dragHeight;
-      heldTarget.copy(hit);
-      prevTarget.copy(hit);
-      prevThrowTime = performance.now();
-      throwVel.set(0, 0, 0);
-      if (dealing) room.send('dealDrag', { deckId: down.id, x: hit.x, y: hit.y, z: hit.z });
-      else room.send('dispenseDrag', { id: down.id, x: hit.x, y: hit.y, z: hit.z });
-      playSfx(dealing ? (pieceIsTile(down.id) ? 'tile-pickup' : 'card-pickup') : 'object-pickup'); // the new piece's drop follows on release
-    }
-  }
-
-  if (down.grabbed) {
-    if (e.transforming) {
-      // A two-finger transform owns this gesture: the twist/pinch arrive as their own intents
-      // (rotateHeld / raiseAxis), so the moving finger must not also drag the piece across the
-      // felt. Freeze XZ the way the Alt-drag dial does, and keep the throw estimator anchored to
-      // where the piece actually is, so lifting a finger can never fling it.
-      throwVel.set(0, 0, 0);
-      prevTarget.copy(heldTarget);
-      prevThrowTime = performance.now();
-      down.transformed = true; // the next plain move must re-anchor rather than snap
-      return;
-    }
-    if (e.rotate) {
-      // Alt turns the held-piece drag into a horizontal rotation dial. Accumulate raw pointer
-      // motion so snapped rotation does not lose sub-step movement; Shift exposes that raw angle.
-      if (!down.rotating) {
-        down.rotating = true;
-        if (!down.rotateOnPress) down.rotateX = e.clientX; // Alt pressed after the grab: anchor here
-      }
-      const raw = (e.clientX - down.rotateX) * DRAG_ROTATE_RAD_PER_PX;
-      down.rotateX = e.clientX;
-      applyHeldRotation(raw, e.fineRotate);
-      throwVel.set(0, 0, 0); // rotating in place should never turn into a throw on release
-      prevThrowTime = performance.now();
-      return;
-    }
-    down.rotating = false;
-    down.rotateOnPress = false;
-    if (down.transformed) {
-      // The transform just ended. The fingers moved while the piece stayed put, so bank that
-      // separation as an offset instead of letting the piece jump to the finger (see drag.js —
-      // the jump is also what flings it, since it lands inside the throw estimator's window).
-      down.transformed = false;
-      const o = reanchorOffset(heldTarget, hit, dragOffset);
-      dragOffset.x = o.x;
-      dragOffset.z = o.z;
-      hit.x = heldTarget.x;
-      hit.z = heldTarget.z;
-    }
-    heldTarget.copy(hit);
-    const now = performance.now(),
-      dt = (now - prevThrowTime) / 1000;
-    if (dt > 0 && dt < 0.1)
-      throwVel.lerp(
-        hit
-          .clone()
-          .sub(prevTarget)
-          .multiplyScalar(1 / dt),
-        0.4,
-      ); // smooth the hand speed
-    prevTarget.copy(hit);
-    prevThrowTime = now;
-    if (now - lastMoveSent > 16) {
-      const t = snapXZ(hit.x, hit.z);
-      if (down.group) room.send('moveGroup', { x: t.x, y: hit.y, z: t.z });
-      else room.send('move', { id: down.id, x: t.x, y: hit.y, z: t.z });
-      lastMoveSent = now;
-    } // ~60Hz throttle
-  }
-};
-const endGesture = (e) => {
-  if (selection.endPointer(e)) {
-    try {
-      renderer.domElement.releasePointerCapture(e.pointerId);
-    } catch {}
-    controls.enabled = !inspection.isActive();
-    return;
-  }
-  if (overlays.isMeasuring()) {
-    // release: commit the overlay if the drag was long enough
-    if (overlays.finishMeasure(e)) {
-      controls.enabled = true;
-      try {
-        renderer.domElement.releasePointerCapture(e.pointerId);
-      } catch {}
-    }
-    return;
-  }
-  if (whiteboard.isOwning()) {
-    // finish the stroke and send it
-    if (whiteboard.isDrawing()) whiteboard.endStroke();
-    try {
-      renderer.domElement.releasePointerCapture(e.pointerId);
-    } catch {}
-    return;
-  }
-  if (inspection.endPointer(e)) return;
-  if (overlays.isMoving()) {
-    // release a moved overlay: commit its final position
-    overlays.finishMove(e);
-    controls.enabled = true;
-    try {
-      renderer.domElement.releasePointerCapture(e.pointerId);
-    } catch {}
-    return;
-  }
-  if (!down) return;
-  if (down.grabbed) {
-    const throwVector =
-      down.kind.grab === 2 || down.kind.heavy ? [0, 0, 0] : [throwVel.x, throwVel.y, throwVel.z]; // decks & mats don't fly
-    if (down.group) room.send('releaseGroup', { v: throwVector });
-    else room.send('release', { id: down.id, v: throwVector });
-  } else if (!down.dragging) {
-    // a click / tap
-    handleClick(down);
-  }
-  controls.enabled = !inspection.isActive(); // stay disabled if this click just entered inspect
-  try {
-    renderer.domElement.releasePointerCapture(e.pointerId);
-  } catch {}
-  down = null;
-};
-// pointerdown / pointermove / pointerup / pointercancel → public/controls.js → INPUT.press / move / release
-// dblclick (claim the whiteboard) → public/controls.js → INPUT.doubleClick
-
-// The piece to act on for a keyboard shortcut: the held one, else whatever's hovered.
-const heldOrHoveredId = () => (down && down.id) || pickId();
-
-// Keyboard shortcuts (ignored while typing in an input). Delete/Backspace removes
-// a piece, U toggles its upright/flat behaviour, G toggles its snap-to-grid.
-// The held rotate/raise keys (A/D/W/S and the arrows) are NOT here — they repeat while
-// held, so the keyboard profile in controls.js owns them and raises rotateAxis / raiseAxis.
-const onKeyDown = (e) => {
-  if (!room) return;
-  if (e.key === 'Escape' && trays.isViewing()) {
-    trays.close();
-    return;
-  }
-  if (e.key === 'Escape' && selection.escape()) return;
-  if (e.key === 'Escape' && overlays.isMeasuring()) {
-    const r = byId('regionTR');
-    if (r && r._close) r._close();
-    else overlays.exit();
-    return;
-  }
-  if (e.key === 'Escape' && whiteboard.isOwning()) {
-    whiteboard.release();
-    return;
-  }
-  if (e.key === 'Escape' && inspection.isActive()) {
-    inspection.releaseInspect();
-    return;
-  }
-  if (e.key === 'Escape' && overlays.hasSelection()) {
-    overlays.select(null);
-    return;
-  }
-  const typing =
-    document.activeElement &&
-    (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
-  if (typing) return;
-
-  if (inspection.isDrawn()) {
-    // f/d/h/r place a drawn card. This sits BELOW the typing guard: it used to sit above it, so
-    // typing "d" in chat with a peek open dealt the card face-down.
-    const where = { f: 'field-up', d: 'field-down', h: 'hand', r: 'deck' }[e.key.toLowerCase()];
-    if (where) {
-      inspection.placeDrawn(where);
-      return;
-    }
-  }
-
-  if (selection.command(e.key)) return;
-
-  if (e.key === 'Delete' || e.key === 'Backspace') {
-    if (e.key === 'Backspace') e.preventDefault();
-    if (overlays.removeSelected()) return; // a selected overlay takes priority
-    if (selection.removeSelected()) return;
-    const id = heldOrHoveredId();
-    if (id) {
-      room.send('remove', { id });
-      if (down && down.id === id) {
-        down = null;
-        controls.enabled = true;
-      }
-    }
-  } else if (e.key === 'u' || e.key === 'U') {
-    // toggle keep-upright / lie-flat
-    const id = heldOrHoveredId();
-    if (id) room.send('setStand', { id });
-  } else if (e.key === 'g' || e.key === 'G') {
-    // toggle snap-to-grid for this piece
-    const id = heldOrHoveredId();
-    if (id) room.send('setSnap', { id });
-  } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
-    // ping the table at the cursor
-    sendPing();
-  }
-};
-
 const hand = createHand({
   scene,
   camera,
@@ -1752,7 +1257,7 @@ inspection = createInspection({
   saveDiceDefault,
   clearDiceDefault,
   onReleaseHand: () => hand.render(),
-  onSingleClick: sendAction,
+  onSingleClick: (...args) => pieceDrag.sendAction(...args),
 });
 inspection.setDiceTextures(diceTextures);
 const presence = createPresence({
@@ -1853,7 +1358,7 @@ let hoverId = null,
   lastHover = 0,
   controlGuideSig = '';
 const hoverIdle = () =>
-  !down &&
+  !pieceDrag.isActive() &&
   !inspection.isActive() &&
   !overlays.isMeasuring() &&
   !whiteboard.isOwning() &&
@@ -1973,6 +1478,7 @@ function showControlGuide(title, subtitle, rows) {
   controlGuide.hidden = false;
 }
 function syncControlGuide() {
+  const down = pieceDrag.current();
   const region = byId('regionBL');
   if (!controlGuidePointer.matches || (region && !region.hidden)) {
     controlGuideSig = '';
@@ -2261,6 +1767,27 @@ const selection = createSelection({
 });
 
 const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window.ottPerf(true)
+const pieceDrag = createPieceDrag({
+  THREE,
+  config: CONFIG,
+  kinds: KIND,
+  meshes,
+  controls,
+  canvas: renderer.domElement,
+  ray,
+  pointer,
+  camera,
+  dragPlane,
+  hit,
+  selection,
+  getRoom: () => room,
+  getInspection: () => inspection,
+  setPointer,
+  openPieceMenu,
+  playSfx,
+  clamp,
+});
+
 (function animate() {
   // shadow-on-demand: last frame's caster-transform key, in an object so the cross-frame write
   // (updated at the end of each rAF tick) isn't flagged dead by no-useless-assignment. See core.js.
@@ -2316,6 +1843,7 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
     p.label.material.opacity = t < 0.6 ? 1 : (1 - t) / 0.4; // hold, then fade near the end
     p.label.position.y = boardTopY + 0.6 + t * 0.35; // drift up a touch
   }
+  const down = pieceDrag.current();
   const held = down && down.grabbed && meshes.get(down.id); // landing spot under the held piece
   if (held) {
     _dropBox.setFromObject(held.mesh);
@@ -2383,14 +1911,14 @@ function pieceMenuItems(id, type) {
   const items = [];
   if (type === 'card') {
     items.push(['Flip', () => room.send('flip', { id })]);
-    items.push(['Take to hand', () => sendAction('takeCard', id)]);
+    items.push(['Take to hand', () => pieceDrag.sendAction('takeCard', id)]);
   }
   if (type === 'die') {
     items.push(['Roll', () => room.send('rollOne', { id })]);
   }
   if (type === 'deck') {
     items.push(['Peek at top card', () => room.send('drawInspect', { deckId: id })]);
-    items.push(['Draw to hand', () => sendAction('drawToHand', id)]);
+    items.push(['Draw to hand', () => pieceDrag.sendAction('drawToHand', id)]);
     items.push(['Shuffle', () => room.send('shuffle', { deckId: id })]);
     items.push(['Split', () => room.send('splitDeck', { deckId: id })]);
     const deckOpen = (() => {
@@ -2406,16 +1934,16 @@ function pieceMenuItems(id, type) {
     ]);
   }
   if (type === 'dispenser') {
-    items.push(['Dispense', () => sendAction('dispense', id)]);
+    items.push(['Dispense', () => pieceDrag.sendAction('dispense', id)]);
   }
   if (KIND[type] && KIND[type].grab === 2)
     items.push([
       'Move',
       () => {
-        armedMove = id;
+        pieceDrag.armMove(id);
       }, // fallback: a plain click arms the next drag, as it always did
       null,
-      (e) => beginMoveFromMenu(id, e), // press and keep dragging — the piece comes with you
+      (e) => pieceDrag.beginMoveFromMenu(id, e), // press and keep dragging — the piece comes with you
     ]); // deck/dispenser: reposition instead of deal
   if (inspection.isInspectable(type)) {
     items.push(['Inspect', () => inspection.enterInspect(id)]);
@@ -2425,59 +1953,6 @@ function pieceMenuItems(id, type) {
   items.push(['Delete', () => room.send('remove', { id }), 'danger']);
   return items;
 }
-// Pick a piece up NOW, at the pointer, as though a move-drag had just crossed the grab threshold.
-// The menu's Move item uses this on POINTERDOWN, so you press Move and keep dragging in one
-// gesture instead of tapping Move, then finding the deck again and dragging that. The piece jumps
-// to the pointer, which is the point: you already aimed at where the menu is.
-function beginMoveFromMenu(id, e) {
-  const entry = meshes.get(id);
-  if (!entry || !room) return false;
-  setPointer(e, e.pointerType === 'touch' ? CONFIG.input.touchLeadPx : 0);
-  ray.setFromCamera(pointer, camera);
-  if (!ray.ray.intersectPlane(dragPlane, hit)) return false;
-  dragHeight = grabHeightFor(e.pointerType === 'touch');
-  hit.y = dragHeight;
-  down = {
-    id,
-    type: entry.type,
-    kind: KIND[entry.type],
-    touch: e.pointerType === 'touch',
-    forceMove: true,
-    primary: true,
-    secondary: false,
-    sx: e.clientX,
-    sy: e.clientY,
-    dragging: true, // already past the threshold: this gesture can never be read as a click
-    grabbed: true,
-    snap: pieceSnap(id),
-    cells: pieceCells(id),
-    group: false,
-    rotateOnPress: false,
-    rotating: false,
-    rotateX: e.clientX,
-    rotateRaw: 0,
-    rotateSent: 0,
-    lastRotateSent: 0,
-    transformed: false,
-  };
-  dragOffset.set(0, 0, 0);
-  controls.enabled = false;
-  heldTarget.copy(hit);
-  prevTarget.copy(hit);
-  prevThrowTime = performance.now();
-  throwVel.set(0, 0, 0);
-  room.send('grab', { id });
-  playSfx(pieceIsTile(id) ? 'tiledeck-pickup' : sfxKind(entry.type) + '-pickup');
-  const t = snapXZ(hit.x, hit.z);
-  room.send('move', { id, x: t.x, y: hit.y, z: t.z });
-  // Capture on the CANVAS even though the press landed on a menu button, so the rest of the drag
-  // reaches the canvas handlers.
-  try {
-    renderer.domElement.setPointerCapture(e.pointerId);
-  } catch {}
-  return true;
-}
-
 let pieceMenuAway = null; // outside-tap dismiss handler installed while the menu is open
 function closePieceMenu() {
   const menu = byId('pieceMenu');
@@ -2540,75 +2015,26 @@ function openPieceMenu(id, p) {
 
 // ===== Input seam ===========================================================
 // Raw canvas events → intents (see public/controls.js). These handlers own what each
-// intent MEANS; controls.js owns which device gesture raises it. As Phase 0 proceeds,
-// the pointer dispatcher and keyboard shortcuts fold in here too.
-const INPUT = {
-  press: onPointerDown, // pointerdown → the dispatcher (grab/deal, marquee, overlay, modal starts)
-  move: onPointerMove, // pointermove → drag routing for every mode
-  release: endGesture, // pointerup / pointercancel → commit/settle the gesture
-  command: onKeyDown, // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
-  secondaryPress: (p) => {
-    // touch long-press → context menu on a piece, or ping on empty felt
-    if (
-      !room ||
-      overlays.isMeasuring() ||
-      whiteboard.isOwning() ||
-      inspection.isActive() ||
-      selection.isActive()
-    )
-      return; // a modal tool owns the gesture
-    const id = down && down.id; // the piece the press landed on (null on empty felt)
-    if (down) down.dragging = true; // consume the gesture: no grab on further move, no tap on release
-    if (id) openPieceMenu(id, p);
-    else {
-      setPointer({ clientX: p.x, clientY: p.y });
-      sendPing();
-    } // long-press empty felt → ping
-  },
-  hasHeld: () => !!(down && down.grabbed),
-  // Axis keys keep their object meaning only where that action has a target. Otherwise the input
-  // profile routes the same physical key to camera panning.
-  hasAxisTarget: (name) =>
-    name === 'raiseAxis'
-      ? !!(down && down.grabbed)
-      : !!(down && down.grabbed) || selection.size > 0,
+// intent means through the composed router; controls.js owns which device gesture raises it.
+const INPUT = createInputRouter({
+  getRoom: () => room,
+  canvas: renderer.domElement,
+  controls,
+  selection,
+  overlays,
+  whiteboard,
+  inspection,
+  trays,
+  pieces: pieceDrag,
+  setPointer,
+  pickId,
+  touchHitPx: CONFIG.input.touchHitPx,
+  getPieceMeshes: () => [...meshes.values()].map((m) => m.mesh),
   panCamera,
-  // Turn the held piece by a raw angle — the device-agnostic form of the Alt-drag dial.
-  // The touch profile raises it from a two-finger twist; a gamepad stick would too.
-  rotateHeld: (radians) => applyHeldRotation(radians),
-  snapHeld: () => {
-    if (down && down.grabbed) room.send('snap', { id: down.id });
-  },
-  ping: (p) => {
-    setPointer({ clientX: p.x, clientY: p.y });
-    sendPing();
-  },
-  // Turn the selection (or the held piece) one small step. The continuous complement to the
-  // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.
-  rotateAxis: (dir) => {
-    if (!room || inspection.isActive()) return; // a peek/inspect view owns the keyboard
-    const ids = selection.size ? selection.ids() : down && down.grabbed ? [down.id] : [];
-    if (ids.length) room.send('rotateGroup', { ids, angle: dir * ROT_STEP });
-  },
-  raiseAxis: (dir) => {
-    if (inspection.isActive()) return; // ...and must not also nudge a piece behind it
-    if (!(down && down.grabbed)) return;
-    dragHeight = clamp(dragHeight + dir * DRAG_STEP, DRAG_MIN, DRAG_MAX); // up = raise
-    // Raise the piece where it already is, rather than re-deriving XZ from the pointer. Identical
-    // for the wheel (the cursor is still while scrolling), and necessary for the two-finger pinch,
-    // where the fingers travel but the piece is meant to stay put and only change height.
-    const t = snapXZ(heldTarget.x, heldTarget.z);
-    if (down.group) room.send('moveGroup', { x: t.x, y: dragHeight, z: t.z });
-    else room.send('move', { id: down.id, x: t.x, y: dragHeight, z: t.z });
-  },
-  // double-click the board to own it and draw; true if a claim was sent
-  doubleClick: (p) => {
-    return whiteboard.claimAt(
-      p,
-      [...meshes.values()].map((m) => m.mesh),
-    );
-  },
-};
+  openPieceMenu,
+  sendPing,
+  byId,
+});
 attachControls(renderer.domElement, INPUT);
 
 // Universal icon buttons: any button labeled "EMOJI text" collapses to just the emoji on small

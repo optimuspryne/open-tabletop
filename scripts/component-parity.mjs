@@ -26,7 +26,7 @@
  *
  * Needs a browser; not part of `npm run check`. Run as `npm run test:components`.
  */
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
 
@@ -202,6 +202,27 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
+  {
+    name: 'client-bootstrap',
+    root: '#controlsModal',
+    expect: { selector: '#controlsModal:not([hidden])', min: 1 },
+    drive: `
+      // Keep joining pending while the real composition root constructs every controller,
+      // wires input, and renders its first frames. No server or authentication is needed.
+      window.Colyseus = {
+        Client: class {
+          joinOrCreate() { return new Promise(() => {}); }
+          reconnect() { return new Promise(() => {}); }
+        },
+        getStateCallbacks: () => {},
+      };
+      await import('/__client-live.js');
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      document.getElementById('controlsBtn').click();
+      if (document.getElementById('controlsModal').hidden)
+        throw new Error('Production client did not wire the controls dialog');
+    `,
+  },
   {
     name: 'room-binders',
     root: '#regionTR',
@@ -920,9 +941,13 @@ const VIEWPORTS = [
 const out = {};
 const server = await serveDir({
   root: ROOT,
-  stubOnly: ['/client.js'], // the engine; editor-panel is what we are exercising
+  stubOnly: ['/client.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
+    '/__client-live.js': {
+      body: await readFile(resolve(ROOT, 'client.js'), 'utf8'),
+      type: 'text/javascript',
+    },
     '/__rows.html': { body: ROWS_FIXTURE },
     '/__component-states.html': { body: COMPONENT_STATES_FIXTURE },
     '/__ui-surfaces.html': { body: UI_SURFACES_FIXTURE },

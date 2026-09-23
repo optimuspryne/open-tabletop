@@ -14,6 +14,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Extract semantic pointer/keyboard routing and piece-drag state into focused client controllers,
+  preserving mode priority, click/deal/dispense behavior, grid/group transforms, touch re-anchoring,
+  and release handling. Add routing/gesture regressions and desktop/touch production-bootstrap checks.
 - Wait for a new Proxmox LXC's IPv4 address and default route before installing packages,
   rebooting the container once if networking is not ready and failing clearly if it remains offline.
 - Split client bootstrap into feature-owned piece, hand, inspection, chat, private notebook,

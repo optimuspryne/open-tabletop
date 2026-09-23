@@ -151,8 +151,8 @@ importing a room singleton:
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
   does not repeatedly triangulate identical pieces.
 - **`public/client.js`** — the browser composition root and remaining table runtime: networking,
-  controller construction, input dispatch, piece dragging, and the ordered render
-  loop. It retains shared session and scene state (`room`, `down`, `meshes`, `buffers`) while
+  controller construction, raycasting, menus, camera panning, and the ordered render
+  loop. It retains shared session and scene state (`room`, `meshes`, `buffers`) while
   presence, selection, inspection, private hand, overlays, whiteboard, trays, room settings, and
   skybox controllers own feature state. A full-screen
   Loading Table cover remains above the runtime until the local mesh count matches synchronized
@@ -161,6 +161,16 @@ importing a room singleton:
   preventing both the bootstrap camera and late hydration from appearing to end users. On desktop,
   it also derives a bottom-left control guide from the current hovered/held piece or private-hand
   card and translates the camera plus OrbitControls target for view-relative keyboard panning.
+- **`public/table/input-router.js`** — semantic input ownership. `createInputRouter` returns the
+  intent map consumed by `attachControls` and the on-screen hold controls. It preserves mode
+  priority, Escape/typing guards, long-press routing, object-axis targeting, and camera-pan gates;
+  device translation and keyboard repeat timing remain in `public/controls.js`.
+- **`public/table/piece-drag.js`** — `createPieceDrag` owns piece press/drag state, click routing,
+  menu Move, grab/deal/dispense and late `dealt` adoption, group movement, grid targets, rotation,
+  touch re-anchoring, and throw estimation. It reuses shared snapping and existing click/drag
+  helpers. The root reads a copied gesture summary for the guide, touch controls, and landing
+  marker. Room access, selection, inspection, raycasting, menu opening, and sound are injected;
+  no mutable client context or feature-to-root import is introduced.
 - **`public/table/piece-view.js`** — the first extracted table feature boundary. It owns defensive
   piece-property parsing, dispenser mesh props, piece add/remove/property bindings, patch
   snapshots/interpolation, current-mesh deck
@@ -1461,8 +1471,28 @@ scoreboard binders retain the optional-schema guard and explicit initial hydrati
 Patch dispatch remains ordered: `pieceView.recordState`, whiteboard synchronization, tray
 synchronization, then skybox synchronization. Piece add/remove callbacks update loading readiness;
 removal still releases inspection/selection/held labels and collider surfaces before dropping the
-snapshot buffer. General UI wiring remains at the root for later composition cleanup; the local
-piece-drag, ping, and audiovisual binders stay beside their current state owners.
+snapshot buffer. `pieceDrag.bindRoom` owns `dealt` responses and checks the live gesture before
+adopting a spawned piece; replies after release are dropped with the existing release message.
+General UI wiring and the ping/audiovisual binders remain at the root for later composition cleanup.
+
+## Semantic input and piece-drag boundaries
+
+Device profiles translate DOM events into intents; the input router then chooses a feature without
+owning its state. Pointer moves first offer the gesture to selection, measurement, whiteboard,
+inspection, overlay movement, then piece dragging. Press and release preserve their distinct
+priority and pointer-capture/camera transitions. Escape closes tray, selection, measure,
+whiteboard, inspection, or selected overlay in that order before checking field focus. Ordinary
+commands and drawn-card placement remain guarded while typing; keyboard axis repeat is guarded
+by the device profile.
+
+The piece-drag controller owns the mutable gesture and its timing/velocity/rotation accumulators.
+The hand and piece drag still share the root's projection plane and scratch hit vector, preserving
+the existing flow. `current()` returns only copied display fields, and controller construction
+precedes the first render. The router calls the controller's release behavior before restoring the
+camera and clearing the gesture, so a click that enters inspection keeps orbit disabled. Physics,
+permissions, inventory, and authoritative snapping remain server-owned. Tests cover modal priority,
+late deal replies, grid/group transforms, typing, and touch re-anchoring; browser checks exercise
+the production root's startup in both pointer layouts.
 
 ## Private-hand controller boundary
 

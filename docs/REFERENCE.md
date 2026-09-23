@@ -45,6 +45,8 @@ The codebase:
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, loading gate, render loop                                                             |
+| `public/table/input-router.js` | browser | Semantic intent dispatch, modal priority, Escape/typing guards, and camera-pan gating |
+| `public/table/piece-drag.js` | browser | Piece gestures, click/deal/dispense flow, grid/group transforms, throw estimation, and dealt-response binding |
 | `public/table/piece-view.js`                                                                           | browser | Safe piece props, room lifecycle bindings, mesh replacement, patch snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
 | `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
 | `public/table/hand.js`                                                                                 | browser | Private hand state, rendering, Show audience/selection, rearrangement/sorting, collapse preference, inspection entry, and card pointer gestures                                                  |
@@ -178,10 +180,20 @@ classDiagram
         +mesh builders + KIND registry
     }
     class Client["public/client.js"] {
-        room, meshes, buffers, down, myIsAdmin
+        room, meshes, buffers, myIsAdmin
         +controller composition + networking + UI wiring
-        +input dispatch + piece drag/wheel/keys
+        +raycasting + menus + camera pan math
         +table/track resize orchestration + render loop
+    }
+    class InputRouter["public/table/input-router.js"] {
+        +createInputRouter(dependencies)
+        +press/move/release/command + semantic intents
+    }
+    class PieceDrag["public/table/piece-drag.js"] {
+        down, armedMove, dragHeight, targets, throwVel
+        +createPieceDrag(dependencies)
+        +bindRoom/press/move/release/current
+        +beginMoveFromMenu/sendAction + transforms
     }
     class PieceView["public/table/piece-view.js"] {
         +piecePropsOf() / meshPropsOf() / pieceProperty()
@@ -305,6 +317,11 @@ classDiagram
     Core <.. Graphics
     Core <.. Client
     Graphics <.. Client
+    InputRouter <.. Client
+    PieceDrag <.. Client
+    PieceDrag <.. InputRouter
+    PieceView <.. PieceDrag
+    Shared <.. PieceDrag
     PieceView <.. Client
     PieceView <.. ColliderDebug
     SharedColliders <.. ColliderDebug
@@ -2102,6 +2119,50 @@ real desktop/touch chat, scores, notes, membership, and timer controls, includin
 `wireCluster`, `wireDrawer`, `holdRepeat`, and `createRadialMenu`. It owns reusable focus,
 responsive presentation, and interaction mechanics without owning feature-specific content.
 
+## `public/table/input-router.js` — semantic input
+
+**`createInputRouter(dependencies)`** returns the intent object passed to `attachControls` and
+on-screen hold controls: `press`, `move`, `release`, `command`, `secondaryPress`, `hasHeld`,
+`hasAxisTarget`, `panCamera`, `rotateHeld`, `snapHeld`, `ping`, `rotateAxis`, `raiseAxis`, and
+`doubleClick`. It receives room access, the canvas/camera controls, feature controllers, raycast
+helpers, and menu/ping/pan callbacks. Device event interpretation stays in `public/controls.js`.
+
+Internal **`onPointerDown`**, **`onPointerMove`**, and **`endGesture`** dispatch to the current
+feature while preserving pointer capture and camera restoration. Move order is selection,
+measurement, whiteboard, inspection, overlay movement, then piece drag. **`onKeyDown`** checks
+Escape exits (tray, selection, measure, whiteboard, inspection, overlay selection) before the
+INPUT/TEXTAREA guard. Drawn-card placement, batch commands, and ordinary commands follow that
+guard. Delete prioritizes overlay, selection, then the held/hovered piece. **`heldOrHoveredId`**
+resolves that target; **`releaseCapture`** tolerates already-lost capture.
+
+## `public/table/piece-drag.js` — piece gesture controller
+
+**`createPieceDrag(dependencies)`** owns the mutable press/drag gesture, armed menu Move, height,
+held/previous targets, throw velocity, rotation accumulation, touch offset, and send timestamps.
+It receives the room accessor, piece kinds/meshes, selection, inspection accessor, Three.js
+projection dependencies, sound/menu callbacks, config, and an optional clock for tests.
+
+- **`press` / `move` / `release`** implement click classification, grab/deal/dispense, group movement,
+  grid targets, Alt/touch rotation, re-anchoring, and release velocity. `release` reports whether
+  it handled a gesture; the router restores camera/capture and calls `clear` afterward.
+- **`bindRoom(room)`** registers `dealt`: adopt a card/prop into the pending gesture or release it
+  with zero velocity if the gesture already ended.
+- **`sendAction` / `handleClick`** retain piece verbs and deferred inspection click routing through
+  existing `clickRoute`. **`beginMoveFromMenu`** transfers a Move press to canvas capture;
+  **`armMove` / `consumeArmedMove`** retain the one-shot fallback.
+- **`rotateAxis` / `raiseAxis` / `rotateHeld` / `snapHeld`** implement held/selection transforms.
+  Internal **`applyHeldRotation`** accumulates raw angles; **`pieceSnap` / `pieceCells` /
+  `pieceIsTile` / `snapXZ`** reuse safe props and shared grid calculations.
+- **`current()`** returns a copied `{ id, type, grabbed, touch }` summary or null for rendering.
+  **`isActive` / `hasHeld` / `pressedId`** expose intent queries; **`consumePress`** suppresses a
+  long-press's later click/grab; **`clear`** discards the gesture.
+
+`test/input-router.js` exercises both controllers together with a controlled clock/raycast,
+including priority, typing, late replies, grid/groups, menu Move, and transform release behavior.
+Component parity imports the real composition root with room joining held pending and checks its
+first frames and dialog wiring in desktop and touch layouts; live multiplayer/gesture feel still
+requires manual verification.
+
 ## `public/client.js` — runtime
 
 ### Networking
@@ -2118,13 +2179,13 @@ Private `hand`/`dropUndone` delivery belongs to `hand.bindRoom`; `inspectCard` b
 `inspection.bindRoom`, and `showFan` to `presence.bindMessages`. Chat and notebook install their
 replay handlers before requesting history. `bindLibraryMessages` routes asset lists and errors
 and Save Table feedback before the editor-panel handoff. Membership owns server-pushed lists
-and pending indicators. The root's local `bindPieceDrag` adopts or releases `dealt` responses
+and pending indicators. `pieceDrag.bindRoom` adopts or releases `dealt` responses
 against the live gesture; `bindPings` and `bindTableEffects` connect attention markers, shuffle
 animation, and shared sounds to the existing effect state.
 
 Session-wide `serverError`, `notice`, `whoami`, `roomClosed`, `kicked`, `accessRevoked`, and leave
 handling stay at the root. **`applyRole`** gates the shell and delegates score/notes affordances to
-`scoreboard.applyRole`. Join/reconnect, loading/exit handling, shared maps, input/drag state, audio
+`scoreboard.applyRole`. Join/reconnect, loading/exit handling, shared maps, raycast/menu/camera helpers, audio
 preferences, generic UI composition, and the ordered render loop also remain there. Asset
 creation and library pickers stay in `editor-panel.js`; the shared DOM helpers remain
 **`byId`/`qs`/`qsa`**. Snapshot recording, transform application, interpolation, and replacement
@@ -2140,14 +2201,14 @@ as `ott-show-colliders`. The composed `public/table/collider-debug.js` controlle
 collider descriptors into non-raycastable cyan Three.js shells, refreshes them after mesh or count
 changes, and follows each synchronized/interpolated transform without changing room state.
 
-### Interaction (`meshes`, `buffers`, `down`)
+### Interaction composition (`meshes`, `buffers`, `pieceDrag`)
 
 - **`setPointer` / `pickId`** — pointer → NDC → raycast → id (walks up to the
   id-stamped root so nested model meshes pick correctly). Fine pointers use the exact ray. A touch
   first tries that exact point, then samples two rings within `CONFIG.input.touchHitPx`; once held,
   `setPointer` aims `touchLeadPx` above the contact point so the piece and landing spot remain
   visible instead of sitting beneath the finger.
-- **`pointerdown/move/up` + `endGesture`** — click vs. drag; dispatch grab/deal/
+- **Router `press/move/release` → `pieceDrag`** — click vs. drag; dispatch grab/deal/
   click via `KIND`; **wheel** raises/lowers a held piece; the drag plane height is
   the scroll-adjustable grab height, and a translucent ring previews the landing.
   **Middle-click** steps a held piece's facing by 45°, or — with nothing held — drops a
@@ -2155,7 +2216,7 @@ changes, and follows each synchronized/interpolated transform without changing r
   (`snapXZ` snaps the `move` target sent to the server). A left-drag on a piece that's _in_
   the selection sends `grabGroup`/`moveGroup`/`releaseGroup` (moves the whole clump); a drag on
   an unselected piece clears the selection first. For deck/dispenser **Move**, the flat and radial
-  long-press menus call `beginMoveFromMenu` before hiding/removing the pressed control, allowing it
+  long-press menus call `pieceDrag.beginMoveFromMenu` before hiding/removing the pressed control, allowing it
   to transfer the active pointer capture to the canvas and continue the same gesture.
 - **Keyboard axes + `panCamera`** — `public/controls.js` owns repeat timing for WASD and the arrow
   keys. With no compatible held-piece or selection target, it sends view-relative camera-pan
@@ -2167,7 +2228,7 @@ changes, and follows each synchronized/interpolated transform without changing r
   drag. Rows are generated by `pieceControlRows` / `hand.controlRows`, include live stack counts
   where relevant, and yield to an open bottom-left panel.
 - **Multi-select** — the composed `selection` controller owns the selected IDs, Select tool,
-  marquee, and highlight pool (see `public/table/selection.js` above). The client forwards
+  marquee, and highlight pool (see `public/table/selection.js` above). The router forwards
   pointer input, calls `selection.escape()` / `selection.command(key)`, and handles empty-click
   clearing. Group dragging and continuous rotation use `selection.ids()`. Piece listeners call
   `selection.remove(id)` on removal or a remote grab; the render loop calls `selection.update()`.
@@ -2175,11 +2236,12 @@ changes, and follows each synchronized/interpolated transform without changing r
 - **Dice tray** — `client.js` forwards synchronized tray state and camera updates to
   `trays.sync`/`trays.updateCamera`; `trays.bindControls` owns the Roll-button visit, spawn,
   Roll all, Scoop, Clear, Put away, and Back actions.
-- **Inspect** — `client.js` forwards double-click and pointer intent to `inspection`, which parks
+- **Inspect** — piece click routing and the input router forward deferred clicks and pointer
+  intents to `inspection`, which parks
   an enlarged copy in front of the camera and owns rotate-drag and F/D/H/R placement. Its
   appearance controls rebuild previews and send synchronized `recolor` messages for supported
   colors, teams, and finishes. Pipped dice hide image-backed custom textures.
-- **`keydown`** — with a **non-empty selection** the keys act on the whole group first
+- **Router `command`** — with a **non-empty selection** the keys act on the whole group first
   (U/G stand/snap, R roll dice, F flip cards, H take cards, `[`/`]` rotate ±45°, Delete removes
   it) and only otherwise fall through to the single-piece behavior: Delete removes, U toggles
   keep-upright, G toggles snap-to-grid, S saves a hovered deck (each acts on
