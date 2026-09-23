@@ -3293,6 +3293,30 @@ label:has(.ico) {
 .trayDie:has(.ico) {
   gap: 2px;
 } /* plus+number reads as "+4" */
+.pop-menu.trayDieMenu {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: min(300px, 84vw);
+  box-sizing: border-box;
+}
+.trayDieMenu .trayDie {
+  width: 100%;
+  height: calc(28px * var(--ui-elements-scale));
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: auto;
+  padding: calc(4px * var(--ui-elements-scale)) calc(6px * var(--ui-elements-scale));
+  font-size: var(--fs-sm);
+  white-space: nowrap;
+}
+.trayDieMenu .trayDie .ico {
+  width: var(--ico-size-sm);
+  height: var(--ico-size-sm);
+}
+.trayDieMenu .trayDie [class*='ico-number-'] {
+  width: calc(var(--ico-size-sm) * 1.15);
+  height: calc(var(--ico-size-sm) * 1.15);
+}
 
 /* Snappy themed hover-hint for icon buttons (see the #tip logic in client.js). */
 #tip {

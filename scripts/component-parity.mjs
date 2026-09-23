@@ -500,6 +500,31 @@ const SCENES = [
       await new Promise((r) => setTimeout(r, 60));`,
   },
   {
+    name: 'dice-add-menu',
+    root: '#trayTools',
+    expect: { selector: '.trayDie', min: 8 },
+    drive: `
+      (await import('/icons.js')).applyIcons();
+      const trayTools = document.getElementById('trayTools');
+      trayTools.hidden = false;
+      trayTools.querySelector('.trayDieMenu').hidden = false;
+      const rects = [...trayTools.querySelectorAll('.trayDie')].map((button) =>
+        button.getBoundingClientRect());
+      const widths = rects.map(({ width }) => width);
+      const heights = rects.map(({ height }) => height);
+      if (Math.max(...widths) - Math.min(...widths) > 1 ||
+          Math.max(...heights) - Math.min(...heights) > 1)
+        throw new Error('Add-dice buttons do not share one size');
+      if (Math.max(...heights) > 46)
+        throw new Error('Add-dice buttons have regressed to oversized controls');
+      if (new Set(rects.map(({ top }) => Math.round(top))).size !== 2)
+        throw new Error('Add-dice buttons do not form two compact rows');
+      if ([...trayTools.querySelectorAll('.trayDie')].some((button) =>
+        button.scrollWidth > button.clientWidth + 1 || button.scrollHeight > button.clientHeight + 1))
+        throw new Error('Add-dice button content overflows its uniform footprint');
+      await new Promise((r) => setTimeout(r, 60));`,
+  },
+  {
     name: 'lighting-panel',
     root: '#roomSettingsModal',
     expect: { selector: '#lightingGlobe, .lightingControl', min: 4 },

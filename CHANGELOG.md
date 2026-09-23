@@ -59,6 +59,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   browser rendering, server validation, scene restoration, and history retention share one policy.
 
 ### Fixed
+- Keep every Dice Box add-die choice on the same compact grid footprint instead of mixing square
+  icon buttons with differently sized model-die buttons.
 - Place measurement shapes and labels on the rendered board surface instead of a board-wide
   height, so tall 3D board geometry or custom colliders do not make them float above play.
 - Give Save Table a temporary checked icon and label after saving without losing its original icon,
