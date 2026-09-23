@@ -396,7 +396,7 @@ are attached through DOM APIs and are genuinely used.
 
 ### Phase 2: cohesive feature controllers
 
-4. Extract whiteboard.
+4. Extract whiteboard. **Completed 2026-09-22.**
 5. Extract overlays.
 6. Extract trays.
 7. Extract hand.

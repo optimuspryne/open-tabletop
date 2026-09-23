@@ -17,6 +17,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 - Enable nesting on new unprivileged Proxmox Debian 13 LXCs so the packaged Redis service can
   create its systemd user namespace, fail and retry APT index updates on transient fetch errors,
   and allow retrying the NodeSource key import after a partial installation.
+- Move whiteboard mesh, stroke replay, ownership/camera mode, drawing gestures, room messages,
+  and controls into a dedicated client controller while keeping table input wiring thin.
 - Extract reusable dialog focus, responsive sheet, cluster, drawer, radial-menu, and hold-repeat
   mechanics from the table client into a dedicated UI-surfaces module, with desktop/touch
   component-parity coverage.

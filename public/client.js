@@ -56,6 +56,7 @@ import { clickRoute } from './clicks.js';
 import { colliderSpec } from '/shared/collider-spec.js';
 import { createColliderDebug } from './table/collider-debug.js';
 import { createUiSurfaces } from './table/ui-surfaces.js';
+import { createWhiteboard } from './table/whiteboard.js';
 import {
   applyTransform,
   createPieceView,
@@ -94,7 +95,7 @@ import {
   trayCenter,
   seatAngle,
 } from '/shared/pieces.js';
-import { MEASURE, WHITEBOARD_LIMITS } from '/shared/overlays.js';
+import { MEASURE } from '/shared/overlays.js';
 import {
   playSfx,
   resumeAudio,
@@ -803,6 +804,7 @@ function rebuildGrid() {
     dragPreviews.set(m.from, { group, label });
   });
 
+  whiteboard.bindRoom(room); // install replay handlers before the first state-driven request
   // Record one timestamped snapshot per piece on every patch (~the server patch
   // rate). The render loop plays these back interpolated and slightly delayed, so
   // motion stays smooth at any speed.
@@ -814,8 +816,7 @@ function rebuildGrid() {
       buf.push(snapshot(now, piece));
       if (buf.length > 24) buf.shift();
     });
-    syncWhiteboard(state.whiteboard); // reflect enable / slide / style changes
-    syncWbStatus(); // who currently holds the board (everyone but the holder)
+    whiteboard.sync(state.whiteboard); // board visual, ownership, and holder status
     syncTrays(state.trays); // reflect personal trays appearing / being put away
     syncSkybox(state.skybox); // reflect the room's skybox
   });
@@ -838,15 +839,6 @@ function rebuildGrid() {
     refreshFan(sid);
   });
   room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
-  room.onMessage('wbStroke', (s) => {
-    if (!s || s.sid === mySession) return;
-    pushStroke(s);
-  }); // another player drew (skip our own echo)
-  room.onMessage('wbStrokes', ({ strokes } = {}) => {
-    wbStrokesLocal.length = 0;
-    for (const s of strokes || []) wbStrokesLocal.push(s);
-    redrawStrokes();
-  }); // full replay (late join)
   room.onMessage('chatMsg', (m) => addChatMsg(m));
   room.onMessage('chatLog', ({ log } = {}) => {
     const el = byId('chatLog');
@@ -858,10 +850,6 @@ function rebuildGrid() {
     byId('notesText').value = text || '';
   }); // private room-memory notes for this account
   room.send('notebookSync');
-  room.onMessage('wbClear', () => {
-    wbStrokesLocal.length = 0;
-    if (wbTex) wbClearCanvas();
-  });
   room.onMessage('skyList', (list) => {
     if (window.onLibraryList) window.onLibraryList('sky', list || []);
   }); // fans to the library + skybox picker
@@ -1300,15 +1288,7 @@ function rebuildGrid() {
       syncTableShapeUI();
       byId('tableFelt').value = room.state.feltColor || '#2f6b4f';
       syncScalePanel();
-      const wb = room.state.whiteboard;
-      if (wb) {
-        byId('wbEnabled').classList.toggle('on', wb.enabled);
-        setIcon(byId('wbEnabled'), wb.enabled ? 'eye' : 'eye-off');
-        qsa('#roomSettingsModal [data-wbstyle]').forEach((c) =>
-          c.classList.toggle('on', c.dataset.wbstyle === (wb.dark ? 'dark' : 'light')),
-        );
-        byId('wbAngle').value = Math.round((wb.angle * 180) / Math.PI);
-      }
+      whiteboard.syncSettings(room.state.whiteboard);
       lightingEditing = false;
       syncLightingPanel();
     };
@@ -1426,40 +1406,7 @@ function rebuildGrid() {
       }
     });
   }
-  // Whiteboard config now lives in the Room Settings → Whiteboard tab (GM-only); synced on open above.
-  // The controls themselves (Show / style / angle) are wired below.
-  {
-    const el = byId('wbEnabled');
-    if (el)
-      el.onclick = () => {
-        const on = !el.classList.contains('on');
-        el.classList.toggle('on', on);
-        setIcon(el, on ? 'eye' : 'eye-off');
-        room.send('wbEnable', { on });
-      };
-  }
-  {
-    const el = byId('wbAngle');
-    if (el) el.oninput = () => room.send('wbSet', { angle: (+el.value * Math.PI) / 180 });
-  }
-  qsa('#roomSettingsModal [data-wbstyle]').forEach(
-    (c) =>
-      (c.onclick = () => {
-        qsa('#roomSettingsModal [data-wbstyle]').forEach((x) => x.classList.remove('on'));
-        c.classList.add('on');
-        room.send('wbSet', { dark: c.dataset.wbstyle === 'dark' });
-      }),
-  );
-  wire('wbPen', () => {
-    wbTool = 'pen';
-    wbSyncToolButtons();
-  });
-  wire('wbEraser', () => {
-    wbTool = 'eraser';
-    wbSyncToolButtons();
-  });
-  wire('wbClearBtn', () => room.send('wbClear'));
-  wire('wbDone', () => room.send('wbRelease'));
+  whiteboard.bindControls(); // Room Settings config and the drawing toolbar
   wire('roomReset', () => {
     byId('roomGrp').hidden = true;
     if (confirm('Reset the table? This clears all pieces.')) room.send('reset');
@@ -2514,7 +2461,7 @@ const cameraPanForward = new THREE.Vector3(),
 // Translate the camera and OrbitControls target together, relative to the current view. This
 // preserves orbit distance/angle and makes W/Up mean "toward the top of the table as I see it".
 function panCamera(rightAmount, forwardAmount) {
-  if (!room || inspect || wbOwning || trayView || camTween) return;
+  if (!room || inspect || whiteboard.isOwning() || trayView || camTween) return;
   cameraPanForward.copy(controls.target).sub(camera.position);
   cameraPanForward.y = 0;
   if (cameraPanForward.lengthSq() < 1e-8) cameraPanForward.set(0, 0, -1);
@@ -3298,21 +3245,11 @@ const onPointerDown = (e) => {
     }
     return;
   }
-  if (wbOwning) {
+  if (whiteboard.isOwning()) {
     // drawing on the whiteboard: start a stroke
     if (e.primary) {
       setPointer(e);
-      const uv = wbHitUV();
-      if (uv) {
-        wbCur = {
-          pts: [uv[0], uv[1]],
-          color: wbTool === 'eraser' ? wbBg() : myColor('#e8e6e0'),
-          width: wbTool === 'eraser' ? 0.03 : 0.005,
-          erase: wbTool === 'eraser',
-        };
-        wbActive = true;
-        renderer.domElement.setPointerCapture(e.pointerId);
-      }
+      if (whiteboard.beginStroke()) renderer.domElement.setPointerCapture(e.pointerId);
     }
     return;
   }
@@ -3428,21 +3365,11 @@ const onPointerMove = (e) => {
     }
     return;
   }
-  if (wbOwning) {
+  if (whiteboard.isOwning()) {
     // extend the current stroke along the board surface
-    if (wbActive && wbCur) {
+    if (whiteboard.isDrawing()) {
       setPointer(e);
-      const uv = wbHitUV();
-      if (uv && wbCur.pts.length < 1998) {
-        const n = wbCur.pts.length,
-          lx = wbCur.pts[n - 2],
-          ly = wbCur.pts[n - 1];
-        if (Math.hypot(uv[0] - lx, uv[1] - ly) > 0.003) {
-          // min spacing → fewer, smoother points
-          wbCur.pts.push(uv[0], uv[1]);
-          drawSegment(lx, ly, uv[0], uv[1], wbCur.color, wbCur.width); // live ink
-        }
-      }
+      whiteboard.extendStroke();
     }
     return;
   }
@@ -3637,9 +3564,9 @@ const endGesture = (e) => {
     }
     return;
   }
-  if (wbOwning) {
+  if (whiteboard.isOwning()) {
     // finish the stroke and send it
-    if (wbActive) endWbStroke();
+    if (whiteboard.isDrawing()) whiteboard.endStroke();
     try {
       renderer.domElement.releasePointerCapture(e.pointerId);
     } catch {}
@@ -3724,8 +3651,8 @@ const onKeyDown = (e) => {
     else exitMeasure();
     return;
   }
-  if (e.key === 'Escape' && wbOwning) {
-    room.send('wbRelease');
+  if (e.key === 'Escape' && whiteboard.isOwning()) {
+    whiteboard.release();
     return;
   }
   if (e.key === 'Escape' && inspect) {
@@ -4311,7 +4238,7 @@ function rebuildSeats() {
     refreshFan(sid);
   });
   refreshMyChip();
-  positionWhiteboard(); // the track radius scales with the table
+  whiteboard.position(); // the track radius scales with the table
   positionTrays(); // personal trays ride the same track — keep them glued to the edge on resize
 }
 const handGroups = new Map(); // sid -> THREE.Group of face-down backs
@@ -4517,7 +4444,13 @@ let hoverId = null,
   lastHover = 0,
   controlGuideSig = '';
 const hoverIdle = () =>
-  !down && !inspect && !measuring && !wbOwning && !overlayMove && !handDrag && !measureDrag;
+  !down &&
+  !inspect &&
+  !measuring &&
+  !whiteboard.isOwning() &&
+  !overlayMove &&
+  !handDrag &&
+  !measureDrag;
 function countLabel(piece) {
   if (piece.type === 'deck') return `${piece.count} card${piece.count === 1 ? '' : 's'}`;
   const d = dispenserDefinition(JSON.parse(piece.props || '{}'));
@@ -5075,94 +5008,22 @@ function updateMyPreview(avatar) {
   if (el) el.style.backgroundImage = avatar ? `url(${avatar})` : 'none';
 }
 
-// ===== Whiteboard: a synced board on a circular track behind the players ======
-// Slice 1: placement only — a blank chalkboard/whiteboard the GM can show, slide
-// around the track, and style. It carries no physics; drawing comes next.
-const WHITEBOARD_RES = 1024; // drawing-canvas resolution (a knob)
-const WB = { w: 8, h: 4.5, margin: 5, gap: 0.5 }; // board size + track clearance
-let wbGroup = null,
-  wbCanvas = null,
-  wbCtx = null,
-  wbTex = null;
-const wbLast = { enabled: null, angle: null, dark: null, owner: null };
-const wbStrokesLocal = []; // mirror of the server's strokes (for replay on a dark<->light flip)
-let wbOwning = false,
-  wbActive = false,
-  wbCur = null,
-  wbTool = 'pen',
-  wbCamSave = null;
-
-function wbBg() {
-  return room.state.whiteboard.dark ? '#1b1b1b' : '#f4f1ea';
-}
-function ensureWbCanvas() {
-  if (wbCanvas) return;
-  wbCanvas = document.createElement('canvas');
-  wbCanvas.width = WHITEBOARD_RES;
-  wbCanvas.height = Math.round((WHITEBOARD_RES * WB.h) / WB.w);
-  wbCtx = wbCanvas.getContext('2d');
-  wbTex = cTex(wbCanvas); // app's texture helper (correct colorSpace + reliable re-upload on needsUpdate)
-}
-function wbClearCanvas() {
-  ensureWbCanvas();
-  wbCtx.fillStyle = wbBg();
-  wbCtx.fillRect(0, 0, wbCanvas.width, wbCanvas.height);
-  wbTex.needsUpdate = true;
-}
-
-function buildWhiteboard() {
-  if (wbGroup) {
-    scene.remove(wbGroup);
-    wbGroup = null;
-  }
-  if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled) return;
-  ensureWbCanvas();
-  wbClearCanvas();
-  const g = new THREE.Group();
-  const frame = new THREE.Mesh(
-    new THREE.PlaneGeometry(WB.w + 0.4, WB.h + 0.4),
-    new THREE.MeshStandardMaterial({ color: 0x4a3b2a, roughness: 0.85 }),
-  );
-  frame.position.z = -0.03;
-  const surf = new THREE.Mesh(
-    new THREE.PlaneGeometry(WB.w, WB.h),
-    new THREE.MeshBasicMaterial({ map: wbTex }),
-  );
-  surf.name = 'wbSurface'; // slice 2 raycasts against this to draw
-  surf.frustumCulled = false; // always render so its texture uploads even when off to the side
-  g.add(frame, surf);
-  scene.add(g);
-  wbGroup = g;
-  positionWhiteboard();
-  if (room) room.send('wbStrokes'); // fetch the current drawing (late-join replay)
-}
-function positionWhiteboard() {
-  if (!wbGroup || !room) return;
-  const s = room.state.whiteboard;
-  const R = Math.max(room.state.tableX, room.state.tableZ) + WB.margin; // outside the seat ring
-  const cy = WB.h / 2 + WB.gap;
-  wbGroup.position.set(Math.sin(s.angle) * R, cy, Math.cos(s.angle) * R);
-  wbGroup.lookAt(0, cy, 0); // drawing face toward the table centre
-}
-// Reflect enable/slide/style/owner changes from synced state (called each state patch).
-function syncWhiteboard(s) {
-  if (!s) return;
-  if (s.enabled !== wbLast.enabled) {
-    wbLast.enabled = s.enabled;
-    buildWhiteboard();
-  }
-  if (wbGroup && s.angle !== wbLast.angle) positionWhiteboard();
-  if (s.dark !== wbLast.dark) {
-    wbLast.dark = s.dark;
-    if (wbGroup) redrawStrokes();
-  } // recolor + replay
-  if (s.owner !== wbLast.owner) {
-    wbLast.owner = s.owner;
-    if (s.owner === mySession) enterWbDraw();
-    else exitWbDraw();
-  }
-  wbLast.angle = s.angle;
-}
+// Whiteboard owns its mesh, stroke history, camera mode, and room protocol.
+const whiteboard = createWhiteboard({
+  THREE,
+  scene,
+  camera,
+  controls,
+  ray,
+  pointer,
+  createTexture: cTex,
+  getRoom: () => room,
+  getSessionId: () => mySession,
+  getStrokeColor: () => myColor('#e8e6e0'),
+  setPointer,
+  setIcon,
+  toast,
+});
 
 // --- Dice tray (Phase 1: placement) — a physics-backed box on the same track as the ---
 // whiteboard. This is only the visual + placement; the walls/dice live server-side. Built
@@ -5289,125 +5150,6 @@ function closeTray() {
       trayCamSave = null;
     });
   else controls.enabled = true;
-}
-
-// --- drawing: strokes are [x0,y0,x1,y1,...] in canvas-normalized [0,1] (y top-down) ---
-function drawSegment(x0, y0, x1, y1, color, width) {
-  ensureWbCanvas();
-  const W = wbCanvas.width,
-    H = wbCanvas.height;
-  wbCtx.strokeStyle = color;
-  wbCtx.lineWidth = Math.max(1.5, width * W);
-  wbCtx.lineCap = 'round';
-  wbCtx.lineJoin = 'round';
-  wbCtx.beginPath();
-  wbCtx.moveTo(x0 * W, y0 * H);
-  wbCtx.lineTo(x1 * W, y1 * H);
-  wbCtx.stroke();
-  wbTex.needsUpdate = true;
-}
-function drawStroke(s) {
-  const pts = s && s.pts ? Array.from(s.pts) : null;
-  if (!pts || pts.length < 4) return; // ignore anything malformed instead of aborting the whole repaint
-  ensureWbCanvas();
-  const W = wbCanvas.width,
-    H = wbCanvas.height;
-  wbCtx.strokeStyle = s.erase ? wbBg() : s.color || '#e8e6e0';
-  wbCtx.lineWidth = Math.max(1.5, (s.width || 0.005) * W);
-  wbCtx.lineCap = 'round';
-  wbCtx.lineJoin = 'round';
-  wbCtx.beginPath();
-  for (let i = 0; i < pts.length; i += 2)
-    (i === 0 ? wbCtx.moveTo : wbCtx.lineTo).call(wbCtx, pts[i] * W, pts[i + 1] * H);
-  wbCtx.stroke();
-  wbTex.needsUpdate = true;
-}
-function redrawStrokes() {
-  wbClearCanvas();
-  for (const s of wbStrokesLocal) drawStroke(s);
-} // clear bg + replay all (dark-flip / late-join)
-function pushStroke(s) {
-  wbStrokesLocal.push(s);
-  if (wbStrokesLocal.length > WHITEBOARD_LIMITS.maxStrokes) wbStrokesLocal.shift();
-  drawStroke(s); // just ink the new stroke — cheap, and needsUpdate re-uploads fine
-}
-
-// Raycast the pointer onto the board surface -> [x, y] in canvas-normalized [0,1], or null.
-function wbHitUV() {
-  const surf = wbGroup && wbGroup.getObjectByName('wbSurface');
-  if (!surf) return null;
-  ray.setFromCamera(pointer, camera);
-  const h = ray.intersectObject(surf)[0];
-  return h && h.uv ? [h.uv.x, 1 - h.uv.y] : null; // UV y is bottom-up; canvas y is top-down
-}
-function endWbStroke() {
-  wbActive = false;
-  if (wbCur && wbCur.pts.length >= 4) {
-    // >= 2 points
-    room.send('wbStroke', wbCur);
-    wbStrokesLocal.push(wbCur); // already drawn live; just keep it for replay
-    if (wbStrokesLocal.length > WHITEBOARD_LIMITS.maxStrokes) wbStrokesLocal.shift();
-  }
-  wbCur = null;
-}
-function wbSyncToolButtons() {
-  const pen = byId('wbPen'),
-    er = byId('wbEraser');
-  if (pen) pen.classList.toggle('on', wbTool === 'pen');
-  if (er) er.classList.toggle('on', wbTool === 'eraser');
-}
-// Own the board: face it straight-on, lock the camera, show the pen toolbar.
-function enterWbDraw() {
-  if (wbOwning || !wbGroup) return;
-  wbOwning = true;
-  wbTool = 'pen';
-  wbCamSave = { pos: camera.position.clone(), target: controls.target.clone() };
-  const s = room.state.whiteboard;
-  const R = Math.max(room.state.tableX, room.state.tableZ) + WB.margin,
-    cy = WB.h / 2 + WB.gap;
-  const dir = new THREE.Vector3(Math.sin(s.angle), 0, Math.cos(s.angle));
-  const boardPos = dir.clone().multiplyScalar(R);
-  boardPos.y = cy;
-  camera.position.copy(boardPos.clone().sub(dir.clone().multiplyScalar(6.5)));
-  camera.position.y = cy + 0.4;
-  controls.target.copy(boardPos);
-  controls.update();
-  controls.enabled = false;
-  const tb = byId('wbTools');
-  if (tb) tb.hidden = false;
-  wbSyncToolButtons();
-}
-// Who is holding the whiteboard, for everyone who is not holding it. The holder gets
-// #wbTools instead, so the two panels are mutually exclusive. Named "…is drawing" rather
-// than "locked" because the point is who to ask, not that you are shut out.
-function wbHolderName(sid) {
-  const p = room && room.state && room.state.players && room.state.players.get(sid);
-  return (p && p.name) || 'Someone';
-}
-function syncWbStatus() {
-  const el = byId('wbStatus');
-  if (!el) return;
-  const wb = room && room.state && room.state.whiteboard;
-  const owner = wb && wb.enabled ? wb.owner : '';
-  const show = !!owner && owner !== mySession;
-  el.hidden = !show;
-  if (show) byId('wbStatusWho').textContent = `${wbHolderName(owner)} is drawing`;
-}
-
-function exitWbDraw() {
-  if (!wbOwning) return;
-  wbOwning = false;
-  wbActive = false;
-  wbCur = null;
-  if (wbCamSave) {
-    camera.position.copy(wbCamSave.pos);
-    controls.target.copy(wbCamSave.target);
-    controls.update();
-    wbCamSave = null;
-  }
-  controls.enabled = true;
-  const tb = byId('wbTools');
-  if (tb) tb.hidden = true;
 }
 
 function renderPlayers() {
@@ -6333,7 +6075,7 @@ const INPUT = {
   command: onKeyDown, // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
   secondaryPress: (p) => {
     // touch long-press → context menu on a piece, or ping on empty felt
-    if (!room || measuring || wbOwning || inspect || selMode) return; // a modal tool owns the gesture
+    if (!room || measuring || whiteboard.isOwning() || inspect || selMode) return; // a modal tool owns the gesture
     const id = down && down.id; // the piece the press landed on (null on empty felt)
     if (down) down.dragging = true; // consume the gesture: no grab on further move, no tap on release
     if (id) openPieceMenu(id, p);
@@ -6380,26 +6122,10 @@ const INPUT = {
   },
   // double-click the board to own it and draw; true if a claim was sent
   doubleClick: (p) => {
-    // The owner check comes AFTER the raycast on purpose: we can only say "X is drawing"
-    // once we know the double-click actually landed on the board.
-    if (!room || !room.state.whiteboard || !room.state.whiteboard.enabled || wbOwning) return false;
-    const surf = wbGroup && wbGroup.getObjectByName('wbSurface');
-    if (!surf) return false;
-    setPointer({ clientX: p.x, clientY: p.y });
-    ray.setFromCamera(pointer, camera);
-    const bh = ray.intersectObject(surf)[0];
-    if (!bh) return false;
-    const ph = ray.intersectObjects([...meshes.values()].map((m) => m.mesh))[0];
-    if (ph && ph.distance < bh.distance) return false; // a piece is in front → inspect, not the board
-    const owner = room.state.whiteboard.owner;
-    if (owner) {
-      // Someone holds it. The server would ignore the claim silently, so say so here —
-      // the state is already synced, which is why this needs no round trip.
-      if (owner !== mySession) toast(`${wbHolderName(owner)} is using the whiteboard`, 'writing');
-      return true; // consumed either way: the double-click was meant for the board
-    }
-    room.send('wbClaim');
-    return true;
+    return whiteboard.claimAt(
+      p,
+      [...meshes.values()].map((m) => m.mesh),
+    );
   },
 };
 attachControls(renderer.domElement, INPUT);
