@@ -1,9 +1,11 @@
 # DRY cleanup and module extraction
 
-Status: server-side extraction sequence completed; client mesh replacement is next.
-This checklist records the remaining cleanup discussed after the backend fixes.
-Suggested module names are proposals, not implemented architecture. Recheck current
-source and the MCP memory graph before starting each step.
+Status: server-side extraction sequence completed. This document preserves the original
+cleanup sequence and its validation concerns; [CLIENT_REFACTOR.md](CLIENT_REFACTOR.md)
+tracks current client extraction progress and next steps. The client checklists below
+record historical scope, not current completion status.
+Recheck current source and the MCP memory graph before starting work; unimplemented
+module names remain proposals. Follow [AGENTS.md](../AGENTS.md) for current project rules.
 
 ## Completed
 
@@ -33,7 +35,13 @@ source and the MCP memory graph before starting each step.
 
 ## Working rules
 
+- Before adding functions or helpers for a feature, inspect existing behavior for reuse or a
+  small compatible extension. Where several implementations share the same rules, consider a
+  focused helper, module, registry, or class with explicit variants; do not abstract solely from
+  visual similarity. Explain the chosen reuse or new-boundary decision.
 - Make one cohesive extraction at a time, preserving behavior and public contracts.
+- Preserve unrelated user/other-task changes and tuning. During staged gameplay/UI work, leave
+  each slice ready for in-app testing before proceeding unless a larger sequence was authorized.
 - Use graph discovery, relevant callers/callees, and coverage checks; verify source
   where graph results are incomplete or stale.
 - Keep authoritative state changes on the server. Browser graphics modules own
@@ -47,13 +55,15 @@ source and the MCP memory graph before starting each step.
 - Preserve authorization rechecks after awaits, capacity-before-consumption checks,
   private card data, recovery queues, and durable save ordering.
 - Run relevant regression tests and `npm run check`. Add tests for meaningful gaps;
-  avoid assertions that merely require code to live in a particular file.
+  avoid assertions that merely require code to live in a particular file. Verify production
+  exports, injection, registrations, and real callers as well as isolated helpers. Run the
+  applicable browser/database suites listed in `AGENTS.md` and report any checks not run.
 - Summarize every changed file and function/helper. Update `CHANGELOG.md` under
-  `[Unreleased]`. Update relevant reference/architecture docs when the user approves
-  pushing or confirms a push, or explicitly asks for those updates.
+  `[Unreleased]`. Update relevant reference/architecture documentation alongside implementation
+  and plan updates; do not defer documentation until push approval or a completed push.
 - Local commits are allowed. Never push without explicit approval; allow user testing.
 
-## Remaining server work, in recommended order
+## Completed server extraction sequence
 
 ### 1. Extract synchronized schema definitions
 
@@ -140,7 +150,9 @@ This is several small changes, not one large move.
 - Validate dragging, throws, group release, snapping, absorption compatibility,
   collider resizing, recovery retries, and body/map cleanup. Preserve simulation order.
 
-## Later client cleanup
+## Original client cleanup scope
+
+Use [CLIENT_REFACTOR.md](CLIENT_REFACTOR.md) for current implementation and verification status.
 
 ### 9. Consolidate mesh replacement
 
@@ -169,10 +181,13 @@ This is several small changes, not one large move.
 ## Completion checklist for each step
 
 - [ ] Scope and current dependencies checked.
+- [ ] Existing implementations assessed for reuse, extension, or justified consolidation.
 - [ ] Extraction implemented with behavior preserved.
-- [ ] Relevant tests and full checks passed.
+- [ ] Production wiring verified; relevant tests and full checks passed (or blockers recorded).
 - [ ] File/function summary and Unreleased changelog entry provided.
-- [ ] User testing completed.
-- [ ] Relevant reference/architecture documentation updated when authorized.
-- [ ] Push explicitly authorized or performed by the user.
-- [ ] This checklist updated to reflect completion.
+- [ ] Relevant reference/architecture documentation updated with the implementation.
+- [ ] Manual testing status recorded explicitly; user verification completed where required.
+- [ ] Active implementation plan updated to distinguish implementation and verification status.
+
+Push approval is a separate release/workflow boundary, not a prerequisite for local completion
+or documentation. Never push without explicit approval; the user may push after testing.
