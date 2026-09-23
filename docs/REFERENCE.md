@@ -51,6 +51,8 @@ The codebase:
 | `public/table/inspection.js`                                                                           | browser | Enlarged-piece/card previews, appearance controls, deferred double-clicks, placement, and pointer rotation |
 | `public/table/presence.js`                                                                            | browser | Seats/cameras, public fans, markers, held labels, roster/turn display, avatar controls, and player bindings |
 | `public/table/selection.js`                                                                            | browser | Local selection, marquee gestures, highlight rings, batch commands, recolor toolbar, and compose/gather planning |
+| `public/table/room-settings.js`                                                                        | browser | Table/grid presentation, scale and lighting controls, local drafts, graphics-quality UI, and room bindings |
+| `public/table/skybox.js`                                                                               | browser | Built-in sky catalog, background texture loading/disposal, and local resolution controls |
 | `public/table/overlays.js`                                                                             | browser | Measurement shapes, board-surface height, selection, previews, movement, and room bindings |
 | `public/table/whiteboard.js`                                                                           | browser | Whiteboard mesh, strokes, ownership, camera/drawing mode, controls, and room messages |
 | `public/table/trays.js`                                                                                | browser | Personal tray meshes, seat placement, camera travel, dice actions, and controls |
@@ -220,6 +222,15 @@ classDiagram
         +createWhiteboard(dependencies)
         +sync/bindRoom/bindControls + stroke gestures
     }
+    class RoomSettings["public/table/room-settings.js"] {
+        +createRoomSettings(dependencies)
+        +bindRoom/hydrate/bindControls
+    }
+    class Skybox["public/table/skybox.js"] {
+        +BUILTIN_SKIES
+        +createSkybox(dependencies)
+        +sync/bindControls
+    }
     class Trays["public/table/trays.js"] {
         +createTrays(dependencies)
         +sync/open/close/putAway/updateCamera
@@ -273,6 +284,10 @@ classDiagram
     Presence ..> Hand : reveal-data callbacks
     Selection <.. Client
     Shared <.. Selection
+    RoomSettings <.. Client
+    Shared <.. RoomSettings
+    SharedLighting <.. RoomSettings
+    Skybox <.. Client
     Overlays <.. Client
     Whiteboard <.. Client
     Trays <.. Client
@@ -1969,6 +1984,47 @@ changes, and **`updateCamera()`** advances travel. `open`/`close`/`putAway` and 
 drive the tray UI; **`dieIds()`** finds only dice tagged for the current seat. Physics and Scoop
 placement remain server-owned; tray geometry/collision knobs are shared `TRAY` values.
 
+## `public/table/room-settings.js` — room customization
+
+**`createRoomSettings(dependencies)`** owns the grid mesh, scale-panel synchronization, table
+appearance controls, lighting drafts, and local graphics-quality UI. It receives room access,
+scene/grid construction, core table/lighting/quality helpers, DOM helpers, and callbacks for
+cross-feature effects. Shared `BOARDS`, `LIGHTING_PRESETS`, and `normalizeLighting` remain the
+sources for board dimensions and lighting policy.
+
+- **`bindRoom(room, cb)`** listens for table size/shape/rim/felt, lighting, and scale/grid changes.
+  Size updates invoke the client's seat/whiteboard/tray placement callback. Internal `rebuildGrid`
+  disposes replaced geometry/material; changing grid lift only moves the current mesh.
+- **`hydrate()`** applies initial size, felt, immediate lighting, rim, and grid before the client
+  reveals the table. It does not register UI listeners or join the room.
+- **`bindControls()`** wires the Room Settings tabs, shape/rim/felt, scale/units, calibration,
+  grid visibility/appearance, lighting presets/globe/sliders, and graphics-quality controls.
+  `syncScalePanel` converts displayed values and preserves focused input. Lighting previews stay
+  local; Apply sends `lightingApply`, Cancel restores synchronized lighting, and owner default
+  actions keep the existing messages. Quality Apply reloads using the existing device preference.
+
+Whiteboard settings and overlay labels synchronize through injected callbacks; server validation,
+core rendering, and shared snapping policy remain outside this controller. `test/room-settings.js`
+covers hydration, mesh cleanup, state listeners, unit conversion, calibration, lighting drafts,
+and messages. Component parity exercises the real settings markup in desktop and touch layouts.
+
+## `public/table/skybox.js` — sky texture lifecycle
+
+**`createSkybox({ THREE, scene, renderer, deviceClass, byId, ... })`** owns the current texture,
+last synchronized ref, and request version. **`sync(ref)`** accepts the existing empty/equirect/
+cube descriptor formats; duplicate state patches do not reload. **`bindControls()`** wires local
+resolution chips using `tabletop.skyRes`: Off, Low (512), Medium (1024), High (2048), and Ultra
+(source size). Defaults remain phone Low, tablet Medium, and desktop High; choices apply live.
+
+Internal `capTexture`/`capCubeTexture` downscale oversized images, and `setSkyTexture` disposes
+replaced textures or restores the original flat background. Each load/resolution/Off request
+invalidates older callbacks, including callbacks for the same ref. Stale successful loads are
+disposed and stale failures cannot clear the current sky. `test/skybox.js` covers resolution,
+mapping/color, disposal, invalid descriptors, and callback races.
+
+**`BUILTIN_SKIES`** exports the existing catalog; the client publishes it as `window.OTT_BUILTIN_SKIES`
+for the library. Asset selection stays in `editor-panel.js`, and synchronized refs remain server-owned.
+
 ## `public/table/ui-surfaces.js` — shared UI mechanics
 
 **`createUiSurfaces(dependencies)`** returns `wireDialog`, `isSheet`, `openAsSheet`, `clearSheet`,
@@ -1983,12 +2039,10 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 `table.html?workshop=1` sets `window.OTT_EDITOR`, handing the live room to the panel via
 `window.onOttRoom`. Reconnect token in `sessionStorage`. The client state listeners
 create/update/remove `meshes` and track `boardTopY` (for the drop marker); `presence.bindRoom`
-owns player and turn presentation. The client listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
-(→ `resizeTable` + `rebuildGrid`), **`tableShape`** (→ the same, plus the shape-picker UI), **`rimWood`** (→ `setRimWood`), the `scale` grid fields (→ `rebuildGrid` /
-`syncScalePanel`), `trays` (→ `trays.sync` — one tray mesh per enabled seat), and
-`roomName` (→ the Room Info header), plus
-`unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
-list and the "Waiting on {name}" turn row). Direct messages: `hand` → `hand.setCards`,
+owns player, turn, and room-name presentation. `roomSettings.bindRoom` owns table appearance,
+lighting, and scale/grid listeners. The client forwards state patches to `skybox.sync` and
+`trays.sync` (one tray mesh per enabled seat), and retains the Members "Unclaimed hands" list
+listeners. Direct messages: `hand` → `hand.setCards`,
 `dealt` (adopt a dealt card), `inspectCard` → `inspection.inspectMesh`, `notebook`
 (restore your private notes), `showFan` → `presence.bindMessages` (updates hand-owned reveal data
 and redraws the public fan), `ping` (spawn an attention marker), **`sfx`** (a shared
@@ -1999,9 +2053,9 @@ Table State button), `notice` (a server-pushed toast — e.g. the piece cap is f
 UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList`
 (library listings, keyed by **id**; also fanned out to the editor panel via
 `window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
-reshape/reset/members gm+). Game-play + Room Controls wiring lives here (spawn,
-grab, table size, scene load, skybox apply, plus the notebook and timer panels); inspection,
-presence, selection, whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
+reshape/reset/members gm+). Remaining game-play and room-shell wiring lives here (spawn,
+grab, reset, plus the notebook and timer panels); inspection, presence, selection, room settings,
+skybox resolution, whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
 and the View Library / Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
 `window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
 **`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,

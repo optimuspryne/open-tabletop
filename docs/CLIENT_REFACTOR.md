@@ -4,7 +4,8 @@ Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, m
 overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified. The private
 hand and inspection have also been extracted and manually verified. Phase 3 selection was
 completed and manually verified on 2026-09-23. Player presence was also completed and manually
-verified on 2026-09-23. Room settings and skybox are next.
+verified on 2026-09-23. Room settings and skybox were completed and manually verified on
+2026-09-23. Phase 3 is complete; feature-specific bootstrap binders are next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -43,6 +44,9 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/hand.js` owns the private hand, Show controls, sorting, and card gestures.
 - `public/table/presence.js` owns seats and camera framing, public fans, player markers, held-piece
   labels, roster/turn presentation, avatar controls, and player room bindings.
+- `public/table/room-settings.js` owns table/grid presentation, scale and lighting controls,
+  local lighting drafts, graphics-quality UI, and settings room bindings.
+- `public/table/skybox.js` owns background texture loading, replacement/disposal, and local resolution.
 - `public/table/selection.js` owns local selection, marquee gestures, highlight rings, batch actions,
   recoloring, and compose/gather planning.
 - `public/table/inspection.js` owns enlarged previews, their appearance controls, drawn-card
@@ -75,7 +79,8 @@ public/
     trays.js                dice-tray rendering and camera transport
     selection.js            local multi-selection and batch actions
     presence.js             seats, public hands, markers, roster, and turn display
-    room-settings.js        table/grid/lighting/skybox settings
+    room-settings.js        table/grid/lighting settings and graphics-quality UI
+    skybox.js               background textures and local sky resolution
     ui-surfaces.js          dialogs, sheets, clusters, drawer, and radial primitives
     input-router.js         semantic pointer and keyboard routing
 ```
@@ -285,18 +290,25 @@ administration can remain distinct even if they both read `myRank`.
 
 ### 10. Room settings and skybox
 
-Group the related table customization controllers rather than leaving them mixed into room
-bootstrap:
+The table customization boundary now lives in `public/table/room-settings.js` and
+`public/table/skybox.js`. `createRoomSettings` owns:
 
 - table shape and rim UI;
 - grid visualization and calibration;
 - scale-panel synchronization;
 - lighting controls;
-- graphics-quality synchronization; and
-- skybox loading, resolution selection, replacement, and cleanup.
+- graphics-quality synchronization.
 
-`syncScalePanel` is already a substantial controller-sized function. Skybox texture lifecycle is
-also internally cohesive and can be extracted independently if that produces a safer first step.
+Its `bindRoom`, `hydrate`, and `bindControls` methods reuse core rendering, shared lighting/board
+policy, and existing server messages. Cross-feature effects stay explicit callbacks: seat/tray/
+whiteboard placement after table resizing, overlay relabeling, and whiteboard settings hydration.
+
+`createSkybox` independently owns loading, resolution selection, replacement, and cleanup through
+`sync` and `bindControls`. The client publishes its `BUILTIN_SKIES` catalog for the existing library
+picker. A request version rejects late callbacks after switching Off, changing resolution, or
+returning to the same sky, fixing a race reproduced by regression tests. No server schema or
+message changes are involved. Unit and desktop/touch component coverage exercise both controllers;
+manual verification reported no regressions.
 
 ### 11. Reusable UI surfaces
 
@@ -437,7 +449,10 @@ are attached through DOM APIs and are genuinely used.
    during manual smoke testing.
 10. Extract player presence. **Completed 2026-09-23; manually verified.** `npm run check`,
     `npm run test:input`, and `npm run test:components` pass. Manual tests reported no regressions.
-11. Extract room settings and skybox.
+11. Extract room settings and skybox. **Completed 2026-09-23; manually verified.**
+    `npm run check` passes (598 tests); `npm run test:input` passes (57 checks), and
+    `npm run test:components` passes in desktop and touch layouts.
+    Manual smoke tests reported no regressions.
 
 ### Phase 4: composition cleanup
 

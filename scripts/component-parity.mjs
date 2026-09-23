@@ -203,6 +203,99 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'room-settings',
+    root: '#roomSettingsModal',
+    expect: { selector: '#feltSwatches .swatch, #gridColorSwatches .swatch', min: 15 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const THREE = await import('three');
+      const { createRoomSettings } = await import('/table/room-settings.js');
+      const { createSkybox } = await import('/table/skybox.js');
+      const { gridMesh } = await import('/graphics.js');
+      const { normalizeLighting } = await import('/shared/lighting.js');
+      const byId = (id) => document.getElementById(id);
+      const fieldWrap = (id) => byId(id).closest('.stepper') || byId(id);
+      const scene = new THREE.Scene();
+      const state = { tableX: 10, tableZ: 7, tableShape: 'rect', feltColor: '#2f6b4f', rimWood: 'oak',
+        scale: { worldPerUnit: 2, unitLabel: 'cm', roundStep: 0.5, gridStyle: 'square', cellWorld: 2,
+          cellZ: 4, gridX: 0, gridZ: 0, gridLift: 0.05, gridColor: '#ffffff', snapAnchor: 'center' },
+        lighting: normalizeLighting({ preset: 'neutral' }), whiteboard: {},
+        pieces: new Map([['board', { type: 'board', props: '{"board":"chess"}' }]]),
+        players: new Map([['me', { role: 'owner' }]]) };
+      const sent = [], applied = [], listeners = new Map();
+      let quality = 'high', reloaded = false;
+      const room = { state, sessionId: 'me', send: (...args) => sent.push(args) };
+      const listen = (object) => (key, fn) => {
+        if (!listeners.has(object)) listeners.set(object, new Map());
+        listeners.get(object).set(key, fn);
+      };
+      const cb = (object) => ({ listen: listen(object),
+        lighting: { listen: listen(state.lighting) }, scale: { listen: listen(state.scale) } });
+      const change = (object, key, value) => { object[key] = value; listeners.get(object).get(key)(); };
+      const settings = createRoomSettings({ scene, gridMesh, gridLiftFallback: 0.05,
+        resizeTable: () => {}, setTableColor: () => {}, setRimWood: () => {},
+        applyLighting: (...args) => applied.push(args), getQuality: () => quality,
+        setQuality: (value) => { quality = value; }, getRoom: () => room,
+        onTableResize: () => {}, syncWhiteboardSettings: () => {}, relabelOverlays: () => {},
+        byId, setIcon: () => {}, reload: () => { reloaded = true; },
+        confirmAction: () => true, alertUser: (message) => { throw Error(message); },
+      });
+      settings.bindRoom(room, cb); settings.hydrate(); settings.bindControls();
+      byId('roomSettings').click();
+      assert(!byId('roomSettingsModal').hidden && byId('tableW').value === '20', 'Settings did not hydrate');
+      document.querySelector('[data-tshape="round"]').click();
+      assert(sent.at(-1)[0] === 'table' && sent.at(-1)[1].z === 10, 'Round shape did not lock depth');
+      change(state, 'tableShape', 'round');
+      assert(fieldWrap('tableD').hidden && byId('tableWLabel').textContent === 'Size', 'Round UI is not single-size');
+      change(state, 'tableShape', 'rect');
+      assert(!fieldWrap('tableD').hidden, 'Rectangular depth stayed hidden');
+      document.querySelector('#tableWoods [data-wood]').click();
+      assert(sent.at(-1)[0] === 'table' && sent.at(-1)[1].rimWood, 'Rim wood did not send');
+      byId('feltSwatches').firstElementChild.click();
+      assert(sent.at(-1)[0] === 'tableColor', 'Felt swatch did not send');
+      document.querySelector('#roomSettingsModal [data-tab="grid"]').click();
+      document.querySelector('#scaleUnits [data-unit="__custom__"]').click();
+      assert(!byId('scaleCustomRow').hidden && document.activeElement === byId('scaleUnitCustom'), 'Custom units did not focus');
+      byId('scaleUnitCustom').value = 'hex'; byId('scaleUnitCustom').dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[1].unitLabel === 'hex', 'Custom unit did not send');
+      byId('gridCell').value = '3'; byId('gridCell').dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[1].cellWorld === 6, 'Cell size lost unit conversion');
+      change(state.scale, 'gridStyle', 'hex');
+      assert(!byId('gridOrientRow').hidden && fieldWrap('gridCellZ').hidden, 'Hex controls are wrong');
+      document.querySelector('#gridOrients [data-orient="flat"]').click();
+      assert(sent.at(-1)[1].hexOrient === 'flat', 'Hex orientation did not send');
+      byId('gridCells').value = '7'; byId('gridCalib').click();
+      assert(sent.at(-1)[0] === 'calibrateGrid' && sent.at(-1)[1].cells === 7, 'Calibration did not send');
+      byId('gridHideTog').click(); assert(sent.at(-1)[1].gridHidden === true, 'Hide grid did not send');
+      change(state.scale, 'gridHidden', true); assert(scene.children.length === 0, 'Hidden grid is still drawn');
+      change(state.scale, 'gridHidden', false); assert(scene.children.length === 1, 'Grid did not return');
+      const lightTab = document.querySelector('#roomSettingsModal [data-tab="lighting"]'); lightTab.click();
+      assert(!document.querySelector('#roomSettingsModal [data-pane="lighting"]').hidden, 'Lighting tab did not open');
+      const before = sent.length;
+      byId('lightingAzimuth').value = '150'; byId('lightingAzimuth').dispatchEvent(new Event('input'));
+      assert(applied.at(-1)[0].azimuth === 150 && sent.length === before, 'Lighting preview should stay local');
+      byId('lightingGlobe').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true, cancelable: true }));
+      assert(applied.at(-1)[0].azimuth === 151, 'Lighting globe fine keyboard control failed');
+      byId('lightingCancel').click(); assert(applied.at(-1)[0].azimuth === state.lighting.azimuth, 'Cancel did not restore lighting');
+      byId('roomSettings').click(); byId('lightingAzimuth').value = '210'; byId('lightingAzimuth').dispatchEvent(new Event('input'));
+      byId('lightingApply').click(); assert(sent.at(-1)[0] === 'lightingApply' && sent.at(-1)[1].azimuth === 210, 'Apply lost lighting draft');
+      document.querySelector('#qualityRow [data-quality="low"]').click();
+      assert(quality === 'low' && !byId('qualityApply').hidden, 'Quality change did not show Apply');
+      byId('qualityApply').click(); assert(reloaded, 'Quality Apply did not reload');
+      document.querySelector('#qualityRow [data-quality="high"]').click(); assert(byId('qualityApply').hidden, 'Original quality should hide Apply');
+      const loads = []; let resolution = 'high';
+      class Loader { load(ref, done) { loads.push(done); } }
+      const sky = createSkybox({ THREE: { ...THREE, TextureLoader: Loader }, scene,
+        renderer: { capabilities: { getMaxAnisotropy: () => 1 } }, deviceClass: () => 'desktop', byId,
+        storage: { getItem: () => resolution, setItem: (key, value) => { resolution = value; } } });
+      sky.bindControls(); sky.sync('/pending-sky');
+      document.querySelector('#skyResRow [data-skyres="off"]').click();
+      const stale = new THREE.Texture({ width: 1, height: 1 }); let disposed = false;
+      stale.addEventListener('dispose', () => { disposed = true; }); loads[0](stale);
+      assert(resolution === 'off' && disposed && scene.background === null, 'Sky Off did not reject pending texture');
+      byId('roomSettings').click(); lightTab.click();`,
+  },
+  {
     name: 'player-presence',
     root: '#players',
     expect: { selector: '#players .prow', min: 3 },

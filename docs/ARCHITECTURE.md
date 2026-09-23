@@ -153,7 +153,8 @@ importing a room singleton:
 - **`public/client.js`** — the browser composition root and remaining table runtime: networking,
   controller construction, input dispatch, piece dragging, and the ordered render
   loop. It retains shared session and scene state (`room`, `down`, `meshes`, `buffers`) while
-  presence, selection, inspection, private hand, overlays, whiteboard, and trays own feature state. A full-screen
+  presence, selection, inspection, private hand, overlays, whiteboard, trays, room settings, and
+  skybox controllers own feature state. A full-screen
   Loading Table cover remains above the runtime until the local mesh count matches synchronized
   pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
@@ -189,6 +190,13 @@ importing a room singleton:
   operate on plain piece data. The composition root supplies room access, meshes, scene/camera,
   canvas, marker settings, and board height; it retains input priority, pointer capture, and
   camera-control arbitration, and removes selected IDs when pieces disappear or are grabbed remotely.
+- **`public/table/room-settings.js`** — table/grid presentation and state listeners, scale panel and
+  calibration controls, local lighting drafts, and graphics-quality UI. It reuses core rendering,
+  graphics grid construction, and shared lighting/board definitions. Room changes go through the
+  existing server messages; resize, whiteboard-panel, and overlay-label effects use injected callbacks.
+- **`public/table/skybox.js`** — background texture loading, resolution caps, replacement/disposal,
+  and viewer-local resolution controls. The client forwards synchronized refs and publishes its
+  built-in catalog; the library retains asset selection and authorization-aware presentation.
 - **`public/table/overlays.js`** — measurement geometry, rendered-board surface elevation,
   selection, drag previews, permissions, and overlay state/message bindings.
 - **`public/table/whiteboard.js`** — whiteboard mesh, local stroke replay, ownership/camera mode,
@@ -884,6 +892,9 @@ machinery:
 - **Skybox** (shared, durable) — a room background: an equirect image or a 6-face
   cubemap, applied by GMs and curated in the editor library. The chosen `skybox`
   (a `/assets/sky/…` URL or a cubemap descriptor) is synced and persisted per room.
+  `public/table/skybox.js` loads and caps textures using each viewer's resolution preference,
+  disposes replaced textures, and rejects stale success/error callbacks by request version. Off
+  and resolution changes invalidate pending loads even when the synchronized ref stays the same.
 - **Scoreboard & room notes** (shared, durable) — a `scores` map (label/score
   rows) and a GM `notes` string, both synced and saved with the room.
 - **Chat** (shared, ephemeral) — public room text. A `chat` message is sanitized
@@ -1267,6 +1278,13 @@ scene restoration, and live GM resizing already call that room API. The extracte
 finishes by calling `room.buildTrays()`, keeping personal trays aligned with the resized table.
 
 ## Scale and grid settings boundary
+
+Browser presentation lives in `public/table/room-settings.js`: it owns the grid mesh lifecycle,
+converts displayed scale values, preserves focused input, and sends existing calibration/settings
+messages. Its room binder updates table appearance and lighting through core rendering helpers;
+initial hydration runs before the client reveals the table. Lighting previews stay local until
+Apply, Cancel restores synchronized lighting, and room-owner defaults remain server-authorized.
+Graphics quality and sky resolution stay per-device preferences.
 
 `createTableScale({ gridLiftMax })` returns room-oriented snapshot, restoration, and calibration
 operations. It owns the durable `RoomScale` field list and restoration clamps, so room-row and scene

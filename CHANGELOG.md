@@ -14,6 +14,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Extract table/grid presentation, scale and lighting controls, lighting drafts, graphics-quality
+  UI, and room-setting bindings into a client controller; isolate skybox loading, resolution,
+  and texture cleanup in a separate controller, with unit and desktop/touch component coverage.
 - Expand project agent guidance with an existing-code-first feature workflow, architecture and
   privacy boundaries, verification requirements, and preservation of user edits; reconcile the
   DRY cleanup plan with current documentation timing and client progress tracking.
@@ -76,6 +79,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   browser rendering, server validation, scene restoration, and history retention share one policy.
 
 ### Fixed
+- Prevent a late skybox load from restoring a background after Sky Off or replacing a newer
+  resolution choice for the same image; stale callbacks now discard their textures.
 - Space scooped dice by their collider size and settle them on the tray floor so they no longer
   spawn overlapping at the center and scatter when physics resolves the collision.
 - Keep every Dice Box add-die choice on the same compact grid footprint instead of mixing square
