@@ -17,7 +17,7 @@ ENV NODE_ENV=production
 ENV ASSETS_DIR=/data/assets
 
 # Keep the numeric identity stable for NFS/bind-mounted asset storage. These defaults
-# match the user/group assigned by the published 0.17.2 image.
+# match the user/group assigned by the published 0.18.0 image.
 ARG APP_UID=100
 ARG APP_GID=101
 

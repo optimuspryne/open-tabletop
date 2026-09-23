@@ -8,6 +8,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-09-23
+
 ### Added
 - Add a local Proxmox VE LXC installer and updater for bare-metal Node.js 26, PostgreSQL 16,
   Redis, non-root systemd operation, optional NFS-backed assets, and fetching a selected Git ref
@@ -1293,6 +1295,7 @@ Initial public release.
   schema and role initialization.
 
 [Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[0.18.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.18.0
 [0.17.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.2
 [0.17.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.0
 [0.16.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.16.0
