@@ -207,20 +207,160 @@ const SCENES = [
     root: '#controlsModal',
     expect: { selector: '#controlsModal:not([hidden])', min: 1 },
     drive: `
-      // Keep joining pending while the real composition root constructs every controller,
-      // wires input, and renders its first frames. No server or authentication is needed.
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const byId = (id) => document.getElementById(id);
+      let join;
+      const messages = new Map(), sent = [];
+      const state = {
+        pieces: new Map(), players: new Map([['me', { name: 'Ada', role: 'owner', seat: 0,
+          color: '#aa7755', avatar: '', hand: 0, showing: false }]]),
+        overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
+        scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
+        whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
+        tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
+      };
+      const room = { state, sessionId: 'me', reconnectionToken: 'fixture',
+        onMessage: (key, fn) => messages.set(key, fn), onStateChange() {}, onLeave() {},
+        send: (...args) => sent.push(args), leave() {}, };
+      const callbacks = (object) => new Proxy({ listen() {} }, {
+        get: (target, key) => target[key] || {
+          listen() {}, onRemove() {}, onAdd(fn) { object[key]?.forEach((value, id) => fn(value, id)); },
+        },
+      });
       window.Colyseus = {
         Client: class {
-          joinOrCreate() { return new Promise(() => {}); }
-          reconnect() { return new Promise(() => {}); }
+          joinOrCreate() { return new Promise(resolve => { join = resolve; }); }
+          reconnect() { return new Promise(resolve => { join = resolve; }); }
         },
-        getStateCallbacks: () => {},
+        getStateCallbacks: () => callbacks,
       };
       await import('/__client-live.js');
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-      document.getElementById('controlsBtn').click();
-      if (document.getElementById('controlsModal').hidden)
-        throw new Error('Production client did not wire the controls dialog');
+      byId('controlsBtn').click();
+      assert(!byId('controlsModal').hidden, 'Production client did not wire the controls dialog');
+      byId('controlsClose').click();
+      join(room);
+      await new Promise(resolve => setTimeout(resolve, 150));
+      assert(byId('sfxVol')?.oninput, 'Joined client did not finish binding controls');
+      assert(messages.has('ping') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
+      byId('sfxVol').value = '37'; byId('sfxVol').dispatchEvent(new Event('input'));
+      const audio = await import('/audio.js');
+      assert(Math.abs(audio.getSfxVolume() - 0.37) < 0.001, 'SFX volume did not reach audio adapter');
+      const muted = audio.getSfxMuted(); byId('sfxMute').click();
+      assert(audio.getSfxMuted() !== muted, 'SFX mute was not wired');
+      const full = document.body.classList.contains('ui-full'); byId('uiModeToggle').click();
+      assert(document.body.classList.contains('ui-full') !== full, 'UI mode did not toggle');
+      byId('uiModeToggle').click();
+      byId('accentCustom').value = '#123456'; byId('accentCustom').dispatchEvent(new Event('input'));
+      assert(localStorage.getItem('ott-accent') === '#123456', 'Accent preference did not persist');
+      byId('settingsBtn').click();
+      assert(byId('creditsBody').textContent.includes('Libraries'), 'Credits did not render');
+      byId('settingsClose').click();
+      const roster = byId('players'), dock = byId('roomInfoBody');
+      byId('seatBtn').click(); assert(byId('seatPop').contains(roster), 'Seat popover lost live roster');
+      byId('roomInfoBtn').click();
+      assert(byId('seatPop').hidden && byId('roomSheet').contains(dock) && dock.contains(roster), 'Room sheet did not return then borrow live nodes');
+      byId('roomSheet')._close(); assert(byId('roomInfo').contains(dock), 'Room sheet failed to return dock');
+      byId('dropBtn').click(); byId('dropDown').click();
+      assert(sent.at(-1)[0] === 'handToTable' && sent.at(-1)[1].faceDown, 'Drop orientation lost');
+      byId('toast').querySelector('button').click(); assert(sent.at(-1)[0] === 'handFromTable', 'Drop Undo lost');
+      messages.get('diceList')([{ id: 'tex', name: 'Custom finish', url: '/fixture.png' }]);
+      assert(byId('trayTextures').querySelectorAll('button').length === 1 && !byId('trayCustomGroup').hidden, 'Uploaded finish chips did not hydrate');
+      byId('trayTextures').querySelector('button').click();
+      assert(JSON.parse(localStorage.getItem('ott-dice'))['6'].finish === 'custom', 'Custom finish did not persist defaults');
+      byId('drawerBtn').click();
+      assert(byId('drawer').querySelector('.drawerRow'), 'Drawer proxies did not build');
+      byId('drawer')._close();
+      byId('fabBtn').click(); assert(!byId('radial').hidden, 'Table action fan did not open');
+      byId('fabBtn').click();
+      byId('controlsBtn').click();
+    `,
+  },
+  {
+    name: 'piece-ui-and-effects',
+    root: '#pieceMenu',
+    expect: { selector: '#pieceMenu:not([hidden]) button', min: 4 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const THREE = await import('three');
+      const { createPieceUi } = await import('/table/piece-ui.js');
+      const { createTableEffects } = await import('/table/effects.js');
+      const byId = (id) => document.getElementById(id);
+      const sent = [], messages = new Map(), sounds = [];
+      const state = { players: new Map([['me', { color: '#ff0000', name: 'Ada' }]]), pieces: new Map([
+        ['deck', { type: 'deck', count: 12, props: '{}' }],
+        ['board', { type: 'board', props: JSON.stringify({ model: 'fixture.glb', box: [3, 0.5, 3] }) }],
+      ]) };
+      const room = { state, send: (...args) => sent.push(args), onMessage: (key, fn) => messages.set(key, fn) };
+      const scene = new THREE.Scene();
+      const deck = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+      deck.position.set(0, 3, 0);
+      const board = new THREE.Group(); board.position.y = 0.5;
+      const meshes = new Map([['deck', { type: 'deck', mesh: deck }], ['board', { type: 'board', mesh: board }]]);
+      let time = 0;
+      const ray = { setFromCamera() {}, ray: { intersectPlane: (_plane, hit) => hit.set(2, 0, 4) } };
+      const config = { ping: { inner: 0.1, outer: 0.2, dur: 1000, grow: 2, lift: 0.05 },
+        label: { w: 2, h: 1 }, marker: { inner: 0.1, outer: 0.2, opacity: 0.5, lift: 0.03 },
+        anim: { shuffle: { dur: 1000, cycles: 3, yaw: 0.1, bob: 0.2 } } };
+      const effects = createTableEffects({ THREE, config, scene, camera: {}, pointer: {}, ray, meshes,
+        getRoom: () => room, getSessionId: () => 'me', getBoardTopY: () => 0.5,
+        nameTag: () => new THREE.Texture(), playSfx: (name) => sounds.push(name), clock: () => time,
+        disposeSprite: (sprite) => { scene.remove(sprite); sprite.material.map.dispose(); sprite.material.dispose(); } });
+      effects.bindPings(room); effects.bindTableEffects(room);
+      effects.sendPing(); assert(sent.at(-1)[0] === 'ping' && sent.at(-1)[1].x === 2, 'Ping projection did not send');
+      messages.get('ping')({ sid: 'me', x: 2, z: 4 });
+      const ring = scene.children.find(mesh => mesh.renderOrder === 5);
+      let disposed = 0; ring.geometry.addEventListener('dispose', () => disposed++);
+      ring.material.addEventListener('dispose', () => disposed++);
+      time = 500; effects.updatePings(); assert(ring.scale.x === 2 && ring.material.opacity === 0.375, 'Ping timing drifted');
+      time = 1001; effects.updatePings(); assert(disposed === 2 && !scene.children.includes(ring), 'Expired ping leaked');
+      messages.get('shuffled')({ id: 'deck' }); time = 1501; effects.applyAnim('deck', deck);
+      assert(sounds.at(-1) === 'shuffle' && deck.position.y > 3, 'Shuffle cue/animation lost');
+      time = 2102; deck.position.y = 3; effects.applyAnim('deck', deck);
+      assert(deck.position.y === 3, 'Expired animation still offsets the mesh');
+      messages.get('sfx')({ type: 'card-drop' }); assert(sounds.at(-1) === 'card-drop', 'Shared sound not routed');
+      const marker = scene.children.find(mesh => mesh.renderOrder === 3);
+      effects.updateDropMarker({ id: 'deck', grabbed: true });
+      assert(marker.visible && Math.abs(marker.position.y - 1.03) < 0.001, 'Landing marker missed board collider');
+      state.pieces.get('board').props = JSON.stringify({ model: 'fixture.glb', box: [3, 1, 3] });
+      effects.updateDropMarker({ id: 'deck', grabbed: true });
+      assert(Math.abs(marker.position.y - 1.53) < 0.001, 'Landing surface did not refresh changed props');
+      effects.disposeSurface('board'); meshes.delete('board');
+      effects.updateDropMarker({ id: 'deck', grabbed: true });
+      assert(Math.abs(marker.position.y - 0.03) < 0.001, 'Removed board left stale landing height');
+      effects.updateDropMarker(null); assert(!marker.visible, 'Idle landing marker visible');
+
+      let held = null, sheet = false, capturedWhileVisible = false, radial;
+      const selection = { size: 0 };
+      const canvas = document.createElement('canvas'); document.body.append(canvas);
+      const pieces = { current: () => held, isActive: () => !!held,
+        sendAction: (...args) => sent.push(args), armMove: () => {},
+        beginMoveFromMenu: () => { capturedWhileVisible = !byId('pieceMenu').hidden; return true; } };
+      const ui = createPieceUi({ byId, canvas, meshes, kinds: { deck: { grab: 2 } }, getRoom: () => room,
+        pieceDrag: pieces, hand: { drag: () => null, hoverCard: () => null, isDragging: () => false }, selection,
+        inspection: { isActive: () => false, isInspectable: () => true },
+        overlays: { isMeasuring: () => false, isMoving: () => false, isDraggingMeasure: () => false },
+        whiteboard: { isOwning: () => false }, setPointer() {}, pickId: () => 'deck',
+        isSheet: () => sheet, openRadial: (...args) => { radial = args; return true; } });
+      canvas.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: 80, clientY: 80 }));
+      assert(byId('hoverCount').textContent === '12 cards', 'Hover count missing');
+      state.pieces.get('deck').count = 8; ui.update();
+      assert(byId('hoverCount').textContent === '8 cards', 'Hover count did not follow state');
+      ui.openPieceMenu('deck', { x: 80, y: 80 });
+      const move = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Move');
+      move.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, cancelable: true }));
+      assert(capturedWhileVisible && byId('pieceMenu').hidden, 'Menu removed before Move capture');
+      meshes.set('die', { type: 'die' }); sheet = true; ui.openPieceMenu('die', { x: 100, y: 100 });
+      assert(radial[2].some(item => item.label === 'Roll'), 'Small piece menu did not use radial');
+      held = { id: 'deck', type: 'deck', grabbed: true, touch: true }; ui.updateHoldControls();
+      assert(!document.querySelector('.heightUp').hidden, 'Touch height controls missing');
+      held = null; selection.size = 1; ui.updateHoldControls();
+      assert(document.querySelector('.heightUp').hidden && !document.querySelector('.rotLeft').hidden, 'Selection controls confused with held controls');
+      ui.update();
+      if (matchMedia('(hover: hover) and (pointer: fine)').matches)
+        assert(byId('controlGuide').textContent.includes('Deck'), 'Desktop guide did not render');
+      else assert(byId('controlGuide').hidden, 'Touch guide should stay hidden');
+      ui.openPieceMenu('deck', { x: 80, y: 80 });
     `,
   },
   {

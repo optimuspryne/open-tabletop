@@ -1,13 +1,16 @@
 # Client decomposition plan
 
-Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, measurement
+Status: complete; all 14 steps are implemented and manually verified.
+
+Phase 1 is complete. Phase 2's whiteboard, measurement
 overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified. The private
 hand and inspection have also been extracted and manually verified. Phase 3 selection was
 completed and manually verified on 2026-09-23. Player presence was also completed and manually
 verified on 2026-09-23. Room settings and skybox were completed and manually verified on
 2026-09-23. Phase 3 is complete. Phase 4 feature-specific bootstrap binders were completed and
 manually verified on 2026-09-23. Step 13 input-router and piece-drag extraction is complete and
-manually verified on 2026-09-23. Step 14 composition cleanup is next.
+manually verified on 2026-09-23. Step 14 composition cleanup was completed and manually verified
+on 2026-09-23. Manual smoke tests reported no regressions.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -56,8 +59,8 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/inspection.js` owns enlarged previews, their appearance controls, drawn-card
   placement, deferred double-clicks, and pointer rotation.
 
-The remaining work continues this pattern: make `client.js` coordinate modules like these rather
-than continuing to own their internal state and implementation.
+Step 14 completes the ownership split with table-shell composition, personal preferences, dice
+defaults, piece feedback, and visual effects. `client.js` now coordinates these controllers.
 
 ## Target architecture
 
@@ -65,7 +68,7 @@ Create a `public/table/` directory for table-client feature modules. This mirror
 `server/game/` organization and avoids adding another dozen unrelated files to the root of
 `public/`.
 
-Proposed shape:
+Implemented shape:
 
 ```text
 public/
@@ -94,6 +97,11 @@ public/
     ui-surfaces.js          dialogs, sheets, clusters, drawer, and radial primitives
     input-router.js         semantic pointer and keyboard routing
     piece-drag.js           piece gestures, transforms, throws, and dealt-response adoption
+    piece-ui.js             contextual guide, hover counts, piece menus, and hold controls
+    effects.js              pings, shuffle animation, landing marker, and board-surface cache
+    dice-preferences.js     local dice defaults and shared finish-picker data
+    preferences.js          audio/theme controls, settings/help tabs, tracks, and credits
+    table-shell.js          table-specific dialogs, clusters, drawer, roster/hand surfaces
 ```
 
 These should use explicit factory dependencies, following the server's `create...` and
@@ -263,7 +271,7 @@ placement calculation is reasonable; sharing feature state is not.
 The selection subsystem now lives in `public/table/selection.js`. The client forwards semantic
 selection input, removes stale IDs on piece removal/remote grabs, and updates highlights in the
 render loop. Compatibility and planning helpers operate on plain piece data for direct testing.
-Pointer capture, camera-control arbitration, and input priority remain in the client.
+Pointer capture, camera-control arbitration, and input priority now belong to the input router.
 
 The extraction moved:
 
@@ -369,14 +377,14 @@ piece state and behavior together: press classification, armed menu Move, grab/d
 `dealt` adoption or late release, group movement, grid targets, rotation, touch re-anchoring, and
 throw estimation. It reuses `clickRoute`, `reanchorOffset`, shared snapping, and piece-property
 readers. `current()` exposes a small copied gesture summary for the guide and landing marker;
-mutable gesture internals stay private. The root retains raycast helpers, menus, camera pan math,
-the shared hand/drag projection scratch, and frame ordering, and constructs the drag controller
-before the first render.
+mutable gesture internals stay private. Step 14 moves menus to `piece-ui.js`. The root retains
+raycast helpers, camera pan math, the shared hand/drag projection scratch, and frame ordering,
+and constructs the drag controller before the first render.
 
 Regression tests exercise routing priority and actual piece gestures; browser component checks
-also import the production composition root with joining held pending, covering startup, the first
-frames, and dialog wiring in desktop and touch layouts. This does not replace live-room/manual
-gesture verification. No gesture mappings, protocol messages, or server authority change.
+also import the production composition root, first holding join pending to check startup and then
+completing a simulated join to exercise controls in desktop and touch layouts. This does not replace
+live-room/manual gesture verification. No gesture mappings, protocol messages, or server authority change.
 
 ## Room bootstrap and message bindings
 
@@ -391,9 +399,10 @@ Handlers precede `handSync`, `chatLog`, `notebookSync`, and `listDice` replay re
 response routing is installed before the editor-panel handoff. The root still registers session
 errors, notices, admin identity, and exits, and coordinates patch delivery in the same order:
 piece snapshots, whiteboard, trays, then skybox. Cross-feature piece-removal effects remain
-explicit injected callbacks. Step 13 moves `dealt` registration into `pieceDrag.bindRoom`. Local
-`bindPings` and `bindTableEffects` keep effect registrations beside their root-owned state for
-later composition cleanup. General shell, audio preferences, and responsive UI composition remain.
+explicit injected callbacks. Step 13 moves `dealt` registration into `pieceDrag.bindRoom`. Step 14
+moves `bindPings` and `bindTableEffects` into the effects controller with their visual state, and
+moves shell controls and personal preferences into focused modules. The root still calls every
+binder in the explicit high-level order.
 
 This is an ownership refactor: no message, saved-state, privacy, or server authorization changes.
 Regression coverage exercises replay ordering, piece lifecycle/cleanup, library responses, notes
@@ -439,8 +448,29 @@ instrumentation. The interpolation mechanics can move into `piece-view.js`, but 
 important architecture, just as `world.step` deliberately remains visible in the server update
 loop.
 
-A reasonable endpoint is a roughly 1,000-1,500-line `client.js`, comparable in purpose to the
-decomposed `server.js`. The number is a consequence of clearer ownership, not a quota.
+Step 14 leaves an approximately 900-line `client.js`, down from 7,650 at the original sweep.
+The endpoint is ownership, not a line quota: the root retains shared mesh/buffer maps, room/session
+identity, role orchestration, raycast/camera adapters, the loading gate, errors/exits, controller
+construction, binding order, and the visible render sequence.
+
+The final boundaries are:
+
+- `createTableShell` owns local panel layout and toast state and composes existing `ui-surfaces`
+  primitives into dialogs, clusters, drawer proxies, seat/room-info surfaces, and the hand tab.
+  The roster and room-info content remain live nodes, borrowed and returned on close.
+- `bindPreferences` wires local audio, theme, settings/help tabs, credits, and track controls;
+  `audio.js` still owns playback. `createDicePreferences` owns persisted defaults and uploaded
+  finish-picker data, supplying the same callbacks to inspection and tray controllers.
+- `createPieceUi` owns menus, hover counts, the contextual guide, and hold-button visibility;
+  `pieceDrag` still owns gestures. Move transfers capture before the menu closes.
+- `createTableEffects` owns pings, shuffle animations, the landing marker, and cached board collider
+  surfaces. The root calls each update at its prior frame position and invokes surface cleanup
+  on piece removal. Shared collider builders and server physics remain unchanged.
+
+Regression coverage completes a simulated production join, exercises shell/live-node controls,
+personal preferences and finish replay, and verifies piece menus, ping disposal, shuffle expiry,
+and landing heights after board-prop changes/removal. The final manual smoke tests were reported
+green on 2026-09-23.
 
 ## Avoid these failure modes
 
@@ -498,7 +528,12 @@ are attached through DOM APIs and are genuinely used.
     `dealt` adoption. `npm run check` passes (622 tests), `test:input` passes (57 checks),
     and `test:components` passes in desktop and touch layouts, including production bootstrap.
     Manual smoke tests reported no regressions.
-14. Reduce `client.js` to joining, composing, binding, and rendering.
+14. Reduce `client.js` to joining, composing, binding, and rendering. **Completed 2026-09-23;
+    manually verified.** Shell, personal/dice preferences, piece feedback, and effects
+    now own their state. `npm run check` passes (626 tests), `test:input` passes (57 checks),
+    and `test:components` passes in desktop and touch layouts, including the production join,
+    shell controls, piece feedback, and effect lifecycles.
+    Manual smoke tests reported no regressions.
 
 Make each numbered item its own cohesive change where practical. A feature can be split into two
 commits when moving state and behavior together would otherwise produce an unreviewable diff.
@@ -528,9 +563,9 @@ High-risk smoke scenarios for the overall refactor are:
 - change table shape, grid, scale, lighting, quality, and skybox; and
 - use modal, sheet, drawer, cluster, and radial controls on desktop and touch layouts.
 
-## First recommended change
+## Original starting recommendation (completed)
 
-Begin with piece mesh replacement and collider diagnostics. They are already identified sources of
+The sequence began with piece mesh replacement and collider diagnostics. They are already identified sources of
 duplication, have explicit inputs and outputs, and can be extracted without first redesigning
 input or room-state ownership. This creates the first stable controller interface that later hand,
 inspection, selection, and render-loop work can depend upon.

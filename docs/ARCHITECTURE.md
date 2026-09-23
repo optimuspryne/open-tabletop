@@ -151,7 +151,7 @@ importing a room singleton:
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
   does not repeatedly triangulate identical pieces.
 - **`public/client.js`** — the browser composition root and remaining table runtime: networking,
-  controller construction, raycasting, menus, camera panning, and the ordered render
+  controller construction, shared raycasting/camera adapters, and the ordered render
   loop. It retains shared session and scene state (`room`, `meshes`, `buffers`) while
   presence, selection, inspection, private hand, overlays, whiteboard, trays, room settings, and
   skybox controllers own feature state. A full-screen
@@ -159,8 +159,21 @@ importing a room singleton:
   pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
   preventing both the bootstrap camera and late hydration from appearing to end users. On desktop,
-  it also derives a bottom-left control guide from the current hovered/held piece or private-hand
-  card and translates the camera plus OrbitControls target for view-relative keyboard panning.
+  it translates the camera plus OrbitControls target for view-relative keyboard panning. Piece UI
+  derives the contextual control guide from the held/hovered piece or private-hand card.
+- **`public/table/table-shell.js`** — table-specific UI composition built on `ui-surfaces`:
+  local panel layout/toasts, dialogs, clusters, drawer proxies, radial actions, and seat/room/hand
+  surfaces. It borrows and returns live roster/dock nodes so feature renderers keep their targets.
+- **`public/table/preferences.js`** — local audio/theme controls, settings/help tabs, credits,
+  and track choices; playback remains in `audio.js`.
+- **`public/table/dice-preferences.js`** — per-device dice defaults and finish lists. Inspection
+  and tray controls reuse its saved-default and texture-chip callbacks; recoloring existing tray
+  dice still sends the same server messages.
+- **`public/table/piece-ui.js`** — piece menus, contextual guide, hover counts, and hold-control
+  visibility. It reads controller state and delegates actions; gesture ownership stays in piece drag.
+- **`public/table/effects.js`** — ping/shuffle state, visual lifetimes, landing marker, and cached
+  board collision surfaces. The root still calls updates in order and disposes board surfaces on
+  piece removal. Cosmetic transforms never alter authoritative simulation state.
 - **`public/table/input-router.js`** — semantic input ownership. `createInputRouter` returns the
   intent map consumed by `attachControls` and the on-screen hold controls. It preserves mode
   priority, Escape/typing guards, long-press routing, object-axis targeting, and camera-pan gates;
@@ -168,8 +181,7 @@ importing a room singleton:
 - **`public/table/piece-drag.js`** — `createPieceDrag` owns piece press/drag state, click routing,
   menu Move, grab/deal/dispense and late `dealt` adoption, group movement, grid targets, rotation,
   touch re-anchoring, and throw estimation. It reuses shared snapping and existing click/drag
-  helpers. The root reads a copied gesture summary for the guide, touch controls, and landing
-  marker. Room access, selection, inspection, raycasting, menu opening, and sound are injected;
+  helpers. Piece UI and the landing-marker update read a copied gesture summary. Room access, selection, inspection, raycasting, menu opening, and sound are injected;
   no mutable client context or feature-to-root import is introduced.
 - **`public/table/piece-view.js`** — the first extracted table feature boundary. It owns defensive
   piece-property parsing, dispenser mesh props, piece add/remove/property bindings, patch
@@ -229,9 +241,9 @@ importing a room singleton:
 - **`public/table/library-bindings.js`** — library-list routing, asset errors, and Save Table feedback.
   It normalizes dice lists for injected texture-picker updates; authoring stays in `editor-panel.js`.
 - **`public/table/ui-surfaces.js`** — reusable dialog focus, responsive sheets, clusters, drawer,
-  radial menus, and hold-repeat behavior; feature-specific content remains in `client.js`.
+  radial menus, and hold-repeat behavior; table-specific composition lives in `table-shell.js`.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
-  raw events into device-neutral pointer/command intents consumed by `client.js`. Touch holds
+  raw events into device-neutral pointer/command intents consumed by `table/input-router.js`. Touch holds
   raise the same secondary-press intent as a mouse context action; a menu action that starts a
   drag transfers pointer capture to the canvas before its temporary button is removed. Its keyboard
   profile runs deterministic held-key intervals: WASD/arrows pan the idle camera, while compatible
@@ -459,7 +471,7 @@ helper the single `release` uses.
 The **selection itself is purely local** — a Set of ids owned by `createSelection` in
 `public/table/selection.js`, never in synced state, so it adds no schema and no one sees yours.
 The controller exposes membership/count queries and copied ID arrays without sharing its mutable
-Set. `client.js` forwards semantic gestures and commands, calls `selection.update()` in the render
+Set. The input router forwards semantic gestures and commands; `client.js` calls `selection.update()` in the render
 loop to follow meshes, dispose stale rings, and refresh the toolbar, and retains group drag physics
 messages. Shift-click and Select-tool taps toggle individual movable pieces. Dragging empty felt
 with Shift or the Select tool paints a screen-space marquee that tests each piece's
@@ -1473,7 +1485,28 @@ synchronization, then skybox synchronization. Piece add/remove callbacks update 
 removal still releases inspection/selection/held labels and collider surfaces before dropping the
 snapshot buffer. `pieceDrag.bindRoom` owns `dealt` responses and checks the live gesture before
 adopting a spawned piece; replies after release are dropped with the existing release message.
-General UI wiring and the ping/audiovisual binders remain at the root for later composition cleanup.
+`effects.bindPings`/`bindTableEffects` retain their original registration positions. Shell and
+preference modules own their control wiring; the root retains session/role orchestration.
+
+## Composition-root endpoint
+
+The final cleanup leaves `client.js` at roughly 900 lines. It retains join/reconnect, session and
+role handling, shared mesh/buffer maps, loading/error/exit handling, explicit controller dependencies,
+shared raycast/camera adapters, binding order, and frame orchestration. Feature modules own their
+local state; there is no catch-all client context or networking module.
+
+The frame order remains interpolation → cosmetic piece animation → collider diagnostics → overlay
+surfaces → presence → piece guide/counts → pings → landing marker → selection → tray/orbit/Lean In
+camera → hold controls → shadow refresh → render → performance sample. Each phase is still visible
+at the root. Board landing surfaces reuse the shared collider specification and existing surface
+builders, replacing cached geometry when props change and releasing it on removal.
+
+Shell proxies invoke the original controls, retaining role gates and unread state. Seat and room
+surfaces move live DOM nodes and return them on close. Flat/radial piece menus transfer pointer
+capture to the drag controller before dismissal. Personal preferences retain their existing storage
+keys and remain local; credits remain available in Settings. Browser regressions execute the real
+composition root through a simulated join in desktop and touch layouts as well as focused visual
+lifecycle checks. Real-device gesture feel and multiplayer behavior remain manual checks.
 
 ## Semantic input and piece-drag boundaries
 

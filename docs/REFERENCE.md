@@ -44,7 +44,12 @@ The codebase:
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
-| `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, loading gate, render loop                                                             |
+| `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, scene/input adapters, loading gate, render loop                                                             |
+| `public/table/table-shell.js` | browser | Table-specific UI composition, local panels/toasts, drawer and roster/hand surfaces |
+| `public/table/preferences.js` | browser | Audio/theme settings, help tabs, credits, and track controls |
+| `public/table/dice-preferences.js` | browser | Per-device dice defaults, uploaded finish data, and tray finish controls |
+| `public/table/piece-ui.js` | browser | Contextual control guide, hover counts, piece menus, and hold-button visibility |
+| `public/table/effects.js` | browser | Ping/shuffle visuals, landing marker, and cached board collider surfaces |
 | `public/table/input-router.js` | browser | Semantic intent dispatch, modal priority, Escape/typing guards, and camera-pan gating |
 | `public/table/piece-drag.js` | browser | Piece gestures, click/deal/dispense flow, grid/group transforms, throw estimation, and dealt-response binding |
 | `public/table/piece-view.js`                                                                           | browser | Safe piece props, room lifecycle bindings, mesh replacement, patch snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
@@ -182,8 +187,29 @@ classDiagram
     class Client["public/client.js"] {
         room, meshes, buffers, myIsAdmin
         +controller composition + networking + UI wiring
-        +raycasting + menus + camera pan math
+        +raycasting + camera pan math
         +table/track resize orchestration + render loop
+    }
+    class TableShell["public/table/table-shell.js"] {
+        +createTableShell() / prepare() / toast()
+        +bindRoomControls/bindInteractionControls/bindControls
+    }
+    class Preferences["public/table/preferences.js"] {
+        +bindPreferences()
+    }
+    class DicePreferences["public/table/dice-preferences.js"] {
+        +createDicePreferences()
+        +myDieProps/saveDiceDefault/clearDiceDefault
+        +setTextures/syncTextures/buildTextureChips/bindControls
+    }
+    class PieceUi["public/table/piece-ui.js"] {
+        +createPieceUi()
+        +openPieceMenu/syncControlGuide/update/updateHoldControls
+    }
+    class Effects["public/table/effects.js"] {
+        +createTableEffects()
+        +bindPings/bindTableEffects/sendPing
+        +applyAnim/updatePings/updateDropMarker/disposeSurface
     }
     class InputRouter["public/table/input-router.js"] {
         +createInputRouter(dependencies)
@@ -317,6 +343,14 @@ classDiagram
     Core <.. Graphics
     Core <.. Client
     Graphics <.. Client
+    TableShell <.. Client
+    Preferences <.. Client
+    DicePreferences <.. Client
+    PieceUi <.. Client
+    Effects <.. Client
+    SharedColliders <.. Effects
+    PieceView <.. Effects
+    UiSurfaces <.. TableShell
     InputRouter <.. Client
     PieceDrag <.. Client
     PieceDrag <.. InputRouter
@@ -346,10 +380,11 @@ classDiagram
     Membership <.. Client
     LibraryBindings <.. Client
     Shared <.. Timer
-    UiSurfaces <.. Client
     Inspection ..> PieceView : hide/reveal original
     Hand ..> Inspection : request preview callback
     Credits <.. Audio
+    Credits <.. Preferences
+    Audio <.. Preferences
     Audio <.. Client
     Server *-- TableRoom
     Server ..> Physics
@@ -728,7 +763,7 @@ and Cannon collision behavior. Run the pointer/UI regression with
   before calling; the helper updates world matrices. Sphere surfaces are triangulated.
 - **`disposeColliderSurface(root)`** releases tree geometry and materials.
 
-The client's `boardDropHeight` caches board-only trees by board ID and serialized props,
+The effects controller's `boardDropHeight` caches board-only trees by board ID and serialized props,
 copies interpolated board transforms for each query, and picks the highest surface below the
 held origin. Removal disposes the cached tree. The held piece and other pieces are excluded;
 raised areas, cut corners, holes, and off-board positions are resolved locally. Pings and
@@ -2159,9 +2194,26 @@ projection dependencies, sound/menu callbacks, config, and an optional clock for
 
 `test/input-router.js` exercises both controllers together with a controlled clock/raycast,
 including priority, typing, late replies, grid/groups, menu Move, and transform release behavior.
-Component parity imports the real composition root with room joining held pending and checks its
-first frames and dialog wiring in desktop and touch layouts; live multiplayer/gesture feel still
-requires manual verification.
+Component parity imports the real composition root, checks its first frames with joining pending,
+then completes a simulated join to exercise control wiring in desktop and touch layouts. Live
+multiplayer and gesture feel still require manual verification.
+
+## Final client composition modules
+
+These modules take explicit dependencies; none imports the client or a mutable room singleton.
+
+| Module / factory | API and ownership |
+| --- | --- |
+| `table-shell.js` / `createTableShell` | `prepare` enhances number inputs and restores local panel layout. `toast` owns its dismiss timer and action callback. `bindInteractionControls` wires help, Lean In, and drop-hand/Undo through callbacks. `bindRoomControls` wires room menus, save/reset, and dock collapse after join. `bindControls` composes `ui-surfaces` dialogs, clusters, hold buttons, radial actions, drawer proxies, seat/room sheets, and hand-tab observers. It exposes `isSheet`/`openRadial` to piece menus. |
+| `preferences.js` / `bindPreferences` | Wires audio volume/mute/playback, track disclosure/selection, credits, settings/help tabs, UI density, and accent color. Internal `renderCredits`, `renderTracks`, `syncMusicBtn`, `syncUiMode`, and `applyAccent` retain local preferences; `audio.js` owns playback. |
+| `dice-preferences.js` / `createDicePreferences` | `myDieProps`, `saveDiceDefault`, and `clearDiceDefault` read/merge/delete per-side defaults in `ott-dice`. `bindControls` builds tray color/finish controls; internal `applyDiceSet`/`applyDiceFinish` save defaults and recolor existing tray dice through room messages. `setTextures`/`syncTextures` refresh uploaded finish chips and notify inspection; `buildTextureChips` is also injected into inspection. |
+| `piece-ui.js` / `createPieceUi` | Owns hover/guide DOM, count throttling/signatures, menu dismiss state, and hold-control visibility. `openPieceMenu` uses internal `pieceMenuItems` and flat/radial presentation. Move calls the injected drag controller before dismissing. `syncControlGuide`, `update`, and `updateHoldControls` render current controller state without owning gestures. |
+| `effects.js` / `createTableEffects` | `bindPings` and `bindTableEffects` install the existing ping/shuffle/sfx listeners. `sendPing` projects the cursor; `updatePings` fades/disposes visuals. `applyAnim` applies expiring cosmetic offsets after interpolation. `updateDropMarker` sizes/tints the landing ring and uses internal `boardDropHeight` to cache collider surfaces by board ID/props. `disposeSurface` releases that cache on removal. |
+
+`test/dice-preferences.js` covers preference merging, finish transitions, clearing, blocked storage,
+and finish-list replay. Component parity exercises a simulated production join, shell proxy/live-node
+handoff, drop/Undo, audio/theme and finish controls, piece menus, touch hold controls, ping cleanup,
+shuffle expiry, and landing-surface refresh/removal.
 
 ## `public/client.js` — runtime
 
@@ -2180,15 +2232,16 @@ Private `hand`/`dropUndone` delivery belongs to `hand.bindRoom`; `inspectCard` b
 replay handlers before requesting history. `bindLibraryMessages` routes asset lists and errors
 and Save Table feedback before the editor-panel handoff. Membership owns server-pushed lists
 and pending indicators. `pieceDrag.bindRoom` adopts or releases `dealt` responses
-against the live gesture; `bindPings` and `bindTableEffects` connect attention markers, shuffle
-animation, and shared sounds to the existing effect state.
+against the live gesture; `effects.bindPings` and `effects.bindTableEffects` connect attention
+markers, shuffle animation, and shared sounds to controller-owned effect state.
 
 Session-wide `serverError`, `notice`, `whoami`, `roomClosed`, `kicked`, `accessRevoked`, and leave
 handling stay at the root. **`applyRole`** gates the shell and delegates score/notes affordances to
-`scoreboard.applyRole`. Join/reconnect, loading/exit handling, shared maps, raycast/menu/camera helpers, audio
-preferences, generic UI composition, and the ordered render loop also remain there. Asset
+`scoreboard.applyRole`. Join/reconnect, loading/exit handling, shared maps, raycast/camera adapters,
+controller composition, and the ordered render loop remain there. Shell controls, preferences,
+piece feedback, and transient effects live in the modules above. Asset
 creation and library pickers stay in `editor-panel.js`; the shared DOM helpers remain
-**`byId`/`qs`/`qsa`**. Snapshot recording, transform application, interpolation, and replacement
+**`byId`/`qs`**. Snapshot recording, transform application, interpolation, and replacement
 restoration delegate to `pieceView` while the root retains buffer ownership and frame order.
 
 For non-modeled decks, the synchronized `count` listener calls
@@ -2223,7 +2276,7 @@ changes, and follows each synchronized/interpolated transform without changing r
   intents that translate the camera and OrbitControls target together. While holding a piece,
   W/S or Up/Down retain raise/lower and A/D or Left/Right retain rotation; A/D also rotates a
   non-empty selection. Field focus suppresses all of these table controls.
-- **`syncControlGuide`** — on fine-pointer desktop layouts, renders a non-interactive bottom-left
+- **`pieceUi.syncControlGuide`** — on fine-pointer desktop layouts, renders a non-interactive bottom-left
   guide for the currently hovered or held table piece, hovered private-hand card, or active hand
   drag. Rows are generated by `pieceControlRows` / `hand.controlRows`, include live stack counts
   where relevant, and yield to an open bottom-left panel.
@@ -2274,7 +2327,7 @@ callback when players join or leave.
   unread dot on the Chat button); its input sends `chat` and its binder requests `chatLog`
   after registering replay handlers on join/reconnect. Sender names render via `textContent`, so a name can't inject markup.
 - The top-right **Music** pane provides playback, next, shuffle, and track picking;
-  **Settings → Sounds** holds SFX/music volume and mute, while its credits view is
+  `bindPreferences` wires playback and **Settings → Sounds** volume/mute; its credits view is
   built from `MUSIC_CREDIT` + `SFX_CREDITS` + `LIB_CREDITS`. `resumeAudio` is armed on the
   first `pointerdown`; pickup cues are played locally, landing/flip/deal/shuffle
   cues arrive as server `sfx`/`shuffled` messages.

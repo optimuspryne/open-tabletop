@@ -14,6 +14,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Complete the client composition cleanup by moving table-shell controls, personal audio/theme
+  settings, dice defaults, piece menus/control hints, and transient visual effects into focused
+  modules. Preserve room binding and render order, and add production-join, live-node handoff,
+  preference persistence, menu capture, and effect lifecycle regression coverage.
 - Extract semantic pointer/keyboard routing and piece-drag state into focused client controllers,
   preserving mode priority, click/deal/dispense behavior, grid/group transforms, touch re-anchoring,
   and release handling. Add routing/gesture regressions and desktop/touch production-bootstrap checks.
