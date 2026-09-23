@@ -48,6 +48,11 @@ The codebase:
 | `public/table/piece-view.js`                                                                           | browser | Safe piece props, mesh replacement, transform snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
 | `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
 | `public/table/hand.js`                                                                                 | browser | Private hand state, rendering, Show audience/selection, rearrangement/sorting, collapse preference, inspection entry, and card pointer gestures                                                  |
+| `public/table/inspection.js`                                                                           | browser | Enlarged-piece/card previews, appearance controls, deferred double-clicks, placement, and pointer rotation |
+| `public/table/overlays.js`                                                                             | browser | Measurement shapes, board-surface height, selection, previews, movement, and room bindings |
+| `public/table/whiteboard.js`                                                                           | browser | Whiteboard mesh, strokes, ownership, camera/drawing mode, controls, and room messages |
+| `public/table/trays.js`                                                                                | browser | Personal tray meshes, seat placement, camera travel, dice actions, and controls |
+| `public/table/ui-surfaces.js`                                                                          | browser | Shared dialogs, responsive sheets, clusters, drawer, radial menus, and hold-repeat controls |
 | `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
 | `public/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
 | `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
@@ -163,15 +168,16 @@ classDiagram
         +mesh builders + KIND registry
     }
     class Client["public/client.js"] {
-        room, meshes, buffers, down, inspect, myIsAdmin
+        room, meshes, buffers, down, myIsAdmin
         +controller composition + networking + UI wiring
-        +interaction (pointer/inspect/wheel/keys)
+        +input dispatch + piece drag/wheel/keys
         +seats/markers + render loop
     }
     class PieceView["public/table/piece-view.js"] {
         +piecePropsOf() / meshPropsOf() / pieceProperty()
         +snapshot() / applyTransform() / syncDeckMeshHeight()
         +createPieceView() → rebuildCard/rebuildPiece/rebuildDeck/sample
+        +setOriginalVisible(id, visible)
     }
     class ColliderDebug["public/table/collider-debug.js"] {
         +createColliderDebug()
@@ -183,6 +189,27 @@ classDiagram
         +setCards/setRevealed/revealedFor/clearRevealed
         +render/cancelGesture/bindShowControls
         +isDragging/drag/hoverCard/controlRows
+    }
+    class Inspection["public/table/inspection.js"] {
+        +createInspection(dependencies)
+        +inspectMesh/enterInspect/releaseInspect/placeDrawn
+        +handleDeferredClick/beginPointer/movePointer/endPointer
+    }
+    class Overlays["public/table/overlays.js"] {
+        +createOverlays(dependencies)
+        +bindRoom/bindControls + measure/move/select
+    }
+    class Whiteboard["public/table/whiteboard.js"] {
+        +createWhiteboard(dependencies)
+        +sync/bindRoom/bindControls + stroke gestures
+    }
+    class Trays["public/table/trays.js"] {
+        +createTrays(dependencies)
+        +sync/open/close/putAway/updateCamera
+    }
+    class UiSurfaces["public/table/ui-surfaces.js"] {
+        +createUiSurfaces(dependencies)
+        +wireDialog/wireCluster/wireDrawer/createRadialMenu
     }
     class Audio["public/audio.js"] {
         +playSfx() resumeAudio()
@@ -224,6 +251,13 @@ classDiagram
     SharedColliders <.. ColliderDebug
     ColliderDebug <.. Client
     Hand <.. Client
+    Inspection <.. Client
+    Overlays <.. Client
+    Whiteboard <.. Client
+    Trays <.. Client
+    UiSurfaces <.. Client
+    Inspection ..> PieceView : hide/reveal original
+    Hand ..> Inspection : request preview callback
     Credits <.. Audio
     Audio <.. Client
     Server *-- TableRoom
@@ -1730,8 +1764,8 @@ lclick, rclick }`; the interaction layer dispatches off this, no type switches.
   the felt and re-runs on the relevant `scale`/table-size changes.
 - **`trayMesh() → THREE.Group`** — a felt-lined open box built from `trayParts()` in tray-local
   space. It shares the collider's floor and footprint, but its visible walls end below the
-  collision walls and it skips the `noMesh` lid. The client's **`syncTrays`** places one per
-  enabled seat at its `trayCenter`/`seatAngle`.
+  collision walls and it skips the `noMesh` lid. The tray controller's **`sync(trays)`** places
+  one per enabled seat at its `trayCenter`/`seatAngle`.
 
 ---
 
@@ -1750,11 +1784,14 @@ Pure property/transform exports:
   update, preventing a preceding props/cover rebuild from resizing a detached mesh.
 
 **`createPieceView({scene, meshes, buffers, kinds, physics, deckHeight, createQuaternion,
-refreshCollider, isInspected})`** returns `{rebuildCard, rebuildPiece, rebuildDeck, sample}`.
+refreshCollider, isInspected})`** returns `{rebuildCard, rebuildPiece, rebuildDeck,
+setOriginalVisible, sample}`.
 The rebuild methods share one remove/build/configure/restore/add/replace sequence while retaining
 their type-specific builders and shadow policy. Piece replacements keep an inspected original
 hidden; procedural decks reapply count-derived height, while modeled deck skins remain fixed.
 Every successful replacement refreshes collider diagnostics through the injected callback.
+`setOriginalVisible(id, visible)` changes the current original mesh when inspection opens or closes,
+including after a props-driven replacement.
 `sample(buffer, renderTime, mesh)` clamps outside the buffer and otherwise lerps position and
 slerps orientation between the snapshots bracketing the requested render time.
 
@@ -1802,6 +1839,56 @@ room singleton or the client runtime.
   reorder gesture; **`drag()`**, **`hoverCard()`**, and **`controlRows()`** supply the desktop
   control guide without exposing the controller's mutable state.
 
+## `public/table/inspection.js` — enlarged inspection
+
+**`createInspection(dependencies)`** owns the current inspection, pending single-click timer,
+enlarged preview, color/team/finish controls, and pointer trackball. Dependencies include the
+scene/camera, room and piece lookups, mesh builders, original-mesh visibility callback, DOM helpers,
+and hand-restoration callback; it does not import `client.js` or hand state.
+
+- **`inspectMesh(mesh, opts)`** opens a drawn or hand card; **`enterInspect(id)`** copies or
+  rebuilds a table piece and hides its original; **`releaseInspect()`** reveals the original and returns an
+  unplaced drawn card to its deck. **`placeDrawn(where)`** sends `playCard` for a hand card or
+  `inspectPlace` for a deck draw.
+- **`handleDeferredClick(id, type, single)`** distinguishes a single action from a piece-inspect
+  or deck-draw double-click. **`beginPointer`**, **`movePointer`**, and **`endPointer`** own
+  rotate-drag and click-to-close while inspection is active.
+- **`isActive()`**, **`isDrawn()`**, **`isInspecting(id)`**, and **`isInspectable(type)`** give the
+  composition root read-only mode checks. **`setDiceTextures(textures)`** refreshes the
+  inspector's custom-finish chips after a late `diceList` message.
+
+## `public/table/overlays.js` — measurement overlays
+
+**`createOverlays(dependencies)`** owns overlay objects, selection handles, measure/move drag
+state, previews, and permission checks. **`bindRoom(room, cb, onHydration)`** handles synchronized
+overlays and `overlayDrag`; **`bindControls()`** wires the measurement UI. The input router calls
+`beginMeasure`/`updateMeasure`/`finishMeasure` or `beginMove`/`updateMove`/`finishMove`, while
+`select`, `removeSelected`, `relabel`, and `syncSurface` maintain the visible overlay state.
+Height follows rendered board geometry under each overlay, not tall physics colliders.
+
+## `public/table/whiteboard.js` — whiteboard
+
+**`createWhiteboard(dependencies)`** owns the board mesh, stroke canvas/replay, owner camera mode,
+and local drawing. **`sync(state)`**, **`syncSettings(state)`**, **`bindRoom(room)`**, and
+**`bindControls()`** connect synchronized state, messages, and controls. The shell forwards
+`beginStroke`/`extendStroke`/`endStroke` and double-click `claimAt`; `release()` exits ownership.
+Canvas resolution and board placement are local `RESOLUTION`/`BOARD` constants; replay bounds
+come from shared `WHITEBOARD_LIMITS`.
+
+## `public/table/trays.js` — personal tray presentation
+
+**`createTrays(dependencies)`** owns seat-indexed tray meshes, current tray camera view and tween,
+and UI actions. **`sync(trays)`** reflects enabled trays, **`position()`** follows table-size
+changes, and **`updateCamera()`** advances travel. `open`/`close`/`putAway` and `bindControls`
+drive the tray UI; **`dieIds()`** finds only dice tagged for the current seat. Physics and Scoop
+placement remain server-owned; tray geometry/collision knobs are shared `TRAY` values.
+
+## `public/table/ui-surfaces.js` — shared UI mechanics
+
+**`createUiSurfaces(dependencies)`** returns `wireDialog`, `isSheet`, `openAsSheet`, `clearSheet`,
+`wireCluster`, `wireDrawer`, `holdRepeat`, and `createRadialMenu`. It owns reusable focus,
+responsive presentation, and interaction mechanics without owning feature-specific content.
+
 ## `public/client.js` — runtime
 
 ### Networking
@@ -1812,11 +1899,11 @@ Connects to the `table` room — or the admin-only **`editor`** room when
 create/update/remove `meshes` and player UI; also tracks `boardTopY` (for the drop
 marker), and listens for `feltColor` (→ `setTableColor`), `tableX/tableZ`
 (→ `resizeTable` + `rebuildGrid`), **`tableShape`** (→ the same, plus the shape-picker UI), **`rimWood`** (→ `setRimWood`), the `scale` grid fields (→ `rebuildGrid` /
-`syncScalePanel`), `trays` (→ `syncTrays` — one tray mesh per enabled seat), and
+`syncScalePanel`), `trays` (→ `trays.sync` — one tray mesh per enabled seat), and
 `roomName` (→ the Room Info header), plus
 `unclaimed`/`turnPending` (→ the Members "Unclaimed hands"
 list and the "Waiting on {name}" turn row). Direct messages: `hand` → `hand.setCards`,
-`dealt` (adopt a dealt card), `inspectCard` → open draw-to-inspect, `notebook`
+`dealt` (adopt a dealt card), `inspectCard` → `inspection.inspectMesh`, `notebook`
 (restore your private notes), `showFan` → `hand.setRevealed` and `refreshFan` (cards someone is
 showing you → face-up in their fan), `ping` (spawn an attention marker), **`sfx`** (a shared
 sound cue → `playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
@@ -1827,9 +1914,9 @@ UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList
 (library listings, keyed by **id**; also fanned out to the editor panel via
 `window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
 reshape/reset/members gm+). Game-play + Room Controls wiring lives here (spawn,
-grab/inspect, whiteboard, table size, scene load, skybox apply, plus the notebook and timer
-panels); Show controls belong to the hand controller. Asset **creation** and the View Library /
-Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
+grab, table size, scene load, skybox apply, plus the notebook and timer panels); inspection,
+whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
+and the View Library / Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
 `window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
 **`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,
 transform application, interpolation, and replacement restoration to the composed
@@ -1845,7 +1932,7 @@ as `ott-show-colliders`. The composed `public/table/collider-debug.js` controlle
 collider descriptors into non-raycastable cyan Three.js shells, refreshes them after mesh or count
 changes, and follows each synchronized/interpolated transform without changing room state.
 
-### Interaction (`meshes`, `buffers`, `down`, `inspect`)
+### Interaction (`meshes`, `buffers`, `down`)
 
 - **`setPointer` / `pickId`** — pointer → NDC → raycast → id (walks up to the
   id-stamped root so nested model meshes pick correctly). Fine pointers use the exact ray. A touch
@@ -1877,17 +1964,13 @@ changes, and follows each synchronized/interpolated transform without changing r
   `finalizeMarquee` adds every piece whose projected centre lands inside; empty-click / Esc
   clears. `selectable(id)` excludes static (mass 0) boards. Highlight rings and the marquee are
   tinted with **my** `--accent` via `selColor()`.
-- **Dice tray** (local camera) — **`openTray()`** (bound to the Roll button) hops your camera to
-  _your_ seat's tray (placing it via `trayShow` first if it isn't out), an over-the-shoulder
-  pose from `seatAngle(mySeat)` via `trayCamPose`/`TRAY_CAM`; the **`#trayTools`** toolbar
-  (d4–d20 palette → `spawn {tray:true}`, Roll all → `roll`, Scoop → `trayScoop`, Clear →
-  `trayClear`, Put away → `trayShow {on:false}`, Back → restore camera).
-- **Inspect** — `inspectMesh` parks an enlarged copy in front of the camera;
-  double-click a piece to inspect (rotate-drag), double-click a deck to
-  draw-to-inspect with F/D/H/R placement. Numbered and pipped dice, bundled/uploaded model props,
-  and modeled dispensers/stacks share the standard material-chip picker; selecting a material
-  rebuilds the preview and sends a synchronized `recolor` finish override. Pipped dice hide the
-  image-backed custom-texture group so their body and pips remain separate.
+- **Dice tray** — `client.js` forwards synchronized tray state and camera updates to
+  `trays.sync`/`trays.updateCamera`; `trays.bindControls` owns the Roll-button visit, spawn,
+  Roll all, Scoop, Clear, Put away, and Back actions.
+- **Inspect** — `client.js` forwards double-click and pointer intent to `inspection`, which parks
+  an enlarged copy in front of the camera and owns rotate-drag and F/D/H/R placement. Its
+  appearance controls rebuild previews and send synchronized `recolor` messages for supported
+  colors, teams, and finishes. Pipped dice hide image-backed custom textures.
 - **`keydown`** — with a **non-empty selection** the keys act on the whole group first
   (U/G stand/snap, R roll dice, F flip cards, H take cards, `[`/`]` rotate ±45°, Delete removes
   it) and only otherwise fall through to the single-piece behavior: Delete removes, U toggles

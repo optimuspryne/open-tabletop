@@ -151,11 +151,11 @@ importing a room singleton:
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
   does not repeatedly triangulate identical pieces.
 - **`public/client.js`** — the browser composition root and remaining table runtime: networking,
-  controller construction, interaction (click vs. drag, inspect, scroll-height), seats/markers,
-  and the ordered render loop. It deliberately retains mutable session state (`room`, `down`,
-  `inspect`, `meshes`, `buffers`) while injecting only the narrow lookups and callbacks needed by
-  table feature modules. A full-screen Loading Table cover remains above the runtime until the local
-  mesh count matches synchronized pieces, the player's seat exists, visual assets are idle, and
+  controller construction, input dispatch, piece dragging, seats/markers, and the ordered render
+  loop. It retains shared session and scene state (`room`, `down`, `meshes`, `buffers`) while
+  inspection, private hand, overlays, whiteboard, and trays own their feature state. A full-screen
+  Loading Table cover remains above the runtime until the local mesh count matches synchronized
+  pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
   preventing both the bootstrap camera and late hydration from appearing to end users. On desktop,
   it also derives a bottom-left control guide from the current hovered/held piece or private-hand
@@ -165,6 +165,7 @@ importing a room singleton:
   height synchronization, and the common remove/build/configure/restore/add/replace lifecycle used
   by card, piece, and deck rebuilds. `client.js` retains the `meshes` and `buffers` maps and injects
   builders, physics policy, inspection visibility, collider refresh, and quaternion construction.
+  Inspection requests original-mesh hide/reveal through `setOriginalVisible`.
 - **`public/table/collider-debug.js`** — local-only collider diagnostic ownership. It constructs and
   disposes non-raycastable Three.js shells from the shared collider specification, stores the
   device preference, enforces the GM rank gate, refreshes variable shapes, and follows live mesh
@@ -173,6 +174,19 @@ importing a room singleton:
   and audience, reveal data used by public fans, sorting/rearrangement, collapse preference, and
   hand-specific pointer gestures. `client.js` injects room access, card builders, scene/raycast
   helpers, inspection entry, and control-guide updates instead of sharing mutable hand globals.
+- **`public/table/inspection.js`** — enlarged table-piece and private-card inspection. It owns
+  the preview, color/team/finish controls, deferred click timing, drawn-card placement, and pointer
+  rotation. The hand requests inspection through an injected callback; the composition root
+  forwards room messages and supplies the piece-view visibility callback.
+- **`public/table/overlays.js`** — measurement geometry, rendered-board surface elevation,
+  selection, drag previews, permissions, and overlay state/message bindings.
+- **`public/table/whiteboard.js`** — whiteboard mesh, local stroke replay, ownership/camera mode,
+  drawing gestures, settings controls, and room messages. It reads shared `WHITEBOARD_LIMITS`;
+  server-side validation remains authoritative.
+- **`public/table/trays.js`** — personal tray meshes, positioning, camera travel, and tray UI
+  actions. The server remains responsible for tray physics, die ownership, and Scoop placement.
+- **`public/table/ui-surfaces.js`** — reusable dialog focus, responsive sheets, clusters, drawer,
+  radial menus, and hold-repeat behavior; feature-specific content remains in `client.js`.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
   raw events into device-neutral pointer/command intents consumed by `client.js`. Touch holds
   raise the same secondary-press intent as a mouse context action; a menu action that starts a
@@ -1397,7 +1411,8 @@ Within one browser, `createHand()` owns the private bar and its local modes: Sho
 picked-card scope, hide/show preference, rearrangement and Sort, hover guidance, and play gestures.
 The global hand pointer hooks moved with that state, including the live two-finger face-up choice,
 unsynced drag preview, drop hit test, and cancellation cleanup. Hand-card inspection requests the
-existing `inspectMesh` callback; the inspection controller is still a separate planned extraction.
+injected `inspection.inspectMesh` callback. Inspection owns the preview and its controls; it uses
+the composition root's piece-view callback to hide or reveal the original table mesh.
 Other players' public fans remain laid out by `client.js`, but their temporary face-up cards are
 stored behind `hand.setRevealed()`/`revealedFor()`. That keeps Show data with the hand feature while
 leaving seat layout and public presence in the composition root.

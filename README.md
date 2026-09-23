@@ -571,7 +571,14 @@ public/
   admin.html/admin.js   site administration UI
   core.js               Three.js scene/camera/renderer plus CONFIG and LIGHTING
   graphics.js           textures, meshes, model loading, and the KIND registry
+  table/piece-view.js   mesh lifecycle, safe props, and interpolation
+  table/collider-debug.js  local GM collider visualization
+  table/ui-surfaces.js   reusable dialogs, sheets, clusters, and radial menus
+  table/whiteboard.js    whiteboard mesh, strokes, ownership, and controls
+  table/overlays.js      measurement overlays and board-surface placement
+  table/trays.js         personal tray visuals, controls, and camera travel
   table/hand.js         private hand rendering, Show controls, sorting, and card gestures
+  table/inspection.js   enlarged piece/card inspection and appearance controls
   controls.js           mouse/touch profiles converted to device-neutral intents
   audio.js/credits.js   local SFX/music playback and attribution manifests
   icons.js/equalize.js  shared icon behavior and early UI preference restoration
@@ -580,8 +587,9 @@ public/
   models/, sounds/      bundled models and sound effects
 ```
 
-The main game-client chain is `shared ← core ← graphics ← client`, with
-`client` also importing `controls` and `audio ← credits`. `table.html` loads
+The main game-client chain is `shared ← core ← graphics ← client`; `client`
+composes the focused `table/` controllers and also imports `controls` and
+`audio ← credits`. `table.html` loads
 `client.js` and `editor-panel.js`; `editor.html` redirects to its `?workshop=1` mode.
 The landing and admin pages
 are standalone (`landing.js` / `admin.js`, plain `fetch` to the HTTP API).
@@ -609,10 +617,9 @@ Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus a
   `SCENE_MAX_BYTES` (snapshot-size guard), `GRID_LIFT_MAX` (maximum grid height),
   `OVERLAY_MAX` / `OVERLAY_MAX_PER_PLAYER` (placed-template caps), and
   `ORPHAN_MIN_AGE_MS` (cleanup age guard).
-- **Whiteboard** — `WHITEBOARD_RES` and `WB` in `public/client.js` control canvas
-  resolution and physical size/placement. `WHITEBOARD_MAX_STROKES` exists in both
-  `server.js` and `public/client.js`; keep the two values equal so server history
-  and the client's replay mirror have the same cap.
+- **Whiteboard** — `RESOLUTION` and `BOARD` in `public/table/whiteboard.js` control canvas
+  resolution and physical size/placement. Replay and protocol limits come from shared
+  `WHITEBOARD_LIMITS` in `shared/overlays.js`, used by the client and server.
 - **Input and cameras** — `LEAN_AMOUNT` and `VIEW` in `public/client.js` control the
   Lean In offset and normal seat camera. `HAND_HOVER` in `public/table/hand.js`
   controls a dragged hand card's preview height; the tray camera and transition
