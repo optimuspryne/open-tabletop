@@ -144,6 +144,7 @@ function fixture() {
   const sent = [],
     inspected = [],
     meshes = [];
+  const feedback = [];
   const room = {
     state: {
       players: new Map([
@@ -190,6 +191,7 @@ function fixture() {
     getSessionId: () => 'me',
     inspectMesh: (_mesh, data) => inspected.push(data),
     syncControlGuide() {},
+    toast: (...args) => feedback.push(args),
     byId: (id) => ids.get(id),
     dragThreshold: 5,
     doc,
@@ -206,7 +208,20 @@ function fixture() {
     cancelDelay: (id) => timers.delete(id),
   });
   const cards = () => ids.get('hand').querySelectorAll('.handcard');
-  return { hand, ids, sortButton, cards, win, storage, timers, sent, inspected, meshes };
+  return {
+    hand,
+    ids,
+    sortButton,
+    cards,
+    win,
+    storage,
+    timers,
+    sent,
+    inspected,
+    meshes,
+    room,
+    feedback,
+  };
 }
 
 const sample = [
@@ -337,4 +352,26 @@ test('reorder drag commits DOM order and a cancelled play drag removes its previ
   assert.equal(f.hand.isDragging(), false);
   assert.equal(f.meshes.length, 0);
   assert.equal(f.ids.get('hand').classes.has('hand-dragging'), false);
+});
+
+test('hand binding restores private cards after reconnect and reports partial/stale drop undo', () => {
+  const f = fixture(),
+    messages = new Map();
+  f.room.onMessage = (type, fn) => messages.set(type, fn);
+  const send = f.room.send;
+  f.room.send = (type, data) => {
+    send(type, data);
+    if (type === 'handSync') messages.get('hand')(sample);
+  };
+  f.hand.bindRoom(f.room);
+  assert.equal(f.cards().length, 2);
+  assert.equal(f.sent.at(-1).type, 'handSync');
+  messages.get('dropUndone')({ restored: 1 });
+  assert.deepEqual(f.feedback.at(-1), ['Returned 1 card to your hand']);
+  messages.get('dropUndone')({ restored: 3 });
+  assert.deepEqual(f.feedback.at(-1), ['Returned 3 cards to your hand']);
+  messages.get('dropUndone')({ restored: 0 });
+  assert.deepEqual(f.feedback.at(-1), ['Those cards are no longer on the table', 'x']);
+  messages.get('hand')(null);
+  assert.equal(f.cards().length, 0);
 });

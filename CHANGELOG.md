@@ -16,6 +16,10 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ### Changed
 - Wait for a new Proxmox LXC's IPv4 address and default route before installing packages,
   rebooting the container once if networking is not ready and failing clearly if it remains offline.
+- Split client bootstrap into feature-owned piece, hand, inspection, chat, private notebook,
+  scoreboard/room-notes, timer, membership, and library-response bindings. Reuse existing mesh
+  and row builders while retaining explicit patch order, replay requests, and session handling;
+  add lifecycle/replay and desktop/touch panel regression coverage.
 - Extract table/grid presentation, scale and lighting controls, lighting drafts, graphics-quality
   UI, and room-setting bindings into a client controller; isolate skybox loading, resolution,
   and texture cleanup in a separate controller, with unit and desktop/touch component coverage.

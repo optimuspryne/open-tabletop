@@ -171,3 +171,114 @@ test('snapshot sampling interpolates position and orientation between buffered s
   assert.deepEqual(mesh.quaternion.target, [0, 1, 0, 0]);
   assert.equal(mesh.quaternion.fraction, 0.5);
 });
+
+test('room bindings hydrate pieces, follow replacement/count patches and clean up in order', () => {
+  const meshes = new Map(),
+    buffers = new Map(),
+    listeners = new Map(),
+    events = [];
+  const piece = (type, props = '{}') => ({
+    type,
+    props,
+    count: 10,
+    owner: '',
+    x: 1,
+    y: 2,
+    z: 3,
+    qx: 0,
+    qy: 0,
+    qz: 0,
+    qw: 1,
+  });
+  const pieces = new Map([
+    ['deck', piece('deck')],
+    ['model', piece('deck', '{"model":"bag"}')],
+    ['stack', piece('dispenser')],
+    ['board', piece('board', '{"model":"board","box":[2,0.3,2]}')],
+  ]);
+  let remove,
+    time = 100;
+  const cb = (object) => ({
+    pieces: {
+      onAdd: (fn) => pieces.forEach(fn),
+      onRemove: (fn) => {
+        remove = fn;
+      },
+    },
+    listen(key, fn) {
+      if (!listeners.has(object)) listeners.set(object, new Map());
+      listeners.get(object).set(key, fn);
+    },
+  });
+  const view = createPieceView({
+    scene: { add() {}, remove: () => events.push('scene remove') },
+    meshes,
+    buffers,
+    kinds: Object.fromEntries(
+      ['deck', 'dispenser', 'board'].map((type) => [type, { mesh: testMesh }]),
+    ),
+    physics: { deck: { mass: 1 }, dispenser: { mass: 0 }, board: { mass: 0 } },
+    deckHeight,
+    createQuaternion: quaternion,
+    refreshCollider: () => events.push('collider'),
+    isInspected: () => false,
+    now: () => time,
+  });
+  view.bindRoom({ state: { pieces } }, cb, {
+    onHydration: () => events.push('hydrate'),
+    onOwner: (id, owner) => events.push([id, owner]),
+    onBoardTop: (height) => events.push(['board top', height]),
+    onRemove: (id) => {
+      assert.ok(meshes.has(id));
+      events.push('feature cleanup');
+    },
+    disposeSurface: (id) => {
+      assert.equal(meshes.has(id), false);
+      assert.ok(buffers.has(id));
+      events.push('surface');
+    },
+  });
+  assert.equal(meshes.size, 4);
+  assert.deepEqual(events.at(-1), ['board top', 0.6]);
+  assert.equal(meshes.get('deck').mesh.userData.id, 'deck');
+  assert.equal(meshes.get('deck').mesh.castShadow, true);
+  assert.equal(meshes.get('board').mesh.castShadow, false);
+  assert.deepEqual(buffers.get('deck')[0], {
+    t: 100,
+    x: 1,
+    y: 2,
+    z: 3,
+    qx: 0,
+    qy: 0,
+    qz: 0,
+    qw: 1,
+  });
+  const deck = pieces.get('deck'),
+    old = meshes.get('deck').mesh;
+  listeners.get(deck).get('props')();
+  const current = meshes.get('deck').mesh;
+  assert.notEqual(current, old);
+  deck.count = 3;
+  listeners.get(deck).get('count')(3);
+  assert.equal(current.scale.y, deckHeight(3));
+  assert.equal(old.scale.y, deckHeight(10));
+  assert.equal(listeners.get(pieces.get('model')).has('count'), false);
+  deck.owner = 'remote';
+  listeners.get(deck).get('owner')();
+  assert.deepEqual(events.at(-1), ['deck', 'remote']);
+  const stack = meshes.get('stack').mesh;
+  listeners.get(pieces.get('stack')).get('count')();
+  assert.notEqual(meshes.get('stack').mesh, stack);
+  for (let i = 0; i < 30; i++) {
+    time++;
+    view.recordState({ pieces });
+  }
+  assert.equal(buffers.get('deck').length, 24);
+  assert.equal(buffers.get('deck').at(-1).t, 130);
+  events.length = 0;
+  remove(deck, 'deck');
+  assert.deepEqual(events, ['hydrate', 'scene remove', 'feature cleanup', 'surface']);
+  assert.equal(buffers.has('deck'), false);
+  view.recordState({ pieces });
+  assert.equal(buffers.has('deck'), false);
+});

@@ -162,11 +162,14 @@ importing a room singleton:
   it also derives a bottom-left control guide from the current hovered/held piece or private-hand
   card and translates the camera plus OrbitControls target for view-relative keyboard panning.
 - **`public/table/piece-view.js`** — the first extracted table feature boundary. It owns defensive
-  piece-property parsing, dispenser mesh props, transform snapshots/interpolation, current-mesh deck
+  piece-property parsing, dispenser mesh props, piece add/remove/property bindings, patch
+  snapshots/interpolation, current-mesh deck
   height synchronization, and the common remove/build/configure/restore/add/replace lifecycle used
   by card, piece, and deck rebuilds. `client.js` retains the `meshes` and `buffers` maps and injects
   builders, physics policy, inspection visibility, collider refresh, and quaternion construction.
-  Inspection requests original-mesh hide/reveal through `setOriginalVisible`.
+  Initial piece meshes reuse the same configurator as replacements. Cross-feature owner/removal,
+  board-height, and collider-surface effects are injected callbacks. Inspection requests
+  original-mesh hide/reveal through `setOriginalVisible`.
 - **`public/table/collider-debug.js`** — local-only collider diagnostic ownership. It constructs and
   disposes non-raycastable Three.js shells from the shared collider specification, stores the
   device preference, enforces the GM rank gate, refreshes variable shapes, and follows live mesh
@@ -182,7 +185,8 @@ importing a room singleton:
 - **`public/table/presence.js`** — seats and seat-camera framing, public hand fans, player markers,
   the local YOU chip, held-piece labels, roster/turn presentation, and avatar/seat controls. It owns
   player state listeners and Show-fan messages, with explicit callbacks into the hand, hydration,
-  local role gating, and departure cleanup. The client keeps member administration, general role
+  local role gating, and departure cleanup. The membership controller owns member administration;
+  the client keeps general role
   gates, table/track resize orchestration, and Lean In; the render loop calls `presence.update()`
   after interpolation so held-piece labels follow the current meshes.
 - **`public/table/selection.js`** — local selection, Select-tool mode, marquee gestures, highlight
@@ -204,6 +208,16 @@ importing a room singleton:
   server-side validation remains authoritative.
 - **`public/table/trays.js`** — personal tray meshes, positioning, camera travel, and tray UI
   actions. The server remains responsible for tray physics, die ownership, and Scoop placement.
+- **`public/table/chat.js`** — public message replay, unread/autoscroll behavior, and send controls.
+- **`public/table/notebook.js`** — private notebook replay and debounced edits, separate from shared notes.
+- **`public/table/scoreboard.js`** — synchronized score rows and public room notes, edit affordances,
+  and controls, reusing the existing row builders. Focused room-note edits survive remote patches.
+- **`public/table/timer.js`** — controls and a local 100 ms display tick from the synchronized timer
+  anchor using shared `timerLive`; it preserves focused duration input and touch mini-readout behavior.
+- **`public/table/membership.js`** — server-pushed membership lists, pending indicators, role actions,
+  and unclaimed-hand assignment. Server authorization and root-level role gating stay unchanged.
+- **`public/table/library-bindings.js`** — library-list routing, asset errors, and Save Table feedback.
+  It normalizes dice lists for injected texture-picker updates; authoring stays in `editor-panel.js`.
 - **`public/table/ui-surfaces.js`** — reusable dialog focus, responsive sheets, clusters, drawer,
   radial menus, and hold-repeat behavior; feature-specific content remains in `client.js`.
 - **`public/controls.js`** — the input seam: mouse and touch profiles translate
@@ -1435,11 +1449,27 @@ all other faces remain private. Each player also has a
 GM-reorderable `order` independent of their physical seat. `state.turn` holds a
 session id, highlighted in the panel; "Next turn" walks that shared order.
 
+## Browser room-binding order
+
+`client.js` retains join/reconnect, controller composition, binding order, loading gates, session
+errors/identity/exits, and the render loop. Feature modules register their own state/message
+listeners. `hand`, chat, notebook, and library binders install replay handlers before requesting
+private cards, chat history, private notes, or dice finishes. Library responses are ready before
+`window.onOttRoom` hands the session to the editor panel. Shared room settings, membership, and
+scoreboard binders retain the optional-schema guard and explicit initial hydration.
+
+Patch dispatch remains ordered: `pieceView.recordState`, whiteboard synchronization, tray
+synchronization, then skybox synchronization. Piece add/remove callbacks update loading readiness;
+removal still releases inspection/selection/held labels and collider surfaces before dropping the
+snapshot buffer. General UI wiring remains at the root for later composition cleanup; the local
+piece-drag, ping, and audiovisual binders stay beside their current state owners.
+
 ## Private-hand controller boundary
 
 The server still keeps card faces outside synchronized room state and sends each player their
-own hand through the private `hand` message. `public/client.js` forwards that message to
-`hand.setCards()` and requests `handSync` after reconnect; the extraction does not change the
+own hand through the private `hand` message. `hand.bindRoom()` installs that handler before
+requesting `handSync` after reconnect and owns drop-undo feedback. `inspection.bindRoom()` handles
+private drawn-card previews; these bindings do not change the
 protocol or where hidden information lives.
 
 Within one browser, `createHand()` owns the private bar and its local modes: Show audience and

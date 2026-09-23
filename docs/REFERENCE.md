@@ -45,7 +45,7 @@ The codebase:
 | `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, interaction, contextual control guide, loading gate, render loop                                                             |
-| `public/table/piece-view.js`                                                                           | browser | Safe piece props, mesh replacement, transform snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
+| `public/table/piece-view.js`                                                                           | browser | Safe piece props, room lifecycle bindings, mesh replacement, patch snapshots/interpolation, and current-mesh deck-height synchronization                                                                             |
 | `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
 | `public/table/hand.js`                                                                                 | browser | Private hand state, rendering, Show audience/selection, rearrangement/sorting, collapse preference, inspection entry, and card pointer gestures                                                  |
 | `public/table/inspection.js`                                                                           | browser | Enlarged-piece/card previews, appearance controls, deferred double-clicks, placement, and pointer rotation |
@@ -56,6 +56,12 @@ The codebase:
 | `public/table/overlays.js`                                                                             | browser | Measurement shapes, board-surface height, selection, previews, movement, and room bindings |
 | `public/table/whiteboard.js`                                                                           | browser | Whiteboard mesh, strokes, ownership, camera/drawing mode, controls, and room messages |
 | `public/table/trays.js`                                                                                | browser | Personal tray meshes, seat placement, camera travel, dice actions, and controls |
+| `public/table/chat.js` | browser | Public chat replay, unread/autoscroll behavior, and send controls |
+| `public/table/notebook.js` | browser | Private notebook replay and debounced edits |
+| `public/table/scoreboard.js` | browser | Score rows, shared room notes, edit affordances, and state/control bindings |
+| `public/table/timer.js` | browser | Shared-anchor timer display, controls, and touch mini-readout |
+| `public/table/membership.js` | browser | Membership lists, pending indicator, role actions, and unclaimed-hand assignment |
+| `public/table/library-bindings.js` | browser | Library response routing, asset errors, and Save Table feedback |
 | `public/table/ui-surfaces.js`                                                                          | browser | Shared dialogs, responsive sheets, clusters, drawer, radial menus, and hold-repeat controls |
 | `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
 | `public/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
@@ -182,6 +188,7 @@ classDiagram
         +snapshot() / applyTransform() / syncDeckMeshHeight()
         +createPieceView() → rebuildCard/rebuildPiece/rebuildDeck/sample
         +setOriginalVisible(id, visible)
+        +bindRoom/recordState
     }
     class ColliderDebug["public/table/collider-debug.js"] {
         +createColliderDebug()
@@ -191,13 +198,14 @@ classDiagram
     class Hand["public/table/hand.js"] {
         +createHand(dependencies)
         +setCards/setRevealed/revealedFor/clearRevealed
-        +render/cancelGesture/bindShowControls
+        +render/cancelGesture/bindShowControls/bindRoom
         +isDragging/drag/hoverCard/controlRows
     }
     class Inspection["public/table/inspection.js"] {
         +createInspection(dependencies)
         +inspectMesh/enterInspect/releaseInspect/placeDrawn
         +handleDeferredClick/beginPointer/movePointer/endPointer
+        +bindRoom
     }
     class Overlays["public/table/overlays.js"] {
         +createOverlays(dependencies)
@@ -234,6 +242,29 @@ classDiagram
     class Trays["public/table/trays.js"] {
         +createTrays(dependencies)
         +sync/open/close/putAway/updateCamera
+    }
+    class Chat["public/table/chat.js"] {
+        +createChat(dependencies)
+        +bindRoom/bindControls
+    }
+    class Notebook["public/table/notebook.js"] {
+        +createNotebook(dependencies)
+        +bindRoom/bindControls
+    }
+    class Scoreboard["public/table/scoreboard.js"] {
+        +createScoreboard(dependencies)
+        +bindRoom/hydrate/bindControls/applyRole/render
+    }
+    class Timer["public/table/timer.js"] {
+        +createTimer(dependencies)
+        +bindControls
+    }
+    class Membership["public/table/membership.js"] {
+        +createMembership(dependencies)
+        +bindMessages/bindRoom/renderUnclaimed
+    }
+    class LibraryBindings["public/table/library-bindings.js"] {
+        +bindLibraryMessages(dependencies)
     }
     class UiSurfaces["public/table/ui-surfaces.js"] {
         +createUiSurfaces(dependencies)
@@ -291,6 +322,13 @@ classDiagram
     Overlays <.. Client
     Whiteboard <.. Client
     Trays <.. Client
+    Chat <.. Client
+    Notebook <.. Client
+    Scoreboard <.. Client
+    Timer <.. Client
+    Membership <.. Client
+    LibraryBindings <.. Client
+    Shared <.. Timer
     UiSurfaces <.. Client
     Inspection ..> PieceView : hide/reveal original
     Hand ..> Inspection : request preview callback
@@ -1820,8 +1858,8 @@ Pure property/transform exports:
   update, preventing a preceding props/cover rebuild from resizing a detached mesh.
 
 **`createPieceView({scene, meshes, buffers, kinds, physics, deckHeight, createQuaternion,
-refreshCollider, isInspected})`** returns `{rebuildCard, rebuildPiece, rebuildDeck,
-setOriginalVisible, sample}`.
+refreshCollider, isInspected, now?})`** returns `{rebuildCard, rebuildPiece, rebuildDeck,
+setOriginalVisible, sample, bindRoom, recordState}`.
 The rebuild methods share one remove/build/configure/restore/add/replace sequence while retaining
 their type-specific builders and shadow policy. Piece replacements keep an inspected original
 hidden; procedural decks reapply count-derived height, while modeled deck skins remain fixed.
@@ -1831,7 +1869,14 @@ including after a props-driven replacement.
 `sample(buffer, renderTime, mesh)` clamps outside the buffer and otherwise lerps position and
 slerps orientation between the snapshots bracketing the requested render time.
 
-The module receives the live maps rather than owning them during this first extraction. It imports
+**`bindRoom(room, cb, hooks)`** owns piece add/remove and owner/props/count listeners, reusing
+`configurePieceMesh` for initial meshes and replacements. Hooks expose hydration, owner changes,
+board height, feature cleanup, and collider-surface disposal; the client coordinates inspection,
+selection, and presence without sharing their internal state. Deck count updates always resolve
+the current mesh. **`recordState(state)`** records one timestamp per patch and caps each existing
+piece buffer at 24 snapshots; removed/missing buffers stay absent.
+
+The module receives the live maps rather than owning them. It imports
 neither `client.js` nor a mutable room, so later ownership moves can happen without a service
 locator or circular dependency.
 
@@ -1862,6 +1907,8 @@ The browser composition root injects room/session access, scene and card builder
 helpers, inspection entry, and the control-guide refresh callback; the module does not import a
 room singleton or the client runtime.
 
+- **`bindRoom(room)`** installs the private `hand` handler before requesting `handSync`, and
+  handles partial/stale `dropUndone` feedback through injected `toast`.
 - **`setCards(cards)`** receives the private `hand` message and calls the controller's
   `renderHand` helper. **`render()`** restores the bar after closing a hand-card inspection.
 - **`setRevealed(sid, cards)`**, **`revealedFor(sid)`**, and **`clearRevealed(sid)`** maintain the
@@ -1894,6 +1941,9 @@ and hand-restoration callback; it does not import `client.js` or hand state.
   composition root read-only mode checks. **`setDiceTextures(textures)`** refreshes the
   inspector's custom-finish chips after a late `diceList` message.
 
+**`bindRoom(room)`** handles private `inspectCard` delivery using the existing card builder and
+`inspectMesh` path, preserving front/back/tile/geometry without adding it to public piece state.
+
 ## `public/table/presence.js` — player presence
 
 **`createPresence(dependencies)`** owns the local seat, seat layouts, public-fan groups, standing
@@ -1925,7 +1975,8 @@ in `client.js`.
 `test/presence.js` covers initial/replayed player hydration, resize and seat framing, fans/reveals,
 property changes, turn/title presentation, departures, labels, and avatar messages. Component parity
 checks the real roster and turn-order controls in desktop and touch layouts. The client retains
-room joining, track resize orchestration, Lean In, and generic seat-popover mechanics.
+room joining, track resize orchestration, Lean In, and generic seat-popover mechanics; unclaimed
+hand lists are refreshed through the membership controller.
 
 ## `public/table/selection.js` — local multi-selection
 
@@ -2025,6 +2076,26 @@ mapping/color, disposal, invalid descriptors, and callback races.
 **`BUILTIN_SKIES`** exports the existing catalog; the client publishes it as `window.OTT_BUILTIN_SKIES`
 for the library. Asset selection stays in `editor-panel.js`, and synchronized refs remain server-owned.
 
+## Table panels and library response bindings
+
+These controllers receive explicit room/DOM dependencies, reuse `rows.js` builders where relevant,
+and preserve the existing messages and server authorization:
+
+| Module / factory | API and ownership |
+| --- | --- |
+| `chat.js` / `createChat` | `bindRoom` installs `chatMsg`/`chatLog` before requesting history; `bindControls` sends trimmed text by button or Enter. Internal `addChatMsg` retains unread and conditional autoscroll behavior. |
+| `notebook.js` / `createNotebook` | `bindRoom` installs private replay before `notebookSync`; `bindControls` debounces private edits by 400 ms. |
+| `scoreboard.js` / `createScoreboard` | `bindRoom` watches score rows and shared notes, including late nested-schema hydration; `hydrate`, `render`, `applyRole`, and `bindControls` handle row rendering, helper/GM affordances, and edits. Shared notes debounce by 400 ms and flush on blur without overwriting focused input. |
+| `timer.js` / `createTimer` | `bindControls` wires timer commands and a 100 ms local tick. Internal `fmtTime` formats shared `timerLive` values; the tick mirrors remote mode/running state, updates the touch mini-readout, and preserves focused duration input. |
+| `membership.js` / `createMembership` | `bindMessages` handles `memberList`, `bindRoom` watches unclaimed-hand changes, and `renderUnclaimed` refreshes recipient choices when presence changes. Existing rows send admit/kick/role/reassignment requests. |
+| `library-bindings.js` / `bindLibraryMessages` | Routes deck/board/prop/scene/mat/sky/dice lists to the current editor hook, installs the dice handler before `listDice`, reports asset/scene/sky errors, and restores Save Table feedback after 1.5 seconds. Dice lists are normalized before the injected texture callback. Asset outage alerts retain their five-second throttle. |
+
+Private notebook content remains distinct from synchronized room notes. Root-level role gates,
+room joining, and library authoring remain outside these controllers. Each binder is called once
+for the joined page session; replay registration precedes requests. `test/room-bindings.js` covers
+notebook replay/debouncing and library routing/errors/save feedback; component parity exercises
+real desktop/touch chat, scores, notes, membership, and timer controls, including mobile sheets.
+
 ## `public/table/ui-surfaces.js` — shared UI mechanics
 
 **`createUiSurfaces(dependencies)`** returns `wireDialog`, `isSheet`, `openAsSheet`, `clearSheet`,
@@ -2037,30 +2108,27 @@ responsive presentation, and interaction mechanics without owning feature-specif
 
 Connects to the `table` room — or the admin-only **`editor`** room when
 `table.html?workshop=1` sets `window.OTT_EDITOR`, handing the live room to the panel via
-`window.onOttRoom`. Reconnect token in `sessionStorage`. The client state listeners
-create/update/remove `meshes` and track `boardTopY` (for the drop marker); `presence.bindRoom`
-owns player, turn, and room-name presentation. `roomSettings.bindRoom` owns table appearance,
-lighting, and scale/grid listeners. The client forwards state patches to `skybox.sync` and
-`trays.sync` (one tray mesh per enabled seat), and retains the Members "Unclaimed hands" list
-listeners. Direct messages: `hand` → `hand.setCards`,
-`dealt` (adopt a dealt card), `inspectCard` → `inspection.inspectMesh`, `notebook`
-(restore your private notes), `showFan` → `presence.bindMessages` (updates hand-owned reveal data
-and redraws the public fan), `ping` (spawn an attention marker), **`sfx`** (a shared
-sound cue → `playSfx`) / **`shuffled`** (riffle animation + shuffle cue), **`chatMsg`** (append
-a chat line) / **`chatLog`** (replay the backlog), **`stateSaved`** (flash the Save
-Table State button), `notice` (a server-pushed toast — e.g. the piece cap is full), `memberList` → the Members panel (with the pending-join pulse),
-`whoami` → sets `myIsAdmin` and toggles `body.not-admin` (hides library-creation
-UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList`
-(library listings, keyed by **id**; also fanned out to the editor panel via
-`window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
-reshape/reset/members gm+). Remaining game-play and room-shell wiring lives here (spawn,
-grab, reset, plus the notebook and timer panels); inspection, presence, selection, room settings,
-skybox resolution, whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
-and the View Library / Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
-`window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
-**`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,
-transform application, interpolation, and replacement restoration to the composed
-`public/table/piece-view.js` controller while `client.js` retains buffer ownership and frame order.
+`window.onOttRoom`. Reconnect token in `sessionStorage`. The composition root invokes
+`pieceView.bindRoom` for piece lifecycle/property listeners, `presence.bindRoom` for player/turn
+presentation, and settings, scoreboard, and membership binders for their state. The existing
+optional-schema guard surrounds settings/scores/unclaimed bindings, followed by initial hydration.
+Patch delivery remains ordered: `pieceView.recordState`, whiteboard, trays, then skybox.
+
+Private `hand`/`dropUndone` delivery belongs to `hand.bindRoom`; `inspectCard` belongs to
+`inspection.bindRoom`, and `showFan` to `presence.bindMessages`. Chat and notebook install their
+replay handlers before requesting history. `bindLibraryMessages` routes asset lists and errors
+and Save Table feedback before the editor-panel handoff. Membership owns server-pushed lists
+and pending indicators. The root's local `bindPieceDrag` adopts or releases `dealt` responses
+against the live gesture; `bindPings` and `bindTableEffects` connect attention markers, shuffle
+animation, and shared sounds to the existing effect state.
+
+Session-wide `serverError`, `notice`, `whoami`, `roomClosed`, `kicked`, `accessRevoked`, and leave
+handling stay at the root. **`applyRole`** gates the shell and delegates score/notes affordances to
+`scoreboard.applyRole`. Join/reconnect, loading/exit handling, shared maps, input/drag state, audio
+preferences, generic UI composition, and the ordered render loop also remain there. Asset
+creation and library pickers stay in `editor-panel.js`; the shared DOM helpers remain
+**`byId`/`qs`/`qsa`**. Snapshot recording, transform application, interpolation, and replacement
+restoration delegate to `pieceView` while the root retains buffer ownership and frame order.
 
 For non-modeled decks, the synchronized `count` listener calls
 **`syncDeckMeshHeight(meshes, id, count, deckHeight)`** from `public/table/piece-view.js`. The
@@ -2134,15 +2202,15 @@ slots, staggered to avoid z-fighting. The private bar remains in the hand contro
 labels and client-owned pings share the `nameTag` texture builder.
 
 Presence also renders the **"⏳ Waiting on {name}"** row for a resumed turn whose owner has not
-returned. `renderUnclaimed` stays in the client and builds the Members panel's Unclaimed hands
+returned. `membership.renderUnclaimed` builds the Members panel's Unclaimed hands
 list, including the **"Give to…"** picker that sends `reassignHand`; presence invokes its refresh
 callback when players join or leave.
 
 ### Chat, sound & music
 
-- **`addChatMsg(m)`** appends a public-chat line (auto-scroll if at bottom, unread
-  dot on the Chat button); the input sends `chat` and the panel requests `chatLog`
-  on open. Sender names render via `textContent`, so a name can't inject markup.
+- The chat controller's **`addChatMsg(m)`** appends a public-chat line (auto-scroll if at bottom,
+  unread dot on the Chat button); its input sends `chat` and its binder requests `chatLog`
+  after registering replay handlers on join/reconnect. Sender names render via `textContent`, so a name can't inject markup.
 - The top-right **Music** pane provides playback, next, shuffle, and track picking;
   **Settings → Sounds** holds SFX/music volume and mute, while its credits view is
   built from `MUSIC_CREDIT` + `SFX_CREDITS` + `LIB_CREDITS`. `resumeAudio` is armed on the

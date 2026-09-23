@@ -38,18 +38,7 @@ import {
   gridMesh,
 } from './graphics.js';
 import { applyIcons, setIcon, initTip, wirePopGroups } from './icons.js';
-import {
-  chatRow,
-  emptyRow,
-  makeButton,
-  memberRow,
-  rankOf,
-  scoreEmptyRow,
-  scoreRow,
-  toastContent,
-  unclaimedHead,
-  unclaimedRow,
-} from './rows.js';
+import { makeButton, rankOf, toastContent } from './rows.js';
 import { reanchorOffset } from './drag.js';
 import { clickRoute } from './clicks.js';
 import { colliderSpec } from '/shared/collider-spec.js';
@@ -62,27 +51,23 @@ import { createHand } from './table/hand.js';
 import { createInspection } from './table/inspection.js';
 import { createSelection } from './table/selection.js';
 import { createPresence } from './table/presence.js';
+import { createChat } from './table/chat.js';
+import { createNotebook } from './table/notebook.js';
+import { createScoreboard } from './table/scoreboard.js';
+import { createTimer } from './table/timer.js';
+import { createMembership } from './table/membership.js';
+import { bindLibraryMessages } from './table/library-bindings.js';
 import { createRoomSettings } from './table/room-settings.js';
 import { BUILTIN_SKIES, createSkybox } from './table/skybox.js';
-import {
-  applyTransform,
-  createPieceView,
-  meshPropsOf,
-  pieceProperty,
-  piecePropsOf,
-  snapshot,
-  syncDeckMeshHeight,
-} from './table/piece-view.js';
+import { createPieceView, meshPropsOf, pieceProperty, piecePropsOf } from './table/piece-view.js';
 import {
   KINDS as PHYS,
-  BOARDS,
   DIE_SIDES,
   DICE_SETS,
   DICE_FINISHES,
   DICE_FINISH_FALLBACK,
   readableInk,
   deckHeight,
-  timerLive,
   formatMeasure,
   dispenserDefinition,
   gridActive,
@@ -326,21 +311,6 @@ function initPanels() {
 }
 initPanels();
 
-// Append one chat message to the log; auto-scroll if the reader's at the bottom,
-// and flag the Tools button as unread when the panel's closed.
-function addChatMsg(m) {
-  const log = byId('chatLog');
-  if (!log || !m) return;
-  const mine = (m.from || '') === (byId('myName')?.textContent || '').trim();
-  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
-  log.appendChild(chatRow(m, { mine }));
-  if (atBottom) log.scrollTop = log.scrollHeight;
-  const chatBtn = byId('chatBtn'),
-    reg = byId('regionTL');
-  const chatShowing = reg && !reg.hidden && reg.querySelector('.pane[data-pane="chat"].on');
-  if (!chatShowing && chatBtn) chatBtn.classList.add('hasUnread');
-}
-
 // A brief confirmation for actions that have no visible dialog (drop hand, …).
 let toastTimer = null;
 function toast(text, icon = 'check', action = null) {
@@ -404,7 +374,7 @@ const colliderDebug = createColliderDebug({
   colliderSpec,
   storage: localStorage,
 });
-const { rebuildCard, rebuildPiece, rebuildDeck, setOriginalVisible, sample } = createPieceView({
+const pieceView = createPieceView({
   scene,
   meshes,
   buffers,
@@ -415,6 +385,7 @@ const { rebuildCard, rebuildPiece, rebuildDeck, setOriginalVisible, sample } = c
   refreshCollider: (id, piece) => colliderDebug.refresh(id, piece),
   isInspected: (id) => inspection.isInspecting(id),
 });
+const { setOriginalVisible, sample } = pieceView;
 
 function syncColliderDebugButton() {
   const button = byId('colliderToggle');
@@ -567,6 +538,17 @@ const roomSettings = createRoomSettings({
   setIcon,
 });
 
+const chat = createChat({ getRoom: () => room, byId });
+const notebook = createNotebook({ getRoom: () => room, byId });
+const scoreboard = createScoreboard({ getRoom: () => room, getRank: () => myRank, byId });
+const timer = createTimer({ getRoom: () => room, byId, setIcon });
+const membership = createMembership({
+  getRoom: () => room,
+  getSessionId: () => mySession,
+  byId,
+  applyIcons,
+});
+
 (async () => {
   const client = new Client(location.origin.replace(/^http/, 'ws'));
   const params = new URLSearchParams(location.search);
@@ -603,89 +585,27 @@ const roomSettings = createRoomSettings({
   }
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
 
-  cb(room.state).pieces.onAdd((piece, id) => {
-    noteSceneHydration();
-    const mesh = KIND[piece.type].mesh(meshPropsOf(piece, id));
-    const castsShadow = PHYS[piece.type].mass > 0;
-    applyTransform(mesh, piece);
-    mesh.traverse((node) => {
-      // stamp the id on the group AND its children, so picking works
-      node.userData.id = id;
-      if (node.isMesh) {
-        node.castShadow = castsShadow;
-        node.receiveShadow = true;
-      }
-    });
-    scene.add(mesh);
-    meshes.set(id, { mesh, type: piece.type });
-    buffers.set(id, [snapshot(performance.now(), piece)]);
-    colliderDebug.refresh(id, piece);
-    cb(piece).listen(
-      'owner',
-      () => {
-        // name tag while held; also drop it from my selection if someone else grabs it
-        presence.updateHeldLabel(id, piece.owner);
-        if (piece.owner && piece.owner !== mySession && selection.has(id)) selection.remove(id);
-      },
-      false,
-    );
-
-    if (piece.type === 'deck') {
-      // The extruded prism is unit-height; scale Y to reflect how many cards remain. A modeled deck
-      // skin (bag/box) is a fixed shape, so leave it alone — it looks the same whatever the count.
-      const modeled = !!pieceProperty(piece, 'model', false);
-      if (!modeled) {
-        const setDeckHeight = (count) => {
-          syncDeckMeshHeight(meshes, id, count, deckHeight);
-          colliderDebug.refresh(id, piece);
-        };
-        setDeckHeight(piece.count);
-        cb(piece).listen('count', setDeckHeight);
-      }
-      // Re-render when props change: an open tile set's cover follows its top tile, and a skin's
-      // tints can be edited. (The height scale is re-applied inside rebuildDeck.)
-      cb(piece).listen('props', () => rebuildDeck(id, piece), false);
-    }
-    if (piece.type === 'card') {
-      // Rebuild the card mesh when its props change (front revealed/hidden on flip).
-      cb(piece).listen('props', () => rebuildCard(id, piece), false);
-    }
-    if (piece.type === 'die' || piece.type === 'prop') {
-      cb(piece).listen('props', () => rebuildPiece(id, piece), false); // recolor / prop tweaks
-    }
-    if (piece.type === 'dispenser') {
-      // Rebuild the stack body when it dispenses (count drops) so its height tracks the amount left,
-      // and when its props change (color/team edited via inspect) so the new tint shows.
-      cb(piece).listen('count', () => rebuildPiece(id, piece), false);
-      cb(piece).listen('props', () => rebuildPiece(id, piece), false);
-    }
-    if (piece.type === 'board') {
-      // Remember the board's top surface height so the drop marker sits on it.
-      const boardProps = JSON.parse(piece.props || '{}');
-      const builtin = boardProps.board && BOARDS[boardProps.board];
-      const box = builtin
-        ? builtin.box
-        : boardProps.model && Array.isArray(boardProps.box)
-          ? boardProps.box
-          : null;
-      boardTopY = box ? box[1] * 2 : 0.1;
-    }
-  });
-
-  cb(room.state).pieces.onRemove((piece, id) => {
-    noteSceneHydration();
-    const entry = meshes.get(id);
-    if (entry) scene.remove(entry.mesh);
-    colliderDebug.remove(id);
-    if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
-    if (inspection.isInspecting(id)) inspection.releaseInspect();
-    presence.updateHeldLabel(id, ''); // drop its name tag if any
-    selection.remove(id); // never keep a removed piece selected
-    meshes.delete(id);
-    const surface = boardDropSurfaces.get(id);
-    if (surface) disposeColliderSurface(surface.root);
-    boardDropSurfaces.delete(id);
-    buffers.delete(id);
+  pieceView.bindRoom(room, cb, {
+    onHydration: noteSceneHydration,
+    onOwner: (id, owner) => {
+      presence.updateHeldLabel(id, owner);
+      if (owner && owner !== mySession && selection.has(id)) selection.remove(id);
+    },
+    onBoardTop: (height) => {
+      boardTopY = height;
+    },
+    onRemove: (id, piece) => {
+      colliderDebug.remove(id);
+      if (piece.type === 'board') boardTopY = 0;
+      if (inspection.isInspecting(id)) inspection.releaseInspect();
+      presence.updateHeldLabel(id, '');
+      selection.remove(id);
+    },
+    disposeSurface: (id) => {
+      const surface = boardDropSurfaces.get(id);
+      if (surface) disposeColliderSurface(surface.root);
+      boardDropSurfaces.delete(id);
+    },
   });
 
   overlays.bindRoom(room, cb, noteSceneHydration);
@@ -695,55 +615,26 @@ const roomSettings = createRoomSettings({
   // rate). The render loop plays these back interpolated and slightly delayed, so
   // motion stays smooth at any speed.
   room.onStateChange((state) => {
-    const now = performance.now();
-    state.pieces.forEach((piece, id) => {
-      const buf = buffers.get(id);
-      if (!buf) return;
-      buf.push(snapshot(now, piece));
-      if (buf.length > 24) buf.shift();
-    });
+    pieceView.recordState(state);
     whiteboard.sync(state.whiteboard); // board visual, ownership, and holder status
     trays.sync(state.trays); // reflect personal trays appearing / being put away
     skybox.sync(state.skybox); // reflect the room's skybox
   });
 
-  room.onMessage('hand', (cards) => {
-    hand.setCards(cards);
-  }); // your private hand — never seen by other clients
-  room.send('handSync'); // re-fetch our hand now the handler is ready (onJoin's send is missed on reconnect)
-  room.onMessage('diceList', (list) => {
-    diceTextures = Array.isArray(list) ? list : []; // the custom dice-texture library
-    refreshTextureChips();
-    if (window.onLibraryList) window.onLibraryList('dice', diceTextures); // editor library list
+  hand.bindRoom(room);
+  bindLibraryMessages(room, {
+    onDiceTextures: (list) => {
+      diceTextures = list;
+      refreshTextureChips();
+    },
+    byId,
+    setIcon,
+    setBtnLabel,
   });
-  room.send('listDice'); // load the finish pickers' custom-texture chips (also refreshed on saves)
   presence.bindMessages(room);
-  room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
-  room.onMessage('chatMsg', (m) => addChatMsg(m));
-  room.onMessage('chatLog', ({ log } = {}) => {
-    const el = byId('chatLog');
-    if (el) el.replaceChildren();
-    (log || []).forEach(addChatMsg);
-  }); // late-join replay
-  room.send('chatLog'); // refresh/reconnect: fetch room-memory history after the handler is ready
-  room.onMessage('notebook', (text) => {
-    byId('notesText').value = text || '';
-  }); // private room-memory notes for this account
-  room.send('notebookSync');
-  room.onMessage('skyList', (list) => {
-    if (window.onLibraryList) window.onLibraryList('sky', list || []);
-  }); // fans to the library + skybox picker
-  room.onMessage('skyError', ({ message } = {}) => {
-    const e = byId('skyErr');
-    if (e) e.textContent = message || 'Could not add that skybox.';
-  });
-  let lastAssetErrorAt = 0;
-  room.onMessage('assetError', ({ message } = {}) => {
-    const now = Date.now();
-    if (now - lastAssetErrorAt < 5000) return; // one refresh requests every asset kind; report one outage, not five alerts
-    lastAssetErrorAt = now;
-    alert(message || 'The library is temporarily unavailable.');
-  });
+  bindPings(room);
+  chat.bindRoom(room);
+  notebook.bindRoom(room);
   let lastServerErrorAt = 0;
   room.onMessage('serverError', ({ message } = {}) => {
     const now = Date.now();
@@ -758,10 +649,7 @@ const roomSettings = createRoomSettings({
   room.onMessage('notice', ({ text, icon } = {}) => {
     if (text) toast(text, icon || 'check'); // soft server-side heads-up (e.g. the piece cap)
   });
-  room.onMessage('memberList', (list) => {
-    renderMembers(list);
-    updateMembersPulse(list);
-  }); // panel data + pending-pulse
+  membership.bindMessages(room);
 
   // Library creation/editing is admin-only; hide those controls for everyone else,
   // leaving the spawn pickers + built-in shapes. (The server enforces it too.)
@@ -829,33 +717,9 @@ const roomSettings = createRoomSettings({
     };
   }
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
-  room.onMessage('shuffled', ({ id }) => {
-    startAnim(id, 'shuffle');
-    playSfx('shuffle');
-  }); // everyone sees + hears the riffle
-  room.onMessage('sfx', ({ type } = {}) => playSfx(type)); // shared cue (roll/flip/deal) broadcast by the server
-  // The undo may be partial (another player picked some up) or stale (30s window gone).
-  room.onMessage('dropUndone', ({ restored } = {}) => {
-    if (restored)
-      toast('Returned ' + restored + ' card' + (restored === 1 ? '' : 's') + ' to your hand');
-    else toast('Those cards are no longer on the table', 'x');
-  });
-  room.onMessage('inspectCard', ({ front, back, tile, geom }) =>
-    inspection.inspectMesh(cardMesh({ front, back, tile, geom }), { drawn: true, type: 'card' }),
-  ); // drawn card — front is ours alone; tile/geom → correct proportions
-  room.onMessage('dealt', ({ id }) => {
-    // a card you dragged off a deck — adopt it as the dragged piece
-    if (down && down.pendingDeal) {
-      down.id = id;
-      down.type = down.adoptType || 'card'; // 'card' from a deck, 'prop' from a dispenser
-      down.kind = KIND[down.type];
-      down.grabbed = true;
-      down.pendingDeal = false;
-      room.send('move', { id, x: hit.x, y: hit.y, z: hit.z });
-    } else {
-      room.send('release', { id, v: [0, 0, 0] }); // gesture already ended — just drop it
-    }
-  });
+  bindTableEffects(room);
+  inspection.bindRoom(room);
+  bindPieceDrag(room);
 
   presence.bindRoom(room, cb);
 
@@ -865,22 +729,14 @@ const roomSettings = createRoomSettings({
   // by schema and fires once they arrive. renderScores guards the empty window.
   // The try/catch only covers a theoretical old server missing these fields.
   try {
-    cb(room.state).scores.onAdd((row) => {
-      renderScores();
-      cb(row).listen('score', renderScores, false);
-      cb(row).listen('label', renderScores, false);
-    });
-    cb(room.state).scores.onRemove(() => renderScores());
-    cb(room.state).listen('notes', updateRoomNotes, false);
+    scoreboard.bindRoom(room, cb);
     roomSettings.bindRoom(room, cb);
-    cb(room.state).unclaimed.onAdd(() => renderUnclaimed());
-    cb(room.state).unclaimed.onRemove(() => renderUnclaimed());
+    membership.bindRoom(room, cb);
   } catch (e) {
     /* older server without these fields — feature stays inert */
   }
-  renderScores();
-  updateRoomNotes();
-  renderUnclaimed();
+  scoreboard.hydrate();
+  membership.renderUnclaimed();
   roomSettings.hydrate();
   skybox.sync(room.state.skybox); // include the room's initial environment in the loading gate
   setTableVisible(true); // reveal only after the joined room's complete table appearance is applied
@@ -920,39 +776,9 @@ const roomSettings = createRoomSettings({
     byId('roomGrp').hidden = true;
     if (confirm('Reset the table? This clears all pieces.')) room.send('reset');
   });
-  room.onMessage('deckList', (decks) => {
-    if (window.onLibraryList) window.onLibraryList('deck', decks);
-  });
-  room.onMessage('propList', (props) => {
-    if (window.onLibraryList) window.onLibraryList('prop', props);
-  });
   overlays.bindControls(); // Measure pane kind picker and clear actions
 
-  // Scene list → the Library's Scenes tab (via the hook); loading happens there.
-  room.onMessage('sceneList', (scenes) => {
-    if (window.onLibraryList) window.onLibraryList('scene', scenes);
-  });
-  room.onMessage('sceneError', ({ message } = {}) => alert(message || 'Could not save the scene.'));
   wire('roomSaveState', () => room.send('stateSave'));
-  room.onMessage('stateSaved', () => {
-    const b = byId('roomSaveState');
-    if (!b) return;
-    const label = b._saveLabel || b.querySelector('.lbl')?.textContent || 'Save Table';
-    b._saveLabel = label;
-    clearTimeout(b._saveFeedbackTimer);
-    setIcon(b, 'square-check');
-    setBtnLabel(b, 'Saved ✓');
-    b._saveFeedbackTimer = setTimeout(() => {
-      setIcon(b, 'device-floppy');
-      setBtnLabel(b, label);
-    }, 1500);
-  });
-  room.onMessage('boardList', (boards) => {
-    if (window.onLibraryList) window.onLibraryList('board', boards);
-  });
-  room.onMessage('matList', (mats) => {
-    if (window.onLibraryList) window.onLibraryList('mat', mats);
-  });
   selection.bindModeControls();
   trays.bindControls(); // visit/leave the tray, spawn dice, roll, scoop, and clear
   {
@@ -1003,9 +829,6 @@ const roomSettings = createRoomSettings({
   }
   wire('reset', () => room.send('reset'));
 
-  // Private notes: a personal scratchpad. Never synced — the server just holds the
-  // text so it survives a reconnect (see the 'notebook' message below).
-  const notesText = byId('notesText'); // Notes now opens via the shared-region cluster (see wireCluster below)
   // Collider diagnostics (Settings → UI): a GM-only, local overlay. It reconstructs the server's
   // current primitive from synchronized props/count and never changes room or physics state.
   {
@@ -1247,107 +1070,11 @@ const roomSettings = createRoomSettings({
       byId('tracksLink')?.classList.toggle('on', open);
     });
   }
-  {
-    // Public chat panel (Tools)
-    const input = byId('chatInput');
-    if (input && byId('chatSend')) {
-      const send = () => {
-        const t = input.value.trim();
-        if (t) {
-          room.send('chat', { text: t });
-          input.value = '';
-        }
-      };
-      byId('chatSend').onclick = send;
-      input.onkeydown = (e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          send();
-        }
-      };
-    }
-  }
-  let notesTimer = null;
-  notesText.addEventListener('input', () => {
-    // debounce so we persist without flooding the socket
-    clearTimeout(notesTimer);
-    notesTimer = setTimeout(() => room.send('notebook', { text: notesText.value }), 400);
-  });
+  chat.bindControls();
+  notebook.bindControls();
 
-  // Shared timer: controls just send commands; the readout is computed locally
-  // from the synced anchor (state.timer), so it ticks smoothly with no per-second
-  // patches. The interval also mirrors another client's changes into the controls.
-  const timerReadout = byId('timerReadout'),
-    timerToggle = byId('timerToggle');
-  const timerMode = byId('timerMode'),
-    timerDurRow = byId('timerDurRow'),
-    timerDur = byId('timerDur');
-  const durMs = () => (+timerDur.value || 0) * 60000;
-  const modeVal = () => {
-    const c = timerMode.querySelector('.libTab.on');
-    return c ? c.dataset.mode : 'up';
-  };
-  const setMode = (m) =>
-    timerMode
-      .querySelectorAll('.libTab')
-      .forEach((c) => c.classList.toggle('on', c.dataset.mode === m));
-  // Timer open/close is handled by the top-right cluster (wireCluster below); its live value also shows in the button (see the tick loop).
-
-  // Scoreboard + room notes content (now in the top-right region; opened via wireCluster)
-  if (byId('scoreRows')) {
-    byId('scoreAdd').onclick = () => {
-      const n = byId('scoreAddName');
-      room.send('score', { action: 'add', label: n.value.trim() || 'Player' });
-      n.value = '';
-    };
-    byId('scoreAddName').onkeydown = (e) => {
-      if (e.key === 'Enter') byId('scoreAdd').click();
-    };
-    byId('scoreClear').onclick = () => {
-      if (confirm('Clear the whole scoreboard?')) room.send('score', { action: 'clear' });
-    };
-    const roomNotesEl = byId('roomNotes');
-    let roomNotesTimer;
-    roomNotesEl.oninput = () => {
-      clearTimeout(roomNotesTimer);
-      roomNotesTimer = setTimeout(() => room.send('roomNotes', { text: roomNotesEl.value }), 400);
-    };
-    roomNotesEl.onblur = () => {
-      clearTimeout(roomNotesTimer);
-      room.send('roomNotes', { text: roomNotesEl.value });
-    };
-  }
-  timerToggle.onclick = () =>
-    room.send('timer', { action: room.state.timer.running ? 'pause' : 'start' });
-  byId('timerReset').onclick = () => room.send('timer', { action: 'reset' });
-  timerMode.querySelectorAll('.libTab').forEach(
-    (c) =>
-      (c.onclick = () => {
-        setMode(c.dataset.mode);
-        room.send('timer', { action: 'set', mode: c.dataset.mode, duration: durMs() });
-      }),
-  );
-  timerDur.onchange = () => room.send('timer', { action: 'set', mode: 'down', duration: durMs() });
-  setInterval(() => {
-    const t = room.state.timer;
-    const btnLbl = byId('timerBtn') && byId('timerBtn').querySelector('.lbl');
-    if (btnLbl) btnLbl.textContent = t ? fmtTime(timerLive(t, Date.now())) : '00:00';
-    const mini = byId('timerMini'); // touch top bar (7e slice 2): the value only, and only while running
-    if (mini) {
-      mini.hidden = !(t && t.running);
-      if (t && t.running) mini.textContent = fmtTime(timerLive(t, Date.now()));
-    }
-    const r = byId('regionTR');
-    const paneOpen = r && !r.hidden && r.querySelector('.pane[data-pane="timer"].on');
-    if (!paneOpen || !t) return; // nothing more to draw unless the timer pane is showing
-    timerReadout.textContent = fmtTime(timerLive(t, Date.now()));
-    setIcon(timerToggle, t.running ? 'player-pause' : 'player-play');
-    if (modeVal() !== t.mode) setMode(t.mode); // reflect another client's switch
-    timerDurRow.hidden = t.mode !== 'down';
-    if (document.activeElement !== timerDur) timerDur.value = Math.round(t.duration / 60000); // don't fight typing
-  }, 100);
-
-  // ---- Members (GM tools): admit / kick / promote — rendered into the dock's #memberSection ----
+  scoreboard.bindControls();
+  timer.bindControls();
 
   hand.bindShowControls();
 })().catch((err) => {
@@ -1374,6 +1101,23 @@ function showExit(msg) {
 }
 
 // ===== Interaction — click vs. drag; the meaning depends on the piece ========
+// Adoption must read the current gesture when the server responds, including after release.
+function bindPieceDrag(room) {
+  room.onMessage('dealt', ({ id }) => {
+    // a card you dragged off a deck — adopt it as the dragged piece
+    if (down && down.pendingDeal) {
+      down.id = id;
+      down.type = down.adoptType || 'card'; // 'card' from a deck, 'prop' from a dispenser
+      down.kind = KIND[down.type];
+      down.grabbed = true;
+      down.pendingDeal = false;
+      room.send('move', { id, x: hit.x, y: hit.y, z: hit.z });
+    } else {
+      room.send('release', { id, v: [0, 0, 0] }); // gesture already ended — just drop it
+    }
+  });
+}
+
 const ray = new THREE.Raycaster(),
   pointer = new THREE.Vector2();
 const GRAB_HEIGHT = CONFIG.grab.height; // float height when a piece is first grabbed (scroll to raise/lower)
@@ -1986,6 +1730,7 @@ const hand = createHand({
   syncControlGuide,
   byId,
   dragThreshold: CONFIG.input.handPx,
+  toast,
 });
 inspection = createInspection({
   THREE,
@@ -2032,7 +1777,7 @@ const presence = createPresence({
   setRevealed: hand.setRevealed,
   clearRevealed: hand.clearRevealed,
   onLocalRole: applyRole,
-  onPlayersChanged: renderUnclaimed,
+  onPlayersChanged: () => membership.renderUnclaimed(),
   onPlayerRemoved: (sid) => overlays.clearDragPreview(sid),
   onHydration: noteSceneHydration,
   byId,
@@ -2087,38 +1832,7 @@ function applyRole(role) {
     const mb = byId('membersBtn');
     if (mb) mb.hidden = true;
   } // no member mgmt in the workshop
-  applyBoardRole(); // scoreboard (helper+) and notes (gm+) edit affordances
-}
-
-// Scoreboard is helper+ editable, room notes GM+; everyone else sees them read-only.
-function applyBoardRole() {
-  const edit = byId('scoreEdit');
-  if (edit) edit.hidden = myRank < 1;
-  const notes = byId('roomNotes');
-  if (notes) notes.readOnly = myRank < 2;
-  renderScores();
-}
-
-function renderScores() {
-  const tbody = byId('scoreRows');
-  if (!tbody || !room || !room.state || !room.state.scores) return;
-  const canEdit = myRank >= 1;
-  const on = {
-    label: (id, label) => room.send('score', { action: 'label', id, label }),
-    adjust: (id, delta) => room.send('score', { action: 'adjust', id, delta }),
-    remove: (id) => room.send('score', { action: 'remove', id }),
-  };
-  tbody.replaceChildren();
-  room.state.scores.forEach((row, id) => tbody.appendChild(scoreRow(row, id, { canEdit, on })));
-  if (!room.state.scores.size) tbody.appendChild(scoreEmptyRow());
-}
-
-function updateRoomNotes() {
-  const el = byId('roomNotes');
-  if (!el || !room || !room.state) return;
-  if (document.activeElement === el) return; // don't stomp a GM mid-type
-  const notes = room.state.notes || '';
-  if (el.value !== notes) el.value = notes;
+  scoreboard.applyRole(); // scoreboard (helper+) and notes (gm+) edit affordances
 }
 
 // Hover readout: a small tooltip over the deck or dispenser under the cursor showing
@@ -2346,6 +2060,18 @@ function sendPing() {
     room.send('ping', { x: spot.x, z: spot.z });
   }
 }
+function bindPings(room) {
+  room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
+}
+
+function bindTableEffects(room) {
+  room.onMessage('shuffled', ({ id }) => {
+    startAnim(id, 'shuffle');
+    playSfx('shuffle');
+  }); // everyone sees + hears the riffle
+  room.onMessage('sfx', ({ type } = {}) => playSfx(type)); // shared cue (roll/flip/deal) broadcast by the server
+}
+
 function spawnPing(sid, x, z) {
   const player = room.state.players.get(sid);
   const color = player ? player.color : '#ffffff';
@@ -2413,16 +2139,6 @@ const overlays = createOverlays({
   byId,
 });
 
-// Format milliseconds as m:ss (or h:mm:ss past an hour), flooring to whole seconds.
-function fmtTime(ms) {
-  const total = Math.floor(ms / 1000);
-  const s = total % 60,
-    m = Math.floor(total / 60) % 60,
-    h = Math.floor(total / 3600);
-  const pad = (n) => String(n).padStart(2, '0');
-  return h ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
-}
-
 // Whiteboard owns its mesh, stroke history, camera mode, and room protocol.
 const whiteboard = createWhiteboard({
   THREE,
@@ -2454,58 +2170,6 @@ const trays = createTrays({
   getDieProps: myDieProps,
   byId,
 });
-
-// Pulse the Members button in the accent color while any join is pending, so a
-// GM sees new requests without opening the panel.
-function updateMembersPulse(list) {
-  const pending = list.some((m) => m.status === 'pending');
-  const dot = byId('memberPending');
-  if (dot) dot.hidden = !pending; // pending indicator in the dock
-  const sec = byId('memberSection');
-  if (sec) sec.classList.toggle('pulse', pending);
-}
-
-// Unclaimed hands from a loaded save whose owner hasn't returned. GM picks a
-// present player to hand each one to (server re-checks the GM rank).
-function renderUnclaimed() {
-  const box = byId('unclaimedHands');
-  if (!box) return;
-  box.replaceChildren();
-  const unclaimed = room.state.unclaimed;
-  if (!unclaimed || unclaimed.size === 0) return;
-  const present = [];
-  room.state.players.forEach((p, sid) => present.push([sid, p.name]));
-  present.sort((a, b) => (a[1] > b[1] ? 1 : a[1] < b[1] ? -1 : 0));
-  const on = {
-    assign: (userId, toSessionId) => room.send('reassignHand', { userId, toSessionId }),
-  };
-  box.appendChild(unclaimedHead());
-  unclaimed.forEach((name, userId) => box.appendChild(unclaimedRow(userId, name, { present, on })));
-}
-
-// The GM-only Members panel: the full membership (incl. offline/pending, from the
-// server's DB list) with admit/kick/promote controls. Buttons just send messages;
-// the server authorizes and pushes a fresh list back.
-function renderMembers(list) {
-  const ul = byId('memberList');
-  if (!ul) return;
-  ul.replaceChildren();
-  const me = room.state.players.get(mySession);
-  const myName = me ? me.name : '';
-  const myRank = rankOf(me ? me.role : 'player');
-  if (!list.length) {
-    ul.appendChild(emptyRow('No members.'));
-    return;
-  }
-  const on = {
-    admit: (m) => room.send('admit', { userId: m.userId }),
-    reject: (m) => room.send('kick', { userId: m.userId }),
-    setRole: (m, role) => room.send('setRole', { userId: m.userId, role }),
-    kick: (m) => room.send('kick', { userId: m.userId }),
-  };
-  for (const m of list) ul.appendChild(memberRow(m, { isSelf: m.username === myName, myRank, on }));
-  applyIcons(ul);
-}
 
 // ===== render loop — buffered snapshot interpolation ========================
 // Every piece is drawn ~DELAY ms in the past, interpolated between the two real
@@ -3025,7 +2689,7 @@ wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') })
         btn: sb,
         pane: 'score',
         onOpen: () => {
-          renderScores();
+          scoreboard.render();
         },
       },
       { btn: ab, pane: 'music' },

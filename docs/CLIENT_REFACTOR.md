@@ -5,7 +5,8 @@ overlay, and dice-tray controllers were extracted on 2026-09-22 and manually ver
 hand and inspection have also been extracted and manually verified. Phase 3 selection was
 completed and manually verified on 2026-09-23. Player presence was also completed and manually
 verified on 2026-09-23. Room settings and skybox were completed and manually verified on
-2026-09-23. Phase 3 is complete; feature-specific bootstrap binders are next.
+2026-09-23. Phase 3 is complete. Phase 4 feature-specific bootstrap binders were completed and
+manually verified on 2026-09-23. The input-router extraction is next.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -34,14 +35,16 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/controls.js` translates raw input-device events into device-independent intents.
 - `public/rows.js` builds reusable DOM rows from data and callbacks.
 - `public/icons.js` owns shared icon and overflow-menu behavior.
-- `public/table/piece-view.js` now owns safe piece props, shared mesh replacement, interpolation,
-  and current-mesh deck-height updates.
+- `public/table/piece-view.js` owns safe piece props, piece state listeners, shared mesh replacement,
+  patch snapshots, interpolation, and current-mesh deck-height updates.
 - `public/table/collider-debug.js` now owns the local diagnostic overlay and its preference.
 - `public/table/ui-surfaces.js` owns reusable dialogs, sheets, clusters, drawer, and radial controls.
 - `public/table/whiteboard.js` owns whiteboard placement, drawing, and room synchronization.
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
 - `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
-- `public/table/hand.js` owns the private hand, Show controls, sorting, and card gestures.
+- `public/table/hand.js` owns the private hand, its replay/messages, Show controls, sorting, and card gestures.
+- Chat, notebook, scoreboard/room notes, timer, membership, and library responses each have focused
+  feature modules and binders under `public/table/`.
 - `public/table/presence.js` owns seats and camera framing, public fans, player markers, held-piece
   labels, roster/turn presentation, avatar controls, and player room bindings.
 - `public/table/room-settings.js` owns table/grid presentation, scale and lighting controls,
@@ -81,6 +84,12 @@ public/
     presence.js             seats, public hands, markers, roster, and turn display
     room-settings.js        table/grid/lighting settings and graphics-quality UI
     skybox.js               background textures and local sky resolution
+    chat.js                 public message replay, unread state, and send controls
+    notebook.js             private notes replay and debounced edits
+    scoreboard.js           scores, shared room notes, and edit affordances
+    timer.js                shared-anchor display and timer controls
+    membership.js           member lists, pending indicators, unclaimed-hand assignment
+    library-bindings.js     asset lists/errors and Save Table feedback
     ui-surfaces.js          dialogs, sheets, clusters, drawer, and radial primitives
     input-router.js         semantic pointer and keyboard routing
 ```
@@ -362,9 +371,24 @@ decide what those intents mean in the application's current mode.
 
 ## Room bootstrap and message bindings
 
-The async bootstrap block beginning around `public/client.js:751` is roughly 1,800 lines. It joins
-the room but also wires pieces, overlays, players, settings, chat, timer, audio, notes, scores,
-cards, assets, and responsive UI.
+At the original sweep, the async bootstrap block around `public/client.js:751` was roughly 1,800
+lines and mixed joining with feature state, messages, and controls. Step 12 now delegates piece
+state to `pieceView.bindRoom`/`recordState`; private hand and drawn-card messages to `hand.bindRoom`
+and `inspection.bindRoom`; and chat, private notes, scores/room notes, timer, membership, and asset
+responses to focused feature modules. Existing presence, overlays, whiteboard, and settings binders
+remain in their original high-level order.
+
+Handlers precede `handSync`, `chatLog`, `notebookSync`, and `listDice` replay requests; library
+response routing is installed before the editor-panel handoff. The root still registers session
+errors, notices, admin identity, and exits, and coordinates patch delivery in the same order:
+piece snapshots, whiteboard, trays, then skybox. Cross-feature piece-removal effects remain
+explicit injected callbacks. Local `bindPieceDrag`, `bindPings`, and `bindTableEffects` functions
+keep registrations beside the interaction/effect state that will be considered during later
+composition cleanup. General shell, audio preferences, and responsive UI composition remain.
+
+This is an ownership refactor: no message, saved-state, privacy, or server authorization changes.
+Regression coverage exercises replay ordering, piece lifecycle/cleanup, library responses, notes
+debouncing, and the actual desktop/touch panels. Manual testing reported no regressions.
 
 Do not replace this with one large `network.js`; that would only move the monolith.
 
@@ -456,7 +480,10 @@ are attached through DOM APIs and are genuinely used.
 
 ### Phase 4: composition cleanup
 
-12. Split the bootstrap block into feature-specific room binders.
+12. Split the bootstrap block into feature-specific room binders. **Completed 2026-09-23;
+    manually verified.** `npm run check` passes (604 tests), `test:input` passes
+    (57 checks), and `test:components` passes in desktop and touch layouts.
+    Manual smoke tests reported no regressions.
 13. Simplify and extract the input router.
 14. Reduce `client.js` to joining, composing, binding, and rendering.
 

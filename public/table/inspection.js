@@ -529,7 +529,14 @@ export function createInspection({
     }
     return true;
   }
+  function bindRoom(room) {
+    room.onMessage('inspectCard', ({ front, back, tile, geom }) =>
+      inspectMesh(kinds.card.mesh({ front, back, tile, geom }), { drawn: true, type: 'card' }),
+    ); // drawn card — front is ours alone; tile/geom → correct proportions
+  }
+
   return {
+    bindRoom,
     isActive,
     isInspecting,
     isDrawn,

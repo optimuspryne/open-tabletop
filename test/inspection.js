@@ -44,7 +44,7 @@ function fixture({ appearance = false } = {}) {
       setPointerCapture: (id) => capture.push(['set', id]),
       releasePointerCapture: (id) => capture.push(['release', id]),
     },
-    kinds: { die: { mesh: () => cardMesh() } },
+    kinds: { die: { mesh: () => cardMesh() }, card: { mesh: cardMesh } },
     config: {
       inspect: { fit: 2, drop: 0, dist: 3 },
       input: { dblMs: 300, clickMs: 320, inspectPx: 4 },
@@ -181,4 +181,18 @@ test('inspected die color changes update the preview and send the same recolor m
   assert.equal(f.camera.children[0].children[0] === before, false);
   assert.equal(original.visible, false);
   assert.deepEqual(f.sent, [['recolor', { id: 'die-1', color: 0x336699, textColor: 0xf4f1ea }]]);
+});
+
+test('private inspectCard messages enter drawn-card inspection without exposing a shared piece', () => {
+  const f = fixture(),
+    messages = new Map();
+  f.inspection.bindRoom({ onMessage: (type, fn) => messages.set(type, fn) });
+  messages.get('inspectCard')({ front: 'A♠', back: 'red', tile: true, geom: { w: 1 } });
+  assert.equal(f.inspection.isActive(), true);
+  assert.equal(f.inspection.isDrawn(), true);
+  assert.equal(f.pieces.size, 0);
+  assert.equal(f.visuals.size, 0);
+  assert.equal(f.elements.get('drawActions').hidden, false);
+  f.inspection.releaseInspect();
+  assert.equal(f.inspection.isActive(), false);
 });

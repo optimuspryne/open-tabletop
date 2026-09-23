@@ -17,6 +17,7 @@ export function createHand({
   getSessionId,
   inspectMesh,
   syncControlGuide,
+  toast,
   byId,
   dragThreshold,
   doc = document,
@@ -642,11 +643,24 @@ export function createHand({
     }
   };
 
+  function setCards(cards) {
+    myHand = Array.isArray(cards) ? cards : [];
+    renderHand(myHand);
+  }
+  function bindRoom(room) {
+    room.onMessage('hand', setCards); // private delivery only
+    room.send('handSync'); // reconnect may miss onJoin's first delivery
+    // The undo may be partial (another player picked some up) or stale (30s window gone).
+    room.onMessage('dropUndone', ({ restored } = {}) => {
+      if (restored)
+        toast('Returned ' + restored + ' card' + (restored === 1 ? '' : 's') + ' to your hand');
+      else toast('Those cards are no longer on the table', 'x');
+    });
+  }
+
   return {
-    setCards(cards) {
-      myHand = Array.isArray(cards) ? cards : [];
-      renderHand(myHand);
-    },
+    setCards,
+    bindRoom,
     setRevealed(sid, cards) {
       if (cards?.length) revealed.set(sid, cards);
       else revealed.delete(sid);

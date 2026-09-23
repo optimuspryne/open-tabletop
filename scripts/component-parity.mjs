@@ -203,6 +203,107 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'room-binders',
+    root: '#regionTR',
+    expect: { selector: '#scoreRows tr', min: 1 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const { createChat } = await import('/table/chat.js');
+      const { createScoreboard } = await import('/table/scoreboard.js');
+      const { createMembership } = await import('/table/membership.js');
+      const { createTimer } = await import('/table/timer.js');
+      const { createUiSurfaces } = await import('/table/ui-surfaces.js');
+      const { applyIcons, setIcon } = await import('/icons.js');
+      const byId = (id) => document.getElementById(id);
+      const ui = createUiSurfaces();
+      const messages = new Map(), sent = [], listeners = new Map(), collections = {}, tasks = new Map();
+      let rank = 3, taskId = 0, tick;
+      const delay = (fn) => { tasks.set(++taskId, fn); return taskId; };
+      const cancelDelay = (id) => tasks.delete(id);
+      const state = { notes: 'Shared notes', players: new Map([['me', { name: 'Ada', role: 'owner' }],
+        ['other', { name: 'Bob', role: 'player' }]]), unclaimed: new Map([[7, 'Absent']]),
+        timer: { running: true, mode: 'up', base: 60000, since: 1000, duration: 120000 } };
+      const room = { state, onMessage: (key, fn) => messages.set(key, fn), send: (key, value) => {
+        sent.push([key, value]);
+        if (key === 'chatLog') messages.get('chatLog')({ log: [{ from: 'Ada', text: 'Restored', ts: 0 }] });
+      } };
+      const cb = (object) => ({
+        scores: { onAdd: (fn) => { collections.scoreAdd = fn; }, onRemove: (fn) => { collections.scoreRemove = fn; } },
+        unclaimed: { onAdd: (fn) => { collections.handAdd = fn; }, onRemove: (fn) => { collections.handRemove = fn; } },
+        listen: (key, fn) => {
+          if (!listeners.has(object)) listeners.set(object, new Map());
+          listeners.get(object).set(key, fn);
+        },
+      });
+      const button = (root, text) => [...root.querySelectorAll('button')].find((b) => b.textContent.trim() === text);
+      const chat = createChat({ getRoom: () => room, byId });
+      byId('myName').textContent = 'Ada'; chat.bindRoom(room); chat.bindControls();
+      assert(byId('chatLog').textContent.includes('Restored'), 'Chat replay was missed');
+      messages.get('chatLog')({ log: [{ from: 'Bob', text: '<b>literal</b>', ts: 0 }] });
+      assert(!byId('chatLog').textContent.includes('Restored') && !byId('chatLog').querySelector('b'), 'Chat replay or escaping failed');
+      assert(byId('chatBtn').classList.contains('hasUnread'), 'Hidden chat did not flag unread');
+      byId('chatInput').value = ' hello ';
+      byId('chatInput').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', cancelable: true }));
+      assert(sent.at(-1)[0] === 'chat' && sent.at(-1)[1].text === 'hello' && byId('chatInput').value === '', 'Chat Enter did not send');
+      const score = createScoreboard({ getRoom: () => room, getRank: () => rank, byId,
+        confirmAction: () => true, delay, cancelDelay });
+      score.bindRoom(room, cb); score.hydrate(); score.bindControls();
+      state.scores = new Map([['s1', { label: 'Team', score: 3 }]]);
+      const row = state.scores.get('s1'); collections.scoreAdd(row); score.applyRole();
+      assert(byId('scoreRows').querySelector('.scoreVal').textContent === '3', 'Late scoreboard hydration failed');
+      button(byId('scoreRows'), '+').click(); assert(sent.at(-1)[1].delta === 1, 'Score adjust did not send');
+      row.score = 5; listeners.get(row).get('score')();
+      assert(byId('scoreRows').querySelector('.scoreVal').textContent === '5', 'Score patch did not render');
+      byId('regionTR').hidden = false;
+      const showPane = (name) => byId('regionTR').querySelectorAll('.pane').forEach((p) => {
+        p.hidden = p.dataset.pane !== name; p.classList.toggle('on', p.dataset.pane === name);
+      });
+      showPane('score');
+      if (ui.isSheet()) {
+        byId('roomSheet').appendChild(byId('roomInfoBody'));
+        byId('roomSheet').hidden = false; ui.openAsSheet(byId('roomSheet'));
+      }
+      byId('roomNotes').focus();
+      assert(document.activeElement === byId('roomNotes'), 'Notes fixture did not open its input');
+      byId('roomNotes').value = 'draft';
+      state.notes = 'remote'; listeners.get(state).get('notes')();
+      assert(byId('roomNotes').value === 'draft', 'Remote notes stomped editing');
+      byId('roomNotes').dispatchEvent(new Event('input')); byId('roomNotes').blur();
+      assert(tasks.size === 0 && sent.at(-1)[0] === 'roomNotes' && sent.at(-1)[1].text === 'draft', 'Notes blur did not flush once');
+      listeners.get(state).get('notes')(); assert(byId('roomNotes').value === 'remote', 'Remote notes did not hydrate');
+      rank = 0; score.applyRole();
+      assert(!byId('scoreRows').querySelector('input') && byId('roomNotes').readOnly && byId('scoreEdit').hidden, 'Read-only score role failed');
+      rank = 3; score.applyRole();
+      byId('scoreAddName').value = 'New'; byId('scoreAdd').click(); assert(sent.at(-1)[1].label === 'New', 'Add score failed');
+      byId('scoreClear').click(); assert(sent.at(-1)[1].action === 'clear', 'Clear scores failed');
+      const members = createMembership({ getRoom: () => room, getSessionId: () => 'me', byId, applyIcons });
+      members.bindMessages(room); members.bindRoom(room, cb); members.renderUnclaimed();
+      messages.get('memberList')([{ userId: 9, username: 'Waiting', status: 'pending', role: 'player' }]);
+      assert(!byId('memberPending').hidden, 'Pending membership indicator missing');
+      button(byId('memberList'), 'Admit').click(); assert(sent.at(-1)[0] === 'admit' && sent.at(-1)[1].userId === 9, 'Admit did not send');
+      const assign = byId('unclaimedHands').querySelector('select'); assign.value = 'other'; assign.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0] === 'reassignHand' && sent.at(-1)[1].toSessionId === 'other', 'Hand reassignment failed');
+      state.unclaimed.clear(); collections.handRemove(); assert(!byId('unclaimedHands').children.length, 'Removed hand stayed visible');
+      messages.get('memberList')([]); assert(byId('memberPending').hidden, 'Pending membership indicator stayed on');
+      const timer = createTimer({ getRoom: () => room, byId, setIcon, now: () => 2000,
+        repeat: (fn, ms) => { assert(ms === 100, 'Timer tick changed'); tick = fn; } });
+      byId('roomInfo').appendChild(byId('roomInfoBody')); byId('roomSheet').hidden = true;
+      ui.clearSheet(byId('roomSheet'));
+      timer.bindControls(); showPane('timer');
+      if (ui.isSheet()) ui.openAsSheet(byId('regionTR'));
+      tick();
+      assert(byId('timerReadout').textContent === '1:01' && !byId('timerMini').hidden, 'Timer anchor display failed');
+      byId('timerToggle').click(); assert(sent.at(-1)[1].action === 'pause', 'Timer pause did not send');
+      state.timer = { running: false, mode: 'down', base: 90000, duration: 120000 }; tick();
+      assert(byId('timerReadout').textContent === '1:30' && !byId('timerDurRow').hidden && byId('timerMini').hidden, 'Remote timer mode failed');
+      byId('timerDur').focus(); byId('timerDur').value = '7'; tick();
+      assert(byId('timerDur').value === '7', 'Timer tick overwrote focused duration');
+      byId('timerDur').dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[1].duration === 420000 && sent.at(-1)[1].mode === 'down', 'Timer duration conversion failed');
+      byId('timerReset').click(); assert(sent.at(-1)[1].action === 'reset', 'Timer reset did not send');
+      showPane('score'); applyIcons();`,
+  },
+  {
     name: 'room-settings',
     root: '#roomSettingsModal',
     expect: { selector: '#feltSwatches .swatch, #gridColorSwatches .swatch', min: 15 },

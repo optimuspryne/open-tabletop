@@ -1,3 +1,5 @@
+import { BOARDS } from '../../shared/pieces.js';
+
 // Parse synchronized piece props defensively. A malformed legacy/custom payload should fall back
 // to ordinary piece behavior instead of breaking input or the render loop.
 export function piecePropsOf(piece) {
@@ -58,6 +60,7 @@ export function createPieceView({
   createQuaternion,
   refreshCollider,
   isInspected,
+  now = () => performance.now(),
 }) {
   const qa = createQuaternion();
   const qb = createQuaternion();
@@ -163,5 +166,95 @@ export function createPieceView({
     return true;
   }
 
-  return { rebuildCard, rebuildPiece, rebuildDeck, setOriginalVisible, sample };
+  // Install lifecycle listeners before recording state patches. Cross-feature effects are explicit.
+  function bindRoom(room, cb, { onHydration, onOwner, onBoardTop, onRemove, disposeSurface }) {
+    cb(room.state).pieces.onAdd((piece, id) => {
+      onHydration();
+      const mesh = kinds[piece.type].mesh(meshPropsOf(piece, id));
+      const castsShadow = physics[piece.type].mass > 0;
+      applyTransform(mesh, piece);
+      configurePieceMesh(mesh, id, castsShadow);
+      scene.add(mesh);
+      meshes.set(id, { mesh, type: piece.type });
+      buffers.set(id, [snapshot(now(), piece)]);
+      refreshCollider(id, piece);
+      cb(piece).listen(
+        'owner',
+        () => {
+          onOwner(id, piece.owner);
+        },
+        false,
+      );
+
+      if (piece.type === 'deck') {
+        // The extruded prism is unit-height; scale Y to reflect how many cards remain. A modeled deck
+        // skin (bag/box) is a fixed shape, so leave it alone — it looks the same whatever the count.
+        const modeled = !!pieceProperty(piece, 'model', false);
+        if (!modeled) {
+          const setDeckHeight = (count) => {
+            syncDeckMeshHeight(meshes, id, count, deckHeight);
+            refreshCollider(id, piece);
+          };
+          setDeckHeight(piece.count);
+          cb(piece).listen('count', setDeckHeight);
+        }
+        // Re-render when props change: an open tile set's cover follows its top tile, and a skin's
+        // tints can be edited. (The height scale is re-applied inside rebuildDeck.)
+        cb(piece).listen('props', () => rebuildDeck(id, piece), false);
+      }
+      if (piece.type === 'card') {
+        // Rebuild the card mesh when its props change (front revealed/hidden on flip).
+        cb(piece).listen('props', () => rebuildCard(id, piece), false);
+      }
+      if (piece.type === 'die' || piece.type === 'prop') {
+        cb(piece).listen('props', () => rebuildPiece(id, piece), false); // recolor / prop tweaks
+      }
+      if (piece.type === 'dispenser') {
+        // Rebuild the stack body when it dispenses (count drops) so its height tracks the amount left,
+        // and when its props change (color/team edited via inspect) so the new tint shows.
+        cb(piece).listen('count', () => rebuildPiece(id, piece), false);
+        cb(piece).listen('props', () => rebuildPiece(id, piece), false);
+      }
+      if (piece.type === 'board') {
+        // Remember the board's top surface height so the drop marker sits on it.
+        const boardProps = JSON.parse(piece.props || '{}');
+        const builtin = boardProps.board && BOARDS[boardProps.board];
+        const box = builtin
+          ? builtin.box
+          : boardProps.model && Array.isArray(boardProps.box)
+            ? boardProps.box
+            : null;
+        onBoardTop(box ? box[1] * 2 : 0.1);
+      }
+    });
+
+    cb(room.state).pieces.onRemove((piece, id) => {
+      onHydration();
+      const entry = meshes.get(id);
+      if (entry) scene.remove(entry.mesh);
+      onRemove(id, piece);
+      meshes.delete(id);
+      disposeSurface(id);
+      buffers.delete(id);
+    });
+  }
+  function recordState(state) {
+    const time = now();
+    state.pieces.forEach((piece, id) => {
+      const buf = buffers.get(id);
+      if (!buf) return;
+      buf.push(snapshot(time, piece));
+      if (buf.length > 24) buf.shift();
+    });
+  }
+
+  return {
+    rebuildCard,
+    rebuildPiece,
+    rebuildDeck,
+    setOriginalVisible,
+    sample,
+    bindRoom,
+    recordState,
+  };
 }
