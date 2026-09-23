@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { compoundColliderSpec, normalizeCompoundCollider } from '/shared/compound-collider.js';
-import { createColliderSurface, disposeColliderSurface } from './collider-surface.js';
+import { createColliderSurface, disposeColliderSurface } from '../rendering/collider-surface.js';
 
 export function groupBounds(shapes) {
   const root = createColliderSurface(compoundColliderSpec({ version: 1, shapes }, [0.5, 0.5, 0.5]));

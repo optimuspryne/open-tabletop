@@ -1,5 +1,5 @@
-import { reanchorOffset } from '../drag.js';
-import { clickRoute } from '../clicks.js';
+import { reanchorOffset } from './drag.js';
+import { clickRoute } from './clicks.js';
 import { gridActive, gridFootprintCells, snapToCell } from '../../shared/pieces.js';
 import { pieceProperty, piecePropsOf } from './piece-view.js';
 

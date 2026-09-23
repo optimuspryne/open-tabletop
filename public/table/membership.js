@@ -1,4 +1,4 @@
-import { rankOf, memberRow, emptyRow, unclaimedHead, unclaimedRow } from '../rows.js';
+import { rankOf, memberRow, emptyRow, unclaimedHead, unclaimedRow } from '../ui/rows.js';
 
 export function createMembership({ getRoom, getSessionId, byId, applyIcons }) {
   // Pulse the Members button in the accent color while any join is pending, so a

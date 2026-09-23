@@ -1,4 +1,4 @@
-// public/drag.js — pure drag-anchor math.
+// public/table/drag.js — pure drag-anchor math.
 //
 // Split out of client.js so it can be tested without a browser, a renderer, or a room: these are
 // plain numbers in, plain numbers out. client.js owns when to call this; this file owns the sign.

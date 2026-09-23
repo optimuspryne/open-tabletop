@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { reanchorOffset } from '../public/drag.js';
+import { reanchorOffset } from '../public/table/drag.js';
 
 // `hit` always arrives with the current offset already applied, so a test that wants to reason
 // about the raw raycast has to add it in the same way client.js does.

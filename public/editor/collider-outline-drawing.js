@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { boardOutlinePoints } from '/shared/board-geometry.js';
 import { normalizeCompoundCollider, compoundColliderSpec } from '/shared/compound-collider.js';
-import { createColliderSurface, disposeColliderSurface } from './collider-surface.js';
+import { createColliderSurface, disposeColliderSurface } from '../rendering/collider-surface.js';
 
 // Drawing coordinates live in a plane through the selected component, independent of camera orbit.
 export function createOutlineDrawing({

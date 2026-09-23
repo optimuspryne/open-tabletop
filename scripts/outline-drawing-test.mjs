@@ -22,7 +22,7 @@ try {
     });
     await page.evaluate(`(async()=>{
       document.getElementById('tableLoading').remove();
-      const {openColliderEditor}=await import('/compound-collider-editor.js');
+      const {openColliderEditor}=await import('/editor/compound-collider-editor.js');
       window.result=openColliderEditor({source:'/models/pieces/chess/rook.glb',box:[.5,.5,.5]});
       for(let i=0;i<200;i++){if(!document.querySelector('[data-action="apply"]').disabled)break;await new Promise(r=>setTimeout(r,25));}
       document.querySelector('[data-action="draw"]').click();

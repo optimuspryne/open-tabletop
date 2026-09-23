@@ -125,7 +125,7 @@ try {
       assert(board.compoundCollider.shapes.length===2&&!board.outline,'Board save lost custom collider');
       assert(board.compoundCollider.shapes[1].outline.cut===0.25,'Board save lost component outline');
       const THREE=await import('three');
-      const {createColliderSurface,colliderSurfaceHeight,disposeColliderSurface}=await import('/collider-surface.js');
+      const {createColliderSurface,colliderSurfaceHeight,disposeColliderSurface}=await import('/rendering/collider-surface.js');
       const root=new THREE.Group();
       root.add(createColliderSurface({type:'compound',shapes:[
         {type:'box',halfExtents:[2,0.1,2],offset:[0,0.1,0]},
@@ -152,7 +152,7 @@ try {
       near(colliderSurfaceHeight(prism,0,0,3),0.2);
       near(colliderSurfaceHeight(prism,0.95,0.95,3),0);
       disposeColliderSurface(prism);
-      const {captureGroup,insertGroup,transformGroup}=await import('/collider-groups.js');
+      const {captureGroup,insertGroup,transformGroup}=await import('/editor/collider-groups.js');
       const layout={version:1,shapes:[
         {type:'box',position:[-0.3,0,0],rotation:[0,0,0],size:[0.1,0.4,0.4]},
         {type:'box',position:[0.3,0,0],rotation:[0,0,0],size:[0.1,0.4,0.4]}]};
@@ -166,7 +166,7 @@ try {
       inserted.shapes[0].position[0]=1;
       near(layout.shapes[0].position[0],-0.3);
       // Reopen a real 3D preview for visual QA; no uploaded file or server needed.
-      const module=await import('/compound-collider-editor.js');
+      const module=await import('/editor/compound-collider-editor.js');
       window.previewResult=module.openColliderEditor({source:uploadTarget,box:board.box,value:board.compoundCollider});
       await wait(()=>modal()&&!button('apply').disabled);
       return {objectShapes:saved.compoundCollider.shapes.length,boardShapes:board.compoundCollider.shapes.length};

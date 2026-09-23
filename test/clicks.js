@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { clickRoute } from '../public/clicks.js';
+import { clickRoute } from '../public/table/clicks.js';
 
 // Mirrors INSPECTABLE in client.js — boards and decks are not inspectable.
 const INSPECTABLE = (t) => ['die', 'card', 'prop', 'dispenser'].includes(t);

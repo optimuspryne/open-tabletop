@@ -34,15 +34,15 @@ several different jobs:
 
 The existing smaller modules already demonstrate useful boundaries:
 
-- `public/core.js` owns the core Three.js scene, camera, renderer, table, and visual settings.
-- `public/graphics.js` owns mesh and texture construction.
-- `public/controls.js` translates raw input-device events into device-independent intents.
-- `public/rows.js` builds reusable DOM rows from data and callbacks.
-- `public/icons.js` owns shared icon and overflow-menu behavior.
+- `public/rendering/core.js` owns the core Three.js scene, camera, renderer, table, and visual settings.
+- `public/rendering/graphics.js` owns mesh and texture construction.
+- `public/table/controls.js` translates raw input-device events into device-independent intents.
+- `public/ui/rows.js` builds reusable DOM rows from data and callbacks.
+- `public/ui/icons.js` owns shared icon and overflow-menu behavior.
 - `public/table/piece-view.js` owns safe piece props, piece state listeners, shared mesh replacement,
   patch snapshots, interpolation, and current-mesh deck-height updates.
 - `public/table/collider-debug.js` now owns the local diagnostic overlay and its preference.
-- `public/table/ui-surfaces.js` owns reusable dialogs, sheets, clusters, drawer, and radial controls.
+- `public/ui/ui-surfaces.js` owns reusable dialogs, sheets, clusters, drawer, and radial controls.
 - `public/table/whiteboard.js` owns whiteboard placement, drawing, and room synchronization.
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
 - `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
@@ -62,6 +62,41 @@ The existing smaller modules already demonstrate useful boundaries:
 Step 14 completes the ownership split with table-shell composition, personal preferences, dice
 defaults, piece feedback, and visual effects. `client.js` now coordinates these controllers.
 
+## Public module organization follow-up
+
+After the 14-step decomposition, 19 existing modules were relocated by responsibility:
+workshop authoring in `public/editor/`, rendering support in `public/rendering/`, shared browser
+UI in `public/ui/`, and input/audio helpers alongside the controllers in `public/table/`.
+`ui-surfaces.js` moved from `table/` to `ui/`; page entry points and the central attribution
+manifest remain at the root. Functions and behavior are unchanged. Imports, HTML script URLs,
+and browser/unit-test fixtures follow the new paths. The early preference script remains a
+classic deferred script in the same position on each page. Manual verification passed on
+2026-09-23; no regressions were reported.
+
+Automated verification passed: `npm run check` (626 tests), `npm run test:input` (57 checks),
+`npm run test:components` (desktop and touch), and `npm run test:devices` (all seven profiles).
+An AST comparison confirmed unchanged executable code apart from imports in all 30 touched
+browser modules; all 89 local browser imports and script sources on the three pages resolve.
+For manual smoke testing, hard-refresh the lobby, admin page, and table; check saved theme/UI
+preferences, icons and menus, piece gestures and rendering, sound/music, and workshop board
+outline/collider editing. Check the browser console/network panel for failed module requests.
+
+The implemented tree below lists each relocated module. The remaining touched files contain
+only path/reference updates; no functions or helpers were added, removed, or behaviorally changed:
+
+| Files | Update |
+| --- | --- |
+| `public/client.js`, `public/admin.js`, `public/landing.js` | Import relocated rendering, UI, input, and audio modules. |
+| `public/index.html`, `public/admin.html`, `public/table.html` | Load the relocated preference script; the table also loads the relocated workshop entry. |
+| `public/table/chat.js`, `membership.js`, `scoreboard.js`, `piece-ui.js`, `table-shell.js` | Import shared UI helpers from `public/ui/`; refresh input-path comments. |
+| `public/table/effects.js`, `piece-drag.js`, `preferences.js` | Import relocated collider surfaces, click/drag helpers, and audio playback. |
+| `scripts/component-parity.mjs`, `input-test.mjs`, `device-matrix.mjs`, `collider-editor-test.mjs`, `outline-drawing-test.mjs` | Update fixture imports and stub URLs. |
+| `scripts/measure-colliders.mjs` | Update the rendering configuration source comment. |
+| `test/asset-texture-url.js`, `test/clicks.js`, `test/drag.js` | Import the relocated pure helpers. |
+| `README.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/CLIENT_REFACTOR.md` | Describe folder ownership, the current module tree, and updated source paths. |
+| `docs/GESTURES.md`, `docs/ROADMAP.md` | Refresh source paths. |
+| `CHANGELOG.md` | Record the organization change under Unreleased. |
+
 ## Target architecture
 
 Create a `public/table/` directory for table-client feature modules. This mirrors the server's
@@ -72,36 +107,57 @@ Implemented shape:
 
 ```text
 public/
-  client.js                 browser composition root
-  core.js                   Three.js scene and renderer
-  graphics.js               mesh and texture builders
-  controls.js               device events -> input intents
+  client.js                      browser composition root
+  landing.js                     lobby entry point
+  admin.js                       administration entry point
+  credits.js                     shared attribution manifest
+  editor/
+    editor-panel.js              library workshop and asset forms
+    board-outline-editor.js      top-down board outline authoring
+    compound-collider-editor.js  3D collider authoring
+    collider-groups.js           collider group capture, insertion, transforms, previews
+    collider-outline-drawing.js  draw/edit outlines in the 3D viewport
+    collider-presets.js          saved collider preset controls
+  rendering/
+    core.js                      Three.js scene and renderer
+    graphics.js                  mesh and texture builders
+    collider-surface.js          shared collider surface queries
+    asset-texture-url.js         saved-image derivative URL mapping
+    perf.js                      developer render-cost overlay
+  ui/
+    icons.js                     shared icons, tooltips, and overflow menus
+    rows.js                      reusable DOM row and button builders
+    equalize.js                  early UI preferences and grouped-button sizing
+    ui-surfaces.js               dialogs, sheets, clusters, drawer, and radial primitives
   table/
-    piece-view.js           live meshes, replacement, snapshots, interpolation
-    collider-debug.js       local diagnostic collider visualization
-    hand.js                 private hand controller
-    inspection.js           enlarged object inspection
-    overlays.js             measurement overlays
-    whiteboard.js           whiteboard placement and drawing
-    trays.js                dice-tray rendering and camera transport
-    selection.js            local multi-selection and batch actions
-    presence.js             seats, public hands, markers, roster, and turn display
-    room-settings.js        table/grid/lighting settings and graphics-quality UI
-    skybox.js               background textures and local sky resolution
-    chat.js                 public message replay, unread state, and send controls
-    notebook.js             private notes replay and debounced edits
-    scoreboard.js           scores, shared room notes, and edit affordances
-    timer.js                shared-anchor display and timer controls
-    membership.js           member lists, pending indicators, unclaimed-hand assignment
-    library-bindings.js     asset lists/errors and Save Table feedback
-    ui-surfaces.js          dialogs, sheets, clusters, drawer, and radial primitives
-    input-router.js         semantic pointer and keyboard routing
-    piece-drag.js           piece gestures, transforms, throws, and dealt-response adoption
-    piece-ui.js             contextual guide, hover counts, piece menus, and hold controls
-    effects.js              pings, shuffle animation, landing marker, and board-surface cache
-    dice-preferences.js     local dice defaults and shared finish-picker data
-    preferences.js          audio/theme controls, settings/help tabs, tracks, and credits
-    table-shell.js          table-specific dialogs, clusters, drawer, roster/hand surfaces
+    controls.js                  device events -> input intents
+    clicks.js                    completed-click routing
+    drag.js                      pure drag-anchor math
+    audio.js                     local sound effects and background music
+    piece-view.js                live meshes, replacement, snapshots, interpolation
+    collider-debug.js            local diagnostic collider visualization
+    hand.js                      private hand controller
+    inspection.js                enlarged object inspection
+    overlays.js                  measurement overlays
+    whiteboard.js                whiteboard placement and drawing
+    trays.js                     dice-tray rendering and camera transport
+    selection.js                 local multi-selection and batch actions
+    presence.js                  seats, public hands, markers, roster, and turn display
+    room-settings.js             table/grid/lighting settings and graphics-quality UI
+    skybox.js                    background textures and local sky resolution
+    chat.js                      public message replay, unread state, and send controls
+    notebook.js                  private notes replay and debounced edits
+    scoreboard.js                scores, shared room notes, and edit affordances
+    timer.js                     shared-anchor display and timer controls
+    membership.js                member lists, pending indicators, unclaimed-hand assignment
+    library-bindings.js          asset lists/errors and Save Table feedback
+    input-router.js              semantic pointer and keyboard routing
+    piece-drag.js                piece gestures, transforms, throws, and dealt-response adoption
+    piece-ui.js                  contextual guide, hover counts, piece menus, and hold controls
+    effects.js                   pings, shuffle animation, landing marker, and board-surface cache
+    dice-preferences.js          local dice defaults and shared finish-picker data
+    preferences.js               audio/theme controls, settings/help tabs, tracks, and credits
+    table-shell.js               table-specific dialogs, clusters, drawer, roster/hand surfaces
 ```
 
 These should use explicit factory dependencies, following the server's `create...` and
@@ -364,7 +420,7 @@ The highest-complexity functions at the original sweep were:
 
 Step 13 extracts `createInputRouter` into `public/table/input-router.js`. It returns the existing
 intent vocabulary consumed by `attachControls` and the on-screen hold buttons. Device translation
-and repeat timing stay in `public/controls.js`; the router owns mode priority, Escape/typing guards,
+and repeat timing stay in `public/table/controls.js`; the router owns mode priority, Escape/typing guards,
 long-press routing, axis targeting, and camera-pan gating through explicit controller dependencies.
 
 Move routing preserves the original order: selection marquee, measurement, whiteboard drawing,

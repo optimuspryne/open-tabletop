@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { BOARD_SIZE, BOARDS, DECK_MODELS, DISPENSERS, PROPS } from '../shared/pieces.js';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const MODEL_SIZE = 1.6; // public/core.js CONFIG.model.size; modeled dispensers normalize to this
+const MODEL_SIZE = 1.6; // public/rendering/core.js CONFIG.model.size; modeled dispensers normalize to this
 const JSON_CHUNK = 0x4e4f534a;
 const GLB_MAGIC = 0x46546c67;
 

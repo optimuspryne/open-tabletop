@@ -21,9 +21,9 @@ import {
   glbFilePreviewURL,
   modelMaterialNames,
   parseCardFront,
-} from './graphics.js';
+} from '../rendering/graphics.js';
 import * as THREE from 'three';
-import { overflowMenu, wirePopGroups } from './icons.js'; // shared with the lobby (7f); this file's own copy retired in 7k
+import { overflowMenu, wirePopGroups } from '../ui/icons.js'; // shared with the lobby (7f); this file's own copy retired in 7k
 
 // Library edit/clone state. openEditModal() sets it; the Add form's Save reads it.
 //   { id }        → Save UPDATES that asset (Edit)

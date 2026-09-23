@@ -1,4 +1,4 @@
-import { applyIcons, setIcon, initTip, overflowMenu } from './icons.js';
+import { applyIcons, setIcon, initTip, overflowMenu } from './ui/icons.js';
 // landing.js — quick-join (default) + login/account + lobby. Talks to the /auth
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.

@@ -57,7 +57,7 @@ itself never moved — `server.js` is now **2278 lines**, *larger* than at 0.9.0
 changelog's "substantially reduces `server.js`" is relative to what it would otherwise have been,
 not an absolute shrink.
 
-Where things live now, for the threads below: `BOARD_PAINTERS` is in `public/graphics.js`;
+Where things live now, for the threads below: `BOARD_PAINTERS` is in `public/rendering/graphics.js`;
 snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 `server/game/handlers/pieces.js` (`applySnap`) and `public/client.js` (`pieceSnap`, `snapXZ`);
 `setupStarter` is still `TableRoom.setupStarter` (`server.js:1062`).
@@ -76,7 +76,7 @@ The difference between "demo" and "we play here every week."
 
 **Instrumentation (2026-09-01).** Both halves are now measurable, off by default. Client:
 `?perf=1` on the table URL (or `window.ottPerf(true)`) draws a `renderer.info` overlay — FPS,
-frame ms, draw calls, triangles, geometry/texture/program counts (`public/perf.js`). Server:
+frame ms, draw calls, triangles, geometry/texture/program counts (`public/rendering/perf.js`). Server:
 `PERF_LOG=1` makes `TableRoom.update` log a per-second `world.step` time (avg/max), awake-vs-total
 body count, and tick health. Real-hardware tools — measure on the low-end target, not headless.
 
@@ -103,7 +103,7 @@ renders as one stacked mesh, and the many-bodies case is bounded at that cap.
   while moving them. FPS barely moved as draws went 187→330 and tris 22k→40k, so it is NOT draw or
   geometry bound — it's fixed per-frame fill-rate: `setPixelRatio(min(dpr,2))` = 2× (4× fragments)
   on retina, `antialias:true`, and a **4096² PCFSoftShadowMap** sun redrawn each frame
-  (`public/core.js:45-80`). Those are ~constant in piece count — exactly the flat-22-fps signature.
+  (`public/rendering/core.js:45-80`). Those are ~constant in piece count — exactly the flat-22-fps signature.
 - *Memory:* opening the library used to evict/reload the Safari tab (texture pressure). **✅
   addressed 2026-09-01:** library thumbnails now load lazily (IntersectionObserver — visible
   cards only, was: every model eagerly) and dispose the loaded model right after snapshotting
@@ -214,7 +214,7 @@ scoped against the real tree rather than from memory.
    (`TableRoom.seatOf`, `canManage`, `canSetRole`, `rank`, `isAdmin`), so this is plausibly a
    new role that never gets a seat rather than a new connection path.
 6. **Custom dispensers.** ✅ **DONE** Built-in dispensers exist end to end — `dispenserMesh`
-   (`public/graphics.js:1493–1583`), `TableRoom.dispenserItem` (`server.js:1175`),
+   (`public/rendering/graphics.js:1493–1583`), `TableRoom.dispenserItem` (`server.js:1175`),
    `afterDispense`, and `dispenserDragPayload` validation
    (`server/message-validation.js:264–269`). "Custom" means a user-defined dispenser in the
    editor; see `DESIGN_dispensers.md`.

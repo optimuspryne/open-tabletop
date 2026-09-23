@@ -1,4 +1,4 @@
-import { applyIcons, initTip } from './icons.js';
+import { applyIcons, initTip } from './ui/icons.js';
 applyIcons();
 initTip();
 

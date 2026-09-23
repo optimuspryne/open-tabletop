@@ -139,14 +139,20 @@ importing a room singleton:
   any Postgres (stock or managed — there's no custom db image). `AUTO_MIGRATE=false` opts out.
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
-- **`public/core.js`** — scene/camera/renderer/controls + the environment map,
+- **Browser module folders** — `public/editor/` owns library and board/collider authoring;
+  `public/rendering/` owns scene, mesh/texture, surface-query, and performance support;
+  `public/ui/` owns shared DOM mechanics; `public/table/` owns table features, input, and audio.
+  `client.js`, `landing.js`, and `admin.js` remain page entry points at the public root, alongside
+  the cross-feature `credits.js` manifest. HTML loads `editor/editor-panel.js` for the workshop
+  and `ui/equalize.js` as the early classic deferred preference script on all three pages.
+- **`public/rendering/core.js`** — scene/camera/renderer/controls + the environment map,
   plus the `CONFIG` (client feel) and startup `LIGHTING` tunable blocks. `applyLighting` maps the
   synchronized table-relative direction, colors, intensities, and softness onto the directional
   and hemisphere lights, easing remote changes over 500 ms. Bootstrap table/rim meshes stay
   hidden until `client.js` applies the joined room's synchronized shape, size, felt, rim, and grid.
   The WebGL canvas has a second readiness gate for the synchronized player-seat camera, and core
   tracks active Three.js texture/model requests through the shared loading manager.
-- **`public/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
+- **`public/rendering/graphics.js`** — every `<canvas>` texture builder, all mesh builders,
   the `.glb` model loading/measuring helpers, and the `KIND` registry. Immutable thin-card,
   rounded-tile, and hex-prism geometries are shared by dimensional key so late-join hydration
   does not repeatedly triangulate identical pieces.
@@ -177,7 +183,7 @@ importing a room singleton:
 - **`public/table/input-router.js`** — semantic input ownership. `createInputRouter` returns the
   intent map consumed by `attachControls` and the on-screen hold controls. It preserves mode
   priority, Escape/typing guards, long-press routing, object-axis targeting, and camera-pan gates;
-  device translation and keyboard repeat timing remain in `public/controls.js`.
+  device translation and keyboard repeat timing remain in `public/table/controls.js`.
 - **`public/table/piece-drag.js`** — `createPieceDrag` owns piece press/drag state, click routing,
   menu Move, grab/deal/dispense and late `dealt` adoption, group movement, grid targets, rotation,
   touch re-anchoring, and throw estimation. It reuses shared snapping and existing click/drag
@@ -240,27 +246,27 @@ importing a room singleton:
   and unclaimed-hand assignment. Server authorization and root-level role gating stay unchanged.
 - **`public/table/library-bindings.js`** — library-list routing, asset errors, and Save Table feedback.
   It normalizes dice lists for injected texture-picker updates; authoring stays in `editor-panel.js`.
-- **`public/table/ui-surfaces.js`** — reusable dialog focus, responsive sheets, clusters, drawer,
+- **`public/ui/ui-surfaces.js`** — reusable dialog focus, responsive sheets, clusters, drawer,
   radial menus, and hold-repeat behavior; table-specific composition lives in `table-shell.js`.
-- **`public/controls.js`** — the input seam: mouse and touch profiles translate
+- **`public/table/controls.js`** — the input seam: mouse and touch profiles translate
   raw events into device-neutral pointer/command intents consumed by `table/input-router.js`. Touch holds
   raise the same secondary-press intent as a mouse context action; a menu action that starts a
   drag transfers pointer capture to the canvas before its temporary button is removed. Its keyboard
   profile runs deterministic held-key intervals: WASD/arrows pan the idle camera, while compatible
   held-piece/selection contexts retain their raise/lower and rotate meanings.
-- **`public/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
+- **`public/table/audio.js`** — the sound layer: a Web Audio **SFX** manager (short
   clips pooled per logical name, played fire-and-forget) plus an HTML5 `<audio>`
   **background-music** player. Volumes/mutes/shuffle are per-player, in
   `localStorage`; nothing here is synced (see "Sound & music").
 - **`public/credits.js`** — the attribution manifest: the `MUSIC` playlist (which
   drives _both_ the music player and the credits panel) plus `SFX_CREDITS` and
   `LIB_CREDITS`. The CC-BY music makes the in-app credits mandatory, not cosmetic.
-- **`public/icons.js` / `public/equalize.js`** — shared icon/tooltip behavior plus
+- **`public/ui/icons.js` / `public/ui/equalize.js`** — shared icon/tooltip behavior plus
   early UI-mode restoration and grouped-action sizing across pages.
 - **The pages** — `index.html` + `landing.js` (the lobby: quick-join, login, room
   list, host request), `table.html` (the game table, which loads the client
   chain and, with `?workshop=1`, the admin-only library workshop plus
-  `editor-panel.js`), `editor.html` (a compatibility redirect to that workshop),
+  `editor/editor-panel.js`), `editor.html` (a compatibility redirect to that workshop),
   `admin.html` + `admin.js` (the admin console), and
   `styles.css` (all UI styling: the design-token `:root` block, then a layer of
   shared component primitives the pages compose from — `.panel`/`.popout` pop-out
@@ -401,7 +407,7 @@ Both halves of the heartbeat are instrumented for the "plays well at real scale"
 sleep and cost no bandwidth, a table of hundreds of _settled_ pieces is nearly free on the
 server step and the network — the cost lives in two different places. **Client render** cost is
 paid every frame for whatever is drawn, moving or not (draw calls, triangles, shadows, skybox);
-`public/perf.js` reads it off `renderer.info` behind `?perf=1`. **Server step + network** cost
+`public/rendering/perf.js` reads it off `renderer.info` behind `?perf=1`. **Server step + network** cost
 spikes only when many bodies are _awake at once_ — a scoop, a shuffle, a dump; `PERF_LOG=1` logs
 the per-tick `world.step` time and the awake-body count that drives it. So the render lever
 (graphics-quality tiers) and the simulation lever are aimed at genuinely different bottlenecks,
@@ -640,7 +646,7 @@ in normalized local X/Z space, so one authored outline scales with the board. Th
 Cannon body use the same prism vertices/faces; GLBs retain their original visual mesh and use the
 outline only for collision. Built-in boards keep their authored box colliders.
 
-`public/board-outline-editor.js` provides a top-down canvas shared by both upload/edit forms.
+`public/editor/board-outline-editor.js` provides a top-down canvas shared by both upload/edit forms.
 Image artwork and orthographic GLB snapshots serve as tracing references. The canvas respects the
 board aspect ratio, supports corner-by-corner drawing with undo/clear, and restores saved outlines
 when editing or cloning. Image boards retain width/depth and ratio-lock controls and add thickness;
@@ -701,7 +707,7 @@ both counts; creation, duplicate, insertion, and outline edits must fit the same
 A concave outline can therefore consume several parts while remaining one editable item.
 Enclosed holes and self-crossing loops are unsupported; an inward opening is supported.
 
-`public/compound-collider-editor.js` owns a Three.js preview, orbit controls, and a private
+`public/editor/compound-collider-editor.js` owns a Three.js preview, orbit controls, and a private
 draft. Drag-mode buttons select orbit, move, rotate, or uniform resize; labeled camera controls
 select perspective, top, front, or side views. Shape buttons add primitives directly.
 It remains a native top-layer `<dialog>`, but composes the same `.modal`, `.modal__header`,
@@ -721,7 +727,7 @@ The embedded top-down outline editor updates the 3D draft as presets, corner cut
 corners change; incomplete custom outlines disable Apply. Controls scroll independently of the
 preview/footer, and the outline editor can collapse while preserving its state.
 
-`public/collider-outline-drawing.js` provides **Draw outline in 3D** and **Edit outline in 3D**.
+`public/editor/collider-outline-drawing.js` provides **Draw outline in 3D** and **Edit outline in 3D**.
 New outlines use a top/front/side plane through the selected component's center (or model origin).
 Existing outlines use their own local plane and retain orientation. The camera aligns to the
 plane, model geometry stays visible, and existing collider shells are temporarily hidden.
@@ -735,7 +741,7 @@ controls are restored on exit, and Apply collider stays disabled during drawing.
 Multi-selection uses the shape list, Ctrl/Command-click in the preview, or Select all.
 Selected components move, rotate around a shared bounds center, and scale uniformly together;
 duplicate/delete affect the whole selection. Individual selection restores per-component editing.
-`public/collider-groups.js` handles group bounds, rigid transforms, normalized capture, insertion,
+`public/editor/collider-groups.js` handles group bounds, rigid transforms, normalized capture, insertion,
 and disposable geometry thumbnails. Out-of-range transforms or insertions are rejected atomically.
 
 Saved collider collections are separate from layouts embedded in asset props. Migration **017**
@@ -747,7 +753,7 @@ and restricts writes to owners/admins directly in SQL. `server/database.js` comp
 
 `server/http/routes/collider-presets.js` exposes authenticated list/get/create/replace/delete
 operations at `/collider-presets`; list pages contain up to 50 records. The boundary validates
-names, visibility, sizes, and compound layouts. `public/collider-presets.js` provides the editor's
+names, visibility, sizes, and compound layouts. `public/editor/collider-presets.js` provides the editor's
 Saved collider collections panel with previews, save-selection, name/visibility updates,
 replacement, deletion, and insertion at a chosen size. Library saves take effect immediately,
 independently of the editor's Apply/Cancel draft. Insertion fetches the current accessible preset
@@ -780,7 +786,7 @@ point edits, plane selection, snapping, and undo/cancel with real desktop/mobile
 
 ### Drop-marker surface placement
 
-`public/collider-surface.js` builds invisible Three.js collision geometry from the shared
+`public/rendering/collider-surface.js` builds invisible Three.js collision geometry from the shared
 collider descriptors. The client caches one surface tree per board and serialized props value,
 rebuilds it when props change, and disposes it when the board is removed. Each query copies the
 board mesh's interpolated position/quaternion, keeping compound child offsets and rotations local.
@@ -1067,7 +1073,7 @@ the `TableRoom` facades preserve the scene, durable-room, handler, and starter c
 ## Sound & music
 
 Audio is deliberately kept off the schema — no sound state is ever synced. It
-splits into two independent systems, both in `public/audio.js`:
+splits into two independent systems, both in `public/table/audio.js`:
 
 **Sound effects (Web Audio).** Each logical cue in the `SOUNDS` map names a _list_
 of files under `/sounds/`; on first use each is fetched and decoded into a pool,
@@ -1122,7 +1128,7 @@ No schema migration is needed. `getProp` is exported through the production data
 definition (`props - 'dispenser'`) and preserves the object row and primary `file_url`.
 
 Large uploaded face originals are not sent directly to the renderer. For local random-name card
-and tile references, the pure `public/asset-texture-url.js` mapper supplies the versioned
+and tile references, the pure `public/rendering/asset-texture-url.js` mapper supplies the versioned
 `/asset-textures/v1/<kind>/<file>.webp` route. Low/medium use a maximum-768-pixel WebP under
 `ASSETS_DIR/.texture-cache/v1/`; High adds `?quality=high` and uses a separate maximum-1536-pixel
 copy under `.texture-cache/v1-high/`. `server/http/routes/asset-textures.js` creates either variant

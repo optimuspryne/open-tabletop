@@ -10,7 +10,7 @@ The codebase:
 | `shared/pieces.js`                                                                                     | both    | Single source of truth: dimensions, masses, colors, dice verts, table containment, and prop/board registries                                                                                     |
 | `shared/collider-spec.js`                                                                              | both    | Renderer-neutral descriptions of authoritative box, sphere, cylinder/cone, flat, convex-die, deck, board, prop, and dispenser colliders                                                         |
 | `shared/board-geometry.js` | both | Board outline validation, presets, dimensions, and shared convex-prism geometry |
-| `public/board-outline-editor.js` | browser | Top-down board outline tracing, GLB outline fitting, aspect-correct previews, undo/clear, and form state |
+| `public/editor/board-outline-editor.js` | browser | Top-down board outline tracing, GLB outline fitting, aspect-correct previews, undo/clear, and form state |
 | `shared/lighting.js`                                                                                   | both    | Factory room lighting, six authored presets, normalization/clamping, and durable snapshot shaping                                                                                               |
 | `server.js`                                                                                            | Node    | Composition root: authoritative simulation, Colyseus rooms, remaining handlers, HTTP/security setup                                                                                              |
 | `server/game/schema.js`                                                                                | Node    | Synchronized Colyseus classes, ordered field declarations, defaults, and root-state collection construction                                                                                      |
@@ -42,8 +42,8 @@ The codebase:
 | `server/user-queries.js`                                                                               | Node    | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection                                                                                                      |
 | `server/room-queries.js`                                                                               | Node    | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection                                                                       |
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
-| `public/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
-| `public/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
+| `public/rendering/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
+| `public/rendering/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, scene/input adapters, loading gate, render loop                                                             |
 | `public/table/table-shell.js` | browser | Table-specific UI composition, local panels/toasts, drawer and roster/hand surfaces |
 | `public/table/preferences.js` | browser | Audio/theme settings, help tabs, credits, and track controls |
@@ -69,14 +69,25 @@ The codebase:
 | `public/table/timer.js` | browser | Shared-anchor timer display, controls, and touch mini-readout |
 | `public/table/membership.js` | browser | Membership lists, pending indicator, role actions, and unclaimed-hand assignment |
 | `public/table/library-bindings.js` | browser | Library response routing, asset errors, and Save Table feedback |
-| `public/table/ui-surfaces.js`                                                                          | browser | Shared dialogs, responsive sheets, clusters, drawer, radial menus, and hold-repeat controls |
-| `public/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
-| `public/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
-| `public/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
+| `public/ui/ui-surfaces.js`                                                                          | browser | Shared dialogs, responsive sheets, clusters, drawer, radial menus, and hold-repeat controls |
+| `public/rendering/asset-texture-url.js`                                                                          | browser | Pure saved-image URL mapping to standard or High versioned WebP derivatives                                                                                                                      |
+| `public/table/controls.js`                                                                                   | browser | Mouse/touch/keyboard profiles translated into device-neutral intents, including contextual object axes and camera panning                                                                        |
+| `public/table/audio.js`                                                                                      | browser | Web Audio SFX manager + HTML5 background-music player (per-player, unsynced)                                                                                                                     |
 | `public/credits.js`                                                                                    | browser | Attribution manifest: `MUSIC` playlist + SFX/library credits (feeds player _and_ credits panel)                                                                                                  |
-| `public/icons.js` / `public/equalize.js`                                                               | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing                                                                                                                                  |
-| `public/{landing,admin,editor-panel}.js`                                                               | browser | Lobby, admin console, library-editor UI (HTTP + room)                                                                                                                                            |
+| `public/ui/icons.js` / `public/ui/equalize.js`                                                               | browser | Icon/tooltip helpers, UI preference boot, grouped-button sizing                                                                                                                                  |
+| `public/{landing,admin}.js`                                                               | browser | Lobby and admin console (HTTP)                                                                                                                                            |
+| `public/editor/editor-panel.js` | browser | Library workshop, asset forms, previews, and room-backed pickers |
+| `public/editor/{compound-collider-editor,collider-outline-drawing,collider-groups,collider-presets}.js` | browser | 3D collider authoring, outline drawing, group transforms, and saved presets |
+| `public/rendering/collider-surface.js` | browser | Shared collision-surface geometry, height queries, and disposal |
+| `public/rendering/perf.js` | browser | Optional render-cost overlay |
+| `public/ui/rows.js` | browser | Shared DOM row, button, and toast builders |
+| `public/table/{clicks,drag}.js` | browser | Pure click routing and drag-anchor math |
 | `public/*.html` + `styles.css`                                                                         | browser | Page shells plus token-driven shared button, form-control, checkbox, panel, and feature styling                                                                                                  |
+
+Browser modules are grouped by responsibility: `editor/` for workshop authoring, `rendering/`
+for graphics support, `ui/` for shared DOM behavior, and `table/` for table features/input/audio.
+The three page entry points and central attribution manifest stay at the public root.
+`ui/equalize.js` keeps its early classic `defer` loading order; the other modules use ES imports.
 
 The main client composition has no cycles: `shared` feeds `core`/`graphics`, `client` imports the
 focused `table` modules and injects their mutable dependencies, and the remaining side branches are
@@ -173,12 +184,12 @@ classDiagram
         <<admin-only>>
         onAuth rejects non-admins
     }
-    class Core["public/core.js"] {
+    class Core["public/rendering/core.js"] {
         +CONFIG / LIGHTING / clamp
         +applyLighting(value, options) / getLighting()
         scene camera renderer controls
     }
-    class Graphics["public/graphics.js"] {
+    class Graphics["public/rendering/graphics.js"] {
         +texture builders (cTex, cardFront, dice, text...)
         +measureGlb/fitModel/measureModel/measureBoard
         +uploadImage/uploadModel/resizeToCanvas
@@ -304,11 +315,11 @@ classDiagram
     class LibraryBindings["public/table/library-bindings.js"] {
         +bindLibraryMessages(dependencies)
     }
-    class UiSurfaces["public/table/ui-surfaces.js"] {
+    class UiSurfaces["public/ui/ui-surfaces.js"] {
         +createUiSurfaces(dependencies)
         +wireDialog/wireCluster/wireDrawer/createRadialMenu
     }
-    class Audio["public/audio.js"] {
+    class Audio["public/table/audio.js"] {
         +playSfx() resumeAudio()
         +SFX + music volume/mute (localStorage)
         +toggleMusic/nextTrack/playTrack/shuffle
@@ -317,7 +328,7 @@ classDiagram
         +MUSIC[] MUSIC_CREDIT
         +SFX_CREDITS[] LIB_CREDITS[]
     }
-    class Pages["landing.js · admin.js · editor-panel.js"] {
+    class Pages["landing.js · admin.js · editor/editor-panel.js"] {
         +lobby / admin console / library editor UI
         +fetch to the HTTP API
     }
@@ -666,7 +677,7 @@ Uploaded GLB object and board records accept `compoundCollider`. Object records 
 it with `collider`; board records cannot combine it with `outline`. Image boards use outlines.
 The layout persists in existing library and piece/scene JSON props without a schema migration.
 
-## `public/compound-collider-editor.js` — 3D authoring
+## `public/editor/compound-collider-editor.js` — 3D authoring
 
 **`openColliderEditor({source, rotation=[0,0,0], box, value})`** returns a promise resolving to
 the applied layout or `null` on cancel. It owns and disposes its preview resources.
@@ -700,7 +711,7 @@ Run with `CHROME_BIN=/path/to/chromium node scripts/collider-editor-test.mjs`.
 - **`outlinePrism(points,width,depth,thickness)`** extrudes validated convex sections into
   vertices/faces for shared physics and preview descriptors.
 
-## `public/collider-outline-drawing.js` — main-viewport drawing
+## `public/editor/collider-outline-drawing.js` — main-viewport drawing
 
 **`createOutlineDrawing({scene,camera,controls,canvas,host,unit,onCommit,onState,validate})`**
 returns `start({shape,position})`, `dispose()`, and an `active` getter. New drawings select a
@@ -721,16 +732,16 @@ and Cannon collision behavior. Run the pointer/UI regression with
 
 ## Reusable collider collections
 
-- **`public/collider-groups.js`**: `groupBounds` computes transformed component bounds;
+- **`public/editor/collider-groups.js`**: `groupBounds` computes transformed component bounds;
   `transformGroup` applies shared translation, rotation, and uniform scale atomically;
   `captureGroup` recenters/normalizes selected components and preserves their table-unit size;
   `insertGroup` returns independent copied components subject to the 16-physics-part budget;
   `drawGroupThumbnail` renders a disposable geometry-based canvas preview.
-- **`public/collider-presets.js`**: `wireColliderPresets(host,{capture,insert})` wires the saved
+- **`public/editor/collider-presets.js`**: `wireColliderPresets(host,{capture,insert})` wires the saved
   collections panel, paginated loading, previews, create/replace, metadata updates, deletion,
   and insertion. It uses the signed-in bearer token. Saving to the library is immediate;
   Apply/Cancel still controls only the collider draft. New insertions select the copied group.
-- **`public/compound-collider-editor.js`**: `openColliderEditor` supports multi-selection and
+- **`public/editor/compound-collider-editor.js`**: `openColliderEditor` supports multi-selection and
   select-all, group numeric/drag transforms, group duplicate/delete, and undo. The controls
   scroll separately from the preview/footer; the embedded outline editor is collapsible.
 - **`server/collider-preset-queries.js`**: `createColliderPresetQueries(query)` returns
@@ -754,7 +765,7 @@ and Cannon collision behavior. Run the pointer/UI regression with
 
 ---
 
-## `public/collider-surface.js` — drop-marker surface queries
+## `public/rendering/collider-surface.js` — drop-marker surface queries
 
 - **`createColliderSurface(spec)`** builds an unrendered Three.js tree for a shared primitive,
   convex, or compound collider description, preserving local offsets/rotations.
@@ -870,7 +881,7 @@ the High-quality derivative; every other value uses the standard derivative.
   state for the admin console without holding an HTTP request open.
 - Successful responses are `image/webp` with a one-year immutable cache policy. Originals stay
   untouched for library editing, backups, and future derivative versions. `cardTextureURL` in
-  `public/graphics.js` redirects only local random-name `/assets/...` card/tile references and
+  `public/rendering/graphics.js` redirects only local random-name `/assets/...` card/tile references and
   appends `?quality=high` when the viewer booted in High; procedural, data, bundled, and external
   references keep their existing path.
 
@@ -1725,7 +1736,7 @@ lifetime (30 days by default, bounded to 1–365).
 
 ---
 
-## `public/core.js` — setup + tunables
+## `public/rendering/core.js` — setup + tunables
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
 felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
@@ -1777,7 +1788,7 @@ quiet for a full frame), and
 
 ---
 
-## `public/graphics.js` — builders (pure)
+## `public/rendering/graphics.js` — builders (pure)
 
 ### Textures → `THREE.CanvasTexture`
 
@@ -1813,7 +1824,7 @@ quiet for a full frame), and
   canvas; **`imgToBlob`** and the avatar path wrap it.
 - **`uploadImage(file,…,kind)`** → POST `/upload`; **`uploadModel(file)`** → POST
   `/upload-model`.
-- **`assetTextureURL(ref, {high?})`** from `public/asset-texture-url.js` maps saved random-name
+- **`assetTextureURL(ref, {high?})`** from `public/rendering/asset-texture-url.js` maps saved random-name
   images onto `/asset-textures/v1/...webp`. Library/hand DOM previews use the standard derivative;
   High-quality Three.js card faces opt into the separate High derivative. Other refs pass through.
 - **`measureGlb(url)`** → `{ size, center }` (true loaded bounds). **`fitModel(obj,
@@ -2148,7 +2159,7 @@ for the joined page session; replay registration precedes requests. `test/room-b
 notebook replay/debouncing and library routing/errors/save feedback; component parity exercises
 real desktop/touch chat, scores, notes, membership, and timer controls, including mobile sheets.
 
-## `public/table/ui-surfaces.js` — shared UI mechanics
+## `public/ui/ui-surfaces.js` — shared UI mechanics
 
 **`createUiSurfaces(dependencies)`** returns `wireDialog`, `isSheet`, `openAsSheet`, `clearSheet`,
 `wireCluster`, `wireDrawer`, `holdRepeat`, and `createRadialMenu`. It owns reusable focus,
@@ -2160,7 +2171,7 @@ responsive presentation, and interaction mechanics without owning feature-specif
 on-screen hold controls: `press`, `move`, `release`, `command`, `secondaryPress`, `hasHeld`,
 `hasAxisTarget`, `panCamera`, `rotateHeld`, `snapHeld`, `ping`, `rotateAxis`, `raiseAxis`, and
 `doubleClick`. It receives room access, the canvas/camera controls, feature controllers, raycast
-helpers, and menu/ping/pan callbacks. Device event interpretation stays in `public/controls.js`.
+helpers, and menu/ping/pan callbacks. Device event interpretation stays in `public/table/controls.js`.
 
 Internal **`onPointerDown`**, **`onPointerMove`**, and **`endGesture`** dispatch to the current
 feature while preserving pointer capture and camera restoration. Move order is selection,
@@ -2271,7 +2282,7 @@ changes, and follows each synchronized/interpolated transform without changing r
   an unselected piece clears the selection first. For deck/dispenser **Move**, the flat and radial
   long-press menus call `pieceDrag.beginMoveFromMenu` before hiding/removing the pressed control, allowing it
   to transfer the active pointer capture to the canvas and continue the same gesture.
-- **Keyboard axes + `panCamera`** — `public/controls.js` owns repeat timing for WASD and the arrow
+- **Keyboard axes + `panCamera`** — `public/table/controls.js` owns repeat timing for WASD and the arrow
   keys. With no compatible held-piece or selection target, it sends view-relative camera-pan
   intents that translate the camera and OrbitControls target together. While holding a piece,
   W/S or Up/Down retain raise/lower and A/D or Left/Right retain rotation; A/D also rotates a
@@ -2341,14 +2352,14 @@ at the current board's surface height, keeps each held-piece **name tag**
 (through `presence.update()`) hovering over its mesh, and expands + fades + disposes active
 **pings**. One uniform path for held, thrown, and resting pieces.
 
-With `?perf=1` on the table URL (or `window.ottPerf(true)` at runtime), `public/perf.js`
+With `?perf=1` on the table URL (or `window.ottPerf(true)` at runtime), `public/rendering/perf.js`
 draws a small dev overlay sampled from `renderer.info` after each `renderer.render` — FPS, frame
 ms (avg/max), draw calls, triangles, geometry/texture/program counts, JS heap. It is the client
 half of profiling "plays well at real scale" (ROADMAP §1); off by default and a no-op when off.
 
 ---
 
-## `public/perf.js` — dev render overlay
+## `public/rendering/perf.js` — dev render overlay
 
 A zero-dependency, dev-only overlay for the client half of ROADMAP §1 (does the frame stay
 smooth at real scale, and where does it go). Off unless `?perf=1` is on the table URL — the form
@@ -2365,7 +2376,7 @@ suite: real numbers need a real GPU, not headless SwiftShader.
 
 ---
 
-## `public/audio.js` — sound effects + music
+## `public/table/audio.js` — sound effects + music
 
 Two independent systems, neither ever synced; all volumes/mutes/shuffle persist
 per-player in `localStorage` (`tabletop.sfxVolume`, `tabletop.sfxMuted`,
@@ -2444,7 +2455,7 @@ device token lives in `localStorage`.
   caption. Use `.help-text` for supporting instructions and `.status-text` for live or reserved
   feedback lines. Use `.button-row` for wrapping action groups and add `.button-row--end` when the
   group should align to the trailing edge. Add `.button-row--compact` for dense generated lists;
-  `public/equalize.js` equalizes buttons within those compact rows.
+  `public/ui/equalize.js` equalizes buttons within those compact rows.
 - **Modals:** HTML overlays use `.modal-backdrop > .modal`; native `<dialog>` implementations use
   `.modal` directly. Compose `.modal__header`, `.modal__title`, `.modal__close`, `.modal__body`, and
   `.modal__footer`; tabbed windows may group their title row and tabs in
@@ -2478,7 +2489,7 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   kick from all live rooms, delete). Its Storage controls preview/trash orphaned uploads and start/poll
   the WebP texture-cache prebuild with live counts and byte totals. Admins host implicitly, so they're
   kept out of the host queue and the header's pending badge.
-- **`public/editor-panel.js`** (`table.html?workshop=1`; `editor.html` redirects there) — the library-management panel. Rides
+- **`public/editor/editor-panel.js`** (`table.html?workshop=1`; `editor.html` redirects there) — the library-management panel. Rides
   on the game client's room via `window.onOttRoom`, and gets listings through
   `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).
   Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
@@ -2490,7 +2501,7 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   needed, and stores finite default amount or infinite supply. Library quantity/amount steppers
   reserve enough width for multi-digit values, and the custom-model Scale stepper cannot collapse
   away either button.
-- **`public/board-outline-editor.js`** — `wireBoardOutline(prefix)` connects the board form's
+- **`public/editor/board-outline-editor.js`** — `wireBoardOutline(prefix)` connects the board form's
   preset selector, corner-cut field, canvas, and undo/clear controls. Its `read`, `fill`, `image`,
   and `aspect` methods validate/save outlines, restore edits, and align reference imagery with the
   board dimensions. Custom corners are added in edge order by clicking/tapping the top-down view.
@@ -2498,7 +2509,7 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   width/depth ratio lock and add thickness; GLBs expose a longest-side target of `0.1–100`, subject
   to the existing model-scale/bounds validation. Scaling updates the model and collider together.
   GLB outlines affect collision only; image outlines affect both visible geometry and collision.
-- **`public/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
+- **`public/ui/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
   `.button-row--compact` group, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an
   external file because CSP hash-gates inline scripts (see ARCHITECTURE › CSP).

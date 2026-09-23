@@ -14,6 +14,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Organize 19 browser modules into `public/editor/`, `public/rendering/`, `public/ui/`, and
+  `public/table/` by responsibility. Update imports, page scripts, test fixtures, and current
+  documentation while preserving module behavior and script loading order.
 - Complete the client composition cleanup by moving table-shell controls, personal audio/theme
   settings, dice defaults, piece menus/control hints, and transient visual effects into focused
   modules. Preserve room binding and render order, and add production-join, live-node handoff,

@@ -1,6 +1,6 @@
-import { createUiSurfaces } from './ui-surfaces.js';
-import { applyIcons, setIcon, initTip, wirePopGroups } from '../icons.js';
-import { toastContent } from '../rows.js';
+import { createUiSurfaces } from '../ui/ui-surfaces.js';
+import { applyIcons, setIcon, initTip, wirePopGroups } from '../ui/icons.js';
+import { toastContent } from '../ui/rows.js';
 // Table-specific DOM composition and local shell state, built on the shared UI surfaces.
 export function createTableShell({ byId, clamp, getRoom }) {
   // Wrap every number input in a themed − / + stepper (universal number-field style).
@@ -232,7 +232,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
     wire('reset', () => getRoom().send('reset'));
   }
   function bindInteractionControls({ handDropPosition, toggleLean }) {
-    // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/controls.js —
+    // Canvas input (context-menu, middle-click, wheel, dblclick) is wired via public/table/controls.js —
     // the composition root supplies the semantic input router.
     {
       const b = byId('controlsBtn');

@@ -1,4 +1,4 @@
-// public/rows.js — list-row builders.
+// public/ui/rows.js — list-row builders.
 //
 // Data in, element out. These read no room, no scene, no module state: everything they
 // need arrives as arguments, and every side effect is a callback the caller supplies.

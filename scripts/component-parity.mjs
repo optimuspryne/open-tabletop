@@ -7,7 +7,7 @@
  * colour swatches — is invisible to it. Three changes shipped in one day needed a human
  * to look at them for exactly this reason.
  *
- * This runs the real modules. public/editor-panel.js does not depend on client.js: it
+ * This runs the real modules. public/editor/editor-panel.js does not depend on client.js: it
  * receives the room through window.onOttRoom and nothing else, so a permissive stub room
  * is enough to reach the whole library UI with no server, no database and no auth.
  *
@@ -75,8 +75,8 @@ const ROWS_FIXTURE = `<!doctype html><meta charset="utf-8">
   <div id="toast"></div>
 </div>
 <script type="module">
-import { chatRow, memberRow, emptyRow, scoreRow, scoreEmptyRow, unclaimedHead, unclaimedRow, toastContent } from '/rows.js';
-import { applyIcons } from '/icons.js';
+import { chatRow, memberRow, emptyRow, scoreRow, scoreEmptyRow, unclaimedHead, unclaimedRow, toastContent } from '/ui/rows.js';
+import { applyIcons } from '/ui/icons.js';
 const log = document.getElementById('chatLog');
 const ts = Date.UTC(2026, 0, 2, 15, 4);   // fixed: toLocaleTimeString must not drift
 for (const [m, opt] of [
@@ -170,7 +170,7 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
   <button id="repeatButton">Hold</button>
   <div id="testRadial" hidden></div>
   <script type="module">
-    import { createUiSurfaces } from '/table/ui-surfaces.js';
+    import { createUiSurfaces } from '/ui/ui-surfaces.js';
     const ui = createUiSurfaces();
     const byId = (id) => document.getElementById(id);
     const dialog = byId('testDialog');
@@ -244,7 +244,7 @@ const SCENES = [
       assert(byId('sfxVol')?.oninput, 'Joined client did not finish binding controls');
       assert(messages.has('ping') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
       byId('sfxVol').value = '37'; byId('sfxVol').dispatchEvent(new Event('input'));
-      const audio = await import('/audio.js');
+      const audio = await import('/table/audio.js');
       assert(Math.abs(audio.getSfxVolume() - 0.37) < 0.001, 'SFX volume did not reach audio adapter');
       const muted = audio.getSfxMuted(); byId('sfxMute').click();
       assert(audio.getSfxMuted() !== muted, 'SFX mute was not wired');
@@ -373,8 +373,8 @@ const SCENES = [
       const { createScoreboard } = await import('/table/scoreboard.js');
       const { createMembership } = await import('/table/membership.js');
       const { createTimer } = await import('/table/timer.js');
-      const { createUiSurfaces } = await import('/table/ui-surfaces.js');
-      const { applyIcons, setIcon } = await import('/icons.js');
+      const { createUiSurfaces } = await import('/ui/ui-surfaces.js');
+      const { applyIcons, setIcon } = await import('/ui/icons.js');
       const byId = (id) => document.getElementById(id);
       const ui = createUiSurfaces();
       const messages = new Map(), sent = [], listeners = new Map(), collections = {}, tasks = new Map();
@@ -473,7 +473,7 @@ const SCENES = [
       const THREE = await import('three');
       const { createRoomSettings } = await import('/table/room-settings.js');
       const { createSkybox } = await import('/table/skybox.js');
-      const { gridMesh } = await import('/graphics.js');
+      const { gridMesh } = await import('/rendering/graphics.js');
       const { normalizeLighting } = await import('/shared/lighting.js');
       const byId = (id) => document.getElementById(id);
       const fieldWrap = (id) => byId(id).closest('.stepper') || byId(id);
@@ -843,7 +843,7 @@ const SCENES = [
         }
         throw new Error('Collider editor did not become ready');
       };
-      const { openColliderEditor } = await import('/compound-collider-editor.js');
+      const { openColliderEditor } = await import('/editor/compound-collider-editor.js');
       window.__componentParityCollider = openColliderEditor({
         source: '/models/pieces/chess/rook.glb',
         box: [0.5, 0.5, 0.5],
@@ -918,7 +918,7 @@ const SCENES = [
     drive: `
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
-      (await import('/icons.js')).applyIcons();`,
+      (await import('/ui/icons.js')).applyIcons();`,
   },
   {
     // Regression guard. The overflow menu is a .pop-group whose shape matches what
@@ -937,7 +937,7 @@ const SCENES = [
       document.getElementById('lib2Btn').click();
       document.querySelector('.libTab[data-tab="decks"]').click();
       ${WITH_ASSETS}
-      (await import('/icons.js')).applyIcons();
+      (await import('/ui/icons.js')).applyIcons();
       await new Promise((r) => setTimeout(r, 60));
       document.querySelector('.overflowTrigger').click();
       await new Promise((r) => setTimeout(r, 60));`,
@@ -956,7 +956,7 @@ const SCENES = [
       document.getElementById('lib2Btn').click();
       document.querySelector('.libTab[data-tab="decks"]').click();
       ${WITH_ASSETS}
-      (await import('/icons.js')).applyIcons();
+      (await import('/ui/icons.js')).applyIcons();
       await new Promise((r) => setTimeout(r, 60));
       document.querySelector('.overflowTrigger').click();
       await new Promise((r) => setTimeout(r, 60));
@@ -975,7 +975,7 @@ const SCENES = [
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
       ${WITH_ASSETS}
-      (await import('/icons.js')).applyIcons();
+      (await import('/ui/icons.js')).applyIcons();
       await new Promise((r) => setTimeout(r, 60));`,
   },
   {
@@ -988,7 +988,7 @@ const SCENES = [
     drive: `
       ${BE_ADMIN}
       window.onOttRoom(${STUB_ROOM});
-      const { applyIcons, setIcon } = await import('/icons.js');
+      const { applyIcons, setIcon } = await import('/ui/icons.js');
       applyIcons();
       document.body.classList.remove('ui-full');
       document.getElementById('roomGrp').hidden = false;
@@ -1015,7 +1015,7 @@ const SCENES = [
     root: '#trayTools',
     expect: { selector: '.trayDie', min: 8 },
     drive: `
-      (await import('/icons.js')).applyIcons();
+      (await import('/ui/icons.js')).applyIcons();
       const trayTools = document.getElementById('trayTools');
       trayTools.hidden = false;
       trayTools.querySelector('.trayDieMenu').hidden = false;
@@ -1040,7 +1040,7 @@ const SCENES = [
     root: '#roomSettingsModal',
     expect: { selector: '#lightingGlobe, .lightingControl', min: 4 },
     drive: `
-      const core = await import('/core.js');
+      const core = await import('/rendering/core.js');
       core.applyLighting({ preset: 'custom', azimuth: 275, elevation: 25,
         keyIntensity: 1.4, keyColor: '#ff9955', ambientIntensity: 0.4,
         ambientColor: '#667799', shadowSoftness: 0.2 }, { duration: 0 });
@@ -1050,7 +1050,7 @@ const SCENES = [
         pane.hidden = pane.dataset.pane !== 'lighting');
       document.querySelectorAll('#roomSettingsModal .libTab').forEach((tab) =>
         tab.classList.toggle('on', tab.dataset.tab === 'lighting'));
-      (await import('/icons.js')).applyIcons();`,
+      (await import('/ui/icons.js')).applyIcons();`,
   },
   {
     name: 'scene-save-options',
@@ -1068,7 +1068,7 @@ const SCENES = [
     drive: `
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
-      (await import('/icons.js')).applyIcons();
+      (await import('/ui/icons.js')).applyIcons();
       document.querySelector('.swatchPop > .pop-trigger').click();`,
   },
 ];

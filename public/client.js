@@ -16,8 +16,8 @@ import {
   getQuality,
   deviceClass,
   applyLighting,
-} from './core.js';
-import { initPerf } from './perf.js';
+} from './rendering/core.js';
+import { initPerf } from './rendering/perf.js';
 import {
   KIND,
   OVERLAY,
@@ -31,9 +31,9 @@ import {
   nameTag,
   makeYouChipTexture,
   gridMesh,
-} from './graphics.js';
-import { applyIcons, setIcon } from './icons.js';
-import { rankOf } from './rows.js';
+} from './rendering/graphics.js';
+import { applyIcons, setIcon } from './ui/icons.js';
+import { rankOf } from './ui/rows.js';
 import { colliderSpec } from '/shared/collider-spec.js';
 import { createColliderDebug } from './table/collider-debug.js';
 import { createWhiteboard } from './table/whiteboard.js';
@@ -54,8 +54,8 @@ import { BUILTIN_SKIES, createSkybox } from './table/skybox.js';
 import { createPieceView, meshPropsOf } from './table/piece-view.js';
 import { KINDS as PHYS, deckHeight, formatMeasure, trayCenter, seatAngle } from '/shared/pieces.js';
 import { MEASURE } from '/shared/overlays.js';
-import { playSfx, resumeAudio } from './audio.js';
-import { attachControls } from './controls.js';
+import { playSfx, resumeAudio } from './table/audio.js';
+import { attachControls } from './table/controls.js';
 import { createInputRouter } from './table/input-router.js';
 import { createPieceDrag } from './table/piece-drag.js';
 import { createTableShell } from './table/table-shell.js';
@@ -858,7 +858,7 @@ addEventListener('resize', () => {
 });
 
 // ===== Input seam ===========================================================
-// Raw canvas events → intents (see public/controls.js). These handlers own what each
+// Raw canvas events → intents (see public/table/controls.js). These handlers own what each
 // intent means through the composed router; controls.js owns which device gesture raises it.
 const INPUT = createInputRouter({
   getRoom: () => room,

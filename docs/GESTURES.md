@@ -4,7 +4,7 @@ Every input gesture the table understands, and whether a finger can reach it. Th
 inventory the roadmap's "audit the gesture surface" bullet asks for — it exists so that a new
 gesture is added with its touch story decided, not discovered later on an iPad.
 
-Read this with `docs/REFERENCE.md` for the modules involved: `public/controls.js` owns the
+Read this with `docs/REFERENCE.md` for the modules involved: `public/table/controls.js` owns the
 device profile (raw pointer/key events → logical intents), `public/client.js` owns the intent
 handlers (`press`, `release`, `secondaryPress`, `doubleClick`, `raiseAxis`, `snapHeld`, `ping`,
 `command`). The point of that seam is that a touch profile can raise the same intents a mouse
@@ -84,7 +84,7 @@ at a tuned 0.57°/px. Rotation snaps to the same 15° the mouse uses, which doub
 zone that stops a stray finger nudging a piece.
 
 Because the piece stays put while the fingers travel, the pointer no longer lands on it when the
-transform ends; the drag re-anchors instead of snapping (`public/drag.js`). That is a throw fix as
+transform ends; the drag re-anchors instead of snapping (`public/table/drag.js`). That is a throw fix as
 much as a position one — the jump would otherwise land inside the throw estimator's window and
 fling the piece at the speed of the jump.
 

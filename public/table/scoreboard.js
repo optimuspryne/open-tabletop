@@ -1,4 +1,4 @@
-import { scoreRow, scoreEmptyRow } from '../rows.js';
+import { scoreRow, scoreEmptyRow } from '../ui/rows.js';
 
 export function createScoreboard({
   getRoom,

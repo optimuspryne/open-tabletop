@@ -5,7 +5,7 @@ import { wireColliderPresets } from './collider-presets.js';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { wireBoardOutline } from './board-outline-editor.js';
 import * as THREE from 'three';
-import { applyIcons } from './icons.js';
+import { applyIcons } from '../ui/icons.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {

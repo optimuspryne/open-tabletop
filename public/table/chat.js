@@ -1,4 +1,4 @@
-import { chatRow } from '../rows.js';
+import { chatRow } from '../ui/rows.js';
 
 export function createChat({ getRoom, byId }) {
   // Append one chat message to the log; auto-scroll if the reader's at the bottom,

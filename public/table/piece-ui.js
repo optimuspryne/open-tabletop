@@ -1,4 +1,4 @@
-import { makeButton } from '../rows.js';
+import { makeButton } from '../ui/rows.js';
 import { dispenserDefinition } from '../../shared/pieces.js';
 // Piece menus and contextual feedback. Gesture state and server actions remain injected.
 export function createPieceUi({
@@ -234,7 +234,7 @@ export function createPieceUi({
 
   // ===== Touch context menu (long-press a piece) ==============================
   // A small floating menu of a piece's verbs; each item runs the same action a key or click
-  // would. Long-press raises secondaryPress (see public/controls.js): on a piece we open this,
+  // would. Long-press raises secondaryPress (see public/table/controls.js): on a piece we open this,
   // on empty felt we ping. Verbs are filtered by kind.
   function pieceMenuItems(id, type) {
     const items = [];

@@ -136,8 +136,8 @@ const server = await serveDir({
   // no engine, no WebGL, no network, and the pages load error-clean.
   stubOnly: [
     '/client.js',
-    '/editor-panel.js',
-    '/equalize.js',
+    '/editor/editor-panel.js',
+    '/ui/equalize.js',
     '/landing.js',
     '/vendor/colyseus.js',
   ],

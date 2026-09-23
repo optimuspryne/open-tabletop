@@ -577,33 +577,24 @@ docker-compose.yml     app + Postgres + Redis with Docker secret files
 proxmox/               host LXC launcher and in-container bare-metal installer
 
 public/
-  index.html/landing.js lobby, authentication, room list, and host requests
-  table.html/client.js  table shell and runtime networking/interaction/render loop
-  editor.html           compatibility redirect to table.html?workshop=1
-  editor-panel.js       library workshop: create, curate, preview, and spawn assets
-  admin.html/admin.js   site administration UI
-  core.js               Three.js scene/camera/renderer plus CONFIG and LIGHTING
-  graphics.js           textures, meshes, model loading, and the KIND registry
-  table/piece-view.js   mesh lifecycle, safe props, and interpolation
-  table/collider-debug.js  local GM collider visualization
-  table/ui-surfaces.js   reusable dialogs, sheets, clusters, and radial menus
-  table/whiteboard.js    whiteboard mesh, strokes, ownership, and controls
-  table/overlays.js      measurement overlays and board-surface placement
-  table/trays.js         personal tray visuals, controls, and camera travel
-  table/hand.js         private hand rendering, Show controls, sorting, and card gestures
-  table/inspection.js   enlarged piece/card inspection and appearance controls
-  controls.js           mouse/touch profiles converted to device-neutral intents
-  audio.js/credits.js   local SFX/music playback and attribution manifests
-  icons.js/equalize.js  shared icon behavior and early UI preference restoration
-  styles.css            shared design tokens, components, and page layouts
-  vendor/               self-hosted Three.js and Colyseus browser libraries
-  models/, sounds/      bundled models and sound effects
+  index.html/landing.js    lobby, authentication, room list, and host requests
+  table.html/client.js     table shell and runtime composition root
+  editor.html             compatibility redirect to table.html?workshop=1
+  admin.html/admin.js      site administration UI
+  credits.js              central music, sound, art, model, and library attribution
+  editor/                 library workshop and board/collider authoring
+  rendering/              scene/renderer, mesh/texture builders, collider surfaces, perf
+  ui/                     shared icons, rows, surface mechanics, early UI preferences
+  table/                  table feature controllers, input/gesture helpers, audio playback
+  styles.css              shared design tokens, components, and page layouts
+  vendor/                 self-hosted Three.js and Colyseus browser libraries
+  models/, sounds/        bundled models and sound effects
 ```
 
 The main game-client chain is `shared ← core ← graphics ← client`; `client`
 composes the focused `table/` controllers and also imports `controls` and
 `audio ← credits`. `table.html` loads
-`client.js` and `editor-panel.js`; `editor.html` redirects to its `?workshop=1` mode.
+`client.js` and `editor/editor-panel.js`; `editor.html` redirects to its `?workshop=1` mode.
 The landing and admin pages
 are standalone (`landing.js` / `admin.js`, plain `fetch` to the HTTP API).
 Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus are self-hosted under `public/vendor/`, so there are no third-party CDN fetches at runtime. That's also what makes the enforced `script-src 'self'` Content-Security-Policy possible.
@@ -620,11 +611,11 @@ Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus a
   throw/roll behavior, collision sounds, spawn/bounds behavior, self-righting,
   and the live-piece cap. Piece dimensions and collider construction themselves
   live in `shared/pieces.js` and `server/physics.js`.
-- **`CONFIG`** in `public/core.js` — client feel: grab/scroll height, model
+- **`CONFIG`** in `public/rendering/core.js` — client feel: grab/scroll height, model
   normalization size, render delay, input thresholds, inspect zoom, drop-marker
   and measurement-overlay appearance, spawn/upload ranges, texture resolutions,
   and shuffle animation.
-- **`LIGHTING`** in `public/core.js` — hemisphere fill, sun, environment-map
+- **`LIGHTING`** in `public/rendering/core.js` — hemisphere fill, sun, environment-map
   strength (three numbers).
 - **Server limits** in `server.js` — `TABLE_LIMIT` (resizable-table bounds),
   `SCENE_MAX_BYTES` (snapshot-size guard), `GRID_LIFT_MAX` (maximum grid height),
@@ -637,24 +628,24 @@ Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus a
   Lean In offset and normal seat camera. `HAND_HOVER` in `public/table/hand.js`
   controls a dragged hand card's preview height; the tray camera and transition
   live in `public/table/trays.js`. In
-  `public/controls.js`, `LONG_PRESS_MS` / `LONG_PRESS_SLOP` control touch
+  `public/table/controls.js`, `LONG_PRESS_MS` / `LONG_PRESS_SLOP` control touch
   long-press timing and movement tolerance; keep the slop aligned with
   `CONFIG.input.dragPx`.
-- **Rendering** — `SHADOW_MARGIN` in `public/core.js` pads the directional-light
+- **Rendering** — `SHADOW_MARGIN` in `public/rendering/core.js` pads the directional-light
   shadow camera around the live table.
 
 ## Add a piece variant or kind
 
 The small path is a new **variant of an existing kind**. Add data to the relevant
 registry in `shared/pieces.js` (`PROPS`, `BOARDS`, `DISPENSERS`, deck/tile data,
-and so on), add any required mesh or painter support in `public/graphics.js`, and
+and so on), add any required mesh or painter support in `public/rendering/graphics.js`, and
 expose it through the built-in or library UI. Existing spawning, synchronization,
 movement, and scene persistence can then reuse that kind's established behavior.
 
 A genuinely new synced **kind** touches more seams:
 
 1. Add its mass/shape descriptor to `KINDS` in `shared/pieces.js` and its mesh plus
-   interaction verbs to the client `KIND` registry in `public/graphics.js`.
+   interaction verbs to the client `KIND` registry in `public/rendering/graphics.js`.
 2. Extend `spawnPayload` in `server/message-validation.js` with an exact,
    bounded props schema; unknown kinds are rejected rather than passed through.
 3. Add collider construction in `server/physics.js` when the generic boxed-shape
@@ -824,7 +815,7 @@ and everyone at the table hears the landing; `*-pickup` clips are local (only yo
 hear yourself grab something). Per-player effect/music volume and mute live under
 the **🔊 Sound** tool.
 
-Each action maps to a **list** of clips in the `SOUNDS` map in `public/audio.js`,
+Each action maps to a **list** of clips in the `SOUNDS` map in `public/table/audio.js`,
 and one is picked at random each time it plays — drop several files in and name them
 however you like (e.g. `die-roll-1.ogg`, `die-roll-2.ogg`); only the array decides
 what's used. A bare string works too, and missing files are skipped silently, so the

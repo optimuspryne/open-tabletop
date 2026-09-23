@@ -1,4 +1,4 @@
-// public/clicks.js — what a completed click means.
+// public/table/clicks.js — what a completed click means.
 //
 // Pure, so the policy can be tested without a room, a renderer or a browser. client.js owns the
 // consequences (open the menu, send the verb, defer for a double); this file owns the decision.

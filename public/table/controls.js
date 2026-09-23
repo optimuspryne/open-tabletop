@@ -1,4 +1,4 @@
-// public/controls.js — the input seam.
+// public/table/controls.js — the input seam.
 //
 // Device PROFILES translate raw input (mouse buttons + wheel today; touch and, later,
 // a gamepad) into a small, device-agnostic INTENT vocabulary. table/input-router.js

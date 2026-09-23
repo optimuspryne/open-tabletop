@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * input-test.mjs — behavioural tests for the input seam (public/controls.js).
+ * input-test.mjs — behavioural tests for the input seam (public/table/controls.js).
  *
  * controls.js translates raw DOM input into the intent vocabulary client.js implements.
  * That seam is unusually testable: attach it to a bare <div>, hand it a recording
@@ -24,7 +24,7 @@ const ROOT = resolve(import.meta.dirname, '..', 'public');
 const FIXTURE = `<!doctype html><meta charset="utf-8">
 <div id="surface" style="width:400px;height:400px"></div>
 <script type="module">
-import { attachControls } from '/controls.js';
+import { attachControls } from '/table/controls.js';
 const rec = [];
 let held = false;
 let axisTarget = true;

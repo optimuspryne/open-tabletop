@@ -15,7 +15,7 @@ import {
   getMusicVolume,
   isMusicPlaying,
   onMusicTrack,
-} from '../audio.js';
+} from './audio.js';
 import {
   MUSIC,
   MUSIC_CREDIT,

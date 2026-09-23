@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetTextureURL } from '../public/asset-texture-url.js';
+import { assetTextureURL } from '../public/rendering/asset-texture-url.js';
 
 test('saved asset images use standard WebP derivatives for previews', () => {
   assert.equal(

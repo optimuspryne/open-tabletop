@@ -2,7 +2,7 @@ import {
   createColliderSurface,
   disposeColliderSurface,
   colliderSurfaceHeight,
-} from '../collider-surface.js';
+} from '../rendering/collider-surface.js';
 import { colliderSpec } from '../../shared/collider-spec.js';
 import { meshPropsOf } from './piece-view.js';
 // Transient table visuals and their lifetimes; the root retains the frame and binding order.

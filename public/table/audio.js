@@ -1,8 +1,8 @@
-// public/audio.js — Web Audio sound-effect manager for built-in objects.
+// public/table/audio.js — Web Audio sound-effect manager for built-in objects.
 // Short clips load once into buffers and play fire-and-forget (overlaps are fine).
 // Files live in /sounds/ (self-hosted; the enforced CSP allows same-origin media).
 // A file that isn't there yet is skipped silently, so the app runs before you add assets.
-import { MUSIC } from './credits.js';
+import { MUSIC } from '../credits.js';
 
 // logical name -> a LIST of files under /sounds/; one is picked at random each play.
 // Add variants for variety, e.g. 'die-roll': ['die-roll-1.ogg', 'die-roll-2.ogg', 'die-roll-3.ogg'].
