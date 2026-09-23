@@ -588,8 +588,18 @@ public/
   table/                  table feature controllers, input/gesture helpers, audio playback
   styles.css              shared design tokens, components, and page layouts
   vendor/                 self-hosted Three.js and Colyseus browser libraries
-  models/, sounds/        bundled models and sound effects
+  static_assets/          bundled mahjong, sky, textures, models, music, and sounds
 ```
+
+Bundled files live in `public/static_assets/{mahjong,sky,textures,models,music,sounds}/`.
+Their public URLs stay `/mahjong/...`, `/sky/...`, `/textures/...`, `/models/...`, `/music/...`,
+and `/sounds/...`, so existing saved games, scenes, and library references remain valid.
+To rename or relocate the bundle, move those six folders together and change only
+`STATIC_ASSETS_DIR` in `server/static-assets.js` (a project-relative or absolute filesystem path).
+Restart the server afterward. Production serving, browser test fixtures, and `assets:colliders`
+all use this setting; browser code and saved URLs need no edits. Keep deployments supplied with
+the configured directory if it lives outside the application tree. Uploaded assets continue to
+use `ASSETS_DIR` and `/assets/...` independently.
 
 The main game-client chain is `shared ← core ← graphics ← client`; `client`
 composes the focused `table/` controllers and also imports `controls` and
@@ -789,7 +799,7 @@ saved-assets/            (ASSETS_DIR, default ./saved-assets — image/model FIL
 `/assets/<kind>/<file>` is served statically. Card faces are stored as
 *references* (a `/assets/…` URL or a procedural string like `rank:A:♠:#000`),
 never image bytes — so a full backup of image decks means dumping the DB **and**
-copying `saved-assets/`. Bundled models live separately under `public/models/`
+copying `saved-assets/`. Bundled models live separately under `public/static_assets/models/`
 (trusted, shipped with the app — no upload path).
 
 For rendering, local uploaded card/tile faces are served through a persistent 768-pixel WebP
@@ -809,7 +819,7 @@ proportions. `modelScale`, `modelRot`, and the tint mode all live in
 
 ## Sound effects
 
-Built-in sound effects live in `public/sounds/`. `*-drop` clips fire on the real
+Built-in sound effects live in `public/static_assets/sounds/`. `*-drop` clips fire on the real
 **physics impact** — the moment a piece lands on the table, not when you let go —
 and everyone at the table hears the landing; `*-pickup` clips are local (only you
 hear yourself grab something). Per-player effect/music volume and mute live under

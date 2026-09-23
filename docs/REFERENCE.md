@@ -42,6 +42,8 @@ The codebase:
 | `server/user-queries.js`                                                                               | Node    | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection                                                                                                      |
 | `server/room-queries.js`                                                                               | Node    | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection                                                                       |
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
+| `server/static-assets.js` | Node | Bundled asset directory setting, trusted filesystem resolution, and stable URL mounts |
+| `server/http/routes/static-assets.js` | Node | Static asset HTTP serving with existing Mahjong cache and media range behavior |
 | `public/rendering/core.js`                                                                                       | browser | Scene/camera/renderer/controls, visual-asset readiness + `CONFIG` & `LIGHTING` tunables                                                                                                         |
 | `public/rendering/graphics.js`                                                                                   | browser | Texture and mesh builders, shared immutable card/tile geometry caches, model loading, `KIND` registry                                                                                            |
 | `public/client.js`                                                                                     | browser | Game-table composition root: networking, controller wiring, scene/input adapters, loading gate, render loop                                                             |
@@ -1736,13 +1738,36 @@ lifetime (30 days by default, bounded to 1–365).
 
 ---
 
+## Bundled static asset paths and serving
+
+- **`STATIC_ASSETS_DIR`** in `server/static-assets.js`: the one location setting, defaulting to
+  `public/static_assets`. Set a project-relative or absolute filesystem path after moving the
+  six category directories together, then restart the server.
+- **`staticAssetPath(assetPath, assetsDir?)`**: resolves a trusted catalog path such as
+  `/models/pieces/chess/rook.glb` beneath that directory. Accepts paths with or without a leading
+  slash. This is for catalog/configuration input; request containment is handled by Express.
+- **`staticAssetMounts(assetsDir?)`**: returns the `/mahjong/`, `/sky/`, `/textures/`, `/models/`,
+  `/music/`, and `/sounds/` URL-to-directory mapping used by production and browser fixtures.
+- **`createStaticAssetRouter({assetsDir?})`** in `server/http/routes/static-assets.js`: mounts
+  bundled files with a one-day cache for `/mahjong/faces`, default revalidation for other files,
+  and Express's usual HEAD, conditional, range, and missing-file handling. `server.js` registers
+  it before the general public tree.
+- **`serveDir`** in `scripts/lib/headless.mjs`: includes these mounts by default; explicit fixture
+  mounts can override a category. **`measureRegisteredColliders`** in `scripts/measure-colliders.mjs`
+  resolves registry model URLs through `staticAssetPath`.
+
+The stable public URLs are independent of the physical folder name. Existing saved URLs, browser
+catalogs, and sky validation continue to work after a move; uploaded `/assets/...` paths are
+unaffected. `test/backend-static-assets.js` covers live catalog requests, relocation to another
+root, cache revalidation, audio ranges, missing/traversal requests, and browser fixture mounts.
+
 ## `public/rendering/core.js` — setup + tunables
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
 felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
 wooden rim around the edge; the physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor/tint the felt
 fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`walnut`/`birch`/`green`/
-`oak`, from `public/textures/wood-*.png`; the felt fabric is `public/textures/felt.jpg`),
+`oak`, from `public/static_assets/textures/wood-*.png`; the felt fabric is `public/static_assets/textures/felt.jpg`),
 **`setTableVisible(visible)`** (toggle the felt and rim together; initial room join reveals them
 only after synchronized appearance is applied), **`setSeatCameraReady()`** (open the second
 initial-view gate after the presence controller applies the synchronized seat camera),

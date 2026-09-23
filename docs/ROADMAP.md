@@ -241,7 +241,7 @@ scoped against the real tree rather than from memory.
      and dice box; per-player default carries the texture. Later, add: publish `brushed`/`glow`
      to phones if wanted, tune the upload size / UV scale, a seamless-tiling toggle.
    - *Pipped d6: ✅ shipped 2026-09-02.* Two built-in dice — Rounded Pips + Square Pips — as
-     bundled `.glb` models (`DICE_MODELS`, `public/models/pieces/dice/`), carried in `props.model`.
+     bundled `.glb` models (`DICE_MODELS`, `public/static_assets/models/pieces/dice/`), carried in `props.model`.
      A normal d6 for physics/value/collider; only the mesh differs. Body (`Ivory`) + pips (`Dots`)
      materials tinted by `color`/`textColor`, so they recolour like any die. Spawn from the dice
      box Add menu + the library built-in Dice tab (`dieModelPreviewURL`).
@@ -302,7 +302,7 @@ Small, concrete, each completes an existing feature:
   A real extraction, scoped in `UI_backlog.md`.
 - **ASSET_CREDITS — tile/box sound cues** — the Mahjong faces are credited in
   `docs/ASSET_CREDITS.md`. Still missing: the tile and tile-box drop/pickup cues
-  (`public/sounds/tile-*.ogg`, `tiledeck-*.ogg`) — real audio files, not procedural, so they need a
+  (`public/static_assets/sounds/tile-*.ogg`, `tiledeck-*.ogg`) — real audio files, not procedural, so they need a
   source line like the other sound packs.
 
 ## Deliberately out (for now)

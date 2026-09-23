@@ -1,11 +1,10 @@
 #!/usr/bin/env node
 
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { BOARD_SIZE, BOARDS, DECK_MODELS, DISPENSERS, PROPS } from '../shared/pieces.js';
+import { staticAssetPath } from '../server/static-assets.js';
 
-const ROOT = resolve(import.meta.dirname, '..');
 const MODEL_SIZE = 1.6; // public/rendering/core.js CONFIG.model.size; modeled dispensers normalize to this
 const JSON_CHUNK = 0x4e4f534a;
 const GLB_MAGIC = 0x46546c67;
@@ -181,7 +180,7 @@ export async function measureRegisteredColliders() {
   const rows = [];
   for (const registration of registrations()) {
     const { family, key, spec, box, mode } = registration;
-    const file = resolve(ROOT, 'public', spec.model.replace(/^\//, ''));
+    const file = staticAssetPath(spec.model);
     const rawBounds = await measureGlbFile(file, spec.modelRot);
     const rawSize = sizeOf(rawBounds);
     const configuredModelScale = spec.modelScale || 1;

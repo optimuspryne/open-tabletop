@@ -14,6 +14,9 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Move all six bundled asset trees into `public/static_assets/`. Centralize their filesystem
+  location in `STATIC_ASSETS_DIR`, shared by HTTP serving, browser fixtures, and collider tools,
+  while preserving public URLs and saved references, Mahjong caching, and audio range requests.
 - Organize 19 browser modules into `public/editor/`, `public/rendering/`, `public/ui/`, and
   `public/table/` by responsibility. Update imports, page scripts, test fixtures, and current
   documentation while preserving module behavior and script loading order.

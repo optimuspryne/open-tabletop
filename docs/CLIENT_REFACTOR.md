@@ -97,6 +97,46 @@ only path/reference updates; no functions or helpers were added, removed, or beh
 | `docs/GESTURES.md`, `docs/ROADMAP.md` | Refresh source paths. |
 | `CHANGELOG.md` | Record the organization change under Unreleased. |
 
+## Bundled asset organization follow-up
+
+All six asset trees were moved beneath `public/static_assets/`, preserving all 192 file contents.
+`STATIC_ASSETS_DIR` in `server/static-assets.js` is the sole filesystem location setting for the
+bundle. The production router, browser fixture server, and collider measurement tool share its
+path mapping. Existing `/mahjong/`, `/sky/`, `/textures/`, `/models/`, `/music/`, and `/sounds/`
+URLs remain stable, including URLs persisted in rooms, scenes, and library entries.
+
+To move the bundle again, relocate its six category folders together, change `STATIC_ASSETS_DIR`
+to a project-relative or absolute path, and restart the server. Client code and saved references
+need no edits. Uploaded assets keep their independent storage setting. Manual verification passed
+on 2026-09-23; no regressions were reported. For future verification, restart the server and
+refresh before testing Mahjong faces, model previews/spawning, table/rim textures, built-in and
+saved skyboxes, sound effects, music playback/seeking, and an existing save.
+
+Automated verification passed: `npm run check` (629 tests), `npm run test:components` (desktop
+and touch), and `npm run assets:colliders` (all registered model files resolved and measured).
+HTTP regressions cover catalog URLs, an alternate nested asset root, conditional caching,
+audio byte ranges, missing/traversal requests, and fixture mount overrides. SHA-256 comparison
+confirmed all 192 relocated files are unchanged.
+
+| Files | Change |
+| --- | --- |
+| `public/mahjong/` → `public/static_assets/mahjong/` (42 files) | Relocated without content changes. |
+| `public/sky/` → `public/static_assets/sky/` (25 files) | Relocated without content changes. |
+| `public/textures/` → `public/static_assets/textures/` (6 files) | Relocated without content changes. |
+| `public/models/` → `public/static_assets/models/` (17 files) | Relocated without content changes. |
+| `public/music/` → `public/static_assets/music/` (35 files) | Relocated without content changes. |
+| `public/sounds/` → `public/static_assets/sounds/` (67 files) | Relocated without content changes. |
+| `server/static-assets.js` | Added `STATIC_ASSETS_DIR`, `staticAssetPath`, and `staticAssetMounts` to separate stable public URLs from physical storage. |
+| `server/http/routes/static-assets.js` | Added `createStaticAssetRouter`, retaining existing cache and media-serving behavior. |
+| `server.js` | Registers the bundled router before general static serving, replacing the direct Mahjong directory mount. |
+| `scripts/lib/headless.mjs` | `serveDir` uses the same mounts, with explicit fixture overrides preserved. |
+| `scripts/measure-colliders.mjs` | `measureRegisteredColliders` resolves model files through `staticAssetPath`; removed the local root constant. |
+| `test/backend-static-assets.js` | Added HTTP/catalog, relocation/cache/range, and fixture regression tests plus the local `start` server helper. |
+| `public/credits.js`, `public/table/skybox.js`, `shared/pieces.js` | Updated authoring/location comments; runtime asset URLs and catalog behavior are unchanged. |
+| `README.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/CLIENT_REFACTOR.md` | Document configuration, relocation, stable URLs, and file/helper changes. |
+| `docs/ASSET_CREDITS.md`, `docs/ROADMAP.md` | Updated current on-disk asset paths; attribution details are preserved. |
+| `CHANGELOG.md` | Recorded the relocation under Unreleased. |
+
 ## Target architecture
 
 Create a `public/table/` directory for table-client feature modules. This mirrors the server's
@@ -111,6 +151,13 @@ public/
   landing.js                     lobby entry point
   admin.js                       administration entry point
   credits.js                     shared attribution manifest
+  static_assets/                 bundled media; URLs mounted by server/static-assets.js
+    mahjong/                     tile face art
+    sky/                         skyboxes
+    textures/                    felt and rim textures
+    models/                      built-in GLB models
+    music/                       background tracks
+    sounds/                      sound effects
   editor/
     editor-panel.js              library workshop and asset forms
     board-outline-editor.js      top-down board outline authoring

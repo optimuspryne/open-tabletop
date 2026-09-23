@@ -199,7 +199,7 @@ export const PROPS = {
     stand: 'flat',
     pearl: true,
   },
-  // Bundled .glb models (public/models/pieces). worldSizes differ wildly, so each has its own modelScale.
+  // Bundled .glb models (/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
     collider: { box: [0.4033, 0.0285, 0.4033], type: 'cylinder' },
@@ -232,7 +232,7 @@ export const PROPS = {
     stand: 'flat',
     pearl: true,
   }, // ~0.4 wide, fits the go board grid
-  // Chess pieces are bundled .glb models (public/models/pieces/chess), CC0 by rehcub.
+  // Chess pieces are bundled .glb models (/models/pieces/chess), CC0 by rehcub.
   // Models carry a baked 0.1 node scale, so their true loaded height is ~0.66 (king); modelScale 2.124
   // brings the king to ~1.4 tall. One uniform scale keeps relative heights; colliders are precomputed.
   'chess-pawn': {
@@ -325,7 +325,7 @@ export const standMode = (shape) => {
   const box = spec.collider && spec.collider.box;
   return box && box[1] <= box[0] && box[1] <= box[2] ? 'flat' : true;
 };
-// Built-in board models (public/models/boards), CC0. Modeled ~0.43 units, so a
+// Built-in board models (/models/boards), CC0. Modeled ~0.43 units, so a
 // large modelScale fills the table; colliders precomputed (worldSize*scale/2).
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
 // `grid` drives "calibrate grid to this board": `cells` across the playing area, and
@@ -457,7 +457,7 @@ export const LETTER_DIST = {
 };
 
 // --- Mahjong -----------------------------------------------------------------
-// The standard 144-tile wall, built from bundled CC0 face art (public/mahjong/faces/*.png, composited
+// The standard 144-tile wall, built from bundled CC0 face art (/mahjong/faces/*.png, composited
 // onto ivory tiles). Each face id → its image URL; buildMahjongWall() (server) stamps the counts:
 //   3 suits × ranks 1-9 × 4  +  4 winds × 4  +  3 dragons × 4  +  4 flowers  +  4 seasons  = 144.
 // The white dragon (dragW) is a generated blue-frame blank (its art wasn't in the set). Edit the lists
@@ -1083,7 +1083,7 @@ export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
 
 // The set of table shapes; 'rect' is the historical default. Interpreted against tableX/tableZ.
 export const TABLE_SHAPES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
-// Wooden-rim textures (public/textures/wood-*.jpg); 'mahogany' is the default.
+// Wooden-rim textures (/textures/wood-*.jpg); 'mahogany' is the default.
 export const RIM_WOODS = ['mahogany', 'walnut', 'birch', 'green', 'oak'];
 
 // The table's outline as a closed polygon of {x,z} perimeter points, for a shape + half-extents.

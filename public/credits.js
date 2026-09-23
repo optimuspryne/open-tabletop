@@ -2,7 +2,7 @@
 //
 // MUSIC drives BOTH the background-music player and the credits panel. Kevin MacLeod's
 // tracks are CC BY 4.0, which REQUIRES a visible credit — the credits panel is it.
-// To add a track: drop the file in public/music/ and add a { title, file } entry below.
+// To add a track: drop the file in the configured bundled asset root under music/ and add a { title, file } entry below.
 //
 // The credit-only arrays below (SFX / MODEL / ART / LIB) feed the same Credits panel.
 // Most bundled assets are CC0 and listed here as a courtesy; the CC BY entries
@@ -62,7 +62,7 @@ export const MUSIC_CREDIT = {
 // `url` links the author's name in the panel; `note` carries any extra attribution
 // (a sub-credited texture, a requested site link) or a licence caveat.
 
-// Sound effects — public/sounds/ (all CC0; listed as a courtesy).
+// Sound effects — /sounds/ URLs (all CC0; listed as a courtesy).
 export const SFX_CREDITS = [
   {
     title: '54 Casino Sound Effects',
@@ -90,7 +90,7 @@ export const SFX_CREDITS = [
   },
 ];
 
-// 3D models — public/models/ (CC0 unless noted; the CC BY entries are a licence obligation).
+// 3D models — /models/ URLs (CC0 unless noted; the CC BY entries are a licence obligation).
 export const MODEL_CREDITS = [
   {
     title: 'Chess Set',
@@ -106,7 +106,7 @@ export const MODEL_CREDITS = [
   },
 ];
 
-// 2D art — skyboxes (public/sky/) + tile faces (public/mahjong/).
+// 2D art — skyboxes (/sky/ URLs) + tile faces (/mahjong/ URLs).
 export const ART_CREDITS = [
   {
     title: 'Cloudy skyboxes',

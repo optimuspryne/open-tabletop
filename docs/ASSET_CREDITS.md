@@ -10,7 +10,7 @@ requirement is actually met.
 
 ---
 
-## 3D models - `public/models/`
+## 3D models - `public/static_assets/models/`
 
 ### Chess pieces  - `pieces/chess/`
 - **Author:** JustinARay - https://opengameart.org/users/justinaray
@@ -33,7 +33,7 @@ requirement is actually met.
 
 ---
 
-## Sound effects - `public/sounds/`
+## Sound effects - `public/static_assets/sounds/`
 All CC0 (public domain).
 
 - **54 Casino Sound Effects** - Kenney (https://opengameart.org/users/kenney)
@@ -47,7 +47,7 @@ All CC0 (public domain).
 
 ---
 
-## Skyboxes - `public/sky/equirect/`
+## Skyboxes - `public/static_assets/sky/equirect/`
 
 - **Cloudy Skyboxes** - Screaming Brain Studios
   (https://opengameart.org/users/screaming-brain-studios)
@@ -56,7 +56,7 @@ All CC0 (public domain).
 
 ---
 
-## Tile art - `public/mahjong/faces/`
+## Tile art - `public/static_assets/mahjong/faces/`
 
 - **Mahjong Tileset** - CodeInfernoGames
   (https://opengameart.org/users/codeinfernogames)
@@ -65,21 +65,21 @@ All CC0 (public domain).
 
 ---
 
-## Table rim texture - `public/textures/`
+## Table rim texture - `public/static_assets/textures/`
 
 - **5 Wood Textures** - by **Luke.RUSTLTD**, https://opengameart.org/content/5-wood-textures
 - **License:** CC0 (public domain; no attribution required - credited here as a courtesy). Four of
   the set are used as the selectable wooden table rim, re-encoded to JPEG:
-  `public/textures/wood-mahogany.png` (default), `wood-walnut.png`, `wood-birch.png`,
+  `public/static_assets/textures/wood-mahogany.png` (default), `wood-walnut.png`, `wood-birch.png`,
   `wood-green.png`, `wood-oak.png`.
 
 ---
 
-## Felt texture - `public/textures/felt.jpg`
+## Felt texture - `public/static_assets/textures/felt.jpg`
 
 - **Felt Backgrounds** - by **jbp4444**, https://opengameart.org/content/felt-backgrounds
 - **License:** CC0 (public domain; no attribution required - credited here as a courtesy). Scans of
-  real felt; used desaturated as the tintable felt surface (`public/textures/felt.jpg`).
+  real felt; used desaturated as the tintable felt surface (`public/static_assets/textures/felt.jpg`).
 
 ---
 

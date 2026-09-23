@@ -12,6 +12,7 @@ import { readFile, mkdtemp, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, extname } from 'node:path';
+import { staticAssetMounts } from '../../server/static-assets.js';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -49,7 +50,7 @@ export function findChrome() {
 }
 
 /**
- * Static file server over `root`.
+ * Static file server over `root`, with the production bundled-asset mounts.
  *   stubJs: serve an empty body for every .js (deterministic, script-free snapshots)
  *   stubOnly: serve an empty body for just these paths (e.g. ['/client.js'])
  *   routes: virtual paths → { body, type }
@@ -57,6 +58,7 @@ export function findChrome() {
  * `missing` collects 404s so a caller can report them rather than silently rendering wrong.
  */
 export async function serveDir({ root, stubJs = false, stubOnly = [], routes = {}, mounts = {} }) {
+  mounts = { ...staticAssetMounts(), ...mounts };
   const missing = [];
   const server = await new Promise((ok) => {
     const s = createServer(async (req, res) => {

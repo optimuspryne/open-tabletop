@@ -597,7 +597,7 @@ The kinds:
 Procedural visuals are drawn onto `<canvas>` and used as `CanvasTexture`s (pips,
 card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
-are bundled `.glb` files under `public/models/` (see `ASSET_CREDITS.md`); the current coin, Go-bowl,
+are bundled `.glb` files under `public/static_assets/models/` (see `ASSET_CREDITS.md`); the current coin, Go-bowl,
 and human-token models are original project assets.
 
 ### Models: scale, orientation, color, and material
@@ -1107,6 +1107,26 @@ in `localStorage`, none of it synced. Kevin MacLeod's tracks are **CC BY 4.0**,
 which requires visible attribution, so `credits.js` also feeds a **credits panel**
 (music + `SFX_CREDITS` + `LIB_CREDITS`); that panel is a licensing obligation, not
 decoration.
+
+## Bundled static assets
+
+`public/static_assets/` contains the six shipped asset trees: `mahjong/`, `sky/`, `textures/`,
+`models/`, `music/`, and `sounds/`. Their filesystem location is controlled only by
+`STATIC_ASSETS_DIR` in `server/static-assets.js`; relative values resolve from the project root,
+independently of the process working directory, and absolute paths are supported.
+
+`staticAssetMounts` maps the stable category URLs (`/models/...`, `/sky/...`, etc.) to that root.
+`createStaticAssetRouter` installs those mounts before general public-file serving and preserves
+the one-day Mahjong face cache, default revalidation elsewhere, and Express range/HEAD behavior.
+Saved model refs, Mahjong faces, sky descriptors, and browser texture/audio paths keep their
+existing URLs. This avoids rewriting persisted rooms, scenes, or libraries when the directory
+moves. No database migration or client asset-URL rewrite is needed.
+
+The browser fixture server reuses `staticAssetMounts`; collider measurement uses
+`staticAssetPath` for trusted registry URLs. These filesystem helpers are Node-only. Browser
+modules continue to request the stable public paths. To relocate the bundle again, move the six
+folders together, change `STATIC_ASSETS_DIR`, and restart the server. Deployments must provide the
+configured directory; uploaded originals and their `ASSETS_DIR` configuration are independent.
 
 ## Persistence: the asset library
 

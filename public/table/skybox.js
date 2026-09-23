@@ -1,7 +1,7 @@
 // Room skybox presentation and viewer-local resolution. The library owns the picker;
 // the composition root passes synchronized refs and publishes the built-in catalog.
 export const BUILTIN_SKIES = [
-  // baked-in: drop files in public/sky/ and add entries here
+  // baked-in: drop files in the configured bundled asset root under sky/ and add entries here
   // equirect: { name: 'Observatory', url: '/sky/observatory.jpg' }
   { name: 'Cloudy - Chaotic', url: '/sky/equirect/cloudy_chaotic.png' },
   { name: 'Cloudy - Clear Afternoon', url: '/sky/equirect/cloudy_clear_afternoon.png' },

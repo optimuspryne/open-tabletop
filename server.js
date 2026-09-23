@@ -83,6 +83,7 @@ import { createAuthRouter } from './server/http/routes/auth.js';
 import { createColliderPresetsRouter } from './server/http/routes/collider-presets.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
+import { createStaticAssetRouter } from './server/http/routes/static-assets.js';
 import {
   createAssetTextureRouter,
   createTexturePrebuilder,
@@ -1222,9 +1223,8 @@ app.post(
   },
 );
 
-// Bundled Mahjong faces keep stable paths within a release. Let repeat room entries reuse them
-// without 42 conditional requests, while the general public tree (including JS) still revalidates.
-app.use('/mahjong/faces', express.static('public/mahjong/faces', { maxAge: '1d' }));
+// Bundled asset URLs are independent of their configured location on disk.
+app.use(createStaticAssetRouter());
 app.use(express.static('public'));
 app.use('/shared', express.static('shared'));
 
