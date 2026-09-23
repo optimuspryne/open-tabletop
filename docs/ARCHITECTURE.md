@@ -153,7 +153,7 @@ importing a room singleton:
 - **`public/client.js`** — the browser composition root and remaining table runtime: networking,
   controller construction, input dispatch, piece dragging, seats/markers, and the ordered render
   loop. It retains shared session and scene state (`room`, `down`, `meshes`, `buffers`) while
-  inspection, private hand, overlays, whiteboard, and trays own their feature state. A full-screen
+  selection, inspection, private hand, overlays, whiteboard, and trays own their feature state. A full-screen
   Loading Table cover remains above the runtime until the local mesh count matches synchronized
   pieces, the player's seat exists, visual assets are idle, and
   pieces/players/overlays remain unchanged for 300 ms. Two complete frames render before it fades,
@@ -178,6 +178,11 @@ importing a room singleton:
   the preview, color/team/finish controls, deferred click timing, drawn-card placement, and pointer
   rotation. The hand requests inspection through an injected callback; the composition root
   forwards room messages and supplies the piece-view visibility callback.
+- **`public/table/selection.js`** — local selection, Select-tool mode, marquee gestures, highlight
+  rings, batch commands, and toolbar/recolor state. Compatibility and compose/gather planning
+  operate on plain piece data. The composition root supplies room access, meshes, scene/camera,
+  canvas, marker settings, and board height; it retains input priority, pointer capture, and
+  camera-control arbitration, and removes selected IDs when pieces disappear or are grabbed remotely.
 - **`public/table/overlays.js`** — measurement geometry, rendered-board surface elevation,
   selection, drag previews, permissions, and overlay state/message bindings.
 - **`public/table/whiteboard.js`** — whiteboard mesh, local stroke replay, ownership/camera mode,
@@ -412,9 +417,13 @@ offset from the anchor in the server-only `groups` map, and each frame set every
 the whole formation rigidly, and `releaseGroup` frees each piece through the same `releasePiece`
 helper the single `release` uses.
 
-The **selection itself is purely local** — a Set of ids on each client, like a cursor, never in
-synced state, so it adds no schema and no one sees yours. Two gestures feed it (a Shift modifier
-and a discoverable Select tool), both painting a screen-space marquee that tests each piece's
+The **selection itself is purely local** — a Set of ids owned by `createSelection` in
+`public/table/selection.js`, never in synced state, so it adds no schema and no one sees yours.
+The controller exposes membership/count queries and copied ID arrays without sharing its mutable
+Set. `client.js` forwards semantic gestures and commands, calls `selection.update()` in the render
+loop to follow meshes, dispose stale rings, and refresh the toolbar, and retains group drag physics
+messages. Shift-click and Select-tool taps toggle individual movable pieces. Dragging empty felt
+with Shift or the Select tool paints a screen-space marquee that tests each piece's
 _projected_ centre against the box — no 3D picking — and the highlight rings and marquee wear
 that player's own accent color. Ownership is the conflict guard, so the selection can safely
 auto-drop any piece someone else grabs or that gets removed, and never goes stale.

@@ -16,7 +16,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
 ### Changed
 - Extract local multi-selection, marquee gestures, highlight rings, batch actions, recoloring,
   and compose/gather planning into a dedicated client controller with selection-rule and
-  desktop/touch toolbar coverage.
+  desktop/touch toolbar coverage, and document its API and ownership boundaries in the client
+  reference and architecture guides.
 - Extract enlarged-piece and drawn-card inspection, color/team/finish controls, deferred
   double-clicks, and inspection pointer rotation into a dedicated client controller.
 - Extract private-hand rendering, Show selection, rearrangement and sorting, collapse persistence,

@@ -4,8 +4,8 @@
   the user wants to test changes thoroughly before pushing.
 - Summarize every file touched and the functions/helpers added, changed, or removed.
 - Record changes in `CHANGELOG.md` under `[Unreleased]` during implementation.
-- Defer relevant `docs/REFERENCE.md` and `docs/ARCHITECTURE.md` updates until the user approves
-  pushing or says they have pushed. At that point, update them to describe the implemented changes.
+- Update `docs/REFERENCE.md` and `docs/ARCHITECTURE.md` when relevant during documentation
+  updates, alongside the changelog and implementation plans; do not defer them until pushing.
 
 # Code discovery
 

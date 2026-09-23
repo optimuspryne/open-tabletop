@@ -49,6 +49,7 @@ The codebase:
 | `public/table/collider-debug.js`                                                                        | browser | GM-gated local collider-shell construction, refresh, transform following, preference, and disposal                                                                                              |
 | `public/table/hand.js`                                                                                 | browser | Private hand state, rendering, Show audience/selection, rearrangement/sorting, collapse preference, inspection entry, and card pointer gestures                                                  |
 | `public/table/inspection.js`                                                                           | browser | Enlarged-piece/card previews, appearance controls, deferred double-clicks, placement, and pointer rotation |
+| `public/table/selection.js`                                                                            | browser | Local selection, marquee gestures, highlight rings, batch commands, recolor toolbar, and compose/gather planning |
 | `public/table/overlays.js`                                                                             | browser | Measurement shapes, board-surface height, selection, previews, movement, and room bindings |
 | `public/table/whiteboard.js`                                                                           | browser | Whiteboard mesh, strokes, ownership, camera/drawing mode, controls, and room messages |
 | `public/table/trays.js`                                                                                | browser | Personal tray meshes, seat placement, camera travel, dice actions, and controls |
@@ -199,6 +200,14 @@ classDiagram
         +createOverlays(dependencies)
         +bindRoom/bindControls + measure/move/select
     }
+    class Selection["public/table/selection.js"] {
+        +createSelection(dependencies)
+        +size / ids / has / remove / clear / isActive
+        +beginPointer/movePointer/endPointer/escape/command
+        +removeSelected/update/bindModeControls/bindActions
+        +cardFamilySig/dispenserSig/composeState/gatherPlan
+        +selColorDesc/selectionPalette
+    }
     class Whiteboard["public/table/whiteboard.js"] {
         +createWhiteboard(dependencies)
         +sync/bindRoom/bindControls + stroke gestures
@@ -252,6 +261,8 @@ classDiagram
     ColliderDebug <.. Client
     Hand <.. Client
     Inspection <.. Client
+    Selection <.. Client
+    Shared <.. Selection
     Overlays <.. Client
     Whiteboard <.. Client
     Trays <.. Client
@@ -1857,6 +1868,37 @@ and hand-restoration callback; it does not import `client.js` or hand state.
   composition root read-only mode checks. **`setDiceTextures(textures)`** refreshes the
   inspector's custom-finish chips after a late `diceList` message.
 
+## `public/table/selection.js` — local multi-selection
+
+**`createSelection(dependencies)`** owns the private selected-ID Set, Select-tool mode, marquee
+gesture, highlight meshes, and cached recolor-toolbar state. Inject Three.js, scene/camera, canvas,
+the live mesh map, marker settings, `getRoom`, `getBoardTopY`, and DOM helpers. The module imports
+shared piece policy; it does not import the client or a mutable room singleton.
+
+- **`size`**, **`ids()`**, and **`has(id)`** expose count, a copied ID array, and membership.
+  **`remove(id)`** drops an ID after piece removal or a remote grab; **`clear()`** clears the Set.
+- **`beginPointer(event, id)`**, **`movePointer(event)`**, and **`endPointer(event)`** consume
+  semantic selection gestures and return whether they handled the input. Shift-click or Select-tool
+  taps toggle movable pieces; empty-felt drags add projected centres inside the marquee. Static
+  boards are excluded. The caller retains pointer capture, input priority, and camera controls.
+- **`isActive()`** reports Select-tool mode. **`escape()`** exits that mode first, then clears
+  selection on a subsequent call, returning whether it handled Escape.
+- **`command(key)`** sends U/G/R/F/H batch actions and bracket rotation for a non-empty selection.
+  **`removeSelected()`** sends `removeGroup` and clears selection. The client keeps overlay-delete
+  priority and typing/inspection guards outside these methods.
+- **`bindModeControls()`** wires mirrored Select buttons; **`bindActions()`** wires batch toolbar
+  buttons, including Combine, Gather, Delete, and Clear. **`update()`** follows selected meshes,
+  disposes stale rings, and refreshes action availability, the Secret/2-Sided label, and color/team
+  swatches. Recolor sends `recolorGroup`; successful compose/gather sends clear local selection.
+- Pure helpers **`cardFamilySig(piece)`**, **`dispenserSig(piece)`**, and
+  **`composeState(pieces, sigOf)`** check compatibility; **`gatherPlan(pieces)`** chooses dispenser
+  merging, loose-piece absorption, or creation of a new dispenser. **`selColorDesc(piece)`** and
+  **`selectionPalette(pieces)`** describe compatible color/team choices. These are UI eligibility
+  hints; the server validates actions authoritatively.
+
+`test/selection.js` covers these rules, gestures, batch commands, and ring cleanup.
+`scripts/component-parity.mjs` exercises the real selection toolbar in desktop and touch layouts.
+
 ## `public/table/overlays.js` — measurement overlays
 
 **`createOverlays(dependencies)`** owns overlay objects, selection handles, measure/move drag
@@ -1915,7 +1957,7 @@ UI), `roomClosed`/`kicked` → the exit screen, `deckList`/`boardList`/`propList
 `window.onLibraryList`). **`applyRole`** hides tools by rank (spawn helper+,
 reshape/reset/members gm+). Game-play + Room Controls wiring lives here (spawn,
 grab, table size, scene load, skybox apply, plus the notebook and timer panels); inspection,
-whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
+selection, whiteboard, overlays, trays, and Show controls delegate to their controllers. Asset **creation**
 and the View Library / Built-Ins / Skybox pickers now live in `editor-panel.js`, handed the live room via
 `window.onOttRoom`. Shared UI helpers: **`byId`/`qs`/`qsa`** (DOM shorthands) and
 **`renderSavedList`** (the scenes list). Snapshot buffering delegates record creation,
@@ -1958,12 +2000,12 @@ changes, and follows each synchronized/interpolated transform without changing r
   guide for the currently hovered or held table piece, hovered private-hand card, or active hand
   drag. Rows are generated by `pieceControlRows` / `hand.controlRows`, include live stack counts
   where relevant, and yield to an open bottom-left panel.
-- **Multi-select** (local; see below) — `selection` (Set of ids), the `selMode` Select tool,
-  the `marquee` box, `selGesture`, and the `selRings` highlight pool. Shift-click toggles a
-  piece (`selToggle`); Shift-drag or the Select tool paints a screen-space `#marquee` div and
-  `finalizeMarquee` adds every piece whose projected centre lands inside; empty-click / Esc
-  clears. `selectable(id)` excludes static (mass 0) boards. Highlight rings and the marquee are
-  tinted with **my** `--accent` via `selColor()`.
+- **Multi-select** — the composed `selection` controller owns the selected IDs, Select tool,
+  marquee, and highlight pool (see `public/table/selection.js` above). The client forwards
+  pointer input, calls `selection.escape()` / `selection.command(key)`, and handles empty-click
+  clearing. Group dragging and continuous rotation use `selection.ids()`. Piece listeners call
+  `selection.remove(id)` on removal or a remote grab; the render loop calls `selection.update()`.
+  Highlight rings and the marquee use the local player's `--accent`.
 - **Dice tray** — `client.js` forwards synchronized tray state and camera updates to
   `trays.sync`/`trays.updateCamera`; `trays.bindControls` owns the Roll-button visit, spawn,
   Roll all, Scoop, Clear, Put away, and Back actions.
