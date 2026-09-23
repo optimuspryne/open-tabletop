@@ -60,6 +60,7 @@ import { createWhiteboard } from './table/whiteboard.js';
 import { createOverlays } from './table/overlays.js';
 import { createTrays } from './table/trays.js';
 import { createHand } from './table/hand.js';
+import { createInspection } from './table/inspection.js';
 import {
   applyTransform,
   createPieceView,
@@ -76,9 +77,6 @@ import {
   DICE_SETS,
   DICE_FINISHES,
   DICE_FINISH_FALLBACK,
-  OBJECT_FINISHES,
-  PROPS,
-  objectFinish,
   PALETTE,
   COLORS,
   readableInk,
@@ -423,6 +421,7 @@ const { Client, getStateCallbacks } = Colyseus;
 const meshes = new Map(); // id -> { mesh, type }
 const buffers = new Map(); // id -> [snapshot]   recent server states, for interpolation
 let room, mySession;
+let inspection;
 let syncLightingPanel = () => {};
 let myIsAdmin = false; // set by the server's 'whoami' on join; gates library-creation UI
 let myRank = 0; // set by applyRole; gates scoreboard (helper+) + room notes (gm+) editing
@@ -435,7 +434,7 @@ const colliderDebug = createColliderDebug({
   colliderSpec,
   storage: localStorage,
 });
-const { rebuildCard, rebuildPiece, rebuildDeck, sample } = createPieceView({
+const { rebuildCard, rebuildPiece, rebuildDeck, setOriginalVisible, sample } = createPieceView({
   scene,
   meshes,
   buffers,
@@ -444,7 +443,7 @@ const { rebuildCard, rebuildPiece, rebuildDeck, sample } = createPieceView({
   deckHeight,
   createQuaternion: () => new THREE.Quaternion(),
   refreshCollider: (id, piece) => colliderDebug.refresh(id, piece),
-  isInspected: (id) => inspect?.origId === id,
+  isInspected: (id) => inspection.isInspecting(id),
 });
 
 function syncColliderDebugButton() {
@@ -527,10 +526,8 @@ function applyDiceFinish(finish, finishImg) {
 
 // Custom dice textures (host-uploaded, ROADMAP §9 phase 2). The library list arrives via the
 // 'diceList' message; each becomes an image chip appended to a finish picker. Clicking one applies
-// the 'custom' finish with that texture URL. finishDieRef is the inspector's per-die applier,
-// captured when the inspector wires up (module scope so a late diceList can rebuild its chips).
+// the 'custom' finish with that texture URL. The inspection controller owns its own chips.
 let diceTextures = [];
-let finishDieRef = null;
 function buildTextureChips(row, apply) {
   if (!row) return;
   row.replaceChildren(); // dedicated texture row → just the thumbnails
@@ -551,7 +548,7 @@ function buildTextureChips(row, apply) {
 // in the dice box; the inspector's Custom button is also gated on the piece being a die (on inspect).
 function refreshTextureChips() {
   buildTextureChips(byId('trayTextures'), (url) => applyDiceFinish('custom', url));
-  if (finishDieRef) buildTextureChips(byId('dieTextures'), (url) => finishDieRef('custom', url));
+  if (inspection) inspection.setDiceTextures(diceTextures);
   const has = diceTextures.length > 0;
   const tg = byId('trayCustomGroup');
   if (tg) tg.hidden = !has;
@@ -741,7 +738,7 @@ function rebuildGrid() {
     if (entry) scene.remove(entry.mesh);
     colliderDebug.remove(id);
     if (piece.type === 'board') boardTopY = 0; // back to bare table until a new board arrives
-    if (inspect && inspect.origId === id) releaseInspect();
+    if (inspection.isInspecting(id)) inspection.releaseInspect();
     updateHeldLabel(id, ''); // drop its name tag if any
     selection.delete(id); // never keep a removed piece selected
     meshes.delete(id);
@@ -908,7 +905,7 @@ function rebuildGrid() {
     else toast('Those cards are no longer on the table', 'x');
   });
   room.onMessage('inspectCard', ({ front, back, tile, geom }) =>
-    inspectMesh(cardMesh({ front, back, tile, geom }), { drawn: true, type: 'card' }),
+    inspection.inspectMesh(cardMesh({ front, back, tile, geom }), { drawn: true, type: 'card' }),
   ); // drawn card — front is ours alone; tile/geom → correct proportions
   room.onMessage('dealt', ({ id }) => {
     // a card you dragged off a deck — adopt it as the dragged piece
@@ -2213,7 +2210,13 @@ const cameraPanForward = new THREE.Vector3(),
 // Translate the camera and OrbitControls target together, relative to the current view. This
 // preserves orbit distance/angle and makes W/Up mean "toward the top of the table as I see it".
 function panCamera(rightAmount, forwardAmount) {
-  if (!room || inspect || whiteboard.isOwning() || trays.isViewing() || trays.isCameraMoving())
+  if (
+    !room ||
+    inspection.isActive() ||
+    whiteboard.isOwning() ||
+    trays.isViewing() ||
+    trays.isCameraMoving()
+  )
     return;
   cameraPanForward.copy(controls.target).sub(camera.position);
   cameraPanForward.y = 0;
@@ -2497,203 +2500,6 @@ function syncSkybox(ref) {
   skyLast = ref;
   applySkybox(ref);
 }
-qsa('[data-place]').forEach((b) => (b.onclick = () => placeDrawn(b.dataset.place))); // drawn-card placement
-{
-  const body = byId('inspectColorBody'),
-    text = byId('inspectColorText'),
-    teamBtn = byId('inspectTeamBtn');
-  const commit = () => {
-    if (!inspect || !inspect.origId) return;
-    const b = parseInt(body.value.slice(1), 16);
-    if (inspect.type === 'die') {
-      const t = parseInt(text.value.slice(1), 16);
-      inspect.props = { ...(inspect.props || {}), color: b, textColor: t };
-      swapInspect(inspect.props); // preview on the inspected die
-      room.send('recolor', { id: inspect.origId, color: b, textColor: t });
-    } else if (inspect.type === 'dispenser') {
-      // poker/coin stack tint
-      inspect.props = { ...(inspect.props || {}), color: b };
-      swapInspect(inspect.props);
-      room.send('recolor', { id: inspect.origId, color: b });
-    } else {
-      // custom prop
-      inspect.props = { ...(inspect.props || {}), color: b };
-      swapInspect(inspect.props);
-      room.send('recolor', { id: inspect.origId, color: b });
-    }
-  };
-  const toHex = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0'); // local (hexStr is defined lower — TDZ)
-  // Paint the inspected die: body = color, numbers auto-contrasted for legibility. Reused by
-  // the freeform body picker and the preset swatches; commits through the normal recolor path.
-  const paintDie = (color) => {
-    if (!inspect || inspect.type !== 'die') return;
-    body.value = toHex(color);
-    if (text) text.value = toHex(readableInk(color));
-    commit();
-  };
-  const finishObject = (key, finishImg) => {
-    if (
-      !inspect ||
-      (inspect.type !== 'die' && inspect.type !== 'prop' && inspect.type !== 'dispenser')
-    )
-      return;
-    const isDie = inspect.type === 'die';
-    const propModel = inspect.props && (PROPS[inspect.props.shape] || inspect.props.model);
-    const dispSpec = inspect.props && dispenserDefinition(inspect.props);
-    const dispenserModel =
-      dispSpec &&
-      (inspect.props.asset ||
-        dispSpec.model ||
-        (PROPS[dispSpec.item] && PROPS[dispSpec.item].model));
-    if (!isDie && !propModel && !dispenserModel) return;
-    const props = { ...(inspect.props || {}) };
-    if (isDie && key === 'matte') {
-      delete props.finish;
-      delete props.finishImg;
-    } else if (isDie && key === 'custom') {
-      props.finish = 'custom';
-      if (finishImg) props.finishImg = finishImg;
-    } else {
-      props.finish = key;
-      delete props.finishImg;
-    }
-    inspect.props = props;
-    swapInspect(props); // rebuild the inspect preview with the new look
-    if (inspect.origId) {
-      const extra = key === 'custom' ? { finish: key, finishImg } : { finish: key };
-      room.send('recolor', { id: inspect.origId, ...extra });
-    }
-  };
-  finishDieRef = finishObject; // let a late diceList rebuild the inspector's texture chips
-  if (body) {
-    // live preview while dragging: props tint blunt; stacks reclone (cached, cheap)
-    body.oninput = () => {
-      if (!inspect) return;
-      const c = parseInt(body.value.slice(1), 16);
-      if (inspect.type === 'prop') tintInspect(c);
-      else if (inspect.type === 'dispenser') swapInspect({ ...(inspect.props || {}), color: c });
-    };
-    body.onchange = () => {
-      if (inspect && inspect.type === 'die' && text)
-        text.value = toHex(readableInk(parseInt(body.value.slice(1), 16))); // auto-contrast numbers to the new body
-      commit();
-    };
-  }
-  if (text) text.onchange = commit; // an explicit number override still wins
-  if (teamBtn)
-    teamBtn.onclick = () => {
-      // go bowl: black ⇄ white interior
-      if (!inspect || inspect.type !== 'dispenser') return;
-      const team = inspect.props.team ? 0 : 1;
-      inspect.props = { ...(inspect.props || {}), team };
-      teamBtn.textContent = team ? 'White' : 'Black';
-      swapInspect(inspect.props);
-      room.send('recolor', { id: inspect.origId, team });
-    };
-  const swatchRow = byId('dieSwatches'); // preset body colors (the named dice sets)
-  if (swatchRow)
-    for (const s of DICE_SETS) {
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'swatch';
-      chip.title = s.name;
-      chip.style.background = toHex(s.color);
-      chip.onclick = () => paintDie(s.color);
-      swatchRow.appendChild(chip);
-    }
-  const dieFinRow = byId('dieFinishes'); // shared die / built-in-object material picker
-  if (dieFinRow) {
-    for (const f of OBJECT_FINISHES) {
-      if (DICE_FINISH_FALLBACK[f.key] && deviceClass() === 'phone') continue; // GPU-heavy on phones
-      const chip = document.createElement('button');
-      chip.type = 'button';
-      chip.className = 'chip';
-      chip.dataset.finish = f.key;
-      chip.innerHTML = '<span class="lbl"></span>';
-      chip.querySelector('.lbl').textContent = f.name;
-      chip.onclick = () => finishObject(f.key);
-      dieFinRow.appendChild(chip);
-    }
-    refreshTextureChips(); // Custom textures live in their own #dieTextures menu
-  }
-  const defBtn = byId('inspectDefaultBtn'); // remember this die's color as my default for its type
-  if (defBtn)
-    defBtn.onclick = () => {
-      if (!inspect || inspect.type !== 'die' || !inspect.props) return;
-      const sides = +inspect.props.sides;
-      if (!DIE_SIDES.includes(sides)) return;
-      const b = parseInt(byId('inspectColorBody').value.slice(1), 16); // read what's on screen now
-      const t = parseInt(byId('inspectColorText').value.slice(1), 16);
-      const finish = inspect.props.finish || 'matte'; // save the die's WHOLE look, not just color
-      const finishImg = inspect.props.finishImg; // the custom texture, if this die wears one
-      saveDiceDefault(sides, b, t, finish, finishImg); // local only — never synced
-      setBtnLabel(defBtn, `Saved · d${sides}`);
-      defBtn.disabled = true; // brief confirmation
-      setTimeout(() => {
-        if (byId('inspectDefaultBtn') === defBtn) {
-          setBtnLabel(defBtn, 'Set as my default');
-          defBtn.disabled = false;
-        }
-      }, 1300);
-    };
-  const resetBtn = byId('inspectResetBtn'); // forget this type's default + plain this die
-  if (resetBtn)
-    resetBtn.onclick = () => {
-      if (!inspect || inspect.type !== 'die' || !inspect.props) return;
-      const sides = +inspect.props.sides;
-      if (DIE_SIDES.includes(sides)) clearDiceDefault(sides);
-      paintDie(0xf4f1ea); // back to plain ivory (ink auto)
-      setBtnLabel(resetBtn, 'Reset ✓');
-      setTimeout(() => {
-        if (byId('inspectResetBtn') === resetBtn) setBtnLabel(resetBtn, 'Reset');
-      }, 1200);
-    };
-}
-
-// --- Prop / dispenser recolor swatches (built per-object from the piece's allowed palette) ---
-// Recolor the inspected prop/dispenser to a freeform/palette color (preview + send).
-function recolorInspectedColor(hex) {
-  if (!inspect || (inspect.type !== 'prop' && inspect.type !== 'dispenser')) return;
-  const color = hex == null ? COLORS.neutralProp : hex;
-  inspect.props = { ...(inspect.props || {}), color };
-  if (inspect.type === 'dispenser') swapInspect(inspect.props);
-  else tintInspect(color);
-  const body = byId('inspectColorBody');
-  if (body) body.value = hexStr(color); // keep the freeform picker in sync
-  room.send('recolor', { id: inspect.origId, color });
-}
-// Recolor the inspected TEAM piece by switching its set (0/1) — colors are fixed, so this
-// picks a side, not a hue. Preview uses the set's color; the server stores props.team.
-function recolorInspectedTeam(i, hex) {
-  if (!inspect) return;
-  inspect.props = { ...(inspect.props || {}), team: i ? 1 : 0 };
-  if (inspect.type === 'dispenser') swapInspect(inspect.props);
-  else tintInspect(hex);
-  room.send('recolor', { id: inspect.origId, team: i ? 1 : 0 });
-}
-// Rebuild the #propSwatches row for the inspected object from its allowed palette (recolorPalette):
-// a team piece gets its two set colors, a limited-palette piece (coins) gets that palette, a
-// general prop gets the full palette. Returns the descriptor so the caller can hide the freeform
-// picker when the object is constrained.
-function rebuildPropSwatches(opt) {
-  const row = byId('propSwatches');
-  if (row) {
-    row.innerHTML = '';
-    if (opt)
-      opt.swatches.forEach((s, i) => {
-        const chip = document.createElement('button');
-        chip.type = 'button';
-        chip.className = 'swatch' + (s.hex == null ? ' neutral' : '');
-        chip.title = s.name;
-        if (s.hex != null) chip.style.background = hexStr(s.hex);
-        chip.onclick = opt.team
-          ? () => recolorInspectedTeam(i, s.hex)
-          : () => recolorInspectedColor(s.hex);
-        row.appendChild(chip);
-      });
-  }
-  return opt;
-}
 
 // Map a click-action name to the server message it sends.
 const sendAction = (action, id) => {
@@ -2712,229 +2518,6 @@ const sendAction = (action, id) => {
   else if (action === 'roll') room.send('rollOne', { id });
 };
 
-// ----- inspect: freeze an enlarged item in front of the camera --------------
-// Local & visual. Two entries: (a) inspect an on-table piece by cloning its
-// scene mesh (a face-down card is back-only, so nothing leaks); (b) DRAW a card
-// from a deck, whose front the server sends privately to us alone, then place it.
-let inspect = null; // { pivot, origId, drag, drawn, placed }
-let pendingClick = null; // defers a single-click so a double-click can pre-empt it
-const INSPECTABLE = (type) =>
-  type === 'die' || type === 'card' || type === 'prop' || type === 'dispenser'; // not boards/decks
-
-// Core inspect: park `mesh` enlarged in front of the camera. opts: { origId,
-// type, drawn }. A 'card' is stood upright; a 'drawn' card shows the action panel.
-function inspectMesh(mesh, opts = {}) {
-  releaseInspect();
-  mesh.position.set(0, 0, 0);
-  mesh.rotation.set(0, 0, 0);
-  mesh.scale.set(1, 1, 1);
-  mesh.visible = true;
-
-  // Scale to a consistent on-screen size and centre the mesh within a pivot.
-  const box = new THREE.Box3().setFromObject(mesh);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const scale = CONFIG.inspect.fit / (Math.max(size.x, size.y, size.z) || 1);
-  mesh.position.copy(center).multiplyScalar(-1);
-
-  const pivot = new THREE.Group();
-  pivot.add(mesh);
-  pivot.scale.setScalar(scale);
-  if (opts.type === 'card') pivot.rotateX(Math.PI / 2); // a card lies flat (face = +Y); stand it up
-
-  if (!camera.parent) scene.add(camera); // camera must be in the graph for its children to render
-  camera.add(pivot);
-  pivot.position.set(0, -CONFIG.inspect.drop, -CONFIG.inspect.dist);
-
-  inspect = {
-    pivot,
-    origId: opts.origId || null,
-    type: opts.type,
-    props: null,
-    drag: null,
-    drawn: !!opts.drawn,
-    placed: false,
-    hid: opts.hid || null,
-  };
-  controls.enabled = false;
-  byId('inspectHint').hidden = !!opts.drawn; // a drawn card shows the action panel instead
-  byId('drawActions').hidden = !opts.drawn;
-  {
-    const db = byId('drawActions') && byId('drawActions').querySelector('[data-place="deck"]');
-    if (db) db.hidden = !!opts.hid;
-  } // a hand card has no deck to return to
-  const piece0 = opts.origId && room.state.pieces.get(opts.origId);
-  const props0 = piece0 ? JSON.parse(piece0.props || '{}') : {};
-  const spec = opts.type === 'dispenser' ? dispenserDefinition(props0) : null;
-  const teamMode = !!(spec && spec.team); // go bowl → black/white toggle
-  const colorMode =
-    opts.type === 'die' ||
-    (opts.type === 'prop' && props0.tintMaterial !== null) ||
-    !!(spec && (spec.color || (props0.asset && props0.asset.item.tintMaterial !== null))); // freeform picker
-  const colorable = (colorMode || teamMode) && !opts.drawn;
-  const row = byId('inspectColorRow');
-  if (row) {
-    row.hidden = !colorable;
-    if (colorable) {
-      inspect.props = props0;
-      if (opts.type === 'dispenser') inspect.props.count = piece0.count; // carry stack height into reclone previews
-      const isDie = opts.type === 'die';
-      const propSpec = opts.type === 'prop' ? PROPS[inspect.props.shape] : null;
-      const customProp =
-        opts.type === 'prop' && !!inspect.props.model && inspect.props.tintMaterial !== null;
-      const dispenserModel =
-        opts.type === 'dispenser' &&
-        spec &&
-        (props0.asset || spec.model || (PROPS[spec.item] && PROPS[spec.item].model));
-      const finishSpec =
-        opts.type === 'dispenser' && spec && spec.body === 'stack'
-          ? PROPS[spec.item]
-          : propSpec || spec;
-      // A prop/dispenser's ALLOWED palette (team set / limited palette / general) — mirrors the
-      // spawn cards, so an object can't be tinted off its intended colors. null for a die.
-      const opt = colorMode && !isDie ? recolorPalette(opts.type, props0, spec) : null;
-      rebuildPropSwatches(opt);
-      const constrained = !!(opt && !opt.free); // team piece or limited palette → no freeform
-      const bodyLab = byId('inspectBodyLab'),
-        textLab = byId('inspectTextLab'),
-        teamLab = byId('inspectTeamLab');
-      if (bodyLab) bodyLab.hidden = teamMode || constrained; // hide the freeform picker when the object is constrained
-      if (textLab) textLab.hidden = !isDie; // dice also get a number color
-      if (teamLab) teamLab.hidden = !teamMode;
-      if (colorMode && bodyLab) {
-        bodyLab.firstChild.nodeValue = isDie ? 'Body ' : 'Color ';
-        byId('inspectColorBody').value = hexStr(
-          inspect.props.color ?? (isDie ? 0xf4f1ea : 0xffffff),
-        ); // die = ivory blank face
-        if (isDie) byId('inspectColorText').value = hexStr(inspect.props.textColor ?? 0x141414); // die = ink numbers
-      }
-      const defBtn = byId('inspectDefaultBtn'); // dice only: "make this my default d?"
-      if (defBtn) {
-        defBtn.hidden = !isDie;
-        defBtn.disabled = false;
-        setBtnLabel(defBtn, 'Set as my default');
-      }
-      const swRow = byId('dieSwatches');
-      if (swRow) swRow.hidden = !isDie; // dice sets (dice only)
-      const isModelDie = isDie && !!inspect.props.model; // a pipped .glb die: standard finishes, no custom texture
-      const dcg = byId('dieCustomGroup');
-      if (dcg) dcg.hidden = !isDie || isModelDie || !diceTextures.length; // Custom textures: dice only, when any exist
-      const dfRow = byId('dieFinishes');
-      if (dfRow) {
-        const finishable = isDie || !!propSpec || customProp || !!dispenserModel;
-        dfRow.hidden = !finishable;
-        const cur = finishable
-          ? isDie
-            ? inspect.props.finish || 'matte'
-            : objectFinish(finishSpec || {}, inspect.props.finish)
-          : null;
-        dfRow
-          .querySelectorAll('[data-finish]')
-          .forEach((c) => c.classList.toggle('on', c.dataset.finish === cur));
-      }
-      const propRow = byId('propSwatches');
-      if (propRow) propRow.hidden = !(opt && opt.swatches.length); // per-object palette
-      const resetBtn = byId('inspectResetBtn');
-      if (resetBtn) {
-        resetBtn.hidden = !isDie;
-        setBtnLabel(resetBtn, 'Reset');
-      }
-      if (teamMode) {
-        const tb = byId('inspectTeamBtn');
-        if (tb) tb.textContent = inspect.props.team ? 'White' : 'Black';
-      }
-    }
-  }
-}
-const hexStr = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
-// Rebuild the inspected mesh with new props (live preview for die colors and
-// dispenser color/team). Cheap for stacks — they reclone from the cached model.
-function swapInspect(props) {
-  if (
-    !inspect ||
-    !inspect.pivot ||
-    (inspect.type !== 'die' && inspect.type !== 'prop' && inspect.type !== 'dispenser')
-  )
-    return;
-  const old = inspect.pivot.children[0];
-  if (old) inspect.pivot.remove(old);
-  if (inspect.type === 'dispenser') props = { ...props, _seed: inspect.origId }; // keep the preview's scramble stable
-  const mesh = KIND[inspect.type].mesh(props);
-  mesh.userData.id = inspect.origId;
-  inspect.pivot.add(mesh);
-}
-
-// Live-tint the inspected mesh (its materials are its own — see enterInspect).
-function tintInspect(color) {
-  if (!inspect || !inspect.pivot) return;
-  const props = inspect.props || {};
-  const definition = inspect.type === 'dispenser' ? dispenserDefinition(props) : null;
-  const slot =
-    inspect.type === 'dispenser' && props.asset
-      ? definition?.appearance === 'custom'
-        ? definition.tintMaterial
-        : props.asset.item.tintMaterial
-      : (definition?.tintMaterial ?? props.tintMaterial);
-  if (slot === null) return;
-  const matches = (name) =>
-    typeof slot !== 'string' ||
-    (typeof name === 'string' && (name === slot || name.startsWith(slot + '.')));
-  inspect.pivot.traverse((node) => {
-    if (node.isMesh && node.material)
-      (Array.isArray(node.material) ? node.material : [node.material]).forEach(
-        (m) => matches(m.name) && m.color && m.color.setHex(color),
-      );
-  });
-}
-
-// Inspect an on-table piece by cloning its mesh (the clone respects hidden info —
-// a face-down card clones back-only), then hide the real piece behind the copy.
-function enterInspect(id) {
-  const entry = meshes.get(id);
-  if (!entry) return;
-  const piece = room.state.pieces.get(id);
-  const fresh =
-    (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && piece
-      ? KIND[entry.type].mesh(meshPropsOf(piece, id)) // own materials → live-recolorable, no shared-material bleed
-      : entry.mesh.clone(true); // clone respects hidden info (face-down card = back only)
-  inspectMesh(fresh, { origId: id, type: entry.type });
-  entry.mesh.visible = false;
-}
-
-function releaseInspect() {
-  if (!inspect) return;
-  const wasHand = inspect.hid;
-  if (inspect.drawn && !inspect.placed && !inspect.hid)
-    room.send('inspectPlace', { where: 'deck' }); // a real drawn card closed without choosing → back to deck
-  camera.remove(inspect.pivot); // shares geometry/materials — never dispose
-  const entry = inspect.origId && meshes.get(inspect.origId);
-  if (entry) entry.mesh.visible = true;
-  inspect = null;
-  controls.enabled = true;
-  byId('inspectHint').hidden = true;
-  byId('drawActions').hidden = true;
-  const row = byId('inspectColorRow');
-  if (row) row.hidden = true;
-  if (wasHand) hand.render(); // restore the hand we hid for the inspect
-}
-
-// Resolve a drawn card to its destination: field-up | field-down | hand | deck.
-function placeDrawn(where) {
-  if (!inspect) return;
-  if (inspect.hid) {
-    // hand-card inspect: play with the chosen face, or keep it in hand
-    if (where === 'field-up') room.send('playCard', { hid: inspect.hid, faceDown: false });
-    else if (where === 'field-down') room.send('playCard', { hid: inspect.hid, faceDown: true });
-    inspect.placed = true; // 'hand' just closes; 'deck' is hidden for hand cards
-    releaseInspect();
-    return;
-  }
-  if (!inspect.drawn) return;
-  room.send('inspectPlace', { where });
-  inspect.placed = true;
-  releaseInspect();
-}
-
 // Handle a click (no drag). A left-click on an inspectable piece or a deck waits
 // briefly for a possible double-click (inspect / draw); everything else fires now.
 function handleClick(gesture) {
@@ -2950,7 +2533,7 @@ function handleClick(gesture) {
   // deck or dispenser still moves on right-drag. The menu also absorbs the two deck shortcuts it
   // replaces — Shuffle was the single right-click, Split the double — which is why secondary no
   // longer takes part in the deferred double-click below.
-  const route = clickRoute(type, gesture.secondary, INSPECTABLE(type));
+  const route = clickRoute(type, gesture.secondary, inspection.isInspectable(type));
   if (route === 'menu') {
     openPieceMenu(id, { x: gesture.sx, y: gesture.sy });
     return;
@@ -2960,28 +2543,7 @@ function handleClick(gesture) {
     return;
   }
 
-  const isSecondClick =
-    pendingClick &&
-    pendingClick.id === id &&
-    performance.now() - pendingClick.t < CONFIG.input.dblMs;
-  if (isSecondClick) {
-    clearTimeout(pendingClick.timer);
-    pendingClick = null;
-    if (type === 'deck')
-      room.send('drawInspect', { deckId: id }); // double-click a deck = draw to inspect
-    else enterInspect(id); // double-click a piece = inspect it
-  } else {
-    if (pendingClick) clearTimeout(pendingClick.timer);
-    const single = gesture.kind.lclick; // deferred, so a double can pre-empt it
-    pendingClick = {
-      id,
-      t: performance.now(),
-      timer: setTimeout(() => {
-        pendingClick = null;
-        sendAction(single, id);
-      }, CONFIG.input.clickMs),
-    };
-  }
+  inspection.handleDeferredClick(id, type, gesture.kind.lclick);
 }
 const onPointerDown = (e) => {
   const wasArmed = armedMove;
@@ -3002,14 +2564,7 @@ const onPointerDown = (e) => {
     }
     return;
   }
-  if (inspect) {
-    // in inspect mode, a left-drag spins the item (trackball)
-    if (e.primary) {
-      inspect.drag = { sx: e.clientX, sy: e.clientY, px: e.clientX, py: e.clientY, moved: false };
-      renderer.domElement.setPointerCapture(e.pointerId);
-    }
-    return;
-  }
+  if (inspection.beginPointer(e)) return;
   if (!room || (!e.primary && !e.secondary)) return;
   setPointer(e);
   const id = pickId(e.touch ? CONFIG.input.touchHitPx : 0);
@@ -3098,22 +2653,7 @@ const onPointerMove = (e) => {
     }
     return;
   }
-  if (inspect) {
-    // spin the inspected item with a screen-aligned trackball
-    const drag = inspect.drag;
-    if (drag) {
-      const dx = e.clientX - drag.px,
-        dy = e.clientY - drag.py;
-      drag.px = e.clientX;
-      drag.py = e.clientY;
-      if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > CONFIG.input.inspectPx)
-        drag.moved = true;
-      inspect.pivot.quaternion.premultiply(
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(dy * 0.01, dx * 0.01, 0)),
-      );
-    }
-    return;
-  }
+  if (inspection.movePointer(e)) return;
   if (overlays.isMoving()) {
     // dragging a selected overlay: translate both ends, synced (throttled)
     overlays.updateMove(e);
@@ -3251,7 +2791,7 @@ const endGesture = (e) => {
     try {
       renderer.domElement.releasePointerCapture(e.pointerId);
     } catch {}
-    controls.enabled = !inspect;
+    controls.enabled = !inspection.isActive();
     return;
   }
   if (overlays.isMeasuring()) {
@@ -3272,18 +2812,7 @@ const endGesture = (e) => {
     } catch {}
     return;
   }
-  if (inspect) {
-    // releasing in inspect mode: a plain click (no drag) closes it
-    const drag = inspect.drag;
-    if (drag) {
-      inspect.drag = null; // clear first — releaseInspect() nulls `inspect`
-      try {
-        renderer.domElement.releasePointerCapture(e.pointerId);
-      } catch {}
-      if (!drag.moved) releaseInspect();
-    }
-    return;
-  }
+  if (inspection.endPointer(e)) return;
   if (overlays.isMoving()) {
     // release a moved overlay: commit its final position
     overlays.finishMove(e);
@@ -3303,7 +2832,7 @@ const endGesture = (e) => {
     // a click / tap
     handleClick(down);
   }
-  controls.enabled = !inspect; // stay disabled if this click just entered inspect
+  controls.enabled = !inspection.isActive(); // stay disabled if this click just entered inspect
   try {
     renderer.domElement.releasePointerCapture(e.pointerId);
   } catch {}
@@ -3343,8 +2872,8 @@ const onKeyDown = (e) => {
     whiteboard.release();
     return;
   }
-  if (e.key === 'Escape' && inspect) {
-    releaseInspect();
+  if (e.key === 'Escape' && inspection.isActive()) {
+    inspection.releaseInspect();
     return;
   }
   if (e.key === 'Escape' && overlays.hasSelection()) {
@@ -3356,12 +2885,12 @@ const onKeyDown = (e) => {
     (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
   if (typing) return;
 
-  if (inspect && inspect.drawn) {
+  if (inspection.isDrawn()) {
     // f/d/h/r place a drawn card. This sits BELOW the typing guard: it used to sit above it, so
     // typing "d" in chat with a peek open dealt the card face-down.
     const where = { f: 'field-up', d: 'field-down', h: 'hand', r: 'deck' }[e.key.toLowerCase()];
     if (where) {
-      placeDrawn(where);
+      inspection.placeDrawn(where);
       return;
     }
   }
@@ -3446,11 +2975,34 @@ const hand = createHand({
   setIcon,
   getRoom: () => room,
   getSessionId: () => mySession,
-  inspectMesh,
+  inspectMesh: (mesh, opts) => inspection.inspectMesh(mesh, opts),
   syncControlGuide,
   byId,
   dragThreshold: CONFIG.input.handPx,
 });
+inspection = createInspection({
+  THREE,
+  scene,
+  camera,
+  controls,
+  canvas: renderer.domElement,
+  kinds: KIND,
+  config: CONFIG,
+  deviceClass,
+  getRoom: () => room,
+  getPieceVisual: (id) => meshes.get(id),
+  setOriginalVisible,
+  meshPropsOf,
+  byId,
+  queryAll: qsa,
+  setBtnLabel,
+  buildTextureChips,
+  saveDiceDefault,
+  clearDiceDefault,
+  onReleaseHand: () => hand.render(),
+  onSingleClick: sendAction,
+});
+inspection.setDiceTextures(diceTextures);
 // ===== seats, other players' fanned hands, and turn order ===================
 // Seats scale with the current table half-extents (state.tableX/tableZ): hands sit
 // just inside each edge and cameras pull back proportionally, so markers/hands stay
@@ -3718,7 +3270,7 @@ let hoverId = null,
   controlGuideSig = '';
 const hoverIdle = () =>
   !down &&
-  !inspect &&
+  !inspection.isActive() &&
   !overlays.isMeasuring() &&
   !whiteboard.isOwning() &&
   !overlays.isMoving() &&
@@ -3784,7 +3336,7 @@ function pieceControlRows(type, held) {
     );
   else {
     rows.push(['Left-drag', 'Move']);
-    if (INSPECTABLE(type)) rows.push(['Double-click', 'Inspect']);
+    if (inspection.isInspectable(type)) rows.push(['Double-click', 'Inspect']);
     rows.push(['Right-click', 'Piece actions']);
   }
   if (selection.size)
@@ -4897,8 +4449,8 @@ function pieceMenuItems(id, type) {
       null,
       (e) => beginMoveFromMenu(id, e), // press and keep dragging — the piece comes with you
     ]); // deck/dispenser: reposition instead of deal
-  if (INSPECTABLE(type)) {
-    items.push(['Inspect', () => enterInspect(id)]);
+  if (inspection.isInspectable(type)) {
+    items.push(['Inspect', () => inspection.enterInspect(id)]);
   }
   if (type !== 'mat') items.push(['Stand / lay flat', () => room.send('setStand', { id })]); // a mat is always flat
   items.push(['Snap to grid', () => room.send('setSnap', { id })]);
@@ -5029,7 +4581,14 @@ const INPUT = {
   command: onKeyDown, // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
   secondaryPress: (p) => {
     // touch long-press → context menu on a piece, or ping on empty felt
-    if (!room || overlays.isMeasuring() || whiteboard.isOwning() || inspect || selMode) return; // a modal tool owns the gesture
+    if (
+      !room ||
+      overlays.isMeasuring() ||
+      whiteboard.isOwning() ||
+      inspection.isActive() ||
+      selMode
+    )
+      return; // a modal tool owns the gesture
     const id = down && down.id; // the piece the press landed on (null on empty felt)
     if (down) down.dragging = true; // consume the gesture: no grab on further move, no tap on release
     if (id) openPieceMenu(id, p);
@@ -5059,12 +4618,12 @@ const INPUT = {
   // Turn the selection (or the held piece) one small step. The continuous complement to the
   // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.
   rotateAxis: (dir) => {
-    if (!room || inspect) return; // a peek/inspect view owns the keyboard
+    if (!room || inspection.isActive()) return; // a peek/inspect view owns the keyboard
     const ids = selection.size ? [...selection] : down && down.grabbed ? [down.id] : [];
     if (ids.length) room.send('rotateGroup', { ids, angle: dir * ROT_STEP });
   },
   raiseAxis: (dir) => {
-    if (inspect) return; // ...and must not also nudge a piece behind it
+    if (inspection.isActive()) return; // ...and must not also nudge a piece behind it
     if (!(down && down.grabbed)) return;
     dragHeight = clamp(dragHeight + dir * DRAG_STEP, DRAG_MIN, DRAG_MAX); // up = raise
     // Raise the piece where it already is, rather than re-deriving XZ from the pointer. Identical

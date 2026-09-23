@@ -116,6 +116,9 @@ test('piece replacement restores the last transform and keeps inspected meshes h
   assert.equal(replacement.userData.id, 'piece-a');
   assert.equal(replacement.visible, false);
   assert.deepEqual(refreshed, [['piece-a', piece]]);
+  assert.equal(view.setOriginalVisible('piece-a', true), true);
+  assert.equal(replacement.visible, true);
+  assert.equal(view.setOriginalVisible('missing', false), false);
 });
 
 test('deck replacement reapplies procedural height but leaves modeled skins fixed', () => {

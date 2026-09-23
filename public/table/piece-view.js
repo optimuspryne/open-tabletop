@@ -126,6 +126,13 @@ export function createPieceView({
     });
   }
 
+  function setOriginalVisible(id, visible) {
+    const entry = meshes.get(id);
+    if (!entry) return false;
+    entry.mesh.visible = visible;
+    return true;
+  }
+
   // Position a mesh at renderTime by interpolating the two buffered snapshots around it. Before
   // the first or after the last snapshot, clamp to that endpoint.
   function sample(buffer, renderTime, mesh) {
@@ -156,5 +163,5 @@ export function createPieceView({
     return true;
   }
 
-  return { rebuildCard, rebuildPiece, rebuildDeck, sample };
+  return { rebuildCard, rebuildPiece, rebuildDeck, setOriginalVisible, sample };
 }

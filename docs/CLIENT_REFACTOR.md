@@ -2,7 +2,7 @@
 
 Status: implementation in progress. Phase 1 is complete. Phase 2's whiteboard, measurement
 overlay, and dice-tray controllers were extracted on 2026-09-22 and manually verified. The private
-hand has also been extracted and manually verified; inspection is next.
+hand and inspection have also been extracted and manually verified.
 
 This document records the focused architectural sweep of `public/client.js` performed on
 2026-09-21. The goal is to give the browser client the same kind of clear composition-root and
@@ -39,6 +39,8 @@ The existing smaller modules already demonstrate useful boundaries:
 - `public/table/overlays.js` owns measurement shapes, previews, selection, and room synchronization.
 - `public/table/trays.js` owns personal tray visuals, placement, camera travel, and controls.
 - `public/table/hand.js` owns the private hand, Show controls, sorting, and card gestures.
+- `public/table/inspection.js` owns enlarged previews, their appearance controls, drawn-card
+  placement, deferred double-clicks, and pointer rotation.
 
 The remaining work continues this pattern: make `client.js` coordinate modules like these rather
 than continuing to own their internal state and implementation.
@@ -171,7 +173,8 @@ and control-guide updates.
 
 ### 4. Inspection
 
-The inspection subsystem begins near `public/client.js:3127`.
+The inspection subsystem originally began near `public/client.js:3127`. It now lives in
+`public/table/inspection.js`; `client.js` forwards room messages and semantic input to it.
 
 Move:
 
@@ -183,7 +186,8 @@ Move:
 
 Inspection interacts with the hand and piece view, but neither should reach into the other's
 internal variables. The hand should request inspection through a callback; the piece view should
-only be asked to hide or reveal the original table mesh.
+only be asked to hide or reveal the original table mesh. The hand now calls the injected inspection
+callback, and inspection asks piece view to change original-mesh visibility.
 
 ### 5. Measurement overlays
 
@@ -411,7 +415,7 @@ are attached through DOM APIs and are genuinely used.
 6. Extract trays. **Completed 2026-09-22; manually verified.** Follow-up tray collision-height
    tuning and non-overlapping Scoop placement were also manually verified.
 7. Extract hand. **Completed 2026-09-22; manually verified.**
-8. Extract inspection.
+8. Extract inspection. **Completed 2026-09-23; manually verified.**
 
 ### Phase 3: broad state owners
 
