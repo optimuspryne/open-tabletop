@@ -14,6 +14,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   directly from the application repository, including the matching in-container installer.
 
 ### Changed
+- Extract measurement overlay construction, selection, previews, permission checks, drag state,
+  room bindings, and measure controls into a dedicated client controller.
 - Enable nesting on new unprivileged Proxmox Debian 13 LXCs so the packaged Redis service can
   create its systemd user namespace, fail and retry APT index updates on transient fetch errors,
   and allow retrying the NodeSource key import after a partial installation.
@@ -55,6 +57,8 @@ See [RELEASING.md](RELEASING.md) for what each version bump means and how releas
   browser rendering, server validation, scene restoration, and history retention share one policy.
 
 ### Fixed
+- Place measurement shapes and labels on the rendered board surface instead of a board-wide
+  height, so tall 3D board geometry or custom colliders do not make them float above play.
 - Give Save Table a temporary checked icon and label after saving without losing its original icon,
   render the Reset menu divider independently from the danger button, and keep the timer value
   visible in compact UI mode.

@@ -57,6 +57,7 @@ import { colliderSpec } from '/shared/collider-spec.js';
 import { createColliderDebug } from './table/collider-debug.js';
 import { createUiSurfaces } from './table/ui-surfaces.js';
 import { createWhiteboard } from './table/whiteboard.js';
+import { createOverlays } from './table/overlays.js';
 import {
   applyTransform,
   createPieceView,
@@ -760,49 +761,7 @@ function rebuildGrid() {
     buffers.delete(id);
   });
 
-  // Overlays (measurement/templates) are public synced state, so a late joiner gets
-  // them in the initial state — no replay needed. Immutable once placed in Step 3
-  // (no overlayMove wired yet), so add/remove is the whole lifecycle here.
-  cb(room.state).overlays.onAdd((o, id) => {
-    noteSceneHydration();
-    addOverlay(id, o);
-    // Re-render on any geometry/color change so a moved overlay (overlayMove) updates live.
-    ['x', 'z', 'x2', 'z2', 'w', 'ang', 'color'].forEach((f) =>
-      cb(o).listen(f, () => addOverlay(id, o), false),
-    );
-  });
-  cb(room.state).overlays.onRemove((o, id) => {
-    noteSceneHydration();
-    removeOverlay(id);
-    if (id === selOverlayId) selectOverlay(null);
-  });
-  // Live measurement previews from other players (transient — never in state).
-  room.onMessage('overlayDrag', (m) => {
-    if (!m || m.from == null) return;
-    clearDragPreview(m.from); // replace this sender's previous frame
-    if (!m.kind) return; // kind null = their drag ended
-    const o = {
-      kind: m.kind,
-      color: m.color || '#ffffff',
-      x: m.x,
-      z: m.z,
-      x2: m.x2,
-      z2: m.z2,
-      w: m.w,
-      ang: m.ang,
-    };
-    const group = (OVERLAY[m.kind] || OVERLAY.ruler).build(o);
-    group.position.y = boardTopY + MEASURE.lift;
-    scene.add(group);
-    const label = overlayLabelSprite(
-      formatMeasure(Math.hypot(o.x2 - o.x, o.z2 - o.z), room.state.scale),
-      o.color,
-      (o.x + o.x2) / 2,
-      (o.z + o.z2) / 2,
-    );
-    scene.add(label);
-    dragPreviews.set(m.from, { group, label });
-  });
+  overlays.bindRoom(room, cb, noteSceneHydration);
 
   whiteboard.bindRoom(room); // install replay handlers before the first state-driven request
   // Record one timestamped snapshot per piece on every patch (~the server patch
@@ -1061,7 +1020,7 @@ function rebuildGrid() {
   cb(room.state).players.onRemove((player, sid) => {
     noteSceneHydration();
     removePlayerVis(sid);
-    clearDragPreview(sid);
+    overlays.clearDragPreview(sid);
     renderPlayers();
     renderUnclaimed();
   });
@@ -1558,7 +1517,7 @@ function rebuildGrid() {
     document
       .querySelectorAll('#gridAnchors [data-anchor]')
       .forEach((b) => b.classList.toggle('on', b.dataset.anchor === anchor));
-    relabelOverlays(); // scale drives every ruler's label
+    overlays.relabel(); // scale drives every ruler's label
   }
   {
     const sEl = byId('scaleStep');
@@ -1701,37 +1660,7 @@ function rebuildGrid() {
       };
   }
 
-  // Measure tool (Tools menu): toggle a modal mode; drag on the felt to lay the
-  // selected overlay (ruler / circle / cone / line — picked in the kind row).
-  {
-    // Measure open/close is handled by the top-right cluster (onOpen=enterMeasure, onClose=exitMeasure).
-    wire('measureClear', () => {
-      if (room) room.send('overlayClear', { scope: 'mine' });
-    }); // just your own
-    wire('measureClearAll', () => {
-      if (room) room.send('overlayClear', { scope: 'all' });
-    }); // GM: everyone's (server re-checks rank)
-    const kinds = document.querySelectorAll('#measureKinds [data-kind]');
-    // 8e: the pane says what the SELECTED shape does — #measureHint was left empty in 7i.
-    const hint = byId('measureHint');
-    const coneDeg = Math.round((MEASURE.coneAngle * 2 * 180) / Math.PI);
-    const w = MEASURE.lineWidth;
-    const HINTS = {
-      ruler: 'Drag A → B — the label reads the distance between them.',
-      circle: 'Drag from the centre outward — the label reads the radius.',
-      cone: `Drag from the origin — a ${coneDeg}° cone opens along the drag.`,
-      line: `Drag a lane ${w} unit${w === 1 ? '' : 's'} wide — the label reads its length.`,
-    };
-    const setKind = (k) => {
-      measureKind = k;
-      kinds.forEach((b) => b.classList.toggle('on', b.dataset.kind === k));
-      if (hint) hint.textContent = HINTS[k] || '';
-    };
-    kinds.forEach((b) => {
-      b.onclick = () => setKind(b.dataset.kind);
-    });
-    setKind(measureKind); // reflect the default (ruler) in the row
-  }
+  overlays.bindControls(); // Measure pane kind picker and clear actions
 
   // Scene list → the Library's Scenes tab (via the hook); loading happens there.
   room.onMessage('sceneList', (scenes) => {
@@ -3233,15 +3162,11 @@ function handleClick(gesture) {
 const onPointerDown = (e) => {
   const wasArmed = armedMove;
   armedMove = null; // Move is one-shot: this press consumes it (if on that piece) or cancels it
-  if (measuring) {
+  if (overlays.isMeasuring()) {
     // Measure mode: left-drag lays the selected overlay (A = press)
-    if (e.primary) {
-      const p = overlayPoint(e);
-      if (p) {
-        measureDrag = { ax: p.x, az: p.z };
-        controls.enabled = false;
-        renderer.domElement.setPointerCapture(e.pointerId);
-      }
+    if (overlays.beginMeasure(e)) {
+      controls.enabled = false;
+      renderer.domElement.setPointerCapture(e.pointerId);
     }
     return;
   }
@@ -3282,28 +3207,14 @@ const onPointerDown = (e) => {
   if (!id) {
     // no piece under the cursor
     if (e.primary) {
-      const oid = pickOverlay(),
-        oo = oid && room.state.overlays.get(oid);
-      if (oid && canEditOverlay(oo)) {
+      if (overlays.beginMove(e)) {
         // left-click an overlay you own (or GM) → select + drag to move
-        selectOverlay(oid);
-        const p = overlayPoint(e);
-        overlayMove = {
-          id: oid,
-          gx: p ? p.x : 0,
-          gz: p ? p.z : 0,
-          x: oo.x,
-          z: oo.z,
-          x2: oo.x2,
-          z2: oo.z2,
-          moved: false,
-        };
         controls.enabled = false;
         renderer.domElement.setPointerCapture(e.pointerId);
         down = null;
         return;
       }
-      selectOverlay(null); // left-click empty felt → deselect
+      overlays.select(null); // left-click empty felt → deselect
       clearSelection(); // …and drop any multi-selection (design-tool convention)
     }
     down = null;
@@ -3350,19 +3261,9 @@ const onPointerMove = (e) => {
     showMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY);
     return;
   } // painting a selection box
-  if (measuring) {
+  if (overlays.isMeasuring()) {
     // live local preview of the overlay being dragged out
-    if (measureDrag) {
-      const p = overlayPoint(e);
-      if (p) {
-        drawPreview(measureDrag.ax, measureDrag.az, p.x, p.z);
-        const now = performance.now();
-        if (now - lastDragSent > 55) {
-          lastDragSent = now;
-          room.send('overlayDrag', overlayAddMsg(measureDrag.ax, measureDrag.az, p.x, p.z));
-        } // let others watch it form
-      }
-    }
+    overlays.updateMeasure(e);
     return;
   }
   if (whiteboard.isOwning()) {
@@ -3389,25 +3290,9 @@ const onPointerMove = (e) => {
     }
     return;
   }
-  if (overlayMove) {
+  if (overlays.isMoving()) {
     // dragging a selected overlay: translate both ends, synced (throttled)
-    const p = overlayPoint(e);
-    if (p) {
-      const dx = p.x - overlayMove.gx,
-        dz = p.z - overlayMove.gz;
-      if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) overlayMove.moved = true;
-      const now = performance.now();
-      if (now - lastDragSent > 55) {
-        lastDragSent = now;
-        room.send('overlayMove', {
-          id: overlayMove.id,
-          x: overlayMove.x + dx,
-          z: overlayMove.z + dz,
-          x2: overlayMove.x2 + dx,
-          z2: overlayMove.z2 + dz,
-        });
-      }
-    }
+    overlays.updateMove(e);
     return;
   }
   if (!down) return;
@@ -3545,19 +3430,10 @@ const endGesture = (e) => {
     controls.enabled = !inspect;
     return;
   }
-  if (measuring) {
+  if (overlays.isMeasuring()) {
     // release: commit the overlay if the drag was long enough
-    if (measureDrag) {
-      const p = overlayPoint(e);
-      if (p) {
-        const len = Math.hypot(p.x - measureDrag.ax, p.z - measureDrag.az);
-        if (len >= MEASURE.minDrag)
-          room.send('overlayAdd', overlayAddMsg(measureDrag.ax, measureDrag.az, p.x, p.z));
-      }
-      measureDrag = null;
-      clearPreview();
+    if (overlays.finishMeasure(e)) {
       controls.enabled = true;
-      room.send('overlayDrag', {}); // drop everyone else's live preview of my drag
       try {
         renderer.domElement.releasePointerCapture(e.pointerId);
       } catch {}
@@ -3584,21 +3460,9 @@ const endGesture = (e) => {
     }
     return;
   }
-  if (overlayMove) {
+  if (overlays.isMoving()) {
     // release a moved overlay: commit its final position
-    const p = overlayPoint(e);
-    if (p && overlayMove.moved) {
-      const dx = p.x - overlayMove.gx,
-        dz = p.z - overlayMove.gz;
-      room.send('overlayMove', {
-        id: overlayMove.id,
-        x: overlayMove.x + dx,
-        z: overlayMove.z + dz,
-        x2: overlayMove.x2 + dx,
-        z2: overlayMove.z2 + dz,
-      });
-    }
-    overlayMove = null;
+    overlays.finishMove(e);
     controls.enabled = true;
     try {
       renderer.domElement.releasePointerCapture(e.pointerId);
@@ -3645,10 +3509,10 @@ const onKeyDown = (e) => {
     clearSelection();
     return;
   } // …then clear a selection
-  if (e.key === 'Escape' && measuring) {
+  if (e.key === 'Escape' && overlays.isMeasuring()) {
     const r = byId('regionTR');
     if (r && r._close) r._close();
-    else exitMeasure();
+    else overlays.exit();
     return;
   }
   if (e.key === 'Escape' && whiteboard.isOwning()) {
@@ -3659,8 +3523,8 @@ const onKeyDown = (e) => {
     releaseInspect();
     return;
   }
-  if (e.key === 'Escape' && selOverlayId) {
-    selectOverlay(null);
+  if (e.key === 'Escape' && overlays.hasSelection()) {
+    overlays.select(null);
     return;
   }
   const typing =
@@ -3714,11 +3578,7 @@ const onKeyDown = (e) => {
 
   if (e.key === 'Delete' || e.key === 'Backspace') {
     if (e.key === 'Backspace') e.preventDefault();
-    if (selOverlayId) {
-      room.send('overlayRemove', { id: selOverlayId });
-      selectOverlay(null);
-      return;
-    } // a selected overlay takes priority
+    if (overlays.removeSelected()) return; // a selected overlay takes priority
     if (selection.size) {
       room.send('removeGroup', { ids: [...selection] });
       clearSelection();
@@ -4446,11 +4306,11 @@ let hoverId = null,
 const hoverIdle = () =>
   !down &&
   !inspect &&
-  !measuring &&
+  !overlays.isMeasuring() &&
   !whiteboard.isOwning() &&
-  !overlayMove &&
+  !overlays.isMoving() &&
   !handDrag &&
-  !measureDrag;
+  !overlays.isDraggingMeasure();
 function countLabel(piece) {
   if (piece.type === 'deck') return `${piece.count} card${piece.count === 1 ? '' : 's'}`;
   const d = dispenserDefinition(JSON.parse(piece.props || '{}'));
@@ -4696,223 +4556,41 @@ function spawnPing(sid, x, z) {
   pings.push({ ring, label, start: performance.now() });
 }
 
-// --- Overlays + the Measure tool ---------------------------------------------
-// Overlays (ruler + circle/cone/line templates) are flat, non-physics annotations
-// synced in room.state.overlays. Geometry comes from the OVERLAY registry; the
-// measure LABEL is a client-owned sprite because it depends on the room's scale.
-const overlayObjs = new Map(); // overlayId -> { group, label }
-let measuring = false; // Measure mode active (modal, like whiteboard draw)
-let measureKind = 'ruler'; // which overlay the drag lays: ruler | circle | cone | line
-let measureDrag = null; // { ax, az } while dragging out an overlay
-let previewGroup = null,
-  previewLabel = null; // local drag preview (synced only on release)
-let lastDragSent = 0; // throttle for live-drag broadcast + overlay move
-const dragPreviews = new Map(); // other players' in-progress measurements: sessionId -> { group, label }
-let selOverlayId = null; // selected overlay (click to select → move / Delete)
-let selHandles = null; // white handle rings marking the selected overlay's A/B points
-let overlayMove = null; // { id, gx, gz, x, z, x2, z2, moved } while dragging a selected overlay
-
-// Only the creator (or a GM) may move/remove an overlay — mirrors the server gate.
-function canEditOverlay(o) {
-  return !!o && (o.owner === mySession || myRank >= 2);
-}
-// Ray-pick the overlay whose geometry is under the cursor (labels/handles excluded).
-function pickOverlay() {
-  ray.setFromCamera(pointer, camera);
-  let best = null,
-    bestDist = Infinity;
-  for (const [id, e] of overlayObjs) {
-    const hits = ray.intersectObject(e.group, true);
-    if (hits.length && hits[0].distance < bestDist) {
-      bestDist = hits[0].distance;
-      best = id;
-    }
-  }
-  return best;
-}
-// Highlight the selected overlay with a small white ring at each of its A/B points.
-function selectOverlay(id) {
-  if (selHandles) {
-    scene.remove(selHandles);
-    disposeGroup(selHandles);
-    selHandles = null;
-  }
-  selOverlayId = id && overlayObjs.has(id) ? id : null;
-  if (!selOverlayId) return;
-  const o = room.state.overlays.get(selOverlayId);
-  if (!o) {
-    selOverlayId = null;
-    return;
-  }
-  const g = new THREE.Group();
-  for (const [px, pz] of [
-    [o.x, o.z],
-    [o.x2, o.z2],
-  ]) {
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.13, 0.2, 20),
-      new THREE.MeshBasicMaterial({
-        color: 0xffffff,
-        transparent: true,
-        opacity: 0.9,
-        depthTest: false,
-        side: THREE.DoubleSide,
-      }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.set(px, boardTopY + MEASURE.lift + 0.02, pz);
-    ring.renderOrder = 7;
-    g.add(ring);
-  }
-  scene.add(g);
-  selHandles = g;
-}
-function clearDragPreview(sid) {
-  const e = dragPreviews.get(sid);
-  if (!e) return;
-  scene.remove(e.group);
-  disposeGroup(e.group);
-  if (e.label) disposeSprite(e.label);
-  dragPreviews.delete(sid);
-}
-
-// The overlayAdd payload for the current kind: A→B always, plus the extra scalar
-// each template needs (cone's angle, line's width) so it survives save/reload.
-function overlayAddMsg(ax, az, bx, bz) {
-  const m = { kind: measureKind, x: ax, z: az, x2: bx, z2: bz };
-  if (measureKind === 'cone') m.ang = MEASURE.coneAngle;
-  if (measureKind === 'line') m.w = MEASURE.lineWidth;
-  return m;
-}
-
+// Shared player color and sprite cleanup are also used by whiteboard/presence.
 function myColor(fallback = '#ffffff') {
-  const p = room && room.state.players.get(mySession);
-  return (p && p.color) || fallback;
+  const player = room && room.state.players.get(mySession);
+  return (player && player.color) || fallback;
 }
-function overlayLabelSprite(text, color, mx, mz) {
-  const s = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: nameTag(text, color), transparent: true, depthTest: false }),
-  );
-  s.scale.set(CONFIG.label.w, CONFIG.label.h, 1);
-  s.position.set(mx, boardTopY + MEASURE.labelLift, mz);
-  s.renderOrder = 6;
-  return s;
-}
-function overlayText(o) {
-  return formatMeasure(Math.hypot(o.x2 - o.x, o.z2 - o.z), room.state.scale);
-}
-function disposeGroup(g) {
-  g.traverse((n) => {
-    if (n.isMesh) {
-      n.geometry.dispose();
-      n.material.dispose();
-    }
-  });
-}
-// Tear down a label/name-tag sprite: pull it from the scene and free its texture + material.
 function disposeSprite(sprite) {
   scene.remove(sprite);
   sprite.material.map.dispose();
   sprite.material.dispose();
 }
-function addOverlay(id, o) {
-  removeOverlay(id);
-  const kind = OVERLAY[o.kind];
-  if (!kind) return;
-  const group = kind.build(o);
-  group.position.y = boardTopY + MEASURE.lift;
-  scene.add(group);
-  // Every kind carries the same floating measure label (ruler = distance, circle =
-  // radius, cone = range, line = length — all just |A→B|), placed at the midpoint.
-  const label = overlayLabelSprite(overlayText(o), o.color, (o.x + o.x2) / 2, (o.z + o.z2) / 2);
-  scene.add(label);
-  overlayObjs.set(id, { group, label });
-  if (id === selOverlayId) selectOverlay(id); // rebuilt (e.g. moved) — reposition its handles
-}
-function removeOverlay(id) {
-  const e = overlayObjs.get(id);
-  if (!e) return;
-  scene.remove(e.group);
-  disposeGroup(e.group);
-  if (e.label) disposeSprite(e.label);
-  overlayObjs.delete(id);
-}
-function relabelOverlays() {
-  // scale changed → recompute every overlay's measure label
-  for (const [id, e] of overlayObjs) {
-    const o = room.state.overlays.get(id);
-    if (o && e.label) {
-      e.label.material.map.dispose();
-      e.label.material.map = nameTag(overlayText(o), o.color);
-      e.label.material.needsUpdate = true;
-    }
-  }
-}
 
-function overlayPoint(e) {
-  // pointer → world (x,z) on the felt surface (the ping plane)
-  setPointer(e);
-  ray.setFromCamera(pointer, camera);
-  const p = new THREE.Vector3();
-  return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -boardTopY), p)
-    ? p
-    : null;
-}
-function clearPreview() {
-  if (previewGroup) {
-    scene.remove(previewGroup);
-    disposeGroup(previewGroup);
-    previewGroup = null;
-  }
-  if (previewLabel) {
-    disposeSprite(previewLabel);
-    previewLabel = null;
-  }
-}
-function drawPreview(ax, az, bx, bz) {
-  clearPreview();
-  const color = myColor();
-  // Build the CURRENT kind locally (defaults for cone angle / line width match
-  // what overlayAddMsg will send on release, so the preview is what you commit).
-  const o = {
-    kind: measureKind,
-    color,
-    x: ax,
-    z: az,
-    x2: bx,
-    z2: bz,
-    ang: MEASURE.coneAngle,
-    w: MEASURE.lineWidth,
-  };
-  previewGroup = (OVERLAY[measureKind] || OVERLAY.ruler).build(o);
-  previewGroup.position.y = boardTopY + MEASURE.lift;
-  scene.add(previewGroup);
-  previewLabel = overlayLabelSprite(
-    formatMeasure(Math.hypot(bx - ax, bz - az), room.state.scale),
-    color,
-    (ax + bx) / 2,
-    (az + bz) / 2,
-  );
-  scene.add(previewLabel);
-}
-function enterMeasure() {
-  if (measuring) return;
-  measuring = true;
-  selectOverlay(null); // measuring and editing are separate modes
-  renderer.domElement.classList.add('measuring');
-  const b = byId('measureBtn');
-  if (b) b.classList.add('on');
-}
-function exitMeasure() {
-  if (!measuring) return;
-  measuring = false;
-  measureDrag = null;
-  clearPreview();
-  if (room) room.send('overlayDrag', {}); // clear any in-progress preview others may see
-  renderer.domElement.classList.remove('measuring');
-  const b = byId('measureBtn');
-  if (b) b.classList.remove('on');
-}
+// Measurement overlay state, picking, previews, and protocol live together.
+const overlays = createOverlays({
+  THREE,
+  scene,
+  camera,
+  ray,
+  pointer,
+  canvas: renderer.domElement,
+  registry: OVERLAY,
+  measure: MEASURE,
+  labelSize: CONFIG.label,
+  nameTag,
+  formatMeasure,
+  disposeSprite,
+  getRoom: () => room,
+  send: (type, data) => room?.send(type, data),
+  getSessionId: () => mySession,
+  getRank: () => myRank,
+  getColor: myColor,
+  getBoardMeshes: () =>
+    [...meshes.values()].filter((entry) => entry.type === 'board').map((entry) => entry.mesh),
+  setPointer,
+  byId,
+});
 
 // Format milliseconds as m:ss (or h:mm:ss past an hour), flooring to whole seconds.
 function fmtTime(ms) {
@@ -5795,6 +5473,7 @@ const perf = initPerf(); // dev render-cost overlay, off unless ?perf=1 / window
       ms.y * 13 +
       ms.z * 17;
   }
+  overlays.syncSurface(); // GLB boards can finish loading after restored overlays arrive
   for (const [id, sprite] of heldLabels) {
     // keep each name tag hovering over its piece
     const entry = meshes.get(id);
@@ -6075,7 +5754,7 @@ const INPUT = {
   command: onKeyDown, // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
   secondaryPress: (p) => {
     // touch long-press → context menu on a piece, or ping on empty felt
-    if (!room || measuring || whiteboard.isOwning() || inspect || selMode) return; // a modal tool owns the gesture
+    if (!room || overlays.isMeasuring() || whiteboard.isOwning() || inspect || selMode) return; // a modal tool owns the gesture
     const id = down && down.id; // the piece the press landed on (null on empty felt)
     if (down) down.dragging = true; // consume the gesture: no grab on further move, no tap on release
     if (id) openPieceMenu(id, p);
@@ -6212,7 +5891,7 @@ wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') })
         },
       },
       { btn: ab, pane: 'music' },
-      { btn: mb, pane: 'measure', onOpen: enterMeasure, onClose: exitMeasure },
+      { btn: mb, pane: 'measure', onOpen: overlays.enter, onClose: overlays.exit },
       { btn: tb, pane: 'timer' },
     ]);
 }
