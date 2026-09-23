@@ -117,9 +117,9 @@ importing a room singleton:
   rechecks live GM rank after database reads, broadcasts only to currently authorized clients,
   and fans admission/decline notifications out through the injected matchmaker.
 - **`server/game/trays.js`** — personal tray physics and lifecycle operations. It owns
-  tray-bound rebuilding, resize repositioning, randomized drop placement, per-seat clearing,
-  and scene restoration; `TableRoom` keeps small forwarding methods and the general `seatOf`
-  ownership helper.
+  tray-bound rebuilding, resize repositioning, randomized drop placement, size-aware Scoop
+  placement, per-seat clearing, and scene restoration; `TableRoom` keeps small forwarding methods
+  and the general `seatOf` ownership helper.
 - **`server/` support modules** — shared permission and validation rules,
   card/deck state helpers, the piece-props codec, upload validation, database and
   session/Redis configuration, bootstrap-admin provisioning, async HTTP and
@@ -788,9 +788,11 @@ running dice-roll _log_ was considered and dropped on purpose: the physical dice
 are the source of truth, and a ledger would pull the feel away from a real table.)
 
 Two things let it fit the engine without new machinery. First, the tray is a real **physics
-container** — floor + four walls + an invisible lid — built from the shared `trayParts()` so the
-collider and the client mesh are the same box. `server/game/trays.js` owns `buildTrays()` and the
-related room operations; it rebuilds every enabled seat's walls
+container** — floor + four walls + an invisible lid. The client renders `trayParts()` without
+the lid; the server builds `trayCollisionParts()` with the same footprint and floor but walls
+scaled by `TRAY.collisionWallScale` (currently `1.5`) and a lid raised to meet their tops. The
+extra collision height contains dice without raising the visible walls. `server/game/trays.js`
+owns `buildTrays()` and the related room operations; it rebuilds every enabled seat's bounds
 at its angle (bodies tagged `__traySeat`) and slides the dice along on a table resize. The one
 real subtlety is the **out-of-bounds net**: it yanks any stray body back to table centre, and a
 tray sits _past_ the table edge, so a tray die is contained by _its own_ tray bounds (`inTray`,
@@ -799,6 +801,12 @@ camera** move, not height or a separate scene — the Roll button hops _your_ ca
 (placing it first if it isn't out), Roll-all flings only your seat's dice with the gentler
 `SIM.trayRoll` impulse, and Back tweens home; no one else's view stirs. `onLeave` puts a departing
 player's tray away so it never lingers for the next occupant.
+
+Scoop is a server-side placement operation, not a physics shove. The `trayScoop` handler calls
+`scoopTrayDice()` for the caller's seat. It searches centre-first positions with each die's
+bounding radius and a tunable gap, then puts the dice at floor level with motion cleared and
+their bodies asleep. If they cannot fit without overlap in one layer, it leaves their positions
+alone rather than stacking colliders and provoking a bounce.
 
 **Table shape.** The play surface is rectangular by default but can be **round, oval, hex
 (flat-top) or a rounded rectangle** (`state.tableShape`, GM-set and durable). One shared
@@ -1247,6 +1255,8 @@ The extracted module depends on room capabilities (`world`, `state`, `bodies`, `
 shared tray geometry rather than the `TableRoom` class, which keeps early construction and scene
 restoration independently testable. `seatOf` remains on the room because deals, permissions,
 disconnect handling, and other non-tray features also consume it.
+The same module exports `scoopTrayDice(room, seat)` for the room-feature handler; its private
+`scoopLayout()` uses the shared `TRAY` spacing knobs and Cannon bounding radii.
 
 ## Synchronized state boundary
 

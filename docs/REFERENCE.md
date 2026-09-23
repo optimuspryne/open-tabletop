@@ -17,7 +17,7 @@ The codebase:
 | `server/game/starters.js`                                                                              | Node    | Injected starter-layout orchestration: reset, board/grid placement, decks, initial dealing, bowls/stacks, and capacity                                                                           |
 | `server/game/table-bounds.js`                                                                          | Node    | Injected Cannon floor and containment-ring construction for every table shape, including boundary-body replacement and tray rebuilding                                                           |
 | `server/game/table-scale.js`                                                                           | Node    | Injected measurement-scale snapshots, validated restoration, and square/hex board-grid calibration                                                                                              |
-| `server/game/trays.js`                                                                                 | Node    | Injected personal dice-tray lifecycle: bounds, resize repositioning, drops, clearing, and scene restoration                                                                                       |
+| `server/game/trays.js`                                                                                 | Node    | Personal dice-tray physics and lifecycle: bounds, resize repositioning, drops, size-aware Scoop placement, clearing, and scene restoration                                                        |
 | `server/game/piece-lifecycle.js`                                                                       | Node    | Injected authoritative body/state creation, complete piece removal, release snapping/throws, landing cues, and deck/dispenser absorption                                                        |
 | `server/game/collider-maintenance.js`                                                                  | Node    | Deck and finite-stack collider reconstruction using shared geometry, count-derived heights, and authored modeled colliders                                                                      |
 | `server/game/placement-operations.js`                                                                  | Node    | Transform publication, snapped-body pin/unpin transitions, and active-grid snap eligibility                                                                                                     |
@@ -105,6 +105,7 @@ classDiagram
     }
     class TrayOperations["server/game/trays.js"] {
         +createTrayOperations({random})
+        +scoopTrayDice(room, seat)
         +buildTrays(room) / repositionTrayDice(room)
         +trayDropPos(room, seat) / clearTraySeat(room, seat)
         +applyTrays(room, seats)
@@ -326,11 +327,14 @@ chess}` each `[color0, color1]`.
   procedural-dice-only `custom`. **`OBJECT_FINISHES`** / **`OBJECT_FINISH_KEYS`** derive the
   model-object catalogue by excluding `custom`; both the Inspect picker and server validation use
   this shared allowlist. `DICE_FINISH_FALLBACK` maps GPU-heavy finishes to phone-safe alternatives.
-- **`TRAY`** — the personal dice tray's geometry, one source for the server floor+walls,
-  the client mesh, and the tests: `hx`/`hz` (floor half-extents), `wall` (wall half-height),
-  `thick` (wall half-thickness), `floorThick` (floor half-height, its top at `y=0`), `lid`
-  (half-thickness of the invisible physics-only ceiling), `margin` (gap from the table edge to
-  the track the tray centre rides).
+- **`TRAY`** — shared personal-tray tuning: `hx`/`hz` (floor half-extents), `wall` (visible-wall
+  half-height), `collisionWallScale` (server wall height relative to the visible wall; default
+  `1.5`, with the invisible lid following its top), `thick` (wall half-thickness), `floorThick`
+  (floor half-height, its top at `y=0`), `lid` (ceiling half-thickness), and `margin` (gap to the
+  tray-centre track). `spawnInset`/`spawnY` tune new dice placement; `recoverySlack`/`recoveryY`
+  tune resize recovery; `scoopGap`/`scoopGridStep`/`scoopFloorLift`/`scoopRadiusFallback` tune
+  Scoop's separated, floor-level layout. The client and server share a footprint and floor, but
+  their wall heights intentionally differ.
 - **`SEAT_ANGLES`** `[8]` + **`seatAngle(seat)`** — each seat's angle on the whiteboard/tray
   track (θ = `atan2(outX, outZ)`, matching `seatLayoutFor`), so a seat's tray sits directly
   behind that player.
@@ -402,10 +406,12 @@ chess}` each `[color0, color1]`.
 - **`trayCenter(angle, tableX, tableZ) → {x, z}`** — a tray's centre on the track for a seat
   angle and table size (radius `max(tableX,tableZ) + TRAY.margin`, the whiteboard formula), so
   the tray hugs the edge at any size.
-- **`trayParts(T?) → [{hx,hy,hz,x,y,z, noMesh?}]`** — the floor + four walls + an invisible
-  physics-only lid, as _tray-local_ box specs (centred at origin, floor top at `y=0`,
-  unrotated); the lid carries `noMesh:true` so the mesh builder skips it. Both the collider and
-  the mesh build from this list.
+- **`trayParts(T?) → [{hx,hy,hz,x,y,z, noMesh?}]`** — tray-local specs for the floor, four
+  visible-height walls, and a lid marked `noMesh:true`; the client draws the floor and walls but
+  skips the lid.
+- **`trayCollisionParts(T?) → [{hx,hy,hz,x,y,z, noMesh?}]`** — the same floor and footprint,
+  with walls scaled by `T.collisionWallScale` and the invisible lid flush with their new top.
+  The server builds its Cannon tray bodies from these specs.
 - **`trayPlace(local, center, angle) → {x, y, z}`** — rotate a tray-local point by `angle`
   about Y and offset to `center`; the one transform the physics bodies and render meshes both
   apply so they land together.
@@ -829,10 +835,17 @@ the existing `TableRoom` forwarding methods: `trayCenterFor`, `buildTrays`,
 the broader `seatOf` ownership helper.
 
 Rebuilding removes only bodies tracked in `room._trayBounds`, repositions already-tagged dice
-before replacing enabled seats' floor/wall/lid bodies, and remains safe during early room setup
-before the piece-body map exists. Drop randomness is injectable for deterministic tests. Scene
+before replacing enabled seats' floor/wall/lid bodies from `trayCollisionParts()`, and remains safe
+during early room setup before the piece-body map exists. Drop randomness is injectable for
+deterministic tests. Scene
 restoration validates and deduplicates seat indices; clearing removes only dice whose Cannon body
 has the matching `__traySeat`.
+
+**`scoopTrayDice(room, seat) → number`** collects only that seat's tray dice and returns their
+count. Its private `scoopLayout()` searches centre-first slots with each body's bounding radius
+and `TRAY.scoopGap`, largest first. The selected positions use each body's AABB to rest just
+above the tray floor; velocity is cleared and bodies sleep. If a single non-overlapping layer
+cannot fit, positions are left unchanged rather than introducing collisions.
 
 ### Card transfers and deck properties
 
@@ -1197,7 +1210,7 @@ Member coordination methods forward to the operations returned by
   waiting lobby. Mutation permissions remain in the member handlers.
 
 Dice-tray methods (personal, one per seat): **`buildTrays()`** (rebuild every enabled seat's
-floor+walls at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on
+floor+walls+lid at its `seatAngle`, bodies tagged `__traySeat`; called from `buildBounds` and on
 toggle), **`trayCenterFor(seat)`** (→ `trayCenter` at the seat angle + live table size),
 **`repositionTrayDice()`** (carry each tray's dice to the new centre on rebuild/resize),
 **`trayDropPos(seat)`** (a spawn point inside the seat's tray), **`seatOf(client)`** (the
@@ -1250,10 +1263,10 @@ stacks decrement and disappear at zero; infinite bowls remain, and compatible
 pieces dropped back onto a dispenser are absorbed by the shared release path.
 
 Dice-tray handlers (personal, keyed on the caller's seat — **no rank gate**):
-**`trayShow`** (`{on}` — toggle _your_ seat's tray in `State.trays`; on off it also clears the
-tray dice; both call `buildTrays`), **`trayScoop`** (re-rack your tray's dice to its centre),
-**`trayClear`** (remove just your tray's dice). Stocking and rolling reuse `spawn`/`roll`/
-`rollOne` above.
+**`trayShow`** (`{on}` — toggle _your_ seat's tray in `State.trays`; turning it off also clears the
+tray dice; both call `buildTrays`), **`trayScoop`** (call `scoopTrayDice` to settle your tray's dice
+in non-overlapping positions near its centre), and **`trayClear`** (remove just your tray's dice).
+Stocking and rolling reuse `spawn`/`roll`/`rollOne` above.
 
 Multi-select group handlers (act on a client-supplied `ids` list, mirroring the singles;
 **not rank-gated** except `removeGroup`): move reuses the servo — **`grabGroup`**
@@ -1707,10 +1720,10 @@ lclick, rclick }`; the interaction layer dispatches off this, no type switches.
   shape's perimeter (`clipSegConvex`), so the grid stops at a round/hex edge; `null` for `off`/zero-cell, and skips a hair-fine
   grid (>300 lines/axis square, or a hex-count cap). The client's **`rebuildGrid`** builds/replaces it at `gridLift` above
   the felt and re-runs on the relevant `scale`/table-size changes.
-- **`trayMesh(feltColor) → THREE.Group`** — a felt-lined open box built from the shared
-  `trayParts()` in tray-local space (so the mesh matches the collider), skipping the `noMesh`
-  lid so it never blocks the top-down view. The client's **`syncTrays`** places one per enabled
-  seat at its `trayCenter`/`seatAngle`.
+- **`trayMesh() → THREE.Group`** — a felt-lined open box built from `trayParts()` in tray-local
+  space. It shares the collider's floor and footprint, but its visible walls end below the
+  collision walls and it skips the `noMesh` lid. The client's **`syncTrays`** places one per
+  enabled seat at its `trayCenter`/`seatAngle`.
 
 ---
 
