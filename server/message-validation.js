@@ -1140,3 +1140,34 @@ export function participationPayload(message) {
     ? { participation: message.participation }
     : null;
 }
+
+// Private deck browsing uses opaque entry/session handles, never client-supplied faces or indices.
+export function deckBrowsePayload(message, kind) {
+  const fields = {
+    start: ['deckId'],
+    access: ['deckId', 'access'],
+    close: ['token'],
+    step: ['token', 'revision', 'direction'],
+    keepAlive: ['token', 'revision'],
+    action: ['token', 'revision', 'entryToken', 'action', 'requestId'],
+  }[kind];
+  if (!fields || !exactObject(message, fields) || fields.some((key) => !(key in message)))
+    return null;
+  const result = {};
+  for (const key of fields) {
+    const value = message[key];
+    if (key === 'deckId') {
+      if (!boundedUniqueIds([value])) return null;
+    } else if (key === 'revision') {
+      if (!Number.isSafeInteger(value) || value < 0) return null;
+    } else if (key === 'direction') {
+      if (value !== -1 && value !== 1) return null;
+    } else if (key === 'access') {
+      if (!['gm', 'players'].includes(value)) return null;
+    } else if (key === 'action') {
+      if (!['hand', 'field-up', 'field-down', 'top', 'bottom'].includes(value)) return null;
+    } else if (!boundedString(value, { min: 1, max: 64, pattern: /^[a-zA-Z0-9-]+$/ })) return null;
+    result[key] = value;
+  }
+  return result;
+}

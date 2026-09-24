@@ -1,3 +1,4 @@
+import { syncOpenCover } from '../deck-sync.js';
 import { returnInspectedCard } from '../inspection-recovery.js';
 import { spawnTableCard, takeTableCard } from '../card-transfer.js';
 import {
@@ -56,6 +57,7 @@ export function registerCardHandlers(
     const parsed = deckIdPayload(message);
     if (!parsed) return;
     const { deckId } = parsed;
+    if (room.deckBrowsing?.blocked(client, [deckId])) return;
     const deck = room.state.pieces.get(deckId);
     if (!ensurePieceCapacity(room, client, maxPieces)) return;
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
@@ -75,6 +77,7 @@ export function registerCardHandlers(
     const parsed = deckIdPayload(message);
     if (!parsed) return;
     const { deckId } = parsed;
+    if (room.deckBrowsing?.blocked(client, [deckId])) return;
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
@@ -88,6 +91,7 @@ export function registerCardHandlers(
     const parsed = deckDragPayload(message);
     if (!parsed) return;
     const { deckId, x, y, z } = parsed;
+    if (room.deckBrowsing?.blocked(client, [deckId])) return;
     const target = { x, y, z };
     const deck = room.state.pieces.get(deckId);
     const deckBody = room.bodies.get(deckId);
@@ -120,6 +124,7 @@ export function registerCardHandlers(
     const parsed = deckIdPayload(message);
     if (!parsed) return;
     const { deckId } = parsed;
+    if (room.deckBrowsing?.blocked(client, [deckId])) return;
     const deck = room.state.pieces.get(deckId);
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
@@ -175,6 +180,7 @@ export function registerCardHandlers(
     const parsed = deckIdPayload(message);
     if (!parsed) return;
     const { deckId } = parsed;
+    if (room.deckBrowsing?.blocked(client, [deckId])) return;
     const cards = room.deckCards.get(deckId);
     if (!cards) return;
     shuffle(cards);
@@ -186,6 +192,7 @@ export function registerCardHandlers(
     const parsed = deckIdPayload(message);
     if (!parsed) return;
     const { deckId } = parsed;
+    if (room.deckBrowsing?.blocked(client, [deckId])) return;
     const deck = room.state.pieces.get(deckId);
     const cards = room.deckCards.get(deckId);
     if (!deck || deck.type !== 'deck' || !cards || cards.length < 2) return;
@@ -207,6 +214,7 @@ export function registerCardHandlers(
   cardMessage('combineIntoDeck', (client, message) => {
     const ids = groupIds(message, { max: maxPieces });
     if (!ids) return;
+    if (room.deckBrowsing?.blocked(client, ids)) return;
     const members = [];
     for (const id of ids) {
       const piece = room.state.pieces.get(id);
@@ -221,6 +229,10 @@ export function registerCardHandlers(
       return;
     members.sort((a, b) => a.body.position.y - b.body.position.y); // top of the table → top of deck
     const props = (members.find((m) => m.piece.type === 'deck') || members[0]).props;
+    const decks = members.filter((m) => m.piece.type === 'deck');
+    if (decks.length && decks.every((m) => m.props.browseAccess === 'players'))
+      props.browseAccess = 'players';
+    else delete props.browseAccess;
     const cards = [];
     let cx = 0;
     let cz = 0;
@@ -258,22 +270,4 @@ function finishDraw(room, deckId, empty) {
     room.updateDeckCollider(deckId);
     syncOpenCover(room, deckId); // the top tile changed → repaint the stack's visible cover
   }
-}
-
-// An OPEN tile set shows its current top tile's back as the stack cover; keep that in sync as the
-// top changes (draw / shuffle / combine). Writes props (→ every client rebuilds the deck) only when
-// the cover actually changes, and only for open decks. No-op for secret decks and bare-back stacks.
-function syncOpenCover(room, deckId) {
-  const piece = room.state.pieces.get(deckId);
-  if (!piece) return;
-  const props = readProps(piece);
-  if (!props.open) return;
-  const cards = room.deckCards.get(deckId);
-  if (!cards || !cards.length) return;
-  const cover = cardBackRef(cards[cards.length - 1]); // the top tile's own back (undefined → shared)
-  const next = cover ?? props.back;
-  if ((props.cover ?? props.back) === next) return; // nothing to repaint
-  if (cover) props.cover = cover;
-  else delete props.cover;
-  writeProps(piece, props);
 }

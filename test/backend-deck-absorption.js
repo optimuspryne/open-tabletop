@@ -82,3 +82,21 @@ test('a card without recoverable front data is not consumed', () => {
   assert.equal(room.state.pieces.has('card'), true);
   assert.deepEqual(room.deckCards.get('deck'), ['old-front']);
 });
+
+test('a released card remains recoverable on the table while its target deck is being browsed', () => {
+  const room = harness({ back: 'blue' }, { back: 'blue' });
+  const checked = [];
+  room.deckBrowsing = {
+    blocked: (client, ids) => {
+      checked.push(ids);
+      return true;
+    },
+  };
+  releasePiece(room, 'card');
+  assert.deepEqual(checked, [['deck']]);
+  assert.equal(room.state.pieces.has('card'), true);
+  assert.deepEqual(room.deckCards.get('deck'), ['old-front']);
+  room.deckBrowsing.blocked = () => false;
+  releasePiece(room, 'card');
+  assert.deepEqual(room.deckCards.get('deck'), ['old-front', 'new-front']);
+});

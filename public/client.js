@@ -1,3 +1,4 @@
+import { createDeckBrowser } from './table/deck-browsing.js';
 import { createParticipation } from './table/participation.js';
 import * as THREE from 'three';
 import {
@@ -25,6 +26,7 @@ import {
   trayMesh,
   cTex,
   cardMesh,
+  createCardBrowsePreview,
   resizeToCanvas,
   parseCardFront,
   cardPreviewURL,
@@ -218,6 +220,7 @@ const participation = createParticipation({
     overlays.cancel();
     whiteboard.cancel();
     inspection.cancel();
+    deckBrowser.cancel();
     pieceUi.closePieceMenu();
     pieceLabels.close();
     shell.closeRadial();
@@ -414,6 +417,7 @@ const membership = createMembership({
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
   effects.bindTableEffects(room);
   inspection.bindRoom(room);
+  deckBrowser.bindRoom(room);
   pieceDrag.bindRoom(room);
 
   presence.bindRoom(room, cb);
@@ -594,6 +598,7 @@ const hand = createHand({
   toast,
 });
 inspection = createInspection({
+  makeBrowsePreview: createCardBrowsePreview,
   canInteract: participation.canInteract,
   THREE,
   scene,
@@ -615,6 +620,13 @@ inspection = createInspection({
   clearDiceDefault,
   onReleaseHand: () => hand.render(),
   onSingleClick: (...args) => pieceDrag.sendAction(...args),
+});
+const deckBrowser = createDeckBrowser({
+  getRoom: () => room,
+  inspection,
+  byId,
+  canInteract: participation.canInteract,
+  toast,
 });
 dicePreferences.syncTextures();
 const presence = createPresence({
@@ -814,6 +826,7 @@ const pieceLabels = createPieceLabels({
   getRank: () => myRank,
 });
 const pieceUi = createPieceUi({
+  browseDeck: (id) => deckBrowser.open(id),
   canInteract: participation.canInteract,
   byId,
   canvas: renderer.domElement,

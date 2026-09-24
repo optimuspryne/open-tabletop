@@ -203,6 +203,62 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'deck-browser',
+    root: '#deckBrowseActions',
+    expect: { selector: '#deckBrowseActions button', min: 8 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const { createDeckBrowser } = await import('/table/deck-browsing.js');
+      const { createCardBrowsePreview, cardMesh } = await import('/rendering/graphics.js');
+      const byId = id => document.getElementById(id), sent = [], messages = new Map(), previews = [];
+      let timer, leave, closed = 0, allowed = true;
+      const room = { send: (...args) => sent.push(args), onMessage: (name, fn) => messages.set(name, fn), onLeave: fn => { leave = fn; } };
+      const browser = createDeckBrowser({ getRoom: () => room, byId, canInteract: () => allowed, toast() {},
+        inspection: { cancel() {}, closeBrowseCard() { closed++; }, showBrowseCard(card, close) { previews.push({card, close}); } },
+        repeat: fn => { timer = fn; return 1; }, stopRepeat() {} });
+      browser.bindRoom(room); browser.open('1');
+      assert(sent.at(-1)[0] === 'browseDeck', 'Browse did not request a private session');
+      const card = { deckId: '1', token: 'lease', revision: 0, entryToken: 'entry', front: 'text:Secret', back: 'back', position: 1, count: 3 };
+      messages.get('deckBrowseCard')(card);
+      assert(!byId('deckBrowseActions').hidden && byId('deckBrowsePrevious').disabled, 'First card navigation is wrong');
+      let escapedKey = false;
+      const keyListener = () => { escapedKey = true; };
+      window.addEventListener('keydown', keyListener);
+      byId('deckBrowseActions').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }));
+      window.removeEventListener('keydown', keyListener);
+      assert(!escapedKey && sent.at(-1)[0] === 'browseStep' && sent.at(-1)[1].direction === 1, 'Browse key escaped to table input');
+      assert(byId('deckBrowseNext').disabled, 'Pending navigation allowed another request');
+      messages.get('deckBrowseCard')({ ...card, revision: 1, entryToken: 'second', position: 2 });
+      byId('deckBrowseActions').querySelector('[data-browse-action="hand"]').click();
+      assert(sent.at(-1)[0] === 'browseAction' && sent.at(-1)[1].entryToken === 'second', 'Action lost private entry identity');
+      messages.get('serverError')({ operation: 'deckBrowse' });
+      assert(!byId('deckBrowseNext').disabled, 'Recoverable failure left controls locked');
+      timer(); assert(sent.at(-1)[0] === 'browseKeepAlive', 'Active browser did not renew lease');
+      byId('deckBrowseClose').click();
+      assert(byId('deckBrowseActions').hidden && sent.at(-1)[0] === 'closeDeckBrowse' && closed > 0, 'Close retained preview or lease');
+      const n = previews.length; messages.get('deckBrowseCard')(card);
+      assert(previews.length === n, 'Late preview reopened a closed browser');
+      allowed = false; browser.open('1'); assert(sent.at(-1)[0] !== 'browseDeck', 'Restricted player opened browsing');
+      allowed = true; browser.open('1'); messages.get('deckBrowseCard')(card);
+      const bounds = byId('deckBrowseActions').getBoundingClientRect();
+      assert(bounds.left >= 0 && bounds.right <= innerWidth && bounds.bottom <= innerHeight, 'Browse controls overflow viewport');
+      // Private previews release newly loaded textures/materials but never resident table assets.
+      const shared = cardMesh({ front: 'text:Resident', back: 'back' });
+      const sharedTexture = shared.material[2].map;
+      let sharedDisposed = 0, ownedDisposed = 0, materialDisposed = 0, geometryDisposed = 0;
+      sharedTexture.addEventListener('dispose', () => sharedDisposed++);
+      const borrowed = createCardBrowsePreview({ front: 'text:Resident', back: 'back' });
+      borrowed.dispose(); assert(sharedDisposed === 0, 'Borrowed texture was disposed');
+      const preview = createCardBrowsePreview({ front: 'text:Private-browse', back: 'back' });
+      preview.mesh.material[2].map.addEventListener('dispose', () => ownedDisposed++);
+      preview.mesh.material[2].addEventListener('dispose', () => materialDisposed++);
+      preview.mesh.geometry.addEventListener('dispose', () => geometryDisposed++);
+      preview.dispose(); preview.dispose();
+      assert(ownedDisposed === 1 && materialDisposed === 1 && geometryDisposed === 0, 'Browse resource ownership is wrong');
+      window.__closeDeckBrowserFixture = leave;
+    `,
+  },
+  {
     name: 'lobby-watch',
     page: '/index.html',
     root: '#roomList',

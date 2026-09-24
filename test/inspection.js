@@ -35,7 +35,9 @@ function fixture({ appearance = false } = {}) {
   const capture = [];
   const cardMesh = () =>
     new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1.5), new THREE.MeshBasicMaterial());
+  let previewDisposals = 0;
   const inspection = createInspection({
+    makeBrowsePreview: () => ({ mesh: cardMesh(), dispose: () => previewDisposals++ }),
     THREE,
     scene,
     camera,
@@ -76,6 +78,7 @@ function fixture({ appearance = false } = {}) {
     cancelDelay: (id) => pending.delete(id),
   });
   return {
+    previewDisposals: () => previewDisposals,
     inspection,
     camera,
     controls,
@@ -195,4 +198,22 @@ test('private inspectCard messages enter drawn-card inspection without exposing 
   assert.equal(f.elements.get('drawActions').hidden, false);
   f.inspection.releaseInspect();
   assert.equal(f.inspection.isActive(), false);
+});
+
+test('browse preview replacements dispose owned resources without closing the active lease', () => {
+  const f = fixture();
+  let closed = 0;
+  f.inspection.showBrowseCard({}, () => closed++);
+  assert.equal(f.inspection.isActive(), true);
+  f.inspection.showBrowseCard({}, () => closed++);
+  assert.equal(f.previewDisposals(), 1);
+  assert.equal(closed, 0);
+  f.inspection.releaseInspect();
+  assert.equal(f.previewDisposals(), 2);
+  assert.equal(closed, 1);
+  assert.equal(f.sent.length, 0, 'browsing must not send inspectPlace');
+  f.inspection.showBrowseCard({}, () => closed++);
+  f.inspection.closeBrowseCard();
+  assert.equal(f.previewDisposals(), 3);
+  assert.equal(closed, 1, 'server-side close must not echo a client close');
 });

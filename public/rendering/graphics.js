@@ -1496,6 +1496,36 @@ function cardMesh(props = {}) {
   });
   return mesh;
 }
+// Browse previews own their materials and any newly loaded face textures. Remove those new
+// textures from the shared cache immediately, so later table meshes cannot borrow them.
+// Existing resident textures and cached card geometry/masks remain shared and are never disposed.
+export function createCardBrowsePreview(props) {
+  const refs = new Set([props.front || 'back', props.back || 'back']);
+  const resident = new Set([...refs].filter((ref) => _texCache.has(ref)));
+  const mesh = cardMesh(props);
+  const textures = [];
+  for (const ref of refs)
+    if (!resident.has(ref) && _texCache.has(ref)) {
+      textures.push(_texCache.get(ref));
+      _texCache.delete(ref);
+    }
+  let disposed = false;
+  return {
+    mesh,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      const materials = new Set();
+      mesh.traverse((node) => {
+        if (node.material) for (const material of [node.material].flat()) materials.add(material);
+        if (node.customDepthMaterial) materials.add(node.customDepthMaterial);
+      });
+      materials.forEach((material) => material.dispose());
+      textures.forEach((texture) => texture.dispose());
+    },
+  };
+}
+
 // A player MAT — a large flat surface others rest on. It's a single-faced tile, so reuse cardMesh's
 // solid-slab path (its geom carries a mat-sized footprint + a slab thickness) with the image mirrored
 // onto both caps, so the mat reads the same whether it's flat or lifted.

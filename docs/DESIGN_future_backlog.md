@@ -16,7 +16,9 @@ The shared request registry supplies guarded registration for future inventories
 other gameplay features. Self-service spectator entry/seating is implemented with user-approved functionality and UI;
 comprehensive live multiplayer/touch coverage is not inferred; see the
 [spectator checkpoint](DESIGN_next_features.md#stage-3-spectator-checkpoint--2026-09-24).
-No backlog feature below is implemented by these participation slices.
+Private deck browsing is also implemented locally with GM-only defaults and a per-deck player
+toggle; the user reports manual tests passing (2026-09-24). Collections are next in the detailed plan.
+No backlog feature below is implemented by these slices.
 
 ## Where to investigate first
 

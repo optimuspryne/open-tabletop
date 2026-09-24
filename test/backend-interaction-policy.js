@@ -1,3 +1,4 @@
+import { registerDeckBrowseHandlers } from '../server/game/handlers/deck-browsing.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
@@ -18,6 +19,7 @@ import { registerRoomFeatureHandlers } from '../server/game/handlers/room-featur
 import { registerRoomStateHandlers } from '../server/game/handlers/room-state.js';
 
 const registrations = [
+  registerDeckBrowseHandlers,
   registerCardHandlers,
   registerLibraryHandlers,
   registerMemberHandlers,

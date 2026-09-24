@@ -7,7 +7,7 @@ Staged feature plans are separate from this description of the running system:
 [DESIGN_next_features.md](DESIGN_next_features.md) plans time-out/spectator permissions, private
 deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_backlog.md) records
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
-there remain proposed except for the participation foundation, durable GM time-outs and self-service spectators recorded below.
+there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
 ## Two worlds, kept apart
 
@@ -356,7 +356,7 @@ handler-specific rank, ownership and privacy checks remain in force. Server-owne
 can deny gameplay for spectators/time-outs, or all requests while policy is loading. Missing
 participation fields remain compatible with legacy internal callers, while room access now loads
 durable policy before gameplay. Reconnect marks readiness false and revokes access on read failure.
-The 121-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
+The 127-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
 one room-send adapter, while the server remains authoritative.
 
 Migration 018 stores time-outs by room/account with a cascading membership foreign key, outside
@@ -1468,6 +1468,20 @@ serialization, and reconnect synchronization remain unchanged.
 
 ## Scene vs. game snapshot (`serializeScene` / `serializeGame`)
 
+Private deck browsing adds an exclusive, expiring room-local lease, with one authorized client
+and one selected entry per deck. GM-only is the default for every deck; a GM may opt that deck
+into active-player browsing. The public piece stores only this access setting. Private responses
+contain one face/back and opaque session/entry handles; snapshots contain the actual inventory,
+not browsing sessions. Browsing itself never removes a card. Transfers validate capacity before
+committing inventory and destination together, and cache bounded receipts to make retries safe.
+
+Card handlers and open/remove group operations guard conflicting mutations before work begins.
+The actual release/absorption path skips leased decks; normal movement remains available.
+Lifecycle removal and reset close leases, and participation/departure cleanup cancels the client's
+session. Every response rechecks current access; clock-driven expiry also frees abandoned leases.
+Inspection rendering is reused through a focused browser controller. Preview materials/new face
+textures have explicit ownership and cleanup, retaining shared table textures and geometry.
+
 Card transfers share explicit preservation rules: `takeTableCard` handles both single
 and group takes, including the double-sided flag and hidden-face lookup.
 The same module's `spawnTableCard` centralizes placement for hands, deck draws,
@@ -1477,7 +1491,7 @@ inventory consumption, and destination selection remain explicit in the callers;
 `spawnCardFlat` still handles grid snapping and physics orientation. The hand
 placement method is a thin facade that supplies geometry and the chosen orientation.
 `deckSpawnProps` supplies split, combine, and snapshot paths with geometry, snap/open
-flags, skin and tints; derived cover and count are rebuilt on spawn.
+flags, browse access, skin and tints; derived cover and count are rebuilt on spawn.
 `inspectedEntry` preserves individual backs for both live returns and disconnect cleanup.
 Snapshotting returns pending inspections to the drawing end in reverse inspection order,
 so the first inspected card remains the original top card. It operates on a copied deck

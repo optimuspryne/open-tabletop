@@ -132,6 +132,17 @@
         <span class="lbl">Reset</span>
       </button>
     </div>
+    <section id="deckBrowseActions" class="panel" role="region" aria-label="Browse deck" tabindex="-1" hidden>
+      <span id="deckBrowsePosition" class="da-note" aria-live="polite"></span>
+      <button id="deckBrowsePrevious" data-icon="chevron-left"><span class="lbl">Previous</span></button>
+      <button id="deckBrowseNext" data-icon="chevron-right"><span class="lbl">Next</span></button>
+      <button data-browse-action="hand" data-icon="cards"><span class="lbl">To hand</span></button>
+      <button data-browse-action="field-up" data-icon="arrow-bar-up"><span class="lbl">Face-up</span></button>
+      <button data-browse-action="field-down" data-icon="arrow-bar-down"><span class="lbl">Face-down</span></button>
+      <button data-browse-action="top" data-icon="arrow-bar-up"><span class="lbl">To top</span></button>
+      <button data-browse-action="bottom" data-icon="arrow-bar-down"><span class="lbl">To bottom</span></button>
+      <button id="deckBrowseClose" data-icon="x"><span class="lbl">Close</span></button>
+    </section>
     <div id="drawActions" data-room-mutation class="panel" hidden>
       <span class="da-note">Drag to Rotate</span>
       <button data-place="field-up" data-icon="arrow-bar-up">
@@ -1077,6 +1088,8 @@
             </ul>
           </div>
           <div class="helpSec">
+            <h4>Browsing decks</h4>
+            <p>A GM can choose Browse deck in a deck's right-click or long-press menu, or allow player browsing for that deck. Previous/Next shows one card privately without changing the order. Use the buttons to take a card, place it, or move it to the top/bottom. Close or Esc releases the deck; draws and shuffles wait until browsing ends. Arrow keys navigate while the browser controls have focus.</p>
             <h4>Your private hand</h4>
             <ul>
               <li>
@@ -1196,6 +1209,8 @@
             </ul>
           </div>
           <div class="helpSec">
+            <h4>Browsing decks</h4>
+            <p>A GM can choose Browse deck in a deck's right-click or long-press menu, or allow player browsing for that deck. Previous/Next shows one card privately without changing the order. Use the buttons to take a card, place it, or move it to the top/bottom. Close or Esc releases the deck; draws and shuffles wait until browsing ends. Arrow keys navigate while the browser controls have focus.</p>
             <h4>Your private hand</h4>
             <ul>
               <li>

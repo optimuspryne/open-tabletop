@@ -3,6 +3,10 @@ import { returnInspectedCard } from './inspection-recovery.js';
 // Shared by time-out and departure. A restriction preserves seats, trays, hands
 // and membership; those belong to the separate final-departure lifecycle.
 export function stopPlayerInteraction(room, sessionId, { recoverInspection = true } = {}) {
+  room.deckBrowsing?.cancelClient(
+    sessionId,
+    'Deck browsing ended because your table access changed.',
+  );
   room.state.pieces.forEach((piece, id) => {
     if (piece.owner !== sessionId) return;
     piece.owner = '';

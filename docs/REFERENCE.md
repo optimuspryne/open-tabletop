@@ -6,7 +6,7 @@ A map of every module, data structure, and key function. For the _why_, see
 For staged implementation status and **remaining proposed** work, see [DESIGN_next_features.md](DESIGN_next_features.md)
 (participation restrictions, deck browsing, collections) and
 [DESIGN_future_backlog.md](DESIGN_future_backlog.md) (discovery briefs for other open items).
-The participation foundation, durable GM time-outs and self-service spectators are implemented; the remaining suggested messages,
+The participation foundation, durable GM time-outs, self-service spectators and private deck browsing are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
 The codebase:
@@ -1035,6 +1035,56 @@ and `TRAY.scoopGap`, largest first. The selected positions use each body's AABB 
 above the tray floor; velocity is cleared and bodies sleep. If a single non-overlapping layer
 cannot fit, positions are left unchanged rather than introducing collisions.
 
+### Private deck browsing
+
+`server/game/deck-browsing.js` owns one private lease per deck and one per client. All decks,
+including open tile decks, default to GM-only (`browseAccess` absent or `gm`). An active GM may
+set `browseAccess:'players'` on that deck; active ordinary players/helpers may then browse.
+Spectators/time-outs never browse. Rank and participation are rechecked before each response/action.
+The mode is public deck metadata; faces, cursor, revision, entry handles and request receipts are
+server-only and sent solely to the authorized browser. No full-deck manifest is delivered.
+
+| Request | Contract |
+| --- | --- |
+| `browseDeck {deckId}` | Acquire a lease; reject busy decks or unresolved inspections; return `deckBrowseCard`. |
+| `browseStep {token,revision,direction}` | Direction −1/1 means previous/next from the top; clamp at ends, advance revision and return a fresh entry handle. Navigation is limited to one step per 80 ms. |
+| `browseKeepAlive {token,revision}` | Renew the live lease; the browser sends this every 20 seconds while idle in the UI. |
+| `browseAction {token,revision,entryToken,action,requestId}` | Actions: `hand`, `field-up`, `field-down`, `top`, `bottom`. Commit synchronously, acknowledge via `deckBrowseActionDone {token,requestId}`, then return the next preview or close. |
+| `closeDeckBrowse {token}` | Idempotent owner-only cleanup, allowed while restricted. |
+| `setDeckBrowseAccess {deckId,access}` | Active GM-only; access is `gm` or `players`. Close any current lease before publishing the new setting. |
+
+`deckBrowseCard` privately includes `{token,deckId,revision,entryToken,position,count,front,back}`
+and tile/geometry metadata; positions are one-based from the top. `deckBrowseClosed {token,reason}`
+contains no card data. Validation rejects extra fields, invalid enums, nondecimal deck IDs,
+unsafe revisions and handles longer than 64 characters. The shared registry classifies close as
+cleanup and the other five requests as gameplay. Failures use the established sanitized
+`serverError` boundary (service notices use operation `deckBrowse`).
+
+Leases expire after 60 seconds without an accepted step/action/heartbeat. The room clock sweeps
+once per second; requests also sweep before use. Disconnect/restriction cleanup, deck removal,
+access changes, reset/load and room disposal cancel sessions. Reconnect starts fresh. Ordinary
+conflicting mutation requests are rejected; a GM may remove/reset the deck, closing its lease.
+A card released onto a busy deck remains on the table. Movement, labels and snapshot saving are
+still available. The existing top-card Inspect path remains separate.
+
+Transfers reuse `spawnTableCard` and `addToHand`, with capacity checked before consumption.
+`addToHand` accepts an optional sixth `{notify:false}` argument to defer private delivery until
+commit. Destination failures roll back new pieces/hand entries and restore the original deck.
+A bounded 64-receipt session cache handles duplicate action requests; older revisions cannot
+consume another card after eviction. Ended sessions retain receipts until expiry/close/replacement.
+`server/game/deck-sync.js` shares `syncOpenCover` with ordinary deck handlers. Split/snapshot
+paths preserve `browseAccess`; combining retains `players` only when every source deck permits
+it (otherwise GM-only). Library deck assets continue using their existing schema/defaults.
+
+`public/table/deck-browsing.js` owns the action panel, pending controls, heartbeat and stale-response
+rejection. `createInspection.showBrowseCard`/`closeBrowseCard` share inspection orientation and
+rotation without using `inspectPlace`. `createCardBrowsePreview` in `public/rendering/graphics.js`
+returns `{mesh,dispose}`: materials and newly loaded private face textures belong to the preview;
+resident textures and cached geometry/masks stay shared. Newly loaded preview textures are removed
+from the shared cache immediately and disposed on replacement/close. Arrow keys are scoped to
+the focused browse controls; Close/Esc/clicking an unrotated preview closes it. The More/gameplay
+restriction controller cancels an open browser. Desktop and touch use the same visible buttons.
+
 ### Card transfers and deck properties
 
 - **`spawnTableCard(room, position, {front, back, open, geo}, faceDown = true)`**
@@ -1574,7 +1624,7 @@ button label and accessible name through the existing icon/label helpers.
 Seatless observers start with a bird's-eye camera and cannot create a tray for seat zero.
 
 Public `Player.timedOut` and `Player.participation` drive badges and `public/table/participation.js`. Its room-send adapter
-uses the shared 121-request capability registry, blocks gameplay before hydration, and rechecks
+uses the shared 127-request capability registry, blocks gameplay before hydration, and rechecks
 mixed save/spawn requests. Mutation controls become inert; the input router retains camera,
 public inspection, chat and highlight/ping paths. A restriction cancels active local gestures.
 `stopPlayerInteraction` releases held bodies with zero velocity, clears group/overlay drag and

@@ -496,6 +496,7 @@ test('split preserves deck skin, tints, snap and per-card backs', () => {
       model: 'pouch',
       color: '#123456',
       textColor: '#abcdef',
+      browseAccess: 'players',
     }),
   });
   room.deckCards.set('1', ['bottom', { front: 'top', back: 'other' }]);
@@ -507,6 +508,7 @@ test('split preserves deck skin, tints, snap and per-card backs', () => {
     deckModel: 'pouch',
     color: '#123456',
     textColor: '#abcdef',
+    browseAccess: 'players',
     cards: [{ front: 'top', back: 'other' }],
   });
 });
@@ -575,4 +577,21 @@ test('disconnected inspections retry once when capacity becomes available', () =
   assert.equal(room.pendingInspect.size, 0);
   assert.equal(room.state.pieces.size, 1);
   assert.deepEqual([...room.cardData.values()], [{ front: 'ace' }]);
+});
+
+test('combining decks keeps player browsing only when every source deck permits it', async () => {
+  for (const access of [undefined, 'players']) {
+    const { room, handlers, events } = harness();
+    const client = makeClient();
+    for (const id of ['1', '2']) {
+      room.state.pieces.set(id, {
+        type: 'deck',
+        props: JSON.stringify({ back: 'back', browseAccess: id === '1' ? 'players' : access }),
+      });
+      room.bodies.set(id, { position: { x: 0, y: Number(id), z: 0 } });
+      room.deckCards.set(id, [id]);
+    }
+    await handlers.get('combineIntoDeck')(client, { ids: ['1', '2'] });
+    assert.equal(events.find((e) => e.name === 'spawn').payload.props.browseAccess, access);
+  }
 });

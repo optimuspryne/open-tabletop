@@ -14,6 +14,7 @@ import {
 // Owns inspection previews, their controls, deferred double-clicks, and pointer rotation.
 export function createInspection({
   canInteract = () => true,
+  makeBrowsePreview,
   THREE,
   scene,
   camera,
@@ -291,9 +292,12 @@ export function createInspection({
       drawn: !!opts.drawn,
       placed: false,
       hid: opts.hid || null,
+      onClose: opts.onClose || null,
+      browse: !!opts.browse,
+      dispose: opts.dispose || null,
     };
     controls.enabled = false;
-    byId('inspectHint').hidden = !!opts.drawn; // a drawn card shows the action panel instead
+    byId('inspectHint').hidden = !!opts.drawn || !!opts.browse; // a drawn card shows the action panel instead
     byId('drawActions').hidden = !opts.drawn;
     {
       const db = byId('drawActions') && byId('drawActions').querySelector('[data-place="deck"]');
@@ -440,9 +444,11 @@ export function createInspection({
   function releaseInspect() {
     if (!inspect) return;
     const wasHand = inspect.hid;
+    const onClose = inspect.onClose;
     if (inspect.drawn && !inspect.placed && !inspect.hid)
       getRoom().send('inspectPlace', { where: 'deck' }); // a real drawn card closed without choosing → back to deck
-    camera.remove(inspect.pivot); // shares geometry/materials — never dispose
+    camera.remove(inspect.pivot);
+    inspect.dispose?.(); // only owned browse-preview resources; normal inspections borrow theirs
     if (inspect.origId) setOriginalVisible(inspect.origId, true);
     inspect = null;
     controls.enabled = true;
@@ -450,6 +456,7 @@ export function createInspection({
     byId('drawActions').hidden = true;
     const row = byId('inspectColorRow');
     if (row) row.hidden = true;
+    onClose?.();
     if (wasHand) onReleaseHand(); // restore the hand we hid for the inspect
   }
 
@@ -549,6 +556,17 @@ export function createInspection({
     isDrawn,
     isInspectable: INSPECTABLE,
     inspectMesh,
+    showBrowseCard(props, onClose) {
+      if (inspect?.browse) inspect.onClose = null; // replacing a preview keeps the server lease
+      const preview = makeBrowsePreview(props);
+      inspectMesh(preview.mesh, { type: 'card', browse: true, onClose, dispose: preview.dispose });
+    },
+    closeBrowseCard() {
+      if (inspect?.browse) {
+        inspect.onClose = null;
+        releaseInspect();
+      }
+    },
     enterInspect,
     releaseInspect,
     placeDrawn,

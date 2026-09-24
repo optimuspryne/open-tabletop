@@ -344,12 +344,13 @@ implementation sequence without making the entire backlog a fixed priority queue
     properties and any contained cards/items; storing and respawning transfers the object rather
     than duplicating it. A blocked placement must leave the inventory item recoverable. Define
     access and visibility rules, and keep player inventories out of portable scene templates.
-22. **Browse through a deck.** Let a player pick up/open a deck and inspect its cards one by one.
+22. **Browse through a deck — implemented locally; user reports manual tests passing.** GM-only by
+    default, with a GM-set per-deck toggle for active players. Browse cards privately one by one.
     Each inspected card offers **Add to hand**, **Place face-up**, **Place face-down**,
     **Put on top of deck**, and **Put on bottom of deck**. Provide desktop and touch browsing
-    controls. Reuse the existing inspection and card-transfer behavior where practical; define
-    who may browse concealed decks, deliver faces only to authorized viewers, and preserve card
-    order and inventory through cancellation, concurrent actions, or disconnects.
+    controls. Reuses inspection and card-transfer behavior with expiring private leases, conflict
+    guards and recoverable transfers. See the deck browsing checkpoint in
+    [DESIGN_next_features.md](DESIGN_next_features.md#deck-browsing-checkpoint--2026-09-24).
 23. ✅ **Prominent low-stock labels — implemented; user reports manual tests passing.** GMs use
     **Labels…** on decks, tile decks, and finite dispensers to choose a full quantity and percentage.
     A gold remaining-count label appears strictly below that threshold. The reference is explicit

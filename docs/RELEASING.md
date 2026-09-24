@@ -94,6 +94,11 @@ field. Automatic startup applies it with the migration role; manual installation
 with their schema-owner connection. Existing policy rows default to player mode and retain their
 time-out. No environment variables, runtime grants or snapshot conversions change.
 
+The subsequent deck-browsing slice adds protocol handlers and client controls. Restart the server
+and refresh browsers together. It uses existing deck properties/snapshot storage and requires no
+new migration, environment variables or grants. Old snapshots remain GM-only by default; leases
+are transient and never restored.
+
 ## Rules that keep the guarantees honest
 
 - **Never re-push a version tag.** Once `:X.Y.Z` is pushed, those bits are frozen. A fix

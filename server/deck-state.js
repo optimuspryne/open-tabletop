@@ -32,7 +32,17 @@ export const inspectedEntry = (pending) =>
 // Translate public deck properties to spawn input without copying derived cover/count.
 export function deckSpawnProps(props, cards) {
   const result = { back: props.back || 'back', cards };
-  for (const key of ['tile', 'geom', 'snap', 'open', 'color', 'textColor', 'label', 'lowStock'])
+  for (const key of [
+    'tile',
+    'geom',
+    'snap',
+    'open',
+    'color',
+    'textColor',
+    'label',
+    'lowStock',
+    'browseAccess',
+  ])
     if (props[key] !== undefined) result[key] = props[key];
   if (props.model) result.deckModel = props.model;
   return result;

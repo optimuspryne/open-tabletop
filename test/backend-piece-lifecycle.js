@@ -186,7 +186,11 @@ test('spawn preserves all compound shapes and the saved layout on a single piece
 
 test('deck label and stock metadata survive snapshot encoding and real piece restoration', () => {
   const { lifecycle, room } = harness();
-  const settings = { label: 'Campaign deck', lowStock: { reference: 54, percent: 25 } };
+  const settings = {
+    label: 'Campaign deck',
+    lowStock: { reference: 54, percent: 25 },
+    browseAccess: 'players',
+  };
   const first = lifecycle.spawn(room, 'deck', [0, 2, 0], {
     ...settings,
     cards: ['a', 'b'],
@@ -197,6 +201,7 @@ test('deck label and stock metadata survive snapshot encoding and real piece res
   const restored = lifecycle.spawn(room, 'deck', [1, 2, 0], snapshot);
   assert.deepEqual(readProps(room.state.pieces.get(restored)), props);
   assert.equal(props.label, settings.label);
+  assert.equal(props.browseAccess, 'players');
   assert.deepEqual(props.lowStock, settings.lowStock);
   assert.equal(room.state.pieces.get(restored).count, 2);
   assert.equal(props.cards, undefined);

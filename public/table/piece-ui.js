@@ -21,6 +21,7 @@ export function createPieceUi({
   highlightPiece,
   getRank,
   editLabels,
+  browseDeck,
 }) {
   const RADIAL_MAX = 7;
   // Hover readout: a small tooltip over the deck or dispenser under the cursor showing
@@ -263,6 +264,20 @@ export function createPieceUi({
       items.push(['Roll', () => getRoom().send('rollOne', { id })]);
     }
     if (type === 'deck') {
+      const deckProps = JSON.parse(getRoom().state.pieces.get(id)?.props || '{}');
+      if (getRank() >= 2 || deckProps.browseAccess === 'players')
+        items.push(['Browse deck…', () => browseDeck(id)]);
+      if (getRank() >= 2)
+        items.push([
+          deckProps.browseAccess === 'players'
+            ? 'Restrict browsing to GMs'
+            : 'Allow player browsing',
+          () =>
+            getRoom().send('setDeckBrowseAccess', {
+              deckId: id,
+              access: deckProps.browseAccess === 'players' ? 'gm' : 'players',
+            }),
+        ]);
       items.push(['Peek at top card', () => getRoom().send('drawInspect', { deckId: id })]);
       items.push(['Draw to hand', () => pieceDrag.sendAction('drawToHand', id)]);
       items.push(['Shuffle', () => getRoom().send('shuffle', { deckId: id })]);

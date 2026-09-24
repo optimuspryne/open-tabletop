@@ -16,7 +16,7 @@ const messagesByCapability = {
   ],
   communication: ['chat', 'ping', 'highlightPiece'],
   personal: ['notebook', 'setName', 'setAvatar', 'setParticipation'],
-  cleanup: ['showStop', 'wbRelease'],
+  cleanup: ['showStop', 'wbRelease', 'closeDeckBrowse'],
   administration: [
     'members',
     'admit',
@@ -40,6 +40,11 @@ const messagesByCapability = {
     'saveDice',
   ],
   gameplay: [
+    'browseDeck',
+    'browseStep',
+    'browseAction',
+    'browseKeepAlive',
+    'setDeckBrowseAccess',
     'grab',
     'move',
     'release',

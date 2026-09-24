@@ -41,6 +41,18 @@ reserved seat, hand and tray; new observers start seatless with a bird's-eye cam
 play requires a free seat if needed and never clears a GM time-out. The preference applies to
 all tabs for the same account/room. Live multiplayer and real-device testing remain pending.
 
+## Deck browsing
+
+Choose **Browse deck…** from a deck's right-click/long-press menu. GMs can choose **Allow player
+browsing** or **Restrict browsing to GMs** in the same menu. All decks default to GM-only;
+spectators/time-outs cannot browse. Desktop and touch have Previous/Next, To hand, Face-up/down,
+To top/bottom and Close buttons. Focused browser controls accept Left/Right arrows and Esc;
+these key events do not become table movement. Drag the enlarged card to rotate; click it without
+dragging to close. Closing leaves order untouched unless an action was applied. A busy deck can
+move, but draws, shuffle, combine and dropped-card absorption wait until browsing closes.
+The user reports manual tests passing (2026-09-24); specific devices and multiplayer scenarios
+were not itemized.
+
 ## Camera
 
 Empty felt only — a press that hits a piece is consumed by the piece dispatcher

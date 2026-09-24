@@ -1,3 +1,5 @@
+import { createDeckBrowsing } from './server/game/deck-browsing.js';
+import { registerDeckBrowseHandlers } from './server/game/handlers/deck-browsing.js';
 import {
   MAX_ROOM_CLIENTS,
   turnPlayers,
@@ -414,6 +416,8 @@ class TableRoom extends Room {
     this.pendingTurn = null; // userId whose turn it was in a saved game, awaiting their return
     this.nextId = 1;
     this.nextHid = 1;
+    this.deckBrowsing = createDeckBrowsing(this, { geoOf, maxPieces: SIM.maxPieces });
+    this.clock.setInterval(() => this.deckBrowsing.sweep(), 1000);
     this.nextOverlayId = 1;
     // Scoreboard row ids: a plain counter, seeded past any rows just restored above
     // (their 's<N>' keys) so a reloaded room's next add can't collide with an old row.
@@ -450,6 +454,7 @@ class TableRoom extends Room {
     });
 
     // --- Cards: flip, deal, take, inspect, shuffle, split ----------------------
+    registerDeckBrowseHandlers(this);
     registerCardHandlers(this, {
       flipHop: SIM.flipHop,
       maxPieces: SIM.maxPieces,
@@ -637,13 +642,13 @@ class TableRoom extends Room {
   }
 
   // Add a card to a player's private hand and push the update to them alone.
-  addToHand(client, front, back, geo = {}, open = false) {
+  addToHand(client, front, back, geo = {}, open = false, { notify = true } = {}) {
     const hand = this.hands.get(client.sessionId) || [];
     const entry = { hid: 'h' + this.nextHid++, front, back, ...geo }; // geo = {tile}/{geom} for tile cards; nothing for plain cards
     if (open) entry.open = true; // a double-sided tile: both faces are real, flip turns it over
     hand.push(entry);
     this.hands.set(client.sessionId, hand);
-    this.sendHand(client);
+    if (notify) this.sendHand(client);
   }
 
   // Place a hand card on the table, honoring double-sided (open) cards. An open card keeps BOTH
@@ -677,6 +682,7 @@ class TableRoom extends Room {
   // starting rack, e.g. dominoes). The deck's tile/geom rides along so held tiles keep their
   // shape. Trims the deck and removes it if it empties.
   dealFromDeckToSeats(deckId, n) {
+    if (this.deckBrowsing?.blocked(null, [deckId])) return;
     const deck = this.state.pieces.get(deckId),
       cards = this.deckCards.get(deckId);
     if (!deck || !cards) return;
@@ -888,6 +894,7 @@ class TableRoom extends Room {
     await saveRoomStateNow(this, { db });
   }
   async onDispose() {
+    this.deckBrowsing?.clear();
     // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     roomAccess.dispose(this);
     await safeRoomTask(

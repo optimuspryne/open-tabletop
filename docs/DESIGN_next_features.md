@@ -1,6 +1,6 @@
 # Next features: participation, deck browsing, and collections
 
-Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; other features proposed**. Original plans
+Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; deck browsing implemented locally with user-reported manual tests passing; collections proposed**. Original plans
 were prepared against commit `b7390c6`; foundation implementation is dated 2026-09-24.
 This document covers [ROADMAP.md](ROADMAP.md) items **5/15, 22, and 18**. Recommendations below
 are starting decisions for later work, not additional user-approved requirements. Recheck current
@@ -444,14 +444,14 @@ position/count, Close, and these actions: **Add to hand**, **Place face-up**, **
 inside the browser and must not also move table objects.
 
 Recommended access: a GM-set per-deck `browseAccess` with `gm` or `players`, defaulting to `gm`
-for concealed decks. Open/double-sided tile decks can default to active players. This is an
+for concealed decks. Open/double-sided tile decks use the same GM-only default. This is an
 explicit permission to see the contents, not automatic game-rule enforcement. Spectators and
 timed-out players cannot start a browsing session. Existing top-card Inspect remains a separate
 action and policy; this feature should not silently change it.
 
-**Decision to revisit:** all active players may browse by default in a trust-based game, or GMs
-explicitly opt each concealed deck in. Choose and document this before shipping; never infer that
-permission to inspect one top card permits enumeration of an entire concealed deck.
+**Decided (2026-09-24):** the user approved GM-only defaults and a per-deck player toggle.
+This implementation defaults every deck, including open tiles, to GM-only. A top-card Inspect
+permission never implies permission to enumerate a deck.
 
 ### Private session and conflict strategy
 
@@ -475,7 +475,7 @@ disconnect, lost membership, time-out, spectator conversion, and deck removal al
 Expose a content-free busy status if useful. Do not publish card indices, faces, or browsing
 history in synchronized state, chat, logs, or public broadcasts.
 
-Proposed protocol, all names provisional:
+Implemented protocol (the reference also documents heartbeat, access toggles and exact replies):
 
 | Request | Server response/behavior |
 | --- | --- |
@@ -540,6 +540,67 @@ Likely ownership: new focused server browsing service and handler family; existi
 deck-state, piece-lifecycle, persistence and inspection UI seams. A global transaction framework
 or permanent card-ID migration is not required by this initial design. Run `check`, `test:input`,
 `test:components`, `test:devices`; add integration checks only if the chosen persistence changes need them.
+
+## Deck browsing checkpoint — 2026-09-24
+
+**Implemented locally; user reports manual tests passing (2026-09-24).** The user chose GM-only by default with a
+per-deck player toggle. The first usable slice includes private navigation and all five card
+destinations, bounded leases/receipts, conflict guards and desktop/touch controls. No database
+migration is needed. Restart the server and refresh browsers before testing.
+
+Reuse decision: keep the existing inspection renderer and card-transfer rules. A focused private
+lease service owns cursor/entry identity and synchronous inventory commits; a separate small
+browser controller owns UI/pending state. `syncOpenCover` moves out of the handler module so both
+ordinary draws and browsing share the cover update. Existing cleanup, persistence and piece
+lifecycle seams cancel leases and preserve the policy without a new transaction framework.
+
+### Files and functions changed
+
+| Files | Changes |
+| --- | --- |
+| `server/game/deck-browsing.js` | Add `createDeckBrowsing` with start/step/action/heartbeat, access setting, bounded receipts, expiry and cancellation; internal transfers recover on destination failure. |
+| `server/game/handlers/deck-browsing.js` | Add `registerDeckBrowseHandlers`, using guarded registration and strict payloads. |
+| `server/message-validation.js` | Add `deckBrowsePayload` for the six request shapes. |
+| `shared/room-capabilities.js` | Classify six new requests, 127 total. |
+| `server.js` | Construct/register the service and clock sweep; cancel on disposal; guard seat dealing; extend `addToHand` to defer notification until commit. |
+| `server/game/handlers/cards.js`, `server/game/deck-sync.js` | Guard draws/shuffle/split/combine, preserve restrictive combined access, and move `syncOpenCover` into a shared server module. |
+| `server/game/handlers/pieces.js` | Guard open-state changes and non-GM removal of browsed decks. |
+| `server/game/piece-lifecycle.js` | Preserve access on spawn, cancel on removal, and prevent absorption into leased decks. |
+| `server/game/scene-persistence.js`, `server/game/interaction-cleanup.js` | Cancel sessions on clear/load and participation/departure cleanup. |
+| `server/deck-state.js` | Extend `deckSpawnProps` to preserve browse access through split/snapshot paths. |
+| `public/table/deck-browsing.js` | Add `createDeckBrowser`: pending controls, private previews, navigation/actions, heartbeat, close and scoped keyboard input. |
+| `public/table/inspection.js` | Add browse-preview entry/close methods and owned-resource disposal; keep drawn/hand semantics separate. |
+| `public/rendering/graphics.js` | Add `createCardBrowsePreview`, borrowing resident textures/geometry and disposing owned materials/new private textures. |
+| `public/client.js`, `public/table/piece-ui.js` | Wire the actual controller/renderer and Browse/access-toggle menu paths. |
+| `public/table.html`, `public/styles.css` | Add responsive action panel with existing icons/tokens and in-app help. |
+| `test/backend-deck-browsing.js` | New real service/handler tests for privacy, access, exclusivity, five destinations, stale/duplicate requests, failure recovery and lifecycle. |
+| `test/backend-card-handlers.js`, `test/backend-piece-lifecycle.js`, `test/backend-deck-absorption.js` | Verify restrictive combine access, split/snapshot restoration and recoverable drops on leased decks. |
+| `test/backend-interaction-policy.js` | Register the real handler family in capability-inventory coverage. |
+| `test/inspection.js`, `scripts/component-parity.mjs` | Verify preview ownership/cancellation and browser buttons, key isolation, late replies, textures and responsive bounds. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` | Record feature, protocol and privacy/resource boundaries. |
+| `docs/GESTURES.md`, `docs/RELEASING.md` | Record input paths and restart/refresh requirements. |
+| `docs/ROADMAP.md`, `docs/DESIGN_next_features.md`, `docs/DESIGN_future_backlog.md` | Record the decision, local implementation and user-reported manual-test sign-off. |
+
+Automated checks passed: `npm run check` (717 tests plus lint/format/CSS checks),
+`test:input` (57 cases), `test:components` (desktop and touch) and `test:devices` (seven profiles).
+No database schema/query changes require integration tests. The user reported manual tests green
+on 2026-09-24; individual scenarios and devices were not itemized. The checklist below remains
+a smoke-test reference, without implying exhaustive multiplayer or real-device coverage.
+
+### Manual smoke tests
+
+1. With a GM and player account, verify Browse is initially GM-only. Enable player browsing on
+   one deck; verify the other remains restricted. Spectators/time-outs remain blocked. Toggle
+   access off during a player session and confirm closure.
+2. Browse duplicate cards, custom tiles/backs and a one-card deck. Try every destination and
+   confirm counts/order, private hands and face-down concealment. Close without moving anything;
+   the original order should remain. Include a full table, then free space and retry.
+3. While another client browses, try draw/peek/shuffle/split/combine, change open mode, and drop a
+   loose card on the deck. Inventory must remain recoverable. A GM delete/reset should close the
+   session; moving the deck should still work.
+4. Disconnect, time out or spectate while browsing, then reconnect. Save while viewing and load
+   afterward: cards/access survive; the old browser does not. Test actual touch navigation,
+   preview rotation and keyboard focus/Esc on desktop.
 
 ## 3. Custom asset collections
 

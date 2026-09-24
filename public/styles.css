@@ -894,6 +894,7 @@ a {
 #selTools.disabled {
   opacity: 0.5;
 }
+#deckBrowseActions,
 #drawActions,
 #wbTools,
 #wbStatus,
@@ -912,6 +913,7 @@ a {
   padding: 10px 12px;
   z-index: 20;
 }
+#deckBrowseActions .da-note,
 #drawActions .da-note,
 #wbTools .da-note,
 #wbStatus .da-note,
@@ -3376,6 +3378,7 @@ label:has(.ico) {
 /* Inspect + dice-tray toolbars dock to the bottom edge on small screens so they never cover the piece
    or tray in the middle. The dense groups are behind pop-menus now, so the bars themselves stay short. */
 @media (max-width: 720px), (pointer: coarse) {
+  #deckBrowseActions,
   #drawActions,
   #trayTools,
   #inspectColorRow {
@@ -7203,4 +7206,8 @@ body.not-gm .gm-only {
 }
 .participation-disabled {
   opacity: 0.45;
+}
+
+#deckBrowseActions {
+  width: min(680px, 94vw);
 }

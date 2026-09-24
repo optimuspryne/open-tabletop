@@ -81,6 +81,7 @@ export function createPieceLifecycle({
       room.deckCards.set(id, deckData.cards.slice());
       piece.count = deckData.cards.length;
       const deckProps = { back: deckData.back, ...geoOf(deckData) };
+      if (props.browseAccess === 'players') deckProps.browseAccess = 'players';
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
         deckProps.model = deckData.deckModel;
       if (props.color != null) deckProps.color = props.color;
@@ -134,6 +135,7 @@ export function createPieceLifecycle({
   };
 
   const removePiece = (room, id) => {
+    room.deckBrowsing?.cancelDeck(id, 'The deck was removed.');
     const body = room.bodies.get(id);
     if (body) room.world.removeBody(body);
     room.bodies.delete(id);
@@ -147,6 +149,7 @@ export function createPieceLifecycle({
   const releasePiece = (room, id, velocity) => {
     const piece = room.state.pieces.get(id);
     if (!piece) return;
+    const releasingClient = room.clients?.find((client) => client.sessionId === piece.owner);
     piece.owner = '';
     room.targets.delete(id);
     room._released.set(id, now());
@@ -183,6 +186,7 @@ export function createPieceLifecycle({
           Math.abs(body.position.x - deckBody.position.x) < sim.absorb.x &&
           Math.abs(body.position.z - deckBody.position.z) < sim.absorb.z;
         if (!onDeck) continue;
+        if (room.deckBrowsing?.blocked(releasingClient, [deckId])) continue;
         const cardProps = readProps(piece);
         const deckPiece = room.state.pieces.get(deckId);
         if (deckPiece?.type !== 'deck') continue;

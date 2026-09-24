@@ -20,6 +20,13 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Private deck browsing through right-click/long-press **Browse deck…**, GM-only by default for
+  every deck. GMs can enable active-player browsing per deck. View one card at a time without
+  changing order, then take it, place it face-up/down, or move it to the top/bottom. Exclusive
+  expiring sessions block conflicting draws, shuffle, combine and absorption; restrictions,
+  disconnects and resets close them. Preserve card metadata and inventory on failed placement
+  or retries. Reuse inspection rendering with owned preview cleanup. Restart the server and
+  refresh browsers; no database migration is required. User reports manual tests passing (2026-09-24).
 - Use Tabler `label` for Labels and `focus-2` for Highlight in the piece radial menu.
 - Tabler eye icons for lobby Watch and More → Spectate, switching to device-gamepad for
   Return to play. Reuse the existing icon/label helpers and regenerate all three page sprites.

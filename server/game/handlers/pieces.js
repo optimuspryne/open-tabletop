@@ -149,6 +149,7 @@ export function registerPieceHandlers(
   pieceMessage('setOpenGroup', (client, message) => {
     const ids = idsFrom(message);
     if (!ids) return;
+    if (room.deckBrowsing?.blocked(client, ids)) return;
     const anyOpen = ids.some((id) => {
       const piece = room.state.pieces.get(id);
       return piece && readProps(piece).open;
@@ -309,12 +310,15 @@ export function registerPieceHandlers(
   pieceMessage('remove', (client, message) => {
     if (room.rank(client) < RANK.helper) return;
     const msg = pieceIdPayload(message);
-    if (msg && room.state.pieces.has(msg.id)) room.removePiece(msg.id);
+    if (!msg) return;
+    if (room.rank(client) < RANK.gm && room.deckBrowsing?.blocked(client, [msg.id])) return;
+    if (room.state.pieces.has(msg.id)) room.removePiece(msg.id);
   });
   pieceMessage('removeGroup', (client, message) => {
     if (room.rank(client) < RANK.helper) return;
     const ids = idsFrom(message);
     if (!ids) return;
+    if (room.rank(client) < RANK.gm && room.deckBrowsing?.blocked(client, ids)) return;
     for (const id of ids) if (room.state.pieces.has(id)) room.removePiece(id);
   });
 
