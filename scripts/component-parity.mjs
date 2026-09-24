@@ -277,8 +277,16 @@ const SCENES = [
       window.OTT_USER_ID = 'package-admin';
       const sent = [], requests = [];
       const room = ${STUB_ROOM};
-      const send = room.send;
-      window.onOttRoom({ onMessage: room.onMessage, send: (type, data) => { sent.push(type); send(type, data); } });
+      const send = room.send, messages = new Map();
+      const groups = [{id:'10',name:'Package group',isPublic:false,revision:1,items:[{kind:'dice',id:'1'},{kind:'deck',id:'2'}]}];
+      window.onOttRoom({
+        onMessage: (type, fn) => { messages.set(type, fn); room.onMessage(type, fn); },
+        send: (type, data) => {
+          sent.push(type);
+          if (type === 'listCollections') messages.get('collectionList')?.({request:data.request,collections:window.OTT_IS_ADMIN ? groups : [],next:null});
+          else send(type, data);
+        }
+      });
       document.getElementById('lib2Btn').click();
       (await import('/ui/icons.js')).applyIcons();
       const host = document.getElementById('assetPackagePanel'); host.open = true;
@@ -289,23 +297,24 @@ const SCENES = [
         if (!String(url).startsWith('/asset-packages/')) return fetchOriginal(url, options);
         requests.push([url, options]);
         if (url.endsWith('/preview')) {
+          if (fail==='proxy') return {ok:false,status:413,json:async()=>{throw new SyntaxError('HTML response');}};
           if (resolvePreview) await new Promise(resolve => resolvePreview = resolve);
-          return {ok:true, json:async()=>packageKind==='deck' ? {kind:'deck',name:'Portable tiles',count:4,open:true,deckModel:'bag',totalBytes:0,files:[]} : {kind:'dice',name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]}};
+          return {ok:true, json:async()=>packageKind==='collection' ? {kind:'collection',name:'Portable collection',count:64,members:Array.from({length:64},(_,i)=>({kind:i%2?'deck':'dice',name:i===0?'<b>Authored name</b>':'Collection asset '+(i+1),count:4,open:!!(i%2)})),totalBytes:123,files:[{width:32,height:32}]} : packageKind==='deck' ? {kind:'deck',name:'Portable tiles',count:4,open:true,deckModel:'bag',totalBytes:0,files:[]} : {kind:'dice',name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]}};
         }
-        if (url.endsWith('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{kind:packageKind,name:JSON.parse(options.body).name}};
-        return {ok:true,json:async()=>({format:'fixture',files:[]})};
+        if (url.includes('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{kind:packageKind,name:options.body instanceof File ? new URL(url,location.href).searchParams.get('name') : JSON.parse(options.body).name}};
+        return {ok:true,blob:async()=>new Blob(['PK fixture'],{type:'application/zip'})};
       };
       const file = document.getElementById('packageFile'), name = document.getElementById('packageName');
       const save = document.getElementById('packageImport'), cancel = document.getElementById('packageCancel');
-      async function choose(text = '{}') {
-        const transfer = new DataTransfer(); transfer.items.add(new File([text], 'dice.ott.json', {type:'application/json'}));
+      async function choose(text = 'PK fixture', legacy = false) {
+        const transfer = new DataTransfer(); transfer.items.add(new File([text], legacy ? 'dice.ott.json' : 'assets.ott.zip', {type:legacy ? 'application/json' : 'application/zip'}));
         file.files = transfer.files; await file.onchange();
       }
       await choose();
       assert(!document.getElementById('packagePreview').hidden, 'Package preview missing');
       assert(file.files.length === 1, 'Preview lost the selected filename');
       assert(document.getElementById('packageContents').textContent.includes('32 × 32'), 'Dependency summary missing');
-      assert(!requests.some(([url])=>url.endsWith('/import')), 'Preview mutated the library');
+      assert(!requests.some(([url])=>url.includes('/import')), 'Preview mutated the library');
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       save.scrollIntoView({block:'nearest'});
       const box=save.getBoundingClientRect();
@@ -315,8 +324,11 @@ const SCENES = [
       assert(!save.disabled && !cancel.disabled && document.getElementById('packageStatus').textContent==='Import unavailable', 'Failure did not restore retry controls');
       fail=false; await save.onclick();
       assert(sent.includes('listDice') && document.getElementById('packagePreview').hidden, 'Import did not refresh and clear draft');
-      assert(JSON.parse(requests.filter(([url])=>url.endsWith('/import')).at(-1)[1].body).name==='Private copy', 'Edited name lost');
-      await choose('{'); assert(document.getElementById('packageStatus').textContent.includes('not valid JSON'), 'Malformed file was not explained');
+      assert(new URL(requests.filter(([url])=>url.includes('/import')).at(-1)[0],location.href).searchParams.get('name')==='Private copy', 'Edited name lost');
+      fail='proxy'; await choose();
+      assert(document.getElementById('packageStatus').textContent.includes('reverse-proxy upload limit'), 'Proxy HTML error was mistaken for invalid package JSON');
+      fail=false;
+      await choose('{', true); assert(document.getElementById('packageStatus').textContent.includes('not valid JSON'), 'Malformed file was not explained');
       resolvePreview = true;
       const pending=choose();
       while(typeof resolvePreview !== 'function') await new Promise(resolve=>setTimeout(resolve,0));
@@ -326,7 +338,7 @@ const SCENES = [
       window.onLibraryList('dice',[{id:'1',name:'Export fixture',isPublic:false,url:'/missing-fixture.png'}]);
       const originalClick = HTMLAnchorElement.prototype.click;
       let downloaded=false;
-      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='dice-texture.ott.json';};
+      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='dice-texture.ott.zip';};
       // Open the real library overflow (desktop popup or touch sheet).
       document.querySelector('#nlc_dice .pop-trigger').click();
       const exportButton=[...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export');
@@ -343,12 +355,42 @@ const SCENES = [
       window.onLibraryList('deck',[{id:'2',name:'Tile export',back:'back',first:'text:Tile',count:4,isPublic:false}]);
       document.querySelector('#libraryModal [data-tab="decks"]').click();
       document.querySelector('#nlc_deck .pop-trigger').click();
-      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='deck.ott.json';};
+      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='deck.ott.zip';};
       downloaded=false;
       [...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export').click();
       await new Promise(resolve=>setTimeout(resolve,20));
       assert(downloaded && requests.some(([url])=>url.endsWith('/deck/2')), 'Deck export action not wired');
+      packageKind='collection';
+      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='collection.ott.zip';};
+      downloaded=false;
+      document.getElementById('collectionPanel').closest('details').open=true;
+      const collectionExport=document.querySelector('[aria-label="Export saved collection Package group"]');
+      assert(collectionExport, 'Collection export action missing');
+      collectionExport.scrollIntoView({block:'nearest'});
+      const exportBox=collectionExport.getBoundingClientRect();
+      assert(exportBox.left>=0 && exportBox.right<=innerWidth && exportBox.top>=0 && exportBox.bottom<=innerHeight && collectionExport.contains(document.elementFromPoint(exportBox.left+exportBox.width/2,exportBox.top+exportBox.height/2)), 'Collection Export action is clipped or covered');
+      collectionExport.click();
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert(downloaded && requests.some(([url])=>url.endsWith('/collection/10')), 'Collection export action not wired');
       HTMLAnchorElement.prototype.click=originalClick;
+      await choose();
+      const members=document.getElementById('packageMembers');
+      assert(members.children.length===64 && !members.hidden && !members.querySelector('b'), 'Collection members missing or name parsed as markup');
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      save.scrollIntoView({block:'nearest'});
+      const collectionBox=save.getBoundingClientRect();
+      assert(collectionBox.top>=0 && collectionBox.bottom<=innerHeight && save.contains(document.elementFromPoint(collectionBox.left+collectionBox.width/2,collectionBox.top+collectionBox.height/2)), 'Large collection hides Import action');
+      const refreshes=Object.fromEntries(['listDice','listDecks','listCollections'].map(type=>[type,sent.filter(value=>value===type).length]));
+      name.value='Imported collection'; await save.onclick();
+      assert(Object.entries(refreshes).every(([type,n])=>sent.filter(value=>value===type).length===n+1), 'Collection import did not refresh all relevant lists');
+      assert(document.getElementById('packageStatus').textContent.includes('private collection') && members.hidden && !members.children.length, 'Collection success/reset incomplete');
+      assert(new URL(requests.filter(([url])=>url.includes('/import')).at(-1)[0],location.href).searchParams.get('name')==='Imported collection', 'Collection rename lost');
+      const binary=requests.filter(([url])=>url.includes('/import')).at(-1)[1];
+      assert(binary.body instanceof File && binary.headers['Content-Type']==='application/zip', 'ZIP was converted to a JSON/base64 body');
+      await choose('{}', true); name.value='Legacy collection'; await save.onclick();
+      assert(JSON.parse(requests.filter(([url])=>url.includes('/import')).at(-1)[1].body).name==='Legacy collection', 'Legacy JSON import failed');
+      await choose(); cancel.click();
+      assert(members.hidden && !members.children.length, 'Cancel retained collection members');
       await choose();
       window.fetch=fetchOriginal;
     `,

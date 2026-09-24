@@ -27,12 +27,40 @@ async function fixture(t) {
   const rows = new Map([
     ['1', { name: 'Original', url: '/assets/dice/' + filename, isPublic: true, ownerId: 'old' }],
   ]);
-  const decks = new Map();
+  const decks = new Map(),
+    collections = new Map();
   const db = {
+    getCollectionForPackage: async (id) => {
+      const group = collections.get(id);
+      return group
+        ? {
+            name: group.name,
+            assets: group.items.map((item) => ({
+              kind: item.kind,
+              asset: (item.kind === 'dice' ? rows : decks).get(item.id),
+            })),
+          }
+        : null;
+    },
     getDeck: async (id) => decks.get(id),
     getDice: async (id) => rows.get(id),
     importAssetPackage: async (kind, value, authorize) => {
       assert.ok(await authorize());
+      if (kind === 'collection') {
+        const items = [];
+        for (const member of value.assets)
+          items.push({
+            kind: member.kind,
+            id: await db.importAssetPackage(
+              member.kind,
+              { ...member.data, ownerId: value.ownerId },
+              authorize,
+            ),
+          });
+        const id = String(collections.size + 1);
+        collections.set(id, { name: value.name, isPublic: false, ownerId: value.ownerId, items });
+        return id;
+      }
       const target = kind === 'dice' ? rows : decks;
       const id = String(target.size + 1);
       target.set(id, { ...value, isPublic: false });
@@ -41,7 +69,7 @@ async function fixture(t) {
   };
   const service = createAssetPackages({ db, assetsDir: root });
   const value = await service.exportAsset('dice', '1', yes);
-  return { root, bytes, filename, rows, decks, db, service, value };
+  return { root, bytes, filename, rows, decks, collections, db, service, value };
 }
 test('dice package round-trip preserves bytes and creates independent private copies', async (t) => {
   const f = await fixture(t);
@@ -178,11 +206,13 @@ test('database import uses a transaction, forces private, rolls back revoked acc
 test('HTTP admin gate, preview, import, export and malformed JSON use production router', async (t) => {
   const f = await fixture(t);
   const app = express();
-  let admin = true;
+  let admin = true,
+    invalidations = 0;
   app.use(
     '/asset-packages',
     createAssetPackagesRouter({
       packages: f.service,
+      onCollectionImported: () => invalidations++,
       rateLimitUpload: (req, res, next) => next(),
       requireAdmin: async (req, res) => {
         if (req.headers.authorization !== 'Bearer admin') {
@@ -238,8 +268,8 @@ test('HTTP admin gate, preview, import, export and malformed JSON use production
   assert.equal((await imported.json()).isPublic, false);
   const exported = await fetch(base + '/dice/1', { headers: { Authorization: 'Bearer admin' } });
   assert.equal(exported.headers.get('cache-control'), 'no-store');
-  assert.match(exported.headers.get('content-disposition'), /dice-texture.ott.json/);
-  assert.deepEqual(await exported.json(), f.value);
+  assert.match(exported.headers.get('content-disposition'), /dice-texture.ott.zip/);
+  assert.equal(Buffer.from(await exported.arrayBuffer()).readUInt32LE(), 0x04034b50);
   f.decks.set('1', {
     name: 'HTTP deck',
     back: 'back',
@@ -252,8 +282,9 @@ test('HTTP admin gate, preview, import, export and malformed JSON use production
   });
   const deckExport = await fetch(base + '/deck/1', { headers: { Authorization: 'Bearer admin' } });
   assert.equal(deckExport.status, 200);
-  assert.match(deckExport.headers.get('content-disposition'), /deck.ott.json/);
-  const deckPackage = await deckExport.json();
+  assert.match(deckExport.headers.get('content-disposition'), /deck.ott.zip/);
+  await deckExport.arrayBuffer();
+  const deckPackage = await f.service.exportAsset('deck', '1', yes);
   assert.equal((await post('/preview', deckPackage)).status, 200);
   const importedDeck = await post('/import', { package: deckPackage, name: 'HTTP tiles' });
   assert.equal(importedDeck.status, 201);
@@ -262,6 +293,30 @@ test('HTTP admin gate, preview, import, export and malformed JSON use production
     headers: { Authorization: 'Bearer admin' },
   });
   assert.equal(unsupported.status, 400);
+  f.collections.set('1', {
+    name: 'HTTP group',
+    items: [
+      { kind: 'dice', id: '1' },
+      { kind: 'deck', id: '1' },
+    ],
+  });
+  const groupResponse = await fetch(base + '/collection/1', {
+    headers: { Authorization: 'Bearer admin' },
+  });
+  assert.equal(groupResponse.status, 200);
+  assert.match(groupResponse.headers.get('content-disposition'), /collection.ott.zip/);
+  await groupResponse.arrayBuffer();
+  const groupPackage = await f.service.exportAsset('collection', '1', yes);
+  assert.equal((await post('/preview', groupPackage)).status, 200);
+  assert.equal(invalidations, 0);
+  const groupImport = await post('/import', { package: groupPackage, name: 'HTTP collection' });
+  assert.equal(groupImport.status, 201);
+  assert.equal((await groupImport.json()).kind, 'collection');
+  assert.equal(invalidations, 1);
+  const badGroup = structuredClone(groupPackage);
+  badGroup.collection.items = [];
+  assert.equal((await post('/import', { package: badGroup, name: 'bad' })).status, 400);
+  assert.equal(invalidations, 1);
 });
 
 async function deckFixture(t) {
@@ -393,4 +448,205 @@ test('multi-image import rolls back all its new files when metadata fails or per
     /revoked/,
   );
   assert.deepEqual(await fs.readdir(path.join(destination.root, 'decks')), []);
+});
+
+test('mixed collection packages deduplicate images, remap every private member and round-trip between stores', async (t) => {
+  const source = await deckFixture(t),
+    target = await fixture(t);
+  source.collections.set('1', {
+    name: 'Shared game',
+    items: [
+      { kind: 'deck', id: '1' },
+      { kind: 'dice', id: '1' },
+    ],
+    isPublic: true,
+    ownerId: 'old',
+  });
+  const value = await source.service.exportAsset('collection', '1', yes);
+  assert.equal(value.version, 3);
+  assert.equal(value.files.length, 2);
+  assert.deepEqual(value.collection, { name: 'Shared game', items: ['asset-1', 'asset-2'] });
+  assert.ok(!JSON.stringify(value).includes('ownerId'));
+  assert.ok(!JSON.stringify(value).includes('/assets/'));
+  const preview = await source.service.inspect(value);
+  assert.equal(preview.summary.kind, 'collection');
+  assert.equal(preview.summary.members.length, 2);
+  assert.equal(preview.summary.members[0].count, 4);
+  const copy = await target.service.importAsset(value, 'Private game', 'new-admin', yes);
+  const group = target.collections.get(copy.id);
+  assert.equal(group.isPublic, false);
+  assert.equal(group.ownerId, 'new-admin');
+  assert.equal(group.items.length, 2);
+  const deck = target.decks.get(group.items[0].id),
+    dice = target.rows.get(group.items[1].id);
+  assert.equal(deck.isPublic, false);
+  assert.equal(dice.isPublic, false);
+  assert.equal(deck.ownerId, 'new-admin');
+  assert.equal(dice.ownerId, 'new-admin');
+  assert.match(deck.back, /^\/assets\/decks\//);
+  assert.match(dice.url, /^\/assets\/dice\//);
+  const exported = await target.service.exportAsset('collection', copy.id, yes);
+  assert.deepEqual(exported.assets, value.assets);
+  assert.deepEqual(exported.files, value.files);
+  assert.equal((await fs.readdir(path.join(target.root, 'decks'))).length, 2);
+  assert.equal((await fs.readdir(path.join(target.root, 'dice'))).length, 2);
+  const second = await target.service.importAsset(value, 'Private game', 'new-admin', yes);
+  assert.notEqual(second.id, copy.id);
+  assert.notEqual(target.collections.get(second.id).items[0].id, group.items[0].id);
+  assert.equal(source.collections.get('1').name, 'Shared game');
+});
+test('collection closure, limits and unsupported members fail without partial imports', async (t) => {
+  const f = await deckFixture(t);
+  f.collections.set('1', {
+    name: 'Group',
+    items: [
+      { kind: 'deck', id: '1' },
+      { kind: 'dice', id: '1' },
+    ],
+  });
+  const value = await f.service.exportAsset('collection', '1', yes);
+  for (const change of [
+    (p) => p.collection.items.pop(),
+    (p) => (p.collection.items[1] = 'asset-1'),
+    (p) => (p.collection.items[0] = '../1'),
+    (p) => (p.collection.ownerId = 'foreign'),
+    (p) => (p.collection.isPublic = true),
+    (p) => (p.assets[1].id = 'asset-1'),
+    (p) => (p.assets[1].kind = 'board'),
+    (p) => (p.assets[1].texture = 'file-99'),
+    (p) => (p.assets = Array(65).fill(p.assets[0])),
+    (p) => (p.files[0].sha256 = 'bad'),
+  ]) {
+    const bad = structuredClone(value);
+    change(bad);
+    await assert.rejects(f.service.importAsset(bad, 'bad', 'admin', yes));
+  }
+  assert.equal(f.collections.size, 1);
+  assert.equal(f.decks.size, 1);
+  assert.equal(f.rows.size, 1);
+  f.collections.get('1').items.push({ kind: 'board', id: '1' });
+  await assert.rejects(f.service.exportAsset('collection', '1', yes), /unsupported asset type/);
+  f.collections.get('1').items = [];
+  const empty = await f.service.exportAsset('collection', '1', yes);
+  assert.deepEqual(empty.assets, []);
+  assert.deepEqual(empty.files, []);
+  const imported = await f.service.importAsset(empty, 'Empty', 'admin', yes);
+  assert.deepEqual(f.collections.get(imported.id).items, []);
+});
+test('collection package failures clean up every category; uncertain commits retain all image dependencies', async (t) => {
+  const f = await deckFixture(t),
+    target = await fixture(t);
+  f.collections.set('1', {
+    name: 'Group',
+    items: [
+      { kind: 'deck', id: '1' },
+      { kind: 'dice', id: '1' },
+    ],
+  });
+  const value = await f.service.exportAsset('collection', '1', yes);
+  target.db.importAssetPackage = async () => {
+    throw new Error('transaction failed');
+  };
+  await assert.rejects(
+    target.service.importAsset(value, 'Failed', 'admin', yes),
+    /transaction failed/,
+  );
+  assert.deepEqual(await fs.readdir(path.join(target.root, 'decks')), []);
+  assert.deepEqual(await fs.readdir(path.join(target.root, 'dice')), [target.filename]);
+  target.db.importAssetPackage = async () => {
+    throw Object.assign(new Error('uncertain'), { preserveAssetFile: true });
+  };
+  await assert.rejects(target.service.importAsset(value, 'Uncertain', 'admin', yes), /uncertain/);
+  assert.equal((await fs.readdir(path.join(target.root, 'decks'))).length, 2);
+  assert.equal((await fs.readdir(path.join(target.root, 'dice'))).length, 2);
+});
+
+test('collection budgets apply across members and accept the exact asset/card limits', async (t) => {
+  const f = await deckFixture(t);
+  const member = {
+    ...f.package.assets[0],
+    back: { generated: 'back' },
+    fronts: [{ generated: 'text:A' }],
+  };
+  const value = {
+    format: ASSET_PACKAGE.format,
+    version: ASSET_PACKAGE.collectionVersion,
+    collection: { name: 'Bounded collection', items: [] },
+    assets: [],
+    files: [],
+  };
+  const populate = (count, fronts) => {
+    value.assets = Array.from({ length: count }, (_, i) => ({
+      ...member,
+      id: `asset-${i + 1}`,
+      fronts,
+    }));
+    value.collection.items = value.assets.map((asset) => asset.id);
+  };
+  populate(64, member.fronts);
+  assert.equal((await inspectAssetPackage(value)).summary.count, 64);
+  populate(65, member.fronts);
+  await assert.rejects(inspectAssetPackage(value), /64 assets/);
+  populate(5, Array(1000).fill({ generated: 'text:A' }));
+  assert.equal((await inspectAssetPackage(value)).summary.count, 5);
+  value.assets.push({ ...member, id: 'asset-6' });
+  value.collection.items.push('asset-6');
+  await assert.rejects(inspectAssetPackage(value), /5,000 cards/);
+  populate(2, Array(12).fill({ generated: 'text:' + 'A'.repeat(100000) }));
+  await assert.rejects(inspectAssetPackage(value), /too much generated face text/);
+  for (const [index, asset] of value.assets.entries())
+    f.decks.set(String(index + 1), {
+      ...asset,
+      back: 'back',
+      fronts: asset.fronts.map((ref) => ref.generated),
+    });
+  f.collections.set('1', {
+    name: 'Too much text',
+    items: [
+      { kind: 'deck', id: '1' },
+      { kind: 'deck', id: '2' },
+    ],
+  });
+  await assert.rejects(
+    f.service.exportAsset('collection', '1', yes),
+    /too much generated face text/,
+  );
+});
+
+test('single decks and collections round-trip more than 256 distinct images within size budgets', async (t) => {
+  const source = await deckFixture(t),
+    target = await fixture(t),
+    fronts = [];
+  for (let index = 0; index < 257; index++) {
+    const filename = (index + 1).toString(16).padStart(18, '0') + '.png';
+    const bytes = await sharp({
+      create: {
+        width: 1,
+        height: 1,
+        channels: 4,
+        background: { r: index % 256, g: Math.floor(index / 256), b: 0, alpha: 1 },
+      },
+    })
+      .png()
+      .toBuffer();
+    await fs.writeFile(path.join(source.root, 'decks', filename), bytes);
+    fronts.push('/assets/decks/' + filename);
+  }
+  source.decks.set('1', { ...source.deck, name: 'Large deck', back: 'back', fronts });
+  source.collections.set('1', { name: 'Large collection', items: [{ kind: 'deck', id: '1' }] });
+  for (const kind of ['deck', 'collection']) {
+    const value = await source.service.exportAsset(kind, '1', yes);
+    assert.equal(value.files.length, 257);
+    const inspected = await inspectAssetPackage(value);
+    assert.equal(inspected.summary.files.length, 257);
+    const copy = await target.service.importAsset(value, 'Large copy', 'admin', yes);
+    const exported = await target.service.exportAsset(kind, copy.id, yes);
+    assert.deepEqual(exported.files, value.files);
+    assert.deepEqual(exported.assets[0].fronts, value.assets[0].fronts);
+    const oversized = { ...value, files: Array(ASSET_PACKAGE.maxFiles + 1).fill(value.files[0]) };
+    await assert.rejects(
+      inspectAssetPackage(oversized),
+      new RegExp(`${ASSET_PACKAGE.maxFiles} images`),
+    );
+  }
 });

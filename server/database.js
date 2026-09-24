@@ -1,4 +1,4 @@
-import { AssetPackageError } from '../shared/asset-package.js';
+import { ASSET_PACKAGE, AssetPackageError } from '../shared/asset-package.js';
 // Pool-injected Postgres operations for the library, users, rooms, and membership.
 //
 // Only METADATA lives in Postgres. The image/model FILES still sit on disk under
@@ -9,7 +9,7 @@ import { AssetPackageError } from '../shared/asset-package.js';
 // Normalisation: a model's URL is the canonical column `file_url`; everything else
 // rides in the `props` jsonb bag. Reads splice the two back into the record shape
 // the game already expects, so nothing is stored twice.
-import { createCollectionQueries } from './collection-queries.js';
+import { createCollectionQueries, insertCollection } from './collection-queries.js';
 import { createParticipationQueries } from './participation-queries.js';
 import { createColliderPresetQueries } from './collider-preset-queries.js';
 import { createLibraryQueries, ASSET_TABLES as ASSET_TABLE } from './library-queries.js';
@@ -230,9 +230,61 @@ export function createDatabase(pool) {
     ).then((r) => String(r.rows[0].id));
   }
 
+  // One repeatable-read snapshot keeps membership and asset metadata from different edits apart.
+  async function getCollectionForPackage(id) {
+    const client = await pool.connect();
+    let discard = false;
+    try {
+      await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+      const { rows } = await client.query('SELECT name FROM asset_collections WHERE id=$1', [id]);
+      if (!rows.length) {
+        await client.query('COMMIT');
+        return null;
+      }
+      const members = await client.query(
+        'SELECT kind, asset_id::text AS id FROM asset_collection_items WHERE collection_id=$1 ORDER BY kind, asset_id LIMIT $2',
+        [id, ASSET_PACKAGE.maxAssets + 1],
+      );
+      if (members.rows.length > ASSET_PACKAGE.maxAssets)
+        throw new AssetPackageError('A collection package supports up to 64 assets.');
+      const unsupported = [
+        ...new Set(
+          members.rows.map((item) => item.kind).filter((kind) => !['dice', 'deck'].includes(kind)),
+        ),
+      ];
+      if (unsupported.length)
+        throw new AssetPackageError(
+          `This collection contains unsupported asset types: ${unsupported.join(', ')}. Nothing was exported.`,
+        );
+      const reads = createLibraryQueries(client.query.bind(client)),
+        assets = [];
+      for (const item of members.rows) {
+        const asset = await (item.kind === 'dice'
+          ? reads.getDice(item.id)
+          : reads.getDeck(item.id));
+        if (!asset)
+          throw new AssetPackageError('A collection member is missing. Reload and try again.');
+        assets.push({ kind: item.kind, asset });
+      }
+      await client.query('COMMIT');
+      return { name: rows[0].name, assets };
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        discard = true;
+      }
+      throw error;
+    } finally {
+      client.release(discard);
+    }
+  }
+
   async function importAssetPackage(kind, value, authorize) {
-    const insert = kind === 'dice' ? insertDice : kind === 'deck' ? insertDeck : null;
-    if (!insert) throw new AssetPackageError('Unsupported asset kind.');
+    const insertion = (assetKind) =>
+      assetKind === 'dice' ? insertDice : assetKind === 'deck' ? insertDeck : null;
+    if (kind !== 'collection' && !insertion(kind))
+      throw new AssetPackageError('Unsupported asset kind.');
     let client,
       discard = false,
       commitAttempted = false;
@@ -241,7 +293,30 @@ export function createDatabase(pool) {
       await client.query('BEGIN');
       if (!(await authorize()))
         throw new AssetPackageError('Admin access is no longer available.', 403);
-      const id = await insert({ ...value, isPublic: false }, client.query.bind(client));
+      const query = client.query.bind(client);
+      let id;
+      if (kind === 'collection') {
+        if (!Array.isArray(value.assets) || value.assets.length > ASSET_PACKAGE.maxAssets)
+          throw new AssetPackageError('Invalid collection members.');
+        const items = [];
+        for (const member of value.assets) {
+          const insert = insertion(member.kind);
+          if (!insert) throw new AssetPackageError('Unsupported collection member type.');
+          const assetId = await insert(
+            { ...member.data, ownerId: value.ownerId, isPublic: false },
+            query,
+          );
+          items.push({ kind: member.kind, id: assetId });
+        }
+        id = (
+          await insertCollection(client, {
+            name: value.name,
+            ownerId: value.ownerId,
+            isPublic: false,
+            items,
+          })
+        ).id;
+      } else id = await insertion(kind)({ ...value, isPublic: false }, query);
       if (!(await authorize()))
         throw new AssetPackageError('Admin access is no longer available.', 403);
       commitAttempted = true;
@@ -677,6 +752,7 @@ export function createDatabase(pool) {
     getDice,
     insertDice,
     importAssetPackage,
+    getCollectionForPackage,
     allAssetRefBlobs,
     setAssetPublic,
     renameAsset,

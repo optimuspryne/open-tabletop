@@ -1305,8 +1305,9 @@
                 <b data-icon="books">Library.</b> Use this to add dice, decks and objects — built-in
                 or custom — to the table. Expand <b>Collections</b> to show or hide custom groups
                 in your own library; Show all resets those filters. Site admins can create and
-                edit shared collections there. Admins can also import dice textures, decks and tile sets under
-                <b>Import / export assets</b>, or choose Export in a supported custom asset’s menu.
+                edit shared collections there. Admins can also import dice textures, decks, tile sets and collections of these assets under
+                <b>Import / export assets</b>, or choose Export in a supported custom asset’s menu. The save-file icon beside
+                a collection exports its saved members. Imported collections and all their assets are private.
                 Imports preview the included images and card count, then create a new private copy. The same
                 controls work by click, tap, or keyboard.
               </li>
@@ -1439,12 +1440,13 @@
         <div class="libraryBody">
           <details id="assetPackagePanel" class="libraryPackages admin-only" hidden>
             <summary data-icon="library-plus">Import / export assets</summary>
-            <p class="help-text">Import a dice texture, deck or tile set package, or choose Export in its library menu. Collections and other asset types are not supported yet.</p>
+            <p class="help-text">Import dice textures, decks, tile sets, or a collection of these assets. Export a saved collection using its save-file icon in Collections. Exports use ZIP packages with a manifest and original images. Older JSON packages still import. Collections with other asset types cannot be exported yet.</p>
             <label class="field-group"><span class="field-label">Package file</span>
-              <input id="packageFile" class="control" type="file" accept=".json,application/json" />
+              <input id="packageFile" class="control" type="file" accept=".zip,.json,application/zip,application/json" />
             </label>
             <div id="packagePreview" hidden>
               <p id="packageContents" class="help-text"></p>
+              <ul id="packageMembers" class="packageMembers" aria-label="Included assets" hidden></ul>
               <label class="field-group"><span class="field-label">Name for the new copy</span>
                 <input id="packageName" class="control" maxlength="80" required />
               </label>

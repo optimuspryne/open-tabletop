@@ -1905,35 +1905,55 @@ and applies the predicate to existing card builders. The library shell keeps its
 uses one scrolling body for Collections and asset panes; the editor action row stays sticky.
 Conflict responses retain local edits for review
 and explicit reload. Built-ins, secondary pickers and existing table objects are independent of local
-collection visibility. Collection membership never grants read/spawn/export permissions. Collection
-export/import and multi-process invalidation remain separate work.
+collection visibility. Collection membership never grants read/spawn/export permissions.
+Other asset types and multi-process invalidation remain separate work; portable packages are described below.
 
 
 ### Portable asset boundary
 
-Portable packages support one custom dice texture (version 1) or one deck/tile set (version 2). A
-strict versioned JSON package uses local asset/file IDs, canonical base64 and a checksum, without
-installation IDs, paths, ownership, publishing flags, or gameplay data. Shared constants bound
-request/image sizes and pixel count. Deck dependencies include original face/back images and locally generated faces, preserving
-order, paired faces and appearance. Other asset types and collection dependency graphs are
-future work; this format does not infer or fetch arbitrary dependencies.
+Version 4 exports are ZIP archives containing a bounded JSON manifest and original image files.
+Legacy base64 JSON versions 1–3 remain importable. Single dice textures, decks/tile sets and
+collections of supported members share the same schema/validation rules. Package-local IDs and
+typed references carry no installation paths, account IDs, publication flags or gameplay state.
+Unsupported collection members fail the whole export. Generated faces, paired tiles, appearance,
+ordered/repeated faces and original uploaded bytes are preserved.
 
-`server/assets/packages.js` owns validation, bounded local export and exclusive-file import.
-It extends the existing image-validation/storage conventions; a dedicated exclusive writer is
-needed to make cleanup safe without changing existing upload behavior. The HTTP router reuses
-admin authentication, rate limiting and async error handling. Admin access is rechecked after
-asynchronous reads and before transactional metadata commit. Preview is read-only; import creates
-fresh private metadata through the existing dice/deck insertion query with an injected transaction.
-`package-decks.js` owns one typed-reference traversal reused by export, validation and import,
-plus strict appearance checks using existing deck/geometry/model rules. Exports deduplicate original
-images by hash; imports map local IDs to new filenames. Metadata and all created images succeed
-together or are cleaned up on definite failure. Unknown metadata and unsupported references fail
-explicitly, preserving the boundary between library assets and private live room inventories.
-There is no distributed filesystem/database transaction: definite failures delete only their own
-new file, while uncertain commits retain image data so a committed row cannot become broken.
-Existing reference-aware orphan cleanup handles abandoned files after its grace period.
+`server/assets/package-archives.js` owns archive transport and temporary storage. It reuses the
+package service via file-reader/writer adapters instead of duplicating asset rules. Exports stage
+validated originals, build a stored ZIP with yazl, recheck authorization and stream the completed
+archive with backpressure. Imports spool the upload to a private OS temporary directory, inspect
+the central directory lazily with yauzl, and decode one bounded image at a time. No archive path
+is extracted. Only regular, canonical manifest-listed files are accepted; duplicate, traversal,
+symlink, encrypted, unknown and oversized entries fail. Actual expanded lengths, SHA-256 and image
+metadata are checked independently. Stored/deflated entries are readable; original encodings remain
+unchanged. Completion/failure/disconnect releases staging; crashes may need OS/operator cleanup.
 
-The browser controller owns package drafts, preview/import status and download URLs, and clears
-identity-sensitive drafts on account/admin changes. It refreshes the existing library list after
-success. Controls live in the Library's single scrolling body, use shared components/icons, and
-support mouse, touch and native keyboard navigation without new gameplay input intents.
+`server/assets/packages.js` owns strict manifests, dependency closure, image validation and
+exclusive-file persistence. ZIP inspection retains metadata and readers rather than accumulated
+image buffers. Its legacy path retains base64 compatibility under the old limits. `package-decks.js`
+is the single traversal for deck export, preview and remapping, reusing deck/geometry/model rules.
+ZIP budgets allow 512 MiB of originals, 544 MiB transfer, 32 MiB and 32 × 1024² pixels per image,
+4 × 1024³ pixels in total, and 12 MiB manifest; file/member/card/text budgets remain bounded.
+These protect resources, not represent benchmarked maximum capacity. See REFERENCE for legacy
+limits and deployment storage/proxy requirements.
+
+The HTTP router authenticates before consuming uploads, serializes package work per process,
+and rechecks live admin/account access after asynchronous work and before commit/delivery.
+Preview writes no permanent assets; import uploads/revalidates the chosen file instead of keeping
+server-side preview sessions. Large binary payloads never pass through JSON parsing/stringification.
+The browser sends `File` objects and receives download `Blob`s; only the bounded manifest and
+legacy packages use JSON. The existing Library controller owns feedback, rename, cancellation,
+identity cleanup and mouse/touch/keyboard controls.
+
+`getCollectionForPackage` reads saved membership/metadata in one read-only repeatable-read
+transaction. `importAssetPackage` creates private member assets, the private collection and
+memberships in one transaction, reusing existing insertions and the collection capacity lock.
+Shared originals are deduplicated across members; an image used by both dice and decks gets a
+fresh file in each storage category, preserving picker/export path contracts. Successful collection
+imports reuse content-free cross-room invalidation; clients re-fetch only authorized lists.
+
+There is no distributed filesystem/database transaction: definite failures remove only their own
+new files, while uncertain commits retain original data so potentially committed rows remain valid.
+Existing reference-aware orphan cleanup handles abandoned permanent files after its grace period.
+Export never reads live private hands, inventories or concealed room order. Supported metadata
+is transferred explicitly; other asset kinds still require their own dependency walkers.

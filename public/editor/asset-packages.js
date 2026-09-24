@@ -1,4 +1,4 @@
-import { ASSET_PACKAGE } from '/shared/asset-package.js';
+import { ASSET_PACKAGE, ASSET_ARCHIVE } from '/shared/asset-package.js';
 
 // Portable assets stay in this library controller; room state never carries package bytes.
 export function createAssetPackageController({ host, isAdmin, onImported }) {
@@ -8,6 +8,7 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
     preview = find('packagePreview');
   const status = find('packageStatus'),
     details = find('packageContents');
+  const members = find('packageMembers');
   const save = find('packageImport'),
     cancel = find('packageCancel');
   let value = null,
@@ -23,6 +24,8 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
     if (!keepFile) file.value = '';
     name.value = '';
     details.textContent = '';
+    members.replaceChildren();
+    members.hidden = true;
     preview.hidden = true;
     busy = false;
     file.disabled = save.disabled = cancel.disabled = false;
@@ -33,13 +36,22 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
         Authorization: 'Bearer ' + (localStorage.getItem('tabletop.token') || ''),
-        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+        ...(body === undefined
+          ? {}
+          : { 'Content-Type': body instanceof File ? 'application/zip' : 'application/json' }),
       },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(body === undefined ? {} : { body: body instanceof File ? body : JSON.stringify(body) }),
     });
-    const result = await response.json();
-    if (!response.ok) throw new Error(result.error || 'Asset transfer failed.');
-    return result;
+    if (!response.ok) {
+      const result = await response.json().catch(() => null);
+      throw new Error(
+        result?.error ||
+          (response.status === 413
+            ? 'The package exceeds the server or reverse-proxy upload limit.'
+            : `Asset transfer failed (HTTP ${response.status}).`),
+      );
+    }
+    return body === undefined ? response.blob() : response.json();
   }
   file.onchange = async () => {
     const selected = file.files[0];
@@ -50,21 +62,36 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
     file.disabled = true;
     message('Checking package…');
     try {
-      if (selected.size > ASSET_PACKAGE.maxPackageBytes)
-        throw new Error('The package exceeds 96 MiB.');
-      const candidate = JSON.parse(await selected.text());
+      const archive = /\.zip$/i.test(selected.name) || selected.type === 'application/zip';
+      if (selected.size > (archive ? ASSET_ARCHIVE.maxPackageBytes : ASSET_PACKAGE.maxPackageBytes))
+        throw new Error(
+          archive ? 'The ZIP package exceeds 544 MiB.' : 'The legacy JSON package exceeds 96 MiB.',
+        );
+      const candidate = archive ? selected : JSON.parse(await selected.text());
       if (current !== epoch || !isAdmin()) return;
       const summary = await request('preview', candidate);
       if (current !== epoch || !isAdmin()) return;
       value = candidate;
       name.value = summary.name;
       const description =
-        summary.kind === 'deck'
-          ? `${summary.open ? 'Tile set' : 'Deck'} · ${summary.count} cards / tiles${summary.deckModel ? ' · Pouch skin' : ''}`
-          : `Dice texture · ${summary.files[0].width} × ${summary.files[0].height}`;
+        summary.kind === 'collection'
+          ? `Collection · ${summary.count} assets`
+          : summary.kind === 'deck'
+            ? `${summary.open ? 'Tile set' : 'Deck'} · ${summary.count} cards / tiles${summary.deckModel ? ' · Pouch skin' : ''}`
+            : `Dice texture · ${summary.files[0].width} × ${summary.files[0].height}`;
       details.textContent = `${description} · ${(summary.totalBytes / 1024).toFixed(1)} KiB · ${summary.files.length} image${summary.files.length === 1 ? '' : 's'} included`;
+      for (const member of summary.members || []) {
+        const item = document.createElement('li');
+        item.textContent = `${member.name} · ${member.kind === 'dice' ? 'dice texture' : `deck / tiles (${member.count})`}`;
+        members.append(item);
+      }
+      members.hidden = !members.childElementCount;
       preview.hidden = false;
-      message('Ready to import. A new private copy will be created.');
+      message(
+        summary.kind === 'collection'
+          ? 'A new private collection and private copies of all its members will be created.'
+          : 'Ready to import. A new private copy will be created.',
+      );
       name.focus({ preventScroll: true });
       preview.scrollIntoView({ block: 'nearest' });
     } catch (error) {
@@ -85,11 +112,16 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
     file.disabled = save.disabled = cancel.disabled = true;
     message('Importing…');
     try {
-      const result = await request('import', { package: value, name: name.value });
+      const result =
+        value instanceof File
+          ? await request('import?name=' + encodeURIComponent(name.value), value)
+          : await request('import', { package: value, name: name.value });
       if (current !== epoch || !isAdmin()) return;
       reset();
       message(
-        `Imported “${result.name}” as a private ${result.kind === 'deck' ? 'deck / tile set' : 'dice texture'}. Find it under ${result.kind === 'deck' ? 'Card Decks/Tiles' : 'Dice'} with Custom or All selected; collection filters may hide it.`,
+        result.kind === 'collection'
+          ? `Imported “${result.name}” as a private collection with private asset copies. Find it under Collections.`
+          : `Imported “${result.name}” as a private ${result.kind === 'deck' ? 'deck / tile set' : 'dice texture'}. Find it under ${result.kind === 'deck' ? 'Card Decks/Tiles' : 'Dice'} with Custom or All selected; collection filters may hide it.`,
       );
       onImported(result.kind);
     } catch (error) {
@@ -120,12 +152,15 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
       try {
         const result = await request(kind + '/' + encodeURIComponent(id));
         if (current !== epoch || !isAdmin()) return;
-        const url = URL.createObjectURL(
-          new Blob([JSON.stringify(result)], { type: 'application/json' }),
-        );
+        const url = URL.createObjectURL(result);
         const link = document.createElement('a');
         link.href = url;
-        link.download = kind === 'dice' ? 'dice-texture.ott.json' : 'deck.ott.json';
+        link.download =
+          kind === 'collection'
+            ? 'collection.ott.zip'
+            : kind === 'dice'
+              ? 'dice-texture.ott.zip'
+              : 'deck.ott.zip';
         document.body.append(link);
         link.click();
         link.remove();

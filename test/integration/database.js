@@ -588,6 +588,30 @@ test('collection pagination and capacity limits are bounded without losing exist
       q.mutate('create', { name: 'Too many', isPublic: true }, options),
       /64 collections/,
     );
+    await assert.rejects(
+      database.importAssetPackage(
+        'collection',
+        {
+          name: 'Over capacity',
+          assets: [
+            {
+              kind: 'dice',
+              data: { name: 'Must not survive capacity failure', url: '/assets/dice/capacity.png' },
+            },
+          ],
+        },
+        async () => true,
+      ),
+      /64 collections/,
+    );
+    assert.equal(
+      (
+        await pool.query('SELECT id FROM custom_dice WHERE name=$1', [
+          'Must not survive capacity failure',
+        ])
+      ).rowCount,
+      0,
+    );
     const read = async (includePrivate) => {
       const results = [];
       let after = '0';
@@ -679,4 +703,176 @@ test('portable decks preserve paired faces and appearance in a private transacti
     0,
   );
   await pool.query('DELETE FROM custom_decks WHERE id=$1', [id]);
+});
+
+test('collection imports create all private members atomically and export a consistent supported snapshot', async () => {
+  const owner = await database.createUser({
+    username: 'collection-package-admin',
+    email: 'collection-package@example.test',
+    passwordHash: 'test',
+  });
+  const value = {
+    name: 'Imported game',
+    ownerId: owner.id,
+    assets: [
+      {
+        kind: 'dice',
+        data: { name: 'Collection die', url: '/assets/dice/import.png', isPublic: true },
+      },
+      {
+        kind: 'deck',
+        data: {
+          name: 'Collection deck',
+          back: 'back',
+          fronts: ['text:A', { front: 'text:B', back: 'text:C' }],
+          open: true,
+          isPublic: true,
+        },
+      },
+    ],
+  };
+  const id = await database.importAssetPackage('collection', value, async () => true);
+  try {
+    const group = (await pool.query('SELECT * FROM asset_collections WHERE id=$1', [id])).rows[0];
+    assert.equal(group.is_public, false);
+    assert.equal(String(group.owner_id), String(owner.id));
+    const items = (
+      await pool.query(
+        'SELECT kind,asset_id::text AS id FROM asset_collection_items WHERE collection_id=$1 ORDER BY kind',
+        [id],
+      )
+    ).rows;
+    assert.equal(items.length, 2);
+    for (const item of items) {
+      const asset = await (item.kind === 'dice'
+        ? database.getDice(item.id)
+        : database.getDeck(item.id));
+      assert.equal(asset.isPublic, false);
+      assert.equal(String(asset.ownerId), String(owner.id));
+    }
+    assert.ok(!(await database.collections.list()).collections.some((group) => group.id === id));
+    const snapshot = await database.getCollectionForPackage(id);
+    assert.equal(snapshot.name, 'Imported game');
+    assert.equal(snapshot.assets.length, 2);
+    assert.deepEqual(
+      snapshot.assets.find((item) => item.kind === 'deck').asset.fronts,
+      value.assets[1].data.fronts,
+    );
+    const before = (
+      await pool.query(
+        'SELECT (SELECT count(*) FROM custom_dice)::int AS dice,(SELECT count(*) FROM custom_decks)::int AS decks',
+      )
+    ).rows[0];
+    let checks = 0;
+    await assert.rejects(
+      database.importAssetPackage(
+        'collection',
+        { ...value, name: 'Revoked import' },
+        async () => ++checks < 2,
+      ),
+      /Admin access/,
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          'SELECT (SELECT count(*) FROM custom_dice)::int AS dice,(SELECT count(*) FROM custom_decks)::int AS decks',
+        )
+      ).rows[0],
+      before,
+    );
+    assert.equal(
+      (await pool.query('SELECT id FROM asset_collections WHERE name=$1', ['Revoked import']))
+        .rowCount,
+      0,
+    );
+    await assert.rejects(
+      database.importAssetPackage(
+        'collection',
+        { ...value, assets: [...value.assets, { kind: 'board', data: { name: 'unsupported' } }] },
+        async () => true,
+      ),
+      /Unsupported/,
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          'SELECT (SELECT count(*) FROM custom_dice)::int AS dice,(SELECT count(*) FROM custom_decks)::int AS decks',
+        )
+      ).rows[0],
+      before,
+    );
+    const board = await database.insertBoard('Unsupported board', { w: 4, d: 4 });
+    await pool.query(
+      "INSERT INTO asset_collection_items(collection_id,kind,asset_id) VALUES ($1,'board',$2)",
+      [id, board],
+    );
+    await assert.rejects(database.getCollectionForPackage(id), /unsupported asset types: board/);
+    await database.deleteAsset('board', board);
+    for (const item of items) await database.deleteAsset(item.kind, item.id);
+  } finally {
+    await pool.query('DELETE FROM asset_collections WHERE id=$1', [id]);
+  }
+});
+
+test('collection export membership and metadata use the same repeatable-read snapshot', async () => {
+  const first = await database.insertDeck({
+    name: 'Snapshot first',
+    back: 'back',
+    fronts: ['text:First'],
+  });
+  const second = await database.insertDeck({
+    name: 'Snapshot second',
+    back: 'back',
+    fronts: ['text:Second'],
+  });
+  let group = await database.collections.mutate(
+    'create',
+    { name: 'Snapshot group', isPublic: false },
+    { authorize: () => true },
+  );
+  group = await database.collections.mutate(
+    'update',
+    {
+      ...group,
+      items: [
+        { kind: 'deck', id: first },
+        { kind: 'deck', id: second },
+      ],
+    },
+    { authorize: () => true },
+  );
+  let edited = false;
+  const reads = createDatabase({
+    query: pool.query.bind(pool),
+    connect: async () => {
+      const client = await pool.connect();
+      return {
+        release: (value) => client.release(value),
+        query: async (sql, args) => {
+          const result = await client.query(sql, args);
+          if (sql.includes('FROM custom_decks WHERE id') && !edited) {
+            edited = true;
+            await pool.query('UPDATE custom_decks SET name=$1 WHERE id=$2', [
+              'Changed after snapshot',
+              second,
+            ]);
+          }
+          return result;
+        },
+      };
+    },
+  });
+  try {
+    const snapshot = await reads.getCollectionForPackage(group.id);
+    assert.equal(edited, true);
+    assert.deepEqual(
+      snapshot.assets.map((item) => item.asset.name),
+      ['Snapshot first', 'Snapshot second'],
+    );
+    assert.equal((await database.getDeck(second)).name, 'Changed after snapshot');
+  } finally {
+    await pool.query('DELETE FROM asset_collections WHERE id=$1', [group.id]);
+    await database.deleteAsset('deck', first);
+    await database.deleteAsset('deck', second);
+  }
 });

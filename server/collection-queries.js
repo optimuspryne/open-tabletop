@@ -18,6 +18,36 @@ const row = (value) => ({
 });
 export class CollectionError extends Error {}
 
+async function insertItems(client, collectionId, items) {
+  if (items.length)
+    await client.query(
+      `INSERT INTO asset_collection_items (collection_id,kind,asset_id)
+     SELECT $1, item.kind, item.id::bigint FROM jsonb_to_recordset($2::jsonb) AS item(kind text,id text)`,
+      [collectionId, JSON.stringify(items)],
+    );
+}
+
+// Transaction primitive shared by normal collection creation and package imports. Callers
+// own the transaction and supply validated membership IDs (newly inserted IDs on import).
+export async function insertCollection(client, { name, isPublic, ownerId = null, items = [] }) {
+  const value = collectionPayload({ name, isPublic }, 'create');
+  if (!value || !Array.isArray(items) || items.length > COLLECTION_LIMITS.items)
+    throw new CollectionError('Invalid collection details.');
+  await client.query("SELECT pg_advisory_xact_lock(hashtext('open-tabletop:collections'))");
+  const { rows } = await client.query('SELECT count(*)::int AS count FROM asset_collections');
+  if (rows[0].count >= COLLECTION_LIMITS.collections)
+    throw new CollectionError(
+      `The library supports up to ${COLLECTION_LIMITS.collections} collections.`,
+    );
+  const created = await client.query(
+    'INSERT INTO asset_collections (name, is_public, owner_id) VALUES ($1,$2,$3) RETURNING *',
+    [value.name, value.isPublic, ownerId],
+  );
+  const result = row(created.rows[0]);
+  await insertItems(client, result.id, items);
+  return { ...result, items };
+}
+
 export function createCollectionQueries(pool) {
   async function transaction(run, authorize) {
     const client = await pool.connect();
@@ -56,19 +86,7 @@ export function createCollectionQueries(pool) {
     if (!['create', 'update', 'delete'].includes(operation) || !value)
       throw new CollectionError('Invalid collection details.');
     return transaction(async (client) => {
-      if (operation === 'create') {
-        await client.query("SELECT pg_advisory_xact_lock(hashtext('open-tabletop:collections'))");
-        const { rows } = await client.query('SELECT count(*)::int AS count FROM asset_collections');
-        if (rows[0].count >= COLLECTION_LIMITS.collections)
-          throw new CollectionError(
-            `The library supports up to ${COLLECTION_LIMITS.collections} collections.`,
-          );
-        const created = await client.query(
-          'INSERT INTO asset_collections (name, is_public, owner_id) VALUES ($1,$2,$3) RETURNING *',
-          [value.name, value.isPublic, ownerId],
-        );
-        return row(created.rows[0]);
-      }
+      if (operation === 'create') return insertCollection(client, { ...value, ownerId });
       const { rows } = await client.query(
         'SELECT revision FROM asset_collections WHERE id=$1 FOR UPDATE',
         [value.id],
@@ -95,12 +113,7 @@ export function createCollectionQueries(pool) {
       }
       if (!authorize()) throw new CollectionError('Collection administration is unavailable.');
       await client.query('DELETE FROM asset_collection_items WHERE collection_id=$1', [value.id]);
-      if (value.items.length)
-        await client.query(
-          `INSERT INTO asset_collection_items (collection_id,kind,asset_id)
-        SELECT $1, item.kind, item.id::bigint FROM jsonb_to_recordset($2::jsonb) AS item(kind text,id text)`,
-          [value.id, JSON.stringify(value.items)],
-        );
+      await insertItems(client, value.id, value.items);
       const updated = await client.query(
         'UPDATE asset_collections SET name=$2,is_public=$3,revision=revision+1,updated_at=now() WHERE id=$1 RETURNING *',
         [value.id, value.name, value.isPublic],

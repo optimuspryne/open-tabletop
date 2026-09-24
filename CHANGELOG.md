@@ -9,6 +9,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Raise the portable package image limit from 256 to 4,096 for both single decks and collections.
+  Keep the existing byte, pixel and card budgets, and report image-count and image-byte failures
+  separately. Requires a server restart; no migration.
 - Route all saved/bundled image thumbnails through bounded WebP previews, including custom dice,
   sky panoramas/cubemap faces, image boards/mats, finish pickers, hands and editor image squares.
   Centralize the URL policy with no raw-image fallback; generate small WebP previews for local
@@ -36,6 +39,19 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Export portable assets as `.ott.zip` archives with a JSON manifest and original binary images;
+  continue importing earlier JSON/base64 packages. Stream uploads/downloads through private
+  temporary storage, validate images one at a time, and serialize package work per server process.
+  Preserve private transactional imports and reject unsafe/mismatched archive contents. ZIP limits
+  allow 512 MiB of originals (544 MiB transfer), 32 MiB per image and larger pixel budgets.
+  Install updated dependencies, restart server and refresh browsers; no migration. Full-size
+  transfers need sufficient temporary storage and reverse-proxy upload allowances.
+  User reports the collection/ZIP package flow works well (2026-09-24).
+- Export saved collections of custom dice textures, decks and tile sets from Library → Collections.
+  Preview all included members, then import a new private collection and private asset copies in
+  one transaction. Share repeated image data across members and preserve saved membership.
+  Unsupported members reject the whole export. Limit packages to 64 assets and 5,000 cards/tiles;
+  existing dice/deck packages remain compatible. Restart server and refresh browsers; no migration.
 - Extend portable asset packages to custom decks and tile sets, including original face/back
   images, paired tile faces, authored order, generated text, geometry, pouch skins and colors.
   Deduplicate repeated images in exports; preview card/image counts and import a new private copy.

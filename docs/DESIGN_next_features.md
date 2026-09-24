@@ -797,7 +797,18 @@ browsers. No new environment variables or grants are needed with the documented 
 The three feature groups above are committed. The user authorized the next bounded slice from
 [item 19](DESIGN_future_backlog.md#asset-and-collection-exportimport): admin-only portable assets,
 starting with one custom dice texture and its original image. See that checkpoint for scope,
-validation and manual testing. Collection export and other asset kinds remain separate work.
+validation and manual testing. Collection export and other asset kinds are staged separately below.
 
 The dice texture slice is committed as `d18317d`, with user-reported manual success. The authorized
 next stage adds deck/tile dependency packages; see the [deck/tile checkpoint](DESIGN_future_backlog.md#deck-and-tile-package-checkpoint--2026-09-24).
+
+The deck/tile stage is committed as `89d0458` after user-reported green manual tests. The next
+stage implements collection packages containing supported dice/deck/tile members; see the
+[collection checkpoint](DESIGN_future_backlog.md#collection-package-checkpoint--2026-09-24).
+The user approved the collection flow after the ZIP follow-up below; other asset kinds remain future work.
+
+The user subsequently requested moving packages from base64 JSON to a manifest plus original
+files. The [ZIP checkpoint](DESIGN_future_backlog.md#zip-package-checkpoint--2026-09-24) implements
+that format while retaining legacy imports. The user reports the collection/ZIP flow works well
+and approved committing it (2026-09-24). Specific second-installation and device scenarios were
+not separately reported.

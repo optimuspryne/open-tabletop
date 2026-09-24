@@ -13,6 +13,7 @@ export function createCollectionController({
   isAdmin,
   getAssets,
   onFilter,
+  onExport,
   storage = localStorage,
 }) {
   let collections = [],
@@ -155,6 +156,14 @@ export function createCollectionController({
         editButton.classList.add('button--icon');
         editButton.disabled = busy;
         wrap.append(editButton);
+        if (onExport) {
+          const exportButton = button('Export', 'device-floppy', () => onExport(value.id));
+          exportButton.setAttribute('aria-label', `Export saved collection ${value.name}`);
+          exportButton.title = 'Export saved collection';
+          exportButton.classList.add('button--icon');
+          exportButton.disabled = busy;
+          wrap.append(exportButton);
+        }
       }
       filters.append(wrap);
     }

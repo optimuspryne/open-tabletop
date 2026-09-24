@@ -111,7 +111,10 @@ import { MAX_PIECES } from './server/game/piece-capacity.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
-import { registerCollectionHandlers } from './server/game/handlers/collections.js';
+import {
+  registerCollectionHandlers,
+  invalidateCollections,
+} from './server/game/handlers/collections.js';
 import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { registerPieceHandlers } from './server/game/handlers/pieces.js';
 import {
@@ -1286,6 +1289,7 @@ app.use(
   '/asset-packages',
   createAssetPackagesRouter({
     packages: createAssetPackages({ db, assetsDir: ASSETS_DIR }),
+    onCollectionImported: invalidateCollections,
     requireAdmin,
     rateLimitUpload,
   }),

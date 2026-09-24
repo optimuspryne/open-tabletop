@@ -255,8 +255,18 @@ The user approved functionality and the final UI (2026-09-24); specific devices 
 
 In Library, open a custom dice texture, deck or tile set's **More actions** menu and choose **Export** (click/tap;
 keyboard users focus the menu button and press Enter). On touch the same action is in its sheet.
-To import, expand **Import / export assets**, choose a `.ott.json` file, review its image details and card/tile count,
+For a saved collection, use the save-file icon next to Edit in **Collections** (click/tap or focus
+and Enter). It exports saved membership, including only dice textures, decks and tile sets.
+To import, expand **Import / export assets**, choose a `.ott.zip` file (older `.ott.json` files also work), review its image details and card/tile count,
 edit the new name if wanted, and choose **Import private copy**. Cancel clears the preview.
 Native file/input/button keyboard controls apply; no canvas gesture or shortcut is added.
 The preview and library share one scrollable body. Imports are separate private assets; enable
 Uncollected and select Dice or Card Decks/Tiles → Custom/All if local filters hide the new asset.
+
+Collection previews list included assets in a bounded scrollable list. Import creates a new private
+collection and private copies of its members. Find it under Collections; use Show all if personal
+filters hide its assets. Collections containing unsupported member types cannot export yet.
+
+ZIP exports contain a manifest and original images. Select the ZIP directly; no manual extraction
+is needed. Import uploads it again after preview. Only one package transfer runs at a time per
+server; a busy message means retry after the other transfer finishes.

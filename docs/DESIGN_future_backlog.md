@@ -263,6 +263,170 @@ Manual smoke tests (restart server and refresh browsers; no migration):
 4. Try a package with a missing image, unknown version or wrong checksum: import must fail without
    a partial library asset. Check preview/Import/Cancel on desktop and touch.
 
+### Collection package checkpoint — 2026-09-24
+
+**Implemented; automated checks passed; user-reported manual success after the ZIP follow-up below.** The deck/tile slice was committed
+as `89d0458` after user-reported green tests. The user authorized this next collection stage.
+
+Version 3 packages one saved collection and up to 64 custom dice/deck/tile members. Empty
+collections are valid. A strict `{name,items:["asset-1",…]}` descriptor names each asset exactly
+once; member IDs and file references are package-local. Original images are deduplicated across
+members and kinds. Existing deck appearance, ordered/repeated faces, generated faces and paired
+tiles retain the version 2 rules. Collection packages share the existing file/byte/pixel limits,
+plus 5,000 total cards/tiles and 2,097,152 generated-face characters across all members.
+Any unsupported member type, missing dependency or over-limit collection rejects the whole
+export. Boards, mats, props, skyboxes and scenes still need explicit dependency walkers.
+
+Imports create a new private collection and private copies of every member, owned by the
+importing admin. Rename applies to the collection; member names stay intact. Duplicate names
+never overwrite existing content. Collection creation and every asset/membership insert share
+one transaction and the existing collection capacity lock. Definite failure removes every new
+image; uncertain commit/rollback retains them for recovery and normal orphan cleanup. Shared
+images used by both dice and decks get fresh copies in each category, preserving existing path
+contracts. Export reads saved metadata/membership from one repeatable-read snapshot, never live
+hands, inventory, accounts or concealed room order. Source files remain unchanged.
+
+Reuse decision: extend the existing package validator, reference walker, image resolver and
+transaction; extract collection insertion/membership SQL for reuse by ordinary collection writes
+and imports. Reuse existing library queries for snapshot reads and the content-free invalidation
+for cross-room refresh. The browser adds a compact Export icon beside Edit and a bounded member
+preview in the existing import controller. No new gameplay input intent, migration or environment
+setting is needed. Restart server and refresh browsers.
+
+Files/functions in this stage:
+
+| File | Change |
+| --- | --- |
+| `shared/asset-package.js` | Add collection version, member limit and total-card budget. |
+| `server/assets/packages.js` | Extend `inspectAssetPackage`, `exportAsset`, `importAsset` and the existing resolver for mixed members, strict closure, global budgets, cross-member deduplication and category-aware file remapping/cleanup. |
+| `server/collection-queries.js` | Extract `insertItems` and exported `insertCollection`; reuse them in `mutate` and package imports. |
+| `server/database.js`, `db.js` | Add/export `getCollectionForPackage` for consistent bounded snapshots; extend `importAssetPackage` with atomic member/collection/membership insertion. |
+| `server/http/routes/asset-packages.js`, `server.js` | Add collection attachment naming, collection error handling and inject existing invalidation after successful import. |
+| `public/editor/collections.js` | Extend `createCollectionController`/`renderFilters` with the saved-collection Export callback/button. |
+| `public/editor/editor-panel.js` | Wire collection export; refresh collections and both supported asset lists after import. |
+| `public/editor/asset-packages.js` | Extend preview, reset, success feedback and downloads for collections and member names/types/counts. |
+| `public/table.html`, `public/styles.css` | Add bounded member list and collection guidance/in-app help, using the existing library scrolling layout. |
+| `test/asset-packages.js` | Add mixed two-store round trips, deduplication/remapping, closure and global-limit rejection, empty collections, private copies, cleanup/uncertain commit, HTTP import/export and invalidation regressions. |
+| `test/backend-database-factory.js` | Verify the new production facade export. |
+| `test/integration/database.js` | Verify private atomic member persistence, capacity/revocation/unsupported-kind rollback and a repeatable-read export during concurrent edits. |
+| `scripts/component-parity.mjs` | Exercise saved-collection download, 64-member preview, text-safe names, rename, refresh, reset and visible Import actions on desktop/touch. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`, both design plans | Document current contracts, scope, controls and verification status. |
+
+Verification: `npm run check` passed (741 tests plus lint, formatting and CSS checks);
+`test:integration` passed all 17 PostgreSQL tests; `test:components` passed desktop and coarse-touch
+scenes; `test:input` passed 57/57 and `test:devices` passed all seven profiles. The final focused
+real-controller desktop/touch flow also passed, including hit testing the collection Export and
+Import buttons; both screenshots were visually inspected. The component fixture's missing
+thumbnail/image requests are expected test-only 404s. Changed Markdown links and `git diff --check`
+passed. The user later approved the collection/ZIP flow (2026-09-24). A second installation and
+cross-room refresh were not separately reported.
+
+Manual smoke tests (restart server and refresh browsers; no migration):
+
+1. Build a collection containing a dice texture, image deck, generated deck and paired tile set.
+   Use its save-file Export icon; preview the package, rename and import it. Verify member names,
+   membership and private visibility. Spawn each copy and inspect images, backs and geometry.
+2. Import again, preferably on a second installation. Both copies should be independent with new
+   IDs; source assets and collection remain unchanged. Earlier dice/deck packages still import.
+3. Include a board or other unsupported member and try export: see a clear failure with no partial
+   package. Try an invalid checksum/missing member: import must create no partial collection/assets.
+4. Check ordinary viewers cannot see private imports; another admin room should refresh. Publish
+   individual members and the collection explicitly only when desired.
+5. On desktop/touch, review a long member list, edit the name, Import and Cancel. Confirm actions
+   remain reachable and saved-collection export reflects saved membership, not an unsaved edit.
+
+### Package image-count follow-up — 2026-09-24
+
+The user encountered the combined 256-image/64-MiB error with a deck collection and requested a higher image limit for
+single-deck packages too. `shared/asset-package.js` now sets `maxFiles` to 4,096. Existing byte,
+pixel, card, member and text budgets remain unchanged; a high-resolution deck can still reach
+those limits first. `inspectAssetPackage` and the existing export resolver in
+`server/assets/packages.js` report image-count and image-byte failures separately, using the shared
+count constant. No new helper or storage path was needed. `test/asset-packages.js` adds actual
+257-distinct-image export/preview/import/re-export regressions for both decks and collections,
+and verifies rejection above the new image-count cap. `CHANGELOG.md`, `docs/REFERENCE.md` and
+`docs/ARCHITECTURE.md` document the updated limits; the older checkpoint retains its historical cap.
+
+Verification: `npm run check` passed (743 tests in the shared working tree, plus lint, formatting
+and CSS checks). The 257-image deck and collection round trips passed. `git diff --check` passed.
+Restart the server and retry the previously blocked collection; also try
+a single image deck above 256 faces. Import the result and inspect the copies. No migration.
+The ZIP follow-up below supersedes this transport and records subsequent user approval.
+
+### ZIP package checkpoint — 2026-09-24
+
+**Implemented; automated validation passed; user-reported manual success (2026-09-24).** After reviewing
+the arbitrary early package limits and JSON/base64 overhead, the user requested moving directly
+to a JSON manifest plus original files. Exports now use `.ott.zip`: `manifest.json` version 4
+and canonical `files/file-N.ext` entries. Legacy `.ott.json` versions 1–3 still import.
+
+Reuse decision: extend `inspectAssetPackage`, `exportAsset` and `importAsset` with bounded
+file-reader/writer adapters; retain the shared image validation, typed deck walker, private DB
+transaction and cleanup logic. Put ZIP structure, streaming and temporary storage in the focused
+`package-archives.js` module. Add yauzl/yazl dependencies for archive handling; no browser build,
+new infrastructure, gameplay input intent or migration is introduced.
+
+Exports stage exact validated originals on disk, deduplicate by SHA-256, build a stored ZIP and
+stream it only after it is complete and authorization is rechecked. Preview/import uploads spool
+to temporary disk and inspect one image at a time. Inspection retains metadata/readers rather
+than all binary buffers. Import uploads the selected file again and validates it again; there is
+no persistent preview upload session. All temporary paths are server-generated. ZIP entry paths
+are never extracted. Missing/extra/duplicate dependencies, traversal, symlinks, encryption,
+unsupported compression, excessive entry metadata, bad hashes/types and excessive expanded sizes fail before permanent
+mutation. Import continues to create new private copies atomically; uncertain commit outcomes
+retain only potentially referenced permanent originals for recovery.
+
+ZIP budgets: 512 MiB originals; 544 MiB transfer; 32 MiB and 32 × 1024² pixels per image;
+4 × 1024³ total pixels; 12 MiB manifest. The larger byte/pixel budgets accompany sequential binary
+processing; they are not claims of measured maximum throughput. Shared limits remain 4,096 images,
+64 collection members, 1,000 cards/tiles per deck, 5,000 per package and bounded generated text.
+Legacy JSON keeps its older byte/pixel budgets. One operation runs per server process, with 503
+and Retry-After for overlap. Auth precedes uploads and is rechecked after asynchronous work.
+
+Files/functions changed in this follow-up:
+
+| File | Change |
+| --- | --- |
+| `shared/asset-package.js` | Add `ASSET_ARCHIVE` version and binary/manifest resource budgets. |
+| `server/assets/packages.js` | Extend `imageInfo`, `fileEnvelope`, `inspectAssetPackage`, `readImage`, `exportAsset` and `importAsset` for version-specific limits, manifest paths and bounded file adapters; retain legacy behavior. |
+| `server/assets/package-archives.js` | Add `openAssetArchive` for strict lazy ZIP reads and `createAssetPackageArchives` with temporary staging, streamed upload limits, completed archive export and cleanup. |
+| `server/http/routes/asset-packages.js` | Serve ZIP downloads, accept binary preview/import uploads, serialize operations, retain JSON imports, and preserve auth/error boundaries. |
+| `public/editor/asset-packages.js` | Send ZIP `File`s directly, download `Blob`s, retain legacy preview/import, and use ZIP names/limits. |
+| `public/table.html` | Accept ZIP/JSON in the picker and explain the new format. |
+| `package.json`, `package-lock.json` | Add yauzl/yazl runtime dependencies and their lockfile entries. |
+| `test/asset-package-archives.js` | Add original-byte round trips, >64 MiB aggregate and >8 MiB/image cases, high-resolution images, compressed input, hostile ZIPs, streaming HTTP/auth/concurrency, disconnects, cleanup and uncertain commits. |
+| `test/asset-packages.js` | Keep legacy compatibility coverage and expect ZIP production downloads. |
+| `scripts/component-parity.mjs` | Test ZIP File transport, binary downloads, legacy imports and existing desktop/touch preview flows. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`, both design plans | Document the archive contract, dependencies, limits, deployment requirements and testing. |
+
+Validation: `npm run check` passed (749 tests in the shared working tree plus lint, formatting
+and CSS checks); PostgreSQL integration passed 17 tests; the full component suite passed desktop
+and coarse-touch scenes. The final focused ZIP/legacy/proxy-error flow also passed on both profiles,
+and screenshots were visually inspected. Input tests passed 57/57 and device checks passed all
+seven profiles. Regression coverage includes >64 MiB of exact originals, >8 MiB images, larger
+resolutions, deflated input, bounded ZIP metadata/expansion and interrupted upload cleanup. Changed
+Markdown links and `git diff --check` passed. npm dependency installation reported no vulnerabilities.
+Production-size memory/latency, live second-installation imports and real-device feel remain manual
+checks; successful automated round trips do not establish maximum supported performance.
+
+Deploy/test: install dependencies, restart server and refresh browsers. No migration. The reverse
+proxy must allow up to 544 MiB for full-size transfers. Provide roughly 1.1 GiB free in the OS temp
+directory for a maximum export plus permanent asset storage for imports. Normal failures and
+disconnects remove staging; process crashes can leave private `ott-package-*` directories for
+OS/operator cleanup. Browser Blob storage and per-image decoding still have resource costs.
+
+Manual smoke tests:
+
+1. Export the previously blocked deck collection. Open the ZIP with an ordinary archive viewer:
+   verify `manifest.json` and original images, with no base64 image data in the manifest.
+2. Preview, rename and import the ZIP, ideally on a second installation. Spawn dice/decks/tiles
+   and verify faces, paired backs, shape, colors and membership. All copies start private.
+3. Import an older dice/deck/collection JSON package to confirm compatibility.
+4. Try an altered image or missing ZIP entry; it must fail without partial assets. Cancel a
+   preview, and try overlapping transfers: the busy message should permit a later retry.
+5. Check desktop/touch controls and live gameplay while transferring a representative large
+   collection. Automated passes do not establish production memory, latency or real-device feel.
+
 ## Physical rulebooks and builder
 
 **Goal:** a spawnable book whose Inspect view reads a rules document, plus custom uploads and a

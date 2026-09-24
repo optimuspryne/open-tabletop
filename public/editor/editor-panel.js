@@ -2466,7 +2466,13 @@ window.onOttRoom = (room) => {
     ? createAssetPackageController({
         host: byId('assetPackagePanel'),
         isAdmin: () => !!window.OTT_IS_ADMIN,
-        onImported: (kind) => room.send(kind === 'deck' ? 'listDecks' : 'listDice'),
+        onImported: (kind) => {
+          if (kind === 'collection') {
+            collectionController?.refresh();
+            room.send('listDecks');
+            room.send('listDice');
+          } else room.send(kind === 'deck' ? 'listDecks' : 'listDice');
+        },
       })
     : null;
   packageController?.identity(window.OTT_USER_ID);
@@ -2476,6 +2482,7 @@ window.onOttRoom = (room) => {
         room,
         isAdmin: () => !!window.OTT_IS_ADMIN,
         getAssets: () => listCache,
+        onExport: (id) => packageController?.exportAsset('collection', id),
         onFilter: () => {
           const modal = byId('libraryModal');
           if (modal && !modal.hidden) {
