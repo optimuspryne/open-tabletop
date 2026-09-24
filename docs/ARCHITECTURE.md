@@ -250,7 +250,11 @@ importing a room singleton:
   gates, table/track resize orchestration, and Lean In; the render loop calls `presence.update()`
   after interpolation so held-piece labels follow the current meshes.
 - **`public/table/selection.js`** — local selection, Select-tool mode, marquee gestures, highlight
-  rings, batch commands, and toolbar/recolor state. Compatibility and compose/gather planning
+  rings, batch commands, and toolbar/recolor state. Its mode bindings also own the floating
+  Multi-Select button above Seat, including active styling and accessible pressed state; the
+  shell no longer proxies selection through the radial menu. Empty-felt clicks/taps exit mode
+  without clearing selection; the controller tracks marquee movement using the injected shared
+  drag threshold, while the router restores camera controls on release. Compatibility and compose/gather planning
   operate on plain piece data. The composition root supplies room access, meshes, scene/camera,
   canvas, marker settings, and board height; it retains input priority, pointer capture, and
   camera-control arbitration, and removes selected IDs when pieces disappear or are grabbed remotely.
@@ -1663,6 +1667,9 @@ protocol or where hidden information lives.
 
 Within one browser, `createHand()` owns the private bar and its local modes: Show audience and
 picked-card scope, hide/show preference, rearrangement and Sort, hover guidance, and play gestures.
+It also owns overflow measurement for the current hand strip, observing size changes and cancelling
+stale observers/frames on rebuild. The shell owns mobile tray expansion; responsive CSS hides
+the floating Multi-Select/Seat/Table Actions buttons while that tray is open.
 The global hand pointer hooks moved with that state, including the live two-finger face-up choice,
 unsynced drag preview, drop hit test, and cancellation cleanup. Hand-card inspection requests the
 injected `inspection.inspectMesh` callback. Inspection owns the preview and its controls; it uses

@@ -695,8 +695,51 @@ const SCENES = [
       byId('drawerBtn').click();
       assert(byId('drawer').querySelector('.drawerRow'), 'Drawer proxies did not build');
       byId('drawer')._close();
+      // The stub room does not finish scene loading; reveal the controls for hit testing.
+      byId('tableLoading')?.remove();
+      const selectButton = byId('selectBtn'), seatButton = byId('seatBtn');
+      const selectBounds = selectButton.getBoundingClientRect(), seatBounds = seatButton.getBoundingClientRect();
+      assert(selectBounds.width===seatBounds.width && selectBounds.height===seatBounds.height &&
+        selectBounds.left===seatBounds.left && selectBounds.bottom<seatBounds.top && selectBounds.top>=0,
+        'Multi-select must match Seat and sit directly above it');
+      assert(document.elementFromPoint(selectBounds.x+selectBounds.width/2,selectBounds.y+selectBounds.height/2)?.closest('#selectBtn'),
+        'Multi-select is not directly reachable');
+      selectButton.click();
+      assert(selectButton.getAttribute('aria-pressed')==='true' && selectButton.classList.contains('on') &&
+        document.querySelector('canvas.selecting'), 'Floating multi-select did not activate selection');
+      selectButton.click();
+      assert(selectButton.getAttribute('aria-pressed')==='false' && !document.querySelector('canvas.selecting'),
+        'Floating multi-select did not exit selection');
       byId('fabBtn').click(); assert(!byId('radial').hidden, 'Table action fan did not open');
+      assert(!byId('radial').textContent.includes('Multi-Select'), 'Multi-select remains in the radial menu');
       byId('fabBtn').click();
+      const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const sheet = matchMedia('(max-width: 900px), (pointer: coarse)').matches;
+      const cards = Array.from({length:20}, (_,i)=>({hid:String(i),front:'rank:A:♠:#000',back:'back'}));
+      messages.get('hand')(cards);
+      await frame();
+      if (sheet) byId('handTab').click();
+      await frame(); await frame();
+      const chevrons = [...byId('hand').querySelectorAll('.handScrollBtn')];
+      const scroll = byId('hand').querySelector('.handScroll');
+      assert(chevrons.length===2 && chevrons.every(button=>!button.hidden), 'Hand scroll arrows require Rearrange before appearing');
+      assert(chevrons[0].disabled && !chevrons[1].disabled, 'Initial hand scroll direction state is wrong');
+      assert(!byId('hand').classList.contains('reordering'), 'Hand scrolling enabled Rearrange');
+      for (const id of ['selectBtn','seatBtn','fabBtn'])
+        assert((getComputedStyle(byId(id)).display==='none')===sheet, id+' visibility does not follow the hand tray');
+      chevrons[1].click();
+      for (let i=0; i<150 && scroll.scrollLeft===0; i++) await new Promise(resolve=>setTimeout(resolve,20));
+      assert(scroll.scrollLeft>0, 'Hand scroll-right button does not move cards');
+      scroll.scrollTo({left:scroll.scrollWidth,behavior:'instant'}); await frame();
+      assert(!chevrons[0].disabled && chevrons[1].disabled, 'Hand scroll end state is wrong');
+      if (sheet) { byId('handTab').click(); await frame(); }
+      for (const id of ['selectBtn','seatBtn','fabBtn']) assert(getComputedStyle(byId(id)).display!=='none', id+' did not return after closing the hand');
+      messages.get('hand')(cards.slice(0,1)); await frame();
+      if (sheet) byId('handTab').click();
+      await frame(); await frame();
+      assert([...byId('hand').querySelectorAll('.handScrollBtn')].every(button=>button.hidden), 'A fitting hand retains scroll arrows');
+      if (sheet) byId('handTab').click();
+      messages.get('hand')([]); await frame();
       const me = room.state.players.get('me');
       me.timedOut = true;
       patches.forEach(fn => fn(room.state));
@@ -1315,7 +1358,14 @@ const SCENES = [
         'Select controls did not synchronize');
       assert(selection.beginPointer({ primary: true, touch: true }, 'a'), 'Touch Select tool did not select');
       selection.endPointer({}); selection.escape();
+      assert(byId('selectBtn').getAttribute('aria-pressed')==='false', 'Escape left multi-select pressed');
       assert(!selection.isActive() && selection.has('a'), 'Escape did not leave selection intact after tool exit');
+      byId('selectBtn').click();
+      selection.beginPointer({primary:true,touch:matchMedia('(pointer: coarse)').matches,clientX:100,clientY:100},null);
+      selection.movePointer({clientX:102,clientY:102});
+      selection.endPointer({clientX:102,clientY:102});
+      assert(!selection.isActive() && selection.has('a') && byId('selectBtn').getAttribute('aria-pressed')==='false' &&
+        !byId('selectBtn').classList.contains('on'), 'Empty felt tap did not exit mode and synchronize the floating button');
       set('a', 'prop', { shape: 'go' }); set('b', 'prop', { shape: 'go', team: 1 }); select('a', 'b');
       byId('selSwatches').children[1].click();
       assert(sent.at(-1)[0] === 'recolorGroup' && sent.at(-1)[1].team === 1, 'Team swatch did not switch team');

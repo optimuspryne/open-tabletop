@@ -792,6 +792,7 @@ const selection = createSelection({
   canvas: renderer.domElement,
   meshes,
   marker: CONFIG.marker,
+  dragThreshold: CONFIG.input.dragPx,
   getRoom: () => room,
   getBoardTopY: () => boardTopY,
   byId,

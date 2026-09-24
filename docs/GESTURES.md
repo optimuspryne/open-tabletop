@@ -157,6 +157,10 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 On coarse-pointer layouts the open hand uses 72–88 px cards in a horizontally scrolling strip.
 Inspect occupies a fixed 30 px corner control, leaving most of each card as the play/reorder drag
 surface.
+Use the left/right scroll buttons as soon as an overflowing hand opens; Rearrange is only for
+changing card order. The buttons update when the tray or viewport resizes. In the sheet layout
+(narrow viewport or coarse pointer), Multi-Select, Seat and Table Actions hide while the hand tray is open and
+return when it closes.
 
 The finger-count rule lives in `touchIds` (`client.js:3063`) and is read live during the drag
 (`client.js:3112`), so putting a second finger down mid-drag flips the card face-up before it
@@ -174,7 +178,12 @@ lands. That is the one gesture in the app with no mouse analogue — and no on-s
 | `[` / `]` | Rotate the formation ∓45° | `.rotLeft` / `.rotRight`, hold to repeat at ~7.5°/tick | ⚠️ |
 | `A` / `D` or ← / → | Turn the selection (or held piece) ~7.5°, repeating while held | ⟲ / ⟳ (the same intent) | ✅ |
 
-The Select tool (`.selectTool`, `client.js:1355`) is the touch stand-in for the Shift modifier:
+The floating Multi-Select button (`#selectBtn.selectTool`) sits above Seat on desktop and touch,
+with matching styling and a pressed state. It is available without opening Table Actions.
+Click or tap the button again, press Escape, or click/tap empty felt without dragging to exit.
+Empty-felt taps tolerate movement below the shared drag threshold and retain selected pieces.
+Dragging keeps the mode active, including a drag that returns to its starting point. The existing selection controller owns its mode.
+It is the touch stand-in for the Shift modifier:
 while it is on, `selMode` forces `additive` true, so a felt drag boxes and a tap toggles.
 `#selTools` is the touch stand-in for the group keys, and the edge clusters' ⟲ / ⟳ for `[` / `]` —
 continuous rather than stepped, so a finger cannot land an exact 45°.

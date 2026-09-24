@@ -108,7 +108,7 @@
 #controlGuide {
   position: fixed;
   left: var(--inset);
-  bottom: calc(var(--inset) + 148px);
+  bottom: calc(var(--inset) + 266px);
   z-index: 7;
   width: min(310px, calc(100vw - 2 * var(--inset)));
   padding: 10px 12px;
@@ -5737,7 +5737,7 @@ body.not-gm .gm-only {
     display: grid;
     place-items: center;
     position: fixed;
-    right: var(--inset);
+    left: var(--inset);
     bottom: calc(var(--inset) + 108px);
     z-index: 8;
     width: 58px;
@@ -6115,9 +6115,11 @@ body.not-gm .gm-only {
   #handRow.trayOpen #dropFlank button .lbl {
     display: inline;
   } /* room for words once it is a full-width pair */
-  /* The seat button rides above whichever height the tray currently is. */
-  body.trayOpen #seatBtn {
-    bottom: calc(var(--inset) + 270px);
+  /* Leave the expanded private hand clear; restore the floating actions when it closes. */
+  body.trayOpen #selectBtn,
+  body.trayOpen #seatBtn,
+  body.trayOpen #fabBtn {
+    display: none;
   }
 }
 
@@ -6135,7 +6137,7 @@ body.not-gm .gm-only {
     display: grid;
     place-items: center;
     position: fixed;
-    right: var(--inset);
+    left: var(--inset);
     bottom: calc(var(--inset) + 42px);
     z-index: 8;
     width: 58px;
@@ -6163,9 +6165,6 @@ body.not-gm .gm-only {
   #fabBtn.on {
     transform: rotate(45deg);
     background: var(--accent-soft);
-  }
-  body.trayOpen #fabBtn {
-    bottom: calc(var(--inset) + 166px);
   }
 }
 /* The radial itself works at any pointer type — long-press exists on desktop too. */
@@ -6716,20 +6715,21 @@ body.not-gm .gm-only {
 /* ============================================================================
    Post-7e: the seat button and the ⊕ fan are the DEFAULT, not the touch layout.
    Slices 4 and 7 were gated behind the sheet bound; the two bottom hamburger
-   bars are retired at every pointer type, and the two round buttons carry their
-   contents on the right edge. The bars stay in the DOM — the seat popover and the
+   bars are retired at every pointer type. Multi-Select, Seat and Table Actions
+   form a matching button stack on the left edge. The bars stay in the DOM — the seat popover and the
    fan proxy real buttons out of them (proxyGated reads classes, not visibility).
    ========================================================================= */
 #hamBar,
 #hamBarRight {
   display: none;
 }
+#selectBtn,
 #seatBtn,
 #fabBtn {
   display: grid;
   place-items: center;
   position: fixed;
-  right: var(--inset);
+  left: var(--inset);
   z-index: 8;
   width: 58px;
   height: 58px;
@@ -6742,6 +6742,9 @@ body.not-gm .gm-only {
     0 0 26px -8px var(--accent),
     0 8px 20px var(--shadow-soft);
 }
+#selectBtn {
+  bottom: calc(var(--inset) + 174px);
+}
 #seatBtn {
   bottom: calc(var(--inset) + 108px);
 }
@@ -6749,19 +6752,23 @@ body.not-gm .gm-only {
   bottom: calc(var(--inset) + 42px);
   transition: transform 0.18s ease;
 }
+#selectBtn[hidden],
 #seatBtn[hidden],
 #fabBtn[hidden] {
   display: none;
 }
+#selectBtn .lbl,
 #seatBtn .lbl,
 #fabBtn .lbl {
   display: none;
 }
+#selectBtn .ico,
 #seatBtn .ico,
 #fabBtn .ico {
   width: var(--ico-size-xl);
   height: var(--ico-size-xl);
 }
+#selectBtn.on,
 #seatBtn.on {
   background: var(--accent-soft);
 }

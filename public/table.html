@@ -621,15 +621,15 @@
         </div>
       </div>
     </div>
+    <button id="selectBtn" class="selectTool" data-icon="select-all" aria-label="Multi-Select" aria-pressed="false">
+      <span class="lbl">Multi-Select</span>
+    </button>
     <button id="seatBtn" data-icon="armchair" aria-label="Your seat" aria-expanded="false" hidden>
       <span class="lbl">Seat</span>
     </button>
     <div id="seatPop" class="seatPop" role="dialog" aria-label="Your seat" hidden></div>
     <div id="hamBar">
       <button id="interactHam" data-icon="hand-move"><span class="lbl">Interactions</span></button>
-      <button class="selectTool" data-icon="select-all">
-        <span class="lbl">Multi-Select</span>
-      </button>
       <button id="roll" data-room-mutation class="rollBtn" data-icon="dice-5">
         <span class="lbl">Dice Box</span>
       </button>
@@ -1097,6 +1097,10 @@
                 sees a face-down fan at your seat.
               </li>
               <li>
+                Use the left/right arrow buttons to scroll a long hand. They work without
+                Rearrange. On mobile, close the hand tab to restore Multi-Select, Seat and Table Actions.
+              </li>
+              <li>
                 <b>Left-drag</b> (or left-click) a card out onto the table and it lands face-down;
                 <b>right-drag</b> (or right-click) and it lands face-up.
               </li>
@@ -1232,7 +1236,7 @@
             <h4>Working with several pieces</h4>
             <ul>
               <li>
-                Turn on the <b>Select</b> tool, then <b>drag</b> empty table to box a selection, or
+                Turn on <b>Multi-Select</b> above the Seat button, then <b>drag</b> empty table to box a selection, or
                 <b>tap</b> pieces to add and remove them.
               </li>
               <li>Drag any selected piece and the whole group comes with it.</li>
@@ -1245,6 +1249,10 @@
         </div>
 
         <div class="modal__body libPane helpScroll" data-pane="table" hidden>
+          <div class="helpSec">
+            <h4>Multi-Select Button</h4>
+            <p><b data-icon="select-all">Multi-Select</b> sits above Seat. Click or tap to turn it on, then drag empty table to box a selection or tap pieces to add and remove them. Click or tap it again, or click/tap empty felt without dragging, to turn it off. Existing selected pieces stay selected. It hides with Seat while the mobile hand is open.</p>
+          </div>
           <div class="helpSec">
             <h4>Your Seat Button</h4>
             <ul>
@@ -1268,7 +1276,6 @@
                 <b data-icon="library-plus">Library.</b> A quick way to access the library so you
                 can spawn objects.
               </li>
-              <li><b data-icon="select-all">Multi-Select.</b> Enable multi-select mode.</li>
             </ul>
           </div>
           <div class="helpSec">

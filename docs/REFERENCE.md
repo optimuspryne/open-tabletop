@@ -2178,6 +2178,14 @@ room singleton or the client runtime.
   handles partial/stale `dropUndone` feedback through injected `toast`.
 - **`setCards(cards)`** receives the private `hand` message and calls the controller's
   `renderHand` helper. **`render()`** restores the bar after closing a hand-card inspection.
+  `scheduleHandScroll` batches overflow measurements after render, viewport resize, and the
+  strip's `ResizeObserver` notification, including the hidden-to-visible mobile tray transition.
+  `renderHand` disconnects the old strip and cancels its pending frame before replacing nodes.
+  `public/styles.css` hides Multi-Select/Seat/Table Actions under `body.trayOpen` only in the sheet media
+  query, retaining their user-selected placement and the control-guide offset. `test/hand.js`
+  covers measurement coalescing, direction states and observer cleanup;
+  `scripts/component-parity.mjs` exercises the real client hand message, tray toggle, scroll
+  buttons and floating-action visibility. In-app help and `docs/GESTURES.md` describe the touch path.
 - **`setRevealed(sid, cards)`**, **`revealedFor(sid)`**, and **`clearRevealed(sid)`** maintain the
   face-up cards shown in public fans. The presence controller places those fan meshes through
   injected reveal-data callbacks.
@@ -2258,7 +2266,14 @@ shared piece policy; it does not import the client or a mutable room singleton.
 - **`beginPointer(event, id)`**, **`movePointer(event)`**, and **`endPointer(event)`** consume
   semantic selection gestures and return whether they handled the input. Shift-click or Select-tool
   taps toggle movable pieces; empty-felt drags add projected centres inside the marquee. Static
-  boards are excluded. The caller retains pointer capture, input priority, and camera controls.
+  boards are excluded. With Select mode active, a release on empty felt without a drag exits
+  the mode while retaining selected IDs. The injected `dragThreshold` uses `CONFIG.input.dragPx`
+  in production (6 px default); movement crossing it remains a drag even after returning to the
+  starting point. Release coordinates are checked too. The caller retains pointer capture, input
+  priority, and camera controls.
+- **`bindModeControls()`** connects `.selectTool` buttons, including the floating `#selectBtn`
+  above Seat. `setSelMode()` keeps their active styling and `aria-pressed` synchronized on toggle,
+  Escape, and cancellation. Table Actions no longer includes a Multi-Select proxy.
 - **`isActive()`** reports Select-tool mode. **`escape()`** exits that mode first, then clears
   selection on a subsequent call, returning whether it handled Escape.
 - **`command(key)`** sends U/G/R/F/H batch actions and bracket rotation for a non-empty selection.

@@ -110,7 +110,12 @@ function fixture() {
   let boardTop = 2;
   const classes = new Set();
   const classList = { toggle: (key, on) => (on ? classes.add(key) : classes.delete(key)) };
-  const button = { classList };
+  const attributes = new Map();
+  const button = {
+    classList,
+    setAttribute: (key, value) => attributes.set(key, value),
+    getAttribute: (key) => attributes.get(key),
+  };
   const marquee = { style: {}, hidden: true };
   const selection = createSelection({
     THREE,
@@ -182,14 +187,66 @@ test('Select tool and Escape preserve the existing two-step exit then clear beha
   f.selection.bindModeControls();
   f.button.onclick();
   assert.equal(f.selection.isActive(), true);
+  assert.equal(f.button.getAttribute('aria-pressed'), 'true');
   assert.equal(f.classes.has('selecting'), true);
   assert.equal(f.press('a', { additive: false, touch: true }), true);
   assert.equal(f.selection.escape(), true);
   assert.equal(f.selection.isActive(), false);
+  assert.equal(f.button.getAttribute('aria-pressed'), 'false');
   assert.equal(f.selection.has('a'), true);
   assert.equal(f.selection.escape(), true);
   assert.equal(f.selection.size, 0);
   assert.equal(f.selection.escape(), false);
+});
+
+for (const touch of [false, true]) {
+  test(`empty-felt ${touch ? 'tap' : 'click'} exits Select mode without clearing selected pieces`, () => {
+    const f = fixture();
+    f.add('a');
+    f.press('a');
+    f.selection.endPointer({});
+    f.selection.bindModeControls();
+    f.button.onclick();
+    f.selection.beginPointer({ primary: true, touch, clientX: 100, clientY: 100 }, null);
+    f.selection.movePointer({ clientX: 102, clientY: 103 });
+    assert.equal(f.selection.isActive(), true);
+    f.selection.endPointer({ clientX: 102, clientY: 103 });
+    assert.equal(f.selection.isActive(), false);
+    assert.equal(f.button.getAttribute('aria-pressed'), 'false');
+    assert.equal(f.classes.has('selecting'), false);
+    assert.equal(f.marquee.hidden, true);
+    assert.deepEqual(f.selection.ids(), ['a']);
+    assert.equal(f.selection.beginPointer({ primary: true, touch }, null), false);
+  });
+}
+
+test('Select drags remain active at the threshold, on release-only movement and after returning to their origin', () => {
+  for (const moves of [[], [{ clientX: 106, clientY: 100 }], [{ clientX: 130, clientY: 130 }]]) {
+    const f = fixture();
+    f.selection.bindModeControls();
+    f.button.onclick();
+    f.selection.beginPointer({ primary: true, clientX: 100, clientY: 100 }, null);
+    for (const move of moves) f.selection.movePointer(move);
+    f.selection.endPointer(
+      moves.length ? { clientX: 100, clientY: 100 } : { clientX: 106, clientY: 100 },
+    );
+    assert.equal(f.selection.isActive(), true);
+    assert.equal(f.marquee.hidden, true);
+  }
+});
+
+test('piece clicks and secondary felt clicks do not exit Select mode', () => {
+  const f = fixture();
+  f.add('a');
+  f.selection.bindModeControls();
+  f.button.onclick();
+  f.selection.beginPointer({ primary: true, clientX: 100, clientY: 100 }, 'a');
+  f.selection.endPointer({ clientX: 100, clientY: 100 });
+  assert.equal(f.selection.isActive(), true);
+  assert.equal(f.selection.has('a'), true);
+  assert.equal(f.selection.beginPointer({ primary: false, secondary: true }, null), false);
+  assert.equal(f.selection.endPointer({ clientX: 100, clientY: 100 }), false);
+  assert.equal(f.selection.isActive(), true);
 });
 
 test('marquee projects into the canvas bounds, adds to selection and excludes static/offscreen pieces', () => {

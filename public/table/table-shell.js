@@ -471,7 +471,6 @@ export function createTableShell({ byId, clamp, getRoom }) {
           const items = [
             proxy('Dice Box', 'dice-5', '#roll'),
             proxy('Library', 'library-plus', '#lib2Btn'),
-            proxy('Multi-Select', 'select-all', '#hamBar .selectTool'),
             proxy('Measure', 'ruler-measure', '#measureBtn'),
           ].filter(Boolean);
           const r = fab.getBoundingClientRect();

@@ -125,7 +125,23 @@ function fixture() {
     elementFromPoint: () => canvas,
   };
   const listeners = new Map();
+  const frames = new Map(),
+    observers = [];
+  let nextFrame = 1;
   const win = {
+    ResizeObserver: class {
+      constructor(callback) {
+        this.callback = callback;
+        this.targets = new Set();
+        observers.push(this);
+      }
+      observe(target) {
+        this.targets.add(target);
+      }
+      disconnect() {
+        this.targets.clear();
+      }
+    },
     addEventListener(type, callback) {
       const list = listeners.get(type) || [];
       list.push(callback);
@@ -134,8 +150,14 @@ function fixture() {
     dispatch(type, event) {
       for (const callback of listeners.get(type) || []) callback(event);
     },
-    requestAnimationFrame: () => 1,
-    cancelAnimationFrame() {},
+    requestAnimationFrame(callback) {
+      const id = nextFrame++;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelAnimationFrame(id) {
+      frames.delete(id);
+    },
     getSelection: () => ({ removeAllRanges() {} }),
   };
   const storage = new Map();
@@ -221,6 +243,13 @@ function fixture() {
     meshes,
     room,
     feedback,
+    frames,
+    observers,
+    flushFrames() {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach((callback) => callback());
+    },
   };
 }
 
@@ -228,6 +257,39 @@ const sample = [
   { hid: 'king', front: 'K♠', back: 'red' },
   { hid: 'ace', front: 'A♠', back: 'red' },
 ];
+
+test('hand arrows remeasure after hidden layout opens and stop watching replaced strips', () => {
+  const f = fixture();
+  f.hand.setCards(sample);
+  const [left, scroll, right] = f.ids.get('hand').children;
+  scroll.clientWidth = scroll.scrollWidth = 0;
+  f.flushFrames();
+  assert.equal(left.hidden, true);
+  scroll.clientWidth = 300;
+  scroll.scrollWidth = 900;
+  f.observers[0].callback();
+  f.observers[0].callback();
+  assert.equal(f.frames.size, 1, 'resize notifications coalesce');
+  f.flushFrames();
+  assert.equal(left.hidden, false);
+  assert.equal(right.hidden, false);
+  assert.equal(left.disabled, true);
+  assert.equal(right.disabled, false);
+  scroll.scrollLeft = 600;
+  scroll.emit('scroll');
+  assert.equal(left.disabled, false);
+  assert.equal(right.disabled, true);
+  scroll.scrollLeft = 0;
+  scroll.clientWidth = 1000;
+  f.win.dispatch('resize');
+  f.flushFrames();
+  assert.equal(left.hidden, true);
+  assert.equal(right.hidden, true);
+  f.observers[0].callback();
+  f.hand.setCards([]);
+  assert.equal(f.observers[0].targets.has(scroll), false, 'detached strip is still observed');
+  assert.equal(f.frames.size, 1, 'stale measurement frame was not cancelled');
+});
 
 test('private hand renders, remembers collapse, and keeps revealed fans private to their sender', () => {
   const f = fixture();

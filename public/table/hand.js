@@ -83,6 +83,20 @@ export function createHand({
     myHand = [];
   let handReorder = null; // an in-progress drag-to-rearrange (reorder mode)
   let handCollapsed = false;
+  let scrollFrame = null;
+  let syncHandScroll = () => {};
+  const scheduleHandScroll = () => {
+    if (scrollFrame !== null) return;
+    scrollFrame = requestAnimationFrame(() => {
+      scrollFrame = null;
+      syncHandScroll();
+    });
+  };
+  // A mobile tray renders while display:none. Measure again when it opens, or its
+  // available width changes, without rebuilding cards or entering Rearrange.
+  const scrollObserver =
+    typeof win.ResizeObserver === 'function' ? new win.ResizeObserver(scheduleHandScroll) : null;
+  addEventListener('resize', scheduleHandScroll);
   try {
     handCollapsed = localStorage.getItem('ott.handHidden') === '1';
   } catch {} // personal view preference, remembered across refreshes
@@ -307,6 +321,10 @@ export function createHand({
   }
 
   function renderHand(cards) {
+    scrollObserver?.disconnect();
+    if (scrollFrame !== null) cancelAnimationFrame(scrollFrame);
+    scrollFrame = null;
+    syncHandScroll = () => {};
     const el = byId('hand');
     handHoverCard = null;
     el.innerHTML = '';
@@ -464,7 +482,9 @@ export function createHand({
       }
     };
     scroll.addEventListener('scroll', syncChevrons);
-    requestAnimationFrame(syncChevrons);
+    syncHandScroll = syncChevrons;
+    scrollObserver?.observe(scroll);
+    scheduleHandScroll();
     if (cards.length && !selectMode) {
       // a small handle to hide the hand from your view
       const hide = document.createElement('button');

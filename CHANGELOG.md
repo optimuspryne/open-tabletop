@@ -9,9 +9,19 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Exit Multi-Select on a left-click or tap on empty felt without dragging, retaining selected
+  pieces. Reuse the configured drag threshold for finger drift; real drags keep the mode active.
+  Synchronize the floating button and restore normal camera input. Browser refresh required.
+- Move Multi-Select from the Table Actions radial menu to a matching floating button above Seat.
+  Keep its active/pressed state synchronized with selection, raise hover hints to clear the stack,
+  and hide it with the other floating buttons while the mobile hand is open. Browser refresh required.
 - Raise the portable package image limit from 256 to 4,096 for both single decks and collections.
   Keep the existing byte, pixel and card budgets, and report image-count and image-byte failures
   separately. Requires a server restart; no migration.
+- Keep the expanded mobile private hand clear by hiding Seat and Table Actions until it closes,
+  preserving the user's left-side button placement and raised control hints. Remeasure hand
+  scroll arrows when the hidden tray opens or resizes, without requiring Rearrange; release
+  observers and pending measurements when rebuilding the hand. Browser refresh required.
 - Route all saved/bundled image thumbnails through bounded WebP previews, including custom dice,
   sky panoramas/cubemap faces, image boards/mats, finish pickers, hands and editor image squares.
   Centralize the URL policy with no raw-image fallback; generate small WebP previews for local

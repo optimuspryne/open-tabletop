@@ -147,6 +147,7 @@ export function createSelection({
   canvas,
   meshes,
   marker,
+  dragThreshold = 6,
   getRoom,
   getBoardTopY,
   byId,
@@ -282,7 +283,10 @@ export function createSelection({
   }
   function setSelMode(on) {
     selMode = on;
-    document.querySelectorAll('.selectTool').forEach((b) => b.classList.toggle('on', on));
+    document.querySelectorAll('.selectTool').forEach((b) => {
+      b.classList.toggle('on', on);
+      b.setAttribute('aria-pressed', String(on));
+    });
     canvas.classList.toggle('selecting', on);
   }
   // A flat ring under a selected piece, styled like dropMarker but tinted + opaque.
@@ -420,20 +424,24 @@ export function createSelection({
     selGesture = true;
     if (id) selToggle(id);
     else {
-      marquee = { sx: e.clientX, sy: e.clientY, add: e.additive || selMode };
+      marquee = { sx: e.clientX, sy: e.clientY, add: e.additive || selMode, dragged: false };
       showMarquee(e.clientX, e.clientY, e.clientX, e.clientY);
     }
     return true;
   }
   function movePointer(e) {
     if (!marquee) return false;
+    marquee.dragged ||= Math.hypot(e.clientX - marquee.sx, e.clientY - marquee.sy) >= dragThreshold;
     showMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY);
     return true;
   }
   function endPointer(e) {
     if (!selGesture) return false;
     if (marquee) {
-      finalizeMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY, marquee.add);
+      // Include release movement, and remember drags that returned to their starting point.
+      movePointer(e);
+      if (selMode && !marquee.dragged) setSelMode(false);
+      else finalizeMarquee(marquee.sx, marquee.sy, e.clientX, e.clientY, marquee.add);
       hideMarquee();
       marquee = null;
     }
