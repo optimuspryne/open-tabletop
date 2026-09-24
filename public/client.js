@@ -63,6 +63,7 @@ import { bindPreferences } from './table/preferences.js';
 import { createDicePreferences } from './table/dice-preferences.js';
 import { createPieceUi } from './table/piece-ui.js';
 import { createTableEffects } from './table/effects.js';
+import { createPieceLabels } from './table/piece-labels.js';
 window.addEventListener('pointerdown', resumeAudio, { once: true }); // browsers block audio until a user gesture
 
 // ===== Tiny DOM helpers =====================================================
@@ -262,7 +263,10 @@ const membership = createMembership({
       presence.updateHeldLabel(id, '');
       selection.remove(id);
     },
-    disposeSurface: (id) => effects.disposeSurface(id),
+    disposeSurface: (id) => {
+      effects.disposeSurface(id);
+      pieceLabels.remove(id);
+    },
   });
 
   overlays.bindRoom(room, cb, noteSceneHydration);
@@ -763,6 +767,13 @@ const pieceDrag = createPieceDrag({
   clamp,
 });
 
+const pieceLabels = createPieceLabels({
+  THREE,
+  scene,
+  meshes,
+  getRoom: () => room,
+  getRank: () => myRank,
+});
 const pieceUi = createPieceUi({
   byId,
   canvas: renderer.domElement,
@@ -779,6 +790,9 @@ const pieceUi = createPieceUi({
   pickId,
   isSheet: shell.isSheet,
   openRadial: shell.openRadial,
+  highlightPiece: (id) => effects.highlightPiece(id),
+  getRank: () => myRank,
+  editLabels: pieceLabels.edit,
 });
 const effects = createTableEffects({
   THREE,
@@ -827,6 +841,7 @@ const effects = createTableEffects({
   overlays.syncSurface(); // GLB boards can finish loading after restored overlays arrive
   presence.update(); // keep held-piece labels over the interpolated meshes
   pieceUi.update(); // contextual guide and live hover counts
+  pieceLabels.update(); // persistent object annotations follow interpolated bounds
   effects.updatePings();
   effects.updateDropMarker(pieceDrag.current());
   selection.update(); // keep a highlight ring under each selected piece
@@ -877,6 +892,8 @@ const INPUT = createInputRouter({
   panCamera,
   openPieceMenu: (...args) => pieceUi.openPieceMenu(...args),
   sendPing: effects.sendPing,
+  highlightPiece: effects.highlightPiece,
+  editLabels: pieceLabels.edit,
   byId,
 });
 attachControls(renderer.domElement, INPUT);

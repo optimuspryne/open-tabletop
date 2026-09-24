@@ -359,6 +359,37 @@ test('avatar control resizes the chosen image and sends the existing setAvatar p
   const f = fixture();
   const file = { name: 'avatar.png' };
   await f.elements.get('avatarInput').handlers.get('change')({ target: { files: [file] } });
-  assert.deepEqual(f.resized, [[file, 96, 96]]);
+  assert.deepEqual(f.resized, [[file, 512, 512]]);
   assert.deepEqual(f.sent.at(-1), ['setAvatar', { data: 'data:image/jpeg;base64,avatar' }]);
+});
+
+test('placard replacement and departure dispose their owned model and texture resources', () => {
+  const f = fixture();
+  const other = player({ seat: 1 });
+  f.add('other', other);
+  const marker = f.scene.children.find(
+    (node) =>
+      node.isGroup && node.children.some((child) => child.geometry?.type === 'PlaneGeometry'),
+  );
+  let disposed = 0;
+  marker.traverse((node) => {
+    node.geometry?.addEventListener('dispose', () => disposed++);
+    node.material?.addEventListener('dispose', () => disposed++);
+    node.material?.map?.addEventListener('dispose', () => disposed++);
+  });
+  f.change(other, 'name', 'Updated');
+  assert.equal(disposed, 5);
+  assert.ok(!f.scene.children.includes(marker));
+  const replacement = f.scene.children.find(
+    (node) =>
+      node.isGroup && node.children.some((child) => child.geometry?.type === 'PlaneGeometry'),
+  );
+  replacement.traverse((node) => {
+    node.geometry?.addEventListener('dispose', () => disposed++);
+    node.material?.addEventListener('dispose', () => disposed++);
+    node.material?.map?.addEventListener('dispose', () => disposed++);
+  });
+  f.remove('other');
+  assert.equal(disposed, 10);
+  assert.ok(!f.scene.children.includes(replacement));
 });

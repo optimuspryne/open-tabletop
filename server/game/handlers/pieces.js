@@ -15,10 +15,12 @@ import {
   snapToCell,
 } from '../../../shared/pieces.js';
 import { RANK } from '../../permissions.js';
+import { finiteStockCount, normalizePieceLabels } from '../../../shared/piece-labels.js';
 import {
   groupIds,
   groupRecolor,
   groupRotation,
+  isPlainObject,
   pieceIdPayload,
   recolorPayload,
   spawnPayload,
@@ -50,6 +52,23 @@ export function registerPieceHandlers(
 ) {
   const pieceMessage = (type, handler) => safeMessage(room, type, handler, { logger });
   const idsFrom = (message) => groupIds(message, { max: maxPieces });
+
+  pieceMessage('setPieceLabels', (client, message) => {
+    if (room.rank(client) < RANK.gm || !isPlainObject(message)) return;
+    if (Object.keys(message).some((key) => !['id', 'label', 'lowStock'].includes(key))) return;
+    const parsed = pieceIdPayload({ id: message.id });
+    const settings = normalizePieceLabels(message);
+    if (!parsed || !settings) return;
+    const piece = room.state.pieces.get(parsed.id);
+    if (!piece) return;
+    const props = readProps(piece);
+    if (settings.lowStock && finiteStockCount(piece, props) === null) return;
+    if (settings.label) props.label = settings.label;
+    else delete props.label;
+    if (settings.lowStock) props.lowStock = settings.lowStock;
+    else delete props.lowStock;
+    writeProps(piece, props);
+  });
 
   pieceMessage('setStandGroup', (client, message) => {
     const ids = idsFrom(message);
@@ -337,6 +356,12 @@ export function registerPieceHandlers(
     if (color != null) spawnProps.color = color;
     if (team != null) spawnProps.team = team;
     if (finish != null) spawnProps.finish = finish;
+    const labels = normalizePieceLabels({
+      label: members[0].props.label ?? '',
+      lowStock: members[0].props.lowStock ?? null,
+    });
+    if (labels?.label) spawnProps.label = labels.label;
+    if (labels?.lowStock) spawnProps.lowStock = labels.lowStock;
     const id = room.spawn('dispenser', [cx, spawnY, cz], spawnProps);
     const merged = room.state.pieces.get(id);
     if (merged && merged.count !== total) {

@@ -17,6 +17,8 @@ export function createInputRouter({
   panCamera,
   openPieceMenu,
   sendPing,
+  highlightPiece,
+  editLabels,
   byId,
   doc = document,
 }) {
@@ -200,6 +202,11 @@ export function createInputRouter({
       // toggle snap-to-grid for this piece
       const id = heldOrHoveredId();
       if (id) room.send('setSnap', { id });
+    } else if ((e.key === 'l' || e.key === 'L') && !e.repeat) {
+      if (!inspection.isActive() && !whiteboard.isOwning() && !overlays.isMeasuring()) {
+        const id = heldOrHoveredId();
+        if (id) editLabels(id);
+      }
     } else if ((e.key === 'p' || e.key === 'P') && !e.repeat) {
       // ping the table at the cursor
       sendPing();
@@ -250,8 +257,18 @@ export function createInputRouter({
     rotateHeld: pieces.rotateHeld,
     snapHeld: pieces.snapHeld,
     ping: (p) => {
+      if (
+        !getRoom() ||
+        inspection.isActive() ||
+        whiteboard.isOwning() ||
+        overlays.isMeasuring() ||
+        selection.isActive()
+      )
+        return;
       setPointer({ clientX: p.x, clientY: p.y });
-      sendPing();
+      const id = pickId();
+      if (id) highlightPiece(id);
+      else sendPing();
     },
     // Turn the selection (or the held piece) one small step. The continuous complement to the
     // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.

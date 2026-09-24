@@ -1,13 +1,31 @@
 import { RANK } from '../../permissions.js';
-import { boundedString, oneField, pointPayload, showPayload } from '../../message-validation.js';
+import {
+  boundedString,
+  oneField,
+  pieceIdPayload,
+  pointPayload,
+  showPayload,
+} from '../../message-validation.js';
 import { safeMessage } from '../safe-message.js';
 import { scoopTrayDice } from '../trays.js';
+
+const HIGHLIGHT_INTERVAL_MS = 250;
 
 export function registerRoomFeatureHandlers(
   room,
   { trayRoll, validSky, now = Date.now, random = Math.random, logger = console },
 ) {
   const featureMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const lastHighlight = new WeakMap();
+
+  featureMessage('highlightPiece', (client, message) => {
+    const parsed = pieceIdPayload(message);
+    if (!parsed || !room.state.pieces.has(parsed.id)) return;
+    const time = now();
+    if (time - (lastHighlight.get(client) ?? -Infinity) < HIGHLIGHT_INTERVAL_MS) return;
+    lastHighlight.set(client, time);
+    room.broadcast('pieceHighlighted', { id: parsed.id, sid: client.sessionId });
+  });
 
   featureMessage('roll', (client) => {
     const seat = room.seatOf(client);

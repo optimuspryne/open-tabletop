@@ -242,6 +242,8 @@ function fixture() {
     panCamera: mark('pan'),
     openPieceMenu: mark('menu'),
     sendPing: mark('ping'),
+    highlightPiece: mark('highlight'),
+    editLabels: mark('labels'),
     byId: () => (modes.panel ? { _close: mark('panel.close') } : null),
     doc,
   });
@@ -634,4 +636,42 @@ test('menu Move captures the canvas, arms one-shot moves, and heavy pieces never
   assert.deepEqual(f.sent.at(-1)[1].v, [0, 0, 0]);
   f.modes.missPlane = true;
   assert.equal(f.pieces.beginMoveFromMenu('deck', pointer()), false);
+});
+
+test('middle-click highlights the picked object, pings empty felt, and respects modal tools', () => {
+  const f = fixture();
+  f.router.ping({ x: 30, y: 40 });
+  assert.deepEqual(f.calls.at(-1), ['highlight', 'die']);
+  f.pick(null);
+  f.router.ping({ x: 30, y: 40 });
+  assert.deepEqual(f.calls.at(-1), ['ping']);
+  f.pick('deck');
+  for (const mode of ['inspect', 'whiteboard', 'measure', 'selectActive']) {
+    f.modes[mode] = true;
+    const before = f.calls.length;
+    f.router.ping({ x: 30, y: 40 });
+    assert.equal(f.calls.length, before);
+    f.modes[mode] = false;
+  }
+  f.disconnect();
+  const before = f.calls.length;
+  f.router.ping({ x: 30, y: 40 });
+  assert.equal(f.calls.length, before);
+});
+
+test('label shortcut targets a piece and stays inactive while typing or inspecting', () => {
+  const f = fixture();
+  f.key('l');
+  assert.deepEqual(f.calls.at(-1), ['labels', 'die']);
+  const count = () => f.calls.filter((call) => call[0] === 'labels').length;
+  f.doc.activeElement = { tagName: 'INPUT' };
+  f.key('L');
+  assert.equal(count(), 1);
+  f.doc.activeElement = null;
+  f.modes.inspect = true;
+  f.key('l');
+  assert.equal(count(), 1);
+  f.modes.inspect = false;
+  f.key('l', true);
+  assert.equal(count(), 1);
 });

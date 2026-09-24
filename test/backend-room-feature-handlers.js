@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
 
 const MESSAGE_NAMES = [
+  'highlightPiece',
   'roll',
   'trayScoop',
   'trayClear',
@@ -59,7 +60,7 @@ function makeClient(sessionId) {
   };
 }
 
-function harness({ rank = 0 } = {}) {
+function harness({ rank = 0, now = () => 1234 } = {}) {
   const handlers = new Map();
   const events = [];
   const clients = new Map([
@@ -121,7 +122,7 @@ function harness({ rank = 0 } = {}) {
   registerRoomFeatureHandlers(room, {
     trayRoll: { up: 8, spread: 13, spin: 30 },
     validSky: (url) => url === '' || url.startsWith('/sky/'),
-    now: () => 1234,
+    now,
     random: () => 0.5,
     logger: { error() {} },
   });
@@ -206,4 +207,35 @@ test('pings are clamped to the current table bounds', async () => {
       payload: { sid: 'client-1', x: 10, z: -7 },
     },
   ]);
+});
+
+test('object highlights validate live IDs, attribute the sender, throttle, and do not mutate pieces', async () => {
+  let time = 0;
+  const { room, handlers, events, clients } = harness({ now: () => time });
+  const alice = clients.get('client-1');
+  const piece = { type: 'prop', props: '{}', owner: '', x: 2 };
+  room.state.pieces.set('42', piece);
+  const highlight = handlers.get('highlightPiece');
+  for (const payload of [null, {}, { id: 42 }, { id: '../42' }, { id: '43' }])
+    await highlight(alice, payload);
+  assert.deepEqual(events, []);
+  await highlight(alice, { id: '42', sid: 'client-2' });
+  assert.deepEqual(events, []);
+  await highlight(alice, { id: '42' });
+  assert.deepEqual(events, [{ name: 'pieceHighlighted', payload: { id: '42', sid: 'client-1' } }]);
+  await highlight(alice, { id: '42' });
+  assert.equal(events.length, 1);
+  await highlight(clients.get('client-2'), { id: '42' });
+  assert.equal(events.length, 2);
+  time = 250;
+  await highlight(alice, { id: '42' });
+  assert.equal(events.length, 3);
+  alice.auth = { revoked: true };
+  time = 500;
+  await highlight(alice, { id: '42' });
+  assert.equal(events.length, 3);
+  assert.deepEqual(piece, { type: 'prop', props: '{}', owner: '', x: 2 });
+  room.state.pieces.delete('42');
+  await highlight(clients.get('client-2'), { id: '42' });
+  assert.equal(events.length, 3);
 });

@@ -4,9 +4,48 @@ All notable changes to Open Tabletop are documented here.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-See [RELEASING.md](RELEASING.md) for what each version bump means and how releases are cut.
+See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how releases are cut.
 
 ## [Unreleased]
+
+### Fixed
+- Keep the object-label renderer and editor idle until the room's piece collection is available;
+  clear stale labels on state loss and resume when it returns. Cover delayed initial state in the
+  production-client browser fixture as well as label editor/resource cleanup regressions.
+
+### Added
+- GM object labels through **Labels…** in the desktop/touch menu or **L** over a piece. Saved
+  labels follow objects; the same editor configures prominent low-stock counts for decks, tile
+  decks, and finite dispensers using an explicit full quantity and percentage threshold.
+- Highlight a tabletop object for everyone with middle-click or its desktop/touch menu. A pulsing
+  halo follows the object for 3.2 seconds; repeats refresh it, and removal/expiry releases its
+  rendering resources. Preserve held-piece rotation and empty-table pings, with server target
+  validation and throttling plus input, server, and browser lifecycle/menu regression coverage.
+
+### Changed
+- Save new lobby/table avatar uploads at 512×512 with JPEG quality 0.85, using shared settings
+  and a 512 KiB encoded-image limit across HTTP and room messages. Re-upload existing avatars
+  to replace their previously saved 96×96 images; existing account data stays compatible.
+- Render player placards at 640×896 on Low/Medium graphics and 960×1344 on High, preserving
+  their world size and anisotropic filtering.
+- Enlarge player placards into human silhouettes with avatar faces, player-colored outlines, and
+  readable name plates. Dispose owned marker geometry/materials/textures when replaced or removed.
+
+### Documentation
+- Record user-reported manual-test sign-off for object labels, stock warnings, highlights,
+  placards, and avatar uploads; retain shape/flair customization as future roadmap work.
+- Record owner-confirmed Claude-generated tile/box sound provenance and CC0 distribution;
+  close the roadmap's missing-attribution item.
+- Extend the roadmap with room-persistent player inventories, per-card deck browsing actions,
+  low-stock count labels, and shared object highlighting with desktop/touch input paths.
+- Add roadmap proposals for persistent object labels, GM-hidden objects, player time-outs,
+  avatar placard styling, drawable notecards, asset collections, portable asset imports/exports,
+  and physical rulebooks with a Markdown builder. Connect shared spectator and concealment work
+  while keeping these proposals distinct from implemented features.
+- Reconcile the roadmap with completed turn ordering, footprints, lighting, touch controls,
+  custom dispensers, dice textures, save safeguards, and server extractions. Separate remaining
+  validation from implementation, and clarify device-based graphics defaults and native-resolution
+  skybox uploads in the roadmap, reference, and architecture guides.
 
 ## [0.18.0] — 2026-09-23
 

@@ -16,7 +16,7 @@
 //   rotateHeld(radians)        turn the held piece by a raw angle (the profile does not snap).
 //   panCamera(right, forward)  translate the idle desktop camera relative to its current view.
 //   doubleClick(pt) -> bool    double-activation on the board (whiteboard claim); true if consumed.
-//   snapHeld() / ping(pt)      middle-click's two jobs (snap the held piece / ping the table).
+//   snapHeld() / ping(pt)      middle-click: rotate held / highlight object or ping empty table.
 //   hasHeld() -> bool          is a piece held? (a profile uses this to disambiguate a control).
 //   hasAxisTarget(name)        should WASD/arrows transform an object, or pan the camera?
 //
@@ -101,7 +101,7 @@ export function attachControls(dom, intents) {
   dom.addEventListener('contextmenu', (e) => e.preventDefault()); // right-click is ours
 
   dom.addEventListener('mousedown', (e) => {
-    // middle button: snap held / ping
+    // middle button: snap held / attention intent (object highlight or table ping)
     if (e.button !== 1) return;
     e.preventDefault();
     if (intents.hasHeld()) intents.snapHeld();

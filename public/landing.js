@@ -1,4 +1,5 @@
 import { applyIcons, setIcon, initTip, overflowMenu } from './ui/icons.js';
+import { AVATAR_IMAGE } from '../shared/avatar.js';
 // landing.js — quick-join (default) + login/account + lobby. Talks to the /auth
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.
@@ -516,7 +517,7 @@ function fileToAvatarDataURL(file) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
-      const size = 96,
+      const size = AVATAR_IMAGE.size,
         canvas = document.createElement('canvas');
       canvas.width = canvas.height = size;
       const ctx = canvas.getContext('2d');
@@ -524,7 +525,7 @@ function fileToAvatarDataURL(file) {
       const w = img.width * scale,
         h = img.height * scale;
       ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
-      resolve(canvas.toDataURL('image/jpeg', 0.7));
+      resolve(canvas.toDataURL('image/jpeg', AVATAR_IMAGE.quality));
     };
     img.onerror = reject;
     const fr = new FileReader();

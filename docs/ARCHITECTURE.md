@@ -177,9 +177,27 @@ importing a room singleton:
   dice still sends the same server messages.
 - **`public/table/piece-ui.js`** — piece menus, contextual guide, hover counts, and hold-control
   visibility. It reads controller state and delegates actions; gesture ownership stays in piece drag.
-- **`public/table/effects.js`** — ping/shuffle state, visual lifetimes, landing marker, and cached
+- **`public/table/piece-labels.js`** — GM label editor and persistent annotation sprites, using
+  shared validation/count rules from `shared/piece-labels.js`. `setPieceLabels` requires GM rank
+  server-side and preserves unrelated props. Public `label`/`lowStock` props use existing snapshot
+  persistence; deck reconstruction explicitly retains them. These annotations describe containers,
+  not their contents. Textures change only with displayed text and are disposed on replacement/removal.
+  The controller tolerates a joined room before `state.pieces` arrives and resumes on hydration;
+  losing the collection closes the editor and removes stale sprites.
+  Visibility follows the rendered object; future concealment must filter server delivery too.
+- Player placards retain their world dimensions while `makePlayerTexture` rasterizes the same
+  layout at 2× resolution on Low/Medium and 3× on High. Existing texture filtering/disposal applies;
+  new avatar uploads are center-cropped to 512×512 JPEG at quality 0.85 in both lobby and table.
+  `shared/avatar.js` owns these settings and the data-URL validator used by HTTP and room messages
+  (below 512 KiB, with JSON-envelope headroom on HTTP). Existing account/schema storage is reused;
+  old images remain valid and gain detail only when re-uploaded from the original.
+- **`public/table/effects.js`** — ping/highlight/shuffle state, visual lifetimes, landing marker, and cached
   board collision surfaces. The root still calls updates in order and disposes board surfaces on
   piece removal. Cosmetic transforms never alter authoritative simulation state.
+  Object highlights are transient `highlightPiece` → `pieceHighlighted` messages, validated against
+  live public pieces and throttled per connection. One pulsing sprite per object follows its rendered
+  bounds for 3.2 seconds; repeats refresh it. Halo materials are disposed on removal/expiry and the
+  shared texture when the final halo ends. No piece material, private face, or saved state is changed.
 - **`public/table/input-router.js`** — semantic input ownership. `createInputRouter` returns the
   intent map consumed by `attachControls` and the on-screen hold controls. It preserves mode
   priority, Escape/typing guards, long-press routing, object-axis targeting, and camera-pan gates;
@@ -417,9 +435,10 @@ redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false
 render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
 tuning on the target device.
 That tuning is now a shipped, client-local **quality tier** (low/med/high, persisted per device,
-defaulting to medium on a coarse pointer) in Settings → UI — a per-viewer render preference, never
-room state, so it stays out of the scene save. High also raises card detail: procedural playing/text
-card canvases render at 1.5× the low/medium dimensions, and local uploaded faces select a larger
+defaulting to Low on phones, Medium on tablets, and High on desktops) in Settings → UI.
+This selects a preset by device class, not a continuous FPS-driven adjustment. It is a per-viewer
+render preference, never room state, so it stays out of the scene save. High also raises card detail:
+procedural playing/text card canvases render at 1.5× the low/medium dimensions, and local uploaded faces select a larger
 server derivative after the tier's required reload.
 
 ## One action end to end: grab & throw
@@ -938,6 +957,8 @@ machinery:
   `public/table/skybox.js` loads and caps textures using each viewer's resolution preference,
   disposes replaced textures, and rejects stale success/error callbacks by request version. Off
   and resolution changes invalidate pending loads even when the synchronized ref stays the same.
+  Ultra retains native source resolution, including larger custom uploads. The bundled skies are
+  2048×1024, so their High and Ultra results match; higher-resolution upload support is complete.
 - **Scoreboard & room notes** (shared, durable) — a `scores` map (label/score
   rows) and a GM `notes` string, both synced and saved with the room.
 - **Chat** (shared, ephemeral) — public room text. A `chat` message is sanitized

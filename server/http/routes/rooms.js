@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import express from 'express';
 import { asyncRoute } from '../async-route.js';
 import { clientUser } from '../auth-context.js';
+import { AVATAR_IMAGE } from '../../../shared/avatar.js';
 
 const roomCode = () => crypto.randomBytes(4).toString('hex').toUpperCase();
 
@@ -137,7 +138,7 @@ export function createRoomsRouter({
   // Routes outside /rooms live here because they share the same bearer-user context.
   router.post(
     '/me/avatar',
-    express.json({ limit: '128kb' }),
+    express.json({ limit: AVATAR_IMAGE.maxDataUrlLength + 1024 }), // data URL plus JSON envelope
     asyncRoute(async (req, res) => {
       const user = await requireUser(req, res);
       if (!user) return;

@@ -1,6 +1,7 @@
 # Open Tabletop — Roadmap
 
-_Last groomed 2026-09-05 (hex grids + table shapes shipped); prior reconcile v0.12.2 (+41 commits)._
+_Last reconciled 2026-09-23 against v0.18.0 source and documentation. Completed implementation
+does not imply that the manual device or large-scene checks have been signed off._
 
 ## North star
 
@@ -25,7 +26,12 @@ These are why some obvious features are deliberately absent — keep them in min
 
 ---
 
-## Architecture note — the server split (verified 2026-09-01, at v0.12.2)
+## Architecture note — the server split (historical v0.12.2 snapshot, 2026-09-01)
+
+The following records the earlier split, not the current backlog. Subsequent extraction moved
+schema definitions, deck builders, starter setup, and focused room behavior into `server/game/`.
+`TableRoom` remains the orchestration entry point in `server.js`; see
+[ARCHITECTURE.md](ARCHITECTURE.md) and [REFERENCE.md](REFERENCE.md) for current ownership.
 
 A DRY pass broke the server monolith into 33 files. What moved:
 
@@ -47,20 +53,20 @@ cluster (`createAuthRouter` / `createRoomsRouter` / `createAdminRouter` / `requi
 cohesion 0.89) and a fully cohesive query layer (`roomRow` / `publicUserRow` / `listBoards`,
 cohesion 1.0).
 
-**What did NOT move:** `server.js` still carries ~120 symbols, including the whole `TableRoom`
+**What had NOT moved at that checkpoint:** `server.js` still carried ~120 symbols, including the whole `TableRoom`
 class (lines 560–2044, ~1,485 lines) plus `EditorRoom` (2045), `LobbyRoom` (2221), the Colyseus schema classes
 (`Piece`, `Player`, `Overlay`, `State`, `Whiteboard`, `Timer`, `ScoreRow`, `RoomScale`), the
 starter builders (`buildDominoSet`, `buildMahjongWall`, `buildScrabbleBag`, `buildSimpleDeck`)
 and `bootstrap`. See "Finish the server split" under Parked threads. Note: 0.11.0 extracted more
 handler modules (movement, cards, room-state, overlays, physics, scene-persistence), but `TableRoom`
-itself never moved — `server.js` is now **2278 lines**, *larger* than at 0.9.0 (2039). The 0.11.0
+itself had not moved — `server.js` was **2278 lines**, *larger* than at 0.9.0 (2039). The 0.11.0
 changelog's "substantially reduces `server.js`" is relative to what it would otherwise have been,
 not an absolute shrink.
 
-Where things live now, for the threads below: `BOARD_PAINTERS` is in `public/rendering/graphics.js`;
-snap logic is split across `shared/pieces.js` (`snapToCell`, `gridActive`),
+Where things lived at that checkpoint: `BOARD_PAINTERS` was in `public/rendering/graphics.js`;
+snap logic was split across `shared/pieces.js` (`snapToCell`, `gridActive`),
 `server/game/handlers/pieces.js` (`applySnap`) and `public/client.js` (`pieceSnap`, `snapXZ`);
-`setupStarter` is still `TableRoom.setupStarter` (`server.js:1062`).
+`setupStarter` was still `TableRoom.setupStarter` (`server.js:1062`).
 
 ---
 
@@ -71,8 +77,13 @@ The difference between "demo" and "we play here every week."
 - ✅ Performance with **hundreds of pieces** on the table. The body count is lower than it looks —
   a deck is one body, not N (see the piece-model note below) — so reaching true hundreds means
   raising `SIM.maxPieces` first, then profiling.
-- **Scene-save size** behavior (big saves, the cap, graceful failure).
-- **Reconnection edges** and connection-quality feedback so a dropped phone rejoins cleanly.
+- ✅ **Scene-save caps and failure feedback.** Library scenes and manual table checkpoints reject
+  oversized payloads with an actionable message; manual Save acknowledges only a successful
+  database write. Oversized-checkpoint rejection has regression coverage. **Still open:**
+  large-scene end-to-end validation; this status does not record a manual stress-test pass.
+- **Reconnection edges and connection-quality feedback — partially complete.** Session rejoin,
+  hand/turn preservation, and authorization rechecks exist. Recovery UX, connection-quality
+  feedback, and dropped-phone validation remain open.
 
 **Instrumentation (2026-09-01).** Both halves are now measurable, off by default. Client:
 `?perf=1` on the table URL (or `window.ottPerf(true)`) draws a `renderer.info` overlay — FPS,
@@ -126,10 +137,10 @@ verified working), because the cost is the per-fragment shadow *sampling* in the
 the regeneration. So shadow-on-demand helps during idle/motion but was not the rest hero — pixel
 ratio is.
 
-*Proposed §12 tier* (device-class default via the same `pointer: coarse` signal the layout uses):
-coarse-pointer → pixelRatio 1 (or test 1.5 for crispness), `PCFShadowMap` (not soft) @ 1024,
-antialias off — proven 60 fps on the iPad, and the smaller map also relieves the library OOM.
-Fine-pointer keeps today's defaults. Manual override (URL/stored, later a settings control) on top.
+**§12 tiers — shipped.** The profiling above led to device-based defaults: phone → Low,
+tablet → Medium, desktop → High, with a saved Settings override and URL development knobs.
+All shipped tiers use soft shadows; pixel ratio, shadow-map size, and antialiasing vary by tier.
+The earlier hard-shadow proposal was superseded after phone GPU testing.
 
 ### 2. A fresh room isn't a blank table — built-in content
 Lowers the cold-start for a host who isn't going to model their own assets.
@@ -143,8 +154,9 @@ Lowers the cold-start for a host who isn't going to model their own assets.
   first used by the word grid), and **deck skins** (`DECK_MODELS`, e.g. the pouch). Tiles and
   their boxes also get their own sound cues. See `DESIGN_tiles.md`.
 - ✅ **Dice colors** — named dice sets (`DICE_SETS`).
-- ✅ **Model dispensers** — a colorable `trainStack` dispenser (`train_dispenser.glb`) that pays
-  out `train_piece` tokens: the first built-in model-dispenser beyond the Go bowl (`shared/pieces.js`).
+- ✅ **Model dispensers** — built-in and uploaded-model dispensers are supported. The train
+  dispenser was an early example; its bundled assets were removed in v0.17.0. The Go bowl and
+  custom-dispenser workflow remain available.
 - Still open: more **tokens/markers**; **RPG battlemaps** (the procedural-board framework is the
   seam — add a `BOARD_PAINTERS` painter); a **user upload path for deck skins** (only the built-in
   pouch exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
@@ -152,9 +164,12 @@ Lowers the cold-start for a host who isn't going to model their own assets.
 
 ### 3. Session tools that stay physical
 Useful for real play *if* they don't drift into app-ledger territory.
-- **Initiative / turn order** (turn passing already exists — this is the ordered-list version).
+- ✅ **Ordered turn passing.** GMs reorder the player list by drag or up/down buttons;
+  Next Turn follows that synchronized order. This completes the ordered-player-list scope,
+  without introducing initiative rolls or automatic rules.
 - A **GM staging area / screen** — a hidden zone only the GM sees, for prepping the next encounter.
-  The design challenge is doing this within the "public state" model without a second hidden sim.
+  Coordinate its hidden-state design with fog of war (backlog item 4) and per-object hiding
+  (item 14), while retaining server-owned physics and authorized delivery of concealed content.
 
 ### 4. A host can stand it up in ten minutes
 If the goal is other people hosting, the setup path *is* the product.
@@ -170,28 +185,28 @@ The single biggest audience expansion. "Pull up the iPad at game night" is a cor
 **The 0.12.0 redesign delivered the bulk of this** — a purpose-built phone/tablet layout (bottom
 sheets with peek/two-thirds/full drag stops, the ⊕ action fan, long-press-piece verbs, a pull-up
 hand tray, icon hints on touch) on top of the existing message protocol (no server change). What
-remains is closing the known gesture gaps and proving it on real devices — not building the interface.
+remains is gesture polish and proving the controls on real devices.
 - **Audit the gesture surface.** ✅ Done — the catalog is `docs/GESTURES.md`: every gesture, its
-  touch equivalent, and a status. Marquee/Shift-select, group drag, the tray camera hop,
-  scroll-to-raise, right-drag-to-move and left-click-a-deck-to-draw each assume a mouse with
-  buttons and a wheel; all but the rotation gestures now have a touch path. Three gaps remain
-  open there — rotating a held piece (middle-click 45°, Alt+drag 15°, Alt+Shift smooth: none
-  reachable by finger), exact-step formation rotation, and single-tap card verbs — plus the fact
-  that the in-app "How to Play" mentions touch zero times.
+  touch equivalent, and a status. Held-piece rotation/raising have two-finger and button paths;
+  cards and decks support tap actions and long-press menus. The in-app How to Play includes a
+  touch section. Remaining exact-angle/smooth-rotation differences are documented in the
+  catalog's Gaps section; they do not mean rotation is unavailable on touch.
 - **Touch equivalents.** ✅ Done - Long-press, two-finger, and on-screen affordances for the button/wheel
   gestures; make the Select tool the primary path where modifiers don't exist.
 - **Responsive HUD.** ✅ Done - The rails/pop-outs assume desktop real estate; verify the tablet layout and
   the collapse behavior.
 - **A device test matrix** ✅ Done - so "works on my machine" stops being the coverage.
+- **Manual device validation remains open.** The unchecked `docs/DEVICE_QA.md` checklist is
+  separate from implemented gestures and automated layout/component coverage.
 ---
 
 ## Feature backlog (added 2026-08-31)
 
-Unordered — priority not yet assigned. Each note records what exists today, so the work is
-scoped against the real tree rather than from memory.
+Unordered — priority not yet assigned. Completed entries are marked explicitly; unmarked entries
+describe planned work. Items 13–24 were added on 2026-09-23.
 
-1. ✅ **Table shape customization — DONE (2026-09-05, confirmed by Ben; CHANGELOG under
-   `[Unreleased]`).** The play surface can be **round, oval, hex (flat-top) or a rounded
+1. ✅ **Table shape customization — DONE (2026-09-05, confirmed by Ben).** The play surface can
+   be **round, oval, hex (flat-top) or a rounded
    rectangle**, not just a rectangle (`state.tableShape`, GM-set + durable, carried in scenes;
    migration 014). One shared `tableOutline(shape, hx, hz)` drives all three consumers: the physics
    wall ring (`buildBounds` — one box wall per outline edge; the floor stays a box), the felt mesh
@@ -203,28 +218,26 @@ scoped against the real tree rather than from memory.
 2. **Interactive tutorial.** Nothing exists today beyond the player-facing How-to-Play panel.
    Worth deciding early whether this is an overlay walkthrough in a normal room or a scripted
    starter scene — the latter reuses `setupStarter` and stays physical-first.
-3. **Hex grid + multi-cell footprints.** Hex grid ✅ **DONE** (see Parked threads / `CHANGELOG.md`).
-   The remaining half is **multi-cell footprints** (big-base minis spanning several cells), still
-   parked below. Listed here so the wishlist is complete; do not duplicate the entry.
-4. **Fog of war.** No implementation today (`grep` for `fog`/`spectator` returns nothing).
-   This is the item most in tension with **trust by transparency** and the public-state model —
-   it needs the same design answer as the GM staging area (§5), and probably shares a mechanism
-   with it. Decide the hidden-state story once, for both.
-5. **Spectator mode.** No implementation today. Seat/role machinery already exists
-   (`TableRoom.seatOf`, `canManage`, `canSetRole`, `rank`, `isAdmin`), so this is plausibly a
-   new role that never gets a seat rather than a new connection path.
-6. **Custom dispensers.** ✅ **DONE** Built-in dispensers exist end to end — `dispenserMesh`
-   (`public/rendering/graphics.js:1493–1583`), `TableRoom.dispenserItem` (`server.js:1175`),
-   `afterDispense`, and `dispenserDragPayload` validation
-   (`server/message-validation.js:264–269`). "Custom" means a user-defined dispenser in the
-   editor; see `DESIGN_dispensers.md`.
+3. ✅ **Hex grid + multi-cell footprints — DONE.** Hex grids and uploaded objects with 1–12 cell
+   N×N footprints are implemented. See the completed entries below and `CHANGELOG.md`.
+4. **Fog of war.** Planned area-based concealment. Coordinate authorized visibility with the
+   GM staging area (§3) and per-object hiding (item 14); hiding individual objects is a distinct
+   feature and does not by itself complete fog of war.
+5. **Spectator mode.** A viewing-only mode with no tabletop-object interaction. Design alongside
+   player time-out (item 15), sharing server-enforced interaction permissions where practical.
+   Decide seat/role behavior separately from the temporary restriction on an existing player.
+6. ✅ **Custom dispensers — DONE.** Admins can attach finite or infinite dispensers to uploaded
+   objects in the editor, using a visible stack, generic container, or second uploaded model.
+   Saved configurations support dispensing and gathering compatible pieces.
 7. **Custom games.** `STARTERS` in `shared/pieces.js` is code-only today — adding a game means
    editing the list. This is the user-facing version: define, save and share a starter from
-   inside the app. Overlaps the "user upload path for deck skins" gap in §3.
+   inside the app. Saved library scenes already provide reusable table layouts; a dedicated
+   starter-authoring workflow remains open. Deck-skin uploads are a separate gap in §2.
 8.  **Hand Re-organization.** ✅ **shipped 2026-09-01** — a per-viewer Rearrange mode (drag hand
     cards to reorder, with Sort by rank/suit), sent to the server as a `reorderHand` permutation so
     the order survives a reconnect. Kept separate from the play-to-table gesture (a mode toggle).
-9. **Custom dice / dice textures.**
+9. ✅ **Custom dice / dice textures — DONE.** Finishes, uploaded textures for numbered dice,
+   and built-in pipped d6 models are shipped. Optional texture tuning is not a completion blocker.
    - *Phase 1 — finishes: ✅ shipped 2026-09-01.* A material look layered on the die color:
      Matte / Satin / Glossy / Metallic (tinted from color) / Pearl (clearcoat+sheen) / Marbled
      (procedural swirl, tinted from color; triplanar-UV'd so it reads on the polyhedra too).
@@ -238,44 +251,114 @@ scoped against the real tree rather than from memory.
      `/assets/dice/` URL), synced on spawn/recolor and validated by `colorProps`/`dieSpawnProps`.
      Rendered as a triplanar map (async per-face composite on the d6), phone-safe (plain map, not
      in the fallback set). Applied from a dedicated **Custom** picker (sparkle) in the inspector
-     and dice box; per-player default carries the texture. Later, add: publish `brushed`/`glow`
-     to phones if wanted, tune the upload size / UV scale, a seamless-tiling toggle.
+     and dice box; per-player default carries the texture. Phone fallbacks for GPU-heavy finishes
+     are intentional. Image-backed custom finishes are not offered for the modeled pipped d6s.
    - *Pipped d6: ✅ shipped 2026-09-02.* Two built-in dice — Rounded Pips + Square Pips — as
      bundled `.glb` models (`DICE_MODELS`, `public/static_assets/models/pieces/dice/`), carried in `props.model`.
      A normal d6 for physics/value/collider; only the mesh differs. Body (`Ivory`) + pips (`Dots`)
      materials tinted by `color`/`textColor`, so they recolour like any die. Spawn from the dice
      box Add menu + the library built-in Dice tab (`dieModelPreviewURL`).
-10. **Multi-select composition.**  ✅ **shipped 2026-09-02** Multi-select exists (`DESIGN_multiselect.md`) but only moves
-   and rotates a selection. These three turn it into a construction tool:
+10. **Multi-select composition.** ✅ **shipped 2026-09-02** The selection tools support:
     1. Combine loose like cards into a **new deck** (discard pile → deck).
     2. **Merge two decks** — the inverse of the existing split.
     3. Gather dispenser-type objects into a **single dispenser**.
-11. **More Room Customization.** ✅ **DONE** Ability to adjust lighting (angles, intensity, color) — still open.
+11. **More Room Customization.** ✅ **DONE** Lighting controls support direction, intensity,
+    colors, shadow softness, presets, and owner-saved defaults; scenes can optionally include lighting.
     Skybox resolution: ✅ **shipped 2026-09-01** — a per-viewer off/low/medium/high/ultra control in
     Settings → UI → Graphics (a max equirect / cube-face width, downscaled at load; also disposed
-    on switch). Built-ins are 2048, so a genuinely higher 'ultra' needs higher-res source assets.
+    on switch). **Higher-resolution custom sources are supported:** Ultra keeps the uploaded
+    source's native resolution. The 25 bundled skies are 2048×1024, so High and Ultra match on
+    those assets. Replacing bundled artwork is optional content work, not unfinished resolution support.
 12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
-    pixel ratio + shadow size/type + AA), device-defaulted (coarse pointer → medium) with an
-    in-app control (Settings → UI → Graphics), a persisted per-device preference, and `?q=` /
-    per-axis dev knobs. Driven by the first profiling pass (see §1). ✅ **Shipped** skybox-resolution
-    (§11) as the remaining memory lever, and possibly an adaptive tier that measures FPS.
-
-   All three are "selection → new composite piece" on the server; the natural home is
-   `server/game/handlers/cards.js` (deck ops) and `pieces.js` (generic composition), with
-   `deck-state.js` holding the resulting state. Worth designing as one operation with three
-   target kinds rather than three features.
+    pixel ratio + shadow-map size + AA), device-defaulted (phone → Low, tablet → Medium,
+    desktop → High) with an in-app control (Settings → UI → Graphics), a persisted per-device
+    preference, and `?q=` /
+    per-axis dev knobs. Driven by the first profiling pass (see §1). Skybox resolution (§11)
+    is also shipped. Automatic device-based selection is complete; continuous FPS-driven tier
+    adjustment is not implemented and was only a speculative extension, not a completion criterion.
+13. ✅ **Persistent object labels (GM) — implemented; user reports manual tests passing.**
+    **Labels…** in the right-click/touch menu creates, edits, or removes a label above an object.
+    **L** edits the held/hovered object, including desktop cards whose right-click still flips.
+    Labels follow movement and use saved, synchronized object props. Rendering follows object
+    visibility; future GM-hidden objects (item 14) still require server-side concealment support.
+14. **Hide individual objects from players (GM).** Add Hide/Reveal to the object's right-click
+    menu and touch long-press menu. A hidden object remains visible to GMs as a translucent or
+    ghosted object indicating its status; players cannot see or interact with it. Moving a hidden
+    object must also conceal its pickup/held-by label and persistent label from players.
+    Concealment must be enforced by server-controlled delivery, including reconnect and save/load,
+    rather than only reducing opacity on a player's client. Coordinate with fog of war and GM
+    staging; resolve collision and other indirect visibility cues during design.
+15. **Player time-out mode (GM).** Temporarily stop a selected player from interacting with
+    tabletop objects while allowing them to observe. Provide a clear GM control to apply and
+    lift the restriction, and make the restricted state clear to the player. Explore temporarily
+    using the same viewing-only permissions as spectator mode (item 5); implement both together
+    if they share a clean boundary. Enforce restrictions server-side, handle any active grab when
+    time-out begins, and preserve the player's identity and recoverable inventory when it ends.
+16. **Player avatar placard styling — baseline implemented; customization remains.** Larger
+    human-shaped placards now use the avatar as a face, a player-colored outline, and a broader
+    name plate. Replacement/removal disposes owned rendering resources. Alternative shapes and
+    optional flair remain planned. The user approved the design after manual testing, including
+    sharper placard textures and the increased avatar upload resolution.
+17. **Mini-whiteboard / notecard objects.** Give players a drawable physical object for games
+    such as Telestrations: card-like handling, but a larger surface and greater mass than a normal
+    card. Inspect opens a drawing surface; players can then place the board face-up or face-down
+    and pass it around the table. Support mouse and touch drawing, retain artwork with the object
+    through saves, and preserve concealed faces through inspection and transfer. Define editing
+    and viewing access explicitly; this is a physical game component, not automated game rules.
+18. **Custom asset collections.** Let users group multiple custom library assets into named
+    collections. Library controls can show or hide collections to keep browsing manageable.
+    Treat this as library organization/filtering, separate from per-object visibility on the table
+    (item 14), and preserve each asset's access permissions.
+19. **Collection and custom asset export/import.** Export individual custom assets or whole
+    collections and import them into another installation. Include the required files and
+    metadata, preserve collection membership, and plan for versioning, duplicate handling, and
+    remapping internal references. Keep these portable asset packages distinct from live game
+    snapshots containing player data. Design the package format alongside collections (item 18).
+20. **Physical rulebooks and rulebook builder.** Add built-in rulebooks for selected games as
+    spawnable 3D objects; Inspect opens their contents for reading and page navigation. Support
+    uploaded/custom rulebooks from ordered image series, multipage PDFs, or Markdown files.
+    Provide a dedicated rulebook-builder modal, similar in scope to the custom collider builder,
+    with Markdown authoring/editing and page previews. Preserve source content and page order;
+    image/PDF imports need a reading path without assuming they become editable Markdown.
+    Include rulebooks in the custom library and plan their collection/export support. Choose
+    built-in content with appropriate distribution rights and record its sources and licenses.
+21. **Player inventories, persistent per room.** Let players move tabletop objects into a
+    personal inventory and later place them back on the table. Store inventory by player account
+    and room so it survives disconnects, reconnects, and room saves/restarts. Preserve the object's
+    properties and any contained cards/items; storing and respawning transfers the object rather
+    than duplicating it. A blocked placement must leave the inventory item recoverable. Define
+    access and visibility rules, and keep player inventories out of portable scene templates.
+22. **Browse through a deck.** Let a player pick up/open a deck and inspect its cards one by one.
+    Each inspected card offers **Add to hand**, **Place face-up**, **Place face-down**,
+    **Put on top of deck**, and **Put on bottom of deck**. Provide desktop and touch browsing
+    controls. Reuse the existing inspection and card-transfer behavior where practical; define
+    who may browse concealed decks, deliver faces only to authorized viewers, and preserve card
+    order and inventory through cancellation, concurrent actions, or disconnects.
+23. ✅ **Prominent low-stock labels — implemented; user reports manual tests passing.** GMs use
+    **Labels…** on decks, tile decks, and finite dispensers to choose a full quantity and percentage.
+    A gold remaining-count label appears strictly below that threshold. The reference is explicit
+    and stays fixed through refills; splits copy the source deck settings, combines use the
+    lowest deck's settings, and dispenser gathers use the first selected stack's settings.
+    Unlimited dispensers do not offer stock warnings.
+    Labels share item 13's rendering and persistence; future hiding must enforce server visibility.
+24. ✅ **Highlight an object for the table — implemented; user reports manual tests passing.**
+    Middle-click a piece while nothing is held, or choose **Highlight** from its desktop/touch
+    menu, to show everyone a pulsing halo for 3.2 seconds. Repeating refreshes one halo per object;
+    it follows movement without changing materials, selection, or physics. Held-piece rotation
+    and empty-table pings retain their gestures. Server requests validate live object IDs and
+    throttle repeats. Input/server regressions and browser lifecycle/menu coverage exercise the
+    feature. Future hidden-object, spectator, and time-out work must integrate this communication
+    action with its visibility/permission policy; those modes are not implemented yet.
 
 ---
 
 ## Parked threads (finish-what-we-started)
 
 Small, concrete, each completes an existing feature:
-- ✅ **DONE 9-10-26 - Finish the server split** — the DRY pass extracted routes, message handlers, queries,
-  validation, physics and config, but `TableRoom` (`server.js:560–2044`) is still a ~1,485-line
-  class holding room lifecycle, seating, trays, scenes, hands, turns and starters. `EditorRoom`,
-  `LobbyRoom`, the schema classes and the starter builders are also still in `server.js`. The
-  remaining seam is `TableRoom` itself; the handler modules it now delegates to are the pattern
-  to keep pulling against.
+- ✅ **Finish the server split — recorded complete 2026-09-10.** Schema definitions, deck
+  builders, starter setup, and focused room operations now have modules under `server/game/`.
+  `server.js` retains room classes and orchestration. The architecture note above is the earlier
+  checkpoint, not a request to repeat completed extractions.
 - ✅ **Hex grids - DONE (confirmed by Ben).** The grid now offers a **hex** style beside square:
   `snapToCell` snaps to hex centres and `gridMesh` draws the hex lattice, pointy- or flat-top via
   the new `RoomScale.hexOrient` (hex size = `cellWorld`), with `calibrateGrid` fitting hexes to a
@@ -300,10 +383,9 @@ Small, concrete, each completes an existing feature:
   copied in `admin.js` and `landing.js`, `landing.js` keeps its own `mkBtn`, and the token read
   (`localStorage.getItem('tabletop.token')`) is still inline in both `client.js` and `graphics.js`.
   A real extraction, scoped in `UI_backlog.md`.
-- **ASSET_CREDITS — tile/box sound cues** — the Mahjong faces are credited in
-  `docs/ASSET_CREDITS.md`. Still missing: the tile and tile-box drop/pickup cues
-  (`public/static_assets/sounds/tile-*.ogg`, `tiledeck-*.ogg`) — real audio files, not procedural, so they need a
-  source line like the other sound packs.
+- ✅ **Tile/box sound provenance — resolved.** The project owner confirmed the `tile-*.ogg`
+  and `tiledeck-*.ogg` cues were created with Claude for Open Tabletop and are distributed as
+  CC0. No third-party attribution is required; `docs/ASSET_CREDITS.md` records their provenance.
 
 ## Deliberately out (for now)
 

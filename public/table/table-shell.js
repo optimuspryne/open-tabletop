@@ -342,6 +342,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
     wireDialog(byId('settingsModal'), { modal: true });
     wireDialog(byId('roomSettingsModal'), { modal: true });
     wireDialog(byId('sceneSaveModal'), { modal: true });
+    wireDialog(byId('pieceLabelsModal'), { modal: true });
     wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
     ['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true }));
     // Top-left cluster (UI_Redesign phase 2): Chat + Notes share one region (accordion).

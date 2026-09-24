@@ -998,6 +998,10 @@
                 <b>Middle-click</b> an empty spot on the table — or press <b>P</b> — to send a
                 visual ping that everyone can see.
               </li>
+              <li>
+                <b>Middle-click a piece</b> to highlight it for everyone with a brief pulsing halo.
+                While holding a piece, middle-click still rotates it by 45°.
+              </li>
             </ul>
           </div>
           <div class="helpSec">
@@ -1165,7 +1169,8 @@
               </li>
               <li>
                 Every piece also offers <b>Inspect</b>, <b>Stand / lay flat</b>,
-                <b>Snap to grid</b> and <b>Delete</b>.
+                <b>Snap to grid</b>, <b>Highlight</b> and <b>Delete</b>.
+                Highlight briefly pulses around the piece for everyone, without moving it.
               </li>
               <li>
                 Decks and dispensers offer <b>Move</b> — press it and keep dragging, and the whole
@@ -1291,6 +1296,12 @@
           <div class="helpSec" id="ablGM" hidden>
             <h4>GM abilities</h4>
             <ul>
+              <li>
+                <b>Object labels.</b> Right-click or long-press a piece and choose <b>Labels…</b>,
+                or press <b>L</b> over it (also works for cards). Add a persistent name above it.
+                Decks, tile decks, and finite dispensers also offer a low-stock count: choose the
+                full quantity and the percentage below which the warning appears.
+              </li>
               <li>
                 <b data-icon="books">Library.</b> Use this to add dice, decks, objects. GM status
                 gives you access to boards, skyboxes, scenes and pre-built games.
@@ -2431,6 +2442,41 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="pieceLabelsModal" class="modal-backdrop" hidden>
+      <form id="pieceLabelsForm" class="modal modalCard sceneSaveCard">
+        <div class="modal__header panel-head">
+          <b class="modal__title panel-title">Object labels</b>
+          <button type="button" id="pieceLabelsClose" class="modal__close close-x" aria-label="Close">✕</button>
+        </div>
+        <div class="modal__body">
+          <label class="field-group" for="pieceLabelText">
+            <span class="field-label">Label</span>
+            <input id="pieceLabelText" class="control" type="text" maxlength="60" />
+            <span class="help-text">Shown above this object. Leave blank to remove.</span>
+          </label>
+          <div id="pieceStockFields">
+            <label class="checkRow" for="pieceStockEnabled">
+              <input id="pieceStockEnabled" class="checkbox__input" type="checkbox" />
+              <span>Show remaining count when stock is low</span>
+            </label>
+            <label class="field-group" for="pieceStockReference">
+              <span class="field-label">Full quantity</span>
+              <input id="pieceStockReference" class="control" type="number" min="1" max="100000" step="1" required />
+            </label>
+            <label class="field-group" for="pieceStockPercent">
+              <span class="field-label">Show below (%)</span>
+              <input id="pieceStockPercent" class="control" type="number" min="1" max="100" step="1" required />
+              <span class="help-text">The full quantity stays fixed until you change it, including after refills or splits.</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal__footer button-row button-row--end">
+          <button id="pieceLabelsCancel" type="button" class="button">Cancel</button>
+          <button type="submit" class="button button--primary">Save labels</button>
+        </div>
+      </form>
     </div>
 
     <div id="sceneSaveModal" class="modal-backdrop" hidden>

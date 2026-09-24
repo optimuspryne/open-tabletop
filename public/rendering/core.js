@@ -19,6 +19,7 @@ const CONFIG = {
   marker: { inner: 0.34, outer: 0.5, opacity: 0.35, lift: 0.02 }, // "drop preview" ring: radii, opacity, height above the surface
   label: { lift: 0.62, w: 1.15, h: 0.36 }, // floating name tag over a held piece: height above the piece + world size
   ping: { dur: 1200, inner: 0.35, outer: 0.5, lift: 0.05, grow: 2.4 }, // attention ping: lifetime (ms), ring radii, height above surface, expansion factor
+  highlight: { dur: 3200, pulseMs: 800, padding: 0.35, minSize: 0.8, textureSize: 64 }, // shared attention halo, independent of local selection
   measure: { fill: 0.14, edge: 0.08 }, // overlay TEMPLATE look (circle/cone/line): interior fill opacity, outline band width (world units)
   input: {
     dblMs: 280,

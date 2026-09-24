@@ -48,11 +48,13 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 | Alt + Shift + drag | Smooth (unsnapped) rotation | ⟲ / ⟳ hold buttons (~7.5°/tick, continuous) | ⚠️ |
 | Middle-click while holding | Rotate the held piece's facing to the next 45° step | Twist (15° steps, not 45°) | ⚠️ |
 | Middle-click empty felt | Ping everyone | Long-press empty felt (`client.js:4977`) | ✅ |
+| Middle-click a piece (nothing held) | Highlight it for everyone with a brief pulsing halo | Long-press → **Highlight** | ✅ |
 | Double-left-click | Inspect up close | Double-tap | ✅ |
 | Right-click a piece | Its menu — every kind but a card, which flips instead | Long-press → the same menu, arced | ✅ |
 | `Delete` / `Backspace` | Remove held-or-hovered piece | Radial → **Delete** | ✅ |
 | `U` | Stand upright / lay flat | Radial → **Stand / lay flat** | ✅ |
 | `G` | Toggle snap-to-grid | Radial → **Snap to grid** | ✅ |
+| `L` (GM) | Edit the held/hovered object's persistent label and eligible stock warning | Long-press → **Labels…** | ✅ |
 
 Touch selection uses an invisible 18 px screen-space radius after an exact raycast miss, so small
 pieces are easier to acquire without changing their visible size or physics. Once held, a piece

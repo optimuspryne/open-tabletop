@@ -1599,7 +1599,9 @@ checks production dependencies and fails only at high severity or above.
   admin only, with a pending-aware 403), `POST /rooms/join` (join or waitlist by
   code), `PATCH /rooms/:id` (rename / approval — owner or admin), `DELETE
 /rooms/:id` (soft-delete + dispose the live room).
-- **Profile:** `POST /me/avatar` (bounded image data URL for the authenticated user).
+- **Profile:** `POST /me/avatar` (image data URL below 512 KiB for the authenticated user).
+  The JSON parser allows that limit plus 1024 bytes for the envelope. `shared/avatar.js` supplies
+  the shared size/quality settings and validator used by this route and room `setAvatar` messages.
 - **Host:** `POST /host/request` (request host access; sets a password first if
   the account is passwordless → `pending`).
 - **Admin** (`requireAdmin`): `GET /admin/rooms`, `GET /admin/users`,
@@ -1796,19 +1798,21 @@ quiet for a full frame), and
 - **Graphics quality tiers** (docs/ROADMAP.md §1/§12): the tablet frame is fill-rate bound, so
   quality is three presets — `low` (px 1, soft shadows @1024, no AA), `medium` (px ≤1.5, soft @2048,
   AA), `high` (px ≤2, soft PCF @4096, AA). Active tier = `?q=` › `localStorage 'tabletop.quality'`
-  › device default (phone → `low`, tablet → `medium`, desktop → `high`; by pointer + viewport). `setQuality(tier)` applies pixel
-  ratio + shadows live and persists; AA re-applies on reload. The UI control is Settings → UI →
-  Graphics, with an **Apply & reload** button (shown once the tier changes) that commits AA and the
+  › device default (phone → `low`, tablet → `medium`, desktop → `high`; by pointer + viewport).
+  This automatic default is device-based; there is no continuous FPS-driven tier adjustment.
+  `setQuality(tier)` applies pixel ratio + shadows live and persists; AA re-applies on reload.
+  The UI control is Settings → UI → Graphics, with an **Apply & reload** button (shown once the tier changes) that commits AA and the
   pixel-ratio change, which iOS Safari only picks up on a fresh context. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
   `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
   `window.ottPixelRatio(v)` / `window.ottShadow(v)`. High also renders procedural card canvases at
   1.5× their standard dimensions and requests the 1536px uploaded-card derivative; Low and Medium
   retain the standard card detail path.
-- **Skybox resolution** (separate per-viewer control beside the tier; `client.js`): `off` / `low`
+- **Skybox resolution** (separate per-viewer control beside the tier; `public/table/skybox.js`): `off` / `low`
   512 / `medium` 1024 / `high` 2048 / `ultra` native — a max width, downscaled at load for an
   equirect image or each cube-map face (`capTexture` / `capCubeTexture`) so only the smaller
-  texture stays resident; built-ins are 2048 so high = ultra on
-  them. Persisted as `tabletop.skyRes`, device-defaulted (phone → low, tablet → medium, desktop → high), applied live.
+  texture stays resident. All 25 bundled skies are 2048×1024, so High and Ultra match on them;
+  larger custom uploads use their native resolution with Ultra. Persisted as `tabletop.skyRes`,
+  device-defaulted (phone → low, tablet → medium, desktop → high), applied live.
 - **`clamp(value, min, max)`**.
 
 ---
@@ -2050,7 +2054,8 @@ in `client.js`.
   public fans. Fans display at most twelve cards, preserve public backs, and use supplied revealed
   faces only in leading slots. Departures remove fans/markers and clear reveal data.
 - **`bindControls()`** wires My Seat, Birds Eye, next turn, and avatar upload. Avatar images are
-  resized to 96×96 and sent with the existing `setAvatar` message. Roster rendering keeps names
+  center-cropped to 512×512 and encoded as JPEG at quality 0.85, matching lobby profile uploads,
+  then sent with the existing `setAvatar` message. Roster rendering keeps names
   inert with `textContent`, shows role/hand/turn state, and offers GM+ drag or arrow-button turn
   reordering through `turnOrder`.
 - **`rebuildSeats()`** follows table size and redraws presence without moving the camera.
@@ -2244,7 +2249,8 @@ These modules take explicit dependencies; none imports the client or a mutable r
 | `preferences.js` / `bindPreferences` | Wires audio volume/mute/playback, track disclosure/selection, credits, settings/help tabs, UI density, and accent color. Internal `renderCredits`, `renderTracks`, `syncMusicBtn`, `syncUiMode`, and `applyAccent` retain local preferences; `audio.js` owns playback. |
 | `dice-preferences.js` / `createDicePreferences` | `myDieProps`, `saveDiceDefault`, and `clearDiceDefault` read/merge/delete per-side defaults in `ott-dice`. `bindControls` builds tray color/finish controls; internal `applyDiceSet`/`applyDiceFinish` save defaults and recolor existing tray dice through room messages. `setTextures`/`syncTextures` refresh uploaded finish chips and notify inspection; `buildTextureChips` is also injected into inspection. |
 | `piece-ui.js` / `createPieceUi` | Owns hover/guide DOM, count throttling/signatures, menu dismiss state, and hold-control visibility. `openPieceMenu` uses internal `pieceMenuItems` and flat/radial presentation. Move calls the injected drag controller before dismissing. `syncControlGuide`, `update`, and `updateHoldControls` render current controller state without owning gestures. |
-| `effects.js` / `createTableEffects` | `bindPings` and `bindTableEffects` install the existing ping/shuffle/sfx listeners. `sendPing` projects the cursor; `updatePings` fades/disposes visuals. `applyAnim` applies expiring cosmetic offsets after interpolation. `updateDropMarker` sizes/tints the landing ring and uses internal `boardDropHeight` to cache collider surfaces by board ID/props. `disposeSurface` releases that cache on removal. |
+| `piece-labels.js` / `createPieceLabels` | `edit` opens the GM name/stock editor; `update` follows live meshes and refreshes changed text; `remove` disposes owned label resources. Shared validation/count rules live in `shared/piece-labels.js`. |
+| `effects.js` / `createTableEffects` | `bindPings` and `bindTableEffects` install ping/object-highlight/shuffle/sfx listeners. `sendPing` projects the cursor; `highlightPiece(id)` requests a shared halo for a live visible object. `updatePings` follows highlighted objects and fades/disposes attention visuals. `applyAnim` applies expiring cosmetic offsets after interpolation. `updateDropMarker` sizes/tints the landing ring and uses internal `boardDropHeight` to cache collider surfaces by board ID/props. `disposeSurface` releases that cache and any halo on removal. |
 
 `test/dice-preferences.js` covers preference merging, finish transitions, clearing, blocked storage,
 and finish-list replay. Component parity exercises a simulated production join, shell proxy/live-node
@@ -2300,8 +2306,9 @@ changes, and follows each synchronized/interpolated transform without changing r
 - **Router `press/move/release` → `pieceDrag`** — click vs. drag; dispatch grab/deal/
   click via `KIND`; **wheel** raises/lowers a held piece; the drag plane height is
   the scroll-adjustable grab height, and a translucent ring previews the landing.
-  **Middle-click** steps a held piece's facing by 45°, or — with nothing held — drops a
-  ping (`sendPing` → raycast to the table). A grid piece being dragged tracks cell-to-cell
+  **Middle-click** steps a held piece's facing by 45°. With nothing held, it highlights the picked
+  piece for everyone or drops a ping on empty table. The piece menu offers **Highlight** on desktop
+  and touch; **P** remains a table-position ping. A grid piece being dragged tracks cell-to-cell
   (`snapXZ` snaps the `move` target sent to the server). A left-drag on a piece that's _in_
   the selection sends `grabGroup`/`moveGroup`/`releaseGroup` (moves the whole clump); a drag on
   an unselected piece clears the selection first. For deck/dispenser **Move**, the flat and radial
@@ -2400,6 +2407,50 @@ down, and the signal a future per-device auto-tier default would read. Not in an
 suite: real numbers need a real GPU, not headless SwiftShader.
 
 ---
+
+## Object labels and shared highlighting
+
+GM **Labels…** in the piece menu (or **L** over/while holding an object) opens the shared
+name/low-stock editor. Desktop cards retain right-click flip; touch uses long-press → **Labels…**.
+`setPieceLabels: {id, label, lowStock}` requires GM rank; the server validates a live decimal
+piece ID, a name of at most 60 characters, and either `null` or
+`{reference: 1..100000, percent: 1..100}` with integer values. Empty text/removing the stock
+checkbox clears that setting without replacing other props. Stock settings are allowed only
+for decks (including tile decks) and finite dispensers.
+
+`shared/piece-labels.js` owns normalization and the count/threshold calculation. Warnings appear
+strictly below `reference * percent / 100`; the GM explicitly chooses the reference total, so
+refills don't change it. Splits copy deck settings; combining uses the lowest selected deck's
+metadata, and gathering dispensers uses the first selected stack's settings. Names/settings
+belong to the container, not each dispensed item. Ordinary saved props persist them through
+snapshots/reconnects; `deckSpawnProps` and deck reconstruction preserve them explicitly.
+
+`createPieceLabels` owns the editor and camera-facing label sprites above rendered bounds.
+Room existence does not guarantee the first synchronized state has arrived: rendering and editing
+wait for `state.pieces`, clearing stale sprites/editor state if the collection disappears.
+`edit`, `update`, and `remove` are called through piece UI/input and the client lifecycle.
+Textures are reused across movement and disposed when displayed text changes or an object
+disappears. Hidden/missing meshes have no label. These props are public: future object hiding
+must also filter server delivery. Player placards use larger silhouette textures in
+`makePlayerTexture`; `createPresence` disposes replaced/removed marker resources.
+Placard artwork is redrawn at 2× its 320×448 layout on Low/Medium and 3× on High, retaining
+the existing world size and anisotropic filtering. New avatar uploads are 512×512; old 96×96
+account images stay valid but need re-uploading from the original to gain photo detail.
+
+### Transient object highlighting
+
+`highlightPiece: {id}` uses the existing decimal piece-ID validator and requires a live public
+piece. `registerRoomFeatureHandlers` accepts at most one request per connection every 250 ms and
+broadcasts `pieceHighlighted: {id, sid}` with the server-known sender. Revoked clients remain
+blocked by the shared message boundary. This communication action does not require GM rank.
+
+`CONFIG.highlight` controls duration (3200 ms), pulse period (800 ms), padding, minimum size,
+and halo texture resolution. `createTableEffects` maintains one halo per object; retriggers update
+its sender color and lifetime. Halos follow current mesh bounds, vanish when pieces disappear or
+become locally invisible, and leave authored materials unchanged. Sprite materials are released
+individually and the shared texture after the final halo. Highlights are transient and not saved.
+Future hidden-object/spectator/time-out features must apply their visibility and communication
+policies to this message path.
 
 ## `public/table/audio.js` — sound effects + music
 

@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
 import { createPieceLifecycle } from '../server/game/piece-lifecycle.js';
+import { deckSpawnProps } from '../server/deck-state.js';
 import { readProps } from '../server/game/props-codec.js';
 
 const SIM = {
@@ -181,4 +182,22 @@ test('spawn preserves all compound shapes and the saved layout on a single piece
   const id = lifecycle.spawn(room, 'prop', [0, 2, 0], props, [0, 0, 0, 1]);
   assert.equal(room.bodies.get(id).shapes.length, 2);
   assert.deepEqual(readProps(room.state.pieces.get(id)).compoundCollider, props.compoundCollider);
+});
+
+test('deck label and stock metadata survive snapshot encoding and real piece restoration', () => {
+  const { lifecycle, room } = harness();
+  const settings = { label: 'Campaign deck', lowStock: { reference: 54, percent: 25 } };
+  const first = lifecycle.spawn(room, 'deck', [0, 2, 0], {
+    ...settings,
+    cards: ['a', 'b'],
+    back: 'blue',
+  });
+  const props = readProps(room.state.pieces.get(first));
+  const snapshot = deckSpawnProps(props, room.deckCards.get(first));
+  const restored = lifecycle.spawn(room, 'deck', [1, 2, 0], snapshot);
+  assert.deepEqual(readProps(room.state.pieces.get(restored)), props);
+  assert.equal(props.label, settings.label);
+  assert.deepEqual(props.lowStock, settings.lowStock);
+  assert.equal(room.state.pieces.get(restored).count, 2);
+  assert.equal(props.cards, undefined);
 });

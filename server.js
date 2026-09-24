@@ -1,4 +1,5 @@
 import { createDeckBuilders } from './server/game/deck-builders.js';
+import { isBoundedImageDataURL } from './shared/avatar.js';
 import {
   afterDispense as consumeDispensedItem,
   dispenserItem as resolveDispenserItem,
@@ -178,10 +179,6 @@ for (const kind of ASSET_KINDS) fs.mkdirSync(path.join(ASSETS_DIR, kind), { recu
 // Clamp a number into [min, max].
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const GRID_LIFT_MAX = 3; // how high (world units) the table grid can float above the felt
-// A bounded image data-URL (the only avatar shape we accept — small enough to
-// sync in state, and never an arbitrary URL/script). Used by setAvatar + /me/avatar.
-const isBoundedImageDataURL = (data) =>
-  typeof data === 'string' && data.startsWith('data:image') && data.length < 60000;
 // A skybox reference: '' (default), a local equirect URL, or a cube descriptor
 // {"t":"cube","f":[6 local urls]}. Only local /assets/sky/ or /sky/ paths, never
 // external — every client loads it.

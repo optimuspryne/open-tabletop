@@ -2829,71 +2829,100 @@ function roundRect(ctx, x, y, w, h, r) {
 // A standing seat-marker texture: a colored card with the player's avatar (or a
 // default silhouette) clipped to a circle, their name, and a "SHOWING n" badge
 // while they're revealing cards. Redrawn once the avatar image loads.
+const PLACARD_TEXTURE_SCALE = { low: 2, medium: 2, high: 3 };
 function makePlayerTexture(player) {
-  const width = 256,
-    height = 320;
-  const { canvas, ctx } = makeCanvas(width, height);
-
+  const width = 320,
+    height = 448;
+  const detail = PLACARD_TEXTURE_SCALE[getQuality()] ?? PLACARD_TEXTURE_SCALE.medium;
+  const { canvas, ctx } = makeCanvas(width * detail, height * detail);
+  ctx.scale(detail, detail); // Draw text/paths at full texture resolution using the same layout.
+  const tex = cTex(canvas);
+  let disposed = false;
+  let image = null;
+  tex.addEventListener('dispose', () => {
+    disposed = true;
+    if (image) image.onload = null;
+  });
   const draw = (img) => {
+    if (disposed) return;
     ctx.clearRect(0, 0, width, height);
-    // Card-ish background with a border tinted in the player's color.
-    ctx.fillStyle = 'rgba(20,24,29,0.9)';
-    roundRect(ctx, 6, 6, width - 12, height - 12, 16);
-    ctx.fill();
-    ctx.lineWidth = 6;
+    // A standing human silhouette, with a face portrait and a broad name plate.
+    const coat = ctx.createLinearGradient(0, 160, 0, height);
+    coat.addColorStop(0, '#344759');
+    coat.addColorStop(1, '#17212c');
+    ctx.fillStyle = coat;
     ctx.strokeStyle = player.color;
-    roundRect(ctx, 6, 6, width - 12, height - 12, 16);
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(118, 162);
+    ctx.lineTo(202, 162);
+    ctx.bezierCurveTo(212, 185, 276, 181, 287, 228);
+    ctx.lineTo(303, 352);
+    ctx.quadraticCurveTo(303, 372, 280, 376);
+    ctx.lineTo(40, 376);
+    ctx.quadraticCurveTo(17, 372, 17, 352);
+    ctx.lineTo(33, 228);
+    ctx.bezierCurveTo(44, 181, 108, 185, 118, 162);
+    ctx.closePath();
+    ctx.fill();
     ctx.stroke();
-    // Avatar image (or a default silhouette) clipped to a circle.
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(104, 189);
+    ctx.lineTo(160, 239);
+    ctx.lineTo(216, 189);
+    ctx.stroke();
+    // Avatar fills the face; the fallback keeps the silhouette legible without an upload.
     ctx.save();
     ctx.beginPath();
-    ctx.arc(width / 2, 120, 78, 0, 7);
-    ctx.closePath();
+    ctx.arc(160, 92, 76, 0, Math.PI * 2);
     ctx.clip();
-    if (img) {
-      ctx.drawImage(img, width / 2 - 78, 42, 156, 156);
-    } else {
-      ctx.fillStyle = '#3a4048';
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#c8ccd2';
+    if (img) ctx.drawImage(img, 84, 16, 152, 152);
+    else {
+      ctx.fillStyle = '#b9c8d4';
+      ctx.fillRect(84, 16, 152, 152);
+      ctx.fillStyle = '#607789';
       ctx.beginPath();
-      ctx.arc(width / 2, 104, 34, 0, 7);
+      ctx.arc(160, 81, 29, 0, Math.PI * 2);
       ctx.fill();
       ctx.beginPath();
-      ctx.ellipse(width / 2, 210, 62, 52, 0, Math.PI, 0);
+      ctx.ellipse(160, 154, 54, 44, 0, Math.PI, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
     ctx.strokeStyle = player.color;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 6;
     ctx.beginPath();
-    ctx.arc(width / 2, 120, 78, 0, 7);
+    ctx.arc(160, 92, 76, 0, Math.PI * 2);
     ctx.stroke();
-    // Name.
-    ctx.fillStyle = '#e8e6e0';
-    ctx.font = 'bold 30px system-ui, sans-serif';
+    // Stable readable identity, regardless of avatar colors.
+    ctx.fillStyle = '#141c25';
+    roundRect(ctx, 10, 351, 300, 84, 18);
+    ctx.fill();
+    ctx.strokeStyle = player.color;
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.fillStyle = '#f4f1ea';
     ctx.textAlign = 'center';
-    ctx.fillText((player.name || 'Player').slice(0, 14), width / 2, 270);
+    ctx.textBaseline = 'middle';
+    ctx.font = 'bold 32px system-ui, sans-serif';
+    ctx.fillText(player.name || 'Player', 160, 393, 274);
     if (player.showing > 0) {
-      // public "is revealing cards" badge — count only, never the content
       ctx.fillStyle = player.color;
-      roundRect(ctx, width / 2 - 64, 12, 128, 30, 15);
+      roundRect(ctx, 65, 286, 190, 38, 19);
       ctx.fill();
       ctx.fillStyle = '#14181d';
-      ctx.font = 'bold 18px system-ui, sans-serif';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('SHOWING ' + player.showing, width / 2, 28);
-      ctx.textBaseline = 'alphabetic';
+      ctx.font = 'bold 20px system-ui, sans-serif';
+      ctx.fillText('SHOWING ' + player.showing, 160, 306);
     }
     tex.needsUpdate = true;
   };
-
-  const tex = cTex(canvas);
   draw(null);
   if (player.avatar) {
-    const img = new Image();
-    img.onload = () => draw(img);
-    img.src = player.avatar;
+    image = new Image();
+    image.onload = () => draw(image);
+    image.src = player.avatar;
   }
   return tex;
 }

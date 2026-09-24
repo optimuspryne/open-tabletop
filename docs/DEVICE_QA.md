@@ -16,6 +16,29 @@ to bottom.
 
 Run it per release, or whenever a gesture or a layout branch changes.
 
+The user reported all manual tests green for the object-label, low-stock, highlight, placard,
+and avatar-upload batch and approved it for commit. The checklists below remain reusable for
+future runs; that sign-off does not specify a per-device/browser test matrix.
+
+### Shared object highlight smoke test (each device, with a second connected viewer)
+- [ ] Desktop: middle-click a piece while nothing is held; both viewers see a pulsing halo
+- [ ] Touch: long-press a piece and choose **Highlight**; both viewers see the same target
+- [ ] Move the target during the effect; the halo follows without changing its material or selection
+- [ ] Repeat Highlight; one halo refreshes, then disappears about 3.2 seconds after the last request
+- [ ] Remove a highlighted object; its halo disappears too
+- [ ] Middle-click while holding still turns 45°; middle-click empty table and **P** still ping
+- [ ] The Highlight action remains reachable in longer deck/dispenser menus on phone screens
+
+### Object labels and placards (GM plus a second connected viewer)
+- [ ] Right-click/long-press → **Labels…** names a miniature; both viewers see it follow movement
+- [ ] Desktop **L** labels a hovered card; right-click still flips it
+- [ ] Label dialog closes with Cancel, Escape, or backdrop; typing does not trigger table shortcuts
+- [ ] Enable a deck/tile-deck/finite-dispenser warning with full quantity 20 and threshold 25%:
+  count 5 has no warning, count 4 shows one, and refilling to 5 hides it
+- [ ] Save/reload and reconnect preserve labels/settings; ordinary players cannot edit them
+- [ ] Long names, avatar images, and the SHOWING badge remain legible on larger silhouette placards
+- [ ] Check labels/placards for overlap at normal zoom and across occupied seats on phone and desktop
+
 ---
 
 ## iPhone — Safari (WebKit)

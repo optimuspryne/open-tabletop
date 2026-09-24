@@ -39,6 +39,96 @@ export function createTableEffects({
   }
   function bindPings(room) {
     room.onMessage('ping', ({ sid, x, z }) => spawnPing(sid, x, z)); // someone's "look here" marker
+    room.onMessage('pieceHighlighted', ({ id, sid }) => spawnHighlight(id, sid));
+  }
+
+  // One halo per object; retriggering refreshes it. The shared texture exists only while needed.
+  const highlights = new Map();
+  let highlightTexture = null;
+  const highlightBox = new THREE.Box3();
+  const highlightSize = new THREE.Vector3();
+  function highlightPiece(id) {
+    const room = getRoom();
+    if (room?.state.pieces.has(id) && meshes.get(id)?.mesh.visible)
+      room.send('highlightPiece', { id });
+  }
+  function makeHighlightTexture() {
+    const size = CONFIG.highlight.textureSize;
+    const pixels = new Uint8Array(size * size * 4);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        const radius = Math.hypot((2 * x + 1) / size - 1, (2 * y + 1) / size - 1);
+        const alpha = Math.max(0, 1 - Math.abs(radius - 0.78) / 0.2);
+        const i = (y * size + x) * 4;
+        pixels.set([255, 255, 255, Math.round(255 * alpha * alpha)], i);
+      }
+    }
+    const texture = new THREE.DataTexture(pixels, size, size);
+    texture.magFilter = THREE.LinearFilter;
+    texture.minFilter = THREE.LinearFilter;
+    texture.needsUpdate = true;
+    return texture;
+  }
+  function removeHighlight(id) {
+    const effect = highlights.get(id);
+    if (!effect) return;
+    scene.remove(effect.sprite);
+    effect.sprite.material.dispose(); // the Sprite geometry and halo texture are shared
+    highlights.delete(id);
+    if (!highlights.size && highlightTexture) {
+      highlightTexture.dispose();
+      highlightTexture = null;
+    }
+  }
+  function spawnHighlight(id, sid) {
+    if (!getRoom()?.state.pieces.has(id) || !meshes.get(id)?.mesh.visible) return;
+    const color = getRoom().state.players.get(sid)?.color || '#ffffff';
+    let effect = highlights.get(id);
+    if (!effect) {
+      highlightTexture ||= makeHighlightTexture();
+      const sprite = new THREE.Sprite(
+        new THREE.SpriteMaterial({
+          map: highlightTexture,
+          color,
+          transparent: true,
+          blending: THREE.AdditiveBlending,
+          depthTest: false,
+          depthWrite: false,
+        }),
+      );
+      sprite.renderOrder = 5;
+      scene.add(sprite);
+      effect = { sprite, start: clock() };
+      highlights.set(id, effect);
+    }
+    effect.start = clock();
+    effect.sprite.material.color.set(color);
+    updateHighlights();
+  }
+  function updateHighlights() {
+    for (const [id, effect] of highlights) {
+      const mesh = meshes.get(id)?.mesh;
+      const elapsed = clock() - effect.start;
+      if (elapsed >= CONFIG.highlight.dur || !getRoom()?.state.pieces.has(id) || !mesh?.visible) {
+        removeHighlight(id);
+        continue;
+      }
+      highlightBox.setFromObject(mesh);
+      if (highlightBox.isEmpty()) {
+        effect.sprite.visible = false;
+        continue;
+      }
+      effect.sprite.visible = true;
+      highlightBox.getCenter(effect.sprite.position);
+      highlightBox.getSize(highlightSize);
+      const pulse = (1 + Math.cos((elapsed / CONFIG.highlight.pulseMs) * 2 * Math.PI)) / 2;
+      const size = Math.max(
+        CONFIG.highlight.minSize,
+        highlightSize.length() + CONFIG.highlight.padding,
+      );
+      effect.sprite.scale.setScalar(size * (1 + 0.06 * pulse));
+      effect.sprite.material.opacity = (0.45 + 0.5 * pulse) * (1 - elapsed / CONFIG.highlight.dur);
+    }
   }
 
   function bindTableEffects(room) {
@@ -151,6 +241,7 @@ export function createTableEffects({
     _dropSize = new THREE.Vector3(); // reused each frame to size the ring to the held piece
 
   function updatePings() {
+    updateHighlights();
     for (let i = pings.length - 1; i >= 0; i--) {
       // expand + fade each active ping, then dispose
       const p = pings[i],
@@ -193,12 +284,14 @@ export function createTableEffects({
 
   return {
     sendPing,
+    highlightPiece,
     bindPings,
     bindTableEffects,
     applyAnim,
     updatePings,
     updateDropMarker,
     disposeSurface(id) {
+      removeHighlight(id);
       const surface = boardDropSurfaces.get(id);
       if (surface) disposeColliderSurface(surface.root);
       boardDropSurfaces.delete(id);

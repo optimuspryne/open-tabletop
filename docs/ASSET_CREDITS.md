@@ -36,6 +36,10 @@ requirement is actually met.
 ## Sound effects - `public/static_assets/sounds/`
 All CC0 (public domain).
 
+- **Original tile and tile-box cues** — `tile-*.ogg` and `tiledeck-*.ogg` were created with
+  Claude for Open Tabletop, as confirmed by the project owner. Distributed as CC0; no
+  third-party attribution is required. This note records provenance.
+
 - **54 Casino Sound Effects** - Kenney (https://opengameart.org/users/kenney)
   - https://opengameart.org/content/54-casino-sound-effects-cards-dice-chips
 - **Card Game Sounds** - HaelDB (https://opengameart.org/users/haeldb)

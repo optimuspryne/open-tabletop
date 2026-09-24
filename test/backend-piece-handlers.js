@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { registerPieceHandlers } from '../server/game/handlers/pieces.js';
 
 const MESSAGE_NAMES = [
+  'setPieceLabels',
   'setStandGroup',
   'setSnapGroup',
   'rollGroup',
@@ -254,6 +255,22 @@ test('gathering preserves the true token total past the per-stack spawn cap', as
   assert.equal(room.state.pieces.get('merged').count, 200); // restored past the clamp
 });
 
+test('gathering retains the first selected stack label and explicit stock reference', async () => {
+  const { room, handlers, events } = harness();
+  const lowStock = { reference: 100, percent: 25 };
+  room.state.pieces.set('1', dispenser('pokerStack', 10, { label: 'Bank', lowStock }));
+  room.state.pieces.set('2', dispenser('pokerStack', 20, { label: 'Other' }));
+  room.bodies.set('1', body());
+  room.bodies.set('2', body());
+  await handlers.get('gatherDispensers')(client, { ids: ['1', '2'] });
+  assert.deepEqual(events.find((event) => event.name === 'spawn').payload.props, {
+    disp: 'pokerStack',
+    count: 30,
+    label: 'Bank',
+    lowStock,
+  });
+});
+
 test('gathering refuses a mix of dispenser kinds', async () => {
   const { room, handlers, events } = harness();
   room.state.pieces.set('1', dispenser('pokerStack', 20, { color: 0xd14b4b }));
@@ -494,4 +511,46 @@ test('group-taking double-sided tiles preserves open state, back and geometry', 
   assert.equal(hand.back, 'other-face');
   assert.deepEqual(hand.geo, { tile: 'domino' });
   assert.equal(room.state.pieces.has('1'), false);
+});
+
+test('GM labels validate stock settings, preserve props, and can be cleared', async () => {
+  const { room, handlers } = harness();
+  const piece = { type: 'deck', count: 10, props: JSON.stringify({ back: 'blue', open: true }) };
+  room.state.pieces.set('42', piece);
+  const set = handlers.get('setPieceLabels');
+  await set(client, {
+    id: '42',
+    label: '  Alice  the ranger ',
+    lowStock: { reference: 54, percent: 25 },
+  });
+  assert.deepEqual(JSON.parse(piece.props), {
+    back: 'blue',
+    open: true,
+    label: 'Alice the ranger',
+    lowStock: { reference: 54, percent: 25 },
+  });
+  const before = piece.props;
+  for (const message of [
+    { id: '42', label: 'x'.repeat(61), lowStock: null },
+    { id: '42', label: 'x', lowStock: { reference: 0, percent: 25 } },
+    { id: '42', label: 'x', lowStock: { reference: 54, percent: 101 } },
+    { id: '42', label: 'x', lowStock: { reference: 54, percent: '25' } },
+    { id: '42', label: 'x', lowStock: null, color: 'red' },
+  ]) {
+    await set(client, message);
+    assert.equal(piece.props, before);
+  }
+  await set(client, { id: '42', label: '', lowStock: null });
+  assert.deepEqual(JSON.parse(piece.props), { back: 'blue', open: true });
+  piece.type = 'prop';
+  await set(client, { id: '42', label: 'bad', lowStock: { reference: 54, percent: 25 } });
+  assert.deepEqual(JSON.parse(piece.props), { back: 'blue', open: true });
+  const player = harness({ rank: 0 });
+  player.room.state.pieces.set('42', piece);
+  await player.handlers.get('setPieceLabels')(client, {
+    id: '42',
+    label: 'unauthorized',
+    lowStock: null,
+  });
+  assert.equal(JSON.parse(piece.props).label, undefined);
 });

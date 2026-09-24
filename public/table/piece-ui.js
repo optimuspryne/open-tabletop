@@ -17,6 +17,9 @@ export function createPieceUi({
   pickId,
   isSheet,
   openRadial,
+  highlightPiece,
+  getRank,
+  editLabels,
 }) {
   const RADIAL_MAX = 7;
   // Hover readout: a small tooltip over the deck or dispenser under the cursor showing
@@ -80,6 +83,8 @@ export function createPieceUi({
       ];
     }
     const rows = [];
+    rows.push(['Middle-click', 'Highlight for everyone']);
+    if (getRank() >= 2) rows.push(['L', 'Edit label / low stock']);
     if (type === 'deck')
       rows.push(
         ['Left-drag', 'Deal a card'],
@@ -277,6 +282,8 @@ export function createPieceUi({
     if (inspection.isInspectable(type)) {
       items.push(['Inspect', () => inspection.enterInspect(id)]);
     }
+    items.push(['Highlight', () => highlightPiece(id)]);
+    if (getRank() >= 2) items.push(['Labels…', () => editLabels(id)]);
     if (type !== 'mat') items.push(['Stand / lay flat', () => getRoom().send('setStand', { id })]); // a mat is always flat
     items.push(['Snap to grid', () => getRoom().send('setSnap', { id })]);
     items.push(['Delete', () => getRoom().send('remove', { id }), 'danger']);

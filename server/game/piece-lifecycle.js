@@ -14,6 +14,7 @@ import { buildCollider, attachCollider } from '../physics.js';
 import { assertPieceCapacity } from './piece-capacity.js';
 import { readProps, writeProps } from './props-codec.js';
 import { Piece } from './schema.js';
+import { normalizePieceLabels } from '../../shared/piece-labels.js';
 
 // Own the synchronized-piece and physics-body lifecycle while retaining the room's existing
 // collider, sound, and private-state contracts. Runtime tuning and deck construction stay injected.
@@ -84,6 +85,12 @@ export function createPieceLifecycle({
         deckProps.model = deckData.deckModel;
       if (props.color != null) deckProps.color = props.color;
       if (props.textColor != null) deckProps.textColor = props.textColor;
+      const labels = normalizePieceLabels({
+        label: props.label ?? '',
+        lowStock: props.lowStock ?? null,
+      });
+      if (labels?.label) deckProps.label = labels.label;
+      if (labels?.lowStock) deckProps.lowStock = labels.lowStock;
       if (props.open) {
         deckProps.open = true;
         const topBack = cardBackRef(deckData.cards[deckData.cards.length - 1]);

@@ -219,7 +219,7 @@ const SCENES = [
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
-      const room = { state, sessionId: 'me', reconnectionToken: 'fixture',
+      const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
         onMessage: (key, fn) => messages.set(key, fn), onStateChange() {}, onLeave() {},
         send: (...args) => sent.push(args), leave() {}, };
       const callbacks = (object) => new Proxy({ listen() {} }, {
@@ -241,8 +241,10 @@ const SCENES = [
       byId('controlsClose').click();
       join(room);
       await new Promise(resolve => setTimeout(resolve, 150));
+      room.state.pieces = state.pieces;
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       assert(byId('sfxVol')?.oninput, 'Joined client did not finish binding controls');
-      assert(messages.has('ping') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
+      assert(messages.has('ping') && messages.has('pieceHighlighted') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
       byId('sfxVol').value = '37'; byId('sfxVol').dispatchEvent(new Event('input'));
       const audio = await import('/table/audio.js');
       assert(Math.abs(audio.getSfxVolume() - 0.37) < 0.001, 'SFX volume did not reach audio adapter');
@@ -277,6 +279,80 @@ const SCENES = [
     `,
   },
   {
+    name: 'piece-labels',
+    root: '#pieceLabelsModal',
+    expect: { selector: '#pieceLabelsModal:not([hidden]) .control', min: 3 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const THREE = await import('three');
+      const { createPieceLabels } = await import('/table/piece-labels.js');
+      const { createUiSurfaces } = await import('/ui/ui-surfaces.js');
+      const byId = id => document.getElementById(id);
+      const scene = new THREE.Scene(), sent = [];
+      const piece = { type: 'deck', count: 12, props: JSON.stringify({ label: 'Adventure deck', lowStock: { reference: 52, percent: 25 } }) };
+      const room = { state: { pieces: new Map([['42', piece]]) }, send: (...args) => sent.push(args) };
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshBasicMaterial());
+      const meshes = new Map([['42', { mesh }]]);
+      let rank = 3;
+      let activeRoom = null;
+      const labels = createPieceLabels({ THREE, scene, meshes, getRoom: () => activeRoom, getRank: () => rank });
+      createUiSurfaces().wireDialog(byId('pieceLabelsModal'), { modal: true });
+      for (const pending of [null, {}, { state: {} }]) {
+        activeRoom = pending;
+        labels.update(); labels.edit('42');
+        assert(scene.children.length === 0 && byId('pieceLabelsModal').hidden, 'Incomplete state opened/rendered labels');
+      }
+      activeRoom = room;
+      // Lose state with live resources and an open editor, then recover on the same controller.
+      for (const pending of [null, {}, { state: {} }]) {
+        labels.update(); labels.edit('42');
+        const sprite = scene.children[0]; let released = 0;
+        sprite.material.map.addEventListener('dispose', () => released++);
+        sprite.material.addEventListener('dispose', () => released++);
+        activeRoom = pending;
+        byId('pieceLabelsForm').dispatchEvent(new Event('submit', { cancelable: true }));
+        labels.update();
+        assert(sent.length === 0 && byId('pieceLabelsModal').hidden, 'Missing state allowed label save');
+        assert(released === 2 && scene.children.length === 0, 'Missing state retained label resources');
+        activeRoom = room;
+        labels.edit('42'); activeRoom = pending; labels.update();
+        assert(byId('pieceLabelsModal').hidden, 'Missing state left editor open');
+        activeRoom = room;
+      }
+      labels.update(); const original = scene.children[0];
+      assert(original.isSprite && original.position.y > .5, 'Saved label not placed above object');
+      mesh.position.y = 3; labels.update();
+      assert(scene.children[0] === original && original.position.y > 3.5, 'Label movement recreated its texture');
+      let disposed = 0;
+      original.material.map.addEventListener('dispose', () => disposed++);
+      original.material.addEventListener('dispose', () => disposed++);
+      piece.count = 13; labels.update();
+      assert(disposed === 2 && scene.children[0].scale.y < original.scale.y, 'Threshold label did not disappear or release resources');
+      labels.edit('42');
+      assert(!byId('pieceLabelsModal').hidden && byId('pieceStockReference').value === '52', 'Editor lost saved threshold');
+      byId('pieceLabelText').value = 'Campaign deck';
+      byId('pieceStockPercent').value = '40';
+      byId('pieceLabelsForm').dispatchEvent(new Event('submit', { cancelable: true }));
+      assert(sent.at(-1)[0] === 'setPieceLabels' && sent.at(-1)[1].lowStock.percent === 40, 'Editor did not send validated settings');
+      assert(byId('pieceLabelsModal').hidden, 'Editor did not close');
+      rank = 0; labels.edit('42'); assert(byId('pieceLabelsModal').hidden, 'Player opened GM editor');
+      rank = 3; labels.edit('42'); rank = 0; labels.update();
+      assert(byId('pieceLabelsModal').hidden, 'Demotion left editing open');
+      rank = 3; labels.edit('42');
+      byId('pieceLabelsModal').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      assert(byId('pieceLabelsModal').hidden, 'Escape did not close editor');
+      mesh.visible = false; labels.update(); assert(scene.children.length === 0, 'Invisible object retained label');
+      mesh.visible = true; piece.props = '{}'; labels.update(); assert(scene.children.length === 0, 'Cleared label remained');
+      piece.type = 'prop'; labels.edit('42'); assert(byId('pieceStockFields').hidden, 'Ordinary prop offered stock settings');
+      byId('pieceLabelsCancel').click();
+      piece.type = 'deck'; labels.edit('42');
+      byId('pieceStockEnabled').checked = true; byId('pieceStockEnabled').dispatchEvent(new Event('change'));
+      await new Promise(resolve => setTimeout(resolve, 0));
+      const save = byId('pieceLabelsForm').querySelector('[type=submit]').getBoundingClientRect();
+      assert(save.bottom <= innerHeight && save.left >= 0 && save.right <= innerWidth, 'Label save control outside viewport');
+    `,
+  },
+  {
     name: 'piece-ui-and-effects',
     root: '#pieceMenu',
     expect: { selector: '#pieceMenu:not([hidden]) button', min: 4 },
@@ -300,6 +376,7 @@ const SCENES = [
       let time = 0;
       const ray = { setFromCamera() {}, ray: { intersectPlane: (_plane, hit) => hit.set(2, 0, 4) } };
       const config = { ping: { inner: 0.1, outer: 0.2, dur: 1000, grow: 2, lift: 0.05 },
+        highlight: { dur: 3200, pulseMs: 800, padding: 0.35, minSize: 0.8, textureSize: 64 },
         label: { w: 2, h: 1 }, marker: { inner: 0.1, outer: 0.2, opacity: 0.5, lift: 0.03 },
         anim: { shuffle: { dur: 1000, cycles: 3, yaw: 0.1, bob: 0.2 } } };
       const effects = createTableEffects({ THREE, config, scene, camera: {}, pointer: {}, ray, meshes,
@@ -329,8 +406,47 @@ const SCENES = [
       effects.updateDropMarker({ id: 'deck', grabbed: true });
       assert(Math.abs(marker.position.y - 0.03) < 0.001, 'Removed board left stale landing height');
       effects.updateDropMarker(null); assert(!marker.visible, 'Idle landing marker visible');
+      effects.highlightPiece('missing');
+      assert(sent.at(-1)[0] === 'ping', 'Unknown object generated a highlight request');
+      effects.highlightPiece('deck');
+      assert(sent.at(-1)[0] === 'highlightPiece' && sent.at(-1)[1].id === 'deck', 'Highlight request lost');
+      const show = messages.get('pieceHighlighted');
+      const halos = () => scene.children.filter(child => child.isSprite);
+      show({ id: 'missing', sid: 'me' });
+      assert(!halos().length, 'Unknown object generated a halo');
+      time = 3000; show({ id: 'deck', sid: 'me' });
+      const halo = halos()[0], originalMaterial = deck.material, alpha = halo.material.opacity;
+      assert(halo.position.y === 3 && halo.material.color.getHexString() === 'ff0000', 'Halo position/color wrong');
+      const haloTexture = halo.material.map;
+      let haloDisposed = 0;
+      haloTexture.addEventListener('dispose', () => haloDisposed++);
+      halo.material.addEventListener('dispose', () => haloDisposed++);
+      time = 3400; deck.position.set(2, 4, 1); effects.updatePings();
+      assert(halo.position.x === 2 && halo.position.y === 4 && halo.material.opacity < alpha, 'Halo did not follow/pulse');
+      assert(deck.material === originalMaterial, 'Highlight replaced authored material');
+      time = 5900; show({ id: 'deck', sid: 'me' });
+      assert(halos().length === 1 && halos()[0] === halo, 'Repeated highlight stacked effects');
+      time = 6500; effects.updatePings(); assert(halos().length === 1, 'Refresh did not extend lifetime');
+      time = 9100; effects.updatePings();
+      assert(!halos().length && haloDisposed === 2, 'Expired halo leaked resources');
+      show({ id: 'deck', sid: 'me' });
+      assert(halos()[0].material.map !== haloTexture, 'Disposed halo texture reused');
+      const other = deck.clone(); meshes.set('other', { type: 'prop', mesh: other });
+      state.pieces.set('other', { type: 'prop' }); show({ id: 'other', sid: 'me' });
+      assert(halos().length === 2 && halos()[0].material.map === halos()[1].material.map, 'Halo texture is not shared');
+      let sharedDisposed = 0; halos()[0].material.map.addEventListener('dispose', () => sharedDisposed++);
+      effects.disposeSurface('other');
+      assert(halos().length === 1 && sharedDisposed === 0, 'Removing an object disposed an active shared texture');
+      deck.visible = false; effects.updatePings();
+      assert(!halos().length && sharedDisposed === 1, 'Invisible object kept its halo');
+      show({ id: 'deck', sid: 'me' }); assert(!halos().length, 'Invisible object acquired a halo');
+      deck.visible = true;
+      show({ id: 'deck', sid: 'me' });
+      const savedDeck = state.pieces.get('deck'); state.pieces.delete('deck'); effects.updatePings();
+      assert(!halos().length, 'Removed piece retained its halo'); state.pieces.set('deck', savedDeck);
 
-      let held = null, sheet = false, capturedWhileVisible = false, radial;
+
+      let held = null, sheet = false, capturedWhileVisible = false, radial, rank = 0;
       const selection = { size: 0 };
       const canvas = document.createElement('canvas'); document.body.append(canvas);
       const pieces = { current: () => held, isActive: () => !!held,
@@ -341,17 +457,33 @@ const SCENES = [
         inspection: { isActive: () => false, isInspectable: () => true },
         overlays: { isMeasuring: () => false, isMoving: () => false, isDraggingMeasure: () => false },
         whiteboard: { isOwning: () => false }, setPointer() {}, pickId: () => 'deck',
-        isSheet: () => sheet, openRadial: (...args) => { radial = args; return true; } });
+        isSheet: () => sheet, openRadial: (...args) => { radial = args; return true; },
+        highlightPiece: (id) => sent.push(['menuHighlight', id]), getRank: () => rank,
+        editLabels: (id) => sent.push(['menuLabels', id]) });
       canvas.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: 80, clientY: 80 }));
       assert(byId('hoverCount').textContent === '12 cards', 'Hover count missing');
       state.pieces.get('deck').count = 8; ui.update();
       assert(byId('hoverCount').textContent === '8 cards', 'Hover count did not follow state');
+      ui.openPieceMenu('deck', { x: 80, y: 80 });
+      [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Highlight').click();
+      assert(sent.at(-1)[0] === 'menuHighlight' && sent.at(-1)[1] === 'deck', 'Desktop highlight action missing');
       ui.openPieceMenu('deck', { x: 80, y: 80 });
       const move = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Move');
       move.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, cancelable: true }));
       assert(capturedWhileVisible && byId('pieceMenu').hidden, 'Menu removed before Move capture');
       meshes.set('die', { type: 'die' }); sheet = true; ui.openPieceMenu('die', { x: 100, y: 100 });
       assert(radial[2].some(item => item.label === 'Roll'), 'Small piece menu did not use radial');
+      radial[2].find(item => item.label === 'Highlight').fn();
+      assert(sent.at(-1)[0] === 'menuHighlight' && sent.at(-1)[1] === 'die', 'Touch highlight action missing');
+      assert(!radial[2].some(item => item.label === 'Labels…'), 'Player menu offered GM labels');
+      rank = 2;
+      for (const touch of [false, true]) {
+        sheet = touch; ui.openPieceMenu('deck', { x: 80, y: 80 });
+        const labelAction = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Labels…');
+        assert(labelAction, 'GM label action missing from desktop/touch menu');
+        labelAction.click();
+        assert(sent.at(-1)[0] === 'menuLabels' && sent.at(-1)[1] === 'deck', 'GM label menu target lost');
+      }
       held = { id: 'deck', type: 'deck', grabbed: true, touch: true }; ui.updateHoldControls();
       assert(!document.querySelector('.heightUp').hidden, 'Touch height controls missing');
       held = null; selection.size = 1; ui.updateHoldControls();

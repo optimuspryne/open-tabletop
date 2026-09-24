@@ -1,3 +1,5 @@
+import { AVATAR_IMAGE } from '../../shared/avatar.js';
+
 // Public player presentation. Room access and cross-feature effects are injected;
 // private hand state, member administration, and general permission gates stay with their owners.
 // Seat-camera framing — the ONE place to tune the default view for every seat.
@@ -215,6 +217,18 @@ export function createPresence({
     heldLabels.set(id, sprite);
   }
 
+  const markerStyle = { width: 2.7, height: 3.8, centerY: 1.95, baseRadius: 0.65 };
+  function disposeMarker(sid) {
+    const marker = markers.get(sid);
+    if (!marker) return;
+    scene.remove(marker);
+    marker.traverse((node) => {
+      node.geometry?.dispose();
+      node.material?.map?.dispose();
+      node.material?.dispose();
+    });
+    markers.delete(sid);
+  }
   function refreshMarker(sid) {
     const room = getRoom();
     if (sid === getSessionId()) return; // don't render my own marker in my face
@@ -223,11 +237,7 @@ export function createPresence({
     const seat = seatLayout[player.seat];
     if (!seat) return;
 
-    const existing = markers.get(sid);
-    if (existing) {
-      scene.remove(existing);
-      markers.delete(sid);
-    }
+    disposeMarker(sid);
 
     const out = new THREE.Vector3(...seat.out).normalize();
     const px = seat.hand[0] + out.x * 1.6,
@@ -235,17 +245,17 @@ export function createPresence({
     const group = new THREE.Group();
 
     const disc = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.55, 0.55, 0.08, 20),
+      new THREE.CylinderGeometry(markerStyle.baseRadius, markerStyle.baseRadius, 0.08, 20),
       new THREE.MeshStandardMaterial({ color: player.color, roughness: 0.5 }),
     );
     disc.position.set(px, 0.04, pz);
     group.add(disc);
 
     const plane = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 3.0),
+      new THREE.PlaneGeometry(markerStyle.width, markerStyle.height),
       new THREE.MeshBasicMaterial({ map: makePlayerTexture(player), transparent: true }),
     );
-    plane.position.set(px, 1.55, pz);
+    plane.position.set(px, markerStyle.centerY, pz);
     plane.lookAt(0, 1.05, 0); // face the table centre
     group.add(plane);
 
@@ -256,11 +266,7 @@ export function createPresence({
   function removePlayerVis(sid) {
     removeFan(sid);
     clearRevealed(sid); // drop anything they were showing us
-    const marker = markers.get(sid);
-    if (marker) {
-      scene.remove(marker);
-      markers.delete(sid);
-    }
+    disposeMarker(sid);
   }
 
   // A flat "YOU" chip laid on the felt at your own seat, so you know which edge is
@@ -557,8 +563,8 @@ export function createPresence({
     byId('avatarInput')?.addEventListener('change', async (e) => {
       const file = e.target.files[0];
       if (!file) return;
-      const canvas = await resizeToCanvas(file, 96, 96);
-      getRoom().send('setAvatar', { data: canvas.toDataURL('image/jpeg', 0.7) });
+      const canvas = await resizeToCanvas(file, AVATAR_IMAGE.size, AVATAR_IMAGE.size);
+      getRoom().send('setAvatar', { data: canvas.toDataURL('image/jpeg', AVATAR_IMAGE.quality) });
     });
     wire('myAv', () => byId('avatarInput').click());
   }
