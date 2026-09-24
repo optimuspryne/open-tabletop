@@ -174,6 +174,7 @@ export function createPieceDrag({
       forceMove: wasArmed === id,
       primary: e.primary,
       secondary: e.secondary,
+      pointerId: e.pointerId,
       sx: e.clientX,
       sy: e.clientY,
       dragging: false,
@@ -418,6 +419,15 @@ export function createPieceDrag({
     pressedId: () => down && down.id,
     current: () =>
       down && { id: down.id, type: down.type, grabbed: down.grabbed, touch: down.touch },
+    cancel: () => {
+      if (down?.pointerId != null) {
+        try {
+          canvas.releasePointerCapture(down.pointerId);
+        } catch {}
+      }
+      down = null;
+      armedMove = null;
+    },
     clear: () => {
       down = null;
     },

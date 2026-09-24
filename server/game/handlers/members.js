@@ -3,6 +3,7 @@ import {
   handReassignmentPayload,
   memberRolePayload,
   memberUserPayload,
+  playerTimeoutPayload,
 } from '../../message-validation.js';
 import { guardedMessage, allowRoomCapability } from '../interaction-policy.js';
 
@@ -14,6 +15,11 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
       logger,
       publicMessage: 'Member operation unavailable. Try again.',
     });
+
+  memberMessage('setPlayerTimeout', (client, message) => {
+    const parsed = playerTimeoutPayload(message);
+    if (parsed) return room.setPlayerTimeout(client, parsed);
+  });
 
   memberMessage('members', async (client) => {
     if (room.rank(client) < RANK.gm) return;

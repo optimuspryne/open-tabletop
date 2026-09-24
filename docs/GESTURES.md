@@ -20,6 +20,17 @@ does; the tables below are the ledger of how far that has gotten.
 
 ---
 
+## Time-out
+
+A GM uses **Room info → Members → Time-out / End time-out** on desktop or touch. The affected
+player sees a persistent notice; member/player rows show the status. Gameplay controls become
+inert, and ongoing piece/hand drags, selection, overlays, drawing and inspection gestures cancel.
+While restricted, dragging over pieces can move the camera; right-click/long-press offers public
+Inspect and Highlight, and double-click opens public inspection. Own-hand eye/double-click viewing,
+chat, pings and local settings remain usable. Deck peeking, hand play/reordering/reveals, shared
+notes/scores/timer changes and library spawning are blocked. Lifting time-out restores normal
+input without changing the player's seat, hand or tray. Real-device feel awaits manual testing.
+
 ## Camera
 
 Empty felt only — a press that hits a piece is consumed by the piece dispatcher

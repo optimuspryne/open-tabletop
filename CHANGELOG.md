@@ -9,11 +9,21 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Keep member names/status visible in the narrow room dock. Put moderation actions in a
+  two-column grid, wrap long names, and highlight Kick/Reject. At user request, reduce action
+  heights and spacing by roughly half while keeping readable labels.
 - Keep the object-label renderer and editor idle until the room's piece collection is available;
   clear stale labels on state loss and resume when it returns. Cover delayed initial state in the
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Durable GM time-outs in the member list, with room-visible badges and an explanation for the
+  affected player. Apply/lift across all tabs and reconnects; preserve seats, hands and trays.
+  Block gameplay, cancel active gestures, release held objects without throwing, and recover
+  pending inspections. Chat, camera controls, public/own-hand inspection and personal notes remain
+  available. Migration **018** stores room/account policy outside gameplay snapshots; restart the
+  server and refresh clients. Spectator entry remains planned; the user reports time-outs work,
+  and approved the compact member-list UI.
 - GM object labels through **Labels…** in the desktop/touch menu or **L** over a piece. Saved
   labels follow objects; the same editor configures prominent low-stock counts for decks, tile
   decks, and finite dispensers using an explicit full quantity and percentage threshold.
@@ -27,7 +37,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   them through the existing error boundary. Server-owned spectator/time-out state blocks gameplay
   independently of rank; asynchronous library loads and optional spawns recheck before mutation.
   Preserve observation, communication, personal notes, cleanup and authorized administration.
-  Durable restrictions, GM controls and spectator entry remain the next implementation stage.
+  The following slice adds durable time-outs and GM controls; spectator entry remains planned.
 - Save new lobby/table avatar uploads at 512×512 with JPEG quality 0.85, using shared settings
   and a 512 KiB encoded-image limit across HTTP and room messages. Re-upload existing avatars
   to replace their previously saved 96×96 images; existing account data stays compatible.
@@ -38,7 +48,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ### Documentation
 - Record user-reported manual-test sign-off for the participation-policy foundation (2026-09-24).
-  Durable time-out controls and spectator behavior remain pending; no full device matrix is implied.
+  The user subsequently confirmed time-outs work and approved the compact member-list UI.
+  Specific devices and edge-case scenarios were not itemized.
 - Add detailed proposed designs for time-out/spectator mode, deck browsing and custom asset
   collections, plus shorter discovery briefs for the other remaining roadmap work. Link them
   from the roadmap, reference and architecture; distinguish recommended decisions from shipped APIs.

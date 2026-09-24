@@ -8,6 +8,7 @@
 // Normalisation: a model's URL is the canonical column `file_url`; everything else
 // rides in the `props` jsonb bag. Reads splice the two back into the record shape
 // the game already expects, so nothing is stored twice.
+import { createParticipationQueries } from './participation-queries.js';
 import { createColliderPresetQueries } from './collider-preset-queries.js';
 import { createLibraryQueries } from './library-queries.js';
 import { createUserQueries, publicUserRow } from './user-queries.js';
@@ -616,6 +617,7 @@ export function createDatabase(pool) {
   }
 
   return {
+    ...createParticipationQueries(pool),
     colliderPresets: createColliderPresetQueries((sql, params) => pool.query(sql, params)),
     close,
     listDecks,

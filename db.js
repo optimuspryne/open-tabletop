@@ -12,6 +12,7 @@ const database = createDatabase(pool);
 export { createDatabase };
 export const {
   colliderPresets,
+  setPlayerTimeout,
   close,
   listDecks,
   getDeck,

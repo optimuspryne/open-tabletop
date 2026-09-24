@@ -428,6 +428,11 @@ export function createOverlays({
     isDraggingMeasure: () => !!measureDrag,
     hasSelection: () => !!selectedId,
     enter,
+    cancel: () => {
+      exit();
+      move = null;
+      select(null);
+    },
     exit,
     select,
     relabel,

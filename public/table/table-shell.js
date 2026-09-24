@@ -852,5 +852,6 @@ export function createTableShell({ byId, clamp, getRoom }) {
     bindControls,
     isSheet: () => surfaces.isSheet(),
     openRadial: (...args) => openRadial(...args),
+    closeRadial: () => closeRadial?.(),
   };
 }

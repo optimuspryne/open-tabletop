@@ -14,6 +14,7 @@ export function createHand({
   applyIcons,
   setIcon,
   getRoom,
+  canInteract = () => true,
   getSessionId,
   inspectMesh,
   syncControlGuide,
@@ -390,6 +391,7 @@ export function createHand({
       });
       if (selectMode && selected.has(card.hid)) div.classList.add('sel');
       div.addEventListener('pointerdown', (ev) => {
+        if (!canInteract()) return;
         if (handDrag) return; // a drag is already in progress (e.g. a second finger) — don't re-arm
         if (reorderMode) return startHandReorder(ev, card, div, scroll); // rearrange, don't play
         if (selectMode) {
@@ -627,9 +629,16 @@ export function createHand({
     ];
   }
 
-  const cancelGesture = () => {
+  const cancelGesture = ({ resetModes = false } = {}) => {
     cancelDelay(handClickTimer);
     handClickTimer = null;
+    if (resetModes) {
+      selectMode = false;
+      selected.clear();
+      setReorderMode(false);
+      byId('hand').classList.remove('selecting');
+      byId('showBtn')?.setAttribute('aria-expanded', 'false');
+    }
     if (handDrag) {
       dropPreview(handDrag.mesh);
       handDrag = null;

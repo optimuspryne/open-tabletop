@@ -6,7 +6,7 @@ A map of every module, data structure, and key function. For the _why_, see
 For staged implementation status and **remaining proposed** work, see [DESIGN_next_features.md](DESIGN_next_features.md)
 (participation restrictions, deck browsing, collections) and
 [DESIGN_future_backlog.md](DESIGN_future_backlog.md) (discovery briefs for other open items).
-Only the participation-policy foundation is implemented so far; the remaining suggested messages,
+The participation foundation and durable GM time-outs are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
 The codebase:
@@ -1518,11 +1518,37 @@ most once per five seconds.
 **`canUseRoomCapability(auth, capability)`** in `server/permissions.js` is a pure participation
 predicate; handler rank, ownership and asset-access checks still apply. Server-owned
 `client.auth.participation` (`player` / `spectator`), `timedOut` and `participationReady` are
-internal integration fields, not client payloads or synchronized/persisted schema. Missing fields
-retain existing admitted-player/editor behavior. `participationReady:false` and `revoked:true`
-deny every capability; explicit unknown participation or malformed time-out values deny gameplay.
-A future durable loader must set the ready flag false before reading policy and leave it false
-on failure. No loader or user-facing restriction control is implemented in this foundation.
+server-owned fields, never accepted from client payloads. `readAccess` loads durable time-out
+policy on join/reconnect; reconnect sets readiness false before reading and revokes access on
+failure. Missing fields remain compatible with internal legacy callers. `participationReady:false`
+and `revoked:true` deny every capability; unknown participation or malformed time-out values deny
+gameplay. Player mode is currently the only entry mode; spectator entry remains planned.
+
+**`setPlayerTimeout({userId,timedOut})`** accepts exactly a positive account ID and boolean.
+GMs may manage players/helpers; owners/site admins may also manage GMs. Self, room owner,
+site-admin and non-admitted targets are excluded. The member list exposes **Time-out / End time-out**
+and stable `isSelf`, `isAdmin`, `timedOut` fields. `memberRow` keeps name/role/status in a
+separate identity block, with explicit action labels in a two-column grid. Long names wrap;
+owner/self rows omit empty action containers. Compact action buttons have 15px desktop and
+22px coarse-pointer minimum heights, growing as needed for readable labels. Kick/Reject use the shared danger-button styling. Successful writes reply `playerTimeoutSet` with
+`{userId,timedOut}` and refresh member lists; failed writes never acknowledge success.
+
+Migration **018** adds `room_participation(room_id,user_id,timed_out,version)`, keyed to membership
+with cascading deletion. `createParticipationQueries.setPlayerTimeout` locks actor/target users
+and memberships, validates durable rank plus live access, writes and commits before publication.
+`createParticipationService` serializes changes per room/account. A committed result is applied
+even if the actor loses access during commit, but that actor receives no acknowledgment.
+`roomAccess.setParticipation` updates every live tab's auth before cleanup/publication; pending
+join reads are invalidated, and periodic revalidation also catches durable policy changes.
+Owners/site admins load unrestricted policy. Policy is not part of scenes or game snapshots.
+
+Public `Player.timedOut` drives badges and `public/table/participation.js`. Its room-send adapter
+uses the shared 120-request capability registry, blocks gameplay before hydration, and rechecks
+mixed save/spawn requests. Mutation controls become inert; the input router retains camera,
+public inspection, chat and highlight/ping paths. A restriction cancels active local gestures.
+`stopPlayerInteraction` releases held bodies with zero velocity, clears group/overlay drag and
+whiteboard ownership, stops reveals, and returns inspected cards (retaining recoverable pending
+inventory when full). Seats, hands, trays, roles and membership remain unchanged.
 
 **`allowRoomCapability(client, capability, operation)`** rechecks that predicate and sends a
 sanitized `serverError` denial (revoked clients receive nothing). Library `loadDeck`, `loadMat`,

@@ -45,6 +45,7 @@ test('an idempotent join performs membership lookup only after a successful empt
     userId: '2',
     role: 'player',
     status: 'admitted',
+    timedOut: false,
   });
   assert.equal(calls.length, 2);
 });

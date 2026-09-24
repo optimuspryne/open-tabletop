@@ -210,17 +210,17 @@ const SCENES = [
       const assert = (ok, message) => { if (!ok) throw Error(message); };
       const byId = (id) => document.getElementById(id);
       let join;
-      const messages = new Map(), sent = [];
+      const messages = new Map(), sent = [], patches = [];
       const state = {
         pieces: new Map(), players: new Map([['me', { name: 'Ada', role: 'owner', seat: 0,
-          color: '#aa7755', avatar: '', hand: 0, showing: false }]]),
+          color: '#aa7755', avatar: '', hand: 0, showing: false, timedOut: false }]]),
         overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
         scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
       const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
-        onMessage: (key, fn) => messages.set(key, fn), onStateChange() {}, onLeave() {},
+        onMessage: (key, fn) => messages.set(key, fn), onStateChange(fn) { patches.push(fn); }, onLeave() {},
         send: (...args) => sent.push(args), leave() {}, };
       const callbacks = (object) => new Proxy({ listen() {} }, {
         get: (target, key) => target[key] || {
@@ -242,6 +242,7 @@ const SCENES = [
       join(room);
       await new Promise(resolve => setTimeout(resolve, 150));
       room.state.pieces = state.pieces;
+      patches.forEach(fn => fn(room.state));
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       assert(byId('sfxVol')?.oninput, 'Joined client did not finish binding controls');
       assert(messages.has('ping') && messages.has('pieceHighlighted') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
@@ -275,6 +276,21 @@ const SCENES = [
       byId('drawer')._close();
       byId('fabBtn').click(); assert(!byId('radial').hidden, 'Table action fan did not open');
       byId('fabBtn').click();
+      const me = room.state.players.get('me');
+      me.timedOut = true;
+      patches.forEach(fn => fn(room.state));
+      assert(!byId('participationNotice').hidden && byId('dropBtn').inert, 'Time-out did not disable controls');
+      const noticeBounds = byId('participationNotice').getBoundingClientRect();
+      assert(noticeBounds.left >= 0 && noticeBounds.right <= innerWidth && noticeBounds.bottom <= innerHeight, 'Time-out notice escaped the viewport');
+      const count = sent.length;
+      room.send('drawInspect', { deckId: 'x' });
+      room.send('saveMat', { spawn: true });
+      assert(sent.length === count, 'Restricted client sent gameplay');
+      room.send('chat', { text: 'Still here' });
+      assert(sent.at(-1)[0] === 'chat', 'Time-out blocked chat');
+      me.timedOut = false;
+      patches.forEach(fn => fn(room.state));
+      assert(byId('participationNotice').hidden && !byId('dropBtn').inert, 'Lifting time-out left controls disabled');
       byId('controlsBtn').click();
     `,
   },
@@ -574,6 +590,14 @@ const SCENES = [
       messages.get('memberList')([{ userId: 9, username: 'Waiting', status: 'pending', role: 'player' }]);
       assert(!byId('memberPending').hidden, 'Pending membership indicator missing');
       button(byId('memberList'), 'Admit').click(); assert(sent.at(-1)[0] === 'admit' && sent.at(-1)[1].userId === 9, 'Admit did not send');
+      messages.get('memberList')([{ userId: 9, username: 'Member', status: 'admitted', role: 'player', isSelf: false, timedOut: false }]);
+      button(byId('memberList'), 'Time-out').click();
+      assert(sent.at(-1)[0] === 'setPlayerTimeout' && sent.at(-1)[1].userId === 9 && sent.at(-1)[1].timedOut === true, 'Time-out control lost its target');
+      messages.get('memberList')([{ userId: 9, username: 'Member', status: 'admitted', role: 'player', isSelf: false, timedOut: true }]);
+      button(byId('memberList'), 'End time-out').click();
+      assert(sent.at(-1)[1].timedOut === false, 'End time-out did not restore interaction');
+      messages.get('memberList')([{ userId: 9, username: 'Member', status: 'admitted', role: 'player', isSelf: true, timedOut: true }]);
+      assert(!byId('memberList').querySelector('button'), 'Self moderation was offered');
       const assign = byId('unclaimedHands').querySelector('select'); assign.value = 'other'; assign.dispatchEvent(new Event('change'));
       assert(sent.at(-1)[0] === 'reassignHand' && sent.at(-1)[1].toSessionId === 'other', 'Hand reassignment failed');
       state.unclaimed.clear(); collections.handRemove(); assert(!byId('unclaimedHands').children.length, 'Removed hand stayed visible');
@@ -844,6 +868,56 @@ const SCENES = [
       byId('selSwatches').children[1].click();
       assert(sent.at(-1)[0] === 'recolorGroup' && sent.at(-1)[1].team === 1, 'Team swatch did not switch team');
       byId('selRecolor').classList.add('open');`,
+  },
+  {
+    name: 'member-dock',
+    root: '#roomInfo',
+    expect: { selector: '#memberList .memberRow', min: 5 },
+    drive: `
+      const { memberRow } = await import('/ui/rows.js');
+      const { applyIcons } = await import('/ui/icons.js');
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const dock = document.getElementById('roomInfo');
+      document.body.append(dock);
+      Object.assign(dock.style, { display: 'block', position: 'fixed', left: '20px', top: '20px', maxHeight: '90vh', overflowY: 'auto' });
+      document.getElementById('roomTitle').textContent = 'Members';
+      document.getElementById('roomInfoBody').style.display = 'flex';
+      document.getElementById('roomInfoHead').style.display = 'flex';
+      const section = document.getElementById('memberSection');
+      for (const child of document.getElementById('roomInfoBody').children) child.hidden = child !== section;
+      section.hidden = false;
+      const list = document.getElementById('memberList');
+      list.replaceChildren();
+      const samples = [
+        { username: 'Ben', role: 'owner', status: 'admitted', isSelf: true },
+        { username: 'TestUser', role: 'player', status: 'admitted' },
+        { username: 'A-very-long-unbroken-member-name', role: 'helper', status: 'admitted', timedOut: true },
+        { username: 'Waiting to join', role: 'player', status: 'pending' },
+        { username: 'Co-GM', role: 'gm', status: 'admitted' },
+      ];
+      for (const member of samples) list.append(memberRow(member, { myRank: 3, isSelf: !!member.isSelf }));
+      applyIcons(list);
+      assert(!list.firstChild.querySelector('button'), 'Owner received moderation actions');
+      for (const width of [270, 240, 210]) {
+        dock.style.width = width + 'px';
+        for (const full of [false, true]) {
+          document.body.classList.toggle('ui-full', full);
+          for (const row of list.children) {
+            const bounds = row.getBoundingClientRect();
+            const identity = row.querySelector('.memberIdentity').getBoundingClientRect();
+            assert(identity.width > 100 && identity.height > 0, 'Member identity collapsed');
+            assert(row.scrollWidth <= row.clientWidth + 1, 'Member row overflows narrow dock');
+            for (const button of row.querySelectorAll('button')) {
+              const rect = button.getBoundingClientRect();
+              assert(rect.left >= bounds.left && rect.right <= bounds.right + 1 && rect.top >= identity.bottom, 'Member action overlaps identity or escapes row');
+              assert(button.scrollWidth <= button.clientWidth + 1, 'Member action text clipped');
+              assert(button.scrollHeight <= button.clientHeight + 1, 'Member action label clipped vertically');
+            }
+          }
+        }
+      }
+      dock.style.width = '270px';
+    `,
   },
   {
     name: 'rows',

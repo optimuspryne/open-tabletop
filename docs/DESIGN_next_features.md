@@ -1,6 +1,6 @@
 # Next features: participation, deck browsing, and collections
 
-Status: **participation stage 1 implemented locally; remaining stages proposed**. Original plans
+Status: **participation stage 1 committed; stage 2 time-outs implemented, functionality and UI approved; remaining stages proposed**. Original plans
 were prepared against commit `b7390c6`; foundation implementation is dated 2026-09-24.
 This document covers [ROADMAP.md](ROADMAP.md) items **5/15, 22, and 18**. Recommendations below
 are starting decisions for later work, not additional user-approved requirements. Recheck current
@@ -24,6 +24,8 @@ These are relative scope assessments, not elapsed-time estimates. Each stage sho
 and ready for in-app testing before proceeding to the next cohesive stage.
 
 ## Current implementation checkpoint — 2026-09-24
+
+Historical stage-1 record at commit `c51423a`; the stage-2 checkpoint below supersedes its pending-feature statements.
 
 **Stage 1: policy foundation is implemented; the user reports manual tests green (2026-09-24).** All 119 current table
 requests have explicit capabilities and use a guarded registration layered over `safeMessage`.
@@ -89,6 +91,124 @@ chat/pings, save/load and library Save+Spawn. Specific devices, browsers and mul
 were not itemized, so this sign-off does not establish a full device matrix. Restriction behavior
 still has automated server coverage only; no user-facing control exists yet. Applying this slice
 requires a server restart and client refresh; no migration is required.
+
+## Stage 2 time-out checkpoint — 2026-09-24
+
+The foundation was committed as **`c51423a`** after user-reported manual tests passed. The next
+cohesive slice implements **durable GM time-outs**; the user confirmed functionality and approved
+the final compact member-list UI. Specific device and edge-case coverage was not itemized.
+Spectator entry, seating and turn exclusion remain stage 3. No changes have been pushed.
+
+Resolved first-release policy: GMs manage players/helpers, owners/site admins can also manage
+GMs, and self/owner/site-admin targets are excluded. Time-outs have no expiry or reason field.
+They preserve roles, seats, turn positions, hands and trays. Chat, pings/highlights, ordinary public
+inspection, own-hand viewing, personal notes and authorized administration remain available.
+Deck peeks, reveals, hand rearrangement/play, shared table changes and spawning are gameplay.
+Room info → Members has the same apply/lift buttons on desktop and touch. The room sees status
+badges, and affected players see a persistent explanation and inert mutation controls.
+
+Migration 018 stores policy separately from scenes/game snapshots and cascades on membership
+removal. Role/user rows are locked and live authority is rechecked before commit. Changes are
+serialized per room/account and propagated to every tab; joins/reconnects load policy before
+accepting gameplay. Read failures fail closed. A committed write remains effective if the actor
+is revoked during commit, but that actor receives no success response. Failed writes neither
+publish policy nor acknowledge success. Restart the server to apply migration 018 with the existing
+migration role, then refresh browsers; manual-migration installations must apply 018 first.
+
+Reuse decision: move the existing capability registry into `shared/` for server and browser use;
+retain the established error boundaries and per-handler permissions. Extract only the shared
+active-interaction cleanup from departure, reuse pending-inspection recovery, and expose focused
+cancellation methods on existing UI controllers. Time-out does not run final departure cleanup.
+No new input device path, build step, icon asset, environment variable or infrastructure is added.
+
+File/function inventory for this slice (no unrelated helper removals):
+
+| File(s) | Added/changed behavior |
+| --- | --- |
+| `postgres/018_room_participation.sql`, `postgres/schema.sql` | New policy table and fresh-install migration baseline. |
+| `server/participation-queries.js` | Add `createParticipationQueries` and transactional `setPlayerTimeout`. |
+| `server/database.js`, `db.js` | Register and export the production query. |
+| `server/room-queries.js` | Extend `memberRow`, `getMembership`, `listMembers` with policy/admin status. |
+| `server/room-access.js` | Extend `readAccess`, reconnect/revalidation; add `setParticipation` and pending-read invalidation. |
+| `server/game/participation.js` | Add `createParticipationService` with per-target serialization and committed-policy publication. |
+| `server/game/interaction-cleanup.js` | Add shared `stopPlayerInteraction`, including recoverable inspection cleanup. |
+| `server.js` | Register service; add `setPlayerTimeout`/`onParticipationChanged`; update `onJoin` and reuse cleanup in `onLeave`. |
+| `shared/room-capabilities.js`, `server/game/interaction-policy.js` | Move/re-export the registry; classify the new administration request (120 total). |
+| `server/message-validation.js`, `server/game/handlers/members.js` | Add strict `playerTimeoutPayload` and register the guarded handler. |
+| `server/game/member-service.js` | Send per-recipient stable `isSelf` membership data. |
+| `server/game/schema.js` | Append public `Player.timedOut`. |
+| `public/table/participation.js` | Add `canInteractWithTable`, `canSendTableRequest`, `createParticipation`; wrap sends and synchronize controls/status. |
+| `public/client.js` | Wire policy before room binders; inject capability predicate and coordinate cancellation. |
+| `public/table/input-router.js` | Gate gameplay intents while preserving camera, inspect and communication gestures. |
+| `public/table/hand.js` | Gate hand dragging/reordering; extend `cancelGesture` to reset modes. |
+| `public/table/piece-drag.js`, `public/table/selection.js` | Add cancellation for pointer capture, armed movement, marquee and selection mode. |
+| `public/table/inspection.js` | Add cancellation; discard delayed drawn-card previews while restricted. |
+| `public/table/overlays.js`, `public/table/whiteboard.js` | Expose cancellation using existing exit/selection/redraw behavior. |
+| `public/table/piece-ui.js`, `public/table/piece-labels.js`, `public/table/table-shell.js` | Restrict piece-menu actions; expose existing close behavior. |
+| `public/table/membership.js`, `public/ui/rows.js` | Render apply/lift buttons and status; send normalized account targets and show acknowledgment. |
+| `public/table/presence.js` | Add live time-out badges and gate turn-order drag controls. |
+| `public/editor/editor-panel.js` | Mark dynamic spawn/apply/load/setup buttons as table mutations. |
+| `public/table.html`, `public/styles.css` | Add notice, mutation-control markers, help and responsive restriction styling. |
+| `test/backend-participation.js` | Add propagation, persistence/reconnect, stale authorization, failure, queue and inventory cleanup regressions. |
+| `test/backend-participation-queries.js` | Add hierarchy, protected-target and transaction rollback regressions. |
+| `test/participation.js`, `test/input-router.js` | Cover hydration, request policy, lift/restrict transitions and permitted inspection/camera input. |
+| `test/backend-member-handlers.js`, `test/backend-room-queries.js` | Update production registration inventory and member result expectations. |
+| `test/integration/database.js` | Exercise migration 018, real query permissions, durable reload and membership cascade. |
+| `scripts/component-parity.mjs` | Exercise production client transition, apply/lift member buttons, self protection and notice bounds. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` | Record behavior, contracts and ownership. |
+| `docs/GESTURES.md`, `docs/RELEASING.md`, `docs/ROADMAP.md` | Record touch path, upgrade requirements and implementation status. |
+| `docs/DESIGN_next_features.md`, `docs/DESIGN_future_backlog.md` | Record this checkpoint without advancing unrelated backlog work. |
+
+Automated verification: `npm run check` passes (lint, formatting, CSS validation and **689 tests**).
+`test:input` passes **57/57**, `test:components` passes all configured profiles including production
+client apply/lift and member-button coverage, `test:devices` passes all **7** profiles, and
+`test:integration` passes all **8** PostgreSQL tests using the runtime role. After the final inert
+selector expansion, the focused participation tests pass. Local test servers, browser subprocesses
+and database setup required sandbox escalation. The fixture reports only its existing missing
+`/favicon.ico`; no feature-related browser errors remain. These checks do not establish a real
+server restart, physical touch feel or two-client multiplayer correctness. Source verification used
+graph generation `2026-09-24T14:05:18Z`; schema/HTML parser gaps were read directly. Documentation
+links and `git diff --check` were also checked.
+
+Manual smoke test after restart/refresh:
+
+1. With two accounts, use Room info → Members to apply/lift time-out. Check badges, notice,
+   disabled controls and desktop right-click/touch long-press inspection. Camera/chat/own-hand
+   viewing should work; dragging, deck peeking, hand play, timers/scores and library spawning should not.
+2. Apply while dragging one piece/a group, rearranging a hand, drawing or inspecting a drawn card.
+   Check no throw, stuck pointer mode, orphaned reveal or lost/duplicated card; include a full table.
+3. Open a second tab for the target; confirm both restrict/lift. Refresh/reconnect and restart the
+   server while restricted; policy should persist. Load a scene and verify it does not lift policy.
+4. Check GM/player/helper hierarchy and owner/self protection, then lift and resume normal play
+   with the same hand, seat and tray. Include real touch hardware; automated tests cannot establish
+   gesture feel, GPU performance or live multiplayer ordering.
+
+### Member-list UI follow-up — 2026-09-24
+
+The user reports that time-outs function correctly, and supplied a screenshot showing member
+names squeezed away and moderation buttons clipped in the narrow dock. This is functional
+sign-off for the time-out slice, not a claim that every manual/device scenario was tested.
+The user approved the final compact UI and requested a commit; no additional migration/restart
+is required for these presentation changes.
+
+- `public/ui/rows.js`: extend existing `memberRow` with a separate identity/status block,
+  explicit self label, danger styling for Kick/Reject, and no empty action container. Existing
+  callbacks/role rules are reused; no new controller or helper is added.
+- `public/styles.css`: replace the forced single-line member layout with a two-column action
+  grid and wrapped names. Following user visual approval, action heights/spacing were reduced
+  by roughly half: 15px desktop and 22px coarse-pointer minimum heights. Compact/full modes
+  keep visible labels.
+- `scripts/component-parity.mjs`: add a member-dock fixture covering owner/self, ordinary,
+  restricted, pending and GM rows; assert readable identities, no horizontal clipping, and
+  unclipped labels at 270/240/210px dock widths in both compact/full modes.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, this plan: record the fix,
+  current presentation contract and scoped functional sign-off.
+
+Desktop/touch screenshots were inspected. `check` passes all 689 tests and `test:devices`
+passes all seven profiles. `test:components` passes desktop and touch, including the new narrow-dock
+fixture. Documentation links and `git diff --check` pass. The acceptance check is a browser refresh followed by Room info → Members
+on desktop/touch, including long names and End time-out. Input routing and database behavior
+are unchanged in this UI follow-up.
 
 ## Verified starting points
 
@@ -197,10 +317,10 @@ loading state until participation and pieces have arrived.
 
 ### Implementation stages and acceptance
 
-1. **Policy foundation — implemented locally, user-reported manual tests green (2026-09-24):** classify messages, add the pure capability predicate and guarded
+1. **Policy foundation — committed as `c51423a`, user-reported manual tests green (2026-09-24):** classify messages, add the pure capability predicate and guarded
    registration, and audit delayed mutations. No feature is complete until direct protocol calls
    are denied consistently; normal player/GM behavior must still pass existing tests.
-2. **Time-out:** durable policy, GM controls, public status, transition cleanup, reconnect behavior.
+2. **Time-out — implemented, user-approved functionality and UI:** durable policy, GM controls, public status, transition cleanup, reconnect behavior.
    Test during single/group dragging, drawing, inspection, and an in-flight library spawn. Verify
    duplicate tabs, restart, failed DB writes, demotion/revocation, and a full table.
 3. **Spectators:** entry/exit controls, seatless join handling, turn exclusion, reserved-seat

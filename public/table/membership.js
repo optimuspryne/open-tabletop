@@ -1,6 +1,6 @@
 import { rankOf, memberRow, emptyRow, unclaimedHead, unclaimedRow } from '../ui/rows.js';
 
-export function createMembership({ getRoom, getSessionId, byId, applyIcons }) {
+export function createMembership({ getRoom, getSessionId, byId, applyIcons, toast = () => {} }) {
   // Pulse the Members button in the accent color while any join is pending, so a
   // GM sees new requests without opening the panel.
   function updateMembersPulse(list) {
@@ -53,12 +53,16 @@ export function createMembership({ getRoom, getSessionId, byId, applyIcons }) {
       reject: (m) => room.send('kick', { userId: m.userId }),
       setRole: (m, role) => room.send('setRole', { userId: m.userId, role }),
       kick: (m) => room.send('kick', { userId: m.userId }),
+      timeout: (m) => room.send('setPlayerTimeout', { userId: m.userId, timedOut: !m.timedOut }),
     };
     for (const m of list)
-      ul.appendChild(memberRow(m, { isSelf: m.username === myName, myRank, on }));
+      ul.appendChild(memberRow(m, { isSelf: m.isSelf ?? m.username === myName, myRank, on }));
     applyIcons(ul);
   }
   function bindMessages(room) {
+    room.onMessage('playerTimeoutSet', ({ timedOut }) =>
+      toast(timedOut ? 'Time-out applied' : 'Time-out ended'),
+    );
     room.onMessage('memberList', (list) => {
       renderMembers(list);
       updateMembersPulse(list);

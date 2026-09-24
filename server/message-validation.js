@@ -1124,3 +1124,11 @@ export function finitePosition(message) {
   if (![x, y, z].every(isWorldCoordinate)) return null;
   return { x, y, z };
 }
+
+// GM time-out changes target durable account identity, never a client rank/session.
+export function playerTimeoutPayload(message) {
+  if (!exactObject(message, ['userId', 'timedOut']) || typeof message.timedOut !== 'boolean')
+    return null;
+  const member = memberUserPayload({ userId: message.userId });
+  return member ? { ...member, timedOut: message.timedOut } : null;
+}

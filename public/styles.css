@@ -1657,7 +1657,7 @@ input[type='range']::-moz-range-thumb {
 .memberRow {
   /* surface via .tile group */
   display: flex;
-  align-items: left;
+  align-items: stretch;
   justify-content: space-between;
   gap: 5px;
 }
@@ -4806,40 +4806,55 @@ body.not-gm .gm-only {
   background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
-/* Member rows: name + role, actions right — one line, as in 2a. The wrap came
-   from three chips carrying both a 22px icon and a label in a 270px dock. */
+/* Member identity keeps its own row; moderation actions must fit the narrow dock. */
 #memberList > li,
 .memberRow {
-  flex-wrap: nowrap;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 8px;
   background: color-mix(in srgb, var(--text) 4%, transparent);
   border-color: color-mix(in srgb, var(--text) 8%, transparent);
 }
+.memberIdentity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+  overflow-wrap: anywhere;
+}
+.memberName {
+  font-size: var(--fs);
+  font-weight: 600;
+}
 #memberList .button-row--compact,
 .memberRow .button-row--compact {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-  margin-left: auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
+  width: 100%;
 }
-/* The labels are explicit (Helper / GM / Kick), so the person-icons are
-   redundant here — dropping them is what buys the single line. */
+/* Keep explicit labels in both compact and full UI modes. */
 #memberList .button-row--compact .ico,
 .memberRow .button-row--compact .ico {
   display: none;
 }
 #memberList .button-row--compact button,
 .memberRow .button-row--compact button {
-  padding: 3px 7px;
-  font-size: var(--fs-sm);
-}
-#memberList > li > span:first-child {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-height: 15px;
+  padding: 0 4px;
+  line-height: 1.2;
+  font-size: var(--fs-sm);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+@media (pointer: coarse) {
+  #memberList .button-row--compact button,
+  .memberRow .button-row--compact button {
+    min-height: 22px;
+  }
 }
 
 /* ============================================================================
@@ -7173,4 +7188,19 @@ body.not-gm .gm-only {
 .compoundLayout > div > [data-action='draw'] {
   align-self: flex-start;
   margin-top: 8px;
+}
+
+/* Participation restrictions retain camera, chat and read-only inspection. */
+.participationNotice {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 76px);
+  inset-inline: 12px;
+  margin-inline: auto;
+  max-width: 42rem;
+  z-index: 30;
+  pointer-events: none;
+  border-color: var(--accent);
+}
+.participation-disabled {
+  opacity: 0.45;
 }

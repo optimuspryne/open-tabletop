@@ -7,6 +7,7 @@ export function createPieceUi({
   meshes,
   kinds: KIND,
   getRoom,
+  canInteract = () => true,
   pieceDrag,
   hand,
   inspection,
@@ -68,6 +69,11 @@ export function createPieceUi({
     mat: 'Mat',
   };
   function pieceControlRows(type, held) {
+    if (!canInteract())
+      return [
+        ['Right-click / long-press', 'Inspect / highlight'],
+        ['WASD / arrows', 'Pan camera'],
+      ];
     if (held) {
       const kind = KIND[type];
       return [
@@ -243,6 +249,12 @@ export function createPieceUi({
   // on empty felt we ping. Verbs are filtered by kind.
   function pieceMenuItems(id, type) {
     const items = [];
+    if (!canInteract()) {
+      if (inspection.isInspectable(type))
+        items.push(['Inspect', () => inspection.enterInspect(id)]);
+      items.push(['Highlight', () => highlightPiece(id)]);
+      return items;
+    }
     if (type === 'card') {
       items.push(['Flip', () => getRoom().send('flip', { id })]);
       items.push(['Take to hand', () => pieceDrag.sendAction('takeCard', id)]);
@@ -377,5 +389,5 @@ export function createPieceUi({
     }
   }
 
-  return { openPieceMenu, syncControlGuide, update, updateHoldControls };
+  return { openPieceMenu, closePieceMenu, syncControlGuide, update, updateHoldControls };
 }

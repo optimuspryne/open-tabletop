@@ -214,7 +214,8 @@ Implementation planning is documented separately so this list can stay concise:
 
 The participation-policy foundation is implemented locally (119 classified requests, guarded
 registration and delayed-mutation checks), with user-reported manual tests green on 2026-09-24.
-Time-out controls/persistence and spectator behavior remain open. Other designs remain proposed;
+Durable time-out controls/persistence are now implemented with user-reported functional and UI approval; spectator
+behavior remains open. Other designs remain proposed;
 unresolved product choices are marked explicitly. The detailed document recommends an
 implementation sequence without making the entire backlog a fixed priority queue.
 
@@ -301,7 +302,7 @@ implementation sequence without making the entire backlog a fixed priority queue
     Concealment must be enforced by server-controlled delivery, including reconnect and save/load,
     rather than only reducing opacity on a player's client. Coordinate with fog of war and GM
     staging; resolve collision and other indirect visibility cues during design.
-15. **Player time-out mode (GM).** Temporarily stop a selected player from interacting with
+15. **Player time-out mode (GM) — implemented; user-approved functionality and UI.** Temporarily stop a selected player from interacting with
     tabletop objects while allowing them to observe. Provide a clear GM control to apply and
     lift the restriction, and make the restricted state clear to the player. Explore temporarily
     using the same viewing-only permissions as spectator mode (item 5); implement both together

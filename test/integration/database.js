@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 17); // Includes reusable collider collections.
+  assert.equal(migrations.rows.length, 18); // Includes durable participation policy.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -306,4 +306,56 @@ test('collider collections persist with owner/admin writes and scoped private re
   await database.purgeUser(owner.id);
   assert.equal((await queries.get(admin, retained.id)).ownerId, null);
   assert.deepEqual((await queries.get(other, retained.id)).layout, layout);
+});
+
+test('durable time-outs preserve hierarchy, survive a fresh database facade and cascade on membership removal', async () => {
+  const owner = await database.createUser({
+    username: 'timeout-owner',
+    email: 'timeout-owner@example.test',
+  });
+  const gm = await database.createUser({
+    username: 'timeout-gm',
+    email: 'timeout-gm@example.test',
+  });
+  const player = await database.createUser({
+    username: 'timeout-player',
+    email: 'timeout-player@example.test',
+  });
+  const room = await database.createRoom({
+    ownerId: owner.id,
+    code: 'TIMEOUT',
+    name: 'Timeout tests',
+    requireApproval: false,
+  });
+  for (const userId of [gm.id, player.id])
+    await database.joinRoom({ roomId: room.id, userId, requireApproval: false });
+  await database.setMemberRole(room.id, gm.id, 'gm');
+  const request = { roomId: room.id, actorId: gm.id, userId: player.id, timedOut: true };
+  assert.equal((await database.setPlayerTimeout(request, () => true)).timedOut, true);
+  assert.equal((await createDatabase(pool).getMembership(room.id, player.id)).timedOut, true);
+  assert.equal(
+    (await database.listMembers(room.id)).find((m) => m.userId === player.id).timedOut,
+    true,
+  );
+  assert.equal(await database.setPlayerTimeout({ ...request, userId: owner.id }, () => true), null);
+  assert.equal(await database.setPlayerTimeout({ ...request, userId: gm.id }, () => true), null);
+  assert.equal(
+    (await database.setPlayerTimeout({ ...request, actorId: owner.id, userId: gm.id }, () => true))
+      .timedOut,
+    true,
+  );
+  assert.equal(await database.setPlayerTimeout({ ...request, timedOut: false }, () => false), null);
+  assert.equal((await database.getMembership(room.id, player.id)).timedOut, true);
+  await database.kickMember(room.id, player.id);
+  assert.equal(
+    (
+      await pool.query('SELECT * FROM room_participation WHERE room_id=$1 AND user_id=$2', [
+        room.id,
+        player.id,
+      ])
+    ).rowCount,
+    0,
+  );
+  await database.joinRoom({ roomId: room.id, userId: player.id, requireApproval: false });
+  assert.equal((await database.getMembership(room.id, player.id)).timedOut, false);
 });

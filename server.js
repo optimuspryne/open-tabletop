@@ -1,3 +1,5 @@
+import { stopPlayerInteraction } from './server/game/interaction-cleanup.js';
+import { createParticipationService } from './server/game/participation.js';
 import { createDeckBuilders } from './server/game/deck-builders.js';
 import { isBoundedImageDataURL } from './shared/avatar.js';
 import {
@@ -244,6 +246,7 @@ const {
 // Track rooms through their final persistence flush so cleanup can protect their data.
 const LIVE_ROOMS = new Set();
 const roomAccess = createRoomAccess({ db, hashToken });
+const participation = createParticipationService({ db, roomAccess });
 setInterval(() => void roomAccess.revalidate(), 30_000).unref();
 const { findOrphanAssets, trashOrphans } = createAssetCleanup({
   assetsDir: ASSETS_DIR,
@@ -944,6 +947,14 @@ class TableRoom extends Room {
     client.send('whoami', { isAdmin: client.auth.isAdmin });
   }
 
+  setPlayerTimeout(client, message) {
+    return participation.setPlayerTimeout(this, client, message);
+  }
+
+  onParticipationChanged(client) {
+    if (client.auth.timedOut) stopPlayerInteraction(this, client.sessionId);
+  }
+
   rank(client) {
     if (client.auth?.revoked) return -1;
     return rankOf(client.auth && client.auth.role);
@@ -970,6 +981,7 @@ class TableRoom extends Room {
     player.color = PALETTE[seat % PALETTE.length];
     player.avatar = auth.avatar || '';
     player.role = auth.role || 'player';
+    player.timedOut = auth.timedOut === true;
     this.state.players.set(client.sessionId, player);
 
     // Reclaim a saved hand / the turn if this account owned one in the loaded game.
@@ -1084,17 +1096,7 @@ class TableRoom extends Room {
   }
 
   async onLeave(client, arg) {
-    // Immediately free any piece they were dragging, so it doesn't hang mid-air.
-    this.state.pieces.forEach((piece, id) => {
-      if (piece.owner === client.sessionId) {
-        piece.owner = '';
-        this.targets.delete(id);
-      }
-    });
-    this.groups.delete(client.sessionId); // drop any in-progress group drag they held
-    // Free the whiteboard right away if they were drawing — don't hold it locked
-    // through the reconnection window (others should be able to claim it at once).
-    if (this.state.whiteboard.owner === client.sessionId) this.state.whiteboard.owner = '';
+    stopPlayerInteraction(this, client.sessionId, { recoverInspection: false });
 
     // On an unexpected drop (not a deliberate leave), hold their seat briefly in
     // case they reconnect. allowReconnection resolves if they come back in time.

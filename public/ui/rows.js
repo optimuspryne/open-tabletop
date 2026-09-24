@@ -60,21 +60,24 @@ export function chatRow(m, { mine = false } = {}) {
 /**
  * One member row. Which buttons appear is presentation — it follows from the member's
  * role and the viewer's rank — so it lives here and can be tested. What each button
- * DOES is the caller's: pass `on` = { admit, reject, setRole, kick }, each taking the
+ * DOES is the caller's: pass `on` = { admit, reject, setRole, kick, timeout }, each taking the
  * member (and, for setRole, the target role).
  */
 export function memberRow(m, { isSelf = false, myRank = 0, on = {} } = {}) {
   const noop = () => {};
-  const { admit = noop, reject = noop, setRole = noop, kick = noop } = on;
+  const { admit = noop, reject = noop, setRole = noop, kick = noop, timeout = noop } = on;
   const li = document.createElement('li');
   li.className = 'memberRow';
 
   const info = document.createElement('span');
-  info.textContent = m.username;
+  info.className = 'memberIdentity';
+  const name = document.createElement('span');
+  name.className = 'memberName';
+  name.textContent = `${m.username}${isSelf ? ' (you)' : ''}`;
   const tag = document.createElement('span');
   tag.className = 'muted';
-  tag.textContent = ` · ${m.role}${m.status === 'pending' ? ' · pending' : ''}`;
-  info.appendChild(tag);
+  tag.textContent = `${m.role}${m.status === 'pending' ? ' · pending' : ''}${m.timedOut ? ' · time-out' : ''}`;
+  info.append(name, tag);
   li.appendChild(info);
 
   const acts = document.createElement('span');
@@ -82,7 +85,7 @@ export function memberRow(m, { isSelf = false, myRank = 0, on = {} } = {}) {
   if (m.status === 'pending') {
     acts.append(
       makeButton('Admit', () => admit(m)),
-      makeButton('Reject', () => reject(m)),
+      makeButton('Reject', () => reject(m), 'danger'),
     );
   } else if (!isSelf && m.role !== 'owner') {
     if (m.role === 'player') acts.appendChild(makeButton('Helper', () => setRole(m, 'helper')));
@@ -96,9 +99,13 @@ export function memberRow(m, { isSelf = false, myRank = 0, on = {} } = {}) {
         acts.appendChild(makeButton('Player', () => setRole(m, 'player')));
       }
     }
-    if (m.role !== 'gm' || myRank >= 3) acts.appendChild(makeButton('Kick', () => kick(m)));
+    if (m.role !== 'gm' || myRank >= 3) {
+      if (myRank >= 2 && !m.isAdmin)
+        acts.appendChild(makeButton(m.timedOut ? 'End time-out' : 'Time-out', () => timeout(m)));
+      acts.appendChild(makeButton('Kick', () => kick(m), 'danger'));
+    }
   }
-  li.appendChild(acts);
+  if (acts.childElementCount) li.appendChild(acts);
   return li;
 }
 

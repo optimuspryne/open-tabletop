@@ -131,6 +131,7 @@ const btn = (label, fn, cls) => {
     button.dataset.icon = ic;
     button.innerHTML = '<span class="lbl">' + label + '</span>';
   } else button.textContent = label;
+  if (['Spawn', 'Apply', 'Load', 'Set up'].includes(label)) button.dataset.roomMutation = '';
   button.onclick = fn;
   return button;
 };
@@ -251,6 +252,7 @@ function wireControls(root) {
   const go = document.createElement('button');
   go.type = 'button';
   go.className = 'spawnSelBtn';
+  go.dataset.roomMutation = '';
   go.dataset.icon = 'category-plus';
   go.innerHTML = '<span class="lbl">Spawn selected</span>';
   go.hidden = true;

@@ -32,6 +32,7 @@ defineTypes(Player, {
   showing: 'number',
   handBack: 'string',
   role: 'string',
+  timedOut: 'boolean',
 }); // showing = revealed hand-card count; handBack = public hand back; role = per-room role
 
 // PUBLIC shared timer. Only its anchor is synchronized; clients compute its live value locally.

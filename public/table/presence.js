@@ -375,7 +375,7 @@ export function createPresence({
       const row = document.createElement('div');
       row.className = 'prow' + (room.state.turn === sid ? ' turn' : '');
       row.dataset.sid = sid;
-      if (getRank() >= 2) {
+      if (getRank() >= 2 && room.state.players.get(getSessionId())?.timedOut !== true) {
         row.draggable = true;
         row.title = 'Drag to change turn order';
         row.addEventListener('dragstart', (event) => {
@@ -415,6 +415,12 @@ export function createPresence({
       const label = document.createElement('span');
       label.textContent = `${player.name}${sid === getSessionId() ? ' (you)' : ''} \u00b7 ${player.hand}`; // textContent = inert
       row.appendChild(label);
+      if (player.timedOut) {
+        const badge = document.createElement('span');
+        badge.className = 'rolebadge';
+        badge.textContent = 'time-out';
+        row.appendChild(badge);
+      }
       if (player.role && player.role !== 'player') {
         // badge for helper/gm/owner
         const badge = document.createElement('span');
@@ -428,6 +434,7 @@ export function createPresence({
         const move = (delta, symbol, label) => {
           const button = document.createElement('button');
           button.type = 'button';
+          button.dataset.roomMutation = '';
           button.textContent = symbol;
           button.setAttribute('aria-label', `${label} ${player.name} in turn order`);
           button.disabled =
@@ -508,6 +515,7 @@ export function createPresence({
         false,
       );
       cb(player).listen('order', renderPlayers, false);
+      cb(player).listen('timedOut', renderPlayers, false);
       cb(player).listen(
         'avatar',
         () => {

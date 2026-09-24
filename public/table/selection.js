@@ -473,6 +473,13 @@ export function createSelection({
     has: (id) => selection.has(id),
     remove: (id) => selection.delete(id),
     clear: clearSelection,
+    cancel: () => {
+      marquee = null;
+      selGesture = false;
+      hideMarquee();
+      setSelMode(false);
+      clearSelection();
+    },
     isActive: () => selMode,
     escape,
     command,

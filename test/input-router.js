@@ -172,6 +172,7 @@ function fixture() {
       return false;
     },
     releaseInspect: mark('inspect.exit'),
+    enterInspect: mark('inspect.enter'),
     placeDrawn: mark('place'),
     isInspectable: (type) => type === 'die' || type === 'prop',
     handleDeferredClick: (...args) => {
@@ -223,6 +224,7 @@ function fixture() {
   });
   pieces.bindRoom(room);
   const router = createInputRouter({
+    canInteract: () => !modes.blocked,
     getRoom: () => room,
     canvas,
     controls,
@@ -674,4 +676,36 @@ test('label shortcut targets a piece and stays inactive while typing or inspecti
   f.modes.inspect = false;
   f.key('l', true);
   assert.equal(count(), 1);
+});
+
+test('time-out input keeps camera, public inspection and menus but never starts gameplay', () => {
+  const f = fixture();
+  f.modes.blocked = true;
+  f.router.press({ primary: true, touch: true, pointerId: 1, clientX: 30, clientY: 40 });
+  f.router.move({ clientX: 90, clientY: 100 });
+  f.router.secondaryPress({ x: 30, y: 40 });
+  f.router.command({ key: 'Delete' });
+  f.router.command({ key: 'p' });
+  f.router.rotateAxis(1);
+  f.router.raiseAxis(1);
+  f.router.doubleClick({ x: 30, y: 40 });
+  f.router.panCamera(1, 0);
+  assert.equal(f.pieces.isActive(), false);
+  assert.deepEqual(f.sent, []);
+  assert.equal(
+    f.calls.some(([name]) => name === 'menu'),
+    true,
+  );
+  assert.equal(
+    f.calls.some(([name]) => name === 'ping'),
+    true,
+  );
+  assert.equal(
+    f.calls.some(([name]) => name === 'inspect.enter'),
+    true,
+  );
+  assert.equal(
+    f.calls.some(([name]) => name === 'pan'),
+    true,
+  );
 });

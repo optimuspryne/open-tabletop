@@ -82,7 +82,7 @@ const actor = (role, userId = '1') => ({
 test('member handler module registers its complete message family', () => {
   assert.deepEqual(
     [...harness().handlers.keys()],
-    ['members', 'admit', 'kick', 'setRole', 'reassignHand'],
+    ['setPlayerTimeout', 'members', 'admit', 'kick', 'setRole', 'reassignHand'],
   );
 });
 

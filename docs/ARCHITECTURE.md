@@ -7,7 +7,7 @@ Staged feature plans are separate from this description of the running system:
 [DESIGN_next_features.md](DESIGN_next_features.md) plans time-out/spectator permissions, private
 deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_backlog.md) records
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
-there remain proposed except for the participation-policy foundation recorded below.
+there remain proposed except for the participation foundation and durable GM time-outs recorded below.
 
 ## Two worlds, kept apart
 
@@ -302,7 +302,7 @@ importing a room singleton:
   than maintaining a second compatibility vocabulary. Control colors, borders, radii, height,
   padding, and form rhythm come from the shared tokens and primitives, so restyling does not
   require editing per-feature `#id` rules).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`017`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`018`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -354,10 +354,25 @@ Its explicit request-capability inventory rejects unclassified registrations. Th
 `canUseRoomCapability` predicate adds participation checks independently of role; existing
 handler-specific rank, ownership and privacy checks remain in force. Server-owned auth fields
 can deny gameplay for spectators/time-outs, or all requests while policy is loading. Missing
-participation fields retain current admitted-player/editor behavior until durable policy loading
-is implemented. This is a foundation only: there are no restriction controls, policy migration,
-public status fields or transition cleanup yet. Future loading must fail closed, and future
-transitions must release held objects and recover private inventory before exposing the feature.
+participation fields remain compatible with legacy internal callers, while room access now loads
+durable policy before gameplay. Reconnect marks readiness false and revokes access on read failure.
+The 120-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
+one room-send adapter, while the server remains authoritative.
+
+Migration 018 stores time-outs by room/account with a cascading membership foreign key, outside
+portable scenes and game snapshots. The participation query module locks users and memberships,
+checks durable hierarchy and live authority, then commits before the service publishes policy.
+Per-account queues order concurrent changes. Commit is the decision point: actor revocation during
+commit suppresses acknowledgment but cannot suppress an already-committed policy. Room access
+invalidates pending joins and sets all matching clients' auth before running transition cleanup.
+Public player status and member rows expose the restriction; no private card data is added.
+
+`stopPlayerInteraction` reuses inspection recovery and the departure cleanup rules without
+removing a time-out target's seat, hand, tray or membership. It zeros held-body velocities,
+clears drag/group/whiteboard state, ends reveals and retains recoverable inspection inventory if
+placement is blocked. Departure calls the same helper, leaving final hand/tray cleanup in its
+existing lifecycle. Client controllers expose focused cancellation hooks; the input router keeps
+camera, inspection and communication available. Spectator seating/entry remains a later slice.
 
 Library loads recheck live participation after database reads. Pending private library/member
 responses and moderation also recheck policy readiness before delivery or the next mutation. Mixed library save/spawn requests
@@ -1744,7 +1759,9 @@ reshape/reset/board = GM+, member management = GM+. **Admins** are a global flag
 (`is_admin`), threaded through `onAuth` as `client.auth.isAdmin`: they join any
 room as an owner and can act on private library assets anywhere. GMs manage members
 (admit / kick / promote) live from the Members panel; the server pushes
-`memberList` to GMs plus a pending-join pulse. Because `onAuth` turns a _pending_
+`memberList` to GMs plus a pending-join pulse. The existing `memberRow` builder owns
+identity/status and action presentation; narrow dock rows use a separate identity block and
+wrapping two-column action grid, retaining the same membership callbacks and server authority. Because `onAuth` turns a _pending_
 joiner away from the table, they instead hold a socket to a tiny per-code
 **`LobbyRoom`** while waiting; on admit/decline the table room calls into that lobby
 (via the matchmaker) to push `admitted`/`declined` and release them — instant, with a

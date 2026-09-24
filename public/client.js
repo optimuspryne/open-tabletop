@@ -1,3 +1,4 @@
+import { createParticipation } from './table/participation.js';
 import * as THREE from 'three';
 import {
   CONFIG,
@@ -204,7 +205,27 @@ const chat = createChat({ getRoom: () => room, byId });
 const notebook = createNotebook({ getRoom: () => room, byId });
 const scoreboard = createScoreboard({ getRoom: () => room, getRank: () => myRank, byId });
 const timer = createTimer({ getRoom: () => room, byId, setIcon });
+const participation = createParticipation({
+  getRoom: () => room,
+  onBlocked: () => {
+    pieceDrag.cancel();
+    hand.cancelGesture({ resetModes: true });
+    selection.cancel();
+    overlays.cancel();
+    whiteboard.cancel();
+    inspection.cancel();
+    pieceUi.closePieceMenu();
+    pieceLabels.close();
+    shell.closeRadial();
+    for (const id of ['roomSettingsModal', 'showStrip']) {
+      const element = byId(id);
+      if (element) element.hidden = true;
+    }
+    controls.enabled = true;
+  },
+});
 const membership = createMembership({
+  toast,
   getRoom: () => room,
   getSessionId: () => mySession,
   byId,
@@ -246,6 +267,8 @@ const membership = createMembership({
     }
   }
   const cb = getStateCallbacks(room); // Colyseus state-change callbacks (NOT jQuery)
+
+  participation.bindRoom(room, cb);
 
   pieceView.bindRoom(room, cb, {
     onHydration: noteSceneHydration,
@@ -534,6 +557,7 @@ shell.bindInteractionControls({
 });
 
 const hand = createHand({
+  canInteract: participation.canInteract,
   scene,
   camera,
   renderer,
@@ -556,6 +580,7 @@ const hand = createHand({
   toast,
 });
 inspection = createInspection({
+  canInteract: participation.canInteract,
   THREE,
   scene,
   camera,
@@ -775,6 +800,7 @@ const pieceLabels = createPieceLabels({
   getRank: () => myRank,
 });
 const pieceUi = createPieceUi({
+  canInteract: participation.canInteract,
   byId,
   canvas: renderer.domElement,
   meshes,
@@ -876,6 +902,7 @@ addEventListener('resize', () => {
 // Raw canvas events → intents (see public/table/controls.js). These handlers own what each
 // intent means through the composed router; controls.js owns which device gesture raises it.
 const INPUT = createInputRouter({
+  canInteract: participation.canInteract,
   getRoom: () => room,
   canvas: renderer.domElement,
   controls,

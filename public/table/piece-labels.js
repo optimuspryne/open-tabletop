@@ -150,5 +150,5 @@ export function createPieceLabels({ THREE, scene, meshes, getRoom, getRank, doc 
       );
     });
   }
-  return { edit, update, remove };
+  return { edit, update, remove, close };
 }

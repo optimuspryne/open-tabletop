@@ -9,11 +9,12 @@ are relative; they are not delivery estimates or evidence that the underlying de
 Completed object labels, low-stock warnings, highlights, placard styling/resolution, and avatar
 uploads are not being reopened. Placard customization remains a separate optional extension.
 
-The shared participation-policy foundation is now implemented locally; see the
-[implementation checkpoint](DESIGN_next_features.md#current-implementation-checkpoint--2026-09-24).
-It supplies guarded message registration for future inventories/notecards and other gameplay
-features. Durable time-out/spectator policy and transition cleanup remain pending, so this does
-not complete their participation dependency or implement any backlog feature below.
+The participation foundation is committed as `c51423a`; durable GM time-outs and transition
+cleanup are now implemented with user-reported functional and UI approval. See the
+[time-out checkpoint](DESIGN_next_features.md#stage-2-time-out-checkpoint--2026-09-24).
+The shared request registry supplies guarded registration for future inventories/notecards and
+other gameplay features. Spectator entry/seating remains pending; no backlog feature below is
+implemented by these participation slices.
 
 ## Where to investigate first
 

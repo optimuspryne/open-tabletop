@@ -44,6 +44,7 @@ export function createRoomAccess({ db, hashToken }) {
     const user = await db.findUserByToken(tokenHash);
     if (!user) throw new ServerError(401, 'Please sign in first.');
     let role = 'owner';
+    let timedOut = false;
     if (kind === 'editor') {
       if (!user.isAdmin) throw new ServerError(403, 'The library editor is for site admins only.');
     } else {
@@ -57,6 +58,7 @@ export function createRoomAccess({ db, hashToken }) {
       } else {
         role = user.isAdmin ? 'owner' : member?.status === 'admitted' ? member.role : null;
         if (!role) throw new ServerError(403, 'You are not an admitted member of this room.');
+        timedOut = !user.isAdmin && role !== 'owner' && member?.timedOut === true;
       }
     }
     return {
@@ -65,11 +67,36 @@ export function createRoomAccess({ db, hashToken }) {
       avatar: user.avatar,
       role,
       isAdmin: !!user.isAdmin,
+      participation: 'player',
+      timedOut,
+      participationReady: true,
     };
   }
 
   function entries(room) {
     return rooms.get(room)?.values() || [];
+  }
+
+  function setParticipation(room, userId, policy) {
+    changed({ room, userId });
+    const affected = [...entries(room)].filter(
+      (entry) => !entry.auth.revoked && sameUser(entry.auth, userId),
+    );
+    // Block every connection before any cleanup can throw.
+    for (const entry of affected) {
+      entry.auth.timedOut = policy.timedOut;
+      const player = room.state?.players?.get(entry.client.sessionId);
+      if (player) player.timedOut = policy.timedOut;
+    }
+    let failure;
+    for (const entry of affected) {
+      try {
+        room.onParticipationChanged?.(entry.client);
+      } catch (error) {
+        failure ||= error;
+      }
+    }
+    if (failure) throw failure;
   }
 
   function disconnect(entry, notice) {
@@ -123,17 +150,24 @@ export function createRoomAccess({ db, hashToken }) {
       });
     },
 
+    setParticipation,
+
     async reconnect(room, client) {
       const entry = rooms.get(room)?.get(client.sessionId);
       if (!entry || entry.auth.revoked) throw new ServerError(403, 'Access revoked.');
       entry.client = client;
+      entry.auth.participationReady = false;
       try {
         await checkedAccess(room, entry.kind, entry.tokenHash, (auth) => {
           if (entry.auth.revoked) throw new ServerError(403, 'Access changed. Please join again.');
           Object.assign(entry.auth, auth);
           client.auth = entry.auth;
           const player = room.state?.players?.get(client.sessionId);
-          if (player) player.role = auth.role;
+          if (player) {
+            player.role = auth.role;
+            player.timedOut = auth.timedOut;
+          }
+          room.onParticipationChanged?.(client);
         });
       } catch (error) {
         entry.auth.revoked = true; // failed rechecks must not start another reconnect window
@@ -192,6 +226,8 @@ export function createRoomAccess({ db, hashToken }) {
             await checkedAccess(room, entry.kind, entry.tokenHash, (auth) => {
               if (auth.role !== entry.auth.role || auth.isAdmin !== entry.auth.isAdmin)
                 invalidate();
+              else if (auth.timedOut !== entry.auth.timedOut)
+                setParticipation(room, auth.userId, { timedOut: auth.timedOut });
             });
           } catch (error) {
             if (error.accessChanged) continue; // a newer local mutation owns this result

@@ -13,7 +13,13 @@ export function createMemberService({ db, matchMaker }) {
     const list = await db.listMembers(room.roomId);
     if (!canUseRoomCapability(client.auth ?? {}, 'administration') || room.rank(client) < RANK.gm)
       return;
-    client.send('memberList', list);
+    client.send(
+      'memberList',
+      list.map((member) => ({
+        ...member,
+        isSelf: String(member.userId) === String(client.auth?.userId),
+      })),
+    );
   };
 
   const broadcastMembers = async (room) => {
@@ -21,7 +27,13 @@ export function createMemberService({ db, matchMaker }) {
     const list = await db.listMembers(room.roomId);
     for (const client of room.clients)
       if (canUseRoomCapability(client.auth ?? {}, 'administration') && room.rank(client) >= RANK.gm)
-        client.send('memberList', list);
+        client.send(
+          'memberList',
+          list.map((member) => ({
+            ...member,
+            isSelf: String(member.userId) === String(client.auth?.userId),
+          })),
+        );
   };
 
   const notifyLobby = async (room, userId, method) => {

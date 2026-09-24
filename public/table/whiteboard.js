@@ -324,6 +324,10 @@ export function createWhiteboard({
     return true;
   };
   return {
+    cancel: () => {
+      exitDraw();
+      if (texture) redrawStrokes();
+    },
     isOwning: () => owning,
     isDrawing: () => drawing,
     position,

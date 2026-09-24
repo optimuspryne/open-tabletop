@@ -2,6 +2,7 @@
 // in the injected controllers. Branch order is intentional and covered by regression tests.
 export function createInputRouter({
   getRoom,
+  canInteract = () => true,
   canvas,
   controls,
   selection,
@@ -28,7 +29,15 @@ export function createInputRouter({
       canvas.releasePointerCapture(e.pointerId);
     } catch {}
   };
+  let observedId = null;
   const onPointerDown = (e) => {
+    if (!canInteract()) {
+      if (inspection.beginPointer(e)) return;
+      setPointer(e);
+      observedId = pickId(e.touch ? touchHitPx : 0);
+      if (e.secondary && observedId) openPieceMenu(observedId, { x: e.clientX, y: e.clientY });
+      return;
+    }
     const wasArmed = pieces.consumeArmedMove(); // Move is one-shot: this press consumes it (if on that piece) or cancels it
     if (overlays.isMeasuring()) {
       // Measure mode: left-drag lays the selected overlay (A = press)
@@ -77,6 +86,10 @@ export function createInputRouter({
     pieces.press(e, id, wasArmed);
   };
   const onPointerMove = (e) => {
+    if (!canInteract()) {
+      inspection.movePointer(e);
+      return;
+    }
     if (selection.movePointer(e)) return;
     if (overlays.isMeasuring()) {
       // live local preview of the overlay being dragged out
@@ -100,6 +113,11 @@ export function createInputRouter({
     pieces.move(e);
   };
   const endGesture = (e) => {
+    if (!canInteract()) {
+      inspection.endPointer(e);
+      releaseCapture(e);
+      return;
+    }
     if (selection.endPointer(e)) {
       releaseCapture(e);
       controls.enabled = !inspection.isActive();
@@ -169,6 +187,10 @@ export function createInputRouter({
       document.activeElement &&
       (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
     if (typing) return;
+    if (!canInteract()) {
+      if (e.key.toLowerCase() === 'p' && !e.repeat) sendPing();
+      return;
+    }
 
     if (inspection.isDrawn()) {
       // f/d/h/r place a drawn card. This sits BELOW the typing guard: it used to sit above it, so
@@ -219,6 +241,15 @@ export function createInputRouter({
     release: endGesture, // pointerup / pointercancel → commit/settle the gesture
     command: onKeyDown, // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
     secondaryPress: (p) => {
+      if (!canInteract()) {
+        if (inspection.isActive()) return;
+        if (observedId) openPieceMenu(observedId, p);
+        else {
+          setPointer({ clientX: p.x, clientY: p.y });
+          sendPing();
+        }
+        return;
+      }
       // touch long-press → context menu on a piece, or ping on empty felt
       if (
         !getRoom() ||
@@ -236,11 +267,12 @@ export function createInputRouter({
         sendPing();
       } // long-press empty felt → ping
     },
-    hasHeld: pieces.hasHeld,
+    hasHeld: () => canInteract() && pieces.hasHeld(),
     // Axis keys keep their object meaning only where that action has a target. Otherwise the input
     // profile routes the same physical key to camera panning.
     hasAxisTarget: (name) =>
-      name === 'raiseAxis' ? pieces.hasHeld() : pieces.hasHeld() || selection.size > 0,
+      canInteract() &&
+      (name === 'raiseAxis' ? pieces.hasHeld() : pieces.hasHeld() || selection.size > 0),
     panCamera: (right, forward) => {
       if (
         !getRoom() ||
@@ -254,8 +286,12 @@ export function createInputRouter({
     },
     // Turn the held piece by a raw angle — the device-agnostic form of the Alt-drag dial.
     // The touch profile raises it from a two-finger twist; a gamepad stick would too.
-    rotateHeld: pieces.rotateHeld,
-    snapHeld: pieces.snapHeld,
+    rotateHeld: (...args) => {
+      if (canInteract()) pieces.rotateHeld(...args);
+    },
+    snapHeld: (...args) => {
+      if (canInteract()) pieces.snapHeld(...args);
+    },
     ping: (p) => {
       if (
         !getRoom() ||
@@ -272,10 +308,21 @@ export function createInputRouter({
     },
     // Turn the selection (or the held piece) one small step. The continuous complement to the
     // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.
-    rotateAxis: pieces.rotateAxis,
-    raiseAxis: pieces.raiseAxis,
+    rotateAxis: (...args) => {
+      if (canInteract()) pieces.rotateAxis(...args);
+    },
+    raiseAxis: (...args) => {
+      if (canInteract()) pieces.raiseAxis(...args);
+    },
     // double-click the board to own it and draw; true if a claim was sent
     doubleClick: (p) => {
+      if (!canInteract()) {
+        setPointer({ clientX: p.x, clientY: p.y });
+        const id = pickId();
+        const type = getRoom()?.state?.pieces?.get(id)?.type;
+        if (id && inspection.isInspectable(type)) inspection.enterInspect(id);
+        return false;
+      }
       return whiteboard.claimAt(p, getPieceMeshes());
     },
   };

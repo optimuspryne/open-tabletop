@@ -81,6 +81,13 @@ No manual `psql -f`, and **no db-image rebuild required** — existing deploymen
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
+The Unreleased time-out slice requires migration **018_room_participation.sql** before the new
+server runs, followed by a client refresh for the appended player status field. Normal startup
+uses the existing migration role and default runtime grants; no new environment variables or
+infrastructure are required. Installations with automatic migration disabled must apply 018 with
+their schema-owner connection. Existing memberships default to unrestricted; scenes and game
+snapshots require no conversion.
+
 ## Rules that keep the guarantees honest
 
 - **Never re-push a version tag.** Once `:X.Y.Z` is pushed, those bits are frozen. A fix
