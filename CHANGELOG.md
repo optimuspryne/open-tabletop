@@ -9,6 +9,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Increase the server's initial schema-encoding buffer from 128 to 512 KiB after a busy table
+  exceeded the previous allocation. Larger states still use Colyseus's automatic growth;
+  this changes allocation, not table capacity or wire data. Requires a server restart.
 - Keep member names/status visible in the narrow room dock. Put moderation actions in a
   two-column grid, wrap long names, and highlight Kick/Reject. At user request, reduce action
   heights and spacing by roughly half while keeping readable labels.

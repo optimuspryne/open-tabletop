@@ -1436,8 +1436,11 @@ The same module exports `scoopTrayDice(room, seat)` for the room-feature handler
 `server/game/schema.js` is the single server-side declaration site for the state
 Colyseus reflects to browsers. Declaration order and field types are a wire contract:
 clients reconstruct the schema from reflection rather than importing this Node module.
-The module therefore contains only schema definitions and the shared `TABLE` defaults;
-it does not configure listeners, rooms, physics, persistence, or process-wide encoder
+The module therefore contains only schema definitions and shared defaults.
+`server.js` preallocates 512 KiB per schema encoder before room creation to reduce overflow
+reallocations on busy tables. This is allocation tuning only: larger states still grow automatically,
+and piece capacity, wire schema and private-state boundaries remain unchanged. The schema module
+itself does not configure listeners, rooms, physics, persistence, or process-wide encoder
 capacity.
 
 The root `State` constructs fresh maps for pieces, players, scores, personal dice trays,

@@ -55,7 +55,8 @@ import { performance } from 'node:perf_hooks';
 import { Server, Room, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Encoder } from '@colyseus/schema';
-Encoder.BUFFER_SIZE = 128 * 1024; // default 16KB overflows a busy table's piece map; 128KB gives ample headroom
+// Preallocate for busy tables; Colyseus can still grow and re-encode larger states.
+Encoder.BUFFER_SIZE = 512 * 1024;
 import * as CANNON from 'cannon-es';
 import {
   KINDS,

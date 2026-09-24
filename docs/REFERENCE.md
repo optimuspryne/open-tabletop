@@ -1148,8 +1148,11 @@ All nine classes below and their `defineTypes` declarations live in
 reflection/wire contract used by joining and reconnecting browser clients. Each `State`
 constructs fresh `MapSchema` collections and nested singleton schemas. The module imports
 only shared `TABLE` and factory-lighting defaults besides `@colyseus/schema`; process-wide
-**`Encoder.BUFFER_SIZE = 128 * 1024`** remains explicit in `server.js`, before rooms are
-created, rather than becoming an import side effect of the schema module.
+**`Encoder.BUFFER_SIZE = 512 * 1024`** remains explicit in `server.js`, before rooms are
+created, rather than becoming an import side effect of the schema module. This is an initial
+allocation (512 KiB per encoder), not a state-size or piece-count limit. Colyseus grows and
+re-encodes on overflow; larger states may still log a growth warning. The increase from 128 KiB
+covers the reported 384 KiB allocation recommendation with headroom. Restart the server to apply.
 
 - **`Piece`** — `type, owner, props` (strings), `count` (deck cards or remaining
   finite-dispenser items), transform `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the
