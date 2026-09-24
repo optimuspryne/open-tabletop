@@ -103,7 +103,7 @@ test('asset listings map every kind to its database reader and client message', 
 });
 
 test('private asset results are suppressed if admin access is lost during the read', async () => {
-  for (const change of ['revoke', 'demote', 'unchanged']) {
+  for (const change of ['revoke', 'demote', 'loading', 'unchanged']) {
     const { db, operations, room } = harness();
     let finishRead;
     let readOptions;
@@ -116,6 +116,7 @@ test('private asset results are suppressed if admin access is lost during the re
     assert.deepEqual(readOptions, { includePrivate: true });
     if (change === 'revoke') user.auth.revoked = true;
     if (change === 'demote') user.auth.isAdmin = false;
+    if (change === 'loading') user.auth.participationReady = false;
     finishRead([{ privateData: true }]);
     assert.equal(await pending, change === 'unchanged');
     assert.equal(user.sent.length, change === 'unchanged' ? 1 : 0);

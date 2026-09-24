@@ -2,6 +2,28 @@
 // authorization matrix testable without starting a room or connecting to Postgres.
 export const RANK = Object.freeze({ player: 0, helper: 1, gm: 2, owner: 3 });
 
+// Participation is independent of rank. Missing fields preserve current admitted
+// player/editor sessions; the durable policy loader must set participationReady
+// false while loading (including failures), then install authoritative values.
+export function canUseRoomCapability(auth = {}, capability) {
+  if (auth.revoked || auth.participationReady === false) return false;
+  switch (capability) {
+    case 'gameplay':
+      return (
+        (auth.participation === undefined || auth.participation === 'player') &&
+        (auth.timedOut === undefined || auth.timedOut === false)
+      );
+    case 'observation':
+    case 'communication':
+    case 'administration':
+    case 'personal':
+    case 'cleanup':
+      return true;
+    default:
+      return false;
+  }
+}
+
 export function rankOf(role) {
   return RANK[role] ?? RANK.player;
 }

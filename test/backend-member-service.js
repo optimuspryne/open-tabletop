@@ -48,7 +48,7 @@ test('member lists require a persistent room and a live GM rank', async () => {
 });
 
 test('a pending member list is suppressed after revocation or demotion', async () => {
-  for (const change of ['revoke', 'demote', 'unchanged']) {
+  for (const change of ['revoke', 'demote', 'loading', 'unchanged']) {
     const { db, room, service } = harness();
     let finishRead;
     db.listMembers = () => new Promise((resolve) => (finishRead = resolve));
@@ -56,6 +56,7 @@ test('a pending member list is suppressed after revocation or demotion', async (
     const pending = service.sendMembers(room, gm);
     if (change === 'revoke') gm.auth.revoked = true;
     if (change === 'demote') gm.auth.rank = 0;
+    if (change === 'loading') gm.auth.participationReady = false;
     finishRead([{ privateData: true }]);
     await pending;
     assert.equal(gm.sent.length, change === 'unchanged' ? 1 : 0, change);
@@ -70,9 +71,11 @@ test('member broadcasts deliver only to clients who are currently GMs', async ()
   const gm = actor(2);
   const demoted = actor(2);
   const player = actor(0);
+  const loading = actor(3);
+  loading.auth.participationReady = false;
   const revoked = actor(3);
   revoked.auth.revoked = true;
-  room.clients.push(owner, gm, demoted, player, revoked);
+  room.clients.push(owner, gm, demoted, player, revoked, loading);
   const pending = service.broadcastMembers(room);
   demoted.auth.rank = 0;
   finishRead([{ id: 'member' }]);
@@ -82,6 +85,7 @@ test('member broadcasts deliver only to clients who are currently GMs', async ()
   assert.equal(demoted.sent.length, 0);
   assert.equal(player.sent.length, 0);
   assert.equal(revoked.sent.length, 0);
+  assert.equal(loading.sent.length, 0);
 });
 
 test('lobby notifications fan out to every matching waiting room', async () => {

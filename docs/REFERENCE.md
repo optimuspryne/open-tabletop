@@ -3,6 +3,12 @@
 A map of every module, data structure, and key function. For the _why_, see
 `ARCHITECTURE.md`; this is the _what_ — the API surface.
 
+For staged implementation status and **remaining proposed** work, see [DESIGN_next_features.md](DESIGN_next_features.md)
+(participation restrictions, deck browsing, collections) and
+[DESIGN_future_backlog.md](DESIGN_future_backlog.md) (discovery briefs for other open items).
+Only the participation-policy foundation is implemented so far; the remaining suggested messages,
+modules and schemas are not current API contracts.
+
 The codebase:
 
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |
@@ -41,6 +47,7 @@ The codebase:
 | `server/library-queries.js`                                                                            | Node    | Testable saved-library read queries; successful empty/not-found results stay distinct from PostgreSQL rejection                                                                                  |
 | `server/user-queries.js`                                                                               | Node    | Testable auth/user/admin reads; successful absence stays distinct from PostgreSQL rejection                                                                                                      |
 | `server/room-queries.js`                                                                               | Node    | Testable room/membership/state reads and idempotent joins; domain absence/defaults stay distinct from PostgreSQL rejection                                                                       |
+| `server/game/interaction-policy.js` | Node | Explicit table-request capabilities, `guardedMessage` registration and live `allowRoomCapability` checks |
 | `server/game/safe-message.js`                                                                          | Node    | `safeMessage`/`safeRoomTask` Colyseus boundaries: catch sync/async message and lifecycle failures, log payload-free room/user context, and send sanitized client errors when a client is present |
 | `server/static-assets.js` | Node | Bundled asset directory setting, trusted filesystem resolution, and stable URL mounts |
 | `server/http/routes/static-assets.js` | Node | Static asset HTTP serving with existing Mahjong cache and media range behavior |
@@ -1495,8 +1502,11 @@ asset records, and return fresh trusted values or `null`. Payloadless messages a
 only handlers without a normalizer. Invalid messages fail closed without a partial
 state change or database call.
 
-All extracted and inline table handlers register through **`safeMessage(room,
-type, handler, options)`**. It contains synchronous throws and promise rejections,
+All extracted and inline table handlers register through **`guardedMessage(room,
+type, handler, options)`** in `server/game/interaction-policy.js`. Registration rejects
+unclassified request names. Its `ROOM_MESSAGE_CAPABILITIES` inventory covers gameplay, observation,
+communication, administration, personal state and cleanup. It calls the existing
+**`safeMessage(room,type,handler,options)`** boundary, which contains synchronous throws and promise rejections,
 logs only operation/room/user/session context (never the payload), and sends a
 sanitized `serverError` by default. Library and membership handlers select narrower
 public messages/error types. **`safeRoomTask(room,type,client,task,options)`** extends
@@ -1504,6 +1514,31 @@ the same boundary to join-time and detached lifecycle work; `notify:false` keeps
 clientless saves log-only. The browser displays generic `serverError` messages at
 most once per five seconds.
 `safeRoomTask` also rejects queued work from clients marked `auth.revoked`.
+
+**`canUseRoomCapability(auth, capability)`** in `server/permissions.js` is a pure participation
+predicate; handler rank, ownership and asset-access checks still apply. Server-owned
+`client.auth.participation` (`player` / `spectator`), `timedOut` and `participationReady` are
+internal integration fields, not client payloads or synchronized/persisted schema. Missing fields
+retain existing admitted-player/editor behavior. `participationReady:false` and `revoked:true`
+deny every capability; explicit unknown participation or malformed time-out values deny gameplay.
+A future durable loader must set the ready flag false before reading policy and leave it false
+on failure. No loader or user-facing restriction control is implemented in this foundation.
+
+**`allowRoomCapability(client, capability, operation)`** rechecks that predicate and sends a
+sanitized `serverError` denial (revoked clients receive nothing). Library `loadDeck`, `loadMat`,
+`loadProp`, `sceneLoad` and `loadBoard` call it after reads before changing the table. `deckFinish`,
+`saveMat` and `saveProp` remain administration but require gameplay when their validated payload
+requests spawning; mats/props recheck after saving. Already-completed asset writes are retained
+if participation changes during the save, but the optional spawn is denied. A denied deck finish
+retains its draft. `getDeck`, asset/member lists and delayed moderation also recheck readiness/access.
+`stateSave` rechecks participation/rank before acknowledgment; an already-issued
+save may still complete. `setAvatar` rechecks access and the live player identity after persistence.
+
+Chat, pings/highlights, own-hand viewing, notebook edits, library listing and authorized account/
+library/member administration remain available under a gameplay restriction. `showStop` and
+`wbRelease` are cleanup; releasing a dragged piece is gameplay because it can throw/absorb objects.
+Hand reassignment, reveals, deck peeks, tray operations, turn changes and room settings are gameplay.
+Server-driven physics, cleanup/recovery and persistence use their existing lifecycle boundaries.
 
 Per-piece flags (rank-gated, mirror each other): **`setStand`** (`{id}` — toggle
 keep-upright; **U**), **`setSnap`** (`{id}` — toggle snap-to-grid, snapping the piece

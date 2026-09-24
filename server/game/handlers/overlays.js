@@ -7,7 +7,7 @@ import {
   overlayMovePayload,
   whiteboardStroke,
 } from '../../message-validation.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage } from '../interaction-policy.js';
 
 const TWO_PI = Math.PI * 2;
 
@@ -15,7 +15,7 @@ export function registerOverlayHandlers(
   room,
   { createOverlay, kinds, maxLength, maxOverlays, maxPerPlayer, maxStrokes, logger = console },
 ) {
-  const overlayMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const overlayMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
 
   overlayMessage('overlayAdd', (client, message) => {
     const msg = overlayGeometry(message, { kinds, maxLen: maxLength, requireKind: true });

@@ -6,7 +6,7 @@ import {
   pointPayload,
   showPayload,
 } from '../../message-validation.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage } from '../interaction-policy.js';
 import { scoopTrayDice } from '../trays.js';
 
 const HIGHLIGHT_INTERVAL_MS = 250;
@@ -15,7 +15,7 @@ export function registerRoomFeatureHandlers(
   room,
   { trayRoll, validSky, now = Date.now, random = Math.random, logger = console },
 ) {
-  const featureMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const featureMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
   const lastHighlight = new WeakMap();
 
   featureMessage('highlightPiece', (client, message) => {

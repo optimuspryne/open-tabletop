@@ -113,7 +113,8 @@ import { boundedString, oneField, reorderHandPayload } from './server/message-va
 import { FACTORY_LIGHTING, normalizeLighting } from './shared/lighting.js';
 import { createRateLimitStore, makeRateLimiter } from './server/rate-limit.js';
 import { trustedProxyHops } from './server/redis-config.js';
-import { safeMessage, safeRoomTask } from './server/game/safe-message.js';
+import { safeRoomTask } from './server/game/safe-message.js';
+import { guardedMessage, allowRoomCapability } from './server/game/interaction-policy.js';
 import { buildWorld, COLLIDER_TYPES, boardSpawnHeight } from './server/physics.js';
 import {
   applyScene as applyPersistedScene,
@@ -412,7 +413,7 @@ class TableRoom extends Room {
     // Contain unexpected failures in every inline table message. Specialized
     // library handlers below override the public message while sharing the same
     // logging and recovery behavior.
-    const tableMessage = (type, handler) => safeMessage(this, type, handler);
+    const tableMessage = (type, handler) => guardedMessage(this, type, handler);
 
     // --- Movement: grab → drag → release (single + multi-select) ---------
     registerMovementHandlers(this, {
@@ -565,6 +566,8 @@ class TableRoom extends Room {
         // Persist to the account so it follows the user across sessions and rooms.
         if (client.auth && client.auth.userId)
           await db.setUserAvatar(client.auth.userId, parsed.data);
+        if (!allowRoomCapability(client, 'personal', 'setAvatar')) return;
+        if (this.state.players.get(client.sessionId) !== player) return;
         player.avatar = parsed.data;
       }
     });

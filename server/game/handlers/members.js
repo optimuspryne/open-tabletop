@@ -4,13 +4,13 @@ import {
   memberRolePayload,
   memberUserPayload,
 } from '../../message-validation.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage, allowRoomCapability } from '../interaction-policy.js';
 
 // Database-backed room membership controls. Client-side visibility is only a
 // convenience; every mutation is independently authorized here.
 export function registerMemberHandlers(room, { db, roomAccess, logger = console }) {
   const memberMessage = (type, handler) =>
-    safeMessage(room, type, handler, {
+    guardedMessage(room, type, handler, {
       logger,
       publicMessage: 'Member operation unavailable. Try again.',
     });
@@ -36,11 +36,15 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
     const { userId } = parsed;
     if (String(userId) === String(client.auth && client.auth.userId)) return;
     const membership = await db.getMembership(room.roomId, userId);
-    if (client.auth?.revoked) return;
+    if (!allowRoomCapability(client, 'administration', 'kick')) return;
     if (!membership || !room.canManage(room.rank(client), membership.role)) return;
     const targetUser = await db.findUserById(userId);
     if (targetUser && targetUser.isAdmin) return;
-    if (client.auth?.revoked || !room.canManage(room.rank(client), membership.role)) return;
+    if (
+      !allowRoomCapability(client, 'administration', 'kick') ||
+      !room.canManage(room.rank(client), membership.role)
+    )
+      return;
     await db.kickMember(room.roomId, userId);
     roomAccess.kickRoom(room, userId);
     await Promise.all([room.notifyLobby(userId, 'notifyDeclined'), room.broadcastMembers()]);
@@ -53,11 +57,15 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
     const { userId, role } = parsed;
     if (String(userId) === String(client.auth && client.auth.userId)) return;
     const membership = await db.getMembership(room.roomId, userId);
-    if (client.auth?.revoked) return;
+    if (!allowRoomCapability(client, 'administration', 'setRole')) return;
     if (!membership || !room.canSetRole(room.rank(client), membership.role, role)) return;
     const targetUser = await db.findUserById(userId);
     if (targetUser && targetUser.isAdmin) return;
-    if (client.auth?.revoked || !room.canSetRole(room.rank(client), membership.role, role)) return;
+    if (
+      !allowRoomCapability(client, 'administration', 'setRole') ||
+      !room.canSetRole(room.rank(client), membership.role, role)
+    )
+      return;
     await db.setMemberRole(room.roomId, userId, role);
     roomAccess.setRole(room, userId, role);
     await room.broadcastMembers();

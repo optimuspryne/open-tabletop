@@ -325,3 +325,21 @@ test('a save that updates no room is a failure', async () => {
     /Room no longer exists/,
   );
 });
+
+test('a completed save does not send privileged acknowledgment after participation is blocked', async () => {
+  const { room, handlers } = harness();
+  const actor = client();
+  let resolveSave;
+  room.saveStateNow = () =>
+    new Promise((resolve) => {
+      resolveSave = resolve;
+    });
+  const pending = handlers.get('stateSave')(actor);
+  actor.auth = { ...actor.auth, timedOut: true };
+  resolveSave();
+  await pending;
+  assert.equal(
+    actor.sent.some(({ type }) => type === 'stateSaved'),
+    false,
+  );
+});

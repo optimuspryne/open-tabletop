@@ -12,13 +12,14 @@ import {
   tablePayload,
   timerPayload,
 } from '../../message-validation.js';
-import { safeMessage, safeRoomTask } from '../safe-message.js';
+import { safeRoomTask } from '../safe-message.js';
+import { guardedMessage, allowRoomCapability } from '../interaction-policy.js';
 
 export function registerRoomStateHandlers(
   room,
   { createScoreRow, tableLimits, gridLiftMax, sceneMaxBytes, now = Date.now, logger = console },
 ) {
-  const roomMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const roomMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
   const rememberCurrentLighting = () => {
     if (room.savedScene)
       room.savedScene = {
@@ -32,7 +33,7 @@ export function registerRoomStateHandlers(
   const notebookKey = (client) =>
     client.auth?.userId != null ? `user:${client.auth.userId}` : `session:${client.sessionId}`;
 
-  safeMessage(
+  guardedMessage(
     room,
     'stateSave',
     async (client) => {
@@ -51,6 +52,8 @@ export function registerRoomStateHandlers(
       }
       room.savedScene = payload;
       await room.saveStateNow();
+      if (!allowRoomCapability(client, 'gameplay', 'stateSave') || room.rank(client) < RANK.gm)
+        return;
       client.send('stateSaved', {});
     },
     { logger, errorType: 'sceneError', publicMessage: 'Could not save table state. Try again.' },

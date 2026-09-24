@@ -26,7 +26,7 @@ import {
   spawnPayload,
 } from '../../message-validation.js';
 import { readProps, writeProps } from '../props-codec.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage } from '../interaction-policy.js';
 import { ensurePieceCapacity } from '../piece-capacity.js';
 
 // Register piece and multi-selection operations. The room remains responsible
@@ -50,7 +50,7 @@ export function registerPieceHandlers(
     logger = console,
   },
 ) {
-  const pieceMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const pieceMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
   const idsFrom = (message) => groupIds(message, { max: maxPieces });
 
   pieceMessage('setPieceLabels', (client, message) => {

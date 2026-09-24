@@ -3,7 +3,7 @@ import {
   dispenserDragPayload,
   pieceIdPayload,
 } from '../../message-validation.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage } from '../interaction-policy.js';
 import { MAX_PIECES, ensurePieceCapacity, hasPieceCapacity } from '../piece-capacity.js';
 
 // Capacity must be checked before consuming inventory, with no intervening await.
@@ -11,7 +11,7 @@ export function registerPlacementHandlers(
   room,
   { randomPosition, dropSfx, maxPieces = MAX_PIECES, logger = console },
 ) {
-  const tableMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const tableMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
   tableMessage('dispense', (client, message) => {
     const parsed = pieceIdPayload(message);
     if (!parsed) return;

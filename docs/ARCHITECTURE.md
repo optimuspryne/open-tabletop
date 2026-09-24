@@ -3,6 +3,12 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
+Staged feature plans are separate from this description of the running system:
+[DESIGN_next_features.md](DESIGN_next_features.md) plans time-out/spectator permissions, private
+deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_backlog.md) records
+lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
+there remain proposed except for the participation-policy foundation recorded below.
+
 ## Two worlds, kept apart
 
 The single most important idea: there are two parallel representations of the
@@ -343,7 +349,24 @@ after adding offsets. The physics servo uses `dragVelocity` to reject non-finite
 velocities before they reach Cannon; on failure it clears the target and ownership and
 zeros the body's linear velocity.
 
-Every table message then runs through `safeMessage`: synchronous throws and rejected
+Every table message registers through `guardedMessage` in `server/game/interaction-policy.js`.
+Its explicit request-capability inventory rejects unclassified registrations. The pure
+`canUseRoomCapability` predicate adds participation checks independently of role; existing
+handler-specific rank, ownership and privacy checks remain in force. Server-owned auth fields
+can deny gameplay for spectators/time-outs, or all requests while policy is loading. Missing
+participation fields retain current admitted-player/editor behavior until durable policy loading
+is implemented. This is a foundation only: there are no restriction controls, policy migration,
+public status fields or transition cleanup yet. Future loading must fail closed, and future
+transitions must release held objects and recover private inventory before exposing the feature.
+
+Library loads recheck live participation after database reads. Pending private library/member
+responses and moderation also recheck policy readiness before delivery or the next mutation. Mixed library save/spawn requests
+check gameplay before starting and again before a delayed spawn, preserving any completed asset
+save. Observation, communication, personal state, cleanup and authorized administration remain
+available; table mutations (including peeks, reveals and hand reassignment) require gameplay.
+Lifecycle physics/recovery/persistence are independent of this client-request gate.
+
+The guard runs inside the existing `safeMessage` error boundary: synchronous throws and rejected
 promises are logged with payload-free room/user/session context and converted to a
 sanitized `serverError` (or the narrower asset/member error) for that client. The
 browser throttles generic notices to prevent alert storms. `safeRoomTask` applies the

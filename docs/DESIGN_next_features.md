@@ -1,0 +1,437 @@
+# Next features: participation, deck browsing, and collections
+
+Status: **participation stage 1 implemented locally; remaining stages proposed**. Original plans
+were prepared against commit `b7390c6`; foundation implementation is dated 2026-09-24.
+This document covers [ROADMAP.md](ROADMAP.md) items **5/15, 22, and 18**. Recommendations below
+are starting decisions for later work, not additional user-approved requirements. Recheck current
+source and resolve the listed product decisions before implementing the affected slice.
+
+The other remaining work has shorter briefs in [DESIGN_future_backlog.md](DESIGN_future_backlog.md).
+Current contracts remain in [REFERENCE.md](REFERENCE.md) and [ARCHITECTURE.md](ARCHITECTURE.md).
+
+## Recommended order and effort
+
+| Work | Assessment | Useful first release | Main risk |
+| --- | --- | --- | --- |
+| Time-out, then spectator mode | Medium-to-large change across gameplay permissions and lifecycle | GM time-out with a common interaction gate | A forgotten message or delayed operation bypasses the restriction |
+| Deck browsing | Medium-to-large; substantial existing UI/transfer reuse | One private browser per deck, five card destinations | Leaking faces or losing/duplicating cards during competing operations |
+| Collections | Medium; database and library UI work | Shared curated collections with local visibility toggles | Accidentally treating membership as permission to read an asset |
+
+Implement time-out's common permission gate first, then finish spectator behavior. Deck browsing
+should consume that gate from its first release. Collections can be developed independently;
+design stable collection/asset identities now, but ship portable export/import separately.
+These are relative scope assessments, not elapsed-time estimates. Each stage should be usable
+and ready for in-app testing before proceeding to the next cohesive stage.
+
+## Current implementation checkpoint — 2026-09-24
+
+**Stage 1: policy foundation is implemented; the user reports manual tests green (2026-09-24).** All 119 current table
+requests have explicit capabilities and use a guarded registration layered over `safeMessage`.
+Unknown registrations fail closed. Existing role and asset permissions remain in their handlers.
+Tests cover the production registration inventory, blocked direct gameplay requests, independent
+role/participation state, allowed observation/communication, pending library reads/saves, and
+private-response/moderation suppression while policy loading is incomplete.
+
+The server-only integration fields are `client.auth.participation`, `timedOut` and
+`participationReady`; they are not yet loaded, persisted or exposed by any user control. Missing
+fields preserve existing player/editor behavior. The future durable loader must set ready false
+before loading and keep it false on failure. This foundation alone is **not an operational
+time-out or spectator feature**. Transition cleanup, duplicate-tab propagation, migrations,
+reconnect/restart policy, public status and desktop/touch controls belong to stages 2–3.
+
+The initial capability policy follows the proposed defaults: chat/pings/highlights and hand viewing
+are allowed; notebook/profile edits are personal; membership/library administration retains its
+own authorization; `showStop`/`wbRelease` are cleanup. Hand reassignment and reveals are gameplay.
+Mixed save/spawn requests check gameplay before work and before delayed spawning. If a save
+already committed when a restriction arrives, the library record remains but no object spawns.
+The pending deck draft survives a denied finish. No UI/input, database schema or query changes.
+
+Reuse decision: retain `safeMessage`/`safeRoomTask` unchanged for errors and lifecycle recovery;
+add the capability gate as a focused wrapper, and keep live asynchronous checks next to mutations.
+
+File/function changes in this slice:
+
+| File | Change |
+| --- | --- |
+| `server/permissions.js` | Add pure `canUseRoomCapability`; retain role helpers. |
+| `server/game/interaction-policy.js` | Add `ROOM_MESSAGE_CAPABILITIES`, `allowRoomCapability`, `guardedMessage`. |
+| `server.js` | `TableRoom.onCreate` registers its eight inline requests through the gate; `setAvatar` rechecks access/player identity after saving. |
+| `server/game/handlers/cards.js` | `registerCardHandlers` uses guarded registration. |
+| `server/game/handlers/library.js` | `registerLibraryHandlers` uses the gate; guard mixed save/spawn requests and delayed loads/spawns. |
+| `server/game/handlers/members.js` | `registerMemberHandlers` uses the gate; hand reassignment is gameplay; delayed moderation rechecks policy readiness. |
+| `server/game/handlers/movement.js` | `registerMovementHandlers` uses guarded registration. |
+| `server/game/handlers/overlays.js` | `registerOverlayHandlers` uses the gate, including explicit read/cleanup exceptions. |
+| `server/game/handlers/pieces.js` | `registerPieceHandlers` uses guarded registration. |
+| `server/game/handlers/placement.js` | `registerPlacementHandlers` uses guarded registration. |
+| `server/game/handlers/room-features.js` | `registerRoomFeatureHandlers` uses the gate with communication/read/cleanup exceptions. |
+| `server/game/handlers/room-state.js` | `registerRoomStateHandlers` uses the gate; `stateSave` rechecks before acknowledgment. Lifecycle helpers unchanged. |
+| `server/game/library.js` | `createLibraryOperations.sendAssetList` checks live observation access before/after reads. |
+| `server/game/member-service.js` | `createMemberService.sendMembers`/`broadcastMembers` check readiness and live administration access. |
+| `test/backend-library-operations.js` | Extend delayed private-list coverage to pending policy loading. |
+| `test/backend-member-service.js` | Extend pending-list and broadcast coverage to pending policy loading. |
+| `test/backend-interaction-policy.js` | Add inventory, predicate, direct-request, allowed-action and recovery regressions. |
+| `test/backend-library-handlers.js` | Add pending-load/save denial, save-only and draft-retention regressions. |
+| `test/backend-room-state-handlers.js` | Add delayed save acknowledgment regression. |
+| `CHANGELOG.md` | Record the foundation under Unreleased while preserving prior entries. |
+| `docs/REFERENCE.md` | Document the current API, capabilities, mixed operations and internal auth fields. |
+| `docs/ARCHITECTURE.md` | Document guard ownership, reuse and the durable-loader/transition boundary. |
+| `docs/ROADMAP.md` | Mark foundation progress without marking time-out/spectators complete. |
+| `docs/DESIGN_next_features.md` | Record this checkpoint and remaining stages. |
+| `docs/DESIGN_future_backlog.md` | Cross-reference the common foundation; keep backlog features pending. |
+
+Verification: focused server regressions and `npm run check` pass (lint, formatting, CSS
+validation and all 670 tests). The full run required local socket/subprocess access outside the
+restricted sandbox. Documentation relative links and `git diff --check` pass. No client input/DOM/
+layout or database-query/schema changes were made, so the additional device/input/component/DB
+suites were not run. The user reported manual tests green on 2026-09-24 for this foundation slice.
+The suggested smoke-test scope was ordinary drag/group drag, draw/inspect/place, tray roll,
+chat/pings, save/load and library Save+Spawn. Specific devices, browsers and multiplayer scenarios
+were not itemized, so this sign-off does not establish a full device matrix. Restriction behavior
+still has automated server coverage only; no user-facing control exists yet. Applying this slice
+requires a server restart and client refresh; no migration is required.
+
+## Verified starting points
+
+The following are existing behavior at the baseline, not proposed APIs:
+
+| Area | Existing code and relevant contract |
+| --- | --- |
+| Permissions | [permissions.js](../server/permissions.js) defines player/helper/GM/owner ranks and target-management rules. Site-admin status is separate from room rank. |
+| Message boundary | [safe-message.js](../server/game/safe-message.js) catches failures and rejects revoked clients; it does not itself classify allowed gameplay actions. |
+| Membership | [room-access.js](../server/room-access.js) rechecks authorization on reconnect. [server.js](../server.js) assigns seats, claims hands, advances turns, and releases held pieces/whiteboard ownership on departure. |
+| Player state | [schema.js](../server/game/schema.js) exposes public player presentation, role, seat, hand count and turn order. New participation fields would be new wire state. |
+| Private cards | [cards.js](../server/game/handlers/cards.js) implements `drawInspect`/`inspectPlace`. A peek currently pops the top card into server-only `pendingInspect`; placement offers hand, field-up/down, or return to deck. |
+| Transfers/recovery | [card-transfer.js](../server/game/card-transfer.js) centralizes table placement and concealed faces. [inspection-recovery.js](../server/game/inspection-recovery.js) returns a pending card or keeps it recoverable when placement is blocked. |
+| Persistence | [hand-state.js](../server/game/hand-state.js) maps live session hands to durable account hands. [scene-persistence.js](../server/game/scene-persistence.js) reconstructs inspected cards in scenes and saves account hands/turn state in game snapshots. |
+| Inspection UI | [inspection.js](../public/table/inspection.js) owns card inspection and destination actions. Existing `placeDrawn` closes optimistically; browsing needs acknowledgments before advancing. |
+| Asset access | [library.js](../server/game/library.js) supplies type-specific lists and rechecks private-list access after reads. [library-queries.js](../server/library-queries.js) filters public assets unless admin private access is requested. |
+| Library UI | [editor-panel.js](../public/editor/editor-panel.js) caches per-kind lists and renders built-in/custom sources. Dispensers are a second view of prop assets, not another asset identity. |
+
+Source inspection and graph coverage checks found no recorded gaps in these evidence files.
+This is a task-focused baseline, not an exhaustive audit of every mutation or asset reference.
+The implementation stages explicitly include those inventories.
+
+## 1. Time-out and spectator mode
+
+### Product behavior and recommended policy
+
+Keep participation separate from role. A helper in time-out stays a helper; a spectator does not
+become a new rank below player. Two independent states avoid accidental release of restrictions:
+`participation = player | spectator` and `timedOut = boolean`. Interaction requires player mode,
+no time-out, active membership, and the normal permission for the requested operation.
+
+Recommended first-release behavior:
+
+- GMs can apply/lift time-out through the player/member list, on desktop and touch. Reuse the
+  existing target-management hierarchy: only owners manage GMs; nobody times out an owner.
+  Do not let a target lift their own time-out. No timed expiry, reasons, or moderation history in v1.
+- Show a clear status badge to the room and a persistent explanation to the affected player.
+  Camera, zoom, local settings, chat, and ordinary public inspection remain available.
+- Allow pings/highlights as communication, with existing throttles. Private hand viewing remains
+  available to its owner; taking, playing, reordering, or revealing cards is blocked. A deck peek
+  currently changes inventory, so it is not an allowed read-only action.
+- Deny manipulation of tabletop objects, dice trays, shared drawings/overlays, scores, timers,
+  turn advancement, room setup, and library actions that spawn/apply content. Personal notebook
+  edits and local library browsing can remain available. Account/library administration uses its
+  own permissions and must not provide an indirect way to change this table.
+- Membership moderation remains usable by authorized owners/GMs even while they voluntarily
+  spectate, so they can restore participation. This does not exempt their gameplay commands.
+- Changing from spectator to player must not clear an independent time-out.
+
+Spectator seat recommendation: new spectators join without a playing seat, turn slot, or tray.
+An existing player who switches to spectator keeps their reserved seat, hand, and physical tray
+in v1, but is skipped by turn passing and cannot manipulate them. This avoids silently deleting
+tray dice or introducing player inventories as a dependency. Releasing occupied spectator seats
+can be a later explicit workflow. Returning to player mode allocates a seat if needed; if none
+is available, stay spectating with an explanation. Never represent a seatless viewer as seat zero.
+
+**Decisions to revisit:** allow self-selected spectator entry or GM assignment only; retain the
+reserved-seat policy for converted players; permit communication highlights during time-out;
+allow own-hand viewing. These defaults keep the first implementation bounded and reversible.
+
+### Server ownership and persistence
+
+Add a focused participation service; extend existing role helpers rather than replacing them.
+Store durable room/account policy separately from portable scenes and gameplay snapshots, using
+a new numbered migration. Suggested record: `(room_id, user_id, participation, timed_out, version)`
+with foreign keys and a unique room/account key. Membership removal should clean up its policy.
+Do not use session ID as the durable restriction key. Apply a change to all live connections for
+that room/account, and reload it on joins/reconnects before accepting gameplay commands.
+
+A failed policy read must not default to unrestricted access. Serialize changes per target account;
+validate the actor/target, write the change durably, recheck live authority around asynchronous
+work, then publish the effective policy and acknowledgment. Do not report a successful restriction
+if its database write failed. Define handling for a simultaneous revoke/demotion in the service.
+A new account is a different identity; this does not replace room admission controls.
+
+Expose only status needed by the UI in public player state. Management messages identify an
+account/member through validated identifiers, never through a client-supplied rank. Proposed
+message names such as `setParticipation` and `setPlayerTimeout` are placeholders until the
+protocol is implemented and added to the reference guide.
+
+### One enforceable interaction policy
+
+Inventory the production message registrations before coding. Include handlers still registered
+in `server.js`, group operations, hand/inspection commands, tray actions, library spawning, and
+operations that finish after database reads. Classify each by capability: observation,
+communication, gameplay mutation, or administration.
+
+Build a focused gameplay registration wrapper around the existing `safeMessage` boundary, with
+an explicit capability policy and deny-by-default handling for unclassified gameplay messages.
+Keep error handling generic; do not bury role changes inside unrelated handlers. Add a test that
+compares the classifications with actual production registrations, as well as behavior tests.
+Recheck permission at mutation/response time after every asynchronous gap. Server-driven physics,
+recovery, and persistence must remain runnable even when a client's input is blocked.
+
+On entering a blocked state, synchronously stop further player writes and perform shared cleanup:
+release owned pieces without an extra throw, clear movement targets and group drags, release the
+whiteboard, stop active reveals, cancel deck browsing, and return/recover any pending inspection.
+Reuse the meaningful cleanup currently in `onLeave`; extract it with explicit options so changing
+participation does not also disconnect the player, delete their tray, or park their hand as
+available for reassignment. Capacity failures retain server-owned recoverable cards.
+
+Client controls mirror the server policy: disable unavailable actions, stop active gestures, close
+mutation editors, and display the restriction. Route this through existing input/controller seams;
+disabling pointer events alone is not enforcement. Initial state may be incomplete: show a safe
+loading state until participation and pieces have arrived.
+
+### Implementation stages and acceptance
+
+1. **Policy foundation — implemented locally, user-reported manual tests green (2026-09-24):** classify messages, add the pure capability predicate and guarded
+   registration, and audit delayed mutations. No feature is complete until direct protocol calls
+   are denied consistently; normal player/GM behavior must still pass existing tests.
+2. **Time-out:** durable policy, GM controls, public status, transition cleanup, reconnect behavior.
+   Test during single/group dragging, drawing, inspection, and an in-flight library spawn. Verify
+   duplicate tabs, restart, failed DB writes, demotion/revocation, and a full table.
+3. **Spectators:** entry/exit controls, seatless join handling, turn exclusion, reserved-seat
+   conversion, preserved hands/trays, and local observer camera controls. Audit seat consumers
+   before choosing a sentinel or optional seat field. Verify an all-spectator room and returning
+   players when every seat is reserved.
+4. **Completion:** two-client desktop/touch tests confirm blocked mutations cannot be sent through
+   any visible control or forged request; permitted chat/camera/inspection still works; no cards
+   disappear; reconnect cannot bypass restrictions; scene loading cannot lift them.
+
+Expected change areas: permissions, room access, member handlers, schema, room lifecycle,
+message registrations, player UI, input routing, and database queries/migration. Run `check`,
+`test:input`, `test:components`, `test:devices`, and `test:integration` as applicable. Document a
+server restart/client refresh and migration requirements; keep database migration/runtime roles separate.
+
+## 2. Browse through a deck
+
+### Product behavior and access
+
+Add **Browse deck…** to the deck's right-click/long-press menu. Opening it does not deal a card or
+alter deck order. Reuse inspection presentation for one card at a time, with Previous/Next,
+position/count, Close, and these actions: **Add to hand**, **Place face-up**, **Place face-down**,
+**Put on top**, **Put on bottom**. Touch uses visible buttons; keyboard navigation is active only
+inside the browser and must not also move table objects.
+
+Recommended access: a GM-set per-deck `browseAccess` with `gm` or `players`, defaulting to `gm`
+for concealed decks. Open/double-sided tile decks can default to active players. This is an
+explicit permission to see the contents, not automatic game-rule enforcement. Spectators and
+timed-out players cannot start a browsing session. Existing top-card Inspect remains a separate
+action and policy; this feature should not silently change it.
+
+**Decision to revisit:** all active players may browse by default in a trust-based game, or GMs
+explicitly opt each concealed deck in. Choose and document this before shipping; never infer that
+permission to inspect one top card permits enumeration of an entire concealed deck.
+
+### Private session and conflict strategy
+
+Prefer a single exclusive browsing lease per deck for v1. A second browser receives a busy message.
+Allow table movement if it does not alter inventory; lock operations that change content/order,
+card metadata used by browsing, or remove/replace the deck. Audit draws, peeks, shuffle, split,
+combine, card absorption on release, removals, and scene/reset operations—not just the Browse UI.
+Normal conflicting actions are rejected with a useful notice. GM delete/reset/access changes
+may cancel the lease first; cancellation is completed before their mutation proceeds.
+
+Keep cards in `deckCards` until a destination succeeds. Store the browser session only on the
+server: actor session/account, deck ID, opaque session token, revision, cursor, expiry, and an
+opaque handle for the displayed entry. Never identify a card solely by its face string: identical
+cards and tiles can occur multiple times. No copied full-deck manifest is sent to the browser.
+A read-only cursor into a leased array is sufficient initially; every successful mutation advances
+the revision and issues a new entry handle.
+
+Use a short renewable idle lease with named limits; a starting proposal is 60 seconds idle,
+refreshed by navigation/actions or a modest heartbeat while the UI is active. Expiry, close,
+disconnect, lost membership, time-out, spectator conversion, and deck removal all cancel it.
+Expose a content-free busy status if useful. Do not publish card indices, faces, or browsing
+history in synchronized state, chat, logs, or public broadcasts.
+
+Proposed protocol, all names provisional:
+
+| Request | Server response/behavior |
+| --- | --- |
+| `browseDeck {deckId}` | Validate participation/access and acquire lease; privately return token, revision, current card, position and count |
+| `browseStep {token, revision, direction}` | Validate owner/expiry/live access and return one selected card privately |
+| `browseAction {token, revision, entryToken, action, requestId}` | Apply one of the five destinations; return explicit success or recoverable failure |
+| `closeDeckBrowse {token}` | Release own lease; safe to repeat, including after permission loss |
+| Expiry/revocation/reset | Send a private closed reason and dispose local card previews |
+
+Bound every field and navigation rate. Reject stale/foreign tokens and out-of-date revisions.
+Deduplicate action requests for the session, so retrying after a lost acknowledgment cannot draw
+a second card. A repeated acknowledged request returns the previous result. Reconnect starts a
+fresh browsing session and receives no obsolete face payloads. Previously seen faces cannot be
+made unknown; the guarantee is authorized delivery and no further disclosure after access loss.
+
+### Transfers, ordering, and saves
+
+Reuse card metadata helpers and `spawnTableCard`; keep geometry, per-card back, open/double-sided
+status, and concealed front intact. Do not drive `drawInspect` repeatedly: it consumes the top
+card and would change order just by browsing.
+
+For each action, validate current permissions/lease and destination capacity first. Stage the
+selected entry, attempt the destination through shared transfer behavior, then commit removal,
+count/cover/collider updates and the new revision as one synchronous room operation. If creation
+can throw after partially mutating, provide rollback/recovery; copying to the hand first and then
+returning early must not leave a duplicate. Avoid awaits inside the inventory commit. Empty-deck
+removal closes the browser only after the last transfer succeeds.
+
+`deckCards` uses a bottom-first array: top is the final entry. Put on top removes the selected
+entry and appends it; put on bottom removes it and prepends it. Preserve every other card's relative
+order. Moving an already top/bottom card is a successful no-op, still acknowledged without losing
+inventory. Navigation after mutation selects a neighboring remaining card deterministically and
+reports its new position; the client waits for that response before replacing its preview.
+
+A blocked field placement leaves the selected card in its original position and keeps the browser
+open for another destination. After placement, the existing physics engine handles the object;
+no legal-move checks or scoring are added. Low-stock labels continue deriving from authoritative
+counts, and container labels/settings remain attached to the deck.
+
+Because browsing alone leaves cards in their deck, existing snapshots can serialize contents
+normally. Leases/tokens/cursors are transient and never saved. Existing `pendingInspect` recovery
+still applies to the old Inspect path; refuse browsing while that deck has a pending inspection
+unless it has been safely resolved. Ensure saving does not duplicate a browse card as an extra
+inspection recovery card. Loading any snapshot invalidates old browser sessions.
+
+### Implementation stages and acceptance
+
+1. **Private service and lease coverage:** implement authorization, cursor/revisions, expiry and
+   conflict checks with deterministic timer tests. Inventory every content mutation, including
+   physics-release absorption. Prove unauthorized clients receive no card faces.
+2. **Transfers:** implement all five actions with order/conservation tests. Include duplicates,
+   tile-specific backs, open tiles, one-card decks, capacity failure, double-click/retry, and an
+   injected destination failure. Integrate participation checks and cancellation.
+3. **UI:** extend inspection presentation with explicit browse state or a focused browse controller
+   that uses its preview renderer. Keep hand/top-card inspection semantics separate. Add desktop,
+   keyboard, touch and loading/error states; bound and dispose preview textures.
+4. **Multiplayer/lifecycle verification:** two users race to browse; another tries shuffle/draw/
+   combine/absorb/delete; the browser disconnects or becomes timed out; save/reload occurs mid-view.
+   Cards/count/order remain correct, no unseen faces leak, and every lease eventually releases.
+
+Likely ownership: new focused server browsing service and handler family; existing card-transfer,
+deck-state, piece-lifecycle, persistence and inspection UI seams. A global transaction framework
+or permanent card-ID migration is not required by this initial design. Run `check`, `test:input`,
+`test:components`, `test:devices`; add integration checks only if the chosen persistence changes need them.
+
+## 3. Custom asset collections
+
+### Scope and recommended ownership
+
+Recommend **administrator-curated, installation-wide collections** for v1, matching today's
+custom-asset curation permissions. Any viewer may locally show/hide available collections; that
+preference does not change the room or another player's library. A collection can contain several
+asset kinds and an asset can belong to several collections. Built-ins remain outside collections.
+
+**Decision to revisit:** personal per-account collections versus shared curated collections.
+If personal organization is preferred, decide before the migration: scope list/read/write rules
+by account rather than inventing a room-GM permission that grants global library administration.
+The model below assumes shared collections with private/admin-only and published visibility.
+
+Creating a collection does not publish its assets. Collection membership does not confer asset
+read, edit, spawn, or export access. Deleting a collection removes memberships, never the assets.
+Removing an asset from one collection leaves it in the library and other collections.
+
+### Data model and authorization
+
+Use the next unused numbered migration, plus query tests and runtime-role grants. Suggested tables:
+
+- `asset_collections`: ID, bounded name, creator account, `is_public`, revision and timestamps.
+  Match current site-admin curation authority rather than implying creator-only ownership.
+- `asset_collection_items`: collection ID, canonical asset kind, asset ID and optional display
+  order; unique `(collection_id, kind, asset_id)`. Cascade collection deletion to these rows only.
+
+Canonical kinds follow existing stored assets: deck, board, mat, prop, scene, sky, dice. A tile
+set is a deck; a dispenser is a prop. The same asset shown in multiple tabs must not acquire two
+independent memberships. Rulebooks can add a new supported kind later.
+
+Current assets live in separate tables. A polymorphic `(kind, asset_id)` is not a foreign key to
+all of them: explicitly allowlist kind-to-query mappings, validate existence/access on writes,
+and define asset-deletion cleanup. Never interpolate an arbitrary client kind as a SQL identifier.
+Perform membership changes transactionally; use revision checks to prevent two editors silently
+replacing one another's changes. Restrict names, page sizes, collection count and batch additions
+with named limits chosen from a realistic library fixture.
+
+List only collections visible to the caller and intersect their entries with asset permissions.
+Counts and previews must describe the visible intersection, not private totals. A public collection
+containing private items must not expose those IDs, names, thumbnails or dependencies. Admin
+private access is rechecked after asynchronous reads, matching existing asset-list delivery.
+Reject unauthorized mutations server-side even if the management UI is hidden.
+
+Initially use collection lists/membership responses alongside existing per-kind asset responses,
+not embedded in synchronized room game state. Keep SQL in focused injected query modules and
+retain safe message/HTTP error boundaries. A database error is an error, not an empty collection.
+Invalidate or refresh affected views after edits and permission changes; clear inaccessible cached
+items on demotion/revocation and recheck access again when an item is spawned/applied.
+
+### Library behavior
+
+Add a collection filter panel using existing component classes/icons, with equivalent full and
+compact/touch layouts. Management offers Create/Rename/Delete and Add/Remove assets; list filters
+offer All, individual collection visibility toggles, and Uncollected. Persist viewer filter choices
+locally, namespaced by account and collection ID; new collections start visible.
+
+Define multi-membership semantics explicitly: an asset is shown if **any enabled** collection
+contains it, or it belongs to no collection the viewer is authorized to read and Uncollected is
+enabled. An unchecked but authorized collection still counts as membership; its assets must not
+reappear through Uncollected. Deduplicate by `(kind,id)`. Thus hiding one collection does not hide
+an asset also in another enabled collection.
+“All” restores every available collection and Uncollected. Search, source and kind filters then
+intersect with this result. Explain an empty filtered view and provide a reset action.
+
+Private collections must not suppress an otherwise public asset for a normal viewer: compute
+membership/filter status using only that viewer's visible collections and accessible items.
+Existing objects and applied textures remain usable when a collection is locally hidden.
+
+Extend the existing list cache/rendering rather than copying asset records or building a second
+library. A focused collection controller may own filter state and management UI; pass predicates
+and callbacks into existing card builders. Include the prop/dispenser dual view and the custom-dice
+texture chooser in the UI audit so stored kinds are not silently unsupported. Decide whether
+secondary pickers use library visibility preferences; default to the main library only and expose
+collection management for all supported kinds explicitly.
+
+### Export/import boundary
+
+Stable collection IDs and typed asset references prepare item 19, but v1 does not export files.
+A future package needs portable IDs, dependency closure, format versioning, ownership/visibility
+mapping, duplicate handling, bounded extraction, and transactional import. See the
+[future export/import brief](DESIGN_future_backlog.md#asset-and-collection-exportimport).
+Do not encode installation paths, room snapshots, private hands, or account credentials in collection
+metadata. Collection publication is not blanket authorization to redistribute every referenced file.
+
+### Implementation stages and acceptance
+
+1. **Schema/queries/access:** implement migration, grants and bounded CRUD/membership operations.
+   Verify non-admin denial, private collections/assets, cross-kind IDs, invalid kinds, duplicate
+   additions, revisions, failed writes and deletion cleanup. Do not change asset permissions.
+2. **Read/filter UI:** combine collections with existing source/search/kind filters, persist local
+   choices, handle removed/new collections, and verify shared membership and uncollected semantics.
+3. **Management UI:** allow creating/renaming/deleting collections and batch membership edits.
+   Preserve selected filters/scroll where practical and surface write conflicts without losing edits.
+4. **Completion:** an admin and ordinary viewer see only authorized content; a private item added
+   to a published collection does not leak; hiding a collection is local; deleting one loses no
+   assets; two kinds with the same numeric ID stay distinct; desktop/touch flows remain usable.
+
+Expected areas: new collection queries/handlers/UI controller, existing library list/render seams,
+a migration and runtime grants, database exports/registrations, and integration fixtures. Run
+`check`, `test:integration`, `test:components`, `test:devices`, plus `test:input` for keyboard/input
+changes. Test upgrades from existing databases and run the actual production registrations, not
+only isolated new helpers.
+
+## Starting implementation later
+
+Use the relevant section as a work brief, confirm the baseline still matches, and turn the first
+stage into a bounded implementation task. Record decisions as they are resolved; keep unimplemented
+stages marked planned. Update the roadmap, changelog, reference and architecture with each shipped
+slice. New features need their own automated and manual verification; the easy-wins sign-off does
+not cover these plans. No application code, schema, or protocol was changed to write this document.

@@ -205,6 +205,19 @@ remains is gesture polish and proving the controls on real devices.
 Unordered — priority not yet assigned. Completed entries are marked explicitly; unmarked entries
 describe planned work. Items 13–24 were added on 2026-09-23.
 
+Implementation planning is documented separately so this list can stay concise:
+
+- [Detailed next-feature plans](DESIGN_next_features.md): time-out/spectator mode (5/15), deck
+  browsing (22), and custom asset collections (18), with proposed policies, stages and acceptance tests.
+- [Future-work discovery briefs](DESIGN_future_backlog.md): the other open features, distribution
+  work and small finish items that need a closer source/design review before implementation.
+
+The participation-policy foundation is implemented locally (119 classified requests, guarded
+registration and delayed-mutation checks), with user-reported manual tests green on 2026-09-24.
+Time-out controls/persistence and spectator behavior remain open. Other designs remain proposed;
+unresolved product choices are marked explicitly. The detailed document recommends an
+implementation sequence without making the entire backlog a fixed priority queue.
+
 1. ✅ **Table shape customization — DONE (2026-09-05, confirmed by Ben).** The play surface can
    be **round, oval, hex (flat-top) or a rounded
    rectangle**, not just a rectangle (`state.tableShape`, GM-set + durable, carried in scenes;

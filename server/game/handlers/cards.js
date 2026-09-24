@@ -16,7 +16,7 @@ import {
   pieceIdPayload,
 } from '../../message-validation.js';
 import { readProps, writeProps } from '../props-codec.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage } from '../interaction-policy.js';
 import { ensurePieceCapacity } from '../piece-capacity.js';
 
 // Register the card/deck message family against a TableRoom-compatible object.
@@ -25,7 +25,7 @@ export function registerCardHandlers(
   room,
   { flipHop, maxPieces, spawnY, geoOf, dropSfx, randomPosition, shuffle, logger = console },
 ) {
-  const cardMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const cardMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
 
   cardMessage('flip', (client, message) => {
     const parsed = pieceIdPayload(message);

@@ -15,7 +15,7 @@ import {
   sceneSavePayload,
 } from '../../message-validation.js';
 import { customAssetSnapshot } from '../../../shared/pieces.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage, allowRoomCapability } from '../interaction-policy.js';
 import { ensurePieceCapacity } from '../piece-capacity.js';
 
 const LIBRARY_ERROR = {
@@ -44,9 +44,9 @@ export function registerLibraryHandlers(
     logger = console,
   },
 ) {
-  const tableMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const tableMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
   const assetMessage = (type, handler) =>
-    safeMessage(room, type, handler, {
+    guardedMessage(room, type, handler, {
       logger,
       ...LIBRARY_ERROR,
     });
@@ -78,6 +78,7 @@ export function registerLibraryHandlers(
     if (!room.isAdmin(client)) return;
     const msg = deckFinishPayload(message);
     if (!msg) return;
+    if (msg.spawn && !allowRoomCapability(client, 'gameplay', 'deckFinish')) return;
     const draft = room.drafts.get(client.sessionId);
     if (msg.spawn && !ensurePieceCapacity(room, client)) return;
     room.drafts.delete(client.sessionId);
@@ -136,6 +137,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const deck = await db.getDeck(msg.id);
+    if (!allowRoomCapability(client, 'gameplay', 'loadDeck')) return;
     if (client.auth?.revoked || room.rank(client) < RANK.helper) return;
     if (!deck || (!deck.isPublic && !room.isAdmin(client))) return;
     if (!ensurePieceCapacity(room, client)) return;
@@ -164,10 +166,12 @@ export function registerLibraryHandlers(
     if (!room.isAdmin(client)) return;
     const msg = saveMatPayload(message, { sanitizeGeom: sanitizeMatGeom });
     if (!msg) return;
+    if (msg.spawn && !allowRoomCapability(client, 'gameplay', 'saveMat')) return;
     const rec = { tex: msg.tex, geom: msg.geom };
     if (msg.editId) await db.updateMat(msg.editId, msg.name, rec);
     else await db.insertMat(msg.name, rec, { ownerId: client.auth.userId });
     if (client.auth?.revoked || !room.isAdmin(client)) return;
+    if (msg.spawn && !allowRoomCapability(client, 'gameplay', 'saveMat')) return;
     if (msg.spawn && ensurePieceCapacity(room, client))
       room.spawn('mat', randomPosition(), { geom: msg.geom, front: msg.tex });
     await room.sendAssetList(client, 'mat');
@@ -178,6 +182,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const mat = await db.getMat(msg.id);
+    if (!allowRoomCapability(client, 'gameplay', 'loadMat')) return;
     if (client.auth?.revoked || room.rank(client) < RANK.helper) return;
     if (!mat || (!mat.isPublic && !room.isAdmin(client)) || !mat.geom || !mat.tex) return;
     if (!ensurePieceCapacity(room, client)) return;
@@ -188,10 +193,12 @@ export function registerLibraryHandlers(
     if (!room.isAdmin(client)) return;
     const msg = savePropPayload(message, { colliders });
     if (!msg) return;
+    if (msg.spawn && !allowRoomCapability(client, 'gameplay', 'saveProp')) return;
     const id = msg.editId
       ? (await db.updateProp(msg.editId, msg.name, msg.props)) && msg.editId
       : await db.insertProp(msg.name, msg.props, { ownerId: client.auth.userId });
     if (client.auth?.revoked || !room.isAdmin(client)) return;
+    if (msg.spawn && !allowRoomCapability(client, 'gameplay', 'saveProp')) return;
     if (msg.spawn && id && ensurePieceCapacity(room, client)) {
       const asset = customAssetSnapshot(id, msg.props);
       room.spawn('prop', randomPosition(), { ...asset.item, asset });
@@ -212,6 +219,7 @@ export function registerLibraryHandlers(
     const msg = loadPropPayload(message);
     if (!msg) return;
     const prop = await db.getProp(msg.id);
+    if (!allowRoomCapability(client, 'gameplay', 'loadProp')) return;
     if (client.auth?.revoked || room.rank(client) < RANK.helper) return;
     if (!prop || (!prop.isPublic && !room.isAdmin(client))) return;
     const asset = customAssetSnapshot(msg.id, prop.props);
@@ -259,7 +267,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const deck = await db.getDeck(msg.id);
-    if (client.auth?.revoked || !room.isAdmin(client)) return;
+    if (!allowRoomCapability(client, 'administration', 'getDeck') || !room.isAdmin(client)) return;
     if (deck)
       client.send('deckData', {
         id: msg.id,
@@ -302,6 +310,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const scene = await db.getScene(msg.id);
+    if (!allowRoomCapability(client, 'gameplay', 'sceneLoad')) return;
     if (client.auth?.revoked || room.rank(client) < RANK.gm) return;
     if (!scene || (!scene.isPublic && !room.isAdmin(client))) return;
     room.applyScene(scene.payload);
@@ -312,6 +321,7 @@ export function registerLibraryHandlers(
     const msg = assetIdPayload(message);
     if (!msg) return;
     const data = await db.getBoard(msg.id);
+    if (!allowRoomCapability(client, 'gameplay', 'loadBoard')) return;
     if (client.auth?.revoked || room.rank(client) < RANK.gm) return;
     if (!data || (!data.isPublic && !room.isAdmin(client))) return;
     const rec = data.rec;

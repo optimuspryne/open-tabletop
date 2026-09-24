@@ -1,3 +1,4 @@
+import { canUseRoomCapability } from '../permissions.js';
 import { readProps } from './props-codec.js';
 
 const ASSET_LISTS = {
@@ -33,12 +34,16 @@ export function createLibraryOperations({ db, saveImageRef }) {
   };
 
   const sendAssetList = async (room, client, kind) => {
-    if (client.auth?.revoked) return false;
+    if (!canUseRoomCapability(client.auth ?? {}, 'observation')) return false;
     const includePrivate = room.isAdmin(client);
     const config = ASSET_LISTS[kind];
     if (!config) return false;
     const list = await db[config[1]]({ includePrivate });
-    if (client.auth?.revoked || (includePrivate && !room.isAdmin(client))) return false;
+    if (
+      !canUseRoomCapability(client.auth ?? {}, 'observation') ||
+      (includePrivate && !room.isAdmin(client))
+    )
+      return false;
     client.send(config[0], list);
     return true;
   };

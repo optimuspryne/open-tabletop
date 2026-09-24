@@ -23,6 +23,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   validation and throttling plus input, server, and browser lifecycle/menu regression coverage.
 
 ### Changed
+- Add the participation-policy foundation: explicitly classify all 119 table requests and guard
+  them through the existing error boundary. Server-owned spectator/time-out state blocks gameplay
+  independently of rank; asynchronous library loads and optional spawns recheck before mutation.
+  Preserve observation, communication, personal notes, cleanup and authorized administration.
+  Durable restrictions, GM controls and spectator entry remain the next implementation stage.
 - Save new lobby/table avatar uploads at 512×512 with JPEG quality 0.85, using shared settings
   and a 512 KiB encoded-image limit across HTTP and room messages. Re-upload existing avatars
   to replace their previously saved 96×96 images; existing account data stays compatible.
@@ -32,6 +37,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   readable name plates. Dispose owned marker geometry/materials/textures when replaced or removed.
 
 ### Documentation
+- Record user-reported manual-test sign-off for the participation-policy foundation (2026-09-24).
+  Durable time-out controls and spectator behavior remain pending; no full device matrix is implied.
+- Add detailed proposed designs for time-out/spectator mode, deck browsing and custom asset
+  collections, plus shorter discovery briefs for the other remaining roadmap work. Link them
+  from the roadmap, reference and architecture; distinguish recommended decisions from shipped APIs.
 - Record user-reported manual-test sign-off for object labels, stock warnings, highlights,
   placards, and avatar uploads; retain shape/flair customization as future roadmap work.
 - Record owner-confirmed Claude-generated tile/box sound provenance and CC0 distribution;

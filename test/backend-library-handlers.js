@@ -464,3 +464,126 @@ test('loadBoard preserves a compound collider', async () => {
   await handlers.get('loadBoard')(client(), { id: '1' });
   assert.deepEqual(calls.find(({ name }) => name === 'swapBoard').args[0], rec);
 });
+
+for (const [operation, query, record] of [
+  ['loadDeck', 'getDeck', { isPublic: true, back: 'back', fronts: ['ace'] }],
+  ['loadMat', 'getMat', { isPublic: true, tex: '/mat', geom: { w: 5, h: 3 } }],
+  ['loadProp', 'getProp', { isPublic: true, props: {} }],
+  ['sceneLoad', 'getScene', { isPublic: true, payload: { pieces: [] } }],
+  ['loadBoard', 'getBoard', { isPublic: true, rec: { board: 'chess' } }],
+]) {
+  for (const restriction of [
+    { timedOut: true },
+    { participation: 'spectator' },
+    { revoked: true },
+  ]) {
+    test(`${operation} rechecks participation after its database read: ${JSON.stringify(restriction)}`, async () => {
+      const { db, handlers, calls } = harness();
+      const actor = client();
+      let resolveRead;
+      db[query] = () =>
+        new Promise((resolve) => {
+          resolveRead = resolve;
+        });
+      const pending = handlers.get(operation)(actor, { id: '1' });
+      Object.assign(actor.auth, restriction);
+      resolveRead(record);
+      await pending;
+      assert.equal(
+        calls.some(({ name }) => ['spawn', 'applyScene', 'swapBoard'].includes(name)),
+        false,
+      );
+    });
+  }
+}
+
+test('time-out preserves a deck draft when finish would spawn; saving only is still allowed', async () => {
+  const { room, handlers, calls } = harness();
+  const actor = client();
+  actor.auth.timedOut = true;
+  const draft = { back: 'back', cards: ['ace'] };
+  room.drafts.set(actor.sessionId, draft);
+  await handlers.get('deckFinish')(actor, { name: 'Deck', spawn: true });
+  assert.equal(room.drafts.get(actor.sessionId), draft);
+  assert.equal(calls.length, 0);
+  await handlers.get('deckFinish')(actor, { name: 'Deck', spawn: false });
+  assert.equal(
+    calls.some(({ name }) => name === 'insertDeck'),
+    true,
+  );
+  assert.equal(
+    calls.some(({ name }) => name === 'spawn'),
+    false,
+  );
+});
+
+for (const [operation, query, payload] of [
+  [
+    'saveMat',
+    'insertMat',
+    { name: 'Mat', tex: '/assets/mats/m.jpg', geom: { w: 5, h: 3 }, spawn: true },
+  ],
+  [
+    'saveProp',
+    'insertProp',
+    {
+      name: 'Prop',
+      props: { model: '/assets/props/p.glb', box: [0.4, 0.2, 0.4], scale: 1, stand: false },
+      spawn: true,
+    },
+  ],
+]) {
+  test(`${operation} blocks Save+Spawn before writing but allows saving only`, async () => {
+    const { handlers, calls } = harness();
+    const actor = client();
+    actor.auth.timedOut = true;
+    await handlers.get(operation)(actor, payload);
+    assert.equal(calls.length, 0);
+    await handlers.get(operation)(actor, { ...payload, spawn: false });
+    assert.equal(
+      calls.some(({ name }) => name === query),
+      true,
+    );
+    assert.equal(
+      calls.some(({ name }) => name === 'spawn'),
+      false,
+    );
+  });
+
+  test(`${operation} cannot spawn after participation changes during saving`, async () => {
+    const { db, handlers, calls } = harness();
+    const actor = client();
+    let resolveSave;
+    db[query] = () =>
+      new Promise((resolve) => {
+        resolveSave = resolve;
+      });
+    const pending = handlers.get(operation)(actor, payload);
+    assert.equal(typeof resolveSave, 'function');
+    actor.auth.timedOut = true;
+    resolveSave('1');
+    await pending;
+    assert.equal(
+      calls.some(({ name }) => name === 'spawn'),
+      false,
+    );
+  });
+}
+
+test('private deck data is suppressed if participation policy starts loading during its read', async () => {
+  const { db, handlers } = harness();
+  const actor = client();
+  let resolveRead;
+  db.getDeck = () =>
+    new Promise((resolve) => {
+      resolveRead = resolve;
+    });
+  const pending = handlers.get('getDeck')(actor, { id: '1' });
+  actor.auth.participationReady = false;
+  resolveRead({ fronts: ['private'], back: 'back' });
+  await pending;
+  assert.equal(
+    actor.sent.some(({ type }) => type === 'deckData'),
+    false,
+  );
+});

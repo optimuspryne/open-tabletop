@@ -6,7 +6,7 @@ import {
   pieceMovePayload,
   pieceReleasePayload,
 } from '../../message-validation.js';
-import { safeMessage } from '../safe-message.js';
+import { guardedMessage } from '../interaction-policy.js';
 import { MAX_PIECES } from '../piece-capacity.js';
 import { isWorldCoordinate } from '../physics-safety.js';
 
@@ -17,7 +17,7 @@ export function registerMovementHandlers(
   room,
   { isMovable, maxPieces = MAX_PIECES, logger = console },
 ) {
-  const movementMessage = (type, handler) => safeMessage(room, type, handler, { logger });
+  const movementMessage = (type, handler) => guardedMessage(room, type, handler, { logger });
 
   movementMessage('grab', (client, message) => {
     const parsed = pieceIdPayload(message);
