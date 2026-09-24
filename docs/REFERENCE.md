@@ -2817,38 +2817,60 @@ removed/inaccessible IDs are pruned after loading all pages. Role transitions cl
 metadata and discard management drafts before refetching. Export/import is not part of this slice.
 
 
-## Portable custom dice textures
+## Portable custom assets
 
-Site admins can export a custom dice texture through its Library overflow menu and import a
-`.ott.json` file under **Import / export assets**. Preview validates first, reports one included
-image (dimensions/size), permits renaming and requires **Import private copy**. Imports are always
-new rows owned by the importing admin, private, and outside collections. Duplicate names do not
-replace assets. Other kinds and collection transfer are not supported in version 1.
+Site admins can export a custom dice texture, deck or tile set through its Library overflow menu
+and import a `.ott.json` file under **Import / export assets**. Preview validates the package first,
+reports included images and card/tile count, permits renaming and requires **Import private copy**.
+Imports always create new private rows owned by the importing admin, outside collections.
+Duplicate names do not replace assets. Other asset types and collection transfer are later stages.
 
-`shared/asset-package.js` defines format `open-tabletop-assets`, version 1, one dice asset
-`{id:"asset-1", kind:"dice", name, texture:"file-1"}` and one file
-`{id:"file-1", mediaType, bytes, sha256, data}` where `data` is canonical base64 of the original.
-Limits are 8 MiB original, 12 MiB JSON, 16 megapixels, single frame, 80-character name. Supported
-images are PNG/JPEG/GIF/WebP. No source URLs, filesystem paths, account IDs or room state are copied.
+`shared/asset-package.js` defines format `open-tabletop-assets`. Both versions contain one asset
+with ID `asset-1` and a files array with sequential package-local IDs. Each file carries
+`{id, mediaType, bytes, sha256, data}`, where `data` is canonical base64 of the uploaded original.
+
+- Version 1 dice asset: `{id, kind:"dice", name, texture:"file-1"}`. Exactly one image; existing
+  dice exports retain this format and older packages remain readable.
+- Version 2 deck asset: `{id, kind:"deck", name, back, fronts, geom, open, deckModel, color, textColor}`.
+  Face/back references are `{file:"file-N"}` or `{generated:"text:…"}`; `fronts` retains order and
+  repetitions and accepts paired `{front, back}` entries. Supported generated tags are `back`,
+  `domback`, `lback`, `mjback`, `text:`, `tback:`, `rank:`, `joker:`, `domino:` and `letter:`. The
+  renderer owns their interpretation. Model IDs must be present in shared `DECK_MODELS`.
+
+Limits: 1,000 cards/tiles; 256 files; 8 MiB/16 megapixels per single-frame PNG/JPEG/GIF/WebP;
+64 MiB total images; 128 megapixels total; 2,097,152 face-reference characters; 96 MiB JSON; 80-character
+name. Generated-only decks can have no files. No source URLs, filesystem paths, account IDs or
+room state are copied. Only generated faces and uploaded originals in the corresponding `dice`
+or `decks` directory are supported. Remote/data URLs, arbitrary bundled images, custom model URLs
+and unknown card metadata fail explicitly. The pouch uses the destination's registered bundled model.
 
 `server/http/routes/asset-packages.js`, mounted by `server.js`, uses bearer `requireAdmin`,
 the existing upload rate limiter and no-store responses:
 
-- `GET /asset-packages/dice/:id`: validated download attachment `dice-texture.ott.json`.
+- `GET /asset-packages/dice/:id`: version 1 attachment `dice-texture.ott.json`.
+- `GET /asset-packages/deck/:id`: version 2 attachment `deck.ott.json`.
 - `POST /asset-packages/preview`: package JSON → `{name, kind, totalBytes, files, isPublic:false}`;
-  validates the whole image without storing anything.
+  decks also return `count`, `open`, `deckModel`. Validates all dependencies without storing them.
 - `POST /asset-packages/import`: `{package, name}` → HTTP 201 `{id, name, kind, isPublic:false}`.
 
 Schema/image errors return 400, missing assets 404, oversized JSON 413, missing login 401 and
 non-admin access 403. Database/I/O failures use the established generic HTTP 500 boundary.
-`server/assets/packages.js` rejects unknown fields, missing dependencies, bad base64/hash/type,
-unsafe export paths/symlinks and oversized/animated/damaged images. It never fetches remote URLs.
-Import writes and syncs a new exclusive random dice file; `importDicePackage` in `server/database.js`
-reuses `insertDice` in a transaction with live access checks. Definite failure cleans up its own
-new file; uncertain COMMIT/rollback outcomes preserve it rather than break a possibly committed
-row. Normal asset cleanup retains referenced files and applies its 24-hour grace period to orphans.
+`server/assets/package-decks.js` owns `mapDeckReferences` and appearance validation using the
+existing deck payload, geometry and model rules. `server/assets/packages.js` uses that traversal
+for export, dependency closure and remapping, validates image bytes/hash/type and bounded totals,
+and rejects missing/unused files, unsafe paths/symlinks and damaged/animated images. Export
+includes each distinct uploaded image once by content hash. It never fetches remote URLs.
 
-`public/editor/asset-packages.js` owns draft bytes and asynchronous request epochs. Identity changes
-or lost admin status clear drafts and suppress late responses. `editor-panel.js` adds the dice
-Export action and refreshes `listDice` after import; room state never carries package bytes.
-Restart the server and refresh clients for this feature; no migration or new environment setting.
+Import writes and syncs fresh exclusive random files; `importAssetPackage` in `server/database.js`
+selects the existing `insertDice` or `insertDeck` query inside one transaction with live admin checks.
+Definite failure cleans up all files created by that attempt. Uncertain COMMIT/rollback outcomes
+preserve them rather than break a possibly committed row. Normal cleanup retains referenced files
+and applies its 24-hour grace period to orphans. Export reads saved library metadata, never room
+hands, inventories, or the current concealed order of a room's deck.
+
+`public/editor/asset-packages.js` owns draft bytes and request epochs. Identity/admin changes clear
+drafts and suppress late responses. `editor-panel.js` offers supported Export actions and refreshes
+`listDice` or `listDecks` after import; room state never carries package bytes. Restart server and
+refresh browsers; no migration or new environment setting is required. The package routes now
+accept requests up to 96 MiB; deployments with stricter reverse-proxy body limits need to allow
+that size on `/asset-packages` to transfer larger decks.

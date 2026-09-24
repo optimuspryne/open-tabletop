@@ -30,10 +30,12 @@ export function createAssetPackagesRouter({ packages, requireAdmin, rateLimitUpl
       }
     });
   router.get(
-    '/dice/:id',
+    '/:kind/:id',
     run(async (req, res, authorize) => {
-      const value = await packages.exportDice(req.params.id, authorize);
-      res.attachment('dice-texture.ott.json').json(value);
+      const value = await packages.exportAsset(req.params.kind, req.params.id, authorize);
+      res
+        .attachment(req.params.kind === 'dice' ? 'dice-texture.ott.json' : 'deck.ott.json')
+        .json(value);
     }),
   );
   router.use(express.json({ limit: ASSET_PACKAGE.maxPackageBytes }));
@@ -54,7 +56,7 @@ export function createAssetPackagesRouter({ packages, requireAdmin, rateLimitUpl
         !Object.hasOwn(req.body, 'name')
       )
         throw new AssetPackageError('Invalid import request.');
-      const result = await packages.importDice(
+      const result = await packages.importAsset(
         req.body.package,
         req.body.name,
         req.packageUser.id,
@@ -65,7 +67,7 @@ export function createAssetPackagesRouter({ packages, requireAdmin, rateLimitUpl
   );
   router.use((error, req, res, next) => {
     if (error.type === 'entity.too.large')
-      return res.status(413).json({ error: 'The package exceeds 12 MiB.' });
+      return res.status(413).json({ error: 'The package exceeds 96 MiB.' });
     if (error.type === 'entity.parse.failed')
       return res.status(400).json({ error: 'The package is not valid JSON.' });
     next(error);

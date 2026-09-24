@@ -145,7 +145,7 @@ packages contain no live hands, player inventories, sessions, tokens or private 
 
 ### Dice texture package checkpoint — 2026-09-24
 
-**Implemented locally; automated checks passed; user-reported manual testing passed (2026-09-24).** User approved the
+**Committed as `d18317d`; automated checks passed; user-reported manual testing passed (2026-09-24).** User approved the
 admin-only first slice. Custom dice textures provide one lossless asset/image round trip before
 adding dependency walkers for other types or collection membership. Imports always create new
 private copies owned by the importing admin; duplicate names are allowed and never overwrite.
@@ -199,6 +199,69 @@ Manual smoke tests (restart server and refresh browser):
 5. Check desktop and touch scrolling, keyboard focus, Import/Cancel, and a non-admin account
    without the transfer controls. Full multi-installation and real-device coverage were not
    separately reported in the user's successful manual test.
+
+### Deck and tile package checkpoint — 2026-09-24
+
+**Implemented; automated checks passed; user-reported manual tests passed (2026-09-24).** The user authorized
+committing the tested dice slice and moving to the next stage. This stage adds one custom deck
+or tile set per package, before collection membership and other asset kinds.
+
+Version 2 preserves ordered/repeated faces, shared backs and per-tile `{front, back}` pairs,
+geometry, double-sided/open mode, the registered pouch skin and its colors. References are typed
+`{file:"file-N"}` or `{generated:"text:…"}`. Generated card-face tags are retained verbatim; existing
+renderers continue to interpret them. Uploaded originals under `/assets/decks/` are copied exactly
+and deduplicated by content hash; imports remap references to new exclusive filenames. Bundled
+skin IDs must exist on the destination. No private hands, player inventory, or current room deck
+order is read: export uses the saved library asset.
+
+Limits: 1,000 cards/tiles, 256 images, 8 MiB and 16 megapixels per image, 64 MiB total image bytes,
+128 megapixels total, 2,097,152 face-reference characters and 96 MiB JSON requests. Missing/unused files,
+unsupported versions, unknown metadata, remote/data URLs and unrecognized bundled image paths
+are rejected. The first dependency resolver covers uploaded deck images and locally generated
+faces, not arbitrary source paths or custom models. Unsupported card metadata is rejected rather
+than discarded. Version 1 dice packages remain readable and dice exports retain that format.
+
+Reuse decision: extend the shared validated-image reader/writer and transaction rather than
+copying the dice implementation. `mapDeckReferences` is the one traversal for export, preview and
+import; `packageDeckMetadata` reuses the existing deck payload/geometry/model validation. Existing
+`insertDeck` receives an optional transaction query, like `insertDice`. A closed `dice`/`deck`
+dispatch in `importAssetPackage` keeps private ownership, authorization, rollback and uncertain
+commit handling together. Collection export remains a separate stage.
+
+Files/functions in this stage:
+
+| File | Change |
+| --- | --- |
+| `shared/asset-package.js` | Add deck version and package/file/card/text/pixel limits; retain version 1 dice format. |
+| `server/assets/package-decks.js` | Add `generatedDeckReference`, `packageDeckMetadata` and `mapDeckReferences`, with focused object/key/error guards. |
+| `server/assets/packages.js` | Add `fileEnvelope`/`readImage`, parameterize the storage-directory check, and extend `inspectAssetPackage` to typed multi-file references; generalize `exportDice`/`importDice` to `exportAsset`/`importAsset`, with deduplication, bounded totals, remapping and multi-file cleanup. |
+| `server/http/routes/asset-packages.js` | Route `GET /:kind/:id`, choose attachment name, dispatch both imports and raise the bounded JSON ceiling. |
+| `server/database.js`, `db.js` | Inject transaction query into `insertDeck`; generalize/export `importDicePackage` as `importAssetPackage`. |
+| `public/editor/asset-packages.js` | Preview deck/tile count, image count and skin; generalize export and report/import the actual asset kind. |
+| `public/editor/editor-panel.js` | Offer deck Export and refresh the appropriate list after import. |
+| `public/table.html` | Update library guidance and in-app help for decks/tiles. |
+| `test/asset-packages.js` | Retain dice regressions; add multi-file/two-store deck round trips, deduplication, generated-only decks, strict dependency/metadata rejection and rollback cleanup; exercise both HTTP routes. |
+| `test/backend-database-factory.js`, `test/integration/database.js` | Verify renamed production export, private deck appearance/face persistence and rollback using PostgreSQL. |
+| `scripts/component-parity.mjs` | Extend the real library flow to generated tile previews, list refresh and desktop/touch deck export. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`, both design plans | Update current contracts, scope and verification, retaining the prior dice checkpoint. |
+
+Verification: `npm run check` passed (737 tests in the shared working tree at this checkpoint),
+`test:integration` passed (15 tests), `test:input` passed (57/57), and `test:devices` passed all seven
+profiles. The first component run hit a missing `onOttRoom` during one unrelated library fixture's
+startup; a full rerun passed desktop and coarse-touch scenes. The package-specific real-controller
+flow also passed independently, and desktop/touch screenshots were visually checked. Diff checks
+passed. The user reports manual tests passing (2026-09-24). A live second-installation test was
+not separately reported.
+
+Manual smoke tests (restart server and refresh browsers; no migration):
+
+1. Export an image deck through **More actions → Export**. Import, rename, and spawn the private
+   copy. Check card count, fronts/shared back, shape and dimensions; the source remains unchanged.
+2. Repeat with double-sided tiles and a pouch skin. Flip tiles and check both faces, colors and
+   geometry. Include repeated faces; duplicates and authored sequence should survive the package.
+3. Try a generated text deck and an earlier dice package; both should still round-trip.
+4. Try a package with a missing image, unknown version or wrong checksum: import must fail without
+   a partial library asset. Check preview/Import/Cancel on desktop and touch.
 
 ## Physical rulebooks and builder
 

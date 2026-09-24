@@ -284,15 +284,15 @@ const SCENES = [
       const host = document.getElementById('assetPackagePanel'); host.open = true;
       assert(!host.hidden, 'Admin package controls hidden');
       const fetchOriginal = window.fetch;
-      let fail = false, resolvePreview = null;
+      let fail = false, resolvePreview = null, packageKind = 'dice';
       window.fetch = async (url, options) => {
         if (!String(url).startsWith('/asset-packages/')) return fetchOriginal(url, options);
         requests.push([url, options]);
         if (url.endsWith('/preview')) {
           if (resolvePreview) await new Promise(resolve => resolvePreview = resolve);
-          return {ok:true, json:async()=>({name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]})};
+          return {ok:true, json:async()=>packageKind==='deck' ? {kind:'deck',name:'Portable tiles',count:4,open:true,deckModel:'bag',totalBytes:0,files:[]} : {kind:'dice',name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]}};
         }
-        if (url.endsWith('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{name:JSON.parse(options.body).name}};
+        if (url.endsWith('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{kind:packageKind,name:JSON.parse(options.body).name}};
         return {ok:true,json:async()=>({format:'fixture',files:[]})};
       };
       const file = document.getElementById('packageFile'), name = document.getElementById('packageName');
@@ -333,6 +333,21 @@ const SCENES = [
       assert(exportButton,'Dice export action missing'); exportButton.click();
       await new Promise(resolve=>setTimeout(resolve,20));
       assert(downloaded && requests.some(([url])=>url.endsWith('/dice/1')), 'Export action is not wired to package download');
+      packageKind='deck';
+      await choose();
+      assert(document.getElementById('packageContents').textContent.includes('Tile set · 4 cards / tiles · Pouch skin'), 'Tile shape/count/skin missing from preview');
+      assert(document.getElementById('packageContents').textContent.includes('0 images included'), 'Generated deck incorrectly requires an image');
+      const deckRefreshes=sent.filter(type=>type==='listDecks').length;
+      await save.onclick();
+      assert(sent.filter(type=>type==='listDecks').length===deckRefreshes+1, 'Deck import did not refresh deck list');
+      window.onLibraryList('deck',[{id:'2',name:'Tile export',back:'back',first:'text:Tile',count:4,isPublic:false}]);
+      document.querySelector('#libraryModal [data-tab="decks"]').click();
+      document.querySelector('#nlc_deck .pop-trigger').click();
+      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='deck.ott.json';};
+      downloaded=false;
+      [...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export').click();
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert(downloaded && requests.some(([url])=>url.endsWith('/deck/2')), 'Deck export action not wired');
       HTMLAnchorElement.prototype.click=originalClick;
       await choose();
       window.fetch=fetchOriginal;

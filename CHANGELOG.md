@@ -36,6 +36,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Extend portable asset packages to custom decks and tile sets, including original face/back
+  images, paired tile faces, authored order, generated text, geometry, pouch skins and colors.
+  Deduplicate repeated images in exports; preview card/image counts and import a new private copy.
+  Continue accepting dice packages. Unsupported or missing dependencies fail explicitly; failed
+  imports clean up their own new files. Restart server and refresh browsers; no migration.
+  User reports manual tests passing (2026-09-24).
 - Admin-only portable custom dice textures: Export from a texture’s library menu, then preview
   and import its `.ott.json` package in Library → Import / export assets. Include the original
   image, validate checksums and bounded image data, and create a new private copy under the

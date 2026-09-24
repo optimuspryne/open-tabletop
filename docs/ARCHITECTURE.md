@@ -1911,10 +1911,11 @@ export/import and multi-process invalidation remain separate work.
 
 ### Portable asset boundary
 
-The first transfer slice supports one custom dice texture plus its original raster image. A
+Portable packages support one custom dice texture (version 1) or one deck/tile set (version 2). A
 strict versioned JSON package uses local asset/file IDs, canonical base64 and a checksum, without
 installation IDs, paths, ownership, publishing flags, or gameplay data. Shared constants bound
-request/image sizes and pixel count. Other asset types and collection dependency graphs are
+request/image sizes and pixel count. Deck dependencies include original face/back images and locally generated faces, preserving
+order, paired faces and appearance. Other asset types and collection dependency graphs are
 future work; this format does not infer or fetch arbitrary dependencies.
 
 `server/assets/packages.js` owns validation, bounded local export and exclusive-file import.
@@ -1922,7 +1923,12 @@ It extends the existing image-validation/storage conventions; a dedicated exclus
 needed to make cleanup safe without changing existing upload behavior. The HTTP router reuses
 admin authentication, rate limiting and async error handling. Admin access is rechecked after
 asynchronous reads and before transactional metadata commit. Preview is read-only; import creates
-fresh private metadata through the existing dice insertion query with an injected transaction.
+fresh private metadata through the existing dice/deck insertion query with an injected transaction.
+`package-decks.js` owns one typed-reference traversal reused by export, validation and import,
+plus strict appearance checks using existing deck/geometry/model rules. Exports deduplicate original
+images by hash; imports map local IDs to new filenames. Metadata and all created images succeed
+together or are cleaned up on definite failure. Unknown metadata and unsupported references fail
+explicitly, preserving the boundary between library assets and private live room inventories.
 There is no distributed filesystem/database transaction: definite failures delete only their own
 new file, while uncertain commits retain image data so a committed row cannot become broken.
 Existing reference-aware orphan cleanup handles abandoned files after its grace period.

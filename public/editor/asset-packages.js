@@ -51,14 +51,18 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
     message('Checking package…');
     try {
       if (selected.size > ASSET_PACKAGE.maxPackageBytes)
-        throw new Error('The package exceeds 12 MiB.');
+        throw new Error('The package exceeds 96 MiB.');
       const candidate = JSON.parse(await selected.text());
       if (current !== epoch || !isAdmin()) return;
       const summary = await request('preview', candidate);
       if (current !== epoch || !isAdmin()) return;
       value = candidate;
       name.value = summary.name;
-      details.textContent = `Dice texture · ${summary.files[0].width} × ${summary.files[0].height} · ${(summary.totalBytes / 1024).toFixed(1)} KiB · 1 image included`;
+      const description =
+        summary.kind === 'deck'
+          ? `${summary.open ? 'Tile set' : 'Deck'} · ${summary.count} cards / tiles${summary.deckModel ? ' · Pouch skin' : ''}`
+          : `Dice texture · ${summary.files[0].width} × ${summary.files[0].height}`;
+      details.textContent = `${description} · ${(summary.totalBytes / 1024).toFixed(1)} KiB · ${summary.files.length} image${summary.files.length === 1 ? '' : 's'} included`;
       preview.hidden = false;
       message('Ready to import. A new private copy will be created.');
       name.focus({ preventScroll: true });
@@ -85,9 +89,9 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
       if (current !== epoch || !isAdmin()) return;
       reset();
       message(
-        `Imported “${result.name}” as a private dice texture. Find it under Dice with Custom or All selected; collection filters may hide it.`,
+        `Imported “${result.name}” as a private ${result.kind === 'deck' ? 'deck / tile set' : 'dice texture'}. Find it under ${result.kind === 'deck' ? 'Card Decks/Tiles' : 'Dice'} with Custom or All selected; collection filters may hide it.`,
       );
-      onImported();
+      onImported(result.kind);
     } catch (error) {
       if (current === epoch) message(error.message);
     } finally {
@@ -107,26 +111,26 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
       account = id;
       host.hidden = !isAdmin();
     },
-    async exportDice(id) {
+    async exportAsset(kind, id) {
       if (!isAdmin()) return;
       const current = epoch;
       host.open = true;
       message('Preparing export…');
       status.scrollIntoView({ block: 'nearest' });
       try {
-        const result = await request('dice/' + encodeURIComponent(id));
+        const result = await request(kind + '/' + encodeURIComponent(id));
         if (current !== epoch || !isAdmin()) return;
         const url = URL.createObjectURL(
           new Blob([JSON.stringify(result)], { type: 'application/json' }),
         );
         const link = document.createElement('a');
         link.href = url;
-        link.download = 'dice-texture.ott.json';
+        link.download = kind === 'dice' ? 'dice-texture.ott.json' : 'deck.ott.json';
         document.body.append(link);
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        message('Export downloaded. It includes the dice texture and its original image.');
+        message('Export downloaded. It includes the asset and its required uploaded images.');
       } catch (error) {
         if (current === epoch) message(error.message);
       }

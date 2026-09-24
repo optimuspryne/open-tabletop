@@ -798,3 +798,6 @@ The three feature groups above are committed. The user authorized the next bound
 [item 19](DESIGN_future_backlog.md#asset-and-collection-exportimport): admin-only portable assets,
 starting with one custom dice texture and its original image. See that checkpoint for scope,
 validation and manual testing. Collection export and other asset kinds remain separate work.
+
+The dice texture slice is committed as `d18317d`, with user-reported manual success. The authorized
+next stage adds deck/tile dependency packages; see the [deck/tile checkpoint](DESIGN_future_backlog.md#deck-and-tile-package-checkpoint--2026-09-24).

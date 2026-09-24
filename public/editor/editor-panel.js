@@ -833,12 +833,12 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
           overflowMenu(
             { name: it.name, meta: (it.isPublic ? 'public' : 'private') + ' · custom ' + kind },
             [
-              ...(kind === 'dice'
+              ...(['dice', 'deck'].includes(kind)
                 ? [
                     {
                       label: 'Export',
                       icon: 'device-floppy',
-                      fn: () => packageController?.exportDice(it.id),
+                      fn: () => packageController?.exportAsset(kind, it.id),
                     },
                   ]
                 : []),
@@ -2466,7 +2466,7 @@ window.onOttRoom = (room) => {
     ? createAssetPackageController({
         host: byId('assetPackagePanel'),
         isAdmin: () => !!window.OTT_IS_ADMIN,
-        onImported: () => room.send('listDice'),
+        onImported: (kind) => room.send(kind === 'deck' ? 'listDecks' : 'listDice'),
       })
     : null;
   packageController?.identity(window.OTT_USER_ID);

@@ -619,16 +619,64 @@ test('portable dice imports create private copies and roll back a revoked admin'
     ownerId: owner.id,
     isPublic: true,
   };
-  const id = await database.importDicePackage(value, async () => true);
+  const id = await database.importAssetPackage('dice', value, async () => true);
   const copy = await database.getDice(id);
   assert.equal(copy.isPublic, false);
   assert.equal(String(copy.ownerId), String(owner.id));
   let checks = 0;
   await assert.rejects(
-    database.importDicePackage({ ...value, name: 'Must roll back' }, async () => ++checks < 2),
+    database.importAssetPackage(
+      'dice',
+      { ...value, name: 'Must roll back' },
+      async () => ++checks < 2,
+    ),
     /Admin access/,
   );
   const result = await pool.query('SELECT id FROM custom_dice WHERE name=$1', ['Must roll back']);
   assert.equal(result.rowCount, 0);
   await pool.query('DELETE FROM custom_dice WHERE id=$1', [id]);
+});
+
+test('portable decks preserve paired faces and appearance in a private transactional copy', async () => {
+  const owner = await database.createUser({
+    username: 'deck-package-admin',
+    email: 'deck-package@example.test',
+    passwordHash: 'test',
+  });
+  const value = {
+    name: 'Imported tiles',
+    back: '/assets/decks/back.png',
+    fronts: [
+      'text:First',
+      { front: '/assets/decks/front.png', back: 'text:Second back' },
+      'text:First',
+    ],
+    geom: { w: 0.5, h: 0.8, t: 0.1, round: 0.05, shape: 'hex' },
+    open: true,
+    deckModel: 'bag',
+    color: '#112233',
+    textColor: '#abcdef',
+    ownerId: owner.id,
+    isPublic: true,
+  };
+  const id = await database.importAssetPackage('deck', value, async () => true);
+  const saved = await database.getDeck(id);
+  assert.equal(saved.isPublic, false);
+  assert.equal(String(saved.ownerId), String(owner.id));
+  for (const key of ['back', 'fronts', 'geom', 'open', 'deckModel', 'color', 'textColor'])
+    assert.deepEqual(saved[key], value[key]);
+  let checks = 0;
+  await assert.rejects(
+    database.importAssetPackage(
+      'deck',
+      { ...value, name: 'Deck rollback' },
+      async () => ++checks < 2,
+    ),
+    /Admin access/,
+  );
+  assert.equal(
+    (await pool.query('SELECT id FROM custom_decks WHERE name=$1', ['Deck rollback'])).rowCount,
+    0,
+  );
+  await pool.query('DELETE FROM custom_decks WHERE id=$1', [id]);
 });

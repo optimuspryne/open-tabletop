@@ -45,30 +45,31 @@ export function createDatabase(pool) {
     if (skin.textColor) props.textColor = skin.textColor;
     return JSON.stringify(props);
   }
-  function insertDeck({
-    name,
-    back,
-    fronts,
-    geom = null,
-    open = false,
-    deckModel = null,
-    color = null,
-    textColor = null,
-    ownerId = null,
-    isPublic = false,
-  }) {
-    return pool
-      .query(
-        "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
-        [
-          name,
-          JSON.stringify(fronts),
-          deckProps(back, geom, open, { deckModel, color, textColor }),
-          ownerId,
-          isPublic,
-        ],
-      )
-      .then((r) => String(r.rows[0].id));
+  function insertDeck(
+    {
+      name,
+      back,
+      fronts,
+      geom = null,
+      open = false,
+      deckModel = null,
+      color = null,
+      textColor = null,
+      ownerId = null,
+      isPublic = false,
+    },
+    query = pool.query.bind(pool),
+  ) {
+    return query(
+      "INSERT INTO custom_decks (name, type, cards, props, owner_id, is_public) VALUES ($1, 'mixed', $2, $3, $4, $5) RETURNING id",
+      [
+        name,
+        JSON.stringify(fronts),
+        deckProps(back, geom, open, { deckModel, color, textColor }),
+        ownerId,
+        isPublic,
+      ],
+    ).then((r) => String(r.rows[0].id));
   }
   // Update an existing deck in place (name + cards + back + optional geometry/open), keeping owner + public flag.
   function updateDeck(id, name, back, fronts, geom = null, open = false, skin = {}) {
@@ -229,7 +230,9 @@ export function createDatabase(pool) {
     ).then((r) => String(r.rows[0].id));
   }
 
-  async function importDicePackage(value, authorize) {
+  async function importAssetPackage(kind, value, authorize) {
+    const insert = kind === 'dice' ? insertDice : kind === 'deck' ? insertDeck : null;
+    if (!insert) throw new AssetPackageError('Unsupported asset kind.');
     let client,
       discard = false,
       commitAttempted = false;
@@ -238,7 +241,7 @@ export function createDatabase(pool) {
       await client.query('BEGIN');
       if (!(await authorize()))
         throw new AssetPackageError('Admin access is no longer available.', 403);
-      const id = await insertDice({ ...value, isPublic: false }, client.query.bind(client));
+      const id = await insert({ ...value, isPublic: false }, client.query.bind(client));
       if (!(await authorize()))
         throw new AssetPackageError('Admin access is no longer available.', 403);
       commitAttempted = true;
@@ -673,7 +676,7 @@ export function createDatabase(pool) {
     listDice,
     getDice,
     insertDice,
-    importDicePackage,
+    importAssetPackage,
     allAssetRefBlobs,
     setAssetPublic,
     renameAsset,

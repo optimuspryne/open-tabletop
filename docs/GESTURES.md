@@ -251,12 +251,12 @@ latest saved version. The same visible controls work on desktop and touch; no ne
 The user approved functionality and the final UI (2026-09-24); specific devices were not itemized.
 
 
-## Portable dice textures (site admins)
+## Portable assets (site admins)
 
-In Library, open a custom dice texture's **More actions** menu and choose **Export** (click/tap;
+In Library, open a custom dice texture, deck or tile set's **More actions** menu and choose **Export** (click/tap;
 keyboard users focus the menu button and press Enter). On touch the same action is in its sheet.
-To import, expand **Import / export assets**, choose a `.ott.json` file, review its image details,
+To import, expand **Import / export assets**, choose a `.ott.json` file, review its image details and card/tile count,
 edit the new name if wanted, and choose **Import private copy**. Cancel clears the preview.
 Native file/input/button keyboard controls apply; no canvas gesture or shortcut is added.
 The preview and library share one scrollable body. Imports are separate private assets; enable
-Uncollected and select Dice → Custom/All if local filters hide the new texture.
+Uncollected and select Dice or Card Decks/Tiles → Custom/All if local filters hide the new asset.
