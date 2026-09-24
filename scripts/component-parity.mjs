@@ -203,6 +203,31 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'lobby-watch',
+    page: '/index.html',
+    root: '#roomList',
+    expect: { selector: '#roomList .roomRow', min: 2 },
+    drive: `
+      localStorage.setItem('tabletop.token', 'fixture');
+      window.fetch = async (url) => ({ ok: true, json: async () => String(url).includes('/auth/token')
+        ? { user: { id: '1', username: 'Viewer', email: 'viewer@example.test', isAdmin: false } }
+        : { rooms: [
+          { id: '1', name: 'A table with a longer descriptive name', code: 'WATCH1', role: 'player', status: 'admitted' },
+          { id: '2', name: 'Another table', code: 'WATCH2', role: 'helper', status: 'admitted' },
+        ] } });
+      await import('/__landing-live.js');
+      for (let i = 0; i < 20 && !document.querySelector('#roomList .roomRow'); i++) await new Promise(resolve => setTimeout(resolve, 20));
+      const rows = [...document.querySelectorAll('#roomList .roomRow')];
+      if (rows.length !== 2) throw Error('Lobby rooms did not render');
+      for (const row of rows) {
+        const watch = [...row.querySelectorAll('button')].find(button => button.textContent.trim() === 'Watch');
+        if (!watch || watch.disabled) throw Error('Admitted player has no Watch action');
+        if (!watch.querySelector('use[href="#i-eye"]')) throw Error('Watch eye icon is missing');
+        if (row.scrollWidth > row.clientWidth + 1) throw Error('Watch action overflows lobby row');
+      }
+    `,
+  },
+  {
     name: 'client-bootstrap',
     root: '#controlsModal',
     expect: { selector: '#controlsModal:not([hidden])', min: 1 },
@@ -213,7 +238,7 @@ const SCENES = [
       const messages = new Map(), sent = [], patches = [];
       const state = {
         pieces: new Map(), players: new Map([['me', { name: 'Ada', role: 'owner', seat: 0,
-          color: '#aa7755', avatar: '', hand: 0, showing: false, timedOut: false }]]),
+          color: '#aa7755', avatar: '', hand: 0, showing: false, timedOut: false, participation: 'player' }]]),
         overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
         scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
@@ -291,6 +316,27 @@ const SCENES = [
       me.timedOut = false;
       patches.forEach(fn => fn(room.state));
       assert(byId('participationNotice').hidden && !byId('dropBtn').inert, 'Lifting time-out left controls disabled');
+      assert(byId('participationBtn').querySelector('use[href="#i-eye"]'), 'Spectate eye icon is missing');
+      byId('participationBtn').click();
+      assert(sent.at(-1)[0] === 'setParticipation' && sent.at(-1)[1].participation === 'spectator', 'Self-service spectator toggle did not send');
+      me.participation = 'spectator';
+      patches.forEach(fn => fn(room.state));
+      messages.get('participationSet')({ participation: 'spectator' });
+      assert(byId('participationBtn').textContent === 'Return to play' && byId('dropBtn').inert, 'Spectator controls did not synchronize');
+      assert(byId('participationBtn').querySelector('use[href="#i-device-gamepad"]') &&
+        byId('participationBtn').getAttribute('aria-label') === 'Return to play', 'Return icon or accessible name is wrong');
+      const spectatorSent = sent.length;
+      room.send('drawInspect', { deckId: 'x' });
+      assert(sent.length === spectatorSent, 'Spectator sent a gameplay request');
+      byId('participationBtn').click();
+      me.participation = 'player'; me.timedOut = true;
+      patches.forEach(fn => fn(room.state));
+      messages.get('participationSet')({ participation: 'player' });
+      assert(byId('participationBtn').querySelector('use[href="#i-eye"]') &&
+        byId('participationBtn').getAttribute('aria-label') === 'Spectate', 'Spectate icon or accessible name did not return');
+      assert(byId('dropBtn').inert && !byId('participationNotice').hidden, 'Return to play bypassed time-out');
+      me.timedOut = false;
+      patches.forEach(fn => fn(room.state));
       byId('controlsBtn').click();
     `,
   },
@@ -777,6 +823,16 @@ const SCENES = [
       assert(!byId('players').querySelector('.turnOrderControls') && rows().every((r) => !r.draggable),
         'Demotion left turn-order controls enabled');
       change(me, 'role', 'gm');
+      change(third, 'participation', 'spectator');
+      assert(rows()[2].textContent.includes('spectator') && !rows()[2].querySelector('.turnOrderControls'),
+        'Spectator status or turn exclusion is missing');
+      rows()[0].querySelectorAll('.turnOrderControls button')[1].click();
+      assert(sent.at(-1)[1].order.join() === 'bob,me', 'Reorder included a spectator');
+      change(me, 'participation', 'spectator');
+      assert([...byId('players').querySelectorAll('.turnOrderControls button')].every((button) => button.disabled) &&
+        rows().every((r) => !r.draggable), 'Spectating GM retained enabled turn-order controls');
+      change(me, 'participation', 'player');
+      change(third, 'participation', 'player');
       change(state, 'turn', 'bob');
       assert(rows()[1].classList.contains('turn') && !byId('turnBtn').classList.contains('myturn') &&
         byId('turnBtn').getAttribute('aria-label').startsWith("Bob's turn"), 'Remote turn state is wrong');
@@ -1287,9 +1343,13 @@ const VIEWPORTS = [
 const out = {};
 const server = await serveDir({
   root: ROOT,
-  stubOnly: ['/client.js'], // most scenes exercise controllers independently
+  stubOnly: ['/client.js', '/landing.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
+    '/__landing-live.js': {
+      body: await readFile(resolve(ROOT, 'landing.js'), 'utf8'),
+      type: 'text/javascript',
+    },
     '/__client-live.js': {
       body: await readFile(resolve(ROOT, 'client.js'), 'utf8'),
       type: 'text/javascript',

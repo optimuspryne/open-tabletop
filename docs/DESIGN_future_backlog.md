@@ -13,8 +13,10 @@ The participation foundation is committed as `c51423a`; durable GM time-outs and
 cleanup are now implemented with user-reported functional and UI approval. See the
 [time-out checkpoint](DESIGN_next_features.md#stage-2-time-out-checkpoint--2026-09-24).
 The shared request registry supplies guarded registration for future inventories/notecards and
-other gameplay features. Spectator entry/seating remains pending; no backlog feature below is
-implemented by these participation slices.
+other gameplay features. Self-service spectator entry/seating is implemented with user-approved functionality and UI;
+comprehensive live multiplayer/touch coverage is not inferred; see the
+[spectator checkpoint](DESIGN_next_features.md#stage-3-spectator-checkpoint--2026-09-24).
+No backlog feature below is implemented by these participation slices.
 
 ## Where to investigate first
 

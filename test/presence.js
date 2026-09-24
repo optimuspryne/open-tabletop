@@ -393,3 +393,17 @@ test('placard replacement and departure dispose their owned model and texture re
   assert.equal(disposed, 10);
   assert.ok(!f.scene.children.includes(replacement));
 });
+
+test('seatless spectators use an observer camera and have no placards or seat-zero hand position', () => {
+  const h = fixture([
+    ['me', player({ seat: -1, order: -1, participation: 'spectator' })],
+    ['watcher', player({ seat: -1, participation: 'spectator' })],
+  ]);
+  assert.equal(h.presence.getSeat(), -1);
+  assert.equal(h.presence.seatName(), 'Observer');
+  assert.deepEqual(h.presence.handDropPosition(), { x: 0, z: 0 });
+  assert.equal(h.scene.children.length, 0);
+  assert.equal(h.camera.position.x, 0);
+  assert.ok(h.camera.position.y > 0);
+  assert.ok(h.events.includes('cameraReady'));
+});

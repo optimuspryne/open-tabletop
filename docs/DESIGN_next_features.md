@@ -1,6 +1,6 @@
 # Next features: participation, deck browsing, and collections
 
-Status: **participation stage 1 committed; stage 2 time-outs implemented, functionality and UI approved; remaining stages proposed**. Original plans
+Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; other features proposed**. Original plans
 were prepared against commit `b7390c6`; foundation implementation is dated 2026-09-24.
 This document covers [ROADMAP.md](ROADMAP.md) items **5/15, 22, and 18**. Recommendations below
 are starting decisions for later work, not additional user-approved requirements. Recheck current
@@ -231,6 +231,103 @@ Source inspection and graph coverage checks found no recorded gaps in these evid
 This is a task-focused baseline, not an exhaustive audit of every mutation or asset reference.
 The implementation stages explicitly include those inventories.
 
+## Stage 3 spectator checkpoint — 2026-09-24
+
+**Implemented; functionality and final icon UI approved by the user for commit (2026-09-24).** The user chose self-service
+spectating. Use **More → Spectate / Return to play** on desktop/touch or **Watch** in the lobby.
+The preference is durable per room/account, including owners/admins, and applies across tabs.
+It does not grant admission, change role or clear a GM time-out. Converted players keep their
+seat/hand/tray; new observers use seat −1, bird's-eye camera and no turn slot. Turns and seat-based
+dealing skip spectators. Returning seatless tabs reserves a distinct free seat for each before
+writing; if any cannot fit, the account stays spectating. Eight playing seats and 24 total
+tracked connections (including reconnect reservations) are separate limits.
+
+The implementation extends the existing participation service, room-access lifecycle, request
+registry, cleanup and client controller. A focused `player-seats.js` module shares allocation
+and turn rules between real join/transition paths. Self-mode writes have a separate database
+authorization boundary from GM time-outs; they reuse serialization without granting moderation.
+Private hand storage/delivery and scene/game snapshot formats retain their existing boundaries.
+
+### Files and functions changed
+
+| Files | Change |
+| --- | --- |
+| `postgres/019_spectator_mode.sql`, `postgres/schema.sql` | Add durable mode with a checked player/spectator enum and migration baseline. |
+| `server/participation-queries.js`, `db.js` | Add/export `setSelfParticipation`; preserve both policy fields in timeout results. |
+| `server/room-queries.js` | Extend `memberRow`, `getMembership`, `listMembers` with durable mode. |
+| `server/room-access.js` | Extend reads, publication, reconnect and revalidation; add `clientsFor`, `beginParticipationChange`; bound admission and invalidate overlapping reads. |
+| `server/game/participation.js` | Share per-account `queue`; add self `setParticipation`, reservation-aware `seatFor`; preserve timeout independence. |
+| `server/game/player-seats.js` | Add `freePlayerSeat`, `turnPlayers`, `advancePlayerTurn`, `createJoinedPlayer`, `applyPlayerParticipation`, private `nextPlayerOrder`, seat/cap constants. |
+| `server.js` | Delegate join/transition/turn logic; add self handler delegation and Watch authorization; exclude spectators from turn order and seat dealing. |
+| `server/game/schema.js` | Append public `Player.participation`. |
+| `server/message-validation.js`, `server/game/handlers/members.js` | Add strict `participationPayload` and self-only guarded registration. |
+| `shared/room-capabilities.js` | Classify `setParticipation` as personal; 121 requests. |
+| `public/table/participation.js` | Extend `canInteractWithTable` and `createParticipation` with mode hydration, notices, pending requests and self toggle. |
+| `public/client.js` | Wire self controls; handle explicit Watch join and remove the temporary URL flag after success. |
+| `public/landing.js` | Extend `enterRoom` and `renderRoomList` with admission-aware Watch. |
+| `public/table.html` | Add More button and player-facing help. |
+| `public/table/presence.js` | Observer camera/seat handling, spectator badges and eligible-only turn controls/payloads. |
+| `public/table/table-shell.js` | Separate player and spectator counts in room info. |
+| `public/table/trays.js` | Guard `open` for seatless observers. |
+| `public/ui/rows.js` | Add spectator status to `memberRow`. |
+| `test/backend-spectators.js` | Exercise real access/service/seat helpers: transitions, turn skipping, all-observer rooms, duplicate tabs, reservations, failures, reconnect and cap. |
+| `test/backend-member-handlers.js`, `test/backend-room-queries.js`, `test/backend-schema.js` | Cover new handler authorization/validation, member defaults and wire status. |
+| `test/participation.js`, `test/presence.js`, `test/trays.js` | Cover self button/ack/error, timeout independence, observer camera and no phantom tray. |
+| `test/integration/database.js` | Exercise migration 019, self-mode persistence, timeout preservation, admission/admin checks and invalid-mode rollback. |
+| `scripts/component-parity.mjs` | Extend real client/roster fixtures; add lobby Watch layout across desktop/touch profiles. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` | Record feature, current protocol/seat contracts and persistence boundaries. |
+| `docs/GESTURES.md`, `docs/RELEASING.md` | Document desktop/touch paths and migration/restart/refresh. |
+| `docs/DESIGN_next_features.md`, `docs/DESIGN_future_backlog.md`, `docs/ROADMAP.md` | Resolve self-service choice and distinguish local implementation from pending manual verification. |
+
+### Spectator icon follow-up — 2026-09-24
+
+The user reports spectator functionality works great and requested Tabler icons. This is
+functional sign-off, not confirmation of every scenario below. Lobby Watch and More → Spectate
+now use `eye`; Return to play uses `device-gamepad`.
+
+- `public/landing.js`: extend `renderRoomList`'s existing icon mapping for Watch.
+- `public/table/participation.js`, `public/client.js`: inject/reuse `setIcon` and `setBtnLabel`
+  in `createParticipation`, retaining icon nodes, visible labels and accessible names.
+- `scripts/build-icons.mjs`, `public/table.html`, `public/index.html`, `public/admin.html`: add
+  device-gamepad, regenerate all sprites, and give the More button standard icon/label markup.
+- `test/participation.js`, `scripts/component-parity.mjs`: adapt the controller fixture and
+  verify the actual icon/label transitions and lobby icon in existing browser checks.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, this checkpoint: record the visual follow-up and functional
+  sign-off. Refresh browsers for the icons; this follow-up adds no migration or server change.
+
+### Radial icon follow-up — 2026-09-24
+
+At user request, `public/table/table-shell.js` extends the existing `RADIAL_ICONS` map inside
+`bindControls`: Labels uses `label`, and Highlight uses `focus-2`. No functions are added or
+removed. `scripts/build-icons.mjs` adds these two Tabler names; `npm run build:icons` regenerates
+`public/table.html`, `public/index.html` and `public/admin.html`. `CHANGELOG.md` and this checkpoint
+record the change. Refresh browsers to load the new sprites.
+
+### Verification and manual smoke tests
+
+Automated verification passed: `npm run check` (701 tests plus lint/format/CSS checks),
+`test:input` (57 cases), `test:components` (desktop/touch), `test:devices` (seven profiles) and
+`test:integration` (nine database cases). A separate browser check clicked the
+real lobby Watch button on desktop and touch and verified its destination URL. Graph coverage
+and direct-source checks supplement the tests; neither establishes live multiplayer or device feel.
+
+**Restart the server** to apply migration 019, then **refresh all browsers**. Installations with
+automatic migration disabled must apply 019 with the schema-owner connection first.
+
+1. With two accounts, switch through More while holding a piece or inspecting a drawn card.
+   Check cleanup, spectator badge/notice, blocked manipulation and permitted chat/camera/inspection.
+   Return and verify the same seat, private hand and tray; no lost or duplicated cards.
+2. Use lobby Watch on desktop/touch, including a table with all eight seats reserved. Confirm a
+   seatless observer camera and no phantom tray. Return should explain a full table; retry after
+   a seat is released. Check an all-spectator room and its first returning player's turn.
+3. Spectate during the middle player's turn: the next eligible player gets the turn. Check
+   roster reorder and seat-based dealing omit spectators, including those retaining seats.
+4. Open duplicate tabs, toggle once, and verify both change. Refresh/reconnect and restart to
+   check persistence. Return requires space for every seatless tab; reconnect during a pending
+   mode write may require retrying the join.
+5. Apply a GM time-out, then self-spectate and return. Time-out must stay active. Check owner/GM
+   moderation while voluntarily spectating, unchanged admission rules, and real touch controls.
+
 ## 1. Time-out and spectator mode
 
 ### Product behavior and recommended policy
@@ -265,9 +362,9 @@ tray dice or introducing player inventories as a dependency. Releasing occupied 
 can be a later explicit workflow. Returning to player mode allocates a seat if needed; if none
 is available, stay spectating with an explanation. Never represent a seatless viewer as seat zero.
 
-**Decisions to revisit:** allow self-selected spectator entry or GM assignment only; retain the
-reserved-seat policy for converted players; permit communication highlights during time-out;
-allow own-hand viewing. These defaults keep the first implementation bounded and reversible.
+**Decided (2026-09-24):** the user chose self-selected spectator entry. Stage 3 implements
+self-service only, retaining reserved seats for converted players, communication highlights and
+own-hand viewing. GM assignment and explicit release of reserved seats remain outside this slice.
 
 ### Server ownership and persistence
 
@@ -286,8 +383,8 @@ A new account is a different identity; this does not replace room admission cont
 
 Expose only status needed by the UI in public player state. Management messages identify an
 account/member through validated identifiers, never through a client-supplied rank. Proposed
-message names such as `setParticipation` and `setPlayerTimeout` are placeholders until the
-protocol is implemented and added to the reference guide.
+messages `setParticipation` and `setPlayerTimeout` are now implemented; see the reference guide
+for their exact payload and authorization contracts.
 
 ### One enforceable interaction policy
 
@@ -323,7 +420,7 @@ loading state until participation and pieces have arrived.
 2. **Time-out — implemented, user-approved functionality and UI:** durable policy, GM controls, public status, transition cleanup, reconnect behavior.
    Test during single/group dragging, drawing, inspection, and an in-flight library spawn. Verify
    duplicate tabs, restart, failed DB writes, demotion/revocation, and a full table.
-3. **Spectators:** entry/exit controls, seatless join handling, turn exclusion, reserved-seat
+3. **Spectators — implemented, user-approved functionality and UI:** entry/exit controls, seatless join handling, turn exclusion, reserved-seat
    conversion, preserved hands/trays, and local observer camera controls. Audit seat consumers
    before choosing a sentinel or optional seat field. Verify an all-spectator room and returning
    players when every seat is reserved.

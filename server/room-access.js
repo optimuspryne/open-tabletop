@@ -7,6 +7,7 @@ const sameUser = (auth, userId) => String(auth.userId) === String(userId);
 export function createRoomAccess({ db, hashToken }) {
   const rooms = new Map();
   const pendingChecks = new Set();
+  const changingParticipation = new WeakMap();
   let checking = false;
 
   function changed({ room, userId, tokenHash }) {
@@ -27,7 +28,11 @@ export function createRoomAccess({ db, hashToken }) {
     pendingChecks.add(check);
     try {
       const auth = await readAccess(room, kind, tokenHash);
-      if (check.invalidated || check.changedUsers.has(String(auth.userId))) {
+      if (
+        check.invalidated ||
+        check.changedUsers.has(String(auth.userId)) ||
+        changingParticipation.get(room)?.has(String(auth.userId))
+      ) {
         const error = new ServerError(403, 'Access changed. Please join again.');
         error.accessChanged = true;
         throw error;
@@ -45,6 +50,7 @@ export function createRoomAccess({ db, hashToken }) {
     if (!user) throw new ServerError(401, 'Please sign in first.');
     let role = 'owner';
     let timedOut = false;
+    let participation = 'player';
     if (kind === 'editor') {
       if (!user.isAdmin) throw new ServerError(403, 'The library editor is for site admins only.');
     } else {
@@ -58,6 +64,9 @@ export function createRoomAccess({ db, hashToken }) {
       } else {
         role = user.isAdmin ? 'owner' : member?.status === 'admitted' ? member.role : null;
         if (!role) throw new ServerError(403, 'You are not an admitted member of this room.');
+        participation = member?.participation ?? 'player';
+        if (!['player', 'spectator'].includes(participation))
+          throw new ServerError(403, 'Invalid participation policy.');
         timedOut = !user.isAdmin && role !== 'owner' && member?.timedOut === true;
       }
     }
@@ -67,7 +76,7 @@ export function createRoomAccess({ db, hashToken }) {
       avatar: user.avatar,
       role,
       isAdmin: !!user.isAdmin,
-      participation: 'player',
+      participation,
       timedOut,
       participationReady: true,
     };
@@ -84,15 +93,22 @@ export function createRoomAccess({ db, hashToken }) {
     );
     // Block every connection before any cleanup can throw.
     for (const entry of affected) {
-      entry.auth.timedOut = policy.timedOut;
+      if (policy.timedOut !== undefined)
+        entry.auth.timedOut =
+          entry.auth.isAdmin || entry.auth.role === 'owner' ? false : policy.timedOut;
+      if (policy.participation !== undefined) entry.auth.participation = policy.participation;
       const player = room.state?.players?.get(entry.client.sessionId);
-      if (player) player.timedOut = policy.timedOut;
+      if (player) {
+        player.timedOut = entry.auth.timedOut;
+        player.participation = entry.auth.participation;
+      }
     }
     let failure;
     for (const entry of affected) {
       try {
         room.onParticipationChanged?.(entry.client);
       } catch (error) {
+        disconnect(entry, 'accessRevoked');
         failure ||= error;
       }
     }
@@ -134,7 +150,12 @@ export function createRoomAccess({ db, hashToken }) {
   return {
     assertActive(room, client) {
       const entry = rooms.get(room)?.get(client.sessionId);
-      if (!entry || entry.auth.revoked) throw new ServerError(403, 'Access revoked.');
+      if (
+        !entry ||
+        entry.auth.revoked ||
+        changingParticipation.get(room)?.has(String(entry.auth.userId))
+      )
+        throw new ServerError(403, 'Access changed. Please join again.');
     },
 
     async authorize(room, client, options, kind = 'table') {
@@ -144,6 +165,11 @@ export function createRoomAccess({ db, hashToken }) {
         throw new ServerError(401, 'Please sign in first.');
       const tokenHash = hashToken(options.token);
       return checkedAccess(room, kind, tokenHash, (auth) => {
+        if (rooms.get(room)?.size >= room.connectionLimit)
+          throw new ServerError(
+            403,
+            'This room has reached its participant limit. Try again later.',
+          );
         if (!rooms.has(room)) rooms.set(room, new Map());
         rooms.get(room).set(client.sessionId, { client, auth, tokenHash, kind });
         return auth;
@@ -151,6 +177,23 @@ export function createRoomAccess({ db, hashToken }) {
     },
 
     setParticipation,
+
+    clientsFor(room, userId) {
+      return [...entries(room)]
+        .filter((entry) => !entry.auth.revoked && sameUser(entry.auth, userId))
+        .map((entry) => entry.client);
+    },
+
+    // A seat reservation covers the existing sessions. Reject stale/new joins during the
+    // short durable transition rather than admitting an unreserved duplicate connection.
+    beginParticipationChange(room, userId) {
+      const key = String(userId);
+      let users = changingParticipation.get(room);
+      if (!users) changingParticipation.set(room, (users = new Set()));
+      users.add(key);
+      changed({ room, userId });
+      return () => users.delete(key);
+    },
 
     async reconnect(room, client) {
       const entry = rooms.get(room)?.get(client.sessionId);
@@ -166,6 +209,7 @@ export function createRoomAccess({ db, hashToken }) {
           if (player) {
             player.role = auth.role;
             player.timedOut = auth.timedOut;
+            player.participation = auth.participation;
           }
           room.onParticipationChanged?.(client);
         });
@@ -226,8 +270,14 @@ export function createRoomAccess({ db, hashToken }) {
             await checkedAccess(room, entry.kind, entry.tokenHash, (auth) => {
               if (auth.role !== entry.auth.role || auth.isAdmin !== entry.auth.isAdmin)
                 invalidate();
-              else if (auth.timedOut !== entry.auth.timedOut)
-                setParticipation(room, auth.userId, { timedOut: auth.timedOut });
+              else if (
+                auth.timedOut !== entry.auth.timedOut ||
+                auth.participation !== entry.auth.participation
+              )
+                setParticipation(room, auth.userId, {
+                  timedOut: auth.timedOut,
+                  participation: auth.participation,
+                });
             });
           } catch (error) {
             if (error.accessChanged) continue; // a newer local mutation owns this result

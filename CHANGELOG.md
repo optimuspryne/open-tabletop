@@ -20,12 +20,22 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Use Tabler `label` for Labels and `focus-2` for Highlight in the piece radial menu.
+- Tabler eye icons for lobby Watch and More → Spectate, switching to device-gamepad for
+  Return to play. Reuse the existing icon/label helpers and regenerate all three page sprites.
+- Self-service spectator mode through **More → Spectate / Return to play**, or **Watch** in the
+  lobby. Preserve converted players' seats, hands and trays; new spectators join without a seat
+  and are skipped by turns/dealing. Camera, chat and authorized inspection remain available.
+  Mode persists per room/account across tabs and reconnects; returning never lifts a GM time-out.
+  Keep eight playing seats and cap total connections at 24. Migration **019** requires a server
+  restart and browser refresh. Automated checks pass; the user approved spectator functionality and final icons for commit;
+  comprehensive live multiplayer/touch testing is not inferred.
 - Durable GM time-outs in the member list, with room-visible badges and an explanation for the
   affected player. Apply/lift across all tabs and reconnects; preserve seats, hands and trays.
   Block gameplay, cancel active gestures, release held objects without throwing, and recover
   pending inspections. Chat, camera controls, public/own-hand inspection and personal notes remain
   available. Migration **018** stores room/account policy outside gameplay snapshots; restart the
-  server and refresh clients. Spectator entry remains planned; the user reports time-outs work,
+  server and refresh clients. Spectator entry follows in the slice above; the user reports time-outs work,
   and approved the compact member-list UI.
 - GM object labels through **Labels…** in the desktop/touch menu or **L** over a piece. Saved
   labels follow objects; the same editor configures prominent low-stock counts for decks, tile

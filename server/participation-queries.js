@@ -42,7 +42,7 @@ export function createParticipationQueries(pool) {
           `INSERT INTO room_participation (room_id, user_id, timed_out) VALUES ($1,$2,$3)
            ON CONFLICT (room_id, user_id) DO UPDATE
            SET timed_out = EXCLUDED.timed_out, version = room_participation.version + 1
-           RETURNING timed_out, version`,
+           RETURNING timed_out, participation, version`,
           [roomId, userId, timedOut],
         );
         if (!authorized()) {
@@ -50,7 +50,59 @@ export function createParticipationQueries(pool) {
           return null;
         }
         await connection.query('COMMIT');
-        return { timedOut: rows[0].timed_out, version: rows[0].version };
+        return {
+          timedOut: rows[0].timed_out,
+          participation: rows[0].participation ?? 'player',
+          version: rows[0].version,
+        };
+      } catch (error) {
+        await connection.query('ROLLBACK');
+        throw error;
+      } finally {
+        connection.release();
+      }
+    },
+    async setSelfParticipation({ roomId, userId, participation }, isLive) {
+      const connection = await pool.connect();
+      try {
+        await connection.query('BEGIN');
+        const { rows: users } = await connection.query(
+          'SELECT id, is_admin FROM users WHERE id = $1 FOR UPDATE',
+          [userId],
+        );
+        const { rows: members } = await connection.query(
+          'SELECT role, status FROM room_members WHERE room_id = $1 AND user_id = $2 FOR UPDATE',
+          [roomId, userId],
+        );
+        const authorized = () =>
+          isLive() && users[0] && (users[0].is_admin || members[0]?.status === 'admitted');
+        if (!authorized()) {
+          await connection.query('ROLLBACK');
+          return null;
+        }
+        // Site admins may enter rooms without a membership. Create only their own admitted
+        // row, after checking durable admin authority, so policy has a durable FK owner.
+        if (!members.length)
+          await connection.query(
+            "INSERT INTO room_members (room_id, user_id, role, status) VALUES ($1,$2,'player','admitted')",
+            [roomId, userId],
+          );
+        const { rows } = await connection.query(
+          `INSERT INTO room_participation (room_id, user_id, participation) VALUES ($1,$2,$3)
+           ON CONFLICT (room_id, user_id) DO UPDATE SET participation = EXCLUDED.participation,
+           version = room_participation.version + 1 RETURNING timed_out, participation, version`,
+          [roomId, userId, participation],
+        );
+        if (!authorized()) {
+          await connection.query('ROLLBACK');
+          return null;
+        }
+        await connection.query('COMMIT');
+        return {
+          timedOut: rows[0].timed_out,
+          participation: rows[0].participation,
+          version: rows[0].version,
+        };
       } catch (error) {
         await connection.query('ROLLBACK');
         throw error;

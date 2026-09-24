@@ -76,7 +76,7 @@ export function memberRow(m, { isSelf = false, myRank = 0, on = {} } = {}) {
   name.textContent = `${m.username}${isSelf ? ' (you)' : ''}`;
   const tag = document.createElement('span');
   tag.className = 'muted';
-  tag.textContent = `${m.role}${m.status === 'pending' ? ' · pending' : ''}${m.timedOut ? ' · time-out' : ''}`;
+  tag.textContent = `${m.role}${m.participation === 'spectator' ? ' · spectator' : ''}${m.status === 'pending' ? ' · pending' : ''}${m.timedOut ? ' · time-out' : ''}`;
   info.append(name, tag);
   li.appendChild(info);
 

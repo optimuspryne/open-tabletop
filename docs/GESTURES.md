@@ -31,6 +31,16 @@ chat, pings and local settings remain usable. Deck peeking, hand play/reordering
 notes/scores/timer changes and library spawning are blocked. Lifting time-out restores normal
 input without changing the player's seat, hand or tray. Real-device feel awaits manual testing.
 
+## Spectator mode
+
+Use **More → Spectate / Return to play** on desktop or touch, or **Watch** beside an admitted
+room in the lobby. Keyboard users can focus and activate the same buttons. A persistent notice
+and roster/member status show the mode. Spectators retain the permitted camera, chat, highlight,
+public inspection and own-hand viewing paths described above. Existing players keep their
+reserved seat, hand and tray; new observers start seatless with a bird's-eye camera. Return to
+play requires a free seat if needed and never clears a GM time-out. The preference applies to
+all tabs for the same account/room. Live multiplayer and real-device testing remain pending.
+
 ## Camera
 
 Empty felt only — a press that hits a piece is consumed by the piece dispatcher

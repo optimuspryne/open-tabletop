@@ -27,8 +27,8 @@ async function api(path, { method = 'GET', body, auth = false } = {}) {
   return data;
 }
 
-const enterRoom = (code) => {
-  location.href = 'table.html?room=' + encodeURIComponent(code);
+const enterRoom = (code, spectate = false) => {
+  location.href = 'table.html?room=' + encodeURIComponent(code) + (spectate ? '&spectate=1' : '');
 };
 
 // ---- small shared UI helpers ----
@@ -255,7 +255,7 @@ function renderRoomList(rooms) {
     list.appendChild(li);
     return;
   }
-  const ROOM_ICON = { Enter: 'door-enter', Rename: 'cursor-text', Close: 'trash' };
+  const ROOM_ICON = { Enter: 'door-enter', Watch: 'eye', Rename: 'cursor-text', Close: 'trash' };
   const mkBtn = (label, fn, cls) => {
     const button = document.createElement('button');
     button.type = 'button';
@@ -297,10 +297,12 @@ function renderRoomList(rooms) {
     actions.className = 'button-row button-row--compact button-row--end';
     const enter = mkBtn('Enter', () => enterRoom(room.code));
     enter.disabled = room.status === 'pending';
-    actions.appendChild(enter);
+    const watch = mkBtn('Watch', () => enterRoom(room.code, true));
+    watch.disabled = room.status === 'pending';
+    actions.append(enter, watch);
     if (room.role === 'owner') {
-      // Owner room management behind one trigger (UI_Redesign 7f): Enter stays the only
-      // button on the row, so the row's width never depends on how many owner actions
+      // Owner room management behind one trigger (UI_Redesign 7f): Enter and Watch stay visible
+      // on the row, so the row's width never depends on how many owner actions
       // there are. Popover on desktop, bottom sheet on touch — same items.
       const gated = room.requireApproval;
       actions.appendChild(

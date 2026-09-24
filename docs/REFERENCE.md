@@ -6,7 +6,7 @@ A map of every module, data structure, and key function. For the _why_, see
 For staged implementation status and **remaining proposed** work, see [DESIGN_next_features.md](DESIGN_next_features.md)
 (participation restrictions, deck browsing, collections) and
 [DESIGN_future_backlog.md](DESIGN_future_backlog.md) (discovery briefs for other open items).
-The participation foundation and durable GM time-outs are implemented; the remaining suggested messages,
+The participation foundation, durable GM time-outs and self-service spectators are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
 The codebase:
@@ -1521,11 +1521,12 @@ most once per five seconds.
 **`canUseRoomCapability(auth, capability)`** in `server/permissions.js` is a pure participation
 predicate; handler rank, ownership and asset-access checks still apply. Server-owned
 `client.auth.participation` (`player` / `spectator`), `timedOut` and `participationReady` are
-server-owned fields, never accepted from client payloads. `readAccess` loads durable time-out
+effective authorization fields. Validated self-mode requests are committed before changing them. `readAccess` loads durable participation
 policy on join/reconnect; reconnect sets readiness false before reading and revokes access on
 failure. Missing fields remain compatible with internal legacy callers. `participationReady:false`
 and `revoked:true` deny every capability; unknown participation or malformed time-out values deny
-gameplay. Player mode is currently the only entry mode; spectator entry remains planned.
+gameplay. A new membership defaults to player mode; durable spectator mode is loaded even for
+owners/site admins. Their time-out exemption does not exempt voluntary spectating.
 
 **`setPlayerTimeout({userId,timedOut})`** accepts exactly a positive account ID and boolean.
 GMs may manage players/helpers; owners/site admins may also manage GMs. Self, room owner,
@@ -1543,10 +1544,37 @@ and memberships, validates durable rank plus live access, writes and commits bef
 even if the actor loses access during commit, but that actor receives no acknowledgment.
 `roomAccess.setParticipation` updates every live tab's auth before cleanup/publication; pending
 join reads are invalidated, and periodic revalidation also catches durable policy changes.
-Owners/site admins load unrestricted policy. Policy is not part of scenes or game snapshots.
+Owners/site admins remain exempt from time-out. Policy is not part of scenes or game snapshots.
 
-Public `Player.timedOut` drives badges and `public/table/participation.js`. Its room-send adapter
-uses the shared 120-request capability registry, blocks gameplay before hydration, and rechecks
+**`setParticipation({participation})`** accepts exactly `player` or `spectator`, with no target
+account or time-out field. It is a personal capability available while restricted. Migration
+**019** appends `participation` (default `player`) to `room_participation`.
+`setSelfParticipation` locks and checks the current admitted membership (or durable site-admin
+status), preserves `timed_out`, increments the policy version and commits before publication.
+The service replies `participationSet {participation}` and refreshes member lists. Failed writes
+or seat allocation never acknowledge success. Site admins without membership receive an admitted
+membership before their own policy is stored; pending ordinary members cannot bypass admission.
+
+`player-seats.js` provides `freePlayerSeat`, `turnPlayers`, `advancePlayerTurn`,
+`createJoinedPlayer` and `applyPlayerParticipation`. New spectators have seat/order **−1**;
+converted players keep their seat, color, hand and tray. Turns/reordering/dealing skip spectators.
+Returning allocates free seats for all seatless tabs before writing; if any cannot be seated,
+all remain spectators. Seat reservations exclude competing joins during that write.
+`roomAccess.beginParticipationChange` rejects overlapping authorization/reconnect reads for the
+account; retrying loads current policy. The authorization cap is **24 tracked connections**,
+including reconnect reservations, independently of eight playing seats. Framework `maxClients`
+is unbounded so matchmaking cannot split a full room code into a second table.
+
+The lobby **Watch** button joins with `participation:'spectator'` after normal admission checks;
+its temporary `spectate=1` URL flag is removed after success. Explicit Watch bypasses saved
+reconnection so the requested mode takes effect. **More → Spectate / Return to play** works on
+desktop and touch, is hidden in the asset editor, and disables while a request is pending.
+Watch and Spectate use the Tabler `eye`; Return to play uses `device-gamepad`, preserving the
+button label and accessible name through the existing icon/label helpers.
+Seatless observers start with a bird's-eye camera and cannot create a tray for seat zero.
+
+Public `Player.timedOut` and `Player.participation` drive badges and `public/table/participation.js`. Its room-send adapter
+uses the shared 121-request capability registry, blocks gameplay before hydration, and rechecks
 mixed save/spawn requests. Mutation controls become inert; the input router retains camera,
 public inspection, chat and highlight/ping paths. A restriction cancels active local gestures.
 `stopPlayerInteraction` releases held bodies with zero velocity, clears group/overlay drag and

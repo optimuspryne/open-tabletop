@@ -13,6 +13,7 @@ export { createDatabase };
 export const {
   colliderPresets,
   setPlayerTimeout,
+  setSelfParticipation,
   close,
   listDecks,
   getDeck,

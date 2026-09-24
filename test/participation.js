@@ -9,7 +9,7 @@ import {
 test('client policy fails closed before hydration and filters mixed save/spawn requests', () => {
   const room = { sessionId: 'me', state: {} };
   assert.equal(canInteractWithTable(room), false);
-  room.state.players = new Map([['me', { timedOut: false }]]);
+  room.state.players = new Map([['me', { timedOut: false, participation: 'player' }]]);
   assert.equal(canInteractWithTable(room), false);
   room.state.pieces = new Map();
   assert.equal(canInteractWithTable(room), true);
@@ -38,16 +38,19 @@ test('client policy fails closed before hydration and filters mixed save/spawn r
 test('the live room adapter cancels once on transition, filters direct callers and restores controls', () => {
   const element = { classList: { toggle() {} }, setAttribute() {}, removeAttribute() {} };
   const notice = {};
+  const button = { setAttribute() {} };
+  const messages = new Map();
   let patch,
     leave,
     disconnected = false,
     cancelled = 0;
   const sent = [];
-  const me = { timedOut: false };
+  const me = { timedOut: false, participation: 'player' };
   const room = {
     sessionId: 'me',
     state: { pieces: new Map(), players: new Map([['me', me]]) },
     send: (...args) => sent.push(args),
+    onMessage: (type, fn) => messages.set(type, fn),
     onStateChange: (fn) => {
       patch = fn;
     },
@@ -56,9 +59,17 @@ test('the live room adapter cancels once on transition, filters direct callers a
     },
   };
   const controller = createParticipation({
+    setIcon() {},
+    setBtnLabel: (element, label) => {
+      element.textContent = label;
+    },
     getRoom: () => room,
     onBlocked: () => cancelled++,
-    doc: { body: {}, getElementById: () => notice, querySelectorAll: () => [element] },
+    doc: {
+      body: {},
+      getElementById: (id) => (id === 'participationBtn' ? button : notice),
+      querySelectorAll: () => [element],
+    },
     observe: () => ({
       observe() {},
       disconnect() {
@@ -95,6 +106,23 @@ test('the live room adapter cancels once on transition, filters direct callers a
   patch();
   assert.equal(element.inert, false);
   assert.equal(notice.hidden, true);
+  button.onclick();
+  assert.deepEqual(sent.at(-1), ['setParticipation', { participation: 'spectator' }]);
+  assert.equal(button.disabled, true);
+  me.participation = 'spectator';
+  patch();
+  messages.get('participationSet')({ participation: 'spectator' });
+  assert.equal(button.textContent, 'Return to play');
+  assert.equal(element.inert, true);
+  assert.match(notice.textContent, /spectating/);
+  button.onclick();
+  messages.get('serverError')({ operation: 'setParticipation' });
+  assert.equal(button.disabled, false);
+  assert.equal(element.inert, true);
+  me.participation = 'player';
+  me.timedOut = true;
+  patch();
+  assert.equal(element.inert, true, 'returning to play must not lift a time-out');
   leave();
   assert.equal(disconnected, true);
 });

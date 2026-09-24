@@ -15,7 +15,7 @@ const messagesByCapability = {
     'listDice',
   ],
   communication: ['chat', 'ping', 'highlightPiece'],
-  personal: ['notebook', 'setName', 'setAvatar'],
+  personal: ['notebook', 'setName', 'setAvatar', 'setParticipation'],
   cleanup: ['showStop', 'wbRelease'],
   administration: [
     'members',

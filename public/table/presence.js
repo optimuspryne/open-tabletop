@@ -89,7 +89,7 @@ export function createPresence({
   // just inside each edge and cameras pull back proportionally, so markers/hands stay
   // at the table's edge on any size. Each client parks its camera at its own seat and
   // renders public hand fans at every occupied seat.
-  let mySeat = 0;
+  let mySeat = -1;
   let seatLayout = seatLayoutFor(10, 7);
 
   // Recompute seats when the table resizes, then reposition everyone's markers, fans,
@@ -108,7 +108,10 @@ export function createPresence({
 
   function applySeat(seat) {
     const layout = seatLayout[seat];
-    if (!layout) return;
+    if (!layout) {
+      applyBirdsEye();
+      return;
+    }
     camera.position.set(...layout.cam.pos);
     controls.target.set(...layout.cam.target);
     controls.update();
@@ -129,6 +132,7 @@ export function createPresence({
     // A tiny Z offset avoids an undefined camera roll when its view and up vectors are parallel.
     camera.position.set(0, height, 0.001);
     controls.update();
+    setSeatCameraReady();
   }
 
   // Rebuild the fanned face-down backs shown at a player's seat. This includes our own public
@@ -355,7 +359,19 @@ export function createPresence({
     if (!el) return;
     const list = [];
     room.state.players.forEach((player, sid) => list.push([sid, player]));
-    list.sort((a, b) => a[1].order - b[1].order || a[1].seat - b[1].seat);
+    list.sort(
+      (a, b) =>
+        Number(a[1].participation === 'spectator') - Number(b[1].participation === 'spectator') ||
+        a[1].order - b[1].order ||
+        a[1].seat - b[1].seat,
+    );
+    const playing = list.filter(
+      ([, player]) => player.participation !== 'spectator' && player.seat >= 0,
+    );
+    const canOrder =
+      getRank() >= 2 &&
+      room.state.players.get(getSessionId())?.timedOut !== true &&
+      room.state.players.get(getSessionId())?.participation !== 'spectator';
     el.replaceChildren();
     if (room.state.turnPending) {
       // the turn is held by someone who hasn't rejoined the saved game
@@ -375,7 +391,7 @@ export function createPresence({
       const row = document.createElement('div');
       row.className = 'prow' + (room.state.turn === sid ? ' turn' : '');
       row.dataset.sid = sid;
-      if (getRank() >= 2 && room.state.players.get(getSessionId())?.timedOut !== true) {
+      if (canOrder && player.participation !== 'spectator' && player.seat >= 0) {
         row.draggable = true;
         row.title = 'Drag to change turn order';
         row.addEventListener('dragstart', (event) => {
@@ -391,7 +407,7 @@ export function createPresence({
         row.addEventListener('drop', (event) => {
           event.preventDefault();
           const moved = event.dataTransfer.getData('text/plain');
-          const order = list.map(([id]) => id);
+          const order = playing.map(([id]) => id);
           const from = order.indexOf(moved);
           const to = order.indexOf(sid);
           if (from < 0 || to < 0 || from === to) return;
@@ -415,6 +431,12 @@ export function createPresence({
       const label = document.createElement('span');
       label.textContent = `${player.name}${sid === getSessionId() ? ' (you)' : ''} \u00b7 ${player.hand}`; // textContent = inert
       row.appendChild(label);
+      if (player.participation === 'spectator') {
+        const badge = document.createElement('span');
+        badge.className = 'rolebadge';
+        badge.textContent = 'spectator';
+        row.appendChild(badge);
+      }
       if (player.timedOut) {
         const badge = document.createElement('span');
         badge.className = 'rolebadge';
@@ -428,7 +450,7 @@ export function createPresence({
         badge.textContent = player.role;
         row.appendChild(badge);
       }
-      if (getRank() >= 2) {
+      if (getRank() >= 2 && player.participation !== 'spectator' && player.seat >= 0) {
         const controls = document.createElement('span');
         controls.className = 'turnOrderControls';
         const move = (delta, symbol, label) => {
@@ -438,9 +460,11 @@ export function createPresence({
           button.textContent = symbol;
           button.setAttribute('aria-label', `${label} ${player.name} in turn order`);
           button.disabled =
-            (delta < 0 && list[0][0] === sid) || (delta > 0 && list[list.length - 1][0] === sid);
+            !canOrder ||
+            (delta < 0 && playing[0][0] === sid) ||
+            (delta > 0 && playing[playing.length - 1][0] === sid);
           button.onclick = () => {
-            const order = list.map(([id]) => id);
+            const order = playing.map(([id]) => id);
             const at = order.indexOf(sid);
             [order[at], order[at + delta]] = [order[at + delta], order[at]];
             room.send('turnOrder', { order });
@@ -516,6 +540,7 @@ export function createPresence({
       );
       cb(player).listen('order', renderPlayers, false);
       cb(player).listen('timedOut', renderPlayers, false);
+      cb(player).listen('participation', renderPlayers, false);
       cb(player).listen(
         'avatar',
         () => {
@@ -588,7 +613,8 @@ export function createPresence({
     }
   }
   function handDropPosition() {
-    const seat = seatLayout[mySeat] || seatLayout[0];
+    const seat = seatLayout[mySeat];
+    if (!seat) return { x: 0, z: 0 };
     return { x: seat.hand[0] - seat.out[0] * 2, z: seat.hand[2] - seat.out[2] * 2 };
   }
   return {
@@ -597,7 +623,7 @@ export function createPresence({
     bindControls,
     rebuildSeats,
     getSeat: () => mySeat,
-    seatName: () => SEAT_NAMES[mySeat],
+    seatName: () => SEAT_NAMES[mySeat] || 'Observer',
     handDropPosition,
     updateHeldLabel,
     update: updateHeldLabels,

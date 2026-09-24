@@ -215,7 +215,7 @@ Implementation planning is documented separately so this list can stay concise:
 The participation-policy foundation is implemented locally (119 classified requests, guarded
 registration and delayed-mutation checks), with user-reported manual tests green on 2026-09-24.
 Durable time-out controls/persistence are now implemented with user-reported functional and UI approval; spectator
-behavior remains open. Other designs remain proposed;
+mode is implemented with self-service entry/exit and user-approved functionality/UI. Other designs remain proposed;
 unresolved product choices are marked explicitly. The detailed document recommends an
 implementation sequence without making the entire backlog a fixed priority queue.
 
@@ -237,9 +237,11 @@ implementation sequence without making the entire backlog a fixed priority queue
 4. **Fog of war.** Planned area-based concealment. Coordinate authorized visibility with the
    GM staging area (§3) and per-object hiding (item 14); hiding individual objects is a distinct
    feature and does not by itself complete fog of war.
-5. **Spectator mode.** A viewing-only mode with no tabletop-object interaction. Design alongside
-   player time-out (item 15), sharing server-enforced interaction permissions where practical.
-   Decide seat/role behavior separately from the temporary restriction on an existing player.
+5. **Spectator mode — implemented; functionality and UI user-approved.** Players choose
+   **More → Spectate / Return to play** or lobby **Watch**. New observers are seatless; converted
+   players reserve seats/hands/trays and are skipped by turns. Durable self-mode shares the
+   interaction policy with time-out but cannot clear it. See the stage 3 checkpoint and smoke tests
+   in [DESIGN_next_features.md](DESIGN_next_features.md#stage-3-spectator-checkpoint--2026-09-24).
 6. ✅ **Custom dispensers — DONE.** Admins can attach finite or infinite dispensers to uploaded
    objects in the editor, using a visible stack, generic container, or second uploaded model.
    Saved configurations support dispensing and gathering compatible pieces.

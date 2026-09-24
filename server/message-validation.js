@@ -1132,3 +1132,11 @@ export function playerTimeoutPayload(message) {
   const member = memberUserPayload({ userId: message.userId });
   return member ? { ...member, timedOut: message.timedOut } : null;
 }
+
+// Self-service only: account identity comes from authenticated room access.
+export function participationPayload(message) {
+  if (!exactObject(message, ['participation'])) return null;
+  return ['player', 'spectator'].includes(message.participation)
+    ? { participation: message.participation }
+    : null;
+}

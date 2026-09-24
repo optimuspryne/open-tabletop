@@ -206,6 +206,10 @@ const notebook = createNotebook({ getRoom: () => room, byId });
 const scoreboard = createScoreboard({ getRoom: () => room, getRank: () => myRank, byId });
 const timer = createTimer({ getRoom: () => room, byId, setIcon });
 const participation = createParticipation({
+  setIcon,
+  setBtnLabel,
+  canChoose: () => !window.OTT_EDITOR,
+  toast,
   getRoom: () => room,
   onBlocked: () => {
     pieceDrag.cancel();
@@ -244,14 +248,24 @@ const membership = createMembership({
     room = await client.joinOrCreate('editor', { token: authToken }); // admin-only workshop; no code, no reconnect
   } else {
     const saved = sessionStorage.getItem(key);
-    if (saved) {
+    const watch = params.get('spectate') === '1';
+    if (saved && !watch) {
       try {
         room = await client.reconnect(saved);
       } catch (e) {
         room = null;
       }
     }
-    if (!room) room = await client.joinOrCreate('table', { code, token: authToken });
+    if (!room)
+      room = await client.joinOrCreate('table', {
+        code,
+        token: authToken,
+        ...(watch ? { participation: 'spectator' } : {}),
+      });
+    if (watch) {
+      params.delete('spectate');
+      history.replaceState(null, '', location.pathname + '?' + params.toString());
+    }
     sessionStorage.setItem(key, room.reconnectionToken);
   }
   mySession = room.sessionId;

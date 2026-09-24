@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 18); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 19); // Includes durable participation policy.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -346,6 +346,25 @@ test('durable time-outs preserve hierarchy, survive a fresh database facade and 
   );
   assert.equal(await database.setPlayerTimeout({ ...request, timedOut: false }, () => false), null);
   assert.equal((await database.getMembership(room.id, player.id)).timedOut, true);
+  const self = { roomId: room.id, userId: player.id, participation: 'spectator' };
+  const spectating = await database.setSelfParticipation(self, () => true);
+  assert.equal(spectating.participation, 'spectator');
+  assert.equal(spectating.timedOut, true);
+  assert.equal(
+    (await createDatabase(pool).getMembership(room.id, player.id)).participation,
+    'spectator',
+  );
+  assert.equal(
+    (await database.listMembers(room.id)).find((m) => m.userId === player.id).participation,
+    'spectator',
+  );
+  const playing = await database.setSelfParticipation(
+    { ...self, participation: 'player' },
+    () => true,
+  );
+  assert.equal(playing.timedOut, true, 'self-service must never lift time-out');
+  assert.equal(await database.setSelfParticipation(self, () => false), null);
+  assert.equal((await database.getMembership(room.id, player.id)).participation, 'player');
   await database.kickMember(room.id, player.id);
   assert.equal(
     (
@@ -358,4 +377,49 @@ test('durable time-outs preserve hierarchy, survive a fresh database facade and 
   );
   await database.joinRoom({ roomId: room.id, userId: player.id, requireApproval: false });
   assert.equal((await database.getMembership(room.id, player.id)).timedOut, false);
+  assert.equal((await database.getMembership(room.id, player.id)).participation, 'player');
+});
+
+test('spectator policy cannot bypass admission; site admins can save their own room preference', async () => {
+  const owner = await database.createUser({
+    username: 'spectator-owner',
+    email: 'spectator-owner@example.test',
+  });
+  const pending = await database.createUser({
+    username: 'spectator-pending',
+    email: 'spectator-pending@example.test',
+  });
+  const admin = await database.createUser({
+    username: 'spectator-admin',
+    email: 'spectator-admin@example.test',
+  });
+  await pool.query('UPDATE users SET is_admin=true WHERE id=$1', [admin.id]);
+  const room = await database.createRoom({
+    ownerId: owner.id,
+    code: 'SPECTATE',
+    name: 'Spectators',
+    requireApproval: true,
+  });
+  await database.joinRoom({ roomId: room.id, userId: pending.id, requireApproval: true });
+  assert.equal(
+    await database.setSelfParticipation(
+      { roomId: room.id, userId: pending.id, participation: 'spectator' },
+      () => true,
+    ),
+    null,
+  );
+  const policy = await database.setSelfParticipation(
+    { roomId: room.id, userId: admin.id, participation: 'spectator' },
+    () => true,
+  );
+  assert.equal(policy.participation, 'spectator');
+  assert.equal((await database.getMembership(room.id, admin.id)).status, 'admitted');
+  await assert.rejects(
+    database.setSelfParticipation(
+      { roomId: room.id, userId: admin.id, participation: 'owner' },
+      () => true,
+    ),
+    (error) => error.code === '23514',
+  );
+  assert.equal((await database.getMembership(room.id, admin.id)).participation, 'spectator');
 });

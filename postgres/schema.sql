@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–018, meant for a FRESH
+-- This is the flattened end state of migrations 001–019, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -91,6 +91,7 @@ CREATE TABLE room_participation (
   room_id bigint NOT NULL,
   user_id bigint NOT NULL,
   timed_out boolean NOT NULL DEFAULT false,
+  participation text NOT NULL DEFAULT 'player' CHECK (participation IN ('player', 'spectator')),
   version integer NOT NULL DEFAULT 1 CHECK (version > 0),
   PRIMARY KEY (room_id, user_id),
   FOREIGN KEY (room_id, user_id) REFERENCES room_members(room_id, user_id) ON DELETE CASCADE
@@ -199,7 +200,7 @@ CREATE TABLE collider_presets (
 CREATE INDEX collider_presets_owner_idx ON collider_presets(owner_id);
 
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–018, so record them as
+-- This baseline IS the flattened result of migrations 001–019, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -216,6 +217,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
-  ('018_room_participation.sql');
+  ('018_room_participation.sql'), ('019_spectator_mode.sql');
 
 COMMIT;

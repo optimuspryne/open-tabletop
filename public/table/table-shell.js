@@ -447,6 +447,8 @@ export function createTableShell({ byId, clamp, getRoom }) {
       Dispense: 'package-off',
       Move: 'hand-move',
       Inspect: 'zoom-in',
+      'Labels…': 'label',
+      Highlight: 'focus-2',
       'Stand / lay flat': 'arrow-big-up-line',
       'Snap to grid': 'grid-3x3',
       Delete: 'trash',
@@ -747,8 +749,12 @@ export function createTableShell({ byId, clamp, getRoom }) {
           name.textContent = (byId('roomTitle') && byId('roomTitle').textContent) || 'Shared Table';
           const meta = document.createElement('div');
           meta.className = 'roomCardMeta';
-          const seated = getRoom() && getRoom().state ? getRoom().state.players.size : 0;
-          meta.textContent = seated + (seated === 1 ? ' player' : ' players') + ' at the table';
+          const participants = [...(getRoom()?.state?.players?.values() || [])];
+          const spectators = participants.filter(
+            (player) => player.participation === 'spectator',
+          ).length;
+          const playing = participants.length - spectators;
+          meta.textContent = `${playing} ${playing === 1 ? 'player' : 'players'} · ${spectators} ${spectators === 1 ? 'spectator' : 'spectators'}`;
           card.append(name, meta);
           const code = roomCode();
           if (code) {

@@ -93,7 +93,7 @@ export function createTrays({
   };
   const open = () => {
     const room = getRoom();
-    if (!room || !room.state.trays) return;
+    if (!room || !room.state.trays || getSeat() < 0) return;
     if (!room.state.trays.get(String(getSeat()))) {
       pendingOpen = true;
       room.send('trayShow', { on: true });

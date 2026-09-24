@@ -1,3 +1,10 @@
+import {
+  MAX_ROOM_CLIENTS,
+  turnPlayers,
+  advancePlayerTurn,
+  createJoinedPlayer,
+  applyPlayerParticipation,
+} from './server/game/player-seats.js';
 import { stopPlayerInteraction } from './server/game/interaction-cleanup.js';
 import { createParticipationService } from './server/game/participation.js';
 import { createDeckBuilders } from './server/game/deck-builders.js';
@@ -34,7 +41,7 @@ import { createTableBounds } from './server/game/table-bounds.js';
 import { createTableScale } from './server/game/table-scale.js';
 import { createTrayOperations } from './server/game/trays.js';
 import { spawnTableCard } from './server/game/card-transfer.js';
-import { Player, ScoreRow, Overlay, State } from './server/game/schema.js';
+import { ScoreRow, Overlay, State } from './server/game/schema.js';
 import {
   returnInspectedCard,
   recoverPendingInspections,
@@ -52,7 +59,7 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { performance } from 'node:perf_hooks';
-import { Server, Room, matchMaker } from '@colyseus/core';
+import { Server, Room, ServerError, matchMaker } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { Encoder } from '@colyseus/schema';
 // Preallocate for busy tables; Colyseus can still grow and re-encode larger states.
@@ -350,7 +357,10 @@ const {
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
   async onCreate(options) {
-    this.maxClients = SEAT_ANGLES.length;
+    // Enforce our total connection cap in authorization, without auto-locking the room:
+    // an auto-locked code would make joinOrCreate create a second table for that code.
+    this.maxClients = Infinity;
+    this.connectionLimit = MAX_ROOM_CLIENTS;
     this.setState(new State());
     this.world = buildWorld(SIM);
     this.mat = this.world.__mat;
@@ -541,9 +551,10 @@ class TableRoom extends Room {
     tableMessage('turnOrder', (client, message) => {
       if (this.rank(client) < RANK.gm) return;
       const parsed = oneField(message, 'order', (value) => {
-        if (!Array.isArray(value) || value.length !== this.state.players.size) return null;
+        const participants = new Set(turnPlayers(this).map(([sid]) => sid));
+        if (!Array.isArray(value) || value.length !== participants.size) return null;
         const ids = value.every(
-          (sid) => typeof sid === 'string' && sid.length <= 64 && this.state.players.has(sid),
+          (sid) => typeof sid === 'string' && sid.length <= 64 && participants.has(sid),
         )
           ? [...value]
           : null;
@@ -673,7 +684,11 @@ class TableRoom extends Room {
       back = dp.back || 'back',
       geo = geoOf(dp);
     for (const client of this.clients) {
-      if (this.seatOf(client) == null) continue; // seated players only
+      if (
+        this.seatOf(client) == null ||
+        this.state.players.get(client.sessionId)?.participation === 'spectator'
+      )
+        continue; // active seated players only
       for (let i = 0; i < n && cards.length; i++) {
         const entry = cards.pop();
         this.addToHand(client, cardFrontRef(entry), cardBackRef(entry) || back, geo, dp.open);
@@ -940,7 +955,24 @@ class TableRoom extends Room {
 
   // Bind authorization to this room, including joins made directly by room ID.
   async onAuth(client, options) {
-    return roomAccess.authorize(this, client, options);
+    const auth = await roomAccess.authorize(this, client, options);
+    client.auth = auth;
+    if (options?.participation === 'spectator' && auth.participation !== 'spectator') {
+      try {
+        const changed = await participation.setParticipation(
+          this,
+          client,
+          { participation: 'spectator' },
+          { acknowledge: false },
+        );
+        if (!changed)
+          throw new ServerError(403, 'Could not enter spectator mode. Please try again.');
+      } catch (error) {
+        roomAccess.forget(this, client);
+        throw error;
+      }
+    }
+    return auth;
   }
 
   async onReconnect(client) {
@@ -952,8 +984,12 @@ class TableRoom extends Room {
     return participation.setPlayerTimeout(this, client, message);
   }
 
+  setParticipation(client, message) {
+    return participation.setParticipation(this, client, message);
+  }
+
   onParticipationChanged(client) {
-    if (client.auth.timedOut) stopPlayerInteraction(this, client.sessionId);
+    applyPlayerParticipation(this, client, { seatFor: participation.seatFor, palette: PALETTE });
   }
 
   rank(client) {
@@ -967,23 +1003,16 @@ class TableRoom extends Room {
   async onJoin(client) {
     roomAccess.assertActive(this, client);
     const auth = client.auth || {};
-    // Give the new player the lowest free seat and a color to match.
-    const takenSeats = new Set();
-    this.state.players.forEach((existing) => takenSeats.add(existing.seat));
-    let seat = 0;
-    while (takenSeats.has(seat)) seat++;
-
-    const player = new Player();
-    player.seat = seat;
-    player.order = this.state.players.size;
-    player.hand = 0;
-    player.showing = 0;
-    player.name = auth.username || 'Player ' + (seat + 1); // identity from the account
-    player.color = PALETTE[seat % PALETTE.length];
-    player.avatar = auth.avatar || '';
-    player.role = auth.role || 'player';
-    player.timedOut = auth.timedOut === true;
-    this.state.players.set(client.sessionId, player);
+    let player;
+    try {
+      player = createJoinedPlayer(this, client, {
+        seatFor: participation.seatFor,
+        palette: PALETTE,
+      });
+    } catch (error) {
+      roomAccess.forget(this, client);
+      throw error;
+    }
 
     // Reclaim a saved hand / the turn if this account owned one in the loaded game.
     const uid = auth.userId != null ? String(auth.userId) : null;
@@ -994,10 +1023,11 @@ class TableRoom extends Room {
     if (uid && this.pendingTurn === uid) {
       this.pendingTurn = null;
       this.state.turnPending = '';
-      this.state.turn = client.sessionId; // the turn was waiting for them
+      if (player.participation !== 'spectator') this.state.turn = client.sessionId; // spectators never reclaim a turn
     }
 
-    if (!this.state.turn) this.state.turn = client.sessionId; // first player to arrive starts
+    if (!this.state.turn && player.participation !== 'spectator')
+      this.state.turn = client.sessionId; // first playing participant starts
     this.sendHand(client);
     if (this.rank(client) >= RANK.gm)
       await safeRoomTask(this, 'joinMembers', client, () => this.sendMembers(client), {
@@ -1008,17 +1038,7 @@ class TableRoom extends Room {
 
   // Advance the turn to the next player by seat order (wrapping around).
   advanceTurn() {
-    this.pendingTurn = null;
-    this.state.turnPending = ''; // advancing clears any absent-player hold
-    const order = [];
-    this.state.players.forEach((player, sid) => order.push([sid, player.order, player.seat]));
-    order.sort((a, b) => a[1] - b[1] || a[2] - b[2]);
-    if (!order.length) {
-      this.state.turn = '';
-      return;
-    }
-    const ids = order.map(([sid]) => sid);
-    this.state.turn = ids[(ids.indexOf(this.state.turn) + 1) % ids.length]; // indexOf -1 wraps to the first
+    advancePlayerTurn(this);
   }
 
   // Copy a physics body's position + orientation into its synced Piece record.

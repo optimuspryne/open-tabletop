@@ -82,7 +82,7 @@ const actor = (role, userId = '1') => ({
 test('member handler module registers its complete message family', () => {
   assert.deepEqual(
     [...harness().handlers.keys()],
-    ['setPlayerTimeout', 'members', 'admit', 'kick', 'setRole', 'reassignHand'],
+    ['setParticipation', 'setPlayerTimeout', 'members', 'admit', 'kick', 'setRole', 'reassignHand'],
   );
 });
 
@@ -251,3 +251,19 @@ for (const operation of ['kick', 'setRole']) {
     }
   }
 }
+
+test('ordinary spectators can request only their own participation change, including during time-out', async () => {
+  const { room, handlers } = harness();
+  const changes = [];
+  room.setParticipation = (client, message) => changes.push([client.auth.userId, message]);
+  const client = actor('player');
+  client.auth.participation = 'spectator';
+  client.auth.timedOut = true;
+  await handlers.get('setParticipation')(client, { participation: 'player' });
+  assert.deepEqual(changes, [['1', { participation: 'player' }]]);
+  await handlers.get('setParticipation')(client, { participation: 'player', userId: '2' });
+  await handlers.get('setParticipation')(client, { participation: 'player', timedOut: false });
+  client.auth.revoked = true;
+  await handlers.get('setParticipation')(client, { participation: 'spectator' });
+  assert.equal(changes.length, 1);
+});

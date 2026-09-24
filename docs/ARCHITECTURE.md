@@ -7,7 +7,7 @@ Staged feature plans are separate from this description of the running system:
 [DESIGN_next_features.md](DESIGN_next_features.md) plans time-out/spectator permissions, private
 deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_backlog.md) records
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
-there remain proposed except for the participation foundation and durable GM time-outs recorded below.
+there remain proposed except for the participation foundation, durable GM time-outs and self-service spectators recorded below.
 
 ## Two worlds, kept apart
 
@@ -302,7 +302,7 @@ importing a room singleton:
   than maintaining a second compatibility vocabulary. Control colors, borders, radii, height,
   padding, and form rhythm come from the shared tokens and primitives, so restyling does not
   require editing per-feature `#id` rules).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`018`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`019`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -356,7 +356,7 @@ handler-specific rank, ownership and privacy checks remain in force. Server-owne
 can deny gameplay for spectators/time-outs, or all requests while policy is loading. Missing
 participation fields remain compatible with legacy internal callers, while room access now loads
 durable policy before gameplay. Reconnect marks readiness false and revokes access on read failure.
-The 120-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
+The 121-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
 one room-send adapter, while the server remains authoritative.
 
 Migration 018 stores time-outs by room/account with a cascading membership foreign key, outside
@@ -372,7 +372,23 @@ removing a time-out target's seat, hand, tray or membership. It zeros held-body 
 clears drag/group/whiteboard state, ends reveals and retains recoverable inspection inventory if
 placement is blocked. Departure calls the same helper, leaving final hand/tray cleanup in its
 existing lifecycle. Client controllers expose focused cancellation hooks; the input router keeps
-camera, inspection and communication available. Spectator seating/entry remains a later slice.
+camera, inspection and communication available.
+
+Migration 019 adds self-selected `player`/`spectator` mode to the same policy row. Self transitions
+reuse the per-account queue but have separate authorization from GM time-outs: admitted members
+and site admins can change only their own mode, without clearing a time-out or changing rank.
+`player-seats.js` shares seat allocation and turn filtering between joins and transitions. New
+spectators use seat/order −1 and an observer camera; converted players reserve their existing
+seat, hand and tray until normal departure. Turns and seat-based dealing skip spectators.
+Returning reserves seats for all matching tabs before the database write; insufficient capacity
+leaves the account spectating. Pending/new authorization for that account is rejected during the
+transition, preventing a stale join from consuming a reserved seat; the client can retry.
+
+Eight playing seats remain available. Room access separately caps tracked connections at 24,
+including reconnect reservations. Framework `maxClients` stays unbounded to prevent matchmaking
+from creating another table for the same code when capacity is reached; authorization enforces
+the finite cap. Mode and time-out are public status, while private hands keep their existing
+server-only ownership and authorized delivery. Neither policy belongs in scene/game snapshots.
 
 Library loads recheck live participation after database reads. Pending private library/member
 responses and moderation also recheck policy readiness before delivery or the next mutation. Mixed library save/spawn requests

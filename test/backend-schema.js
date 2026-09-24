@@ -136,6 +136,8 @@ test('schema reflection round-trips every synchronized class and preserves field
     showing: 1,
     handBack: '/back.png',
     role: 'gm',
+    participation: 'spectator',
+    timedOut: true,
   });
   state.pieces.set('piece-1', piece);
   state.players.set('client-1', player);

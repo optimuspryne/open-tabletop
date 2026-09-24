@@ -30,6 +30,7 @@ const ICONS = [
   'cone-plus',
   'square-plus-2',
   // Tools menu
+  'device-gamepad',
   'notes',
   'message-dots',
   'scoreboard',
@@ -65,6 +66,8 @@ const ICONS = [
   'trash',
   'ampersand',
   // Interactions + hamburgers
+  'label',
+  'focus-2',
   'zoom-in',
   'armchair',
   'cards',

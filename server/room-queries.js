@@ -17,6 +17,7 @@ export const memberRow = (row) =>
     role: row.role,
     status: row.status,
     timedOut: row.timed_out === true,
+    participation: row.participation ?? 'player',
   };
 export const DEFAULT_ROOM_STATE = Object.freeze({
   scoreboard: [],
@@ -37,7 +38,7 @@ const freshDefaultState = () => ({ ...DEFAULT_ROOM_STATE, scoreboard: [] });
 export function createRoomQueries(query) {
   const getMembership = async (roomId, userId) => {
     const { rows } = await query(
-      `SELECT m.*, p.timed_out FROM room_members m
+      `SELECT m.*, p.timed_out, p.participation FROM room_members m
        LEFT JOIN room_participation p USING (room_id, user_id)
        WHERE m.room_id = $1 AND m.user_id = $2`,
       [roomId, userId],
@@ -124,7 +125,7 @@ export function createRoomQueries(query) {
 
     async listMembers(roomId) {
       const { rows } = await query(
-        `SELECT m.room_id, m.user_id, m.role, m.status, p.timed_out, u.username, u.avatar, u.is_admin FROM room_members m
+        `SELECT m.room_id, m.user_id, m.role, m.status, p.timed_out, p.participation, u.username, u.avatar, u.is_admin FROM room_members m
          JOIN users u ON u.id = m.user_id
          LEFT JOIN room_participation p USING (room_id, user_id) WHERE m.room_id = $1
          ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'gm' THEN 1 WHEN 'helper' THEN 2 ELSE 3 END, u.username`,
@@ -137,6 +138,7 @@ export function createRoomQueries(query) {
         role: row.role,
         status: row.status,
         timedOut: row.timed_out === true,
+        participation: row.participation ?? 'player',
         isAdmin: row.is_admin === true,
       }));
     },

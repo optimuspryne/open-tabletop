@@ -88,6 +88,12 @@ infrastructure are required. Installations with automatic migration disabled mus
 their schema-owner connection. Existing memberships default to unrestricted; scenes and game
 snapshots require no conversion.
 
+The following self-service spectator slice also requires **019_spectator_mode.sql** before
+starting the new server. Restart and refresh all browsers for the appended `Player.participation`
+field. Automatic startup applies it with the migration role; manual installations apply 019
+with their schema-owner connection. Existing policy rows default to player mode and retain their
+time-out. No environment variables, runtime grants or snapshot conversions change.
+
 ## Rules that keep the guarantees honest
 
 - **Never re-push a version tag.** Once `:X.Y.Z` is pushed, those bits are frozen. A fix

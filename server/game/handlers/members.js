@@ -4,6 +4,7 @@ import {
   memberRolePayload,
   memberUserPayload,
   playerTimeoutPayload,
+  participationPayload,
 } from '../../message-validation.js';
 import { guardedMessage, allowRoomCapability } from '../interaction-policy.js';
 
@@ -15,6 +16,11 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
       logger,
       publicMessage: 'Member operation unavailable. Try again.',
     });
+
+  memberMessage('setParticipation', (client, message) => {
+    const parsed = participationPayload(message);
+    if (parsed) return room.setParticipation(client, parsed);
+  });
 
   memberMessage('setPlayerTimeout', (client, message) => {
     const parsed = playerTimeoutPayload(message);

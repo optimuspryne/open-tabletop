@@ -177,3 +177,12 @@ test('tray controls send the existing protocol and die lookup keeps only my dice
   f.rollButtons[0].onclick();
   assert.deepEqual(f.sent.at(-1), { type: 'trayShow', data: { on: true } });
 });
+
+test('seatless spectators cannot open or create a seat-zero tray', () => {
+  const h = fixture();
+  h.setSeat(-1);
+  h.state.trays.set('0', true);
+  h.trays.open();
+  assert.equal(h.trays.isViewing(), false);
+  assert.deepEqual(h.sent, []);
+});
