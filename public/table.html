@@ -1303,7 +1303,9 @@
             <ul>
               <li>
                 <b data-icon="books">Library.</b> Use this to add dice, decks and objects — built-in
-                or custom — to the table.
+                or custom — to the table. Expand <b>Collections</b> to show or hide custom groups
+                in your own library; Show all resets those filters. Site admins can create and
+                edit shared collections there.
               </li>
               <li>
                 <b data-icon="scoreboard">Scoreboard.</b> Helpers can add, rename, adjust and clear
@@ -1431,38 +1433,44 @@
             <button class="libTab" data-tab="scenes">Scenes</button>
           </div>
         </div>
-        <div class="modal__body libPane" data-pane="dice">
-          <ul id="nlb_dice" class="libList lib2-bi"></ul>
-          <ul id="nlc_dice" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="decks" hidden>
-          <ul id="nlb_decks" class="libList lib2-bi"></ul>
-          <ul id="nlc_deck" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="boards" hidden>
-          <ul id="nlb_boards" class="libList lib2-bi"></ul>
-          <ul id="nlc_board" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="mats" hidden>
-          <ul id="nlc_mat" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="objects" hidden>
-          <ul id="nlb_objects" class="libList lib2-bi"></ul>
-          <ul id="nlc_prop" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="games" hidden>
-          <ul id="nlb_games" class="libList lib2-bi"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="dispensers" hidden>
-          <ul id="nlb_dispensers" class="libList lib2-bi"></ul>
-          <ul id="nlc_dispenser" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="sky" hidden>
-          <ul id="nlb_sky" class="libList lib2-bi"></ul>
-          <ul id="nlc_sky" class="libList lib2-cu"></ul>
-        </div>
-        <div class="modal__body libPane" data-pane="scenes" hidden>
-          <ul id="nlc_scene" class="libList lib2-cu"></ul>
+        <div class="libraryBody">
+          <details class="libraryCollections">
+            <summary data-icon="books">Collections</summary>
+            <div id="collectionPanel"></div>
+          </details>
+          <div class="modal__body libPane" data-pane="dice">
+            <ul id="nlb_dice" class="libList lib2-bi"></ul>
+            <ul id="nlc_dice" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="decks" hidden>
+            <ul id="nlb_decks" class="libList lib2-bi"></ul>
+            <ul id="nlc_deck" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="boards" hidden>
+            <ul id="nlb_boards" class="libList lib2-bi"></ul>
+            <ul id="nlc_board" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="mats" hidden>
+            <ul id="nlc_mat" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="objects" hidden>
+            <ul id="nlb_objects" class="libList lib2-bi"></ul>
+            <ul id="nlc_prop" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="games" hidden>
+            <ul id="nlb_games" class="libList lib2-bi"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="dispensers" hidden>
+            <ul id="nlb_dispensers" class="libList lib2-bi"></ul>
+            <ul id="nlc_dispenser" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="sky" hidden>
+            <ul id="nlb_sky" class="libList lib2-bi"></ul>
+            <ul id="nlc_sky" class="libList lib2-cu"></ul>
+          </div>
+          <div class="modal__body libPane" data-pane="scenes" hidden>
+            <ul id="nlc_scene" class="libList lib2-cu"></ul>
+          </div>
         </div>
       </div>
     </div>

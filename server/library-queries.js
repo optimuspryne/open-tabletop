@@ -1,5 +1,18 @@
 import { BOARDS } from '../shared/pieces.js';
 
+// Closed SQL identifier registry shared by administration and collection membership.
+export const ASSET_TABLES = Object.freeze(
+  Object.assign(Object.create(null), {
+    deck: 'custom_decks',
+    board: 'custom_boards',
+    mat: 'custom_mats',
+    prop: 'custom_objects',
+    scene: 'custom_scenes',
+    sky: 'custom_skyboxes',
+    dice: 'custom_dice',
+  }),
+);
+
 const idOrNull = (value) => (value == null ? null : String(value));
 const boardKind = (record) => {
   if (record.board) return BOARDS[record.board] ? BOARDS[record.board].name : record.board;

@@ -35,11 +35,18 @@ const SHARED = resolve(import.meta.dirname, '..', 'shared');
 
 // A permissive stub: editor-panel only needs the handover to wire its UI. Nothing here
 // reaches the network — every method is a no-op and every state read is undefined.
-const STUB_ROOM = `new Proxy({}, {
-  get: (t, k) => k === 'sessionId' ? 'component-parity'
-    : k === 'state' ? new Proxy({}, { get: () => undefined })
-    : () => undefined,
-})`;
+const STUB_ROOM = `(() => {
+  const messages = new Map();
+  return new Proxy({}, {
+    get: (t, k) => k === 'sessionId' ? 'component-parity'
+      : k === 'state' ? new Proxy({}, { get: () => undefined })
+      : k === 'onMessage' ? (type, fn) => messages.set(type, fn)
+      : k === 'send' ? (type, data) => {
+          if (type === 'listCollections') messages.get('collectionList')?.({ request:data.request, collections:[], next:null });
+        }
+      : () => undefined,
+  });
+})()`;
 
 // Becoming an admin with custom assets. Two things kept this whole surface unrendered until now:
 // table.html ships `<body class="ui-full not-admin">` and it is client.js — stubbed here — that
@@ -202,6 +209,102 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
+  {
+    name: 'asset-collections',
+    root: '#libraryModal',
+    expect: { selector: '.collectionChoice', min: 4 },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      window.OTT_USER_ID = 'collection-fixture';
+      document.getElementById('tableLoading').remove();
+      localStorage.removeItem('ott.collections.collection-fixture');
+      const messages = new Map(), sent = [];
+      let groups = [
+        {id:'1', name:'Shared game', isPublic:true, revision:1, items:[{kind:'deck',id:'1'}]},
+        {id:'2', name:'Second collection', isPublic:false, revision:1, items:[{kind:'deck',id:'1'}, {kind:'dice',id:'1'}]},
+      ];
+      const room = {onMessage:(type, fn)=>messages.set(type,fn), send:(type, value)=>{
+        sent.push([type,value]);
+        if(type==='listCollections') messages.get('collectionList')({request:value.request,collections:groups,next:null});
+      }};
+      window.onOttRoom(room);
+      document.getElementById('lib2Btn').click();
+      window.onLibraryList('deck',[{id:'1',name:'Collected deck',isPublic:true,count:3}]);
+      window.onLibraryList('dice',[{id:'1',name:'Dice finish',isPublic:true,url:'/missing-fixture.png'}]);
+      window.onLibraryList('prop',[{id:'2',name:'Uncollected prop',isPublic:true}, ...Array.from({length:60},(_,i)=>({id:String(i+3),name:'Extra asset '+i,isPublic:true}))]);
+      const panel=document.getElementById('collectionPanel');
+      panel.parentElement.open=true;
+      const libraryBody=document.querySelector('#libraryModal .libraryBody');
+      const reachable = (element, message) => {
+        const rect=element.getBoundingClientRect();
+        const target=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);
+        assert(rect.top>=0 && rect.bottom<=innerHeight && target && element.contains(target), message);
+      };
+      const checkExpandedFilters = () => {
+        assert(panel.parentElement.scrollHeight <= panel.parentElement.clientHeight + 1,
+          'Collections was squeezed into a separate clipped scroll strip');
+        for(const label of panel.querySelectorAll('.collectionFilters label')) {
+          label.scrollIntoView({block:'nearest'});
+          reachable(label.querySelector('input'), 'Expanded collection filter is clipped by the asset list');
+        }
+        const newButton=panel.querySelector('[aria-label="New collection"]');
+        newButton.scrollIntoView({block:'nearest'});
+        reachable(newButton, 'Collection management action is clipped by the asset list');
+        const collectionBounds=panel.parentElement.getBoundingClientRect();
+        const paneBounds=document.querySelector('#libraryModal .libPane:not([hidden])').getBoundingClientRect();
+        assert(collectionBounds.bottom<=paneBounds.top, 'Asset pane overlaps expanded Collections');
+        libraryBody.scrollTop=0;
+      };
+      checkExpandedFilters();
+      document.body.classList.replace('ui-full','ui-compact');
+      checkExpandedFilters();
+      document.body.classList.replace('ui-compact','ui-full');
+      const click = text => { const b=[...panel.querySelectorAll('button')].find(b=>b.textContent===text || b.getAttribute('aria-label')===text); assert(b, 'Missing button: '+text); b.click(); };
+      const filter = text => [...panel.querySelectorAll('.collectionFilters label')].find(label=>label.textContent.startsWith(text)).querySelector('input');
+      filter('Shared game').click();
+      assert(document.querySelector('#nlc_deck .libCard'), 'Union membership hid an asset in an enabled collection');
+      filter('Second collection').click();
+      assert(!document.querySelector('#nlc_deck .libCard'), 'Hidden member leaked through Uncollected');
+      assert(document.querySelector('#nlc_prop .libCard'), 'Uncollected asset disappeared');
+      assert(!document.querySelector('#nlc_dice .libCard'), 'Dice collection filter not wired');
+      click('Show all');
+      assert(document.querySelector('#nlc_dice .libCard'), 'Dice list missing from library');
+      click('Edit Shared game');
+      const manager=panel.querySelector('.collectionManager');
+      assert(!manager.hidden, 'Admin management did not open');
+      const reachableSave = () => {
+        const button=manager.querySelector('[aria-label="Save collection"]');
+        const rect=button.getBoundingClientRect();
+        assert(rect.top>=0 && rect.bottom<=innerHeight, 'Save collection is outside the viewport');
+        const target=document.elementFromPoint(rect.left+rect.width/2,rect.top+rect.height/2);
+        assert(target && button.contains(target), 'Save collection is clipped or covered');
+      };
+      reachableSave();
+      manager.querySelector('.collectionInventory').scrollTop=10000;
+      reachableSave();
+      manager.scrollIntoView({block:'end'});
+      reachableSave();
+      manager.querySelector('.collectionInventory').scrollTop=0;
+      const name=manager.querySelector('[aria-label="Collection name"]');
+      name.value='Updated shared game';
+      const prop=[...manager.querySelectorAll('.collectionInventory label')].find(label=>label.textContent.includes('Uncollected prop'));
+      prop.querySelector('input').click(); click('Save collection');
+      const save=sent.at(-1);
+      assert(save[0]==='updateCollection' && save[1].items.length===2 && save[1].revision===1, 'Membership save lost typed references/revision');
+      assert(name.disabled,'Pending mutation still editable');
+      messages.get('collectionError')({message:'This collection changed. Reload it before saving.'});
+      assert(!name.disabled && name.value==='Updated shared game' && !manager.hidden, 'Conflict erased draft');
+      messages.get('collectionsChanged')({});
+      assert(name.value==='Updated shared game', 'Refresh erased unsaved draft');
+      window.OTT_IS_ADMIN=false; groups=groups.filter(value=>value.isPublic); window.onLibraryAdmin();
+      assert(manager.hidden && ![...panel.querySelectorAll('button')].some(b=>b.textContent==='New collection'), 'Demotion retained management UI');
+      assert(!panel.textContent.includes('Second collection'), 'Demotion retained private collection');
+      const bounds=panel.getBoundingClientRect(); assert(bounds.left>=0 && bounds.right<=innerWidth, 'Collection panel overflows viewport');
+      localStorage.removeItem('ott.collections.collection-fixture');
+      (await import('/ui/icons.js')).applyIcons();
+    `,
+  },
   {
     name: 'deck-browser',
     root: '#deckBrowseActions',

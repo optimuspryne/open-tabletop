@@ -321,7 +321,7 @@ implementation sequence without making the entire backlog a fixed priority queue
     and pass it around the table. Support mouse and touch drawing, retain artwork with the object
     through saves, and preserve concealed faces through inspection and transfer. Define editing
     and viewing access explicitly; this is a physical game component, not automated game rules.
-18. **Custom asset collections.** Let users group multiple custom library assets into named
+18. **Custom asset collections — implemented locally; functionality and UI user-approved.** Let users group multiple custom library assets into named
     collections. Library controls can show or hide collections to keep browsing manageable.
     Treat this as library organization/filtering, separate from per-object visibility on the table
     (item 14), and preserve each asset's access permissions.

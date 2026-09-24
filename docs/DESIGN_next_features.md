@@ -1,6 +1,6 @@
 # Next features: participation, deck browsing, and collections
 
-Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; deck browsing implemented locally with user-reported manual tests passing; collections proposed**. Original plans
+Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; deck browsing committed as `f14a4f1` with user-reported manual tests passing; collections implemented locally, automated checks passed, functionality and final UI user-approved**. Original plans
 were prepared against commit `b7390c6`; foundation implementation is dated 2026-09-24.
 This document covers [ROADMAP.md](ROADMAP.md) items **5/15, 22, and 18**. Recommendations below
 are starting decisions for later work, not additional user-approved requirements. Recheck current
@@ -604,17 +604,16 @@ a smoke-test reference, without implying exhaustive multiplayer or real-device c
 
 ## 3. Custom asset collections
 
-### Scope and recommended ownership
+### Scope and approved ownership
 
-Recommend **administrator-curated, installation-wide collections** for v1, matching today's
-custom-asset curation permissions. Any viewer may locally show/hide available collections; that
+**Ownership decision approved (2026-09-24): shared, site-admin-managed collections.** This matches
+the existing custom-asset curation authority. Any viewer may locally show/hide available collections; that
 preference does not change the room or another player's library. A collection can contain several
 asset kinds and an asset can belong to several collections. Built-ins remain outside collections.
 
-**Decision to revisit:** personal per-account collections versus shared curated collections.
-If personal organization is preferred, decide before the migration: scope list/read/write rules
-by account rather than inventing a room-GM permission that grants global library administration.
-The model below assumes shared collections with private/admin-only and published visibility.
+Personal per-account collections are outside v1. Room-GM status does not grant global collection
+administration. The first implementation follows the private/admin-only and published visibility design below.
+See the checkpoint for implementation and verification status.
 
 Creating a collection does not publish its assets. Collection membership does not confer asset
 read, edit, spawn, or export access. Deleting a collection removes memberships, never the assets.
@@ -634,11 +633,12 @@ set is a deck; a dispenser is a prop. The same asset shown in multiple tabs must
 independent memberships. Rulebooks can add a new supported kind later.
 
 Current assets live in separate tables. A polymorphic `(kind, asset_id)` is not a foreign key to
-all of them: explicitly allowlist kind-to-query mappings, validate existence/access on writes,
-and define asset-deletion cleanup. Never interpolate an arbitrary client kind as a SQL identifier.
+all of them: explicitly allowlist kind-to-query mappings and validate existence/access on writes. Generated
+per-kind foreign-key columns enforce typed existence and cascade deleted-asset memberships. Never interpolate an arbitrary client kind as a SQL identifier.
 Perform membership changes transactionally; use revision checks to prevent two editors silently
 replacing one another's changes. Restrict names, page sizes, collection count and batch additions
-with named limits chosen from a realistic library fixture.
+with named limits: 64 collections, 500 assets per collection, 80-character names and 16 collections
+per keyset-paginated response.
 
 List only collections visible to the caller and intersect their entries with asset permissions.
 Counts and previews must describe the visible intersection, not private totals. A public collection
@@ -713,3 +713,80 @@ stage into a bounded implementation task. Record decisions as they are resolved;
 stages marked planned. Update the roadmap, changelog, reference and architecture with each shipped
 slice. New features need their own automated and manual verification; the easy-wins sign-off does
 not cover these plans. No application code, schema, or protocol was changed to write this document.
+
+
+## Collections checkpoint — 2026-09-24
+
+**Implemented locally; automated checks passed; functionality and final UI user-approved (2026-09-24).** Shared collections are
+site-admin-managed, private by default and optionally published. Create, rename, publish/unpublish,
+delete, and replace multiple asset memberships in Library → Collections. All seven stored kinds
+are supported, including custom dice finishes and the shared prop/dispenser identity. Exports and
+personal collections remain later work.
+
+Viewer filters persist locally by account and collection ID. Any enabled membership shows an
+asset; hidden members do not reappear through Uncollected. Built-ins and secondary finish pickers
+remain independent. Publishing a collection never publishes private assets. Revision conflicts
+retain the draft and offer Reload draft. Content-free invalidations refresh connected rooms through
+fresh access checks. Pagination preserves drafts; disconnected clients reload on re-entry.
+
+Reuse decision: extend the existing list cache/render path and canonical controls/Tabler helpers.
+Share the existing SQL table allowlist with membership queries. A focused collection query module
+owns atomic membership replacement, and a browser controller owns local filters and admin drafts.
+No room game-state or snapshot fields are added.
+
+| Files | Functions / changes |
+| --- | --- |
+| `shared/asset-collections.js` | Add limits, canonical kinds, typed item keys, strict payload validation and union filter predicate. |
+| `postgres/020_asset_collections.sql`, `postgres/schema.sql` | Add collection metadata and typed membership foreign keys; keep fresh baseline and migration seed current. |
+| `server/collection-queries.js` | Add `createCollectionQueries`, paginated permission-filtered `list`, transactional `mutate` and safe `CollectionError` messages. |
+| `server/library-queries.js`, `server/database.js`, `db.js` | Share the closed SQL table registry and compose/export collection queries. |
+| `server/game/handlers/collections.js` | Add guarded read/admin handlers and content-free cross-room invalidation with disposal. |
+| `server/game/handlers/library.js` | Invalidate collections after asset visibility changes/deletion. |
+| `server.js`, `shared/room-capabilities.js` | Register/dispose collection handlers, classify four messages, deliver account ID with admin identity on join/reconnect. |
+| `public/editor/collections.js` | Add collection filters, local preferences, management drafts, asset chooser, paging and conflict/error handling. |
+| `public/editor/editor-panel.js`, `public/client.js` | Wire controller into existing library rendering/cache and identity; include custom dice in full library rendering. |
+| `public/table.html`, `public/styles.css` | Add collapsible collection panel and responsive shared-control layout. |
+| `test/backend-collections.js`, `test/backend-interaction-policy.js`, `test/backend-database-factory.js` | Cover filters, payloads, server access/error boundaries, invalidation cleanup, actual registrations and production exports. |
+| `test/integration/database.js`, `scripts/test-database.mjs` | Cover PostgreSQL constraints, privacy, rollbacks, revisions, caps/pagination and populated pre-020 migration. |
+| `scripts/component-parity.mjs` | Exercise actual library/controller wiring on desktop/touch, union filters, dice, bulk membership, draft conflicts and demotion cleanup. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/RELEASING.md`, `docs/GESTURES.md`, `docs/ROADMAP.md`, both design plans | Record behavior, protocol, migration, input paths and verification status. |
+
+Automated validation passed: `npm run check` (722 tests plus lint, format and CSS checks),
+`test:integration` (13 PostgreSQL tests plus the populated pre-020 upgrade), `test:input` (57 cases),
+`test:components` (desktop and touch), and `test:devices` (seven profiles). Desktop/phone fixture
+screenshots were inspected for layout. The component suite's missing fixture image/favicon are
+expected test-only 404s. Changed Markdown links and `git diff --check` also pass. The user
+approved functionality and the final UI on 2026-09-24. Specific devices and scenarios were not
+itemized; the smoke-test checklist below remains a reference, not a claim of exhaustive coverage.
+
+Collection UI follow-up: the Library shell clipped tall collection editors. The Collections
+region and asset panes now share one scrollable `libraryBody` below the fixed header;
+its Save/Cancel action row sticks to the bottom. This also prevents populated asset panes from
+shrinking Collections to a clipped strip. `public/table.html` adds the shared body wrapper.
+`createCollectionController` reuses its existing buttons, with Save styled as the primary action;
+`public/styles.css` owns the scroll/sticky layout. The component fixture checks real button
+visibility and hit testing with a long asset list on desktop and touch. Follow-up validation
+passed: `check` (722 tests), `test:components`, `test:devices` (seven profiles) and `test:input`
+(57 cases), plus desktop/phone screenshot inspection. Refresh browsers for this UI correction;
+no additional server restart or migration is needed. The shared-body correction also passed
+`check` (722 tests), the full component/device suites, and a focused populated-library regression
+in full/compact desktop and touch modes. Populated desktop, phone and short-landscape screenshots
+were inspected; expanded filters no longer have a separate squeezed scroll region.
+
+### Collections manual smoke tests
+
+Restart the server to apply **020_asset_collections.sql** with the migration role, then refresh
+browsers. No new environment variables or grants are needed with the documented default grants.
+
+1. As a site admin, create a collection, edit its name and choose several kinds of asset, then
+   save. Reopen the library and restart/reconnect to confirm persistence.
+2. Publish it and compare with a non-admin viewer. Private member assets and private collections
+   must be absent from that viewer's names, counts and library results.
+3. Assign an asset to two collections. Hide either, then both; check Uncollected and Show all.
+   Refresh and confirm preferences persist for that account without affecting another viewer.
+4. Edit the same collection from two admin clients. The second save must report a conflict while
+   preserving its draft. Reload draft should pick up the saved version.
+5. Delete a collection and confirm its assets remain. Delete a member asset and confirm membership
+   disappears. Toggle publication from another room and confirm open libraries refresh.
+6. On desktop and touch, open Collections, search/select members, save/cancel and navigate controls
+   with the keyboard. Check compact/full modes, long names, dice finishes and prop/dispensers.

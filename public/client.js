@@ -351,7 +351,8 @@ const membership = createMembership({
 
   // Library creation/editing is admin-only; hide those controls for everyone else,
   // leaving the spawn pickers + built-in shapes. (The server enforces it too.)
-  room.onMessage('whoami', ({ isAdmin }) => {
+  room.onMessage('whoami', ({ isAdmin, userId }) => {
+    window.OTT_USER_ID = userId;
     myIsAdmin = !!isAdmin;
     window.OTT_IS_ADMIN = myIsAdmin; // editor-panel.js gates library management on this
     if (window.onLibraryAdmin) window.onLibraryAdmin(); // re-render the library so admin-only buttons appear/hide

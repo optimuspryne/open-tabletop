@@ -109,6 +109,7 @@ import { MAX_PIECES } from './server/game/piece-capacity.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
 import { registerMemberHandlers } from './server/game/handlers/members.js';
+import { registerCollectionHandlers } from './server/game/handlers/collections.js';
 import { registerLibraryHandlers } from './server/game/handlers/library.js';
 import { registerPieceHandlers } from './server/game/handlers/pieces.js';
 import {
@@ -470,6 +471,7 @@ class TableRoom extends Room {
     // list, unlike a deck. dispense = drop beside it; dispenseDrag = drop + carry.
     registerPlacementHandlers(this, { randomPosition: rnd, dropSfx, maxPieces: SIM.maxPieces });
 
+    this.disposeCollections = registerCollectionHandlers(this, { db });
     registerLibraryHandlers(this, {
       db,
       boardKeys: Object.keys(BOARDS),
@@ -894,6 +896,7 @@ class TableRoom extends Room {
     await saveRoomStateNow(this, { db });
   }
   async onDispose() {
+    this.disposeCollections?.();
     this.deckBrowsing?.clear();
     // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     roomAccess.dispose(this);
@@ -984,7 +987,7 @@ class TableRoom extends Room {
 
   async onReconnect(client) {
     await roomAccess.reconnect(this, client);
-    client.send('whoami', { isAdmin: client.auth.isAdmin });
+    client.send('whoami', { isAdmin: this.isAdmin(client), userId: String(client.auth.userId) });
   }
 
   setPlayerTimeout(client, message) {
@@ -1040,7 +1043,7 @@ class TableRoom extends Room {
       await safeRoomTask(this, 'joinMembers', client, () => this.sendMembers(client), {
         publicMessage: 'Member operation unavailable. Try again.',
       }); // GMs get the member list up front (pending pulse)
-    client.send('whoami', { isAdmin: this.isAdmin(client) }); // lets the client hide library-creation UI from non-admins
+    client.send('whoami', { isAdmin: this.isAdmin(client), userId: String(client.auth.userId) }); // lets the client hide library-creation UI from non-admins
   }
 
   // Advance the turn to the next player by seat order (wrapping around).

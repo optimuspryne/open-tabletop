@@ -9,6 +9,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Give Collections and library assets one scrolling body below the fixed header, so populated
+  asset panes cannot squeeze the collection controls into a clipped strip. Keep collection
+  Save/Cancel controls visible in a sticky action row on desktop and touch.
 - Increase the server's initial schema-encoding buffer from 128 to 512 KiB after a busy table
   exceeded the previous allocation. Larger states still use Colyseus's automatic growth;
   this changes allocation, not table capacity or wire data. Requires a server restart.
@@ -20,6 +23,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Shared site-admin-managed custom asset collections with private/published visibility, mixed-kind
+  membership, rename/delete and a searchable bulk asset chooser in Library → Collections. Local
+  per-account filters support multiple memberships, Uncollected and Show all, including custom dice.
+  Preserve asset permissions and keep assets when deleting collections; transactional revisions
+  prevent conflicting edits from silently overwriting work. Requires migration **020**, server
+  restart and browser refresh. User approved functionality and final UI (2026-09-24).
 - Private deck browsing through right-click/long-press **Browse deck…**, GM-only by default for
   every deck. GMs can enable active-player browsing per deck. View one card at a time without
   changing order, then take it, place it face-up/down, or move it to the top/bottom. Exclusive
@@ -67,6 +76,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   readable name plates. Dispose owned marker geometry/materials/textures when replaced or removed.
 
 ### Documentation
+- Record approved shared, site-admin-managed ownership for planned custom asset collections;
+  personal collections are outside v1. The implemented slice follows that approved scope.
 - Record user-reported manual-test sign-off for the participation-policy foundation (2026-09-24).
   The user subsequently confirmed time-outs work and approved the compact member-list UI.
   Specific devices and edge-case scenarios were not itemized.

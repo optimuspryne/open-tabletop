@@ -1,3 +1,4 @@
+import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
@@ -116,6 +117,34 @@ async function prepareDatabase(ownerUrl) {
   try {
     const schema = await fs.readFile(path.join(root, 'postgres/schema.sql'), 'utf8');
     await client.query(schema);
+    // Exercise the actual numbered upgrade against a populated pre-collections baseline.
+    const collectionMigration = await fs.readFile(
+      path.join(root, 'postgres/020_asset_collections.sql'),
+      'utf8',
+    );
+    const previous = schema
+      .replace(collectionMigration + '\n', '')
+      .replace(", ('020_asset_collections.sql')", '')
+      .replace('001–020', '001–019');
+    await client.query('CREATE SCHEMA collection_upgrade_test');
+    try {
+      await client.query('SET search_path TO collection_upgrade_test');
+      await client.query(previous);
+      const seeded = await client.query(
+        "INSERT INTO custom_decks(name) VALUES ('Upgrade survivor') RETURNING id",
+      );
+      await client.query(collectionMigration);
+      assert.equal(
+        (await client.query('SELECT name FROM custom_decks WHERE id=$1', [seeded.rows[0].id]))
+          .rows[0].name,
+        'Upgrade survivor',
+      );
+      await client.query("INSERT INTO asset_collections(name) VALUES ('Upgraded collection')");
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA collection_upgrade_test CASCADE');
+    }
+
     await client.query(`CREATE ROLE tabletop_app LOGIN PASSWORD '${appPassword}'`);
     await client.query(`GRANT CONNECT ON DATABASE "${databaseName}" TO tabletop_app`);
     await client.query('GRANT USAGE ON SCHEMA public TO tabletop_app');

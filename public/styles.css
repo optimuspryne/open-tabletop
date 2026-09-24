@@ -7211,3 +7211,35 @@ body.not-gm .gm-only {
 #deckBrowseActions {
   width: min(680px, 94vw);
 }
+
+/* Shared collection management and personal filters stay inside the library dialog. */
+#libraryModal .libraryBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+#libraryModal .libraryBody > .libPane {
+  flex: none;
+  overflow: visible;
+}
+.libraryCollections { padding: var(--gap) var(--inset); }
+.libraryCollections summary { cursor: pointer; }
+.collectionFilters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--gap); }
+.collectionFilter { display: flex; align-items: center; gap: var(--gap); min-width: 0; }
+.collectionFilter > label { flex: 1; }
+.collectionFilters { margin-block: var(--gap); }
+.libraryCollections .collectionChoice { display: flex; margin: 0; color: var(--text); align-items: center; gap: var(--gap); overflow-wrap: anywhere; min-width: 0; min-height: var(--control-min-height); }
+.collectionChoice input { flex-shrink: 0; }
+.collectionManager { display: grid; gap: var(--gap); margin-top: var(--gap); }
+.collectionManager[hidden] { display: none; }
+.collectionInventory { display: grid; gap: var(--gap); max-height: 32vh; overflow: auto; }
+.collectionManager .control { width: 100%; min-width: 0; box-sizing: border-box; }
+
+.collectionControls {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding-block: var(--gap);
+  background: var(--panel-solid);
+  border-top: 1px solid var(--border);
+}

@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 19); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 20); // Includes durable participation policy.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -422,4 +422,187 @@ test('spectator policy cannot bypass admission; site admins can save their own r
     (error) => error.code === '23514',
   );
   assert.equal((await database.getMembership(room.id, admin.id)).participation, 'spectator');
+});
+
+test('collections persist mixed typed assets, filter private data, and preserve assets on deletion', async () => {
+  const q = database.collections;
+  const options = { authorize: () => true };
+  const targets = [
+    [
+      'deck',
+      await database.insertDeck({
+        name: 'Collection Deck',
+        back: 'back',
+        fronts: ['front'],
+        isPublic: true,
+      }),
+    ],
+    ['board', await database.insertBoard('Collection Board', { w: 8, d: 8 }, { isPublic: true })],
+    ['mat', await database.insertMat('Collection Mat', { tex: '/mat.jpg' }, { isPublic: true })],
+    [
+      'prop',
+      await database.insertProp('Collection Prop', { model: '/prop.glb' }, { isPublic: true }),
+    ],
+    [
+      'scene',
+      await database.insertScene({ name: 'Collection Scene', payload: {}, isPublic: true }),
+    ],
+    [
+      'sky',
+      await database.insertSkybox({ name: 'Collection Sky', url: '/sky.jpg', isPublic: true }),
+    ],
+    [
+      'dice',
+      await database.insertDice({ name: 'Collection Dice', url: '/dice.jpg', isPublic: true }),
+    ],
+  ];
+  const privateId = await database.insertDeck({
+    name: 'Hidden deck',
+    fronts: ['secret'],
+    back: 'back',
+  });
+  let group = await q.mutate('create', { name: 'Mixed game', isPublic: true }, options);
+  const items = [...targets.map(([kind, id]) => ({ kind, id })), { kind: 'deck', id: privateId }];
+  group = await q.mutate('update', { ...group, items }, options);
+  const admin = (await q.list({ includePrivate: true })).collections.find(
+    (value) => value.id === group.id,
+  );
+  assert.equal(admin.items.length, 8);
+  const player = (await q.list()).collections.find((value) => value.id === group.id);
+  assert.equal(player.items.length, 7);
+  assert.equal(
+    player.items.some((item) => item.kind === 'deck' && item.id === privateId),
+    false,
+  );
+  await assert.rejects(
+    q.mutate('update', { ...group, revision: 1, items: [] }, options),
+    /changed/,
+  );
+  assert.equal(
+    (await q.list({ includePrivate: true })).collections.find((value) => value.id === group.id)
+      .items.length,
+    8,
+  );
+  await database.deleteAsset('deck', targets[0][1]);
+  assert.equal(
+    (await q.list({ includePrivate: true })).collections.find((value) => value.id === group.id)
+      .items.length,
+    7,
+  );
+  await q.mutate('delete', { id: group.id, revision: group.revision }, options);
+  assert.ok(await database.getDeck(privateId));
+  assert.equal(
+    (
+      await pool.query(
+        'SELECT count(*)::int AS count FROM asset_collection_items WHERE collection_id=$1',
+        [group.id],
+      )
+    ).rows[0].count,
+    0,
+  );
+});
+
+test('collection writes roll back on invalid assets, revoked access, and competing revisions', async () => {
+  const q = database.collections,
+    options = { authorize: () => true };
+  let group = await q.mutate('create', { name: 'Transactional', isPublic: false }, options);
+  const deck = await database.insertDeck({ name: 'Keep', back: 'back', fronts: ['front'] });
+  group = await q.mutate('update', { ...group, items: [{ kind: 'deck', id: deck }] }, options);
+  await assert.rejects(
+    q.mutate(
+      'update',
+      { ...group, name: 'Lost', items: [{ kind: 'board', id: '9223372036854775807' }] },
+      options,
+    ),
+    /removed/,
+  );
+  assert.equal(
+    (await q.list({ includePrivate: true })).collections.find((value) => value.id === group.id)
+      .name,
+    'Transactional',
+  );
+  let checks = 0;
+  await assert.rejects(
+    q.mutate('update', { ...group, name: 'Revoked', items: [] }, { authorize: () => ++checks < 3 }),
+    /unavailable/,
+  );
+  let saved = (await q.list({ includePrivate: true })).collections.find(
+    (value) => value.id === group.id,
+  );
+  assert.equal(saved.name, 'Transactional');
+  assert.equal(saved.items.length, 1);
+  assert.equal(saved.revision, group.revision);
+  const competing = await Promise.allSettled(
+    ['First', 'Second'].map((name) => q.mutate('update', { ...group, name, items: [] }, options)),
+  );
+  assert.equal(competing.filter((value) => value.status === 'fulfilled').length, 1);
+  assert.equal(competing.filter((value) => value.status === 'rejected').length, 1);
+  saved = (await q.list({ includePrivate: true })).collections.find(
+    (value) => value.id === group.id,
+  );
+  assert.equal(
+    (await q.list()).collections.some((value) => value.id === group.id),
+    false,
+  );
+  await q.mutate('delete', { id: saved.id, revision: saved.revision }, options);
+});
+
+test('collection foreign keys enforce typed existence, including direct application-role writes', async () => {
+  const group = await database.collections.mutate(
+    'create',
+    { name: 'FK test', isPublic: false },
+    { authorize: () => true },
+  );
+  await assert.rejects(
+    pool.query(
+      "INSERT INTO asset_collection_items(collection_id,kind,asset_id) VALUES ($1,'deck',9223372036854775807)",
+      [group.id],
+    ),
+    (error) => error.code === '23503',
+  );
+  await assert.rejects(
+    pool.query(
+      "INSERT INTO asset_collection_items(collection_id,kind,asset_id) VALUES ($1,'invalid',1)",
+      [group.id],
+    ),
+    (error) => error.code === '23514',
+  );
+  await database.collections.mutate(
+    'delete',
+    { id: group.id, revision: group.revision },
+    { authorize: () => true },
+  );
+});
+
+test('collection pagination and capacity limits are bounded without losing existing rows', async () => {
+  const q = database.collections,
+    options = { authorize: () => true };
+  await assert.rejects(q.mutate('create', { name: 'Denied', isPublic: true }), /unavailable/);
+  const created = [];
+  try {
+    for (let i = 0; i < 64; i++)
+      created.push(
+        await q.mutate('create', { name: `Paged ${i}`, isPublic: i % 2 === 0 }, options),
+      );
+    await assert.rejects(
+      q.mutate('create', { name: 'Too many', isPublic: true }, options),
+      /64 collections/,
+    );
+    const read = async (includePrivate) => {
+      const results = [];
+      let after = '0';
+      do {
+        const page = await q.list({ includePrivate, after });
+        assert.ok(page.collections.length <= 16);
+        results.push(...page.collections);
+        after = page.next;
+      } while (after);
+      return results;
+    };
+    assert.equal((await read(true)).length, 64);
+    assert.equal((await read(false)).length, 32);
+  } finally {
+    for (const group of created)
+      await q.mutate('delete', { id: group.id, revision: group.revision }, options);
+  }
 });

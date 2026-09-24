@@ -1,3 +1,4 @@
+import { invalidateCollections } from './collections.js';
 import { RANK } from '../../permissions.js';
 import {
   assetIdPayload,
@@ -253,6 +254,7 @@ export function registerLibraryHandlers(
     const msg = assetMutationPayload(message, { kinds: libraryKinds, mode: 'public' });
     if (!msg) return;
     await db.setAssetPublic(msg.kind, msg.id, msg.isPublic);
+    invalidateCollections();
     await room.sendAssetList(client, msg.kind);
   });
   assetMessage('assetRename', async (client, message) => {
@@ -286,6 +288,7 @@ export function registerLibraryHandlers(
     const msg = assetMutationPayload(message, { kinds: libraryKinds, mode: 'delete' });
     if (!msg) return;
     await db.deleteAsset(msg.kind, msg.id);
+    invalidateCollections();
     await room.sendAssetList(client, msg.kind);
   });
 

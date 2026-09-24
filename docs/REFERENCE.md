@@ -1624,7 +1624,7 @@ button label and accessible name through the existing icon/label helpers.
 Seatless observers start with a bird's-eye camera and cannot create a tray for seat zero.
 
 Public `Player.timedOut` and `Player.participation` drive badges and `public/table/participation.js`. Its room-send adapter
-uses the shared 127-request capability registry, blocks gameplay before hydration, and rechecks
+uses the shared 131-request capability registry, blocks gameplay before hydration, and rechecks
 mixed save/spawn requests. Mutation controls become inert; the input router retains camera,
 public inspection, chat and highlight/ping paths. A restriction cancels active local gestures.
 `stopPlayerInteraction` releases held bodies with zero velocity, clears group/overlay drag and
@@ -2731,3 +2731,48 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   `.button-row--compact` group, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an
   external file because CSP hash-gates inline scripts (see ARCHITECTURE › CSP).
+
+
+## Custom asset collections
+
+Migration **020_asset_collections.sql** stores shared admin-curated collections and typed asset
+memberships. `server/library-queries.js` exports the closed `ASSET_TABLES` SQL identifier registry,
+reused by administration and `server/collection-queries.js`. `createDatabase` and `db.js` expose
+`collections.list` and `collections.mutate`. Generated per-kind FK targets enforce existence and
+cascade asset deletion to memberships; collection deletion never deletes assets. Creator deletion
+sets ownership null; authority stays site-admin-wide.
+
+`shared/asset-collections.js` defines seven canonical kinds (deck, board, mat, prop, scene, sky,
+dice), strict payloads and limits: 64 collections, 500 members each, 80-character names and pages
+of 16 collections. Tile sets are decks; dispensers use the source prop membership. Collection
+IDs and asset IDs are positive decimal bigint strings; revisions are positive safe integers.
+
+The guarded message family in `server/game/handlers/collections.js` is registered by `server.js`:
+
+- `listCollections {request, after?}` (observation) replies `collectionList {request, collections,
+  next}`. Each collection has `{id, name, isPublic, revision, items:[{kind,id}]}`. `next` is the
+  last ID or null. A full final page may require one empty request to finish.
+- `createCollection {name, isPublic}`, `updateCollection {id, revision, name, isPublic, items}`,
+  `deleteCollection {id, revision}` require site-admin authority, independently of room role.
+- `collectionSaved {id, operation}` acknowledges a committed mutation. `collectionError` retains
+  the browser draft; database errors use the standard safe message boundary rather than empty lists.
+- `collectionsChanged {}` contains no private metadata and invalidates connected rooms after
+  collection writes or asset publication/deletion. Recipients refetch collections and asset lists;
+  room disposal removes its listener. Multi-process invalidation is not provided.
+
+List queries intersect collection and asset visibility in one statement; private item IDs and
+counts are absent for ordinary viewers. Live authority is rechecked after reads and before commit.
+Writes lock the collection, compare its revision, validate/lock targets and replace membership in
+one transaction. Failed writes roll back; simultaneous saves cannot silently replace each other.
+Creation serializes the total-count limit with an advisory transaction lock.
+
+`public/editor/collections.js` owns the collapsible Library controller, local visibility preferences
+(`ott.collections.<accountId>`), pagination, admin drafts and the multi-kind asset checklist. The
+Library markup places Collections and all asset panes inside one scrollable `libraryBody` under
+the fixed header, preventing the panes from shrinking the filters. The editor keeps its action row
+sticky within that body. The existing list cache/rendering applies its predicate only to the main custom library, including
+custom dice and prop/dispenser views. Any enabled visible collection membership shows the asset;
+only assets with no visible membership use Uncollected. Search/source/kind controls further filter
+these results. Built-ins and secondary finish pickers remain independent. New collections are visible;
+removed/inaccessible IDs are pruned after loading all pages. Role transitions clear private cached
+metadata and discard management drafts before refetching. Export/import is not part of this slice.

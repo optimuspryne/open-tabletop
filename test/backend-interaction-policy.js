@@ -1,3 +1,4 @@
+import { registerCollectionHandlers } from '../server/game/handlers/collections.js';
 import { registerDeckBrowseHandlers } from '../server/game/handlers/deck-browsing.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -48,6 +49,7 @@ function registeredHandlers() {
     },
   };
   for (const register of registrations) register(room, {});
+  registerCollectionHandlers(room, {})();
   return { room, handlers };
 }
 

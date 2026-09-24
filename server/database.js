@@ -8,9 +8,10 @@
 // Normalisation: a model's URL is the canonical column `file_url`; everything else
 // rides in the `props` jsonb bag. Reads splice the two back into the record shape
 // the game already expects, so nothing is stored twice.
+import { createCollectionQueries } from './collection-queries.js';
 import { createParticipationQueries } from './participation-queries.js';
 import { createColliderPresetQueries } from './collider-preset-queries.js';
-import { createLibraryQueries } from './library-queries.js';
+import { createLibraryQueries, ASSET_TABLES as ASSET_TABLE } from './library-queries.js';
 import { createUserQueries, publicUserRow } from './user-queries.js';
 import { createRoomQueries, roomRow } from './room-queries.js';
 
@@ -246,15 +247,7 @@ export function createDatabase(pool) {
   // Editing/visibility/deletion is admin-only (enforced server-side); these just run
   // the query for whichever kind. Unknown kinds are rejected so the table name can
   // never come from untrusted input.
-  const ASSET_TABLE = {
-    deck: 'custom_decks',
-    board: 'custom_boards',
-    prop: 'custom_objects',
-    scene: 'custom_scenes',
-    sky: 'custom_skyboxes',
-    dice: 'custom_dice',
-    mat: 'custom_mats',
-  };
+
   function setAssetPublic(kind, id, isPublic) {
     const table = ASSET_TABLE[kind];
     if (!table) return Promise.reject(new Error('bad kind'));
@@ -617,6 +610,7 @@ export function createDatabase(pool) {
   }
 
   return {
+    collections: createCollectionQueries(pool),
     ...createParticipationQueries(pool),
     colliderPresets: createColliderPresetQueries((sql, params) => pool.query(sql, params)),
     close,

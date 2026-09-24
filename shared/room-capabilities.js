@@ -13,6 +13,7 @@ const messagesByCapability = {
     'listScenes',
     'listSkyboxes',
     'listDice',
+    'listCollections',
   ],
   communication: ['chat', 'ping', 'highlightPiece'],
   personal: ['notebook', 'setName', 'setAvatar', 'setParticipation'],
@@ -38,6 +39,9 @@ const messagesByCapability = {
     'sceneSave',
     'saveSkybox',
     'saveDice',
+    'createCollection',
+    'updateCollection',
+    'deleteCollection',
   ],
   gameplay: [
     'browseDeck',

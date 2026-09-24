@@ -302,7 +302,7 @@ importing a room singleton:
   than maintaining a second compatibility vocabulary. Control colors, borders, radii, height,
   padding, and form rhythm come from the shared tokens and primitives, so restyling does not
   require editing per-feature `#id` rules).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`019`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`020`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -356,7 +356,7 @@ handler-specific rank, ownership and privacy checks remain in force. Server-owne
 can deny gameplay for spectators/time-outs, or all requests while policy is loading. Missing
 participation fields remain compatible with legacy internal callers, while room access now loads
 durable policy before gameplay. Reconnect marks readiness false and revokes access on read failure.
-The 127-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
+The 131-request registry lives in `shared/room-capabilities.js`; the browser mirrors it through
 one room-send adapter, while the server remains authoritative.
 
 Migration 018 stores time-outs by room/account with a cascading membership foreign key, outside
@@ -1876,3 +1876,26 @@ caps. Defense in depth, not provably safe.
   `box`, and optional measured grid spacing). Run `npm run assets:colliders -- <key>` after replacing
   its GLB to obtain the scale/collider recommendation, then verify the printed playing-area spacing
   separately when the model has a decorative border.
+
+
+### Shared custom asset collections
+
+Collections are installation-wide library metadata, outside synchronized room state and game/scene
+snapshots. Only site admins curate them; each viewer's filtering remains in local storage. A focused
+query factory (`server/collection-queries.js`) shares the existing SQL asset-table allowlist, uses
+transactional revision checks for membership replacement, and intersects collection/asset visibility
+on reads. Migration 020 provides real typed foreign keys through generated target columns, so deleted
+assets cannot leave dangling memberships and deleting a collection cannot consume assets.
+
+`server/game/handlers/collections.js` uses the established guarded/safe message boundary and live
+authorization checks after asynchronous reads and before committing writes. In-process content-free
+invalidation reaches all connected rooms; each client refetches authorized metadata. List payloads
+are paginated and creation/membership sizes are bounded. Database failures remain errors.
+
+`public/editor/collections.js` owns filters and admin drafts; `editor-panel.js` passes cached assets
+and applies the predicate to existing card builders. The library shell keeps its header fixed and
+uses one scrolling body for Collections and asset panes; the editor action row stays sticky.
+Conflict responses retain local edits for review
+and explicit reload. Built-ins, secondary pickers and existing table objects are independent of local
+collection visibility. Collection membership never grants read/spawn/export permissions. Portable
+export/import and multi-process invalidation remain separate work.

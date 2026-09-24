@@ -1,3 +1,4 @@
+import { createCollectionController } from './collections.js';
 import { openColliderEditor } from './compound-collider-editor.js';
 import { wireBoardOutline } from './board-outline-editor.js';
 // editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
@@ -771,11 +772,16 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
   if (!ul) return;
   ul.replaceChildren();
   if (asDispenser) list = list.filter((it) => it.props && it.props.dispenser);
+  const beforeFilter = list.length;
+  if (ul.id.startsWith('nlc_') && collectionController)
+    list = list.filter((item) => collectionController.allows(kind, item.id));
   if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + color + multi-select for spawnable assets
   if (!list.length) {
     const li = document.createElement('li');
     li.className = 'libEmpty';
-    li.textContent = 'None yet.';
+    li.textContent = beforeFilter
+      ? 'No assets match your collection filters. Use Show all in Collections to reset.'
+      : 'None yet.';
     ul.appendChild(li);
     return;
   }
@@ -914,8 +920,10 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
 
 // client.js fans the three list messages here (and still renders the modal saved-lists).
 const listCache = {};
+let collectionController = null;
 window.onLibraryList = (kind, list) => {
   listCache[kind] = list;
+  collectionController?.assetsChanged();
   const lm = byId('libraryModal');
   if (lm && !lm.hidden) {
     renderList(kind, list, (k) => byId('nlc_' + k));
@@ -923,6 +931,11 @@ window.onLibraryList = (kind, list) => {
   }
 };
 window.onLibraryAdmin = () => {
+  for (const kind in listCache)
+    listCache[kind] = (listCache[kind] || []).filter(
+      (item) => window.OTT_IS_ADMIN || item.isPublic,
+    );
+  collectionController?.identity(window.OTT_USER_ID);
   const lm = byId('libraryModal');
   if (lm && !lm.hidden)
     for (const k in listCache) {
@@ -1178,7 +1191,7 @@ function renderBuiltin(sink) {
 // Combined library (parallel test): built-in + custom into one modal, filtered by the source toggle.
 function renderLibrary() {
   renderBuiltin((k) => byId('nlb_' + k)); // built-in kinds → nlb_* lists
-  for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene'])
+  for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene', 'dice'])
     // custom kinds → nlc_* lists
     renderList(kind, listCache[kind] || [], (k) => byId('nlc_' + k));
   renderList('prop', listCache.prop || [], () => byId('nlc_dispenser'), {
@@ -2409,7 +2422,27 @@ window.onOttRoom = (room) => {
     }
     (isText ? FILLERS.txtdeck : FILLERS.imgdeck)(d, clone);
   });
+  collectionController = byId('collectionPanel')
+    ? createCollectionController({
+        host: byId('collectionPanel'),
+        room,
+        isAdmin: () => !!window.OTT_IS_ADMIN,
+        getAssets: () => listCache,
+        onFilter: () => {
+          const modal = byId('libraryModal');
+          if (modal && !modal.hidden) {
+            for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene', 'dice'])
+              renderList(kind, listCache[kind] || [], (key) => byId('nlc_' + key));
+            renderList('prop', listCache.prop || [], () => byId('nlc_dispenser'), {
+              asDispenser: true,
+            });
+          }
+        },
+      })
+    : null;
+  collectionController?.identity(window.OTT_USER_ID);
   const refresh = () => {
+    collectionController?.refresh();
     room.send('listDecks');
     room.send('listBoards');
     room.send('listMats');

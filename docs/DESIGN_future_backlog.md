@@ -17,7 +17,9 @@ other gameplay features. Self-service spectator entry/seating is implemented wit
 comprehensive live multiplayer/touch coverage is not inferred; see the
 [spectator checkpoint](DESIGN_next_features.md#stage-3-spectator-checkpoint--2026-09-24).
 Private deck browsing is also implemented locally with GM-only defaults and a per-deck player
-toggle; the user reports manual tests passing (2026-09-24). Collections are next in the detailed plan.
+toggle; the user reports manual tests passing (2026-09-24), committed as `f14a4f1`. Shared,
+site-admin-managed collections are now implemented locally; automated checks passed and the user
+approved functionality and the final UI (2026-09-24). See the [collections checkpoint](DESIGN_next_features.md#collections-checkpoint--2026-09-24).
 No backlog feature below is implemented by these slices.
 
 ## Where to investigate first

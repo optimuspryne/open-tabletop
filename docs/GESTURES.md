@@ -235,3 +235,17 @@ selection button row, and double-tap to claim the whiteboard.
 What no tab spells out is the two exact-angle gaps listed above — there is still no single-action
 45° for a selection you are not holding, and no truly unsnapped rotation off the mouse — but those
 are holes in the gesture surface itself, not in its documentation.
+
+
+## Asset collections
+
+In Library, expand **Collections** with a click/tap (or keyboard focus and Enter). Check collections
+to show them locally, toggle Uncollected, or choose Show all. An asset in multiple collections stays
+visible while any membership is enabled. This does not affect objects on the table or finish pickers.
+Site admins use New collection or a collection's Edit button to open its name/publication controls
+and searchable asset checklist. Collections and library results share one scrollable body below the fixed library header.
+The asset chooser also scrolls, with Save collection and Cancel visible in its bottom action row.
+Select multiple assets and Save collection; Cancel discards the
+local draft. A conflicting save retains the draft; Reload draft explicitly discards it for the
+latest saved version. The same visible controls work on desktop and touch; no new gesture is added.
+The user approved functionality and the final UI (2026-09-24); specific devices were not itemized.

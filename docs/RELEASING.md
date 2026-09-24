@@ -99,6 +99,12 @@ and refresh browsers together. It uses existing deck properties/snapshot storage
 new migration, environment variables or grants. Old snapshots remain GM-only by default; leases
 are transient and never restored.
 
+The collections slice requires **020_asset_collections.sql**. Restart with the migration role
+configured, then refresh browsers. When automatic migration is disabled, apply 020 using the
+schema owner before starting the new server. Existing assets are unchanged and begin uncollected.
+The new tables inherit the documented default CRUD grants; no new runtime privileges, environment
+variables, asset conversions or snapshot changes are needed. Fresh installs use the updated baseline.
+
 ## Rules that keep the guarantees honest
 
 - **Never re-push a version tag.** Once `:X.Y.Z` is pushed, those bits are frozen. A fix
