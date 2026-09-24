@@ -151,6 +151,14 @@ importing a room singleton:
   `client.js`, `landing.js`, and `admin.js` remain page entry points at the public root, alongside
   the cross-feature `credits.js` manifest. HTML loads `editor/editor-panel.js` for the workshop
   and `ui/equalize.js` as the early classic deferred preference script on all three pages.
+  Library previews load near the viewport and release observer references when their rows are
+  replaced; unchanged custom listings retain their DOM. Shared button sizing batches layout
+  reads across action groups. Saved/bundled image thumbnails in the library, dice finish pickers,
+  hands and authoring forms use a separate on-demand 320px WebP cache through the existing
+  asset-texture route and shared thumbnail mapper. Unsupported thumbnail refs stay empty instead
+  of loading originals. Local-file and generated previews are bounded WebP data URLs. Bundled
+  caches revalidate source changes; random-name upload caches stay immutable. Originals remain
+  available for upload/editing and full tabletop rendering, independently of thumbnail refs.
 - **`public/rendering/core.js`** — scene/camera/renderer/controls + the environment map,
   plus the `CONFIG` (client feel) and startup `LIGHTING` tunable blocks. `applyLighting` maps the
   synchronized table-relative direction, colors, intensities, and softness onto the directional

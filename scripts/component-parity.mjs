@@ -210,6 +210,63 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'library-image-thumbnails',
+    root: '#libraryModal',
+    expect: {
+      selector: '#nlc_sky .libCard, #nlc_dice .libCard, #nlc_board .libCard, #nlc_mat .libCard',
+      min: 5,
+    },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const waitFor = async check => {
+        for (let i=0; i<60; i++) { if (check()) return; await new Promise(r=>setTimeout(r,50)); }
+        throw Error('Thumbnail did not load');
+      };
+      const ref = kind => '/assets/'+kind+'/0123456789abcdefab.png';
+      window.onOttRoom(${STUB_ROOM});
+      window.onLibraryList('sky', [
+        {id:'s1',name:'Panorama',isPublic:true,url:ref('sky')},
+        {id:'s2',name:'Cubemap',isPublic:true,url:JSON.stringify({t:'cube',f:Array(6).fill(ref('sky'))})},
+      ]);
+      for (const kind of ['dice','board','mat']) window.onLibraryList(kind,[{id:kind,name:kind,isPublic:true,url:ref('dice'),preview:ref(kind+'s')}]);
+      document.getElementById('lib2Btn').click();
+      const modal = document.getElementById('libraryModal');
+      for (const kind of ['sky','dice','board','mat']) {
+        const list = document.getElementById('nlc_'+kind);
+        modal.querySelector('[data-tab="'+list.closest('.libPane').dataset.pane+'"]').click();
+        for (const box of list.querySelectorAll('.libPreview')) {
+          box.scrollIntoView({block:'center'});
+          await waitFor(()=>box.querySelector('img')?.hasAttribute('src'));
+          assert(box.querySelector('img').src.endsWith('.png.webp?quality=thumbnail'), kind+' loaded a raw original');
+        }
+      }
+      const {createDicePreferences} = await import('/table/dice-preferences.js');
+      let applied;
+      const preferences = createDicePreferences({byId:()=>null,onTextures:()=>{}});
+      preferences.setTextures([{id:'d',name:'Finish',url:ref('dice')}]);
+      const row = document.createElement('div');
+      preferences.buildTextureChips(row, value=>{applied=value;});
+      assert(row.firstChild.style.backgroundImage.includes('.png.webp?quality=thumbnail'), 'Finish chip uses original');
+      row.firstChild.click();
+      assert(applied===ref('dice'), 'Finish action used thumbnail instead of original');
+      const graphics = await import('/rendering/graphics.js');
+      const canvas = document.createElement('canvas'); canvas.width=1200; canvas.height=600;
+      const file = new File([await new Promise(r=>canvas.toBlob(r,'image/png'))], 'large.png', {type:'image/png'});
+      const data = await graphics.imageFilePreviewURL(file);
+      assert(data.startsWith('data:image/webp;'), 'Local file preview is not WebP');
+      const bitmap = await createImageBitmap(await (await fetch(data)).blob());
+      assert(bitmap.width===320 && bitmap.height===160, 'Local file preview lost bounds or aspect'); bitmap.close();
+      const input=document.getElementById('adDiceImg'), transfer=new DataTransfer(); transfer.items.add(file);
+      input.files=transfer.files; input.dispatchEvent(new Event('change'));
+      await waitFor(()=>input.parentElement.style.backgroundImage.includes('data:image/webp;'));
+      input.dispatchEvent(new Event('change')); input.value=''; input.dispatchEvent(new Event('change'));
+      await new Promise(r=>setTimeout(r,100));
+      assert(input.parentElement.style.backgroundImage==='none', 'Cleared file preview reappeared after decode');
+      assert(graphics.cardPreviewURL('text:Test').startsWith('data:image/webp;'), 'Procedural preview is not WebP');
+      (await import('/ui/icons.js')).applyIcons();`,
+  },
+  {
     name: 'asset-packages',
     root: '#libraryModal',
     expect: { selector: '#assetPackagePanel', min: 1 },
@@ -280,6 +337,57 @@ const SCENES = [
       await choose();
       window.fetch=fetchOriginal;
     `,
+  },
+  {
+    name: 'library-large-decks',
+    root: '#libraryModal',
+    expect: { selector: '#nlc_deck .libCard', min: 40 },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const waitFor = async (check, message) => {
+        for (let i = 0; i < 60; i++) {
+          if (check()) return;
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+        throw Error(message);
+      };
+      document.getElementById('tableLoading').remove();
+      window.onOttRoom(${STUB_ROOM});
+      const decks = Array.from({length:40}, (_, i) => ({
+        id:String(i+1), name:'Deck '+i, count:54, isPublic:true,
+        back:'text:Back '+i, first:'text:Front '+i,
+      }));
+      window.onLibraryList('deck', decks);
+      document.getElementById('lib2Btn').click();
+      const modal = document.getElementById('libraryModal');
+      modal.querySelector('[data-tab="decks"]').click();
+      const list = document.getElementById('nlc_deck');
+      const cards = [...list.querySelectorAll('.libCard')];
+      const last = cards.at(-1).querySelector('.libPreview');
+      assert(!last.querySelector('img').hasAttribute('src'), 'Offscreen deck generated a preview eagerly');
+      cards[0].scrollIntoView({block:'center'});
+      await waitFor(() => [...cards[0].querySelectorAll('img')].every(im => im.hasAttribute('src')), 'Visible deck did not load both faces');
+      assert(!last.querySelector('img').hasAttribute('src'), 'Loading first deck also loaded distant decks');
+      window.onLibraryList('deck', structuredClone(decks));
+      assert(list.querySelector('.libCard') === cards[0], 'Identical response rebuilt cards');
+      modal.querySelector('.libSearch').value = 'Deck 39';
+      modal.querySelector('.libSearch').dispatchEvent(new Event('input'));
+      last.scrollIntoView({block:'center'});
+      await waitFor(() => [...last.querySelectorAll('img')].every(im => im.hasAttribute('src')), 'Search-revealed deck did not load');
+      assert([...last.querySelectorAll('img')].every(im => im.decoding === 'async'), 'Thumbnails block synchronous image decoding');
+      const {cardPreviewURL} = await import('/rendering/graphics.js');
+      assert(cardPreviewURL('/assets/decks/0123456789abcdefab.png', {thumbnail:true}).endsWith('?quality=thumbnail'), 'Library thumbnail option did not reach the image endpoint');
+      assert(!cardPreviewURL('/assets/decks/0123456789abcdefab.png', {thumbnail:false}).includes('?'), 'Explicit standard preview resolution changed');
+      window.onLibraryList('deck', decks.map((deck, i) => i ? deck : {...deck, name:'Renamed deck'}));
+      assert(!cards[0].isConnected && last._loadThumb === null, 'Replaced list retained pending preview work');
+      assert(list.querySelector('.libName').textContent.includes('Renamed deck'), 'Changed metadata did not rerender');
+      modal.querySelector('.libSearchClear').click();
+      document.getElementById('lib2Close').click();
+      const retained = list.querySelector('.libCard');
+      document.getElementById('lib2Btn').click();
+      assert(list.querySelector('.libCard') === retained, 'Reopening rebuilt an unchanged deck list');
+      (await import('/ui/icons.js')).applyIcons();`,
   },
   {
     name: 'asset-collections',

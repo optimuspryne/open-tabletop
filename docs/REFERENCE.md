@@ -869,30 +869,63 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 
 ### `server/http/routes/asset-textures.js` — card/tile display derivatives
 
-**`createAssetTextureRouter({assetsDir, assetKinds, maxDimension?, highMaxDimension?})`** serves
+**`createAssetTextureRouter({assetsDir, assetKinds, maxDimension?, highMaxDimension?, thumbnailMaxDimension?, bundledAssetsDir?})`** serves
 `GET /asset-textures/v1/<kind>/<random-image-name>.webp`. It accepts only an allowlisted
 asset category and the random image filename shape produced by `saveAsset`; traversal,
 metadata, models, and arbitrary filenames return 404. A strict `?quality=high` request uses
-the High-quality derivative; every other value uses the standard derivative.
+the High-quality derivative; `?quality=thumbnail` selects the library thumbnail. Every other
+value uses the standard derivative.
+
+Bundled thumbnails use the same route with kind `bundled` and a URL-encoded relative image path
+in the filename parameter, for example `sky%2Fequirect%2Fcloudy_noon.png.webp?quality=thumbnail`.
+Only raster images below `sky/`, `mahjong/`, and `textures/` are accepted, with strict path-segment
+validation and no traversal or remote proxying. Sources resolve through the existing static-assets
+configuration (`bundledAssetsDir` defaults to `STATIC_ASSETS_DIR`). Cached bundled thumbnails
+are rebuilt when their source mtime advances and use `public, no-cache` HTTP revalidation, since
+bundled filenames may be updated in place. Uploaded random-name image caches remain immutable.
 
 - **`textureAssetPaths(..., quality = 'standard')`** resolves the immutable original and its
   versioned cache path under `.texture-cache/v1/<kind>/` (standard) or
-  `.texture-cache/v1-high/<kind>/` (High).
+  `.texture-cache/v1-high/<kind>/` (High), or `.texture-cache/v1-thumbnail/<kind>/` (library).
 - **`createTextureDerivative(source, destination, maxDimension = 768)`** preserves aspect and
   alpha, never enlarges the source, applies EXIF orientation, and writes a quality-82 WebP via
   an atomic temporary file. The router passes 768 for standard requests and 1536 for High by
-  default. Concurrent requests for one face share the same pending job.
+  default, and 320 for library thumbnails. Concurrent requests for the same face and variant
+  share one pending job. Thumbnails are generated on demand; the admin prebuilder still builds
+  standard derivatives. All variants are disposable caches under the existing assets directory.
 - **`prebuildTextureCache(...)`** scans every allowlisted asset folder for random-name JPG/JPEG/PNG
   uploads, creates only missing derivatives with two bounded workers by default, continues past
   individual conversion failures, and reports processed/created/skipped/failed counts plus byte totals.
 - **`createTexturePrebuilder(options)`** wraps that scan as one process-local background job. Repeated
   starts while it is running coalesce onto the existing job; `status()` exposes its scan/build/complete
   state for the admin console without holding an HTTP request open.
-- Successful responses are `image/webp` with a one-year immutable cache policy. Originals stay
+- Successful uploaded-image responses are `image/webp` with a one-year immutable cache policy. Originals stay
   untouched for library editing, backups, and future derivative versions. `cardTextureURL` in
   `public/rendering/graphics.js` redirects only local random-name `/assets/...` card/tile references and
   appends `?quality=high` when the viewer booted in High; procedural, data, bundled, and external
   references keep their existing path.
+
+Thumbnail callers use `assetThumbnailURL` in `public/rendering/asset-texture-url.js`, which maps
+saved and bundled images to 320px WebP derivatives, accepts generated WebP data URLs, and returns
+null for unsupported sources instead of loading raw originals. `shared/image-thumbnails.js`
+owns the common size and bundled-path allowlist. In `public/rendering/graphics.js`,
+`cardPreviewURL` defaults to thumbnails (`thumbnail:false` explicitly retains standard previews),
+`boardPreviewURL` converts image boards/mats, and `canvasThumbnailURL` bounds generated card,
+board and model snapshots. `imageFilePreviewURL` reuses `resizeToCanvas` with aspect-preserving
+`inside` sizing for not-yet-uploaded files; object URLs are revoked on both load and decode error.
+Original files still supply uploads, measurements, editing geometry, and tabletop rendering.
+
+`public/editor/editor-panel.js` funnels synchronous and lazy image sinks through this mapper;
+sky/dice previews use the near-viewport loader, upload squares and face grids use local WebP
+previews, and cleared/replaced squares ignore stale completions. `public/table/dice-preferences.js`
+uses thumbnail URLs in `buildTextureChips` while callbacks retain original finish refs; this covers
+both tray and inspection pickers. `public/table/hand.js` uses `cardPreviewURL` for image faces too.
+
+Regression coverage lives in `test/asset-texture-url.js` (all categories, bundled paths and no raw
+fallback), `test/backend-asset-textures.js` (real HTTP size/cache isolation, bundled refresh and
+path rejection), and `scripts/component-parity.mjs` (library dice/sky/board/mat images, finish-chip
+actions, generated/local WebP previews and stale file-selection cleanup on desktop/touch).
+This contract is also summarized in `docs/ARCHITECTURE.md` and `CHANGELOG.md`.
 
 ### `server/asset-cleanup.js` — orphan preview and trash
 
@@ -2719,6 +2752,11 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   needed, and stores finite default amount or infinite supply. Library quantity/amount steppers
   reserve enough width for multi-digit values, and the custom-model Scale stepper cannot collapse
   away either button.
+  Custom lists retain their DOM when visible metadata and curation permissions are unchanged.
+  Deck/tile, sky and dice previews share the near-viewport loader with model previews, decode images
+  asynchronously, and request 320px WebP derivatives. Hand thumbnails use the same small variant;
+  enlarged tabletop inspection still uses the rendering texture. `clearPreviewList` unregisters removed
+  preview boxes and ignores late completions when a list changes.
 - **`public/editor/board-outline-editor.js`** — `wireBoardOutline(prefix)` connects the board form's
   preset selector, corner-cut field, canvas, and undo/clear controls. Its `read`, `fill`, `image`,
   and `aspect` methods validate/save outlines, restore edits, and align reference imagery with the
@@ -2728,7 +2766,8 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   to the existing model-scale/bounds validation. Scaling updates the model and collider together.
   GLB outlines affect collision only; image outlines affect both visible geometry and collision.
 - **`public/ui/equalize.js`** (all pages, `defer`) — unifies grouped button widths to the widest in each
-  `.button-row--compact` group, and applies the saved interface preference on load: reads
+  `.button-row--compact` group with batched reset/measure/write phases to avoid per-row forced
+  layouts in large libraries, and applies the saved interface preference on load: reads
   `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts run. Kept as an
   external file because CSP hash-gates inline scripts (see ARCHITECTURE › CSP).
 

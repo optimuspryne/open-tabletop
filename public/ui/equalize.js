@@ -27,20 +27,22 @@ try {
 // a floor; this matches the rest up to the widest). Runs on load, on resize
 // (the fluid font rescales widths), and whenever the DOM changes (re-renders).
 (function () {
-  function equalizeGroup(group) {
-    const btns = group.querySelectorAll(':scope > button');
-    if (btns.length < 2) return;
-    for (const button of btns) button.style.width = ''; // reset to natural width
-    let max = 0;
-    for (const button of btns) max = Math.max(max, button.getBoundingClientRect().width);
-    if (!max) return; // hidden / not laid out yet — leave natural, don't collapse to 0
-    max = Math.ceil(max);
-    for (const button of btns) button.style.width = max + 'px'; // unify to the widest
-  }
   let queued = false;
   function run() {
     queued = false;
-    document.querySelectorAll('.button-row--compact').forEach(equalizeGroup);
+    const groups = [...document.querySelectorAll('.button-row--compact')]
+      .map((group) => [...group.querySelectorAll(':scope > button')])
+      .filter((buttons) => buttons.length >= 2);
+    // Reset every group before measuring any: alternating writes/reads per library card
+    // forces a full layout for each row. These three phases need only one measurement layout.
+    for (const buttons of groups) for (const button of buttons) button.style.width = '';
+    const widths = groups.map((buttons) =>
+      Math.ceil(Math.max(...buttons.map((button) => button.getBoundingClientRect().width))),
+    );
+    groups.forEach((buttons, index) => {
+      if (!widths[index]) return; // hidden — retain natural widths until the panel opens
+      for (const button of buttons) button.style.width = widths[index] + 'px';
+    });
   }
   function schedule() {
     if (!queued) {

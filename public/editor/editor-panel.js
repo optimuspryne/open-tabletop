@@ -2,6 +2,7 @@ import { createAssetPackageController } from './asset-packages.js';
 import { createCollectionController } from './collections.js';
 import { openColliderEditor } from './compound-collider-editor.js';
 import { wireBoardOutline } from './board-outline-editor.js';
+import { assetThumbnailURL } from '../rendering/asset-texture-url.js';
 // editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
 // on the table engine's room connection, handed over by client.js via
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
@@ -9,6 +10,7 @@ import { wireBoardOutline } from './board-outline-editor.js';
 // keep working too). In the editor the admin sees private assets as well as public.
 import {
   cardPreviewURL,
+  imageFilePreviewURL,
   propPreviewURL,
   boardPreviewURL,
   procBoardTexURL,
@@ -694,7 +696,9 @@ const thumbImg = (src, cls) => {
   const im = document.createElement('img');
   im.className = 'libThumb' + (cls ? ' ' + cls : '');
   im.loading = 'lazy';
-  if (src) im.src = src;
+  im.decoding = 'async';
+  const url = assetThumbnailURL(src);
+  if (url) im.src = url;
   return im;
 };
 // Defer a thumbnail until its card scrolls near the viewport, so opening a big library tab does
@@ -709,29 +713,44 @@ const _thumbObserver =
             const load = e.target._loadThumb;
             e.target._loadThumb = null; // once
             _thumbObserver.unobserve(e.target);
-            load();
+            for (const run of load) run();
           }
         },
         { rootMargin: '300px' },
       )
     : null;
-const fillAsync = (box, makePromise) => {
-  const im = thumbImg();
+const fillAsync = (box, makePromise, cls) => {
+  const im = thumbImg(null, cls);
   box.append(im);
   const run = () =>
-    makePromise()
+    Promise.resolve()
+      .then(() => (box._thumbCancelled ? null : makePromise()))
       .then((u) => {
-        if (u) im.src = u;
+        if (box._thumbCancelled) return;
+        const url = assetThumbnailURL(u);
+        if (url) im.src = url;
         else box.classList.add('empty');
       })
-      .catch(() => box.classList.add('empty'));
+      .catch(() => {
+        if (!box._thumbCancelled) box.classList.add('empty');
+      });
   if (_thumbObserver) {
-    box._loadThumb = run;
+    (box._loadThumb ||= []).push(run);
     _thumbObserver.observe(box);
   } else {
     run();
   }
 };
+
+function clearPreviewList(ul) {
+  // IntersectionObserver retains offscreen targets even after replaceChildren removes them.
+  for (const box of ul.querySelectorAll('.libPreview')) {
+    _thumbObserver?.unobserve(box);
+    box._loadThumb = null;
+    box._thumbCancelled = true;
+  }
+  ul.replaceChildren();
+}
 
 // Build the preview image(s) for a card. Decks show back + first-front; skyboxes,
 // boards and props show a thumbnail (boards/props render async); scenes get a glyph.
@@ -740,10 +759,8 @@ function previewEl(kind, it) {
   wrap.className = 'libPreview';
   if (kind === 'deck') {
     wrap.classList.add('deckPreview');
-    wrap.append(
-      thumbImg(cardPreviewURL(it.back), 'back'),
-      thumbImg(cardPreviewURL(it.first), 'front'),
-    );
+    fillAsync(wrap, () => cardPreviewURL(it.back, { thumbnail: true }), 'back');
+    fillAsync(wrap, () => cardPreviewURL(it.first, { thumbnail: true }), 'front');
   } else if (kind === 'sky') {
     let src = it.url;
     if (typeof src === 'string' && src[0] === '{') {
@@ -753,13 +770,13 @@ function previewEl(kind, it) {
         src = null;
       }
     } // cubemap → first face
-    wrap.append(thumbImg(src));
+    fillAsync(wrap, () => assetThumbnailURL(src));
   } else if (kind === 'board' || kind === 'mat') {
     fillAsync(wrap, () => boardPreviewURL(it.preview));
   } else if (kind === 'prop') {
     fillAsync(wrap, () => propPreviewURL(it.props || {}));
   } else if (kind === 'dice') {
-    wrap.append(thumbImg(it.url)); // the uploaded dice texture
+    fillAsync(wrap, () => assetThumbnailURL(it.url));
   } else {
     // scene — no single image
     wrap.classList.add('empty');
@@ -771,11 +788,23 @@ function previewEl(kind, it) {
 function renderList(kind, list, sink, { asDispenser = false } = {}) {
   const ul = (sink || ((k) => byId(LIST_UL[k])))(kind);
   if (!ul) return;
-  ul.replaceChildren();
   if (asDispenser) list = list.filter((it) => it.props && it.props.dispenser);
   const beforeFilter = list.length;
   if (ul.id.startsWith('nlc_') && collectionController)
     list = list.filter((item) => collectionController.allows(kind, item.id));
+  // Opening/refreshing delivers the same metadata several times. Keep previews, focus and
+  // spawn controls when the visible rows and curation permissions have not changed.
+  const renderKey = JSON.stringify([
+    kind,
+    asDispenser,
+    !!window.OTT_IS_ADMIN,
+    !!byId('addModal'),
+    beforeFilter > 0,
+    list,
+  ]);
+  if (ul._renderKey === renderKey) return;
+  clearPreviewList(ul);
+  ul._renderKey = renderKey;
   if (kind === 'prop' || kind === 'deck') spawnBar(ul); // quantity + color + multi-select for spawnable assets
   if (!list.length) {
     const li = document.createElement('li');
@@ -994,7 +1023,7 @@ const _BIUL = {
 function renderBuiltin(sink) {
   sink = sink || ((k) => byId(_BIUL[k]));
   const dice = sink('dice');
-  dice.replaceChildren();
+  clearPreviewList(dice);
   spawnBar(dice);
   for (const sides of DIE_SIDES) {
     const box = previewBox();
@@ -1024,7 +1053,7 @@ function renderBuiltin(sink) {
   }
 
   const decks = sink('decks');
-  decks.replaceChildren();
+  clearPreviewList(decks);
   spawnBar(decks);
   {
     const box = previewBox('deckPreview');
@@ -1094,7 +1123,7 @@ function renderBuiltin(sink) {
   } // the full wall on its own
 
   const boards = sink('boards');
-  boards.replaceChildren();
+  clearPreviewList(boards);
   for (const key of Object.keys(BOARDS)) {
     const box = previewBox();
     fillAsync(box, () =>
@@ -1110,7 +1139,7 @@ function renderBuiltin(sink) {
   // One-click starter games (table only; GM+). Loading one clears the table, so confirm first.
   const games = sink('games');
   if (games) {
-    games.replaceChildren();
+    clearPreviewList(games);
     const gamePreview = {
       chess: BOARDS.chess.model,
       checkers: BOARDS.chess.model,
@@ -1143,7 +1172,7 @@ function renderBuiltin(sink) {
   }
 
   const objs = sink('objects');
-  objs.replaceChildren();
+  clearPreviewList(objs);
   spawnBar(objs);
   for (const p of PROP_LIST) {
     const box = previewBox();
@@ -1165,7 +1194,7 @@ function renderBuiltin(sink) {
   }
 
   const disp = sink('dispensers');
-  disp.replaceChildren();
+  clearPreviewList(disp);
   spawnBar(disp);
   for (const { id } of DISPENSER_LIST) {
     const spec = DISPENSERS[id];
@@ -1189,11 +1218,11 @@ function renderBuiltin(sink) {
   }
 
   const sky = sink('sky');
-  sky.replaceChildren();
+  clearPreviewList(sky);
   for (const s of window.OTT_BUILTIN_SKIES || []) {
     const ref = skyRef(s);
     const box = previewBox();
-    box.append(thumbImg(s.faces ? s.faces[0] : s.url));
+    fillAsync(box, () => assetThumbnailURL(s.faces ? s.faces[0] : s.url));
     sky.append(builtinCard(box, s.name, 'Apply', () => ROOM.send('skybox', { url: ref })));
   }
   const bm = byId('libraryModal');
@@ -1209,6 +1238,8 @@ function renderLibrary() {
   renderList('prop', listCache.prop || [], () => byId('nlc_dispenser'), {
     asDispenser: true,
   });
+  // Built-ins were rebuilt even when every custom list was reused.
+  byId('libraryModal')?._applySearch?.();
 }
 
 // Room Controls → Skybox: a two-tab picker (built-in + custom), apply to the room.
@@ -1263,12 +1294,12 @@ function paintTileGrid(inputId, gridId, capId) {
     cap.textContent = files.length ? files.length + ' selected' : '';
   }
   files.slice(0, MAX_FRONT_THUMBS).forEach((f) => {
-    const t = grid.appendChild(document.createElement('i')),
-      r = new FileReader();
-    r.onload = () => {
-      t.style.backgroundImage = `url("${r.result}")`;
-    };
-    r.readAsDataURL(f);
+    const t = grid.appendChild(document.createElement('i'));
+    imageFilePreviewURL(f)
+      .then((url) => {
+        if (t.isConnected) t.style.backgroundImage = `url("${url}")`;
+      })
+      .catch(() => {});
   });
   if (files.length > MAX_FRONT_THUMBS) {
     const more = grid.appendChild(document.createElement('i'));
@@ -1352,8 +1383,7 @@ function wireAddTiles() {
     clearSq('adTileCover');
     paintTileGrid('adTileFronts', 'adTileFrontsGrid', 'adTileFrontsCount');
     paintTileGrid('adTileBacks', 'adTileBacksGrid', 'adTileBacksCount');
-    if (d.back && d.back !== 'back')
-      byId('adTileCover').parentElement.style.backgroundImage = `url("${d.back}")`;
+    if (d.back && d.back !== 'back') showCardPrev(byId('adTileCover').parentElement, d.back);
     if (d.geom) {
       const m = Math.max(1, Math.min(8, Math.round((d.geom.t / TILES.card.t) * 2) / 2)) || 1;
       byId('adTileThick').value = m;
@@ -1441,7 +1471,7 @@ function wireAddTiles() {
   byId('adTileSpawn').onclick = () => saveTiles(true);
 }
 const showCardPrev = (el, ref) => {
-  const u = cardPreviewURL(ref);
+  const u = cardPreviewURL(ref, { thumbnail: true });
   el.style.backgroundImage = u ? `url("${u}")` : 'none';
 };
 // Turn a .uploadSq (with a hidden <input type=file> inside) into a click-to-upload tile.
@@ -1451,26 +1481,24 @@ function wireUploadSq(inputId, isGlb, onChange, glbPreview = glbFilePreviewURL) 
   sq.addEventListener('click', () => input.click());
   input.addEventListener('change', () => {
     const f = input.files[0];
+    const version = (sq._previewVersion = (sq._previewVersion || 0) + 1);
+    sq.style.backgroundImage = 'none';
     sq.classList.toggle('filled', !!f);
     if (onChange) onChange();
     if (!f) sq.style.backgroundImage = 'none';
-    else if (isGlb)
-      glbPreview(f).then((u) => {
-        sq.style.backgroundImage = u ? `url("${u}")` : 'none';
-      });
-    else {
-      const r = new FileReader();
-      r.onload = () => {
-        sq.style.backgroundImage = `url("${r.result}")`;
-      };
-      r.readAsDataURL(f);
-    }
+    else
+      (isGlb ? glbPreview(f) : imageFilePreviewURL(f))
+        .then((u) => {
+          if (sq._previewVersion === version) sq.style.backgroundImage = u ? `url("${u}")` : 'none';
+        })
+        .catch(() => {});
   });
 }
 const clearSq = (inputId) => {
   const input = byId(inputId),
     sq = input.parentElement;
   input.value = '';
+  sq._previewVersion = (sq._previewVersion || 0) + 1;
   sq.classList.remove('filled');
   sq.style.backgroundImage = 'none';
   sq.style.backgroundColor = '';
@@ -1641,8 +1669,7 @@ function wireAddDeck() {
     byId('adImgName').value = clone ? '' : d.name;
     clearSq('adImgBack');
     clearSq('adImgFronts');
-    if (d.back && d.back !== 'back')
-      byId('adImgBack').parentElement.style.backgroundImage = `url("${d.back}")`;
+    if (d.back && d.back !== 'back') showCardPrev(byId('adImgBack').parentElement, d.back);
   };
   FILLERS.txtdeck = (d, clone) => {
     // Edit/Clone text deck: back text/colors + front colors + faces (decoded from the refs)

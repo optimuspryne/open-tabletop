@@ -4,12 +4,93 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
+import express from 'express';
 import {
+  createAssetTextureRouter,
   createTexturePrebuilder,
   createTextureDerivative,
   prebuildTextureCache,
   textureAssetPaths,
 } from '../server/http/routes/asset-textures.js';
+import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
+
+test('texture HTTP route isolates thumbnail sizes and caches while preserving the original', async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'open-tabletop-thumb-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  await fs.promises.mkdir(path.join(root, 'decks'));
+  const original = await sharp({
+    create: { width: 1800, height: 2520, channels: 4, background: '#4a78c980' },
+  })
+    .png()
+    .toBuffer();
+  const filename = '0123456789abcdefab.png';
+  await fs.promises.writeFile(path.join(root, 'decks', filename), original);
+  const app = express();
+  const bundledAssetsDir = path.join(root, 'bundled');
+  await fs.promises.mkdir(path.join(bundledAssetsDir, 'sky'), { recursive: true });
+  const skySource = path.join(bundledAssetsDir, 'sky', 'test.png');
+  await fs.promises.writeFile(skySource, original);
+  app.use(createAssetTextureRouter({ assetsDir: root, assetKinds: ['decks'], bundledAssetsDir }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const url = `http://127.0.0.1:${server.address().port}/asset-textures/v1/decks/${filename}.webp`;
+  for (const [quality, height] of [
+    ['thumbnail', 320],
+    ['standard', 768],
+    ['high', 1536],
+    ['invalid', 768],
+  ]) {
+    const responses = await Promise.all([
+      fetch(`${url}?quality=${quality}`),
+      fetch(`${url}?quality=${quality}`),
+    ]);
+    const buffers = await Promise.all(
+      responses.map(async (response) => {
+        assert.equal(response.status, 200);
+        assert.match(response.headers.get('cache-control'), /immutable/);
+        return Buffer.from(await response.arrayBuffer());
+      }),
+    );
+    assert.deepEqual(buffers[0], buffers[1]);
+    const metadata = await sharp(buffers[0]).metadata();
+    assert.equal(metadata.height, height);
+    assert.equal(metadata.hasAlpha, true);
+  }
+  assert.deepEqual(await fs.promises.readFile(path.join(root, 'decks', filename)), original);
+  assert.equal(
+    (await fetch(url.replace('/decks/', '/unknown/') + '?quality=thumbnail')).status,
+    404,
+  );
+  assert.equal((await fetch(url.replace(filename, 'bad.png') + '?quality=thumbnail')).status, 404);
+  const skyURL = `http://127.0.0.1:${server.address().port}${assetThumbnailURL('/sky/test.png')}`;
+  const sky = await fetch(skyURL);
+  assert.equal(sky.status, 200);
+  assert.equal(sky.headers.get('cache-control'), 'public, no-cache');
+  const skyBytes = Buffer.from(await sky.arrayBuffer());
+  assert.equal((await sharp(skyBytes).metadata()).height, 320);
+  await sharp({ create: { width: 700, height: 350, channels: 4, background: '#ffffff' } })
+    .png()
+    .toFile(skySource);
+  // Ensure a deterministic newer timestamp even on a filesystem with coarse mtime resolution.
+  const later = new Date(Date.now() + 2000);
+  await fs.promises.utimes(skySource, later, later);
+  const refreshed = await fetch(skyURL);
+  const metadata = await sharp(Buffer.from(await refreshed.arrayBuffer())).metadata();
+  assert.equal(metadata.width, 320);
+  assert.equal(metadata.height, 160);
+  for (const ref of [
+    'sky/../test.png',
+    'sky/%2e%2e/test.png',
+    'models/test.png',
+    '/sky/test.png',
+  ]) {
+    assert.equal(
+      textureAssetPaths(root, ['decks'], 'bundled', ref + '.webp', 'thumbnail', bundledAssetsDir),
+      null,
+    );
+  }
+});
 
 test('textureAssetPaths accepts only allowlisted random-name image derivatives', () => {
   const root = '/srv/assets';

@@ -3,7 +3,8 @@ import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer, deviceClass, getQuality, tableMesh, rimMat } from './core.js';
-import { assetTextureURL } from './asset-texture-url.js';
+import { assetTextureURL, assetThumbnailURL } from './asset-texture-url.js';
+import { THUMBNAIL_MAX_DIMENSION } from '../../shared/image-thumbnails.js';
 import {
   PROPS,
   COLORS,
@@ -1118,8 +1119,13 @@ function resizeToCanvas(file, w, h, fit, bg) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
+      if (fit === 'inside') {
+        const scale = Math.min(1, w / img.width, h / img.height);
+        w = Math.max(1, Math.round(img.width * scale));
+        h = Math.max(1, Math.round(img.height * scale));
+      }
       const { canvas, ctx } = makeCanvas(w, h);
-      if (fit === 'stretch') {
+      if (fit === 'stretch' || fit === 'inside') {
         ctx.drawImage(img, 0, 0, w, h); // whole image squashed to fit (boards)
       } else if (fit === 'contain') {
         // Fit the whole image inside, centre, and pad the leftover with bg (no crop).
@@ -1139,9 +1145,32 @@ function resizeToCanvas(file, w, h, fit, bg) {
       URL.revokeObjectURL(img.src);
       resolve(canvas);
     };
-    img.onerror = reject;
+    img.onerror = (error) => {
+      URL.revokeObjectURL(img.src);
+      reject(error);
+    };
     img.src = URL.createObjectURL(file);
   });
+}
+
+function canvasThumbnailURL(image) {
+  const scale = Math.min(1, THUMBNAIL_MAX_DIMENSION / Math.max(image.width, image.height));
+  const { canvas, ctx } = makeCanvas(
+    Math.max(1, Math.round(image.width * scale)),
+    Math.max(1, Math.round(image.height * scale)),
+  );
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/webp', 0.82);
+}
+
+export async function imageFilePreviewURL(file) {
+  const canvas = await resizeToCanvas(
+    file,
+    THUMBNAIL_MAX_DIMENSION,
+    THUMBNAIL_MAX_DIMENSION,
+    'inside',
+  );
+  return canvasThumbnailURL(canvas);
 }
 
 // Resize `file` and encode it to an image Blob for HTTP upload (format/quality
@@ -1981,8 +2010,7 @@ export function procBoardTexURL(key) {
   const painter = BOARD_PAINTERS[b.proc];
   if (!painter) return null;
   const tex = painter(b.paint || {});
-  const url =
-    tex && tex.image && tex.image.toDataURL ? tex.image.toDataURL('image/jpeg', 0.85) : null;
+  const url = tex && tex.image && tex.image.toDataURL ? canvasThumbnailURL(tex.image) : null;
   if (url) rememberPreview(ck, url);
   return url;
 }
@@ -2670,7 +2698,7 @@ function snapshot(obj) {
   cam.far = maxDim * 40;
   cam.updateProjectionMatrix();
   renderer.render(scene, cam);
-  const url = renderer.domElement.toDataURL('image/png');
+  const url = canvasThumbnailURL(renderer.domElement);
   scene.remove(obj);
   return url;
 }
@@ -2684,24 +2712,29 @@ function rememberPreview(key, url) {
   }
   _prevCache.set(key, url);
 }
-// A card ref → preview image URL. Saved images use the standard WebP derivative; external/data
-// images pass through; procedural refs (back / rank: / text: / tback:) become canvas data-URLs.
-export function cardPreviewURL(ref) {
+// Card previews default to bounded WebP thumbnails. Explicit standard previews remain available
+// to callers needing more resolution; this never changes the texture used by a tabletop mesh.
+export function cardPreviewURL(ref, { thumbnail = true } = {}) {
   const r = ref || 'back';
-  if (r.startsWith('/')) return assetTextureURL(r);
-  if (r.startsWith('http') || r.startsWith('data:')) return r;
-  if (_prevCache.has(r)) return _prevCache.get(r);
+  if (r.startsWith('/')) return thumbnail ? assetThumbnailURL(r) : assetTextureURL(r);
+  if (r.startsWith('http') || r.startsWith('data:')) return thumbnail ? assetThumbnailURL(r) : r;
+  const key = thumbnail ? 'thumb:' + r : r;
+  if (_prevCache.has(key)) return _prevCache.get(key);
   const wasCached = _texCache.has(r); // already resident for a placed piece?
   const tex = resolveTexture(r);
   const url =
-    tex && tex.image && tex.image.toDataURL ? tex.image.toDataURL('image/jpeg', 0.85) : null;
+    tex && tex.image && tex.image.toDataURL
+      ? thumbnail
+        ? canvasThumbnailURL(tex.image)
+        : tex.image.toDataURL('image/jpeg', 0.85)
+      : null;
   if (!wasCached && tex) {
     // Built only to snapshot — don't leave a GPU texture behind. A later placement rebuilds on
     // demand; if a piece was already using it, wasCached is true and we leave it alone.
     _texCache.delete(r);
     tex.dispose();
   }
-  if (url) rememberPreview(r, url);
+  if (url) rememberPreview(key, url);
   return url;
 }
 // A prop (a .glb in the library, or a built-in shape) → a rendered thumbnail data-URL.
@@ -2763,7 +2796,7 @@ export async function boardOutlinePreviewURL(url) {
   }
 }
 
-// A board preview: an image URL passes through; a .glb is rendered; else null.
+// A board preview: an image uses a WebP thumbnail; a .glb is rendered; else null.
 export async function boardPreviewURL(fileUrl) {
   if (!fileUrl) return null;
   const key = 'b:' + fileUrl;
@@ -2777,7 +2810,7 @@ export async function boardPreviewURL(fileUrl) {
     } catch (e) {
       /* null */
     }
-  } else url = fileUrl; // an image URL (jpg/png/webp…)
+  } else url = assetThumbnailURL(fileUrl);
   if (url) rememberPreview(key, url);
   return url;
 }

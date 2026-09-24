@@ -1,3 +1,4 @@
+import { assetThumbnailURL } from '../rendering/asset-texture-url.js';
 import {
   DIE_SIDES,
   DICE_SETS,
@@ -100,7 +101,8 @@ export function createDicePreferences({
       chip.title = t.name;
       chip.style.cssText =
         'width:34px;height:34px;padding:0;background-size:cover;background-position:center;border-radius:6px';
-      chip.style.backgroundImage = `url("${t.url}")`;
+      const preview = assetThumbnailURL(t.url);
+      if (preview) chip.style.backgroundImage = `url("${preview}")`;
       chip.onclick = () => apply(t.url);
       row.appendChild(chip);
     }

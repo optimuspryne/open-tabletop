@@ -9,6 +9,19 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Route all saved/bundled image thumbnails through bounded WebP previews, including custom dice,
+  sky panoramas/cubemap faces, image boards/mats, finish pickers, hands and editor image squares.
+  Centralize the URL policy with no raw-image fallback; generate small WebP previews for local
+  files and procedural/model snapshots. Keep original refs for apply/spawn/upload actions and
+  full tabletop rendering. Reuse the existing derivative endpoint with a strict bundled-raster
+  allowlist and source-change revalidation. Requires a server restart and browser refresh.
+  User reports improvement and approved the thumbnail changes for commit (2026-09-24).
+- Reduce work while browsing large card/tile libraries: load previews near the viewport with
+  asynchronous decoding and dedicated 320px WebP thumbnails, retain unchanged custom lists,
+  release removed thumbnail observers, and batch shared button-width measurements. Keep original,
+  hand and tabletop image quality intact. Requires a server restart and browser refresh; the
+  thumbnail cache builds on demand without a migration. Automated regression coverage includes
+  40-deck desktop/touch browsing; the user reports scrolling is much better (2026-09-24).
 - Give Collections and library assets one scrolling body below the fixed header, so populated
   asset panes cannot squeeze the collection controls into a clipped strip. Keep collection
   Save/Cancel controls visible in a sticky action row on desktop and touch.

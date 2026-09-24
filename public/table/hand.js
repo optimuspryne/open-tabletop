@@ -369,14 +369,15 @@ export function createHand({
         div.classList.add('img'); // render the same texture the table uses (wrapped text / joker / domino / letter face)
         if (cf.kind === 'domino') div.classList.add('tile'); // a domino slot is 1:2, so the tile fills it without clipping
         if (cf.kind === 'letter') div.classList.add('tileSq'); // a letter tile is square
-        const u = cardPreviewURL(card.front);
+        const u = cardPreviewURL(card.front, { thumbnail: true });
         if (u) div.style.backgroundImage = `url("${u}")`;
       } else if (cf.kind === 'image') {
         div.classList.add('img');
         if (card.geom && card.geom.shape === 'hex')
           div.classList.add('shape-hex'); // match the tabletop silhouette
         else if (card.geom && card.geom.round === 0) div.classList.add('shape-square');
-        div.style.backgroundImage = `url("${cf.ref}")`; // uploaded/file card art
+        const u = cardPreviewURL(cf.ref, { thumbnail: true });
+        if (u) div.style.backgroundImage = `url("${u}")`;
       }
       div.title = 'Left drag/click: face-down · Right drag/click: face-up';
       div.oncontextmenu = (ev) => ev.preventDefault(); // right-click is handled by the pointer events
