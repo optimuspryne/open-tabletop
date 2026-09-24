@@ -1,3 +1,5 @@
+import { createAssetPackages } from './server/assets/packages.js';
+import { createAssetPackagesRouter } from './server/http/routes/asset-packages.js';
 import { createDeckBrowsing } from './server/game/deck-browsing.js';
 import { registerDeckBrowseHandlers } from './server/game/handlers/deck-browsing.js';
 import {
@@ -1280,6 +1282,14 @@ app.use(
 // Raw image/model uploads are authenticated, byte-validated, and throttled in
 // their own router. saveAsset retains the allowlisted destination policy.
 app.use(createUploadRouter({ rateLimitUpload, requireAdmin, saveAsset }));
+app.use(
+  '/asset-packages',
+  createAssetPackagesRouter({
+    packages: createAssetPackages({ db, assetsDir: ASSETS_DIR }),
+    requireAdmin,
+    rateLimitUpload,
+  }),
+);
 
 // --- Auth (HTTP): signup / login / token-resolve --------------------------
 // The landing page talks to these before joining any room. Passwords use scrypt;

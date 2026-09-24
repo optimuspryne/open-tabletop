@@ -1,3 +1,4 @@
+import { createAssetPackageController } from './asset-packages.js';
 import { createCollectionController } from './collections.js';
 import { openColliderEditor } from './compound-collider-editor.js';
 import { wireBoardOutline } from './board-outline-editor.js';
@@ -803,6 +804,15 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
           overflowMenu(
             { name: it.name, meta: (it.isPublic ? 'public' : 'private') + ' · custom ' + kind },
             [
+              ...(kind === 'dice'
+                ? [
+                    {
+                      label: 'Export',
+                      icon: 'device-floppy',
+                      fn: () => packageController?.exportDice(it.id),
+                    },
+                  ]
+                : []),
               ...(isEditor && canEdit
                 ? [{ label: 'Clone', icon: 'copy', fn: () => openEditModal(kind, it, true) }]
                 : []),
@@ -921,6 +931,7 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
 // client.js fans the three list messages here (and still renders the modal saved-lists).
 const listCache = {};
 let collectionController = null;
+let packageController = null;
 window.onLibraryList = (kind, list) => {
   listCache[kind] = list;
   collectionController?.assetsChanged();
@@ -936,6 +947,7 @@ window.onLibraryAdmin = () => {
       (item) => window.OTT_IS_ADMIN || item.isPublic,
     );
   collectionController?.identity(window.OTT_USER_ID);
+  packageController?.identity(window.OTT_USER_ID);
   const lm = byId('libraryModal');
   if (lm && !lm.hidden)
     for (const k in listCache) {
@@ -2422,6 +2434,15 @@ window.onOttRoom = (room) => {
     }
     (isText ? FILLERS.txtdeck : FILLERS.imgdeck)(d, clone);
   });
+  packageController?.reset();
+  packageController = byId('assetPackagePanel')
+    ? createAssetPackageController({
+        host: byId('assetPackagePanel'),
+        isAdmin: () => !!window.OTT_IS_ADMIN,
+        onImported: () => room.send('listDice'),
+      })
+    : null;
+  packageController?.identity(window.OTT_USER_ID);
   collectionController = byId('collectionPanel')
     ? createCollectionController({
         host: byId('collectionPanel'),

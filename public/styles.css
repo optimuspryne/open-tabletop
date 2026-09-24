@@ -7243,3 +7243,10 @@ body.not-gm .gm-only {
   background: var(--panel-solid);
   border-top: 1px solid var(--border);
 }
+
+/* Portable asset preview uses the library's single scrolling body. */
+.libraryPackages { padding: var(--gap) var(--inset); }
+.libraryPackages summary { cursor: pointer; }
+.libraryPackages .control { width: 100%; min-width: 0; box-sizing: border-box; }
+.libraryPackages .status-text { overflow-wrap: anywhere; }
+.libraryPackages .button-row { flex-wrap: wrap; }

@@ -2776,3 +2776,40 @@ only assets with no visible membership use Uncollected. Search/source/kind contr
 these results. Built-ins and secondary finish pickers remain independent. New collections are visible;
 removed/inaccessible IDs are pruned after loading all pages. Role transitions clear private cached
 metadata and discard management drafts before refetching. Export/import is not part of this slice.
+
+
+## Portable custom dice textures
+
+Site admins can export a custom dice texture through its Library overflow menu and import a
+`.ott.json` file under **Import / export assets**. Preview validates first, reports one included
+image (dimensions/size), permits renaming and requires **Import private copy**. Imports are always
+new rows owned by the importing admin, private, and outside collections. Duplicate names do not
+replace assets. Other kinds and collection transfer are not supported in version 1.
+
+`shared/asset-package.js` defines format `open-tabletop-assets`, version 1, one dice asset
+`{id:"asset-1", kind:"dice", name, texture:"file-1"}` and one file
+`{id:"file-1", mediaType, bytes, sha256, data}` where `data` is canonical base64 of the original.
+Limits are 8 MiB original, 12 MiB JSON, 16 megapixels, single frame, 80-character name. Supported
+images are PNG/JPEG/GIF/WebP. No source URLs, filesystem paths, account IDs or room state are copied.
+
+`server/http/routes/asset-packages.js`, mounted by `server.js`, uses bearer `requireAdmin`,
+the existing upload rate limiter and no-store responses:
+
+- `GET /asset-packages/dice/:id`: validated download attachment `dice-texture.ott.json`.
+- `POST /asset-packages/preview`: package JSON → `{name, kind, totalBytes, files, isPublic:false}`;
+  validates the whole image without storing anything.
+- `POST /asset-packages/import`: `{package, name}` → HTTP 201 `{id, name, kind, isPublic:false}`.
+
+Schema/image errors return 400, missing assets 404, oversized JSON 413, missing login 401 and
+non-admin access 403. Database/I/O failures use the established generic HTTP 500 boundary.
+`server/assets/packages.js` rejects unknown fields, missing dependencies, bad base64/hash/type,
+unsafe export paths/symlinks and oversized/animated/damaged images. It never fetches remote URLs.
+Import writes and syncs a new exclusive random dice file; `importDicePackage` in `server/database.js`
+reuses `insertDice` in a transaction with live access checks. Definite failure cleans up its own
+new file; uncertain COMMIT/rollback outcomes preserve it rather than break a possibly committed
+row. Normal asset cleanup retains referenced files and applies its 24-hour grace period to orphans.
+
+`public/editor/asset-packages.js` owns draft bytes and asynchronous request epochs. Identity changes
+or lost admin status clear drafts and suppress late responses. `editor-panel.js` adds the dice
+Export action and refreshes `listDice` after import; room state never carries package bytes.
+Restart the server and refresh clients for this feature; no migration or new environment setting.

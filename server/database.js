@@ -1,3 +1,4 @@
+import { AssetPackageError } from '../shared/asset-package.js';
 // Pool-injected Postgres operations for the library, users, rooms, and membership.
 //
 // Only METADATA lives in Postgres. The image/model FILES still sit on disk under
@@ -218,13 +219,46 @@ export function createDatabase(pool) {
   async function getDice(id) {
     return library.getDice(id);
   }
-  function insertDice({ name, url, ownerId = null, isPublic = false }) {
-    return pool
-      .query(
-        'INSERT INTO custom_dice (name, file_url, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
-        [name, url, ownerId, isPublic],
-      )
-      .then((r) => String(r.rows[0].id));
+  function insertDice(
+    { name, url, ownerId = null, isPublic = false },
+    query = pool.query.bind(pool),
+  ) {
+    return query(
+      'INSERT INTO custom_dice (name, file_url, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
+      [name, url, ownerId, isPublic],
+    ).then((r) => String(r.rows[0].id));
+  }
+
+  async function importDicePackage(value, authorize) {
+    let client,
+      discard = false,
+      commitAttempted = false;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      if (!(await authorize()))
+        throw new AssetPackageError('Admin access is no longer available.', 403);
+      const id = await insertDice({ ...value, isPublic: false }, client.query.bind(client));
+      if (!(await authorize()))
+        throw new AssetPackageError('Admin access is no longer available.', 403);
+      commitAttempted = true;
+      await client.query('COMMIT');
+      return id;
+    } catch (error) {
+      let rolledBack = !client;
+      if (client) {
+        try {
+          await client.query('ROLLBACK');
+          rolledBack = true;
+        } catch {
+          discard = true;
+        }
+      }
+      error.preserveAssetFile = commitAttempted || !rolledBack;
+      throw error;
+    } finally {
+      client?.release(discard);
+    }
   }
 
   // Every stored blob that could name an asset file — the reference set for orphan
@@ -639,6 +673,7 @@ export function createDatabase(pool) {
     listDice,
     getDice,
     insertDice,
+    importDicePackage,
     allAssetRefBlobs,
     setAssetPublic,
     renameAsset,

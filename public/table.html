@@ -1305,7 +1305,10 @@
                 <b data-icon="books">Library.</b> Use this to add dice, decks and objects — built-in
                 or custom — to the table. Expand <b>Collections</b> to show or hide custom groups
                 in your own library; Show all resets those filters. Site admins can create and
-                edit shared collections there.
+                edit shared collections there. Admins can also import a dice texture package under
+                <b>Import / export assets</b>, or choose Export in a custom dice texture’s menu.
+                Imports preview the included image and create a new private copy. The same
+                controls work by click, tap, or keyboard.
               </li>
               <li>
                 <b data-icon="scoreboard">Scoreboard.</b> Helpers can add, rename, adjust and clear
@@ -1434,6 +1437,25 @@
           </div>
         </div>
         <div class="libraryBody">
+          <details id="assetPackagePanel" class="libraryPackages admin-only" hidden>
+            <summary data-icon="library-plus">Import / export assets</summary>
+            <p class="help-text">Import a dice texture package, or use Export in a custom dice texture’s menu. Other asset types and collections are not supported yet.</p>
+            <label class="field-group"><span class="field-label">Package file</span>
+              <input id="packageFile" class="control" type="file" accept=".json,application/json" />
+            </label>
+            <div id="packagePreview" hidden>
+              <p id="packageContents" class="help-text"></p>
+              <label class="field-group"><span class="field-label">Name for the new copy</span>
+                <input id="packageName" class="control" maxlength="80" required />
+              </label>
+              <p class="help-text">Imports are private. Existing assets are never replaced.</p>
+              <div class="button-row button-row--compact">
+                <button id="packageImport" type="button" class="button button--primary" data-icon="library-plus">Import private copy</button>
+                <button id="packageCancel" type="button" class="button" data-icon="x">Cancel</button>
+              </div>
+            </div>
+            <p id="packageStatus" class="status-text" role="status"></p>
+          </details>
           <details class="libraryCollections">
             <summary data-icon="books">Collections</summary>
             <div id="collectionPanel"></div>

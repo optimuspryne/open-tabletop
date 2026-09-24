@@ -1897,5 +1897,29 @@ and applies the predicate to existing card builders. The library shell keeps its
 uses one scrolling body for Collections and asset panes; the editor action row stays sticky.
 Conflict responses retain local edits for review
 and explicit reload. Built-ins, secondary pickers and existing table objects are independent of local
-collection visibility. Collection membership never grants read/spawn/export permissions. Portable
+collection visibility. Collection membership never grants read/spawn/export permissions. Collection
 export/import and multi-process invalidation remain separate work.
+
+
+### Portable asset boundary
+
+The first transfer slice supports one custom dice texture plus its original raster image. A
+strict versioned JSON package uses local asset/file IDs, canonical base64 and a checksum, without
+installation IDs, paths, ownership, publishing flags, or gameplay data. Shared constants bound
+request/image sizes and pixel count. Other asset types and collection dependency graphs are
+future work; this format does not infer or fetch arbitrary dependencies.
+
+`server/assets/packages.js` owns validation, bounded local export and exclusive-file import.
+It extends the existing image-validation/storage conventions; a dedicated exclusive writer is
+needed to make cleanup safe without changing existing upload behavior. The HTTP router reuses
+admin authentication, rate limiting and async error handling. Admin access is rechecked after
+asynchronous reads and before transactional metadata commit. Preview is read-only; import creates
+fresh private metadata through the existing dice insertion query with an injected transaction.
+There is no distributed filesystem/database transaction: definite failures delete only their own
+new file, while uncertain commits retain image data so a committed row cannot become broken.
+Existing reference-aware orphan cleanup handles abandoned files after its grace period.
+
+The browser controller owns package drafts, preview/import status and download URLs, and clears
+identity-sensitive drafts on account/admin changes. It refreshes the existing library list after
+success. Controls live in the Library's single scrolling body, use shared components/icons, and
+support mouse, touch and native keyboard navigation without new gameplay input intents.

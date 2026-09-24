@@ -1,6 +1,6 @@
 # Next features: participation, deck browsing, and collections
 
-Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; deck browsing committed as `f14a4f1` with user-reported manual tests passing; collections implemented locally, automated checks passed, functionality and final UI user-approved**. Original plans
+Status: **participation stage 1 committed; stage 2 time-outs committed and user-approved; stage 3 self-service spectators implemented, functionality and icon UI user-approved; deck browsing committed as `f14a4f1` with user-reported manual tests passing; collections committed as `7856d03`, automated checks passed, functionality and final UI user-approved**. Original plans
 were prepared against commit `b7390c6`; foundation implementation is dated 2026-09-24.
 This document covers [ROADMAP.md](ROADMAP.md) items **5/15, 22, and 18**. Recommendations below
 are starting decisions for later work, not additional user-approved requirements. Recheck current
@@ -790,3 +790,11 @@ browsers. No new environment variables or grants are needed with the documented 
    disappears. Toggle publication from another room and confirm open libraries refresh.
 6. On desktop and touch, open Collections, search/select members, save/cancel and navigate controls
    with the keyboard. Check compact/full modes, long names, dice finishes and prop/dispensers.
+
+
+## Portable assets handoff — 2026-09-24
+
+The three feature groups above are committed. The user authorized the next bounded slice from
+[item 19](DESIGN_future_backlog.md#asset-and-collection-exportimport): admin-only portable assets,
+starting with one custom dice texture and its original image. See that checkpoint for scope,
+validation and manual testing. Collection export and other asset kinds remain separate work.

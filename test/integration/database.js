@@ -606,3 +606,29 @@ test('collection pagination and capacity limits are bounded without losing exist
       await q.mutate('delete', { id: group.id, revision: group.revision }, options);
   }
 });
+
+test('portable dice imports create private copies and roll back a revoked admin', async () => {
+  const owner = await database.createUser({
+    username: 'package-admin',
+    email: 'package@example.test',
+    passwordHash: 'test',
+  });
+  const value = {
+    name: 'Imported texture',
+    url: '/assets/dice/package.png',
+    ownerId: owner.id,
+    isPublic: true,
+  };
+  const id = await database.importDicePackage(value, async () => true);
+  const copy = await database.getDice(id);
+  assert.equal(copy.isPublic, false);
+  assert.equal(String(copy.ownerId), String(owner.id));
+  let checks = 0;
+  await assert.rejects(
+    database.importDicePackage({ ...value, name: 'Must roll back' }, async () => ++checks < 2),
+    /Admin access/,
+  );
+  const result = await pool.query('SELECT id FROM custom_dice WHERE name=$1', ['Must roll back']);
+  assert.equal(result.rowCount, 0);
+  await pool.query('DELETE FROM custom_dice WHERE id=$1', [id]);
+});

@@ -41,6 +41,7 @@ export const {
   listDice,
   getDice,
   insertDice,
+  importDicePackage,
   allAssetRefBlobs,
   setAssetPublic,
   renameAsset,

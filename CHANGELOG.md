@@ -23,6 +23,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Admin-only portable custom dice textures: Export from a texture’s library menu, then preview
+  and import its `.ott.json` package in Library → Import / export assets. Include the original
+  image, validate checksums and bounded image data, and create a new private copy under the
+  importing admin. Existing assets are never replaced. Other asset types and collections are
+  future slices. Requires server restart and browser refresh; no database migration.
+  User reports the import/export flow worked well in manual testing (2026-09-24).
 - Shared site-admin-managed custom asset collections with private/published visibility, mixed-kind
   membership, rename/delete and a searchable bulk asset chooser in Library → Collections. Local
   per-account filters support multiple memberships, Uncollected and Show all, including custom dice.

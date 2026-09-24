@@ -210,6 +210,78 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'asset-packages',
+    root: '#libraryModal',
+    expect: { selector: '#assetPackagePanel', min: 1 },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      document.getElementById('tableLoading').remove();
+      window.OTT_USER_ID = 'package-admin';
+      const sent = [], requests = [];
+      const room = ${STUB_ROOM};
+      const send = room.send;
+      window.onOttRoom({ onMessage: room.onMessage, send: (type, data) => { sent.push(type); send(type, data); } });
+      document.getElementById('lib2Btn').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const host = document.getElementById('assetPackagePanel'); host.open = true;
+      assert(!host.hidden, 'Admin package controls hidden');
+      const fetchOriginal = window.fetch;
+      let fail = false, resolvePreview = null;
+      window.fetch = async (url, options) => {
+        if (!String(url).startsWith('/asset-packages/')) return fetchOriginal(url, options);
+        requests.push([url, options]);
+        if (url.endsWith('/preview')) {
+          if (resolvePreview) await new Promise(resolve => resolvePreview = resolve);
+          return {ok:true, json:async()=>({name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]})};
+        }
+        if (url.endsWith('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{name:JSON.parse(options.body).name}};
+        return {ok:true,json:async()=>({format:'fixture',files:[]})};
+      };
+      const file = document.getElementById('packageFile'), name = document.getElementById('packageName');
+      const save = document.getElementById('packageImport'), cancel = document.getElementById('packageCancel');
+      async function choose(text = '{}') {
+        const transfer = new DataTransfer(); transfer.items.add(new File([text], 'dice.ott.json', {type:'application/json'}));
+        file.files = transfer.files; await file.onchange();
+      }
+      await choose();
+      assert(!document.getElementById('packagePreview').hidden, 'Package preview missing');
+      assert(file.files.length === 1, 'Preview lost the selected filename');
+      assert(document.getElementById('packageContents').textContent.includes('32 × 32'), 'Dependency summary missing');
+      assert(!requests.some(([url])=>url.endsWith('/import')), 'Preview mutated the library');
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      save.scrollIntoView({block:'nearest'});
+      const box=save.getBoundingClientRect();
+      assert(box.top>=0 && box.bottom<=innerHeight && box.right<=innerWidth, 'Import action outside viewport');
+      assert(save.contains(document.elementFromPoint(box.left+box.width/2,box.top+box.height/2)), 'Import action is covered');
+      name.value='Private copy'; fail=true; await save.onclick();
+      assert(!save.disabled && !cancel.disabled && document.getElementById('packageStatus').textContent==='Import unavailable', 'Failure did not restore retry controls');
+      fail=false; await save.onclick();
+      assert(sent.includes('listDice') && document.getElementById('packagePreview').hidden, 'Import did not refresh and clear draft');
+      assert(JSON.parse(requests.filter(([url])=>url.endsWith('/import')).at(-1)[1].body).name==='Private copy', 'Edited name lost');
+      await choose('{'); assert(document.getElementById('packageStatus').textContent.includes('not valid JSON'), 'Malformed file was not explained');
+      resolvePreview = true;
+      const pending=choose();
+      while(typeof resolvePreview !== 'function') await new Promise(resolve=>setTimeout(resolve,0));
+      window.OTT_IS_ADMIN=false; window.onLibraryAdmin(); resolvePreview(); await pending;
+      assert(host.hidden && document.getElementById('packagePreview').hidden && !name.value, 'Late preview survived demotion');
+      window.OTT_IS_ADMIN=true; window.onLibraryAdmin(); resolvePreview=null;
+      window.onLibraryList('dice',[{id:'1',name:'Export fixture',isPublic:false,url:'/missing-fixture.png'}]);
+      const originalClick = HTMLAnchorElement.prototype.click;
+      let downloaded=false;
+      HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='dice-texture.ott.json';};
+      // Open the real library overflow (desktop popup or touch sheet).
+      document.querySelector('#nlc_dice .pop-trigger').click();
+      const exportButton=[...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export');
+      assert(exportButton,'Dice export action missing'); exportButton.click();
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert(downloaded && requests.some(([url])=>url.endsWith('/dice/1')), 'Export action is not wired to package download');
+      HTMLAnchorElement.prototype.click=originalClick;
+      await choose();
+      window.fetch=fetchOriginal;
+    `,
+  },
+  {
     name: 'asset-collections',
     root: '#libraryModal',
     expect: { selector: '.collectionChoice', min: 4 },

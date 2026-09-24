@@ -18,7 +18,7 @@ comprehensive live multiplayer/touch coverage is not inferred; see the
 [spectator checkpoint](DESIGN_next_features.md#stage-3-spectator-checkpoint--2026-09-24).
 Private deck browsing is also implemented locally with GM-only defaults and a per-deck player
 toggle; the user reports manual tests passing (2026-09-24), committed as `f14a4f1`. Shared,
-site-admin-managed collections are now implemented locally; automated checks passed and the user
+site-admin-managed collections are committed as `7856d03`; automated checks passed and the user
 approved functionality and the final UI (2026-09-24). See the [collections checkpoint](DESIGN_next_features.md#collections-checkpoint--2026-09-24).
 No backlog feature below is implemented by these slices.
 
@@ -142,6 +142,63 @@ remote URLs. Failed import cleans up only its own temporary/new resources.
 **Acceptance bar:** round trips work on a second installation without broken references; failed
 imports leave existing assets intact; duplicate names/IDs cannot overwrite unrelated assets;
 packages contain no live hands, player inventories, sessions, tokens or private room snapshots.
+
+### Dice texture package checkpoint — 2026-09-24
+
+**Implemented locally; automated checks passed; user-reported manual testing passed (2026-09-24).** User approved the
+admin-only first slice. Custom dice textures provide one lossless asset/image round trip before
+adding dependency walkers for other types or collection membership. Imports always create new
+private copies owned by the importing admin; duplicate names are allowed and never overwrite.
+
+Library → Import / export assets accepts `.ott.json` files and asks the server to validate them
+before showing the proposed name, dimensions, byte size and included image count. The admin can
+rename, then explicitly choose **Import private copy**. Custom dice overflow menus offer **Export**.
+The shared Library body scrolls normally on desktop/touch; controls use native keyboard behavior.
+Packages carry no account IDs, server paths, room/player state or publishing instructions.
+
+Version 1 uses a JSON manifest with package-local IDs and one base64 image with a SHA-256 checksum.
+Limits: one dice texture, one PNG/JPEG/GIF/WebP image, 8 MiB original, 16 megapixels, single frame,
+12 MiB request/file, 80-character name. Exact schema validation rejects unsupported versions,
+missing/extra dependencies, arbitrary paths/URLs and unknown fields. Export reads only generated
+local dice filenames and refuses symlinks. Import writes a fresh exclusive filename and reuses
+transactional dice insertion, rechecking admin access after asynchronous work and before commit.
+Definite failures remove only that newly written file; uncertain commits retain it for recovery
+and existing orphan cleanup after its normal grace period. No database migration is needed.
+
+Files/functions in this slice:
+
+| File | Change |
+| --- | --- |
+| `shared/asset-package.js` | Add format/size constants, `AssetPackageError`, and `packageName`. |
+| `server/assets/packages.js` | Add strict `inspectAssetPackage`, image decoding, and `createAssetPackages` with bounded `exportDice`/exclusive-file `importDice`. Reuse image magic validation. |
+| `server/http/routes/asset-packages.js`, `server.js` | Add/register admin-authenticated export, preview and import routes using the existing rate limiter and async error boundary. |
+| `server/database.js`, `db.js` | Let existing `insertDice` accept a transaction query; add/export `importDicePackage` with rollback and uncertain-commit handling. |
+| `public/editor/asset-packages.js` | Add `createAssetPackageController`, preview/import/download flow, errors, duplicate-submit protection and identity cleanup. |
+| `public/editor/editor-panel.js` | Connect the controller to room/admin lifecycle, refresh dice after import, and add the custom dice Export action. |
+| `public/table.html`, `public/styles.css` | Add bounded, wrapping library import controls and help; reuse canonical components and existing Tabler icons. |
+| `test/asset-packages.js` | Cover round trips, original bytes, bad packages/paths, admin loss, write failures, rollback and production HTTP router. |
+| `test/backend-database-factory.js`, `test/integration/database.js` | Verify production facade and actual PostgreSQL private insertion/rollback. |
+| `scripts/component-parity.mjs` | Exercise preview, rename, failure/retry, reachable import controls, role loss and the real dice export action on desktop/touch. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`, both design plans | Record scope, contracts, controls and current verification status. |
+
+Verification: `npm run check` passed (731 tests in the current shared working tree);
+`test:integration` passed (14 tests); `test:components` passed desktop/coarse-touch scenes;
+`test:input` passed (57/57); `test:devices` passed all seven profiles. The final package-specific
+browser flow and desktop/touch screenshots were checked separately after the last controller
+changes. `git diff --check` passed. Automated round trips use separate temporary asset stores;
+a second live installation and specific real-device coverage were not separately reported.
+
+Manual smoke tests (restart server and refresh browser):
+
+1. As a site admin, export an uploaded custom dice texture from its **More actions → Export** menu.
+2. Import that package on this or a second installation. Preview the name/image information,
+   rename it, and import. Confirm a separate private texture appears under Dice → Custom/All
+   (enable Uncollected if collection filters hide it), and applying it preserves the original look.
+3. Import it again with the same name: both copies should remain independent; the original remains.
+4. Try malformed JSON or change the package checksum: see an error without a new asset.
+5. Check desktop and touch scrolling, keyboard focus, Import/Cancel, and a non-admin account
+   without the transfer controls. Full multi-installation and real-device coverage were not
+   separately reported in the user's successful manual test.
 
 ## Physical rulebooks and builder
 
