@@ -275,7 +275,7 @@ const SCENES = [
       const assert = (ok, message) => { if (!ok) throw Error(message); };
       document.getElementById('tableLoading').remove();
       window.OTT_USER_ID = 'package-admin';
-      const sent = [], requests = [];
+      const sent = [], requests = [], savedBoards = [];
       const room = ${STUB_ROOM};
       const send = room.send, messages = new Map();
       const groups = [{id:'10',name:'Package group',isPublic:false,revision:1,items:[{kind:'dice',id:'1'},{kind:'deck',id:'2'}]}];
@@ -283,6 +283,7 @@ const SCENES = [
         onMessage: (type, fn) => { messages.set(type, fn); room.onMessage(type, fn); },
         send: (type, data) => {
           sent.push(type);
+          if(type==='saveBoard') savedBoards.push(data);
           if (type === 'listCollections') messages.get('collectionList')?.({request:data.request,collections:window.OTT_IS_ADMIN ? groups : [],next:null});
           else send(type, data);
         }
@@ -299,11 +300,38 @@ const SCENES = [
         if (url.endsWith('/preview')) {
           if (fail==='proxy') return {ok:false,status:413,json:async()=>{throw new SyntaxError('HTML response');}};
           if (resolvePreview) await new Promise(resolve => resolvePreview = resolve);
-          return {ok:true, json:async()=>packageKind==='collection' ? {kind:'collection',name:'Portable collection',count:64,members:Array.from({length:64},(_,i)=>({kind:i%2?'deck':'dice',name:i===0?'<b>Authored name</b>':'Collection asset '+(i+1),count:4,open:!!(i%2)})),totalBytes:123,files:[{width:32,height:32}]} : packageKind==='deck' ? {kind:'deck',name:'Portable tiles',count:4,open:true,deckModel:'bag',totalBytes:0,files:[]} : {kind:'dice',name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]}};
+          return {ok:true, json:async()=>['board','mat','sky','prop'].includes(packageKind) ? {kind:packageKind,name:'Portable surface',model:packageKind==='board',collider:'compound',type:'cube',totalBytes:123,files:[{mediaType:'model/gltf-binary'}]} : packageKind==='collection' ? {kind:'collection',name:'Portable collection',count:64,members:Array.from({length:64},(_,i)=>({kind:i%2?'deck':'dice',name:i===0?'<b>Authored name</b>':'Collection asset '+(i+1),count:4,open:!!(i%2)})),totalBytes:123,files:[{width:32,height:32}]} : packageKind==='deck' ? {kind:'deck',name:'Portable tiles',count:4,open:true,deckModel:'bag',totalBytes:0,files:[]} : {kind:'dice',name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]}};
         }
         if (url.includes('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{kind:packageKind,name:options.body instanceof File ? new URL(url,location.href).searchParams.get('name') : JSON.parse(options.body).name}};
         return {ok:true,blob:async()=>new Blob(['PK fixture'],{type:'application/zip'})};
       };
+      // Exercise the real board Save -> uploadModel -> measureBoard -> room message path.
+      const ordinaryFetch=window.fetch, modelRequests=[];
+      const positions=new Float32Array([0,0,0, 1,0,0, 0,0.1,1]);
+      const json=JSON.stringify({asset:{version:'2.0'},buffers:[{byteLength:36}],bufferViews:[{buffer:0,byteLength:36}],accessors:[{bufferView:0,componentType:5126,count:3,type:'VEC3',min:[0,0,0],max:[1,0.1,1]}],meshes:[{primitives:[{attributes:{POSITION:0}}]}],nodes:[{mesh:0}],scenes:[{nodes:[0]}],scene:0});
+      const text=new TextEncoder().encode(json+' '.repeat((4-json.length%4)%4));
+      const model=new Uint8Array(28+text.length+36), view=new DataView(model.buffer);
+      [0x46546c67,2,model.length,text.length,0x4e4f534a].forEach((n,i)=>view.setUint32(i*4,n,true));
+      model.set(text,20);view.setUint32(20+text.length,36,true);view.setUint32(24+text.length,0x004e4942,true);model.set(new Uint8Array(positions.buffer),28+text.length);
+      window.fetch=async(url,options)=>{
+        const ref=typeof url==='string'?url:url.url;
+        if(ref.includes('/upload-model?')) { modelRequests.push([ref,options]); return {ok:true,json:async()=>({url:'/assets/boards/package-fixture.glb'})}; }
+        if(ref.endsWith('/assets/boards/package-fixture.glb')) return new Response(model,{headers:{'Content-Type':'model/gltf-binary'}});
+        return ordinaryFetch(url,options);
+      };
+      const picked=new DataTransfer();picked.items.add(new File([model],'board.glb',{type:'model/gltf-binary'}));
+      document.getElementById('adBoardGlb').files=picked.files;
+      document.getElementById('adBoardGlbName').value='Uploaded board';
+      document.getElementById('adBoardGlbSize').value='8';
+      const originalAlert=window.alert;window.alert=message=>{throw Error(message);};
+      await document.getElementById('adBoardGlbSave').onclick();
+      window.alert=originalAlert;
+      assert(modelRequests.length===1 && modelRequests[0][0]==='/upload-model?kind=boards' && modelRequests[0][1].body instanceof File, 'Board Save uploads to the wrong category');
+      assert(savedBoards.length===1 && savedBoards[0].board.model==='/assets/boards/package-fixture.glb','Uploaded board did not retain its board URL');
+      const {uploadModel}=await import('/rendering/graphics.js');
+      await uploadModel(new File([model],'object.glb'));
+      assert(modelRequests.at(-1)[0]==='/upload-model?kind=props','Object upload default changed');
+      window.fetch=ordinaryFetch;
       const file = document.getElementById('packageFile'), name = document.getElementById('packageName');
       const save = document.getElementById('packageImport'), cancel = document.getElementById('packageCancel');
       async function choose(text = 'PK fixture', legacy = false) {
@@ -348,7 +376,7 @@ const SCENES = [
       packageKind='deck';
       await choose();
       assert(document.getElementById('packageContents').textContent.includes('Tile set · 4 cards / tiles · Pouch skin'), 'Tile shape/count/skin missing from preview');
-      assert(document.getElementById('packageContents').textContent.includes('0 images included'), 'Generated deck incorrectly requires an image');
+      assert(document.getElementById('packageContents').textContent.includes('0 files included'), 'Generated deck incorrectly requires an image');
       const deckRefreshes=sent.filter(type=>type==='listDecks').length;
       await save.onclick();
       assert(sent.filter(type=>type==='listDecks').length===deckRefreshes+1, 'Deck import did not refresh deck list');
@@ -360,6 +388,24 @@ const SCENES = [
       [...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export').click();
       await new Promise(resolve=>setTimeout(resolve,20));
       assert(downloaded && requests.some(([url])=>url.endsWith('/deck/2')), 'Deck export action not wired');
+      for (const [kind, tab, refresh, expected] of [['board','boards','listBoards','Model board · compound collider'],['mat','mats','listMats','Player mat'],['sky','sky','listSkyboxes','6-face cubemap'],['prop','objects','listProps','3D model · compound collider']]) {
+        packageKind=kind;
+        await choose();
+        assert(document.getElementById('packageContents').textContent.includes(expected), kind+' preview missing');
+        const before=sent.filter(type=>type===refresh).length;
+        await save.onclick();
+        assert(sent.filter(type=>type===refresh).length===before+1, kind+' list did not refresh');
+        assert(document.getElementById('packageStatus').textContent.includes('private'), kind+' success missing');
+        window.onLibraryList(kind,[{id:'3',name:'Surface export',w:4,d:3,tex:'/missing-fixture.png',url:'/missing-fixture.png',geom:{w:2,h:1},isPublic:false}]);
+        document.querySelector('#libraryModal [data-tab="'+tab+'"]').click();
+        document.querySelector('#nlc_'+kind+' .overflowTrigger').click();
+        HTMLAnchorElement.prototype.click=function(){downloaded=this.download===kind+'.ott.zip';};
+        downloaded=false;
+        const action=[...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export');
+        assert(action, kind+' export action missing'); action.click();
+        await new Promise(resolve=>setTimeout(resolve,20));
+        assert(downloaded && requests.some(([url])=>url.endsWith('/'+kind+'/3')), kind+' export action not wired');
+      }
       packageKind='collection';
       HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='collection.ott.zip';};
       downloaded=false;
@@ -380,7 +426,7 @@ const SCENES = [
       save.scrollIntoView({block:'nearest'});
       const collectionBox=save.getBoundingClientRect();
       assert(collectionBox.top>=0 && collectionBox.bottom<=innerHeight && save.contains(document.elementFromPoint(collectionBox.left+collectionBox.width/2,collectionBox.top+collectionBox.height/2)), 'Large collection hides Import action');
-      const refreshes=Object.fromEntries(['listDice','listDecks','listCollections'].map(type=>[type,sent.filter(value=>value===type).length]));
+      const refreshes=Object.fromEntries(['listDice','listDecks','listBoards','listMats','listSkyboxes','listProps','listCollections'].map(type=>[type,sent.filter(value=>value===type).length]));
       name.value='Imported collection'; await save.onclick();
       assert(Object.entries(refreshes).every(([type,n])=>sent.filter(value=>value===type).length===n+1), 'Collection import did not refresh all relevant lists');
       assert(document.getElementById('packageStatus').textContent.includes('private collection') && members.hidden && !members.children.length, 'Collection success/reset incomplete');

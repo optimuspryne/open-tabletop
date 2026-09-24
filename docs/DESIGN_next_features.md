@@ -812,3 +812,17 @@ files. The [ZIP checkpoint](DESIGN_future_backlog.md#zip-package-checkpoint--202
 that format while retaining legacy imports. The user reports the collection/ZIP flow works well
 and approved committing it (2026-09-24). Specific second-installation and device scenarios were
 not separately reported.
+
+
+The collection/ZIP stage is committed as `9503984`. The user authorized boards, mats and skyboxes
+next, including collider preservation for model boards. See the
+[surface package checkpoint](DESIGN_future_backlog.md#board-mat-and-skybox-package-checkpoint--2026-09-24).
+Automated validation passed (757 unit tests, 18 PostgreSQL tests and desktop/touch component flows);
+the user reports green manual tests after the model/board-upload follow-up below (2026-09-24).
+
+The user then authorized standalone model packages and reported a model-board export failure.
+The [model checkpoint](DESIGN_future_backlog.md#model-package-and-board-upload-checkpoint--2026-09-24)
+adds object packages and corrects new board uploads to `/assets/boards/`, retaining read compatibility
+for older boards stored in props. Automated checks pass: 760 unit tests, 19 PostgreSQL tests and
+desktop/touch component flows. The user reports green manual tests and approved committing both
+slices (2026-09-24). Specific second-installation and real-device scenarios were not separately reported.

@@ -1201,8 +1201,8 @@ async function postUpload(path, contentType, body) {
 }
 
 // POST a raw .glb model; return the URL ref the server stored it under.
-function uploadModel(file) {
-  return postUpload('/upload-model?kind=props', 'model/gltf-binary', file);
+function uploadModel(file, kind = 'props') {
+  return postUpload('/upload-model?kind=' + kind, 'model/gltf-binary', file);
 }
 
 // Load a .glb and return its true world-space bounds { size, center }, with all

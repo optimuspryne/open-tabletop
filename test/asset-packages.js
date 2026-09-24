@@ -646,7 +646,7 @@ test('single decks and collections round-trip more than 256 distinct images with
     const oversized = { ...value, files: Array(ASSET_PACKAGE.maxFiles + 1).fill(value.files[0]) };
     await assert.rejects(
       inspectAssetPackage(oversized),
-      new RegExp(`${ASSET_PACKAGE.maxFiles} images`),
+      new RegExp(`${ASSET_PACKAGE.maxFiles} files`),
     );
   }
 });

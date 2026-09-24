@@ -5,13 +5,32 @@ import { createHash, randomBytes } from 'node:crypto';
 import sharp from 'sharp';
 import {
   ASSET_PACKAGE,
+  PACKAGE_ASSET_KINDS,
   ASSET_ARCHIVE,
   AssetPackageError,
   packageName,
 } from '../../shared/asset-package.js';
-import { imageExtension } from './upload-validation.js';
+import { imageExtension, validateGlb } from './upload-validation.js';
 import { generatedDeckReference, packageDeckMetadata, mapDeckReferences } from './package-decks.js';
-const mime = { png: 'image/png', jpg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp' };
+import { surfaceSourceData, mapSurfaceReferences, surfaceStorageData } from './package-surfaces.js';
+import { mapPropReferences } from './package-models.js';
+const mapAssetReferences = (kind, data, resolve) =>
+  kind === 'prop' ? mapPropReferences(data, resolve) : mapSurfaceReferences(kind, data, resolve);
+const categories = {
+  dice: 'dice',
+  deck: 'decks',
+  board: 'boards',
+  mat: 'mats',
+  sky: 'sky',
+  prop: 'props',
+};
+const mime = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  glb: 'model/gltf-binary',
+};
 const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const exact = (value, keys) =>
   value &&
@@ -42,6 +61,17 @@ async function imageInfo(bytes, limits) {
     invalid('The image is damaged or exceeds the image limits.');
   }
 }
+async function dependencyInfo(bytes, limits, model = false) {
+  if (!model) return imageInfo(bytes, limits);
+  let result;
+  try {
+    result = validateGlb(bytes);
+  } catch {
+    invalid('Invalid GLB model.');
+  }
+  if (!result.ok) invalid('Invalid GLB model: ' + result.reason);
+  return { ext: 'glb', mediaType: mime.glb };
+}
 function fileEnvelope(file, index, archive, limits) {
   if (
     !exact(file, ['id', 'mediaType', 'bytes', 'sha256', archive ? 'path' : 'data']) ||
@@ -52,17 +82,17 @@ function fileEnvelope(file, index, archive, limits) {
     typeof file.sha256 !== 'string' ||
     !/^[a-f0-9]{64}$/.test(file.sha256)
   )
-    invalid('Invalid image dependency or package size.');
+    invalid('Invalid file dependency or package size.');
   if (archive) {
     const ext = Object.keys(mime).find((key) => mime[key] === file.mediaType);
     if (!ext || file.path !== `files/${file.id}.${ext}`)
-      invalid('Invalid image dependency path or type.');
+      invalid('Invalid file dependency path or type.');
   } else if (
     typeof file.data !== 'string' ||
     file.data.length !== 4 * Math.ceil(file.bytes / 3) ||
     !/^[A-Za-z0-9+/]*={0,2}$/.test(file.data)
   )
-    invalid('Invalid image dependency or package size.');
+    invalid('Invalid file dependency or package size.');
 }
 export async function inspectAssetPackage(value, { readFile } = {}) {
   const archive = value?.version === ASSET_ARCHIVE.version;
@@ -94,7 +124,7 @@ export async function inspectAssetPackage(value, { readFile } = {}) {
   )
     invalid('Invalid asset count. A collection package supports up to 64 assets.');
   if (!Array.isArray(value.files) || value.files.length > ASSET_PACKAGE.maxFiles)
-    invalid(`A package supports up to ${ASSET_PACKAGE.maxFiles} images.`);
+    invalid(`A package supports up to ${ASSET_PACKAGE.maxFiles} files.`);
   if (
     collection &&
     (!exact(value.collection, ['name', 'items']) ||
@@ -112,25 +142,42 @@ export async function inspectAssetPackage(value, { readFile } = {}) {
     totalBytes += file.bytes;
   });
   if (totalBytes > limits.maxTotalBytes)
-    invalid(`The image dependencies exceed ${limits.maxTotalBytes / 1024 ** 2} MiB.`);
-  const ids = new Set(value.files.map((file) => file.id)),
+    invalid(`The file dependencies exceed ${limits.maxTotalBytes / 1024 ** 2} MiB.`);
+  const ids = new Map(value.files.map((file) => [file.id, file])),
     used = new Map(),
     assets = [];
-  const useFile = (id, category) => {
+  const useFile = (id, category, model = false) => {
     if (!ids.has(id)) invalid('Missing or unsupported image dependency.');
+    if ((ids.get(id).mediaType === mime.glb) !== model)
+      invalid('Unsupported dependency type for this asset.');
     if (!used.has(id)) used.set(id, new Set());
     used.get(id).add(category);
     return id;
   };
   for (const [index, asset] of value.assets.entries()) {
-    const isDice = asset?.kind === 'dice';
+    const isDice = asset?.kind === 'dice',
+      isDeck = asset?.kind === 'deck';
     const keys = isDice
       ? ['id', 'kind', 'name', 'texture']
-      : ['id', 'kind', 'name', 'back', 'fronts', 'geom', 'open', 'deckModel', 'color', 'textColor'];
+      : isDeck
+        ? [
+            'id',
+            'kind',
+            'name',
+            'back',
+            'fronts',
+            'geom',
+            'open',
+            'deckModel',
+            'color',
+            'textColor',
+          ]
+        : ['id', 'kind', 'name', 'data'];
     if (
       !exact(asset, keys) ||
       asset.id !== `asset-${index + 1}` ||
-      !['dice', 'deck'].includes(asset.kind) ||
+      !PACKAGE_ASSET_KINDS.includes(asset.kind) ||
+      (!archive && !['dice', 'deck'].includes(asset.kind)) ||
       (!archive &&
         !collection &&
         asset.kind !== (value.version === ASSET_PACKAGE.version ? 'dice' : 'deck'))
@@ -142,7 +189,7 @@ export async function inspectAssetPackage(value, { readFile } = {}) {
       if (!collection && (asset.texture !== 'file-1' || value.files.length !== 1))
         invalid('A dice package needs one image dependency.');
       useFile(asset.texture, 'dice');
-    } else {
+    } else if (isDeck) {
       metadata = packageDeckMetadata(asset);
       await mapDeckReferences(asset, (ref) => {
         if (exact(ref, ['generated']) && generatedDeckReference(ref.generated)) {
@@ -158,9 +205,14 @@ export async function inspectAssetPackage(value, { readFile } = {}) {
       if (totalCards > ASSET_PACKAGE.maxTotalCards)
         invalid('The package exceeds 5,000 cards or tiles.');
     }
+    if (!isDice && !isDeck)
+      await mapAssetReferences(asset.kind, asset.data, (ref, model) => {
+        if (!exact(ref, ['file'])) invalid('Missing or unsupported file dependency.');
+        return useFile(ref.file, categories[asset.kind], model);
+      });
     assets.push({ asset, metadata });
   }
-  if (used.size !== value.files.length) invalid('The package contains unused image dependencies.');
+  if (used.size !== value.files.length) invalid('The package contains unused file dependencies.');
   let totalPixels = 0;
   const files = [];
   for (const file of value.files) {
@@ -170,13 +222,13 @@ export async function inspectAssetPackage(value, { readFile } = {}) {
       (!archive && bytes.toString('base64') !== file.data) ||
       digest(bytes) !== file.sha256
     )
-      invalid('The image checksum or byte count does not match.');
-    const info = await imageInfo(bytes, limits);
+      invalid('The file checksum or byte count does not match.');
+    const info = await dependencyInfo(bytes, limits, file.mediaType === mime.glb);
     if (file.mediaType !== info.mediaType)
-      invalid('The image type does not match its declared type.');
-    totalPixels += info.width * info.height;
+      invalid('The file type does not match its declared type.');
+    totalPixels += (info.width || 0) * (info.height || 0);
     if (totalPixels > limits.maxTotalPixels)
-      invalid(`The image dependencies exceed ${limits.maxTotalPixels / 1024 ** 2} megapixels.`);
+      invalid(`The file dependencies exceed ${limits.maxTotalPixels / 1024 ** 2} megapixels.`);
     files.push({
       id: file.id,
       size: file.bytes,
@@ -190,7 +242,19 @@ export async function inspectAssetPackage(value, { readFile } = {}) {
     kind: asset.kind,
     ...(asset.kind === 'deck'
       ? { count: asset.fronts.length, open: asset.open, deckModel: asset.deckModel }
-      : {}),
+      : ['board', 'prop'].includes(asset.kind)
+        ? {
+            model: !!asset.data.model,
+            collider: asset.data.compoundCollider
+              ? 'compound'
+              : asset.data.outline
+                ? 'outline'
+                : asset.data.collider || 'default',
+            ...(asset.kind === 'prop' ? { dispenser: !!asset.data.dispenser } : {}),
+          }
+        : asset.kind === 'sky'
+          ? { type: asset.data.type }
+          : {}),
   });
   return {
     assets,
@@ -223,27 +287,34 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
       dir = path.join(root, kind);
     const stat = await fs.lstat(dir);
     if (!stat.isDirectory() || stat.isSymbolicLink())
-      invalid('Image storage must be a regular directory.');
+      invalid('Asset storage must be a regular directory.');
     return dir;
   }
-  async function readImage(url, kind, limits) {
+  async function readDependency(url, kind, limits, model) {
+    // Older board uploads used props; current board uploads/imports use boards.
+    // Accept both exact locations for board models without moving shared originals.
+    const sourceKinds = model && kind === 'boards' ? 'boards|props' : kind;
     const match = new RegExp(
-      '^/assets/' + kind + '/([a-f0-9]{18}\\.(?:png|jpg|jpeg|gif|webp))$',
+      '^/assets/(' +
+        sourceKinds +
+        ')/([a-f0-9]{18}\\.(?:' +
+        (model ? 'glb' : 'png|jpg|jpeg|gif|webp') +
+        '))$',
     ).exec(url);
     if (!match)
       invalid(
-        'This asset does not reference a supported local uploaded image. Remote and embedded images are not supported.',
+        'This asset does not reference a supported local uploaded file. Remote and embedded references are not supported.',
       );
     let handle, bytes;
     try {
       handle = await fs.open(
-        path.join(await directory(kind), match[1]),
+        path.join(await directory(match[1]), match[2]),
         constants.O_RDONLY | constants.O_NOFOLLOW,
       );
       const stat = await handle.stat();
       if (!stat.isFile() || stat.size > limits.maxFileBytes)
         invalid(
-          `Each image must be a regular file no larger than ${limits.maxFileBytes / 1024 ** 2} MiB.`,
+          `Each dependency must be a regular file no larger than ${limits.maxFileBytes / 1024 ** 2} MiB.`,
         );
       const buffer = Buffer.alloc(Math.min(stat.size + 1, limits.maxFileBytes + 1));
       let size = 0;
@@ -252,12 +323,11 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
         if (!read.bytesRead) break;
         size += read.bytesRead;
       }
-      if (size !== stat.size)
-        invalid('The original image changed while reading. Please try again.');
+      if (size !== stat.size) invalid('The original file changed while reading. Please try again.');
       bytes = buffer.subarray(0, size);
     } catch (error) {
       if (['ENOENT', 'ELOOP'].includes(error.code))
-        invalid('The original image is missing or is a symbolic link.');
+        invalid('The original file is missing or is a symbolic link.');
       throw error;
     } finally {
       await handle?.close();
@@ -266,13 +336,22 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
   }
   async function exportAsset(kind, id, authorize, { writeFile } = {}) {
     const limits = writeFile ? ASSET_ARCHIVE : ASSET_PACKAGE;
-    if (!['dice', 'deck', 'collection'].includes(kind)) invalid('Unsupported asset kind.');
+    if (![...PACKAGE_ASSET_KINDS, 'collection'].includes(kind)) invalid('Unsupported asset kind.');
     if (typeof id !== 'string' || !/^[1-9]\d{0,17}$/.test(id)) invalid('Invalid asset ID.');
+    if (!writeFile && !['dice', 'deck', 'collection'].includes(kind))
+      invalid('This asset requires a ZIP package.');
     const source = await (kind === 'collection'
       ? db.getCollectionForPackage(id)
-      : kind === 'dice'
-        ? db.getDice(id)
-        : db.getDeck(id));
+      : db[
+          {
+            dice: 'getDice',
+            deck: 'getDeck',
+            board: 'getBoard',
+            mat: 'getMat',
+            sky: 'getSkybox',
+            prop: 'getProp',
+          }[kind]
+        ](id));
     if (!source) throw new AssetPackageError('Asset or collection not found.', 404);
     const members = kind === 'collection' ? source.assets : [{ kind, asset: source }];
     if (members.length > ASSET_PACKAGE.maxAssets)
@@ -284,17 +363,17 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
       totalPixels = 0,
       totalCards = 0,
       characters = 0;
-    const resolve = async (ref, assetKind) => {
+    const resolve = async (ref, assetKind, model = false) => {
       if (assetKind === 'deck' && generatedDeckReference(ref)) {
         characters += ref.length;
         if (characters > ASSET_PACKAGE.maxGeneratedChars)
           invalid('The package contains too much generated face text.');
         return { generated: ref };
       }
-      if (typeof ref !== 'string') invalid('Unsupported card reference or metadata.');
-      const sourceKey = assetKind + ':' + ref;
+      if (typeof ref !== 'string') invalid('Unsupported asset reference or metadata.');
+      const sourceKey = assetKind + ':' + model + ':' + ref;
       if (urls.has(sourceKey)) return { file: urls.get(sourceKey) };
-      const bytes = await readImage(ref, assetKind === 'dice' ? 'dice' : 'decks', limits),
+      const bytes = await readDependency(ref, categories[assetKind], limits, model),
         hash = digest(bytes);
       if (hashes.has(hash)) {
         urls.set(sourceKey, hashes.get(hash));
@@ -302,13 +381,13 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
       }
       totalBytes += bytes.length;
       if (files.length >= ASSET_PACKAGE.maxFiles)
-        invalid(`A package supports up to ${ASSET_PACKAGE.maxFiles} images.`);
+        invalid(`A package supports up to ${ASSET_PACKAGE.maxFiles} files.`);
       if (totalBytes > limits.maxTotalBytes)
-        invalid(`The image dependencies exceed ${limits.maxTotalBytes / 1024 ** 2} MiB.`);
-      const info = await imageInfo(bytes, limits);
-      totalPixels += info.width * info.height;
+        invalid(`The file dependencies exceed ${limits.maxTotalBytes / 1024 ** 2} MiB.`);
+      const info = await dependencyInfo(bytes, limits, model);
+      totalPixels += (info.width || 0) * (info.height || 0);
       if (totalPixels > limits.maxTotalPixels)
-        invalid(`The image dependencies exceed ${limits.maxTotalPixels / 1024 ** 2} megapixels.`);
+        invalid(`The file dependencies exceed ${limits.maxTotalPixels / 1024 ** 2} megapixels.`);
       const file = {
         id: `file-${files.length + 1}`,
         mediaType: info.mediaType,
@@ -327,7 +406,10 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
     const assets = [];
     for (const member of members) {
       const { kind: assetKind, asset } = member;
-      if (!['dice', 'deck'].includes(assetKind))
+      if (
+        !PACKAGE_ASSET_KINDS.includes(assetKind) ||
+        (!writeFile && !['dice', 'deck'].includes(assetKind))
+      )
         invalid('The collection contains an unsupported asset type. Nothing was exported.');
       const base = {
         id: `asset-${assets.length + 1}`,
@@ -337,11 +419,20 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
       const portable =
         assetKind === 'dice'
           ? { ...base, texture: (await resolve(asset.url, assetKind)).file }
-          : {
-              ...base,
-              ...packageDeckMetadata(asset),
-              ...(await mapDeckReferences(asset, (ref) => resolve(ref, assetKind))),
-            };
+          : assetKind !== 'deck'
+            ? {
+                ...base,
+                data: await mapAssetReferences(
+                  assetKind,
+                  assetKind === 'prop' ? asset.props : surfaceSourceData(assetKind, asset),
+                  (ref, model) => resolve(ref, assetKind, model),
+                ),
+              }
+            : {
+                ...base,
+                ...packageDeckMetadata(asset),
+                ...(await mapDeckReferences(asset, (ref) => resolve(ref, assetKind))),
+              };
       totalCards += assetKind === 'deck' ? asset.fronts.length : 0;
       if (totalCards > ASSET_PACKAGE.maxTotalCards)
         invalid('The package exceeds 5,000 cards or tiles.');
@@ -383,7 +474,7 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
     try {
       for (const file of inspected.files) {
         const bytes = file.readBytes ? await file.readBytes() : file.bytes;
-        // A shared image used by both dice and decks needs one destination file in each
+        // A shared original needs one destination file in each
         // storage category so existing pickers and future exports retain valid paths.
         for (const category of file.categories) {
           const dir = await directory(category),
@@ -402,15 +493,21 @@ export function createAssetPackages({ db, assetsDir, logger = console }) {
       }
       const members = [];
       for (const { asset, metadata } of inspected.assets) {
-        const data =
-          asset.kind === 'dice'
-            ? { url: urls.get('dice:' + asset.texture) }
-            : {
-                ...metadata,
-                ...(await mapDeckReferences(asset, (ref) =>
-                  Object.hasOwn(ref, 'generated') ? ref.generated : urls.get('decks:' + ref.file),
-                )),
-              };
+        let data;
+        if (asset.kind === 'dice') data = { url: urls.get('dice:' + asset.texture) };
+        else if (asset.kind === 'deck')
+          data = {
+            ...metadata,
+            ...(await mapDeckReferences(asset, (ref) =>
+              Object.hasOwn(ref, 'generated') ? ref.generated : urls.get('decks:' + ref.file),
+            )),
+          };
+        else {
+          const mapped = await mapAssetReferences(asset.kind, asset.data, (ref) =>
+            urls.get(categories[asset.kind] + ':' + ref.file),
+          );
+          data = asset.kind === 'prop' ? { props: mapped } : surfaceStorageData(asset.kind, mapped);
+        }
         members.push({ kind: asset.kind, data: { ...data, name: packageName(asset.name) } });
       }
       const data = kind === 'collection' ? { assets: members } : members[0].data;

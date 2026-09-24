@@ -82,7 +82,7 @@ export async function openAssetArchive(filename) {
       const type = (entry.externalFileAttributes >>> 16) & 0o170000;
       if (
         (name !== 'manifest.json' &&
-          !/^files\/file-[1-9]\d{0,3}\.(png|jpg|gif|webp)$/.test(name)) ||
+          !/^files\/file-[1-9]\d{0,3}\.(png|jpg|gif|webp|glb)$/.test(name)) ||
         entries.has(name) ||
         (type && type !== 0o100000) ||
         entry.externalFileAttributes & 0x10 ||
@@ -133,7 +133,7 @@ export async function openAssetArchive(filename) {
     for (const file of manifest.files) {
       const entry = entries.get(file?.path);
       if (!entry || expected.has(file.path) || entry.uncompressedSize !== file.bytes)
-        throw invalid('Missing, duplicate or mismatched ZIP image dependency.');
+        throw invalid('Missing, duplicate or mismatched ZIP file dependency.');
       expected.add(file.path);
     }
     if (expected.size !== entries.size)

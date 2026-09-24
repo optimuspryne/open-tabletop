@@ -1,3 +1,4 @@
+export const PACKAGE_ASSET_KINDS = Object.freeze(['dice', 'deck', 'board', 'mat', 'sky', 'prop']);
 // v1: dice; v2: deck/tiles; v3: one collection of supported assets. References use local IDs.
 export const ASSET_PACKAGE = Object.freeze({
   format: 'open-tabletop-assets',

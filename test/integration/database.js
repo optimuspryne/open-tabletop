@@ -788,7 +788,7 @@ test('collection imports create all private members atomically and export a cons
     await assert.rejects(
       database.importAssetPackage(
         'collection',
-        { ...value, assets: [...value.assets, { kind: 'board', data: { name: 'unsupported' } }] },
+        { ...value, assets: [...value.assets, { kind: 'scene', data: { name: 'unsupported' } }] },
         async () => true,
       ),
       /Unsupported/,
@@ -801,13 +801,13 @@ test('collection imports create all private members atomically and export a cons
       ).rows[0],
       before,
     );
-    const board = await database.insertBoard('Unsupported board', { w: 4, d: 4 });
+    const scene = await database.insertScene({ name: 'Unsupported scene', payload: {} });
     await pool.query(
-      "INSERT INTO asset_collection_items(collection_id,kind,asset_id) VALUES ($1,'board',$2)",
-      [id, board],
+      "INSERT INTO asset_collection_items(collection_id,kind,asset_id) VALUES ($1,'scene',$2)",
+      [id, scene],
     );
-    await assert.rejects(database.getCollectionForPackage(id), /unsupported asset types: board/);
-    await database.deleteAsset('board', board);
+    await assert.rejects(database.getCollectionForPackage(id), /unsupported asset types: scene/);
+    await database.deleteAsset('scene', scene);
     for (const item of items) await database.deleteAsset(item.kind, item.id);
   } finally {
     await pool.query('DELETE FROM asset_collections WHERE id=$1', [id]);
@@ -874,5 +874,205 @@ test('collection export membership and metadata use the same repeatable-read sna
     await pool.query('DELETE FROM asset_collections WHERE id=$1', [group.id]);
     await database.deleteAsset('deck', first);
     await database.deleteAsset('deck', second);
+  }
+});
+
+test('surface package imports preserve board colliders, mat geometry and sky variants with private transactional writes', async () => {
+  const owner = await database.createUser({
+    username: 'surface-package-admin',
+    email: 'surface-package@example.test',
+    passwordHash: 'test',
+  });
+  const assets = [
+    {
+      kind: 'board',
+      data: {
+        name: 'Imported collider board',
+        rec: {
+          model: '/assets/boards/abc.glb',
+          modelScale: 2,
+          box: [2, 0.2, 1],
+          compoundCollider: {
+            version: 1,
+            shapes: [
+              { type: 'box', position: [0, 0, 0], size: [1, 0.1, 1], rotation: [0, 0.3, 0] },
+            ],
+          },
+        },
+      },
+    },
+    {
+      kind: 'mat',
+      data: {
+        name: 'Imported sized mat',
+        tex: '/assets/mats/abc.png',
+        geom: { w: 4, h: 2, t: 0.02, round: 0.1, shape: 'rect' },
+      },
+    },
+    {
+      kind: 'sky',
+      data: {
+        name: 'Imported cube sky',
+        url: JSON.stringify({ t: 'cube', f: Array(6).fill('/assets/sky/abc.png') }),
+      },
+    },
+  ];
+  const getters = { board: 'getBoard', mat: 'getMat', sky: 'getSkybox' };
+  const created = [];
+  let collection;
+  try {
+    for (const asset of assets) {
+      const id = await database.importAssetPackage(
+        asset.kind,
+        { ...asset.data, ownerId: owner.id, isPublic: true },
+        async () => true,
+      );
+      created.push({ kind: asset.kind, id });
+      const saved = await database[getters[asset.kind]](id);
+      assert.deepEqual(saved, { ...asset.data, isPublic: false, ownerId: owner.id });
+    }
+    collection = await database.importAssetPackage(
+      'collection',
+      { name: 'Imported surfaces', ownerId: owner.id, assets },
+      async () => true,
+    );
+    const snapshot = await database.getCollectionForPackage(collection);
+    assert.equal(snapshot.assets.length, 3);
+    for (const member of snapshot.assets) {
+      const source = assets.find((item) => item.kind === member.kind);
+      assert.deepEqual(member.asset, { ...source.data, isPublic: false, ownerId: owner.id });
+    }
+    const before = await pool.query(
+      'SELECT (SELECT count(*) FROM custom_boards)::int AS boards,(SELECT count(*) FROM custom_mats)::int AS mats,(SELECT count(*) FROM custom_skyboxes)::int AS sky',
+    );
+    await assert.rejects(
+      database.importAssetPackage(
+        'collection',
+        {
+          name: 'Surface rollback',
+          ownerId: owner.id,
+          assets: [...assets, { kind: 'scene', data: {} }],
+        },
+        async () => true,
+      ),
+      /Unsupported/,
+    );
+    let checks = 0;
+    await assert.rejects(
+      database.importAssetPackage(
+        'collection',
+        { name: 'Revoked surfaces', ownerId: owner.id, assets },
+        async () => ++checks === 1,
+      ),
+      /Admin access/,
+    );
+    assert.deepEqual(
+      (
+        await pool.query(
+          'SELECT (SELECT count(*) FROM custom_boards)::int AS boards,(SELECT count(*) FROM custom_mats)::int AS mats,(SELECT count(*) FROM custom_skyboxes)::int AS sky',
+        )
+      ).rows,
+      before.rows,
+    );
+    assert.equal(
+      (
+        await pool.query(
+          "SELECT id FROM asset_collections WHERE name IN ('Surface rollback','Revoked surfaces')",
+        )
+      ).rowCount,
+      0,
+    );
+  } finally {
+    if (collection) {
+      const { rows } = await pool.query(
+        'SELECT kind,asset_id::text AS id FROM asset_collection_items WHERE collection_id=$1',
+        [collection],
+      );
+      created.push(...rows);
+      await pool.query('DELETE FROM asset_collections WHERE id=$1', [collection]);
+    }
+    for (const item of created) await database.deleteAsset(item.kind, item.id);
+  }
+});
+
+test('model packages retain saved object/dispenser definitions and import private collection members atomically', async () => {
+  const props = {
+    model: '/assets/props/model.glb',
+    box: [0.4, 0.6, 0.3],
+    scale: 1.5,
+    stand: true,
+    modelRot: [0, 0.2, 0],
+    collider: 'cylinder',
+    cells: 2,
+    tintMaterial: 'paint',
+    color: 0xaabbcc,
+    dispenser: {
+      appearance: 'custom',
+      infinite: false,
+      defaultCount: 17,
+      model: '/assets/props/container.glb',
+      box: [1, 1, 1],
+      scale: 2,
+    },
+  };
+  const created = [];
+  let collection;
+  try {
+    const id = await database.importAssetPackage(
+      'prop',
+      { name: 'Portable model', props, isPublic: true },
+      async () => true,
+    );
+    created.push(id);
+    assert.deepEqual(await database.getProp(id), {
+      id,
+      name: 'Portable model',
+      props,
+      isPublic: false,
+      ownerId: null,
+    });
+    collection = await database.importAssetPackage(
+      'collection',
+      {
+        name: 'Portable model collection',
+        assets: [{ kind: 'prop', data: { name: 'Member model', props } }],
+      },
+      async () => true,
+    );
+    const snapshot = await database.getCollectionForPackage(collection);
+    assert.equal(snapshot.assets[0].kind, 'prop');
+    assert.deepEqual(snapshot.assets[0].asset.props, props);
+    created.push(snapshot.assets[0].asset.id);
+    const before = await pool.query('SELECT count(*)::int AS count FROM custom_objects');
+    await assert.rejects(
+      database.importAssetPackage(
+        'collection',
+        {
+          name: 'Failed models',
+          assets: [
+            { kind: 'prop', data: { name: 'Rolled back', props } },
+            { kind: 'scene', data: {} },
+          ],
+        },
+        async () => true,
+      ),
+      /Unsupported/,
+    );
+    let checks = 0;
+    await assert.rejects(
+      database.importAssetPackage(
+        'prop',
+        { name: 'Revoked model', props },
+        async () => ++checks === 1,
+      ),
+      /Admin access/,
+    );
+    assert.deepEqual(
+      (await pool.query('SELECT count(*)::int AS count FROM custom_objects')).rows,
+      before.rows,
+    );
+  } finally {
+    if (collection) await pool.query('DELETE FROM asset_collections WHERE id=$1', [collection]);
+    for (const id of created) await database.deleteAsset('prop', id);
   }
 });

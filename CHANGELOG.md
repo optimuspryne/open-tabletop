@@ -9,6 +9,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Store new model-board uploads under `/assets/boards/`, leaving object uploads under
+  `/assets/props/`. Allow package exports to read older model boards from their original props
+  location; board imports write to boards. Existing shared originals are preserved.
 - Exit Multi-Select on a left-click or tap on empty felt without dragging, retaining selected
   pieces. Reuse the configured drag threshold for finger drift; real drags keep the mode active.
   Synchronize the floating button and restore normal camera input. Browser refresh required.
@@ -49,6 +52,17 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Export/import custom 3D models as ZIP packages, individually or in collections. Preserve original
+  GLBs, embedded materials/textures, scale, rotation, stand/grid sizing, tint/finish and colliders.
+  Include saved dispenser settings and any separate custom container GLB, without live inventory.
+  Imports create new private copies; restart server and refresh browsers. No migration.
+  User reports green manual tests after the model-board upload fix (2026-09-24).
+- Extend portable ZIP packages to custom boards, player mats and skyboxes, individually or in
+  collections. Preserve model-board GLB originals and embedded materials, model scale/bounds,
+  authored outlines and compound colliders; preserve mat geometry and panorama/cubemap face order.
+  Reuse private transactional imports, dependency validation and cleanup. Restart the server and
+  refresh browsers; no migration or new dependencies. User reports green manual tests after the
+  model package and board-upload follow-up (2026-09-24).
 - Export portable assets as `.ott.zip` archives with a JSON manifest and original binary images;
   continue importing earlier JSON/base64 packages. Stream uploads/downloads through private
   temporary storage, validate images one at a time, and serialize package work per server process.

@@ -427,6 +427,130 @@ Manual smoke tests:
 5. Check desktop/touch controls and live gameplay while transferring a representative large
    collection. Automated passes do not establish production memory, latency or real-device feel.
 
+### Board, mat and skybox package checkpoint — 2026-09-24
+
+**Implemented; automated validation passed; user reports green manual tests after the model/board-upload follow-up (2026-09-24).** The user authorized
+these next asset kinds after approving collection/ZIP packages (`9503984`), specifically asking
+whether model-board collider information would export. It does: the complete validated saved
+collider travels inline with model scale/bounds and the original GLB. Compound shape sizes,
+positions, rotations and outlines are independent of named collider presets on either installation.
+
+Support single assets and mixed collections: flat/image/model boards (plus saved registered board
+presets), player-mat images and geometry, panoramic skies and ordered six-face cubemaps. New kinds
+require ZIP version 4; legacy dice/deck/collection JSON remains readable. Model materials and
+embedded textures retain exact bytes. Remote or cross-category references fail; GLBs reuse the
+existing upload validator and cannot occupy raster-image slots. Originals share the existing
+file-count, per-file and aggregate byte limits; raster pixel budgets apply to standalone images,
+not embedded GLB textures or mesh complexity. No new dependency, migration or infrastructure.
+
+Reuse decision: extend the current package pipeline and transaction-aware insertion functions.
+The focused `package-surfaces.js` walker owns board/mat/sky data and reuses existing board and mat
+validators for export, inspection and remapping; reject lossy normalization. Keep ZIP staging,
+authorization, private copies, cross-room collection invalidation and failure cleanup unchanged.
+
+Files/functions in this slice:
+
+| File | Change |
+| --- | --- |
+| `shared/asset-package.js` | Add `PACKAGE_ASSET_KINDS`, shared by package validation, collection queries and export menus. |
+| `server/assets/package-surfaces.js` | Add `surfaceSourceData`, `mapSurfaceReferences`, `surfaceStorageData`; preserve geometry/colliders and convert stored sky descriptors. |
+| `server/assets/packages.js` | Extend `fileEnvelope`, `inspectAssetPackage`, `exportAsset`, `importAsset`; add `dependencyInfo` and extend/rename `readImage` to `readDependency` for typed original GLBs. |
+| `server/assets/package-archives.js` | Extend `openAssetArchive` canonical entries to GLB files. |
+| `server/library-queries.js`, `db.js` | Add/expose `getSkybox` with existing query-error semantics. |
+| `server/database.js` | Expose `getSkybox`; extend board/mat/sky insertions with optional transaction queries; expand collection snapshot reads and atomic package imports. |
+| `public/editor/asset-packages.js` | Add `assetDescription` and labels for new previews, member lists, success messages and download names. |
+| `public/editor/editor-panel.js` | Extend `renderList` export actions and `onImported` library refreshes for individual assets and collections. |
+| `public/table.html` | Update library help and package guidance. |
+| `test/asset-package-archives.js` | Add cross-store surface round trips, original GLB/material preservation, collider-geometry equality, cubemap ordering, metadata/file rejection, cleanup and real HTTP flows. |
+| `test/asset-packages.js` | Update file-count wording expectation now that originals include models. |
+| `test/backend-library-queries.js`, `test/backend-database-factory.js` | Verify sky lookup error/not-found semantics and production export. |
+| `test/integration/database.js` | Verify private surface writes, collection snapshots and rollback; use still-unsupported scenes/props in rejection fixtures. |
+| `scripts/component-parity.mjs` | Extend real controller/menu fixtures for surface descriptions, downloads and all affected list refreshes on desktop/touch. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`, both design plans | Record format, scope, reuse decisions and verification separately from manual sign-off. |
+
+Validation: `npm run check` passed (757 tests plus lint, formatting and CSS checks),
+`test:integration` passed all 18 PostgreSQL tests, and `test:components` passed desktop and
+coarse-touch scenes. The final focused real-controller surface/legacy/collection flow also passed
+both profiles, and screenshots were visually inspected. Changed Markdown links and `git diff --check`
+passed. No canvas/input-intent or responsive CSS changes were made, so input/device suites were not
+rerun for this slice. Automated collider-geometry equality and original-byte tests do not replace
+live gameplay checks, real-device feel or a second-installation manual test.
+
+Restart server and refresh browsers; no migration or additional npm installation beyond the
+preceding ZIP stage. Existing temporary-disk and proxy budgets apply.
+
+Manual smoke tests:
+
+1. Export a model board with an edited compound collider; import under a new name (ideally on a
+   second installation). Compare collider editor shapes/transforms and drop pieces on its surface
+   and openings. Check original materials, textures, orientation and scale.
+2. Round-trip an image board with an outline/thickness and a sized mat; compare footprint and art.
+3. Round-trip a panorama and cubemap; apply the imported skies and inspect seams/face orientation.
+4. Export/import a collection mixing these assets with dice/decks. Verify new private members,
+   correct names and membership; repeat import without changing the originals. Desktop/touch
+   menus, preview, Import and Cancel should remain usable.
+
+### Model package and board upload checkpoint — 2026-09-24
+
+**Implemented; automated checks passed; user reports green manual tests (2026-09-24).** The user authorized
+standalone model exports and reported the local-reference rejection for a model board. Investigation
+confirmed that the production `saveGlb` caller used `uploadModel(file)`, which always posted to
+`/upload-model?kind=props`, while package export expected boards. The user explicitly requested
+correcting the upload destination. `uploadModel(file, kind = 'props')` now supports the board
+caller's explicit `boards`; object/container uploads keep their default. Older board GLBs still
+export from props, and imported boards are stored under boards. Existing shared originals and
+stored URLs are preserved, with no automatic file move or database rewrite.
+
+ZIP version 4 now supports `prop` model objects individually and in collections. Preserve original
+GLB materials/textures, scale, bounds, stand mode, model rotation, grid footprint, color, finish,
+tint material and primitive/compound colliders. Include saved automatic/generic/custom dispenser
+settings and a separate custom-container model when present; only authored supply defaults travel,
+never live remaining counts, inventory or player data. Scene packages remain future work.
+
+Reuse decision: add `package-models.js` with `mapPropReferences` using `propRecordPayload` and shared
+collider types. The existing file resolver handles model bytes, path/type validation, limits,
+deduplication and remapping. An explicit `mapAssetReferences` dispatch selects the model or surface
+walker; existing private transaction/rollback and collection snapshot rules remain unchanged.
+
+Files/functions extended in this follow-up (the preceding checkpoint lists the surface slice):
+
+| File | Change |
+| --- | --- |
+| `server/assets/package-models.js` | Add `mapPropReferences` with lossless saved-object validation and main/container model traversal. |
+| `server/assets/packages.js` | Add `mapAssetReferences`; extend `inspectAssetPackage`, `exportAsset`, `importAsset` and summaries for props; let `readDependency` read historical board models from props. |
+| `shared/asset-package.js` | Register `prop` in `PACKAGE_ASSET_KINDS`. |
+| `server/database.js` | Give `insertProp` an optional transaction query; include props in package imports and collection snapshot reads. |
+| `public/rendering/graphics.js` | Let `uploadModel` accept a category, retaining props as the object default. |
+| `public/editor/editor-panel.js` | Make `saveGlb` request boards; refresh object lists after standalone/collection imports. Shared export-kind registration exposes the model menu action. |
+| `public/editor/asset-packages.js`, `public/table.html` | Add model/dispenser descriptions, success destinations, filenames and in-app help. |
+| `test/asset-package-archives.js` | Cover old board upload locations, cross-store model/material/collider/dispenser round trips, real model HTTP routes, invalid/live metadata and cleanup. |
+| `test/integration/database.js` | Cover private object writes, metadata/collection snapshots and rollback; unsupported fixtures now use scenes. |
+| `scripts/component-parity.mjs` | Exercise actual board Save → upload → bounds measurement → room message, assert the new category and object default; verify object package menu/preview/import and refresh behavior. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`, both design plans | Record current schema, storage compatibility and verification. |
+
+Validation: `npm run check` passed (760 tests plus lint, formatting and CSS checks), PostgreSQL
+integration passed 19 tests, and the full component suite passed desktop and coarse-touch profiles.
+The focused board-upload/model-package flow passed both profiles, and its screenshots were visually
+inspected. Changed checkpoint links and `git diff --check` passed. No input-intent or responsive CSS
+changes were made, so input/device suites were not rerun. The user subsequently reported green
+manual tests (2026-09-24); specific second-installation and real-device scenarios were not separately
+reported. The smoke-test list below remains a reference for future verification.
+
+No migration, dependency or budget changes. Restart the server and refresh browsers before testing.
+The earlier surface automated pass did not cover the board editor's actual upload path; this
+follow-up adds that regression instead of relying on a boards-only fixture.
+
+Manual smoke tests:
+
+1. Retry export of the existing model board that failed; import it and verify materials/colliders.
+2. Upload a new model board; its saved model URL should start `/assets/boards/`. New objects and
+   custom dispenser models should still use `/assets/props/`.
+3. Export/import an object with a compound collider, rotation, tint and footprint. Check its
+   appearance, physics and grid size. Repeat with a custom dispenser and verify its container art
+   and authored supply defaults. Existing live dispensers should be unaffected.
+4. Import a mixed collection of models, boards and image assets; all members should be independent
+   private copies, with unchanged originals. Check desktop/touch menu and preview controls.
+
 ## Physical rulebooks and builder
 
 **Goal:** a spawnable book whose Inspect view reads a rules document, plus custom uploads and a

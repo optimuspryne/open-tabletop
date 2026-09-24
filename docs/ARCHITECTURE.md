@@ -1918,8 +1918,8 @@ Other asset types and multi-process invalidation remain separate work; portable 
 
 ### Portable asset boundary
 
-Version 4 exports are ZIP archives containing a bounded JSON manifest and original image files.
-Legacy base64 JSON versions 1–3 remain importable. Single dice textures, decks/tile sets and
+Version 4 exports are ZIP archives containing a bounded JSON manifest and original image/model files.
+Legacy base64 JSON versions 1–3 remain importable. Single dice textures, decks/tile sets, boards, mats, skyboxes, model objects and
 collections of supported members share the same schema/validation rules. Package-local IDs and
 typed references carry no installation paths, account IDs, publication flags or gameplay state.
 Unsupported collection members fail the whole export. Generated faces, paired tiles, appearance,
@@ -1931,17 +1931,32 @@ validated originals, build a stored ZIP with yazl, recheck authorization and str
 archive with backpressure. Imports spool the upload to a private OS temporary directory, inspect
 the central directory lazily with yauzl, and decode one bounded image at a time. No archive path
 is extracted. Only regular, canonical manifest-listed files are accepted; duplicate, traversal,
-symlink, encrypted, unknown and oversized entries fail. Actual expanded lengths, SHA-256 and image
+symlink, encrypted, unknown and oversized entries fail. Actual expanded lengths, SHA-256 and image/model
 metadata are checked independently. Stored/deflated entries are readable; original encodings remain
 unchanged. Completion/failure/disconnect releases staging; crashes may need OS/operator cleanup.
 
-`server/assets/packages.js` owns strict manifests, dependency closure, image validation and
+`server/assets/packages.js` owns strict manifests, dependency closure, image/model validation and
 exclusive-file persistence. ZIP inspection retains metadata and readers rather than accumulated
-image buffers. Its legacy path retains base64 compatibility under the old limits. `package-decks.js`
+binary buffers. Its legacy path retains base64 compatibility under the old limits. `package-decks.js`
 is the single traversal for deck export, preview and remapping, reusing deck/geometry/model rules.
-ZIP budgets allow 512 MiB of originals, 544 MiB transfer, 32 MiB and 32 × 1024² pixels per image,
-4 × 1024³ pixels in total, and 12 MiB manifest; file/member/card/text budgets remain bounded.
-These protect resources, not represent benchmarked maximum capacity. See REFERENCE for legacy
+`package-surfaces.js` owns the board/mat/sky variant traversal, translating stored cube JSON to
+explicit ordered face refs and preserving model scale, bounds, outlines and compound colliders.
+It reuses gameplay geometry validators and rejects lossy metadata normalization. Original GLB
+materials/textures stay embedded and untouched; model files use the existing upload validator.
+Registered board presets remain references to the destination's bundled definition; uploaded
+model boards carry their own collider data, without exporting a separate named collider preset.
+`package-models.js` traverses saved object props using the normal object/dispenser validator and
+shared collider types. It preserves appearance, primitive/compound collision data, grid sizing,
+and any saved dispenser definition and custom container GLB. Live dispenser counts/inventory and
+room state never enter the package. The main GLB and container GLB share byte validation,
+deduplication, storage and rollback with the existing pipeline.
+New model-board uploads explicitly select the boards directory; objects retain the props default.
+Export reads historical board GLBs from props as well as boards, while imports use the canonical
+category. No existing shared originals or database references are relocated by this change.
+ZIP budgets allow 512 MiB of originals, 544 MiB transfer, 32 MiB per image/model, 32 × 1024² pixels per standalone image,
+4 × 1024³ standalone image pixels in total, and 12 MiB manifest; file/member/card/text budgets remain bounded.
+Embedded GLB texture resolution and mesh complexity use the existing model-upload validation
+boundary, not the standalone raster pixel budget. These budgets protect resources; they are not benchmarked maximum capacity. See REFERENCE for legacy
 limits and deployment storage/proxy requirements.
 
 The HTTP router authenticates before consuming uploads, serializes package work per process,
@@ -1955,7 +1970,7 @@ identity cleanup and mouse/touch/keyboard controls.
 `getCollectionForPackage` reads saved membership/metadata in one read-only repeatable-read
 transaction. `importAssetPackage` creates private member assets, the private collection and
 memberships in one transaction, reusing existing insertions and the collection capacity lock.
-Shared originals are deduplicated across members; an image used by both dice and decks gets a
+Shared originals are deduplicated across members; an original used by several asset kinds gets a
 fresh file in each storage category, preserving picker/export path contracts. Successful collection
 imports reuse content-free cross-room invalidation; clients re-fetch only authorized lists.
 

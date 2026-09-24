@@ -72,7 +72,7 @@ test('production database facade exports the custom-object lookup', async () => 
     [
       '--input-type=module',
       '-e',
-      "const db = await import('./db.js'); if (typeof db.collections?.list !== 'function' || typeof db.collections?.mutate !== 'function' || typeof db.getCollectionForPackage !== 'function' || typeof db.importAssetPackage !== 'function' || typeof db.getProp !== 'function' || typeof db.removePropDispenser !== 'function') process.exit(2); await db.close();",
+      "const db = await import('./db.js'); if (typeof db.collections?.list !== 'function' || typeof db.collections?.mutate !== 'function' || typeof db.getCollectionForPackage !== 'function' || typeof db.importAssetPackage !== 'function' || typeof db.getSkybox !== 'function' || typeof db.getProp !== 'function' || typeof db.removePropDispenser !== 'function') process.exit(2); await db.close();",
     ],
     {
       cwd: new URL('..', import.meta.url),

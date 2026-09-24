@@ -12,6 +12,7 @@ test('successful empty library queries remain ordinary empty and not-found resul
   assert.deepEqual(await library.listSkyboxes(), []);
   assert.equal(await library.getDeck('1'), null);
   assert.equal(await library.getBoard('1'), null);
+  assert.equal(await library.getSkybox('1'), null);
   assert.equal(await library.getScene('1'), null);
 });
 
@@ -30,6 +31,7 @@ test('library query failures reject instead of masquerading as empty results', a
     () => library.listScenes(),
     () => library.getScene('1'),
     () => library.listSkyboxes(),
+    () => library.getSkybox('1'),
   ])
     await assert.rejects(read, (error) => error === outage);
 });

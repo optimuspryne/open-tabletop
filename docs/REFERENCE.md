@@ -2834,10 +2834,10 @@ metadata and discard management drafts before refetching. Export/import is not p
 
 ## Portable custom assets
 
-Site admins export custom dice textures, decks and tile sets from their Library overflow menu,
+Site admins export custom dice textures, decks/tile sets, boards, mats, skyboxes and 3D models from their Library overflow menu,
 or saved collections with the save-file icon beside Edit. Downloads are `.ott.zip` packages
-containing `manifest.json` and original image files. **Import / export assets** accepts ZIP and
-older `.ott.json` packages. Preview lists included members/images, supports renaming, and requires
+containing `manifest.json` and original image/model files. **Import / export assets** accepts ZIP and
+older `.ott.json` packages. Preview lists included members/files, supports renaming, and requires
 **Import private copy**. Imports create new private rows owned by the importing admin. Collection
 imports create a private collection with private copies of every member; renaming changes only
 the collection name. Duplicate names never replace content. Unsupported member types reject the
@@ -2853,11 +2853,26 @@ asset/file IDs. No installation paths, account IDs, publication flags or gamepla
   and paired `{front,back}` entries. Generated tags are `back`, `domback`, `lback`, `mjback`,
   `text:`, `tback:`, `rank:`, `joker:`, `domino:` and `letter:`. Model IDs must exist in shared
   `DECK_MODELS`; the pouch uses the destination's registered bundled model.
+- Board/mat/skybox assets (ZIP only): `{id,kind:"board"|"mat"|"sky",name,data}`.
+  Board `data` carries the saved record: `{w,d,tex?,thickness?,outline?}`, a registered `{board}`
+  preset, or `{model,modelScale,box,outline?|compoundCollider?}`. `model`/`tex` are `{file:"file-N"}`.
+  Model GLBs retain original embedded textures/materials. Compound collider shapes, offsets, sizes,
+  rotations and outlines travel inline; no destination collider-preset library is required.
+  Mat `data` is `{tex:{file:"file-N"},geom}`, using the existing mat geometry limits.
+  Sky `data` is `{type:"equirect",url:{file:"file-N"}}` or
+  `{type:"cube",faces:[{file:"file-N"},…]}` with exactly six faces in original +X/−X/+Y/−Y/+Z/−Z
+  order, including repeated references. Import reconstructs the stored `{t:"cube",f:[…]}` JSON URL.
+- Model object assets (ZIP only): `{id,kind:"prop",name,data}`. `data` preserves saved object
+  props: model, box, scale, stand, optional modelRot/cells/color/finish/tintMaterial, and primitive
+  or compound collider. The main `model` and optional custom `dispenser.model` use `{file:"file-N"}`.
+  Saved dispenser appearance, supply defaults and custom-container transforms/collider/tint survive;
+  runtime count/inventory is not part of an asset definition and is rejected. Both GLB dependencies
+  are included and deduplicated when identical; original embedded materials/textures are untouched.
 - Single-asset manifests contain exactly one asset. Collection manifests add
   `collection:{name,items:["asset-1",…]}` referencing every member exactly once, in asset order.
-  Empty collections and generated-only decks need no image files.
+  Empty collections, generated-only decks and flat/preset boards need no files.
 - ZIP file descriptors are `{id,mediaType,bytes,sha256,path:"files/file-N.png"}` (extension must
-  match PNG/JPEG/GIF/WebP). `data` is forbidden. ZIP contains exactly `manifest.json` and its
+  match PNG/JPEG/GIF/WebP or GLB with `model/gltf-binary`). `data` is forbidden. ZIP contains exactly `manifest.json` and its
   declared regular files, with no extra directories, hidden files or dependencies.
 - Legacy versions 1 (dice), 2 (deck) and 3 (collection) use `{id,mediaType,bytes,sha256,data}`,
   where `data` is canonical base64. They retain their older byte/pixel ceilings.
@@ -2866,54 +2881,69 @@ asset/file IDs. No installation paths, account IDs, publication flags or gamepla
 | --- | --- | --- |
 | Request/file size | 544 MiB | 96 MiB |
 | Manifest | 12 MiB | Included in JSON request |
-| Total original images | 512 MiB | 64 MiB |
-| Individual image | 32 MiB | 8 MiB |
+| Total originals | 512 MiB | 64 MiB |
+| Individual image/model | 32 MiB | 8 MiB |
 | Individual image pixels | 32 × 1024² | 16 × 1024² |
 | Total image pixels | 4 × 1024³ | 128 × 1024² |
 
-Shared ceilings: 4,096 image files, 64 collection members, 1,000 cards/tiles per deck, 5,000 per
+Shared ceilings: 4,096 files, 64 collection members, 1,000 cards/tiles per deck, 5,000 per
 package, 2,097,152 face-reference characters per deck/generated characters per package and
 80-character names. Images must be single-frame. These are resource budgets, not claims of
-measured maximum throughput. Only uploaded originals under the corresponding `dice`/`decks`
-directory and generated faces are supported; remote/data URLs, arbitrary bundled images,
-custom model URLs and unknown card metadata fail explicitly.
+measured maximum throughput. Uploaded originals must live under their corresponding
+`dice`/`decks`/`boards`/`mats`/`sky`/`props` directory. GLBs are allowed only for typed model references,
+validated with the existing upload validator (including no external image/buffer URIs), and bounded
+by the same 32 MiB file and aggregate byte budgets. Raster pixel limits cover standalone image
+files, not embedded GLB textures or rendered mesh complexity. Generated deck faces and registered
+board presets are supported; remote/data asset URLs, arbitrary bundled files and unknown metadata
+fail explicitly. New board uploads use `uploadModel(file, 'boards')`; ordinary object uploads
+keep the default `props` category. Export additionally accepts older board GLBs under `/assets/props/`.
+Board imports always write `/assets/boards/`; object and container imports write `/assets/props/`.
+Existing files/rows are not moved or rewritten because another asset may share the original.
+Legacy JSON formats retain their dice/deck-only schemas.
 
 `server/http/routes/asset-packages.js` uses bearer `requireAdmin`, the upload rate limiter and
 no-store responses. It allows one package operation at a time per server process; overlapping
 requests return 503 with `Retry-After: 5`. Authentication runs before upload processing, with live
 account/admin checks after asynchronous work and before privileged commit/delivery.
 
-- `GET /asset-packages/dice/:id`, `/deck/:id`, `/collection/:id`: version 4 ZIP attachments named
-  `dice-texture.ott.zip`, `deck.ott.zip`, `collection.ott.zip`. The completed archive is streamed
+- `GET /asset-packages/dice/:id`, `/deck/:id`, `/board/:id`, `/mat/:id`, `/sky/:id`, `/prop/:id`, `/collection/:id`: version 4 ZIP attachments named
+  `dice-texture.ott.zip`, `deck.ott.zip`, `board.ott.zip`, `mat.ott.zip`, `sky.ott.zip`, `prop.ott.zip`, `collection.ott.zip`. The completed archive is streamed
   as a chunked HTTP response after validation, with no partial download on validation failure.
 - `POST /asset-packages/preview`, `Content-Type: application/zip`: raw ZIP file →
   `{name,kind,totalBytes,files,isPublic:false}`. Decks add `count/open/deckModel`; collections add
-  member `count` and `members` with names/kinds/deck details. No permanent files or rows are created.
+  member `count` and `members` with names/kinds/details. Boards/models add `model/collider`; models also add `dispenser`; skyboxes add `type`. No permanent files or rows are created.
 - `POST /asset-packages/import?name=…`, `Content-Type: application/zip`: raw ZIP file → HTTP 201
   `{id,name,kind,isPublic:false}`. The file is uploaded and validated again; preview stores no
   long-lived token or upload session.
 - Legacy `application/json` preview accepts the package; legacy import accepts `{package,name}`.
   ZIP manifests sent without their archive are rejected.
 
-Schema/image/archive errors return 400, missing saved assets 404, oversized bodies 413, missing
+Schema/file/archive errors return 400, missing saved assets 404, oversized bodies 413, missing
 login 401 and non-admin access 403. Database/filesystem failures use the generic HTTP 500 boundary.
 `server/assets/package-archives.js` owns ZIP transport, using yazl for backpressure-aware writes and
 yauzl for bounded lazy reads. Exports use stored entries (original image encodings are untouched);
 imports accept stored or deflated entries. Paths are never extracted to the filesystem. Duplicate,
 unknown, traversal, symlink, encrypted and unsupported-compression entries are rejected, and
-central-directory sizes, actual expanded bytes, manifest closure, hashes and image types are checked.
+central-directory sizes, actual expanded bytes, manifest closure, hashes and image/model types are checked.
 Each ZIP entry has a 4 KiB combined filename/extra-field/comment budget to bound retained metadata.
 
 `server/assets/packages.js` owns shared validation, dependency discovery and remapping. Its optional
 file reader/writer supports ZIP originals without constructing base64 strings. ZIP inspection retains
-file readers/metadata, not all image buffers; images are checked/written one at a time. Legacy imports
+file readers/metadata, not all binary buffers; originals are checked/written one at a time. Legacy imports
 keep the bounded JSON path. `package-decks.js` remains the shared face traversal/appearance validator.
-Originals are deduplicated by SHA-256 across members. A file used by both dice and decks is imported
+`package-surfaces.js` adds `surfaceSourceData`, `mapSurfaceReferences` and `surfaceStorageData` for
+board/mat/sky variants, reusing `boardRecordPayload` and `sanitizeMatGeom`. It rejects lossy metadata
+normalization and shares the same traversal for dependency discovery, inspection and remapping.
+`package-models.js` adds `mapPropReferences`, reusing `propRecordPayload` and shared collider types,
+with lossless metadata checks and traversal of the main GLB and optional custom container GLB.
+Originals are deduplicated by SHA-256 across members. A file used by several kinds is imported
 once into each storage category so existing pickers and future exports retain valid paths.
 
 `getCollectionForPackage` reads saved membership/metadata from one repeatable-read snapshot.
 `importAssetPackage` inserts private member assets, collection and memberships in one transaction,
-reusing `insertCollection` and its capacity lock. New permanent files use exclusive random names
+reusing `insertCollection` and its capacity lock. Board/mat/sky/prop insertions now accept an optional
+transaction query without changing ordinary save callers. `getSkybox` is exposed by library queries,
+the database factory and the production facade, preserving not-found versus query-error behavior. New permanent files use exclusive random names
 and are synced before metadata commits. Definite failure removes only this attempt's new files;
 uncertain COMMIT/rollback retains them for recovery and reference-aware orphan cleanup. Source
 assets, live hands, player inventories and concealed room order are never exported or altered.

@@ -1,4 +1,4 @@
-import { ASSET_PACKAGE, AssetPackageError } from '../shared/asset-package.js';
+import { ASSET_PACKAGE, PACKAGE_ASSET_KINDS, AssetPackageError } from '../shared/asset-package.js';
 // Pool-injected Postgres operations for the library, users, rooms, and membership.
 //
 // Only METADATA lives in Postgres. The image/model FILES still sit on disk under
@@ -95,14 +95,17 @@ export function createDatabase(pool) {
   async function getBoard(id) {
     return library.getBoard(id);
   }
-  function insertBoard(name, rec, { ownerId = null, isPublic = false } = {}) {
+  function insertBoard(
+    name,
+    rec,
+    { ownerId = null, isPublic = false } = {},
+    query = pool.query.bind(pool),
+  ) {
     const { model, ...rest } = rec;
-    return pool
-      .query(
-        'INSERT INTO custom_boards (name, type, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-        [name, boardType(rec), model || null, JSON.stringify(rest), ownerId, isPublic],
-      )
-      .then((r) => String(r.rows[0].id));
+    return query(
+      'INSERT INTO custom_boards (name, type, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [name, boardType(rec), model || null, JSON.stringify(rest), ownerId, isPublic],
+    ).then((r) => String(r.rows[0].id));
   }
   // Update an existing board in place (keeps id, owner, public flag).
   function updateBoard(id, name, rec) {
@@ -124,13 +127,16 @@ export function createDatabase(pool) {
   async function getMat(id) {
     return library.getMat(id);
   }
-  function insertMat(name, { tex, geom }, { ownerId = null, isPublic = false } = {}) {
-    return pool
-      .query(
-        'INSERT INTO custom_mats (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [name, tex, JSON.stringify({ geom }), ownerId, isPublic],
-      )
-      .then((r) => String(r.rows[0].id));
+  function insertMat(
+    name,
+    { tex, geom },
+    { ownerId = null, isPublic = false } = {},
+    query = pool.query.bind(pool),
+  ) {
+    return query(
+      'INSERT INTO custom_mats (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [name, tex, JSON.stringify({ geom }), ownerId, isPublic],
+    ).then((r) => String(r.rows[0].id));
   }
   function updateMat(id, name, { tex, geom }) {
     return pool
@@ -152,14 +158,17 @@ export function createDatabase(pool) {
   async function getProp(id) {
     return library.getProp(id);
   }
-  function insertProp(name, props, { ownerId = null, isPublic = false } = {}) {
+  function insertProp(
+    name,
+    props,
+    { ownerId = null, isPublic = false } = {},
+    query = pool.query.bind(pool),
+  ) {
     const { model, ...rest } = props;
-    return pool
-      .query(
-        'INSERT INTO custom_objects (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [name, model, JSON.stringify(rest), ownerId, isPublic],
-      )
-      .then((r) => String(r.rows[0].id));
+    return query(
+      'INSERT INTO custom_objects (name, file_url, props, owner_id, is_public) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+      [name, model, JSON.stringify(rest), ownerId, isPublic],
+    ).then((r) => String(r.rows[0].id));
   }
   // Update an existing prop in place (keeps id, owner, public flag).
   function updateProp(id, name, props) {
@@ -202,13 +211,17 @@ export function createDatabase(pool) {
   async function listSkyboxes({ includePrivate = false } = {}) {
     return library.listSkyboxes({ includePrivate });
   }
-  function insertSkybox({ name, url, ownerId = null, isPublic = false }) {
-    return pool
-      .query(
-        'INSERT INTO custom_skyboxes (name, file_url, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
-        [name, url, ownerId, isPublic],
-      )
-      .then((r) => String(r.rows[0].id));
+  async function getSkybox(id) {
+    return library.getSkybox(id);
+  }
+  function insertSkybox(
+    { name, url, ownerId = null, isPublic = false },
+    query = pool.query.bind(pool),
+  ) {
+    return query(
+      'INSERT INTO custom_skyboxes (name, file_url, owner_id, is_public) VALUES ($1, $2, $3, $4) RETURNING id',
+      [name, url, ownerId, isPublic],
+    ).then((r) => String(r.rows[0].id));
   }
 
   // ===== Dice textures (host-uploaded die surface images) =====================
@@ -249,7 +262,9 @@ export function createDatabase(pool) {
         throw new AssetPackageError('A collection package supports up to 64 assets.');
       const unsupported = [
         ...new Set(
-          members.rows.map((item) => item.kind).filter((kind) => !['dice', 'deck'].includes(kind)),
+          members.rows
+            .map((item) => item.kind)
+            .filter((kind) => !PACKAGE_ASSET_KINDS.includes(kind)),
         ),
       ];
       if (unsupported.length)
@@ -259,9 +274,16 @@ export function createDatabase(pool) {
       const reads = createLibraryQueries(client.query.bind(client)),
         assets = [];
       for (const item of members.rows) {
-        const asset = await (item.kind === 'dice'
-          ? reads.getDice(item.id)
-          : reads.getDeck(item.id));
+        const asset = await reads[
+          {
+            dice: 'getDice',
+            deck: 'getDeck',
+            board: 'getBoard',
+            mat: 'getMat',
+            sky: 'getSkybox',
+            prop: 'getProp',
+          }[item.kind]
+        ](item.id);
         if (!asset)
           throw new AssetPackageError('A collection member is missing. Reload and try again.');
         assets.push({ kind: item.kind, asset });
@@ -281,8 +303,16 @@ export function createDatabase(pool) {
   }
 
   async function importAssetPackage(kind, value, authorize) {
+    const insertions = {
+      dice: insertDice,
+      deck: insertDeck,
+      sky: insertSkybox,
+      prop: (data, query) => insertProp(data.name, data.props, data, query),
+      board: (data, query) => insertBoard(data.name, data.rec, data, query),
+      mat: (data, query) => insertMat(data.name, data, data, query),
+    };
     const insertion = (assetKind) =>
-      assetKind === 'dice' ? insertDice : assetKind === 'deck' ? insertDeck : null;
+      Object.hasOwn(insertions, assetKind) ? insertions[assetKind] : null;
     if (kind !== 'collection' && !insertion(kind))
       throw new AssetPackageError('Unsupported asset kind.');
     let client,
@@ -747,6 +777,7 @@ export function createDatabase(pool) {
     getScene,
     insertScene,
     listSkyboxes,
+    getSkybox,
     insertSkybox,
     listDice,
     getDice,

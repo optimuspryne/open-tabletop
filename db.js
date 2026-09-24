@@ -37,6 +37,7 @@ export const {
   getScene,
   insertScene,
   listSkyboxes,
+  getSkybox,
   insertSkybox,
   listDice,
   getDice,

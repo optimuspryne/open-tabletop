@@ -216,6 +216,22 @@ export function createLibraryQueries(query) {
       }));
     },
 
+    async getSkybox(id) {
+      const { rows } = await query(
+        'SELECT name, file_url, is_public, owner_id FROM custom_skyboxes WHERE id = $1',
+        [id],
+      );
+      const row = rows[0];
+      return row
+        ? {
+            name: row.name,
+            url: row.file_url,
+            isPublic: row.is_public,
+            ownerId: idOrNull(row.owner_id),
+          }
+        : null;
+    },
+
     async listDice({ includePrivate = false } = {}) {
       const { rows } = await query(
         `SELECT id, name, file_url, is_public, owner_id FROM custom_dice

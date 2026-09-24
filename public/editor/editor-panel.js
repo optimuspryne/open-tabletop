@@ -1,3 +1,4 @@
+import { PACKAGE_ASSET_KINDS } from '/shared/asset-package.js';
 import { createAssetPackageController } from './asset-packages.js';
 import { createCollectionController } from './collections.js';
 import { openColliderEditor } from './compound-collider-editor.js';
@@ -833,7 +834,7 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
           overflowMenu(
             { name: it.name, meta: (it.isPublic ? 'public' : 'private') + ' · custom ' + kind },
             [
-              ...(['dice', 'deck'].includes(kind)
+              ...(PACKAGE_ASSET_KINDS.includes(kind)
                 ? [
                     {
                       label: 'Export',
@@ -1806,7 +1807,7 @@ function wireAddBoard() {
     if (!name) return alert('Name the board first.');
     const f = byId('adBoardGlb').files[0];
     try {
-      const url = f ? await uploadModel(f) : editCtx && editCtx.model; // keep the existing model when editing/cloning
+      const url = f ? await uploadModel(f, 'boards') : editCtx && editCtx.model; // keep the existing model when editing/cloning
       if (!url) return alert('Choose a .glb file.');
       const target = +byId('adBoardGlbSize').value;
       if (!Number.isFinite(target) || target < 0.1 || target > 100)
@@ -2471,7 +2472,21 @@ window.onOttRoom = (room) => {
             collectionController?.refresh();
             room.send('listDecks');
             room.send('listDice');
-          } else room.send(kind === 'deck' ? 'listDecks' : 'listDice');
+            room.send('listBoards');
+            room.send('listMats');
+            room.send('listSkyboxes');
+            room.send('listProps');
+          } else
+            room.send(
+              {
+                deck: 'listDecks',
+                dice: 'listDice',
+                board: 'listBoards',
+                mat: 'listMats',
+                sky: 'listSkyboxes',
+                prop: 'listProps',
+              }[kind],
+            );
         },
       })
     : null;

@@ -1,5 +1,34 @@
 import { ASSET_PACKAGE, ASSET_ARCHIVE } from '/shared/asset-package.js';
 
+const labels = {
+  dice: 'Dice texture',
+  deck: 'Deck / tile set',
+  board: 'Board',
+  mat: 'Player mat',
+  sky: 'Skybox',
+  prop: '3D model',
+};
+const panes = {
+  dice: 'Dice',
+  deck: 'Card Decks/Tiles',
+  board: 'Game Boards',
+  mat: 'Player Mats',
+  sky: 'Skyboxes',
+  prop: '3D Objects',
+};
+function assetDescription(asset) {
+  if (asset.kind === 'dice' && asset.files?.[0])
+    return `Dice texture · ${asset.files[0].width} × ${asset.files[0].height}`;
+  if (asset.kind === 'deck')
+    return `${asset.open ? 'Tile set' : 'Deck'} · ${asset.count} cards / tiles${asset.deckModel ? ' · Pouch skin' : ''}`;
+  if (asset.kind === 'prop')
+    return `3D model · ${asset.collider} collider${asset.dispenser ? ' · Dispenser definition' : ''}`;
+  if (asset.kind === 'board' && asset.model) return `Model board · ${asset.collider} collider`;
+  if (asset.kind === 'sky')
+    return asset.type === 'cube' ? 'Skybox · 6-face cubemap' : 'Skybox · panorama';
+  return labels[asset.kind];
+}
+
 // Portable assets stay in this library controller; room state never carries package bytes.
 export function createAssetPackageController({ host, isAdmin, onImported }) {
   const find = (id) => host.querySelector('#' + id);
@@ -76,13 +105,11 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
       const description =
         summary.kind === 'collection'
           ? `Collection · ${summary.count} assets`
-          : summary.kind === 'deck'
-            ? `${summary.open ? 'Tile set' : 'Deck'} · ${summary.count} cards / tiles${summary.deckModel ? ' · Pouch skin' : ''}`
-            : `Dice texture · ${summary.files[0].width} × ${summary.files[0].height}`;
-      details.textContent = `${description} · ${(summary.totalBytes / 1024).toFixed(1)} KiB · ${summary.files.length} image${summary.files.length === 1 ? '' : 's'} included`;
+          : assetDescription(summary);
+      details.textContent = `${description} · ${(summary.totalBytes / 1024).toFixed(1)} KiB · ${summary.files.length} file${summary.files.length === 1 ? '' : 's'} included`;
       for (const member of summary.members || []) {
         const item = document.createElement('li');
-        item.textContent = `${member.name} · ${member.kind === 'dice' ? 'dice texture' : `deck / tiles (${member.count})`}`;
+        item.textContent = `${member.name} · ${assetDescription(member)}`;
         members.append(item);
       }
       members.hidden = !members.childElementCount;
@@ -121,7 +148,7 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
       message(
         result.kind === 'collection'
           ? `Imported “${result.name}” as a private collection with private asset copies. Find it under Collections.`
-          : `Imported “${result.name}” as a private ${result.kind === 'deck' ? 'deck / tile set' : 'dice texture'}. Find it under ${result.kind === 'deck' ? 'Card Decks/Tiles' : 'Dice'} with Custom or All selected; collection filters may hide it.`,
+          : `Imported “${result.name}” as a private ${labels[result.kind].toLowerCase()}. Find it under ${panes[result.kind]} with Custom or All selected; collection filters may hide it.`,
       );
       onImported(result.kind);
     } catch (error) {
@@ -160,12 +187,12 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
             ? 'collection.ott.zip'
             : kind === 'dice'
               ? 'dice-texture.ott.zip'
-              : 'deck.ott.zip';
+              : kind + '.ott.zip';
         document.body.append(link);
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        message('Export downloaded. It includes the asset and its required uploaded images.');
+        message('Export downloaded. It includes the asset and its required original files.');
       } catch (error) {
         if (current === epoch) message(error.message);
       }
