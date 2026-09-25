@@ -1,6 +1,6 @@
 # Drawable notecards
 
-Status: freehand drawing, zoom/pan, private-hand support and the selected Tabler icons are
+Status: paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
 implemented and user-approved for commit. Automated verification is recorded below; the user
 did not specify a per-device or multiplayer test matrix.
 
@@ -162,7 +162,7 @@ previous artwork and position. Hand/pass/table commits consume the top only afte
 transfer. Failed placement or invalid recipients keep the draft and lease available for retry.
 Drawing the final card removes the empty stack. A single remaining card may stay in a stack.
 
-Stack entries are server-only `{drawing,noteProps}` records in bottom-first order. Metadata
+Stack entries are server-only `{drawing,paper,noteProps}` records in bottom-first order. Metadata
 includes each card's label, snap and stand settings. Splitting moves the top half to a new
 stack after capacity checks and successful allocation. Combining preserves each source's
 internal order and places higher source pieces nearer the top. It converts the lowest source
@@ -230,3 +230,73 @@ fixture output. Documentation links and `git diff --check` passed. No database c
 an integration migration run. The user subsequently reported that the notecard work functions correctly and approved it
 for commit. No per-device or multiplayer test matrix was specified, so individual checklist
 items remain available for future verification.
+
+## Paper styles and drawing helpers — implemented, user-tested and approved for commit
+
+The user approved the editor mock-up and Tabler choices before implementation. Paper choices
+are Blank/Ruled/Grid/Dots, in Ivory/White/Pale yellow. Paper is saved per card, not as an account
+preference, and travels with ink through table pieces, hands, passing, selective Show, stacks,
+scene/game saves and reconnect. Face-down backs reveal neither pattern nor tone. Old snapshots
+without paper load as blank ivory; explicit invalid styles fail before mutation/reset. Older
+clients omitting paper on commit preserve the existing style.
+
+Line (`line`), Rectangle (`square`) and Ellipse (`circle`) use the existing stroke protocol.
+Constrain (`ruler-measure`) or Shift makes 45° lines, squares and circles in physical canvas
+coordinates. An ellipse uses 64 segments; every helper previews and commits one bounded,
+undoable stroke. The approved icons already existed in all sprites, so regeneration was unnecessary.
+No schema migration, new asset or service is required. Ink is replayed into a separate scratch
+canvas so erasing reveals the selected pattern/tone. Clear and history affect ink; Cancel also
+restores the previous paper. The whiteboard renderer's behavior is unchanged.
+
+Keyboard arrows move a visible cursor through the current view. Enter starts/finishes a stroke;
+Escape cancels the unfinished keyboard stroke first. Tab/blur discards unfinished keyboard ink.
+These commands go through `attachDrawingControls`, which ignores them during pointer gestures.
+Mouse/finger/stylus and existing pan/pinch cancellation share the same stroke construction and
+capacity checks. Help, accessible labels, pressed states, focus and status feedback accompany the
+compact controls. The desktop canvas height leaves room for the expanded controls and footer;
+phone dialogs retain vertical scrolling with wrapped controls.
+
+### Paper/helper extension file map
+
+| File | Functions/helpers or responsibilities added/changed |
+| --- | --- |
+| `shared/notecards.js` | Add `NOTECARD_PATTERNS`, `NOTECARD_TONES`, `normalizeNotecardPaper`; extend `normalizeNotecardStack` to validate/copy paper. |
+| `server/game/notecards.js` | Extend `give`, `take`, `placeHandCard`, `publish`, `restore`, `claim`, `commit`, `placeStackCard`, `draw`, `combine` to preserve paper privately and restore both fields after failed placement. |
+| `server/game/piece-lifecycle.js` | `spawn` validates paper before allocating physical pieces. |
+| `server/game/scene-persistence.js` | `serializeScene` stores private paper; `applyScene` validates before reset and normalizes restored hand entries. |
+| `server/game/handlers/room-features.js` | `showStart` sends paper only alongside artwork to the selected audience. |
+| `public/rendering/notecards.js` | Extend `paintNotecard` with patterned paper and weakly held per-context ink layers; `notecardMesh` supplies paper. |
+| `public/rendering/graphics.js` | Extend `notecardPreviewURL(drawing,paper)` for styled thumbnails. |
+| `public/table/hand.js` | `renderHand` and drag preview creation retain paper in thumbnails and temporary meshes. |
+| `public/table/presence.js` | `refreshFan` passes authorized paper to revealed notecard meshes. |
+| `public/table/notecard-shapes.js` | Add `notecardShapePoints` to create bounded line/rectangle/ellipse polylines with optional constraints. |
+| `public/table/notecards.js` | Extend `createNotecardEditor`, `paint`, `sync`, `show`, `open`, `openHand`, `syncHand`, room updates and commit/cleanup; add shared `beginStroke`/`extendStroke`, helper/paper controls and keyboard cursor intents. |
+| `public/table/controls.js` | `attachDrawingControls` forwards idle focused-canvas keyboard commands and blur through the intent interface. |
+| `public/table.html` | Add paper/helper controls using approved existing icons, accessible canvas instructions and in-app help. |
+| `public/styles.css` | Wrap paper controls and reserve desktop space for the expanded editor/footer. |
+| `test/notecard-shapes.js` | Bounded ordinary strokes, reverse drags, degenerate endpoints, physical aspect constraints and line clipping. |
+| `test/notecards.js` | Default/invalid paper, concealment, forged/omitted-paper commits, transfer/Show, stack and save round trips, legacy snapshots and allocation failure recovery. |
+| `scripts/notecard-test.mjs` | Real mouse/touch helper creation, keyboard cancellation/history, paper payloads/reopening, Clear semantics, pixel-level erasing, concealed backs and thumbnails. |
+| `CHANGELOG.md` | Unreleased feature entry. |
+| `docs/REFERENCE.md` | Paper protocol/normalization, renderer, shape helper and input contracts. |
+| `docs/ARCHITECTURE.md` | Private paper ownership and ink/paper rendering boundaries. |
+| `docs/GESTURES.md` | Touch/desktop helper and keyboard drawing paths. |
+| `docs/ROADMAP.md` | Implementation and user acceptance status. |
+| `docs/DEVICE_QA.md` | Real-device, accessibility and multiplayer smoke-test checklist. |
+| `docs/DESIGN_notecards.md` | Approved scope, reuse decision, implementation map and verification record. |
+
+Automated verification is recorded below. No per-device user acceptance
+is inferred from the approved mock-up or automated passes. Restart the server and refresh all
+browsers before manual testing; use the new checklist in [DEVICE_QA.md](DEVICE_QA.md).
+
+Paper/helper verification on 2026-09-25: `npm run check` passed with **815 unit tests**, lint,
+formatting and CSS checks; `test:input` passed **57/57**; `test:components` passed (including
+production bootstrap and the expanded mouse/touch notecard fixture); `test:devices` passed all
+**seven profiles**. The focused browser checks were repeated after focus-hint/layout refinements,
+including whole-shape capacity rejection, at 1280, 390 and 360 px. Full/compact desktop and phone
+screenshots were inspected. Final paper-type validation passed the full check suite. Documentation
+links and `git diff --check` passed. The component fixture still reports its seven expected sample
+asset 404s without failing. No database/query/migration change requires the integration suite.
+The user reported that the extension works great and approved it for commit. No per-device,
+assistive-technology or multiplayer test matrix was specified; the detailed QA checklist remains
+available for future verification.

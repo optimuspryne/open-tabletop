@@ -6,6 +6,7 @@ import * as CANNON from 'cannon-es';
 import {
   NOTECARD,
   normalizeNotecardDrawing,
+  normalizeNotecardPaper,
   normalizeNotecardStack,
 } from '../../shared/notecards.js';
 import { pieceIdPayload, isPlainObject } from '../message-validation.js';
@@ -30,13 +31,14 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       total += held.cards.filter((card) => card.kind === 'notecard').length;
     return total;
   }
-  function give(client, drawing, props = {}) {
+  function give(client, drawing, paper, props = {}) {
     const hand = room.hands.get(client.sessionId) || [];
     hand.push({
       hid: 'h' + room.nextHid++,
       kind: 'notecard',
       back: 'back',
       drawing,
+      paper,
       noteProps: Object.fromEntries(
         ['snap', 'stand', 'label']
           .filter((key) => props[key] !== undefined)
@@ -52,6 +54,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       return room.spawn('notecard', position, {
         ...card.noteProps,
         drawing: card.drawing,
+        paper: card.paper,
         faceDown,
       });
     } finally {
@@ -69,7 +72,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       room.flips.has(id)
     )
       return false;
-    give(client, doc.drawing, readProps(piece));
+    give(client, doc.drawing, doc.paper, readProps(piece));
     room.removePiece(id);
     return true;
   }
@@ -79,11 +82,15 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     if (!piece || (!doc && !stacks.has(id))) return;
     const props = readProps(piece);
     delete props.drawing;
+    delete props.paper;
     delete props.editing;
     delete props.editingName;
     delete props.cards;
     props.faceDown = stacks.has(id) || doc.faceDown || leases.has(id);
-    if (!props.faceDown) props.drawing = doc.drawing;
+    if (!props.faceDown) {
+      props.drawing = doc.drawing;
+      props.paper = doc.paper;
+    }
     if (leases.has(id)) {
       props.editing = leases.get(id).sid;
       props.editingName = String(room.state.players.get(props.editing)?.name || 'Someone').slice(
@@ -96,8 +103,9 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
   function restore(id, props) {
     if (documents.size >= NOTECARD.maxCards) throw new Error('The notecard limit was reached.');
     const drawing = normalizeNotecardDrawing(props.drawing ?? []);
-    if (!drawing) throw new Error('Invalid notecard drawing.');
-    documents.set(id, { drawing, faceDown: props.faceDown === true });
+    const paper = normalizeNotecardPaper(props.paper);
+    if (!drawing || !paper) throw new Error('Invalid notecard drawing or paper.');
+    documents.set(id, { drawing, paper, faceDown: props.faceDown === true });
     publish(id);
   }
   function close(id, reason = '') {
@@ -153,7 +161,13 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         expires: now() + NOTECARD.leaseMs,
       };
       leases.set(id, lease);
-      client.send('notecardEdit', { id, hid: card.hid, token: lease.token, drawing: card.drawing });
+      client.send('notecardEdit', {
+        id,
+        hid: card.hid,
+        token: lease.token,
+        drawing: card.drawing,
+        paper: card.paper,
+      });
       return;
     }
     const parsed = pieceIdPayload(message);
@@ -184,6 +198,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       id,
       token: lease.token,
       drawing: (stacks.get(id)?.at(-1) || documents.get(id)).drawing,
+      paper: (stacks.get(id)?.at(-1) || documents.get(id)).paper,
       fromStack: stacks.has(id),
     });
   }
@@ -205,11 +220,18 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     const lease = owned(client, message);
     if (!lease) return;
     const drawing = normalizeNotecardDrawing(message.drawing);
+    const source = lease.hid
+      ? handCard(lease.sid, lease.hid)
+      : stacks.get(message.id)?.at(-1) || documents.get(message.id);
+    const paper = normalizeNotecardPaper(
+      message.paper === undefined ? source?.paper : message.paper,
+    );
     const destination = message.destination ?? 'table';
     const fail = (text) =>
       client.send('serverError', { operation: 'notecardCommit', message: text });
     if (
       !drawing ||
+      !paper ||
       !['table', 'hand', 'pass', ...(stacks.has(message.id) ? ['stack'] : [])].includes(
         destination,
       ) ||
@@ -240,15 +262,17 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     if (stacks.has(message.id)) {
       const cards = stacks.get(message.id),
         top = cards.at(-1);
-      if (destination === 'stack') top.drawing = drawing;
-      else {
+      if (destination === 'stack') {
+        top.drawing = drawing;
+        top.paper = paper;
+      } else {
         if (destination === 'table') {
           if (!hasPieceCapacity(room)) {
             fail('The table is full. Return to top or keep the notecard in hand.');
             return;
           }
-          placeStackCard(message.id, top, drawing, message.faceDown);
-        } else give(recipient, drawing, top.noteProps);
+          placeStackCard(message.id, top, drawing, paper, message.faceDown);
+        } else give(recipient, drawing, paper, top.noteProps);
         cards.pop();
       }
       close(message.id);
@@ -261,24 +285,26 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         return;
       }
       // Keep inventory and committed artwork intact if creation fails.
-      const previous = card.drawing;
+      const previous = { drawing: card.drawing, paper: card.paper };
       card.drawing = drawing;
+      card.paper = paper;
       try {
         placeHandCard([0, 3, 0], card, message.faceDown);
       } catch (error) {
-        card.drawing = previous;
+        Object.assign(card, previous);
         throw error;
       }
       room.hands.get(lease.sid).splice(room.hands.get(lease.sid).indexOf(card), 1);
       room.sendHand(client);
     } else if (destination === 'table') {
-      documents.set(message.id, { drawing, faceDown: message.faceDown });
+      documents.set(message.id, { drawing, paper, faceDown: message.faceDown });
     } else if (destination === 'hand' && card) {
       card.drawing = drawing;
+      card.paper = paper;
       room.sendHand(client);
     } else {
       const props = card?.noteProps || readProps(room.state.pieces.get(message.id));
-      give(recipient, drawing, props);
+      give(recipient, drawing, paper, props);
       if (card) {
         room.hands.get(lease.sid).splice(room.hands.get(lease.sid).indexOf(card), 1);
         room.sendHand(client);
@@ -322,7 +348,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     if (!piece || piece.owner || room.flips.has(parsed.id) || blocked(client, message)) return null;
     return parsed.id;
   }
-  function placeStackCard(id, top, drawing, faceDown) {
+  function placeStackCard(id, top, drawing, paper, faceDown) {
     const body = room.bodies.get(id);
     transferring.add(top);
     try {
@@ -332,6 +358,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         {
           ...top.noteProps,
           drawing,
+          paper,
           faceDown,
         },
       );
@@ -350,8 +377,8 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         room.notifyFull(client);
         return;
       }
-      placeStackCard(id, top, top.drawing, true);
-    } else give(client, top.drawing, top.noteProps);
+      placeStackCard(id, top, top.drawing, top.paper, true);
+    } else give(client, top.drawing, top.paper, top.noteProps);
     cards.pop();
     syncStack(id);
   }
@@ -424,6 +451,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
           stacks.get(id) || [
             {
               drawing: documents.get(id).drawing,
+              paper: documents.get(id).paper,
               noteProps: readProps(room.state.pieces.get(id)),
             },
           ],

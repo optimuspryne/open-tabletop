@@ -81,9 +81,17 @@ focused, Space-drag pans, +/− zoom, and 0 fits the card. Fit card restores 100
 Pointer cancellation drops the unfinished stroke. Canvas gestures never move the
 table camera. Spectators can view a public face or their own private hand drawing read-only.
 
-Use Pen/Eraser, ink swatches, Width, Undo/Redo and undoable Clear. Ctrl/Cmd+Z undoes;
+Choose Blank, Ruled, Grid or Dots and Ivory, White or Pale yellow paper; these settings save per
+card. Use Pen/Eraser, Line/Rectangle/Ellipse, ink swatches, Width, Undo/Redo and undoable Clear ink.
+Drag with one finger, mouse or stylus to preview a helper; release commits one undoable stroke.
+Constrain is a persistent touch-friendly toggle; holding Shift provides the same 45° line,
+square or circle constraint on desktop. Eraser and Clear ink preserve the selected paper.
+With the canvas focused, arrows move a visible cursor and Enter starts/finishes a stroke.
+Escape cancels an unfinished keyboard stroke before closing the editor; Tab/blur discards that
+unfinished stroke. Keyboard drawing uses the current zoom/pan coordinates. Space remains the
+existing temporary pan gesture. Ctrl/Cmd+Z undoes;
 Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes. **Place face-up** or **Place face-down** commits; Cancel
-or Escape restores the previous drawing. **Keep in hand** retains it privately; **Pass to** plus
+or Escape (when no keyboard stroke is pending) restores the previous drawing and paper. **Keep in hand** retains it privately; **Pass to** plus
 **Pass privately** transfers directly into the selected active player's hand. Use a hand thumbnail's
 eye button (or desktop double-click) to reopen it. Existing hand click/drag and Drop controls place
 notecards face-up/down; context-menu **Take to hand** retrieves one without editing. Context-menu **Flip** changes the visible face, and

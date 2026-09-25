@@ -1149,7 +1149,7 @@ function resizeToCanvas(file, w, h, fit, bg) {
   });
 }
 
-export function notecardPreviewURL(drawing) {
+export function notecardPreviewURL(drawing, paper) {
   const { canvas, ctx } = makeCanvas(320, 213);
   paintNotecard(
     ctx,
@@ -1161,6 +1161,7 @@ export function notecardPreviewURL(drawing) {
         erase: false,
       },
     ],
+    { paper },
   );
   try {
     return canvasThumbnailURL(canvas);

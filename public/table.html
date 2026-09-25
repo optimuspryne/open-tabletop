@@ -1337,6 +1337,11 @@
                 long-press offers Draw to hand, Play top face-down, Shuffle, Split and Move stack.
                 Select notecards/stacks and Combine to merge them. Left-drag moves the whole stack.
                 Shift+F10 or Context Menu cycles stack menus; arrows/Home/End navigate and Escape closes.
+                Paper offers Blank, Ruled, Grid and Dots in Ivory, White or Pale yellow; settings stay with the card.
+                Line, Rectangle and Ellipse create one undoable stroke. Constrain (or Shift while drawing)
+                makes 45° lines, squares and circles. Eraser and Clear ink preserve the paper.
+                With the drawing canvas focused, arrows move a cursor and Enter starts/finishes a stroke;
+                Escape cancels that keyboard stroke first, then closes the editor. Tab cancels unfinished keyboard ink.
               </li>
               <li>
                 <b data-icon="dots"> > </b><b data-icon="settings">Settings.</b> Go here to change
@@ -2610,16 +2615,26 @@
       </div>
       <div class="modal__body">
         <div id="notecardTools" class="notecard-tools">
+          <div class="button-row notecard-paper">
+            <label>Paper <select id="notecardPattern"><option value="blank">Blank</option><option value="ruled">Ruled</option><option value="grid">Grid</option><option value="dots">Dots</option></select></label>
+            <label>Tone <select id="notecardTone"><option value="ivory">Ivory</option><option value="white">White</option><option value="yellow">Pale yellow</option></select></label>
+          </div>
           <div class="button-row">
             <button id="notecardPen" type="button" aria-pressed="true" data-icon="writing"><span class="lbl">Pen</span></button>
             <button id="notecardEraser" type="button" aria-pressed="false" data-icon="eraser"><span class="lbl">Eraser</span></button>
+            <button id="notecardLine" type="button" aria-pressed="false" data-icon="line"><span class="lbl">Line</span></button>
+            <button id="notecardRectangle" type="button" aria-pressed="false" data-icon="square"><span class="lbl">Rectangle</span></button>
+            <button id="notecardEllipse" type="button" aria-pressed="false" data-icon="circle"><span class="lbl">Ellipse</span></button>
+          </div>
+          <div class="button-row">
             <label>Width <select id="notecardWidth"><option value="0">Fine</option><option value="1" selected>Medium</option><option value="2">Broad</option></select></label>
+            <button id="notecardConstrain" type="button" aria-pressed="false" data-icon="ruler-measure"><span class="lbl">Constrain</span></button>
           </div>
           <div id="notecardColors" class="button-row" role="group" aria-label="Ink colors"></div>
           <div class="button-row">
             <button id="notecardUndo" type="button" data-icon="arrow-back-up"><span class="lbl">Undo</span></button>
             <button id="notecardRedo" type="button" data-icon="arrow-forward-up"><span class="lbl">Redo</span></button>
-            <button id="notecardClear" type="button" data-icon="wiper"><span class="lbl">Clear</span></button>
+            <button id="notecardClear" type="button" data-icon="wiper"><span class="lbl">Clear ink</span></button>
           </div>
         </div>
         <div class="button-row notecard-navigation" role="group" aria-label="Drawing view">
@@ -2629,7 +2644,8 @@
           <button id="notecardZoomIn" type="button" data-icon="zoom-in"><span class="lbl">Zoom in</span></button>
           <button id="notecardFit" type="button" data-icon="focus-2"><span class="lbl">Fit card</span></button>
         </div>
-        <canvas id="notecardCanvas" width="1024" height="682" tabindex="0" aria-label="Freehand notecard drawing surface"></canvas>
+        <canvas id="notecardCanvas" width="1024" height="682" tabindex="0" aria-label="Notecard drawing surface" aria-describedby="notecardDrawingHelp"></canvas>
+        <p id="notecardDrawingHelp" class="hint">Drag to draw. Keyboard: focus the card, use arrows to move, Enter to start/finish, Escape to cancel a stroke. Constrain (or Shift) makes squares, circles and 45° lines.</p>
         <div id="notecardPassControls" class="button-row notecard-pass">
           <label for="notecardRecipient">Pass to</label><select id="notecardRecipient" aria-label="Private recipient"></select>
           <button id="notecardPass" type="button" data-icon="send-2"><span class="lbl">Pass privately</span></button>

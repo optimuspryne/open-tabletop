@@ -1,8 +1,16 @@
-import { NOTECARD, NOTECARD_COLORS, NOTECARD_WIDTHS } from '../../shared/notecards.js';
+import {
+  NOTECARD,
+  NOTECARD_COLORS,
+  NOTECARD_WIDTHS,
+  normalizeNotecardPaper,
+} from '../../shared/notecards.js';
 import { paintNotecard } from '../rendering/notecards.js';
+import { notecardShapePoints } from './notecard-shapes.js';
 import { createDrawingView } from './drawing-view.js';
 import { applyIcons } from '../ui/icons.js';
 import { attachDrawingControls } from './controls.js';
+
+const CURSOR_STEP = 0.01; // fraction of visible canvas width per arrow-key step
 
 // This panel owns a private draft; only an acknowledged placement closes it.
 export function createNotecardEditor({
@@ -18,6 +26,19 @@ export function createNotecardEditor({
   const canvas = byId('notecardCanvas');
   const context = canvas.getContext('2d');
   const view = createDrawingView();
+  let paper = normalizeNotecardPaper(),
+    tool = 'pen',
+    constrain = false;
+  let keyboard = false,
+    cursor = [0.5, 0.5],
+    strokeStart = null;
+  const toolIds = {
+    pen: 'notecardPen',
+    eraser: 'notecardEraser',
+    line: 'notecardLine',
+    rectangle: 'notecardRectangle',
+    ellipse: 'notecardEllipse',
+  };
   let pan = false,
     recipientKey = '';
   byId('notecardRecipient').add(new Option('Choose player…', ''));
@@ -33,7 +54,6 @@ export function createNotecardEditor({
     undo = [],
     stroke = null;
   let busy = false,
-    erase = false,
     color = NOTECARD_COLORS[0],
     width = NOTECARD_WIDTHS[1];
   let previousFocus = null,
@@ -45,8 +65,25 @@ export function createNotecardEditor({
     context.save();
     context.translate(view.x * canvas.width, view.y * canvas.height);
     context.scale(view.scale, view.scale);
-    paintNotecard(context, stroke ? [...drawing, stroke] : drawing, { back: !!current?.back });
+    paintNotecard(context, stroke ? [...drawing, stroke] : drawing, {
+      back: !!current?.back,
+      paper,
+    });
     context.restore();
+    if (keyboard && current?.token && !busy) {
+      const x = cursor[0] * canvas.width,
+        y = cursor[1] * canvas.height;
+      context.save();
+      context.strokeStyle = '#202830';
+      context.lineWidth = 4;
+      context.beginPath();
+      context.arc(x, y, 9, 0, Math.PI * 2);
+      context.stroke();
+      context.strokeStyle = '#ffffff';
+      context.lineWidth = 2;
+      context.stroke();
+      context.restore();
+    }
     byId('notecardZoomLevel').textContent = Math.round(view.scale * 100) + '%';
     byId('notecardZoomOut').disabled = view.scale <= 1;
     byId('notecardZoomIn').disabled = view.scale >= 8;
@@ -62,8 +99,13 @@ export function createNotecardEditor({
     byId('notecardClear').disabled = !drawing.length;
     byId('notecardPan').setAttribute('aria-pressed', String(pan));
     canvas.style.cursor = pan ? 'grab' : 'crosshair';
-    byId('notecardPen').setAttribute('aria-pressed', String(!erase && !pan));
-    byId('notecardEraser').setAttribute('aria-pressed', String(erase && !pan));
+    for (const [name, id] of Object.entries(toolIds))
+      byId(id).setAttribute('aria-pressed', String(tool === name && !pan));
+    byId('notecardConstrain').setAttribute('aria-pressed', String(constrain));
+    byId('notecardConstrain').disabled = ['pen', 'eraser'].includes(tool) || pan;
+    byId('notecardPattern').value = paper.pattern;
+    byId('notecardTone').value = paper.tone;
+    byId('notecardDrawingHelp').hidden = !current?.token;
     byId('notecardCancel').disabled = busy;
     const label = current?.token ? 'Cancel' : 'Close';
     byId('notecardCancel').querySelector('.lbl').textContent = label;
@@ -85,6 +127,9 @@ export function createNotecardEditor({
     opening = null;
     stroke = null;
     drawing = [];
+    paper = normalizeNotecardPaper();
+    keyboard = false;
+    strokeStart = null;
     redo = [];
     undo = [];
     busy = false;
@@ -97,6 +142,9 @@ export function createNotecardEditor({
   }
   function show(data) {
     current = data;
+    paper = normalizeNotecardPaper(data.paper) || normalizeNotecardPaper();
+    keyboard = false;
+    cursor = [0.5, 0.5];
     view.reset();
     pan = false;
     refreshRecipients();
@@ -117,7 +165,7 @@ export function createNotecardEditor({
     sync();
     paint();
     dialog.showModal();
-    byId(data.token ? 'notecardPen' : 'notecardCancel').focus();
+    byId(data.token ? toolIds[tool] : 'notecardCancel').focus();
     if (data.token)
       heartbeat = repeat(() => {
         if (current?.token)
@@ -136,6 +184,7 @@ export function createNotecardEditor({
       show({
         id,
         drawing: props.drawing || [],
+        paper: props.paper,
         back: piece.type === 'notecardStack' || props.faceDown || !!props.editing,
       });
       return;
@@ -164,7 +213,7 @@ export function createNotecardEditor({
     previousFocus = document.activeElement;
     beforeOpen();
     if (!canInteract()) {
-      show({ id: 'hand:' + card.hid, hid: card.hid, drawing: card.drawing });
+      show({ id: 'hand:' + card.hid, hid: card.hid, drawing: card.drawing, paper: card.paper });
       return;
     }
     opening = 'hand:' + card.hid;
@@ -213,27 +262,27 @@ export function createNotecardEditor({
     const rect = canvas.getBoundingClientRect();
     return [(x - rect.left) / rect.width, (y - rect.top) / rect.height];
   };
-  const drawingControls = attachDrawingControls(canvas, {
-    isPanning: () => pan,
-    transform(from, to, factor) {
-      view.transform(screenPoint(from), screenPoint(to), factor);
-      paint();
-    },
-    press(event) {
-      if (!current?.token || busy || !canInteract()) return false;
-      used = drawing.reduce((sum, s) => sum + s.pts.length, 0);
-      if (drawing.length >= NOTECARD.maxStrokes || used + 2 > NOTECARD.maxCoordinates) {
-        status('Drawing limit reached. Undo or clear strokes to continue.');
-        return false;
-      }
-      stroke = { pts: point(event), color, width, erase };
-      paint();
-      return true;
-    },
-    move(event) {
-      if (!stroke) return;
-      const next = point(event),
-        pts = stroke.pts;
+  function beginStroke(position, locked = false) {
+    if (!current?.token || busy || !canInteract()) return false;
+    used = drawing.reduce((sum, s) => sum + s.pts.length, 0);
+    const pts = ['pen', 'eraser'].includes(tool)
+      ? position
+      : notecardShapePoints(tool, position, position, constrain || locked);
+    if (drawing.length >= NOTECARD.maxStrokes || used + pts.length > NOTECARD.maxCoordinates) {
+      status('Drawing limit reached. Undo or clear strokes to continue.');
+      return false;
+    }
+    strokeStart = position;
+    stroke = { pts, color, width, erase: tool === 'eraser' };
+    paint();
+    return true;
+  }
+  function extendStroke(next, locked = false) {
+    if (!stroke) return;
+    if (!['pen', 'eraser'].includes(tool)) {
+      stroke.pts = notecardShapePoints(tool, strokeStart, next, constrain || locked);
+    } else {
+      const pts = stroke.pts;
       if (Math.hypot(next[0] - pts.at(-2), next[1] - pts.at(-1)) < 0.0015) return;
       if (used + pts.length + 2 > NOTECARD.maxCoordinates) {
         status('Drawing limit reached. Undo or clear strokes to continue.');
@@ -244,12 +293,71 @@ export function createNotecardEditor({
         return;
       }
       pts.push(...next);
+    }
+    paint();
+  }
+  const drawingControls = attachDrawingControls(canvas, {
+    isPanning: () => pan,
+    transform(from, to, factor) {
+      view.transform(screenPoint(from), screenPoint(to), factor);
       paint();
+    },
+    press(event) {
+      keyboard = false;
+      stroke = null;
+      return beginStroke(point(event), event.additive);
+    },
+    move(event) {
+      extendStroke(point(event), event.additive);
     },
     release: finishStroke,
     cancel() {
       stroke = null;
       paint();
+    },
+    command(event) {
+      if (!current?.token || busy || !canInteract() || pan) return false;
+      const deltas = {
+        ArrowLeft: [-1, 0],
+        ArrowRight: [1, 0],
+        ArrowUp: [0, -1],
+        ArrowDown: [0, 1],
+      };
+      if (event.key === 'Escape' && keyboard && stroke) {
+        stroke = null;
+        paint();
+        status('Stroke canceled.');
+        return true;
+      }
+      if (event.key !== 'Enter' && !deltas[event.key]) return false;
+      keyboard = true;
+      if (event.key === 'Enter') {
+        if (!event.repeat) {
+          if (stroke) finishStroke();
+          else if (beginStroke(view.point(...cursor), event.shiftKey))
+            status('Start set. Move with arrows; Enter to finish, Escape to cancel.');
+        }
+      } else {
+        const [dx, dy] = deltas[event.key];
+        cursor = [
+          Math.max(0, Math.min(1, cursor[0] + dx * CURSOR_STEP)),
+          Math.max(0, Math.min(1, cursor[1] + (dy * CURSOR_STEP * canvas.width) / canvas.height)),
+        ];
+        const position = view.point(...cursor);
+        extendStroke(position, event.shiftKey);
+        status(
+          `Cursor ${Math.round(position[0] * 100)}%, ${Math.round(position[1] * 100)}%. ${stroke ? 'Enter to finish.' : 'Enter to start.'}`,
+        );
+      }
+      paint();
+      return true;
+    },
+    blur() {
+      if (keyboard) {
+        stroke = null;
+        keyboard = false;
+        paint();
+      }
     },
   });
   for (const ink of NOTECARD_COLORS) {
@@ -262,7 +370,7 @@ export function createNotecardEditor({
     button.onclick = () => {
       finishStroke();
       color = ink;
-      erase = false;
+      if (tool === 'eraser') tool = 'pen';
       pan = false;
       byId('notecardColors')
         .querySelectorAll('button')
@@ -275,18 +383,46 @@ export function createNotecardEditor({
     finishStroke();
     width = NOTECARD_WIDTHS[Number(event.target.value)];
   };
-  byId('notecardPen').onclick = () => {
+  for (const [name, id] of Object.entries(toolIds))
+    byId(id).onclick = () => {
+      finishStroke();
+      tool = name;
+      pan = false;
+      sync();
+      status(`${name[0].toUpperCase() + name.slice(1)} selected.`);
+    };
+  byId('notecardConstrain').title =
+    'Square, circle, or line in 45° steps. Also available with Shift.';
+  const instructions = byId('notecardDrawingHelp').textContent;
+  for (const id of [...Object.values(toolIds), 'notecardConstrain']) {
+    const button = byId(id);
+    button.setAttribute('aria-describedby', 'notecardDrawingHelp');
+    // Native hover titles also have a visible keyboard/touch-focus equivalent.
+    button.addEventListener('focus', () => {
+      byId('notecardDrawingHelp').textContent = `${button.title}. ${instructions}`;
+    });
+    button.addEventListener('blur', () => {
+      byId('notecardDrawingHelp').textContent = instructions;
+    });
+  }
+  byId('notecardConstrain').onclick = () => {
     finishStroke();
-    erase = false;
-    pan = false;
+    constrain = !constrain;
     sync();
+    status(
+      constrain ? 'Constrain on: squares, circles, and lines in 45° steps.' : 'Constrain off.',
+    );
   };
-  byId('notecardEraser').onclick = () => {
-    finishStroke();
-    erase = true;
-    pan = false;
-    sync();
-  };
+  for (const [id, key] of [
+    ['notecardPattern', 'pattern'],
+    ['notecardTone', 'tone'],
+  ])
+    byId(id).onchange = (event) => {
+      finishStroke();
+      paper = { ...paper, [key]: event.target.value };
+      paint();
+      sync();
+    };
   for (const action of ['undo', 'redo', 'clear'])
     byId(`notecard${action[0].toUpperCase()}${action.slice(1)}`).onclick = () => history(action);
   byId('notecardPan').onclick = () => {
@@ -318,6 +454,7 @@ export function createNotecardEditor({
       id: current.id,
       token: current.token,
       drawing,
+      paper,
       faceDown,
       destination,
       recipient: byId('notecardRecipient').value,
@@ -350,6 +487,7 @@ export function createNotecardEditor({
     if (!card) close(false);
     else {
       drawing = card.drawing || [];
+      paper = normalizeNotecardPaper(card.paper) || normalizeNotecardPaper();
       paint();
     }
   }
@@ -388,6 +526,7 @@ export function createNotecardEditor({
       const props = JSON.parse(piece.props || '{}');
       current.back = props.faceDown || !!props.editing;
       drawing = props.drawing || [];
+      paper = normalizeNotecardPaper(props.paper) || normalizeNotecardPaper();
       status(current.back ? 'This notecard is face-down.' : 'Viewing a notecard.');
       paint();
     });

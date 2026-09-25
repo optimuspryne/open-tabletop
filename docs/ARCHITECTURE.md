@@ -1025,7 +1025,13 @@ machinery:
   temporarily makes the body static. The interaction gate rejects mutations targeting reserved
   cards, and physics maintenance preserves that reservation. Artwork is sent only to the editor
   or published on a face-up, unreserved card. Private hand entries carry `kind: "notecard"` and
-  committed drawing data, inheriting account-owned park/claim/reassignment and game persistence.
+  committed drawing and bounded paper-style data, inheriting account-owned park/claim/reassignment
+  and game persistence. Paper follows the artwork's privacy boundary, including on public faces,
+  private Show and saved stack entries; older snapshots default to blank ivory. Client shape helpers
+  emit ordinary normalized strokes, so server validation and history retain one stroke format.
+  Rendering composites ink separately from paper, allowing erasing without covering patterns;
+  the shared whiteboard stroke renderer and protocol remain unchanged. Keyboard drawing enters
+  through the drawing intent layer; its cursor, zoom and uncommitted shapes stay local.
   An explicit Show sends faces only to the chosen audience; opening a hand editor retracts Show.
   Transfers validate recipients and table capacity before consuming inventory. The 16-card cap
   includes physical pieces, active hands and unclaimed hands. View zoom/pan stays browser-local.
@@ -1033,7 +1039,7 @@ machinery:
   document even during editing; restore keeps concealed faces server-only. Departure, loss of
   gameplay access, expiry and table reset release reservations without replacing committed art.
   Shared stroke replay is reused from the whiteboard; its public broadcast protocol is not used
-  for private drafts. Notecard stacks add server-only ordered `{drawing,noteProps}` entries
+  for private drafts. Notecard stacks add server-only ordered `{drawing,paper,noteProps}` entries
   within the same service; every entry counts toward the room cap. A stack edit reserves its
   committed top without consuming it. Transfers validate before consumption, and combining
   reuses one physical piece to work at the piece cap. Public state contains only count/back

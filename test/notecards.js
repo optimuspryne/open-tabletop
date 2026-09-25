@@ -7,7 +7,12 @@ import { stopPlayerInteraction } from '../server/game/interaction-cleanup.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
-import { NOTECARD, normalizeNotecardDrawing } from '../shared/notecards.js';
+import {
+  NOTECARD,
+  normalizeNotecardDrawing,
+  normalizeNotecardPaper,
+  normalizeNotecardStack,
+} from '../shared/notecards.js';
 import { colliderSpec } from '../shared/collider-spec.js';
 import { createNotecards, registerNotecardHandlers } from '../server/game/notecards.js';
 import { registerMovementHandlers } from '../server/game/handlers/movement.js';
@@ -23,6 +28,7 @@ import { readProps } from '../server/game/props-codec.js';
 import { guardedMessage } from '../server/game/interaction-policy.js';
 import { spawnPayload } from '../server/message-validation.js';
 
+const defaultPaper = { pattern: 'blank', tone: 'ivory' };
 const artwork = [{ pts: [0.1, 0.2, 0.4, 0.8], color: '#202830', width: 0.007, erase: false }];
 function harness() {
   let time = 0,
@@ -133,7 +139,11 @@ function harness() {
   registerRoomFeatureHandlers(room, {});
   registerMovementHandlers(room, { isMovable: () => true });
   guardedMessage(room, 'remove', (_client, { id }) => room.removePiece(id));
-  const id = room.spawn('notecard', [0, 1, 0], { drawing: artwork, faceDown: true });
+  const id = room.spawn('notecard', [0, 1, 0], {
+    drawing: artwork,
+    paper: defaultPaper,
+    faceDown: true,
+  });
   const send = (type, payload, actor = alice) => handlers.get(type)(actor, payload);
   const claim = (actor = alice) => {
     send('notecardEdit', { id }, actor);
@@ -264,7 +274,11 @@ test('disconnect cleanup and expired leases restore committed contents and rejec
   advance();
   assert.equal(room.notecards.isEditing(id), false);
   send('notecardCommit', { id, token: lease.token, drawing: [], faceDown: false });
-  assert.deepEqual(room.notecards.snapshot(id), { drawing: artwork, faceDown: true });
+  assert.deepEqual(room.notecards.snapshot(id), {
+    drawing: artwork,
+    paper: defaultPaper,
+    faceDown: true,
+  });
 });
 
 test('scene round-trip retains concealed contents and committed orientation during private editing', () => {
@@ -282,7 +296,11 @@ test('scene round-trip retains concealed contents and committed orientation duri
   });
   const restoredId = [...room.state.pieces.keys()][0];
   assert.notEqual(restoredId, id);
-  assert.deepEqual(room.notecards.snapshot(restoredId), { drawing: artwork, faceDown: true });
+  assert.deepEqual(room.notecards.snapshot(restoredId), {
+    drawing: artwork,
+    paper: defaultPaper,
+    faceDown: true,
+  });
   assert.equal(readProps(room.state.pieces.get(restoredId)).drawing, undefined);
   room.notecards.flip(restoredId);
   assert.deepEqual(readProps(room.state.pieces.get(restoredId)).drawing, artwork);
@@ -461,7 +479,7 @@ test('explicit Show reveals a hand notecard only to the chosen audience and does
   send('showStart', { hids: 'all', to: ['bob'] });
   assert.deepEqual(bob.sent.at(-1), {
     type: 'showFan',
-    payload: { sid: 'alice', cards: [{ kind: 'notecard', drawing: artwork }] },
+    payload: { sid: 'alice', cards: [{ kind: 'notecard', drawing: artwork, paper: defaultPaper }] },
   });
   assert.equal(room.state.pieces.size, 0);
 });
@@ -476,8 +494,8 @@ test('editing a shown notecard retracts the reveal before returning private artw
 });
 
 const stackCards = () => [
-  { drawing: [], noteProps: { label: 'Bottom', snap: true, stand: 'flat' } },
-  { drawing: artwork, noteProps: { label: 'Top' } },
+  { drawing: [], paper: defaultPaper, noteProps: { label: 'Bottom', snap: true, stand: 'flat' } },
+  { drawing: artwork, paper: defaultPaper, noteProps: { label: 'Top' } },
 ];
 const sceneOptions = {
   maxPieces: 250,
@@ -561,6 +579,7 @@ test('split and combine preserve all drawings and order, work at the notecard ca
   room.removePiece(loose);
   const cards = Array.from({ length: 16 }, (_, i) => ({
     drawing: i % 2 ? artwork : [],
+    paper: defaultPaper,
     noteProps: { label: String(i) },
   }));
   const id = room.spawn('notecardStack', [0, 1, 0], { cards });
@@ -682,4 +701,162 @@ test('a captured stack snapshot remains stable while later edits and draws chang
   send('notecardCommit', { ...alice.sent.at(-1).payload, destination: 'stack', drawing: [] });
   send('notecardDraw', { id, destination: 'hand' });
   assert.deepEqual(saved.pieces.at(-1).props.cards, stackCards());
+});
+
+test('paper validation defaults old documents and rejects unsupported or injected styles', () => {
+  assert.deepEqual(normalizeNotecardPaper(), defaultPaper);
+  for (const pattern of ['blank', 'ruled', 'grid', 'dots'])
+    for (const tone of ['ivory', 'white', 'yellow'])
+      assert.deepEqual(normalizeNotecardPaper({ pattern, tone }), { pattern, tone });
+  for (const paper of [
+    null,
+    [],
+    {},
+    { pattern: 'grid', tone: '__proto__' },
+    { pattern: 'grid', tone: ['ivory'] },
+    { pattern: 'grid', tone: { toString: null } },
+    { pattern: 'image', tone: 'ivory' },
+    { pattern: 'grid', tone: 'white', url: 'private' },
+  ]) {
+    assert.equal(normalizeNotecardPaper(paper), null);
+    assert.equal(normalizeNotecardStack([{ drawing: [], paper }]), null);
+  }
+  assert.deepEqual(normalizeNotecardStack([{ drawing: [] }])[0].paper, defaultPaper);
+});
+
+test('paper is private while concealed or editing, committed atomically, and revealed with ink', () => {
+  const { room, id, alice, bob, claim, send } = harness();
+  const paper = { pattern: 'grid', tone: 'yellow' };
+  let lease = claim();
+  send('notecardCommit', { ...lease, paper, faceDown: false }, bob);
+  assert.deepEqual(room.notecards.snapshot(id).paper, defaultPaper);
+  send('notecardCommit', { ...lease, paper, faceDown: false });
+  assert.deepEqual(readProps(room.state.pieces.get(id)).paper, paper);
+  lease = claim();
+  assert.deepEqual(lease.paper, paper);
+  assert.equal(readProps(room.state.pieces.get(id)).paper, undefined);
+  send('notecardCommit', {
+    ...lease,
+    drawing: [],
+    paper: { ...paper, tone: 'bad' },
+    faceDown: false,
+  });
+  assert.deepEqual(room.notecards.snapshot(id).drawing, artwork);
+  assert.deepEqual(room.notecards.snapshot(id).paper, paper);
+  assert.equal(room.notecards.isEditing(id), true);
+  send('notecardCancel', lease);
+  assert.deepEqual(readProps(room.state.pieces.get(id)).paper, paper);
+  lease = claim();
+  // Older clients omit paper: preserve the stored paper rather than resetting it.
+  send('notecardCommit', { id, token: lease.token, drawing: [], faceDown: true });
+  assert.equal(readProps(room.state.pieces.get(id)).paper, undefined);
+  assert.deepEqual(room.notecards.snapshot(id).paper, paper);
+  assert.equal(alice.sent.at(-1).type, 'notecardClosed');
+});
+
+test('styled cards retain paper through private pass, Show, park/claim and game restore', () => {
+  const { room, id, alice, bob, claim, send } = harness();
+  alice.auth.userId = 'account-a';
+  bob.auth.userId = 'account-b';
+  const paper = { pattern: 'dots', tone: 'white' };
+  send('notecardCommit', { ...claim(), paper, destination: 'pass', recipient: 'bob' });
+  let card = room.hands.get('bob')[0];
+  assert.deepEqual(card.paper, paper);
+  send('showStart', { hids: 'all', to: ['alice'] }, bob);
+  assert.deepEqual(alice.sent.at(-1).payload.cards[0].paper, paper);
+  parkHand(room, bob);
+  assert.deepEqual(room.pendingHands.get('account-b').cards[0].paper, paper);
+  claimHand(room, 'account-b', 'bob');
+  const scene = serializeGame(room);
+  applyScene(room, scene, sceneOptions);
+  assert.deepEqual(room.pendingHands.get('account-b').cards[0].paper, paper);
+  claimHand(room, 'account-b', 'bob');
+  card = room.hands.get('bob')[0];
+  room.notecards.placeHandCard([0, 2, 0], card, false);
+  const played = [...room.state.pieces.keys()].at(-1);
+  assert.deepEqual(readProps(room.state.pieces.get(played)).paper, paper);
+  assert.equal(room.state.pieces.has(id), false);
+});
+
+test('stack paper survives return, split/combine, scene restore and both draw destinations', () => {
+  const { room, id: loose, send, alice } = harness();
+  const paper = { pattern: 'ruled', tone: 'yellow' };
+  const id = room.spawn('notecardStack', [0, 2, 0], { count: 2 });
+  send('notecardEdit', { id });
+  send('notecardCommit', { ...alice.sent.at(-1).payload, paper, destination: 'stack' });
+  assert.deepEqual(room.notecards.snapshot(id).cards.at(-1).paper, paper);
+  assert.equal(readProps(room.state.pieces.get(id)).paper, undefined);
+  send('notecardSplit', { id });
+  const split = [...room.state.pieces.keys()].at(-1);
+  assert.deepEqual(room.notecards.snapshot(split).cards[0].paper, paper);
+  send('notecardCombine', { ids: [id, split, loose] });
+  const all = [...room.state.pieces.keys()];
+  assert.equal(all.length, 1);
+  const scene = serializeScene(room);
+  applyScene(room, scene, sceneOptions);
+  const restored = [...room.state.pieces.keys()][0];
+  const expected = room.notecards.snapshot(restored).cards.map((c) => c.paper);
+  assert.ok(expected.some((p) => p.pattern === 'ruled'));
+  send('notecardDraw', { id: restored, destination: 'hand' });
+  assert.deepEqual(room.hands.get('alice')[0].paper, expected.at(-1));
+  send('notecardDraw', { id: restored, destination: 'table' });
+  const played = [...room.state.pieces.keys()].at(-1);
+  assert.deepEqual(room.notecards.snapshot(played).paper, expected.at(-2));
+  assert.equal(readProps(room.state.pieces.get(played)).paper, undefined);
+});
+
+test('bad saved paper is rejected before table reset; legacy snapshots get blank ivory', () => {
+  const { room, id } = harness();
+  for (const scene of [
+    { pieces: [{ type: 'notecard', props: { paper: null } }] },
+    {
+      pieces: [
+        {
+          type: 'notecardStack',
+          props: { cards: [{ drawing: [], paper: { pattern: 'grid', tone: 'bad' } }] },
+        },
+      ],
+    },
+    { hands: [{ userId: 'a', cards: [{ kind: 'notecard', drawing: [], paper: {} }] }] },
+  ]) {
+    assert.throws(() => applyScene(room, scene, sceneOptions), /invalid/);
+    assert.equal(room.state.pieces.has(id), true);
+  }
+  applyScene(
+    room,
+    {
+      pieces: [{ type: 'notecard', props: { drawing: artwork, faceDown: true }, pos: [0, 1, 0] }],
+      hands: [{ userId: 'legacy', cards: [{ kind: 'notecard', drawing: [] }] }],
+    },
+    sceneOptions,
+  );
+  assert.deepEqual(room.notecards.snapshot([...room.state.pieces.keys()][0]).paper, defaultPaper);
+  assert.deepEqual(room.pendingHands.get('legacy').cards[0].paper, defaultPaper);
+});
+
+test('failed hand placement restores both paper and drawing, retaining the edit for retry', () => {
+  const { room, id, send, alice } = harness();
+  send('takeCard', { id });
+  const card = room.hands.get('alice')[0];
+  send('notecardEdit', { hid: card.hid });
+  const lease = alice.sent.at(-1).payload;
+  const spawn = room.spawn;
+  room.spawn = () => {
+    throw new Error('allocation');
+  };
+  assert.throws(
+    () =>
+      room.notecards.commit(alice, {
+        ...lease,
+        drawing: [],
+        paper: { pattern: 'dots', tone: 'yellow' },
+        destination: 'table',
+        faceDown: false,
+      }),
+    /allocation/,
+  );
+  assert.deepEqual(card.paper, defaultPaper);
+  assert.deepEqual(card.drawing, artwork);
+  assert.equal(room.notecards.isEditing(lease.id), true);
+  room.spawn = spawn;
 });

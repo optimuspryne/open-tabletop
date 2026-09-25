@@ -7288,12 +7288,13 @@ body.not-gm .gm-only {
 }
 .notecard-dialog:not([open]) { display: none; }
 .notecard-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
-.notecard-tools { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.notecard-tools { display: flex; flex-wrap: wrap; gap: var(--gap); margin-bottom: 12px; }
+.notecard-paper { flex-basis: 100%; }
 .notecard-tools .button-row { flex-wrap: wrap; }
 .notecard-tools label { display: inline-flex; align-items: center; gap: 6px; }
 .notecard-ink { width: 32px; min-height: 32px; background: var(--ink); border: 2px solid var(--border); }
 .notecard-ink[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
-#notecardCanvas { display: block; width: min(100%, max(300px, calc((100dvh - 380px) * 1.5))); margin-inline: auto; height: auto; aspect-ratio: 3 / 2; touch-action: none; cursor: crosshair; border-radius: 4px; }
+#notecardCanvas { display: block; width: min(100%, max(300px, calc((100dvh - 520px) * 1.5))); margin-inline: auto; height: auto; aspect-ratio: 3 / 2; touch-action: none; cursor: crosshair; border-radius: 4px; }
 .notecard-dialog .modal__footer { flex-wrap: wrap; }
 @media (pointer: coarse) {
   .notecard-dialog button, .notecard-dialog select { min-height: 44px; }
@@ -7312,4 +7313,5 @@ body.not-gm .gm-only {
 .notecard-pass select { min-width: 0; max-width: 100%; flex: 1; }
 .notecard-dialog [hidden] { display: none; }
 #notecardCanvas:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+#notecardDrawingHelp { font-size: max(12px, 0.85em); }
 .handcard.notecard { width: 120px; background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #fffdf5; }

@@ -347,3 +347,20 @@ or multiplayer test matrix was specified; the checklist remains available for fu
 - [ ] Compact/full modes: all approved icons, hover/focus hints, touch targets and phone layouts.
 - [ ] Keyboard Shift+F10/Context Menu, arrows/Home/End, Enter/Space and Escape focus behavior.
 - [ ] Full table/capacity failures retain cards; drawing the last card removes only the empty stack.
+
+
+### Notecard paper styles and drawing helpers
+
+The user confirmed that the implementation works great and approved it for commit. No detailed
+real-device, assistive-technology or multiplayer test matrix was specified, so checklist items
+remain available for future verification.
+After a server restart and browser refresh:
+
+- [ ] Try all four patterns and three tones in full/compact mode, desktop and touch.
+- [ ] Draw lines, rectangles and ellipses with mouse/finger/stylus. Check Shift and Constrain,
+  including at paper edges and high zoom; each shape should undo in one action.
+- [ ] Erase across a pattern; Clear ink and undo it. Paper should remain intact.
+- [ ] Tab to the canvas, use arrows/Enter to draw, Escape to cancel a stroke, and Tab to leave.
+  Check visible focus, announced names/states/status and compact hints with assistive technology.
+- [ ] Keep/pass/Show, draw/return/split/combine stacks, save/reload and reconnect. Verify paper
+  follows the right card, remains concealed on backs, and Cancel retains the original style.

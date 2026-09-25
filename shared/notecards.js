@@ -25,6 +25,28 @@ export const NOTECARD_COLORS = Object.freeze([
   '#ffffff',
 ]);
 export const NOTECARD_WIDTHS = Object.freeze([0.003, 0.007, 0.015]);
+export const NOTECARD_PATTERNS = Object.freeze(['blank', 'ruled', 'grid', 'dots']);
+export const NOTECARD_TONES = Object.freeze({
+  ivory: NOTECARD.paper,
+  white: '#ffffff',
+  yellow: '#fff1b8',
+});
+
+// Missing paper in older snapshots means blank ivory. Invalid explicit values fail closed.
+export function normalizeNotecardPaper(value = { pattern: 'blank', tone: 'ivory' }) {
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    Object.keys(value).some((key) => !['pattern', 'tone'].includes(key)) ||
+    typeof value.pattern !== 'string' ||
+    typeof value.tone !== 'string' ||
+    !NOTECARD_PATTERNS.includes(value.pattern) ||
+    !Object.hasOwn(NOTECARD_TONES, value.tone)
+  )
+    return null;
+  return { pattern: value.pattern, tone: value.tone };
+}
 
 export function normalizeNotecardDrawing(value) {
   if (!Array.isArray(value) || value.length > NOTECARD.maxStrokes) return null;
@@ -70,9 +92,11 @@ export function normalizeNotecardStack(value) {
   const cards = [];
   for (const entry of value) {
     const drawing = normalizeNotecardDrawing(entry?.drawing);
+    const paper = normalizeNotecardPaper(entry?.paper);
     const props = entry?.noteProps ?? {};
     if (
       !drawing ||
+      !paper ||
       !props ||
       typeof props !== 'object' ||
       Array.isArray(props) ||
@@ -83,6 +107,7 @@ export function normalizeNotecardStack(value) {
       return null;
     cards.push({
       drawing,
+      paper,
       noteProps: Object.fromEntries(
         ['snap', 'stand', 'label']
           .filter((key) => props[key] !== undefined)

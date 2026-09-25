@@ -171,7 +171,7 @@ export function createPresence({
       const card =
         i < shown.length
           ? shown[i].kind === 'notecard'
-            ? notecardMesh({ drawing: shown[i].drawing })
+            ? notecardMesh({ drawing: shown[i].drawing, paper: shown[i].paper })
             : cardMesh({ front: shown[i].front, back: shown[i].back })
           : cardMesh({ back: player.handBack || undefined });
       card.castShadow = card.receiveShadow = false;

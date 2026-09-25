@@ -145,6 +145,11 @@ export function attachDrawingControls(canvas, intents) {
   );
   const host = canvas.closest('dialog') || canvas;
   host.addEventListener('keydown', (event) => {
+    if (event.target === canvas && !pointers.size && intents.command?.(logicalKey(event))) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.key === ' ' && event.target === canvas) {
       space = true;
       event.preventDefault();
@@ -155,6 +160,7 @@ export function attachDrawingControls(canvas, intents) {
   });
   canvas.addEventListener('blur', () => {
     space = false;
+    intents.blur?.();
   });
   return {
     reset() {

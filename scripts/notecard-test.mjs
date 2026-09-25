@@ -222,10 +222,149 @@ try {
     const pass = await page.evaluate(`noteTest.sent.at(-1)`);
     assert.equal(pass.payload.destination, 'pass');
     assert.equal(pass.payload.recipient, 'bob');
+    // Approved paper + shape tools use the same private editor and commit payload.
     await page.evaluate(`noteTest.messages.get('notecardClosed')({token:'hand-token'});
-      noteTest.editor.open('one'); noteTest.messages.get('notecardEdit')({id:'one',token:'screenshot',drawing:[{pts:[.1,.2,.2,.6,.4,.25,.6,.7,.8,.3],color:'#2878ba',width:.007,erase:false}]});`);
+      noteTest.editor.open('one'); noteTest.messages.get('notecardEdit')({id:'one',token:'helpers',drawing:[]});
+      document.getElementById('notecardPattern').value='grid'; document.getElementById('notecardPattern').dispatchEvent(new Event('change'));
+      document.getElementById('notecardTone').value='yellow'; document.getElementById('notecardTone').dispatchEvent(new Event('change'));`);
+    const helperRect = await page.evaluate(
+      `(() => {const r=document.getElementById('notecardCanvas').getBoundingClientRect(); return {x:r.x,y:r.y,w:r.width,h:r.height};})()`,
+    );
+    for (const tool of ['Line', 'Rectangle', 'Ellipse']) {
+      await page.evaluate(`document.getElementById('notecard${tool}').click()`);
+      if (tool === 'Ellipse')
+        await page.evaluate(`document.getElementById('notecardConstrain').click()`);
+      await pointer(
+        device.touch ? 'touchStart' : 'mousePressed',
+        helperRect.x + helperRect.w * 0.2,
+        helperRect.y + helperRect.h * 0.2,
+      );
+      await pointer(
+        device.touch ? 'touchMove' : 'mouseMoved',
+        helperRect.x + helperRect.w * 0.8,
+        helperRect.y + helperRect.h * 0.7,
+      );
+      await pointer(
+        device.touch ? 'touchEnd' : 'mouseReleased',
+        helperRect.x + helperRect.w * 0.8,
+        helperRect.y + helperRect.h * 0.7,
+      );
+    }
+    const key = async (key, code, windowsVirtualKeyCode) => {
+      for (const type of ['keyDown', 'keyUp'])
+        await browser.send(
+          'Input.dispatchKeyEvent',
+          { type, key, code, windowsVirtualKeyCode },
+          page.sessionId,
+        );
+    };
+    await page.evaluate(
+      `document.getElementById('notecardLine').click();document.getElementById('notecardCanvas').focus();`,
+    );
+    await key('Enter', 'Enter', 13);
+    await key('ArrowRight', 'ArrowRight', 39);
+    await key('Escape', 'Escape', 27);
+    assert.equal(
+      await page.evaluate(`document.getElementById('notecardDialog').open`),
+      true,
+      'Escape cancels keyboard draft before closing editor',
+    );
+    await key('Enter', 'Enter', 13);
+    for (let i = 0; i < 5; i++) await key('ArrowRight', 'ArrowRight', 39);
+    await key('Enter', 'Enter', 13);
+    await page.evaluate(
+      `document.getElementById('notecardUndo').click();document.getElementById('notecardRedo').click();document.getElementById('notecardKeep').click()`,
+    );
+    const helpers = await page.evaluate(`noteTest.sent.at(-1).payload`);
+    assert.deepEqual(helpers.paper, { pattern: 'grid', tone: 'yellow' });
+    assert.deepEqual(
+      helpers.drawing.map((s) => s.pts.length),
+      [4, 10, 130, 4],
+    );
+    const ellipse = helpers.drawing[2].pts,
+      xs = ellipse.filter((_, i) => i % 2 === 0),
+      ys = ellipse.filter((_, i) => i % 2 === 1);
+    assert.ok(
+      Math.abs(
+        (Math.max(...xs) - Math.min(...xs)) * 1024 - (Math.max(...ys) - Math.min(...ys)) * 682,
+      ) < 0.2,
+      'Constrain makes a physical circle',
+    );
+    await page.evaluate(
+      `noteTest.messages.get('serverError')({operation:'notecardCommit',message:'Retry'});document.getElementById('notecardClear').click();document.getElementById('notecardKeep').click()`,
+    );
+    const cleared = await page.evaluate(`noteTest.sent.at(-1).payload`);
+    assert.deepEqual(cleared.drawing, []);
+    assert.deepEqual(cleared.paper, helpers.paper, 'Clear changes only ink');
+    await page.evaluate(
+      `noteTest.messages.get('serverError')({operation:'notecardCommit',message:'Retry'});document.getElementById('notecardUndo').click();document.getElementById('notecardKeep').click()`,
+    );
+    assert.deepEqual(
+      await page.evaluate(`noteTest.sent.at(-1).payload.drawing`),
+      helpers.drawing,
+      'Clear is one undo action',
+    );
+    await page.evaluate(
+      `noteTest.messages.get('notecardClosed')({token:'helpers'});noteTest.editor.open('one');noteTest.messages.get('notecardEdit')({id:'one',token:'paper-roundtrip',drawing:[],paper:{pattern:'dots',tone:'white'}});`,
+    );
+    assert.equal(await page.evaluate(`document.getElementById('notecardPattern').value`), 'dots');
+    assert.equal(await page.evaluate(`document.getElementById('notecardTone').value`), 'white');
+    await page.evaluate(`noteTest.editor.cancel();noteTest.editor.open('one');
+      const dense = Array.from({length:8},()=>({pts:Array(1008).fill(.2),color:'#202830',width:.007,erase:false}));
+      noteTest.messages.get('notecardEdit')({id:'one',token:'budget',drawing:dense});
+      document.getElementById('notecardEllipse').click();document.getElementById('notecardCanvas').focus();`);
+    await key('Enter', 'Enter', 13);
+    assert.match(
+      await page.evaluate(`document.getElementById('notecardStatus').textContent`),
+      /limit reached/,
+    );
+    assert.equal(
+      await page.evaluate(`document.getElementById('notecardUndo').disabled`),
+      true,
+      'reject a whole helper before exceeding the coordinate budget',
+    );
+    await page.evaluate(`noteTest.editor.cancel()`);
+    // Erasing composites only the ink layer, including after a tone change and at thumbnail size.
+    const pixels = await page.evaluate(`(async()=>{
+      const {paintNotecard}=await import('/rendering/notecards.js');
+      const {notecardPreviewURL}=await import('/rendering/graphics.js');
+      const c=document.createElement('canvas');c.width=300;c.height=200;const ctx=c.getContext('2d');
+      const paper={pattern:'grid',tone:'yellow'}, stroke={pts:[.1,.5,.9,.5],color:'#d43b3b',width:.015,erase:false}, erase={...stroke,width:.015,erase:true};
+      const bytes=()=>Array.from(ctx.getImageData(0,0,300,200).data);
+      paintNotecard(ctx,[],{paper});const blank=bytes();
+      paintNotecard(ctx,[stroke,erase],{paper});const erased=bytes();
+      // Solid centers and grid intersections are restored, not painted ivory.
+      const sample=(data,x,y)=>data.slice((y*300+x)*4,(y*300+x)*4+4);
+      const restored=[sample(erased,150,100),sample(erased,155,100)];
+      const expected=[sample(blank,150,100),sample(blank,155,100)];
+      paintNotecard(ctx,[stroke],{back:true,paper});const hidden=bytes();
+      paintNotecard(ctx,[stroke],{back:true,paper:{pattern:'dots',tone:'white'}});const other=bytes();
+      const first=notecardPreviewURL([],paper),second=notecardPreviewURL([],{pattern:'dots',tone:'white'});
+      return {restored,expected,backSame:JSON.stringify(hidden)===JSON.stringify(other),thumbnailChanged:first!==second};
+    })()`);
+    assert.deepEqual(
+      pixels.restored,
+      pixels.expected,
+      'eraser restores the selected pattern and tone',
+    );
+    assert.equal(pixels.backSame, true, 'paper choices do not mark the concealed back');
+    assert.equal(pixels.thumbnailChanged, true, 'hand thumbnail includes paper');
+    await page.evaluate(`noteTest.messages.get('notecardClosed')({token:'hand-token'});
+      noteTest.editor.open('one'); noteTest.messages.get('notecardEdit')({id:'one',token:'screenshot',paper:{pattern:'grid',tone:'ivory'},drawing:[{pts:[.1,.2,.2,.6,.4,.25,.6,.7,.8,.3],color:'#2878ba',width:.007,erase:false}]});`);
     for (const full of [true, false]) {
       await page.evaluate(`document.body.classList.toggle('ui-full', ${full})`);
+      await page.evaluate(`document.getElementById('notecardRectangle').focus()`);
+      assert.match(
+        await page.evaluate(`document.getElementById('notecardDrawingHelp').textContent`),
+        /^Rectangle/,
+      );
+      await writeFile(
+        `/tmp/notecard-paper-${device.width}-${full ? 'full' : 'compact'}.png`,
+        Buffer.from(
+          (await browser.send('Page.captureScreenshot', { format: 'png' }, page.sessionId)).data,
+          'base64',
+        ),
+      );
       assert.equal(
         await page.evaluate(
           `document.getElementById('notecardDialog').scrollWidth > document.getElementById('notecardDialog').clientWidth`,

@@ -9,6 +9,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- **Notecard paper styles and drawing helpers.** Choose blank, ruled, grid or dotted paper in
+  ivory, white or pale yellow. Each card retains its paper through hands, private passing,
+  Show, stacks and saves; concealed backs remain indistinguishable. Line, rectangle and ellipse
+  tools create single undoable strokes, with a Constrain toggle/Shift for 45° lines, squares
+  and circles. Eraser/Clear affect ink only. Includes keyboard cursor drawing and the approved
+  Tabler icons; older saves default to blank ivory paper.
 - **Notecard stacks.** Spawn 2–16 blank notecards as a finite stack, draw privately to hand or
   editor, return edited artwork to the top, play the top face-down, shuffle, split, and combine
   selected loose notecards/stacks. Contents and order remain server-private and survive saves;
