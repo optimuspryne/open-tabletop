@@ -111,6 +111,12 @@ Only one package operation runs at a time per server process. Imports create sep
 copies, preserving existing assets. Saved dispenser definitions are included; scene ZIP exports
 and live player data are outside the portable format.
 
+### Deployment verification
+
+On 2026-09-25, the project owner reported successful 0.19.0 deployment tests via Docker,
+bare metal and Proxmox, with asset-pack uploads also working successfully. This records
+manual verification of those deployment and upload scenarios.
+
 ## Rules that keep the guarantees honest
 
 - **Never re-push a version tag.** Once `:X.Y.Z` is pushed, those bits are frozen. A fix

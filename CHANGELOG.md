@@ -8,6 +8,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Documentation
+- Record successful user-reported 0.19.0 deployment tests on Docker, bare metal and Proxmox,
+  along with successful asset-pack uploads.
+
 ## [0.19.0] — 2026-09-24
 
 ### Added
