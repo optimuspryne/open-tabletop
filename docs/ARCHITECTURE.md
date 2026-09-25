@@ -1025,9 +1025,15 @@ machinery:
   temporarily makes the body static. The interaction gate rejects mutations targeting reserved
   cards, and physics maintenance preserves that reservation. Artwork is sent only to the editor
   or published on a face-up, unreserved card. Private hand entries carry `kind: "notecard"` and
-  committed drawing and bounded paper-style data, inheriting account-owned park/claim/reassignment
+  committed drawing, bounded paper-style data and editable plain-text boxes, inheriting account-owned park/claim/reassignment
   and game persistence. Paper follows the artwork's privacy boundary, including on public faces,
-  private Show and saved stack entries; older snapshots default to blank ivory. Client shape helpers
+  private Show and saved stack entries; older snapshots default to blank ivory and no text boxes.
+  `normalizeNotecardContent` validates the entire private document before mutation/allocation.
+  Text remains structured editable data, never HTML or flattened ink. The focused text controller
+  owns selection and gestures, while the parent editor owns content and shared ink/text history.
+  Measured wrapping is shared by editor, thumbnails and meshes; text paints above ink, so Eraser
+  and Clear ink preserve it. Text overflow blocks editor commit with a recoverable warning;
+  server validation bounds payload/geometry independently of browser font metrics. Client shape helpers
   emit ordinary normalized strokes, so server validation and history retain one stroke format.
   Rendering composites ink separately from paper, allowing erasing without covering patterns;
   the shared whiteboard stroke renderer and protocol remain unchanged. Keyboard drawing enters
@@ -1039,7 +1045,7 @@ machinery:
   document even during editing; restore keeps concealed faces server-only. Departure, loss of
   gameplay access, expiry and table reset release reservations without replacing committed art.
   Shared stroke replay is reused from the whiteboard; its public broadcast protocol is not used
-  for private drafts. Notecard stacks add server-only ordered `{drawing,paper,noteProps}` entries
+  for private drafts. Notecard stacks add server-only ordered `{drawing,paper,textBoxes,noteProps}` entries
   within the same service; every entry counts toward the room cap. A stack edit reserves its
   committed top without consuming it. Transfers validate before consumption, and combining
   reuses one physical piece to work at the piece cap. Public state contains only count/back

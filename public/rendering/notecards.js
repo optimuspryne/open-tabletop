@@ -6,6 +6,7 @@ import {
   notecardStackHeight,
 } from '../../shared/notecards.js';
 import { drawCanvasStroke } from './strokes.js';
+import { paintNotecardText } from './notecard-text.js';
 import { releaseCanvasOnDispose } from './resources.js';
 
 // One scratch ink layer per live destination, reclaimed with its canvas/context.
@@ -20,7 +21,7 @@ const PAPER_GUIDES = Object.freeze({
 export function paintNotecard(
   context,
   drawing,
-  { back = false, name = '', count = 0, paper } = {},
+  { back = false, name = '', count = 0, paper, textBoxes = [] } = {},
 ) {
   const { width, height } = context.canvas;
   const style = normalizeNotecardPaper(paper) || normalizeNotecardPaper();
@@ -85,6 +86,7 @@ export function paintNotecard(
       drawCanvasStroke(inkContext, stroke, width, height, '#000000', 1);
     }
     context.drawImage(ink, 0, 0);
+    paintNotecardText(context, textBoxes);
   }
 }
 
@@ -95,6 +97,7 @@ export function notecardMesh(props = {}) {
     canvas.height = NOTECARD.canvasHeight;
     paintNotecard(canvas.getContext('2d'), props.drawing, {
       paper: props.paper,
+      textBoxes: props.textBoxes,
       back,
       name: props.editingName || '',
       count: props.stackCount || 0,

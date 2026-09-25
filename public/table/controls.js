@@ -52,7 +52,7 @@ const logicalKey = (e) => ({
 
 // Flat drawing input: pen strokes, explicit pan, wheel zoom and two-finger view transforms.
 // A pinch cancels the unfinished stroke and suppresses drawing until all fingers lift.
-export function attachDrawingControls(canvas, intents) {
+export function attachDrawingControls(canvas, intents, focusTarget = canvas) {
   const pointers = new Map();
   let owner = null,
     mode = null,
@@ -73,7 +73,7 @@ export function attachDrawingControls(canvas, intents) {
     if (mode && mode !== 'gesture' && !pointers.has(owner)) return;
     if (event.pointerType === 'touch' && pointers.size && mode !== 'gesture' && !last?.touch)
       return;
-    if (!pointers.size) canvas.focus();
+    if (!pointers.size) focusTarget.focus();
     pointers.set(event.pointerId, point(event));
     canvas.setPointerCapture(event.pointerId);
     event.preventDefault();
@@ -145,12 +145,14 @@ export function attachDrawingControls(canvas, intents) {
   );
   const host = canvas.closest('dialog') || canvas;
   host.addEventListener('keydown', (event) => {
-    if (event.target === canvas && !pointers.size && intents.command?.(logicalKey(event))) {
+    const keyboardTarget =
+      event.target === focusTarget || intents.ownsKeyboardTarget?.(event.target);
+    if (keyboardTarget && !pointers.size && intents.command?.(logicalKey(event), event.target)) {
       event.preventDefault();
       event.stopPropagation();
       return;
     }
-    if (event.key === ' ' && event.target === canvas) {
+    if (event.key === ' ' && keyboardTarget) {
       space = true;
       event.preventDefault();
     }
@@ -158,7 +160,7 @@ export function attachDrawingControls(canvas, intents) {
   host.addEventListener('keyup', (event) => {
     if (event.key === ' ') space = false;
   });
-  canvas.addEventListener('blur', () => {
+  canvas.addEventListener('focusout', () => {
     space = false;
     intents.blur?.();
   });

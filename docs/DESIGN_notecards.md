@@ -1,6 +1,6 @@
 # Drawable notecards
 
-Status: paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
+Status: editable text boxes are implemented, user-tested and approved for commit. Paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
 implemented and user-approved for commit. Automated verification is recorded below; the user
 did not specify a per-device or multiplayer test matrix.
 
@@ -300,3 +300,76 @@ asset 404s without failing. No database/query/migration change requires the inte
 The user reported that the extension works great and approved it for commit. No per-device,
 assistive-technology or multiplayer test matrix was specified; the detailed QA checklist remains
 available for future verification.
+
+
+## Editable text boxes — implemented, user-tested and approved for commit
+
+The user approved the interactive desktop/full and phone/compact example and Tabler choices:
+Text (`cursor-text`), Add (`plus`), Delete (`trash`), width resize (`arrow-autofit-width`). These
+already exist in the sprite. The Text tool opens a native textarea, box picker, size/alignment/ink
+controls and accessible selection overlays. Up to eight multiline boxes (500 UTF-16 code units
+each) stay editable through table placement, hands, private pass, selective Show, stacks and saves.
+Mouse/touch dragging moves boxes and resizes wrapping width. Keyboard arrows move; Shift+left/right
+or arrows on the width handle resize; Enter edits; Delete removes. Native fields retain standard
+text editing. Two fingers cancel tentative movement before navigating. Compact/full controls use
+names, focus indicators and equivalent written hints. Overlay buttons do not blur underlying text.
+
+Text paints above ink. Eraser/Clear ink preserve it; shared Undo/Redo covers drawing and text,
+grouping each typing session and pointer drag into one action. Paper choices remain outside
+history. Overflow warns and blocks commit while retaining the draft. Layout uses system sans-serif
+font metrics; cross-platform fallback may differ. No rich text, custom fonts or templates are added.
+Older saves default to no boxes, and older commits omitting text retain committed boxes. Invalid
+payloads fail before mutation or destructive restore. Concealed text uses the existing server-only
+artwork boundary, including saved/parked hands and stack order; failed transfers retain content.
+
+Reuse decision: extend the existing private document service, transfers, serializer, renderer and
+input intents. `normalizeNotecardContent` consolidates validation of the three content fields.
+Text layout has its own renderer module, reused for painting and editor bounds; text selection and
+gestures have a focused controller with explicit dependencies. The parent editor retains draft and
+history ownership. Existing drawing/whiteboard protocols and geometry stay compatible.
+
+### Text extension file map
+
+| File | Functions/helpers or responsibilities added/changed |
+| --- | --- |
+| `shared/notecards.js` | Add `NOTECARD_TEXT`, `normalizeNotecardTextBoxes`, `normalizeNotecardContent`; extend `normalizeNotecardStack` for complete documents. |
+| `server/game/notecards.js` | Extend `give`, `take`, `placeHandCard`, `publish`, `restore`, `claim`, `commit`, `placeStackCard`, `draw`, `combine` and snapshots to preserve private text and roll back complete content on failures. |
+| `server/game/piece-lifecycle.js` | `spawn` validates the combined document before allocating pieces. |
+| `server/game/scene-persistence.js` | `serializeScene` retains private text; `applyScene` preflights combined documents and restores hand content. |
+| `server/game/handlers/room-features.js` | `showStart` sends text only to the selected audience. |
+| `public/rendering/notecard-text.js` | Add `layoutNotecardText` and `paintNotecardText`: canonical wrapping, newlines, plain-text drawing, clipping and overflow metrics. |
+| `public/rendering/notecards.js` | Extend `paintNotecard`/`notecardMesh` to paint text above ink only on authorized fronts. |
+| `public/rendering/graphics.js` | Extend `notecardPreviewURL` with text. |
+| `public/table/hand.js` | `renderHand`/drag state and preview meshes carry text. |
+| `public/table/presence.js` | `refreshFan` passes authorized text to Show meshes. |
+| `public/table/notecard-text.js` | Add `createNotecardTextEditor`: `sync`, `updateOverlay`, `add`, `remove`, `select`, `replace`, `endEdit`, `error`, `press`/`move`/`release`/`cancel`, `command` and `reset`; manage selection, typing, gestures, accessible overlays and draft cleanup. |
+| `public/table/notecards.js` | Extend draft/open/show/hand/state/cleanup and commit flows for text; add combined `snapshot`, update `remember`/`history`, wire controller intents and content rendering, overflow checks and accessible descriptions. |
+| `public/table/controls.js` | Extend `attachDrawingControls` with separate stage/focus target and owned keyboard targets; preserve pointer/pinch and focus-loss intents. |
+| `public/table.html` | Approved Text tool, fields, box controls, overlay stage and accessible help. |
+| `public/styles.css` | Responsive text panel/stage, transparent selectable overlays, focus and coarse-pointer width handles. |
+| `test/notecards.js` | Text payload/permission validation, legacy defaults, private transfer/Show, hands, stack/scene round trips and allocation rollback. |
+| `test/notecard-text.js` | Measured wrap/newlines/Unicode, size/width/position overflow and empty-box layout. |
+| `scripts/lib/notecard-text-test.mjs` | Add `verifyNotecardText`: production mouse/touch/keyboard editing, zoomed width resize, shared history, overflow, privacy, rendering and compact/full screenshots. |
+| `scripts/notecard-test.mjs` | Run the focused text fixture; support modifier keys in browser input helper. |
+| `CHANGELOG.md` | Unreleased feature entry. |
+| `docs/REFERENCE.md` | Text contract, normalization, renderer/controller and input boundaries. |
+| `docs/ARCHITECTURE.md` | Private structured text, content validation and state/rendering ownership. |
+| `docs/GESTURES.md` | Mouse/touch and keyboard text editing instructions. |
+| `docs/ROADMAP.md` | Text implementation, user acceptance and remaining templates status. |
+| `docs/DEVICE_QA.md` | Text, accessibility, real-device and multiplayer smoke checks. |
+| `docs/DESIGN_notecards.md` | Approved scope, reuse decision, file map and verification status. |
+
+Restart the server and refresh all browsers before testing. No database migration is required.
+Text verification on 2026-09-25: `npm run check` passed **823 unit tests**, lint, formatting and
+CSS checks, including the final right-edge rounding regression. `test:input` passed **57/57**;
+`test:devices` passed all **seven profiles**. The focused text browser fixture passed mouse at
+1280 px and touch at 390/360 px, including zoomed width-handle dragging, combined history,
+overflow recovery, concealment and thumbnails. `test:components` passed its full desktop/touch
+production fixtures and the final notecard regression. An initial component process was interrupted
+(exit 143); a separate rerun completed successfully. The fixture's seven expected sample-asset
+404s remain non-failing. Full/compact desktop and phone screenshots were inspected, including a
+fix preventing selection overlays from blurring text. Local documentation links and
+`git diff --check` passed. No database/query/migration change required `test:integration`.
+The user reported that the text box extension works great and approved it for commit. No detailed
+real-device, assistive-technology or multiplayer matrix was specified; the checklist remains
+available for future verification in [DEVICE_QA.md](DEVICE_QA.md).

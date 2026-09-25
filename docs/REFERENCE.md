@@ -2385,27 +2385,35 @@ input. Notecards are a distinct `KINDS`/`KIND` piece type with fixed shared dime
 paper defaults to blank ivory on restore; malformed explicit values return `null`. An older
 commit omitting paper preserves the current card's paper. Validation occurs before mutation or
 scene replacement. Paper has the same privacy/recipient boundary as artwork.
+`NOTECARD_TEXT` and `normalizeNotecardTextBoxes(value)` bound editable plain text to eight boxes,
+500 UTF-16 code units each. A box is `{id,text,x,y,w,size,color,align}`: unique integer ID 1–8,
+normalized coordinates, width at least 0.15 and within the right paper edge, size 0.03/0.04/0.06
+of paper width, an existing ink color, and left/center/right alignment. Explicit newlines survive;
+CRLF normalizes to LF. Unknown keys, control characters and invalid geometry are rejected.
+Missing text defaults to `[]` in older snapshots; omitted commit text preserves existing boxes.
+`normalizeNotecardContent(value)` validates/copies `{drawing,paper,textBoxes}` as one boundary
+for spawn, commits, hand restoration and stack entries before allocation or mutation.
 
 **`server/game/notecards.js`** exposes `createNotecards(room)` and
 `registerNotecardHandlers(room)`. The private service owns committed drawings and session/token
 reservations. Requests are `notecardEdit({id})` for a table piece or `notecardEdit({hid})` for
-an actor-owned hand notecard, `notecardCommit({id,token,drawing,paper,faceDown,destination,recipient})`,
+an actor-owned hand notecard, `notecardCommit({id,token,drawing,paper,textBoxes,faceDown,destination,recipient})`,
 `notecardKeepAlive({id,token})`, `notecardCancel({id,token})`, and `notecardFlip({id})`.
 `destination` is `table` (default, requires boolean `faceDown`), `hand`, or `pass` (requires a
 live active `recipient` session). A hand reply uses `id: "hand:" + hid` plus `hid`; keepalive,
 cancel and commit use that returned ID and token. Only cancellation uses the cleanup
 capability; the others require gameplay access.
-Replies `notecardEdit` and `notecardClosed` go only to the actor. Public props contain `drawing` and `paper`
+Replies `notecardEdit` and `notecardClosed` go only to the actor. Public props contain `drawing`, `paper` and `textBoxes`
 only while face-up and unreserved; `editing`/`editingName` identify the current editor.
 Snapshots include committed private drawing data, without editing tokens or draft strokes.
 
-Private hand entries are `{hid,kind:"notecard",back:"back",drawing,paper,noteProps}`; `noteProps`
+Private hand entries are `{hid,kind:"notecard",back:"back",drawing,paper,textBoxes,noteProps}`; `noteProps`
 retains label/snap/stand metadata. Existing hand ownership, park/claim, reassignment, reorder
 and game persistence preserve these entries; portable scenes exclude hands. The 16-card cap
 counts table documents, every contained stack entry, live hands and parked hands together. `take` and `placeHandCard`
 extend existing transfer paths, checking physical capacity before consumption. During a hand
 edit, play/drop/Show are blocked; entering the editor stops any prior Show. Explicit selective
-Show sends committed drawings only to its audience. Transfers never publish private faces.
+Show sends committed drawings, paper and text only to its audience. Transfers never publish private faces.
 
 **`public/table/notecards.js`** exposes `createNotecardEditor`: `open`, `openHand`, `syncHand`, `bindRoom`, `cancel`,
 and `isActive`. Inspection routes notecards into the native dialog. The client retains the
@@ -2415,22 +2423,39 @@ pinch input into intents; `createDrawingView` owns the local normalized 1–8× 
 Painting and pointer mapping use inverse transforms; navigation never changes saved strokes.
 The chosen Tabler controls retain accessible names and native tooltips above the dialog layer. `paintNotecard`/`notecardMesh` build surfaces with individually disposable
 textures; `drawCanvasStroke` is shared with whiteboard replay.
-`paintNotecard(context,drawing,{paper,back,name,count})` uses one weakly held scratch ink canvas
+`paintNotecard(context,drawing,{paper,textBoxes,back,name,count})` uses one weakly held scratch ink canvas
 per live destination. Destination-out erasing affects only ink; paper/pattern is painted behind
-it. Hidden/back painting clears the scratch pixels and ignores paper appearance. Thumbnails,
-drag previews and selective Show pass paper through this renderer. Whiteboard replay is unchanged.
+it; editable text is painted above the ink. Hidden/back painting clears the scratch pixels and
+ignores paper/text appearance. Thumbnails, drag previews and selective Show pass all content
+through this renderer. Whiteboard replay is unchanged.
+`layoutNotecardText` and `paintNotecardText` in `public/rendering/notecard-text.js` measure and
+wrap plain text in canonical paper pixels with a system sans-serif font, then scale to the target.
+No HTML is interpreted; long words wrap, explicit newlines remain, and rendering clips to paper.
+The editor warns and disables commit if measured text exceeds the bottom edge; the server checks
+bounded geometry/data without depending on browser font metrics. Font fallback can vary by device.
 `notecardShapePoints(tool,start,end,constrain)` in `public/table/notecard-shapes.js` emits an
 ordinary normalized polyline (line 4 coordinates, rectangle 10, ellipse 130). Constraints use
 canvas dimensions, keeping physical squares/circles correct; snapped lines shorten at edges.
 The editor previews/replaces one draft stroke, checks its full coordinate budget before starting,
-and commits it as one history action. Paper settings are draft-local until commit; Clear/history
-operate on ink only. `attachDrawingControls` forwards focused keyboard commands only while no
+and commits it as one history action. Paper settings are draft-local until commit and outside
+Undo/Redo; Clear ink preserves text, while history snapshots include both ink and text. `attachDrawingControls` forwards focused keyboard commands only while no
 pointer gesture is active and notifies blur. Arrows move a local cursor; Enter starts/finishes,
 Escape cancels an unfinished keyboard stroke, and blur discards it. Tool names, pressed states,
 canvas instructions and status feedback remain accessible in compact mode.
 
+**`public/table/notecard-text.js`** exposes `createNotecardTextEditor`. It owns text selection,
+typing sessions, cancellable gestures and accessible overlay controls; the parent editor owns
+content, permissions and combined history. Add selects a new box and focuses the native textarea.
+Typing, formatting, move, resize and Delete are undoable; a drag is one action. Text mode hides
+ink-only settings and adds a box picker, size/alignment/color controls and width handle. Arrows
+move a focused box/card, Shift+left/right or the focused handle's arrows resize, Enter edits,
+and Delete removes. Two-finger navigation cancels a tentative text move. Controls are removed
+and private text cleared on close. `attachDrawingControls(stage,intents,focusTarget)` keeps
+pointer capture on the stage and forwards keyboard commands only from the canvas or owned
+overlay controls, never from the textarea/native selects. Pan/zoom remains local.
+
 **Notecard stacks:** `notecardStack` is a distinct physical kind. Blank spawns accept only
-`{count: 2..16}`. Server-only entries `{drawing,paper,noteProps}` are bottom-first; public props never
+`{count: 2..16}`. Server-only entries `{drawing,paper,textBoxes,noteProps}` are bottom-first; public props never
 include them. `normalizeNotecardStack` validates/copies private inventories, and
 `notecardStackHeight` drives mesh/collider height. Mass is `NOTECARD.mass * count`.
 `notecardDraw({id,destination:"hand"|"table"})` draws to the actor or plays face-down beside the

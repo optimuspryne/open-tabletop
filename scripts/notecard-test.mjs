@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
+import { verifyNotecardText } from './lib/notecard-text-test.mjs';
 import { serveDir, launch, newPage } from './lib/headless.mjs';
 
 const server = await serveDir({
@@ -250,11 +251,11 @@ try {
         helperRect.y + helperRect.h * 0.7,
       );
     }
-    const key = async (key, code, windowsVirtualKeyCode) => {
+    const key = async (key, code, windowsVirtualKeyCode, modifiers = 0) => {
       for (const type of ['keyDown', 'keyUp'])
         await browser.send(
           'Input.dispatchKeyEvent',
-          { type, key, code, windowsVirtualKeyCode },
+          { type, key, code, windowsVirtualKeyCode, modifiers },
           page.sessionId,
         );
     };
@@ -349,6 +350,7 @@ try {
     );
     assert.equal(pixels.backSame, true, 'paper choices do not mark the concealed back');
     assert.equal(pixels.thumbnailChanged, true, 'hand thumbnail includes paper');
+    await verifyNotecardText({ page, browser, device, pointer, key });
     await page.evaluate(`noteTest.messages.get('notecardClosed')({token:'hand-token'});
       noteTest.editor.open('one'); noteTest.messages.get('notecardEdit')({id:'one',token:'screenshot',paper:{pattern:'grid',tone:'ivory'},drawing:[{pts:[.1,.2,.2,.6,.4,.25,.6,.7,.8,.3],color:'#2878ba',width:.007,erase:false}]});`);
     for (const full of [true, false]) {

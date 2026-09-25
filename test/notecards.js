@@ -11,6 +11,8 @@ import {
   NOTECARD,
   normalizeNotecardDrawing,
   normalizeNotecardPaper,
+  normalizeNotecardTextBoxes,
+  normalizeNotecardContent,
   normalizeNotecardStack,
 } from '../shared/notecards.js';
 import { colliderSpec } from '../shared/collider-spec.js';
@@ -142,6 +144,7 @@ function harness() {
   const id = room.spawn('notecard', [0, 1, 0], {
     drawing: artwork,
     paper: defaultPaper,
+    textBoxes: [],
     faceDown: true,
   });
   const send = (type, payload, actor = alice) => handlers.get(type)(actor, payload);
@@ -277,6 +280,7 @@ test('disconnect cleanup and expired leases restore committed contents and rejec
   assert.deepEqual(room.notecards.snapshot(id), {
     drawing: artwork,
     paper: defaultPaper,
+    textBoxes: [],
     faceDown: true,
   });
 });
@@ -299,6 +303,7 @@ test('scene round-trip retains concealed contents and committed orientation duri
   assert.deepEqual(room.notecards.snapshot(restoredId), {
     drawing: artwork,
     paper: defaultPaper,
+    textBoxes: [],
     faceDown: true,
   });
   assert.equal(readProps(room.state.pieces.get(restoredId)).drawing, undefined);
@@ -479,7 +484,10 @@ test('explicit Show reveals a hand notecard only to the chosen audience and does
   send('showStart', { hids: 'all', to: ['bob'] });
   assert.deepEqual(bob.sent.at(-1), {
     type: 'showFan',
-    payload: { sid: 'alice', cards: [{ kind: 'notecard', drawing: artwork, paper: defaultPaper }] },
+    payload: {
+      sid: 'alice',
+      cards: [{ kind: 'notecard', drawing: artwork, paper: defaultPaper, textBoxes: [] }],
+    },
   });
   assert.equal(room.state.pieces.size, 0);
 });
@@ -494,8 +502,13 @@ test('editing a shown notecard retracts the reveal before returning private artw
 });
 
 const stackCards = () => [
-  { drawing: [], paper: defaultPaper, noteProps: { label: 'Bottom', snap: true, stand: 'flat' } },
-  { drawing: artwork, paper: defaultPaper, noteProps: { label: 'Top' } },
+  {
+    drawing: [],
+    paper: defaultPaper,
+    textBoxes: [],
+    noteProps: { label: 'Bottom', snap: true, stand: 'flat' },
+  },
+  { drawing: artwork, paper: defaultPaper, textBoxes: [], noteProps: { label: 'Top' } },
 ];
 const sceneOptions = {
   maxPieces: 250,
@@ -580,6 +593,7 @@ test('split and combine preserve all drawings and order, work at the notecard ca
   const cards = Array.from({ length: 16 }, (_, i) => ({
     drawing: i % 2 ? artwork : [],
     paper: defaultPaper,
+    textBoxes: [],
     noteProps: { label: String(i) },
   }));
   const id = room.spawn('notecardStack', [0, 1, 0], { cards });
@@ -859,4 +873,214 @@ test('failed hand placement restores both paper and drawing, retaining the edit 
   assert.deepEqual(card.drawing, artwork);
   assert.equal(room.notecards.isEditing(lease.id), true);
   room.spawn = spawn;
+});
+
+const noteText = [
+  {
+    id: 1,
+    text: 'TOP SECRET\nπ <b>plain text</b>',
+    x: 0.1,
+    y: 0.2,
+    w: 0.7,
+    size: 0.04,
+    color: '#202830',
+    align: 'left',
+  },
+];
+
+test('text boxes validate bounded plain text, geometry, identifiers and formatting', () => {
+  assert.deepEqual(normalizeNotecardTextBoxes(), []);
+  assert.deepEqual(normalizeNotecardTextBoxes(noteText), noteText);
+  assert.notEqual(normalizeNotecardTextBoxes(noteText)[0], noteText[0]);
+  const edge = normalizeNotecardTextBoxes([{ ...noteText[0], x: 0.10005, w: 0.89995 }]);
+  assert.ok(edge);
+  assert.deepEqual(
+    normalizeNotecardTextBoxes(edge),
+    edge,
+    'right-edge rounding remains valid on reload',
+  );
+  assert.equal(
+    normalizeNotecardTextBoxes([{ ...noteText[0], text: 'a\r\nb\rc' }])[0].text,
+    'a\nb\nc',
+  );
+  for (const patch of [
+    { id: 0 },
+    { id: 9 },
+    { id: 1.5 },
+    { text: 'a'.repeat(501) },
+    { text: 5 },
+    { text: 'bad\u0000' },
+    { x: NaN },
+    { x: -0.1 },
+    { x: 0.9 },
+    { y: Infinity },
+    { w: 0.01 },
+    { size: 0.08 },
+    { color: 'red' },
+    { align: 'justify' },
+    { html: '<img>' },
+  ])
+    assert.equal(normalizeNotecardTextBoxes([{ ...noteText[0], ...patch }]), null);
+  for (const value of [null, {}, [null], Array(9).fill(noteText[0]), [...noteText, ...noteText]])
+    assert.equal(normalizeNotecardTextBoxes(value), null);
+  assert.equal(normalizeNotecardContent({ drawing: [], textBoxes: null }), null);
+  assert.deepEqual(normalizeNotecardContent({ drawing: [] }).textBoxes, []);
+  assert.equal(normalizeNotecardStack([{ drawing: [], textBoxes: [{}] }]), null);
+});
+
+test('text remains private under leases and backs, rejects forged/invalid updates, and survives old-client commits', () => {
+  const { room, id, claim, send, bob } = harness();
+  let lease = claim();
+  send('notecardCommit', { ...lease, textBoxes: noteText, faceDown: true });
+  assert.deepEqual(room.notecards.snapshot(id).textBoxes, noteText);
+  assert.equal(readProps(room.state.pieces.get(id)).textBoxes, undefined);
+  const before = bob.sent.length;
+  lease = claim();
+  assert.deepEqual(lease.textBoxes, noteText);
+  assert.equal(bob.sent.length, before);
+  send('notecardCommit', { ...lease, textBoxes: [], faceDown: false }, bob);
+  send('notecardCommit', { ...lease, textBoxes: [{ ...noteText[0], w: 2 }], faceDown: false });
+  assert.deepEqual(room.notecards.snapshot(id).textBoxes, noteText);
+  assert.equal(room.notecards.isEditing(id), true);
+  send('notecardCancel', lease);
+  lease = claim();
+  send('notecardCommit', { id, token: lease.token, drawing: [], faceDown: false });
+  assert.deepEqual(readProps(room.state.pieces.get(id)).textBoxes, noteText);
+  send('notecardFlip', { id });
+  assert.equal(readProps(room.state.pieces.get(id)).textBoxes, undefined);
+});
+
+test('editable text survives hands, private pass, Show, parking and saved games', () => {
+  const { room, id, claim, send, alice, bob } = harness();
+  alice.auth.userId = 'account-a';
+  bob.auth.userId = 'account-b';
+  send('notecardCommit', { ...claim(), textBoxes: noteText, destination: 'hand' });
+  const card = room.hands.get('alice')[0];
+  assert.deepEqual(card.textBoxes, noteText);
+  send('notecardEdit', { hid: card.hid });
+  send('notecardCommit', {
+    ...alice.sent.at(-1).payload,
+    textBoxes: [{ ...noteText[0], text: 'Changed' }],
+    destination: 'pass',
+    recipient: 'bob',
+  });
+  const expected = [{ ...noteText[0], text: 'Changed' }];
+  assert.deepEqual(room.hands.get('bob')[0].textBoxes, expected);
+  send('showStart', { hids: 'all', to: ['alice'] }, bob);
+  assert.deepEqual(alice.sent.at(-1).payload.cards[0].textBoxes, expected);
+  parkHand(room, bob);
+  claimHand(room, 'account-b', 'bob');
+  applyScene(room, serializeGame(room), sceneOptions);
+  assert.deepEqual(room.pendingHands.get('account-b').cards[0].textBoxes, expected);
+  claimHand(room, 'account-b', 'bob');
+  send('notecardEdit', { hid: room.hands.get('bob')[0].hid }, bob);
+  assert.deepEqual(bob.sent.at(-1).payload.textBoxes, expected);
+  send(
+    'notecardCommit',
+    { ...bob.sent.at(-1).payload, destination: 'table', faceDown: false },
+    bob,
+  );
+  assert.deepEqual(readProps([...room.state.pieces.values()][0]).textBoxes, expected);
+  assert.equal(room.state.pieces.has(id), false);
+});
+
+test('text follows stack entries through editing, split/combine, snapshot, draw and rollback', () => {
+  const { room, id: loose, send, alice } = harness();
+  const id = room.spawn('notecardStack', [0, 2, 0], {
+    cards: [{ drawing: [] }, { drawing: [], textBoxes: noteText }],
+  });
+  send('notecardEdit', { id });
+  let lease = alice.sent.at(-1).payload;
+  assert.deepEqual(lease.textBoxes, noteText);
+  send('notecardCommit', {
+    ...lease,
+    destination: 'stack',
+    textBoxes: [{ ...noteText[0], text: 'Saved' }],
+  });
+  const expected = [{ ...noteText[0], text: 'Saved' }];
+  const snapshot = room.notecards.snapshot(id);
+  send('notecardEdit', { id });
+  lease = alice.sent.at(-1).payload;
+  const spawn = room.spawn;
+  room.spawn = () => {
+    throw new Error('allocation');
+  };
+  assert.throws(
+    () =>
+      room.notecards.commit(alice, {
+        ...lease,
+        destination: 'table',
+        faceDown: false,
+        textBoxes: [],
+      }),
+    /allocation/,
+  );
+  assert.deepEqual(room.notecards.snapshot(id), snapshot);
+  room.spawn = spawn;
+  send('notecardCancel', lease);
+  send('notecardSplit', { id });
+  const split = [...room.state.pieces.keys()].at(-1);
+  assert.deepEqual(room.notecards.snapshot(split).cards[0].textBoxes, expected);
+  send('notecardCombine', { ids: [id, split, loose] });
+  applyScene(room, serializeScene(room), sceneOptions);
+  const restored = [...room.state.pieces.keys()][0];
+  assert.equal(readProps(room.state.pieces.get(restored)).textBoxes, undefined);
+  const order = room.notecards.snapshot(restored).cards;
+  for (const entry of [...order].reverse()) {
+    send('notecardDraw', { id: restored, destination: 'hand' });
+    assert.deepEqual(room.hands.get('alice').at(-1).textBoxes, entry.textBoxes);
+  }
+});
+
+test('bad saved text fails before reset; older loose/stack/hand entries receive empty text', () => {
+  const { room, id } = harness();
+  for (const scene of [
+    { pieces: [{ type: 'notecard', props: { textBoxes: null } }] },
+    { pieces: [{ type: 'notecardStack', props: { cards: [{ drawing: [], textBoxes: [{}] }] } }] },
+    { hands: [{ userId: 'a', cards: [{ kind: 'notecard', drawing: [], textBoxes: [{}] }] }] },
+  ]) {
+    assert.throws(() => applyScene(room, scene, sceneOptions), /invalid/);
+    assert.equal(room.state.pieces.has(id), true);
+  }
+  applyScene(
+    room,
+    {
+      pieces: [
+        { type: 'notecard', pos: [0, 1, 0], props: {} },
+        { type: 'notecardStack', pos: [0, 1, 0], props: { cards: [{ drawing: [] }] } },
+      ],
+      hands: [{ userId: 'legacy', cards: [{ kind: 'notecard', drawing: [] }] }],
+    },
+    sceneOptions,
+  );
+  for (const [pieceId, piece] of room.state.pieces) {
+    const doc = room.notecards.snapshot(pieceId);
+    assert.deepEqual(piece.type === 'notecardStack' ? doc.cards[0].textBoxes : doc.textBoxes, []);
+  }
+  assert.deepEqual(room.pendingHands.get('legacy').cards[0].textBoxes, []);
+});
+
+test('failed hand placement restores text as well as ink and paper', () => {
+  const { room, claim, send, alice } = harness();
+  send('notecardCommit', { ...claim(), textBoxes: noteText, destination: 'hand' });
+  const card = room.hands.get('alice')[0];
+  send('notecardEdit', { hid: card.hid });
+  const lease = alice.sent.at(-1).payload;
+  room.spawn = () => {
+    throw new Error('allocation');
+  };
+  assert.throws(
+    () =>
+      room.notecards.commit(alice, {
+        ...lease,
+        textBoxes: [],
+        drawing: [],
+        destination: 'table',
+        faceDown: false,
+      }),
+    /allocation/,
+  );
+  assert.deepEqual(card.textBoxes, noteText);
+  assert.deepEqual(card.drawing, artwork);
+  assert.equal(room.notecards.isEditing(lease.id), true);
 });

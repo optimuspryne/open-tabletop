@@ -1,8 +1,4 @@
-import {
-  normalizeNotecardDrawing,
-  normalizeNotecardPaper,
-  normalizeNotecardStack,
-} from '../../shared/notecards.js';
+import { normalizeNotecardContent, normalizeNotecardStack } from '../../shared/notecards.js';
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
@@ -36,10 +32,9 @@ export function createPieceLifecycle({
     if (type === 'notecard' && !room.notecards.hasCapacity())
       throw new Error('The notecard limit was reached.');
     if (type === 'notecard') {
-      const drawing = normalizeNotecardDrawing(props.drawing ?? []);
-      const paper = normalizeNotecardPaper(props.paper);
-      if (!drawing || !paper) throw new Error('Invalid notecard drawing or paper.');
-      props = { ...props, drawing, paper };
+      const content = normalizeNotecardContent({ ...props, drawing: props.drawing ?? [] });
+      if (!content) throw new Error('Invalid notecard content.');
+      props = { ...props, ...content };
     }
     if (type === 'notecardStack') {
       const cards = normalizeNotecardStack(

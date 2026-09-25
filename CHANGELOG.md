@@ -9,6 +9,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- **Editable notecard text boxes.** Add up to eight multiline boxes with size, ink color and
+  alignment; move them and resize their wrapping width with mouse, touch or keyboard. Text stays
+  above ink and remains editable through hands, private passing, Show, stacks and saves. Shared
+  Undo/Redo covers ink and text; Eraser/Clear ink preserve text. Includes the approved Tabler
+  controls, accessible box selection and an overflow warning that keeps the draft open.
 - **Notecard paper styles and drawing helpers.** Choose blank, ruled, grid or dotted paper in
   ivory, white or pale yellow. Each card retains its paper through hands, private passing,
   Show, stacks and saves; concealed backs remain indistinguishable. Line, rectangle and ellipse
@@ -58,6 +63,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Restart the server and refresh browsers to use the new sky derivative variants. No migration.
 
 ### Documentation
+- Record successful user testing and commit approval for editable notecard text boxes.
 - Record successful user testing and commit approval for notecard stacks.
 - Require an approved mock-up or example before adding, modifying or removing UI elements;
   document accessibility expectations for keyboard use, focus, accessible labels, hints and touch.

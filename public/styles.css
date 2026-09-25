@@ -7294,7 +7294,22 @@ body.not-gm .gm-only {
 .notecard-tools label { display: inline-flex; align-items: center; gap: 6px; }
 .notecard-ink { width: 32px; min-height: 32px; background: var(--ink); border: 2px solid var(--border); }
 .notecard-ink[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
-#notecardCanvas { display: block; width: min(100%, max(300px, calc((100dvh - 520px) * 1.5))); margin-inline: auto; height: auto; aspect-ratio: 3 / 2; touch-action: none; cursor: crosshair; border-radius: 4px; }
+.notecard-stage { position: relative; width: min(100%, max(300px, calc((100dvh - 520px) * 1.5))); margin-inline: auto; touch-action: none; border-radius: 4px; overflow: hidden; }
+#notecardCanvas { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; touch-action: none; cursor: crosshair; }
+.notecard-dialog.has-text-tool .notecard-stage { width: min(100%, max(280px, calc((100dvh - 710px) * 1.5))); }
+.notecard-text-panel { margin-bottom: var(--gap); }
+.notecard-text-panel .button-row { flex-wrap: wrap; align-items: center; margin-block: var(--gap); }
+.notecard-text-panel label { display: inline-flex; align-items: center; gap: var(--gap); }
+.notecard-text-picker { flex: 1; min-width: 140px; }
+.notecard-text-picker select { width: 100%; min-width: 0; }
+#notecardTextContent { width: 100%; box-sizing: border-box; resize: vertical; }
+#notecardTextHelp, #notecardTextError { font-size: max(12px, 0.85em); }
+.notecard-text-overlay { position: absolute; inset: 0; pointer-events: none; }
+.notecard-text-overlay .notecard-text-box { position: absolute; pointer-events: auto; padding: 0; min-width: 0; min-height: 0; background: transparent; backdrop-filter: none; border: 1px solid transparent; border-radius: 0; box-shadow: none; touch-action: none; }
+.notecard-text-overlay .notecard-text-box[aria-pressed="true"] { background: transparent; border: 1px dashed #725217; }
+.notecard-text-overlay .notecard-text-box:focus-visible { outline: 2px solid #202830; outline-offset: -3px; }
+.notecard-text-overlay .notecard-text-resize { position: absolute; pointer-events: auto; min-width: 30px; min-height: 30px; padding: 4px; transform: translate(-100%, 0); background: var(--panel-solid); touch-action: none; }
+@media (pointer: coarse) { .notecard-text-overlay .notecard-text-resize { min-width: 44px; min-height: 44px; } }
 .notecard-dialog .modal__footer { flex-wrap: wrap; }
 @media (pointer: coarse) {
   .notecard-dialog button, .notecard-dialog select { min-height: 44px; }

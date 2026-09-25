@@ -364,3 +364,24 @@ After a server restart and browser refresh:
   Check visible focus, announced names/states/status and compact hints with assistive technology.
 - [ ] Keep/pass/Show, draw/return/split/combine stacks, save/reload and reconnect. Verify paper
   follows the right card, remains concealed on backs, and Cancel retains the original style.
+
+
+### Editable notecard text boxes — user-tested and approved for commit
+
+The user confirmed that the implementation works great and approved it for commit. No detailed
+real-device, assistive-technology or multiplayer matrix was specified; the checklist remains
+available for future verification.
+Restart the server and refresh browsers. No database migration is required.
+
+- [ ] In full/compact desktop and phone layouts, add multiline boxes, select each through the
+  card and Box picker, change size/alignment/color, and edit again after reopening.
+- [ ] Move and width-resize with mouse/finger/stylus at normal/high zoom; use two fingers to
+  cancel a tentative move and pan/zoom. Check near every paper edge.
+- [ ] Complete the flow using only the keyboard: Tab, arrows, Shift+left/right, Enter, Delete,
+  native text editing and Undo/Redo. Check visible focus and screen-reader names/status.
+- [ ] Combine text and drawing; erase/Clear ink, Delete a box, and Undo/Redo each action.
+  Overflow should explain how to fix the draft and prevent saving until it fits.
+- [ ] Keep/pass/Show, draw/return/split/combine stacks, save/reload and reconnect with two accounts.
+  Verify text follows the right card, stays editable, and never appears on backs or to excluded viewers.
+- [ ] Check multiline/non-ASCII text on actual supported browsers, including IME/mobile keyboards;
+  font fallback can differ between operating systems. Cancel preserves the committed original.

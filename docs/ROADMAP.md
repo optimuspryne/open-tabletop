@@ -325,7 +325,10 @@ implementation sequence without making the entire backlog a fixed priority queue
     Approved finite stacks now support private top-card editing/return, draw, shuffle, split and
     combination; the user confirmed the notecard work functions correctly and approved it for commit.
     Paper styles and line/rectangle/ellipse helpers are implemented with approved UI, keyboard drawing,
-    and automated regression coverage; the user confirmed it works great and approved it for commit. See [implementation and QA notes](DESIGN_notecards.md).
+    and automated regression coverage; the user confirmed it works great and approved it for commit.
+    Editable text boxes are implemented with approved UI/icons, shared ink/text history, keyboard
+    movement/resizing and private persistence; the user confirmed it works great and approved it for commit. Saveable templates
+    remain a later extension. See [implementation and QA notes](DESIGN_notecards.md).
 18. **Custom asset collections — implemented locally; functionality and UI user-approved.** Let users group multiple custom library assets into named
     collections. Library controls can show or hide collections to keep browsing manageable.
     Treat this as library organization/filtering, separate from per-object visibility on the table

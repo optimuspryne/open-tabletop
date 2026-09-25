@@ -1,7 +1,6 @@
 import {
   NOTECARD,
-  normalizeNotecardDrawing,
-  normalizeNotecardPaper,
+  normalizeNotecardContent,
   normalizeNotecardStack,
 } from '../../shared/notecards.js';
 import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
@@ -54,6 +53,7 @@ export function serializeScene(room, { includeLighting = false } = {}) {
       delete props.editingName;
       delete props.drawing;
       delete props.paper;
+      delete props.textBoxes;
       props = { ...props, ...room.notecards.snapshot(id) };
     } else if (piece.type === 'deck') {
       const cards = (room.deckCards.get(id) || []).slice();
@@ -181,16 +181,12 @@ export function applyScene(
     Array.isArray(hand?.cards) ? hand.cards.filter((card) => card?.kind === 'notecard') : [],
   );
   if (
-    heldNotes.some(
-      (card) => !normalizeNotecardDrawing(card.drawing) || !normalizeNotecardPaper(card.paper),
-    ) ||
+    heldNotes.some((card) => !normalizeNotecardContent(card)) ||
     stacks.some((cards) => !cards) ||
     notecards.length + heldNotes.length + stacks.reduce((n, cards) => n + (cards?.length || 0), 0) >
       NOTECARD.maxCards ||
     notecards.some(
-      (entry) =>
-        !normalizeNotecardDrawing(entry.props?.drawing ?? []) ||
-        !normalizeNotecardPaper(entry.props?.paper),
+      (entry) => !normalizeNotecardContent({ ...entry.props, drawing: entry.props?.drawing ?? [] }),
     )
   )
     throw new Error('The scene contains invalid notecard artwork or too many notecards.');
@@ -287,12 +283,7 @@ export function applyScene(
         typeof card === 'object' && card !== null
           ? {
               ...card,
-              ...(card.kind === 'notecard'
-                ? {
-                    drawing: normalizeNotecardDrawing(card.drawing),
-                    paper: normalizeNotecardPaper(card.paper),
-                  }
-                : {}),
+              ...(card.kind === 'notecard' ? normalizeNotecardContent(card) : {}),
               hid: 'h' + room.nextHid++,
             }
           : card,
