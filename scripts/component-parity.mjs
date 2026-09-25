@@ -210,6 +210,50 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'library-png-fallback',
+    root: '#libraryModal',
+    expect: {
+      selector: '#nlb_dice .libPreview img[src], #nlb_decks .libPreview img[src]',
+      min: 14,
+    },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      // Safari can decode WebP but canvas.toDataURL('image/webp') returns PNG.
+      const encode = HTMLCanvasElement.prototype.toDataURL;
+      HTMLCanvasElement.prototype.toDataURL = function(type, ...args) {
+        return encode.call(this, type === 'image/webp' ? 'image/png' : type, ...args);
+      };
+      try {
+        window.onOttRoom(${STUB_ROOM});
+        document.getElementById('lib2Btn').click();
+        const modal = document.getElementById('libraryModal');
+        for (const [kind, count] of [['dice', 8], ['decks', 4], ['boards', 2], ['objects', 3]]) {
+          const list = document.getElementById('nlb_'+kind);
+          modal.querySelector('[data-tab="'+list.closest('.libPane').dataset.pane+'"]').click();
+          const boxes = [...list.querySelectorAll('.libPreview')].slice(0, count);
+          assert(boxes.length === count, kind+' fixture is incomplete');
+          for (const box of boxes) {
+            box.scrollIntoView({block:'center'});
+            for (let i=0; i<100; i++) {
+              const imgs = [...box.querySelectorAll('img')];
+              if (imgs.length && imgs.every(im=>im.complete && im.naturalWidth>0)) break;
+              await new Promise(r=>setTimeout(r,50));
+            }
+            const imgs = [...box.querySelectorAll('img')];
+            assert(imgs.length && imgs.every(im=>im.complete && im.naturalWidth>0), kind+' PNG preview did not decode');
+            for (const im of imgs) {
+              assert(im.src.startsWith('data:image/png;'), kind+' did not exercise PNG fallback');
+              assert(im.naturalWidth<=320 && im.naturalHeight<=320, kind+' exceeded thumbnail bounds');
+            }
+          }
+        }
+      } finally {
+        HTMLCanvasElement.prototype.toDataURL = encode;
+      }
+      (await import('/ui/icons.js')).applyIcons();`,
+  },
+  {
     name: 'library-image-thumbnails',
     root: '#libraryModal',
     expect: {

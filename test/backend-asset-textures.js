@@ -236,3 +236,64 @@ test('createTexturePrebuilder coalesces concurrent starts and reports completion
     { state: 'complete', total: 1, created: 1, failed: 0 },
   );
 });
+
+test('sky display derivatives use selected sizes and separate caches for bundled and saved skies', async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'open-tabletop-sky-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const bundledAssetsDir = path.join(root, 'bundled');
+  await fs.promises.mkdir(path.join(bundledAssetsDir, 'sky'), { recursive: true });
+  await fs.promises.mkdir(path.join(root, 'sky'));
+  const filename = '0123456789abcdefab.png';
+  const original = await sharp({
+    create: { width: 2400, height: 1200, channels: 3, background: '#abcdef' },
+  })
+    .png()
+    .toBuffer();
+  await fs.promises.writeFile(path.join(root, 'sky', filename), original);
+  await fs.promises.writeFile(path.join(bundledAssetsDir, 'sky', 'noon.png'), original);
+  const app = express();
+  app.use(
+    createAssetTextureRouter({ assetsDir: root, assetKinds: ['sky', 'decks'], bundledAssetsDir }),
+  );
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const paths = new Set();
+  for (const [quality, width] of [
+    ['sky-low', 512],
+    ['sky-medium', 1024],
+    ['sky-high', 2048],
+    ['thumbnail', 320],
+  ]) {
+    for (const [kind, file] of [
+      ['sky', `${filename}.webp`],
+      ['bundled', 'sky/noon.png.webp'],
+    ]) {
+      const response = await fetch(
+        `${origin}/asset-textures/v1/${kind}/${encodeURIComponent(file)}?quality=${quality}`,
+      );
+      assert.equal(response.status, 200);
+      const metadata = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+      assert.equal(metadata.width, width);
+      assert.equal(metadata.height, width / 2);
+      paths.add(textureAssetPaths(root, ['sky'], kind, file, quality, bundledAssetsDir).cached);
+    }
+  }
+  assert.equal(paths.size, 8);
+  for (const ref of ['sky/../secret.png.webp', 'textures/felt.jpg.webp', 'models/noon.png.webp']) {
+    const response = await fetch(
+      `${origin}/asset-textures/v1/bundled/${encodeURIComponent(ref)}?quality=sky-low`,
+    );
+    assert.equal(response.status, 404);
+  }
+  assert.equal(
+    (await fetch(`${origin}/asset-textures/v1/decks/${filename}.webp?quality=sky-low`)).status,
+    404,
+  );
+  assert.deepEqual(await fs.promises.readFile(path.join(root, 'sky', filename)), original);
+  assert.deepEqual(
+    await fs.promises.readFile(path.join(bundledAssetsDir, 'sky', 'noon.png')),
+    original,
+  );
+});

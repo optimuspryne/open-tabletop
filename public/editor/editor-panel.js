@@ -1028,7 +1028,7 @@ function renderBuiltin(sink) {
   spawnBar(dice);
   for (const sides of DIE_SIDES) {
     const box = previewBox();
-    box.append(thumbImg(diePreviewURL(sides)));
+    fillAsync(box, () => diePreviewURL(sides));
     dice.append(
       spawnCard({
         preview: box,

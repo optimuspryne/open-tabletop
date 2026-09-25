@@ -31,7 +31,7 @@ const CONFIG = {
     touchLeadPx: 48,
     panStep: 0.1,
   }, // click/drag feel, keyboard camera step, plus touch-only grab padding and held-piece lead
-  tex: { die: 1024, board: 2048 }, // canvas texture resolutions (higher = sharper, more GPU memory)
+  tex: { die: 256, board: 2048 }, // canvas texture resolutions (higher = sharper, more GPU memory)
   upload: { cardW: 1024, cardH: 1432, board: 1024, type: 'image/png', quality: 1.0 }, // keep enough source detail for the high-quality card derivative; lower tiers still download the smaller display copy
   anim: { shuffle: { dur: 420, yaw: 0.15, bob: 0.15, cycles: 6 } }, // cosmetic shuffle "riffle": duration (ms), yaw wiggle (rad), lift (units), oscillations
 };
@@ -164,6 +164,9 @@ function qualitySettings(tier) {
   };
 }
 let activeQuality = resolveQuality();
+// Dice carry many face maps. Resolve once at boot, like card texture detail.
+const DIE_TEXTURE_SIZE = { low: 256, medium: 256, high: 512 };
+CONFIG.tex.die = DIE_TEXTURE_SIZE[activeQuality];
 const _q0 = qualitySettings(activeQuality);
 
 const renderer = new THREE.WebGLRenderer({ antialias: _q0.aa });

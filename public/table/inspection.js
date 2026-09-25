@@ -295,6 +295,7 @@ export function createInspection({
       onClose: opts.onClose || null,
       browse: !!opts.browse,
       dispose: opts.dispose || null,
+      ownsMesh: !!opts.ownsMesh,
     };
     controls.enabled = false;
     byId('inspectHint').hidden = !!opts.drawn || !!opts.browse; // a drawn card shows the action panel instead
@@ -397,9 +398,13 @@ export function createInspection({
     )
       return;
     const old = inspect.pivot.children[0];
-    if (old) inspect.pivot.remove(old);
     if (inspect.type === 'dispenser') props = { ...props, _seed: inspect.origId }; // keep the preview's scramble stable
     const mesh = kinds[inspect.type].mesh(props);
+    if (old) {
+      inspect.pivot.remove(old);
+      if (inspect.ownsMesh) kinds[inspect.type].dispose?.(old);
+    }
+    inspect.ownsMesh = true;
     mesh.userData.id = inspect.origId;
     inspect.pivot.add(mesh);
   }
@@ -433,11 +438,12 @@ export function createInspection({
     const entry = getPieceVisual(id);
     if (!entry) return;
     const piece = getRoom().state.pieces.get(id);
-    const fresh =
-      (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && piece
-        ? kinds[entry.type].mesh(meshPropsOf(piece, id)) // own materials → live-recolorable, no shared-material bleed
-        : entry.mesh.clone(true); // clone respects hidden info (face-down card = back only)
-    inspectMesh(fresh, { origId: id, type: entry.type });
+    const ownsMesh =
+      (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && !!piece;
+    const fresh = ownsMesh
+      ? kinds[entry.type].mesh(meshPropsOf(piece, id)) // own materials → live-recolorable, no shared-material bleed
+      : entry.mesh.clone(true); // clone respects hidden info (face-down card = back only)
+    inspectMesh(fresh, { origId: id, type: entry.type, ownsMesh });
     setOriginalVisible(id, false);
   }
 
@@ -448,7 +454,8 @@ export function createInspection({
     if (inspect.drawn && !inspect.placed && !inspect.hid)
       getRoom().send('inspectPlace', { where: 'deck' }); // a real drawn card closed without choosing → back to deck
     camera.remove(inspect.pivot);
-    inspect.dispose?.(); // only owned browse-preview resources; normal inspections borrow theirs
+    inspect.dispose?.(); // browse previews own their private resources
+    if (inspect.ownsMesh) kinds[inspect.type].dispose?.(inspect.pivot.children[0]);
     if (inspect.origId) setOriginalVisible(inspect.origId, true);
     inspect = null;
     controls.enabled = true;

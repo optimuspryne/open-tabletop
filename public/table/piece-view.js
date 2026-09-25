@@ -87,8 +87,9 @@ export function createPieceView({
     const entry = meshes.get(id);
     if (!entry) return false;
 
+    const mesh = build(); // retain the current visual if construction fails
     scene.remove(entry.mesh);
-    const mesh = build();
+    kinds[entry.type]?.dispose?.(entry.mesh);
     configure(mesh);
     if (afterBuild) afterBuild(mesh);
     restoreBufferedTransform(id, mesh);
@@ -231,7 +232,10 @@ export function createPieceView({
     cb(room.state).pieces.onRemove((piece, id) => {
       onHydration();
       const entry = meshes.get(id);
-      if (entry) scene.remove(entry.mesh);
+      if (entry) {
+        scene.remove(entry.mesh);
+        kinds[entry.type]?.dispose?.(entry.mesh);
+      }
       onRemove(id, piece);
       meshes.delete(id);
       disposeSurface(id);

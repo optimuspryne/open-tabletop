@@ -1,4 +1,5 @@
 import { drawPlacard } from './placards.js';
+import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
@@ -39,7 +40,14 @@ function makeCanvas(w, h) {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  return { canvas, ctx: canvas.getContext('2d') };
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    canvas.width = canvas.height = 0;
+    throw new Error(
+      'Unable to allocate a drawing canvas. Reload the table to free graphics memory.',
+    );
+  }
+  return { canvas, ctx };
 }
 
 // The max anisotropic-filtering level the GPU supports, cached after the first
@@ -321,7 +329,7 @@ function deckEdgeTex() {
 
 // Wrap a canvas as a THREE texture with anisotropic filtering (see maxAnisotropy).
 function cTex(canvas, srgb = true) {
-  const texture = new THREE.CanvasTexture(canvas);
+  const texture = releaseCanvasOnDispose(new THREE.CanvasTexture(canvas), canvas);
   texture.anisotropy = maxAnisotropy();
   if (srgb) texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
@@ -362,14 +370,14 @@ function drawNumber(ctx, size, value, color) {
 const _digitTex = new Map(),
   _faceTex = new Map();
 
-function digitTexture(value, text) {
-  const def = text == null;
-  if (def && _digitTex.has(value)) return _digitTex.get(value);
+function digitTexture(value) {
+  if (_digitTex.has(value)) return _digitTex.get(value);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
-  drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
+  drawNumber(ctx, size, value, '#ffffff'); // tint the material instead of allocating per ink color
   const texture = cTex(canvas);
-  if (def) _digitTex.set(value, texture);
+  texture.userData.ottSharedTexture = true;
+  _digitTex.set(value, texture);
   return texture;
 }
 
@@ -389,7 +397,10 @@ function numberFaceTexture(value, body, text, finishKey, finishImg) {
   }
   drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
   const texture = cTex(canvas);
-  if (def) _faceTex.set(value, texture); // only the default is cached (custom faces are per-die)
+  if (def) {
+    texture.userData.ottSharedTexture = true;
+    _faceTex.set(value, texture);
+  } // custom faces belong to the die and are released on recolor/removal
   return texture;
 }
 
@@ -539,6 +550,7 @@ function customTexture(url) {
   if (_customTex.has(url)) return _customTex.get(url);
   const tex = loadImageTexture(url); // sRGB + anisotropy
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.userData.ottSharedTexture = true;
   _customTex.set(url, tex);
   return tex;
 }
@@ -554,10 +566,7 @@ function drawImageCover(ctx, img, size) {
   ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
 }
 
-const _customFaceTex = new Map();
 function customFaceTexture(value, text, url) {
-  const key = value + '|' + (text ?? '') + '|' + url;
-  if (_customFaceTex.has(key)) return _customFaceTex.get(key);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
   ctx.fillStyle = COLORS.ivory;
@@ -572,7 +581,9 @@ function customFaceTexture(value, text, url) {
     texture.needsUpdate = true;
   };
   img.src = url;
-  _customFaceTex.set(key, texture);
+  texture.addEventListener('dispose', () => {
+    img.onload = null; // a removed/recolored die must not redraw its released canvas
+  });
   return texture;
 }
 
@@ -780,7 +791,8 @@ function numberLabel(value, size, text) {
   return new THREE.Mesh(
     new THREE.PlaneGeometry(size, size),
     new THREE.MeshBasicMaterial({
-      map: digitTexture(value, text),
+      map: digitTexture(value),
+      color: text ?? COLORS.ink,
       transparent: true,
       depthWrite: false,
     }),
@@ -1161,7 +1173,11 @@ function canvasThumbnailURL(image) {
     Math.max(1, Math.round(image.height * scale)),
   );
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL('image/webp', 0.82);
+  try {
+    return canvas.toDataURL('image/webp', 0.82);
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
 }
 
 export async function imageFilePreviewURL(file) {
@@ -1586,6 +1602,10 @@ function loadModelGroup(url, fitOpts, onMesh, beforeFit) {
     url,
     (gltf) => {
       const obj = gltf.scene;
+      if (group.userData.ottDisposed) {
+        disposeHierarchy(obj);
+        return;
+      }
       if (beforeFit) beforeFit(obj);
       fitModel(obj, fitOpts);
       obj.traverse((node) => {
@@ -2305,7 +2325,7 @@ function dispenserMesh(props = {}) {
 // lclick / rclick: click actions (message names).
 // Adding a kind = one entry here + one in the shared KINDS descriptor.
 const KIND = {
-  die: { mesh: dieMesh, grab: 0, rclick: 'roll' },
+  die: { mesh: dieMesh, dispose: disposeHierarchy, grab: 0, rclick: 'roll' },
   card: { mesh: cardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
   prop: { mesh: propMesh, grab: 0 },
   deck: { mesh: deckMesh, grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
@@ -2667,22 +2687,6 @@ function thumbRig() {
   _thumb = { renderer, scene, cam };
   return _thumb;
 }
-// Free a loaded model's GPU resources once it's been snapshotted for a library thumbnail. The
-// gltfLoader is uncached, so each preview owns its scene outright — disposing it can't affect a
-// piece placed on the table (those do their own load). Only the 220px data-URL is retained.
-function disposeHierarchy(root) {
-  root.traverse((n) => {
-    if (n.geometry) n.geometry.dispose();
-    const mats = Array.isArray(n.material) ? n.material : n.material ? [n.material] : [];
-    for (const m of mats) {
-      for (const key in m) {
-        const val = m[key];
-        if (val && val.isTexture && !val.userData.ottSharedFinish) val.dispose();
-      }
-      m.dispose();
-    }
-  });
-}
 function snapshot(obj) {
   const { renderer, scene, cam } = thumbRig();
   const box = new THREE.Box3().setFromObject(obj);
@@ -2698,10 +2702,12 @@ function snapshot(obj) {
   cam.near = maxDim / 100;
   cam.far = maxDim * 40;
   cam.updateProjectionMatrix();
-  renderer.render(scene, cam);
-  const url = canvasThumbnailURL(renderer.domElement);
-  scene.remove(obj);
-  return url;
+  try {
+    renderer.render(scene, cam);
+    return canvasThumbnailURL(renderer.domElement);
+  } finally {
+    scene.remove(obj);
+  }
 }
 
 const _prevCache = new Map();
@@ -2845,7 +2851,12 @@ export function diePreviewURL(sides, finish) {
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
   try {
-    url = snapshot(dieMesh({ sides, finish }));
+    const mesh = dieMesh({ sides, finish });
+    try {
+      url = snapshot(mesh);
+    } finally {
+      disposeHierarchy(mesh);
+    }
   } catch (e) {
     /* null → placeholder */
   }

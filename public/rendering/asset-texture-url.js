@@ -1,4 +1,4 @@
-import { BUNDLED_THUMBNAIL_IMAGE } from '../../shared/image-thumbnails.js';
+import { BUNDLED_THUMBNAIL_IMAGE, SKY_TEXTURE_SIZES } from '../../shared/image-thumbnails.js';
 const LOCAL_ASSET_IMAGE = /^\/assets\/([a-z]+)\/([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))$/i;
 
 // Map a saved source image to the versioned display derivative. External/data/procedural refs and
@@ -12,10 +12,11 @@ export function assetTextureURL(ref, { high = false, thumbnail = false } = {}) {
 }
 
 // Thumbnail sinks never fall back to a full-size source. Data URLs here are already-rendered
-// WebP previews; saved and bundled images use server derivatives. Unsupported refs stay empty.
+// WebP previews (or PNG when the browser cannot encode WebP); saved and bundled images use
+// server derivatives. Unsupported refs stay empty.
 export function assetThumbnailURL(ref) {
   if (typeof ref !== 'string') return null;
-  if (/^data:image\/webp;base64,[a-z0-9+/=]+$/i.test(ref)) return ref;
+  if (/^data:image\/(?:webp|png);base64,[a-z0-9+/=]+$/i.test(ref)) return ref;
   if (LOCAL_ASSET_IMAGE.test(ref)) return assetTextureURL(ref, { thumbnail: true });
   if (BUNDLED_THUMBNAIL_IMAGE.test(ref))
     return `/asset-textures/v1/bundled/${encodeURIComponent(ref.slice(1))}.webp?quality=thumbnail`;
@@ -32,4 +33,16 @@ export function assetThumbnailURL(ref) {
     }
   }
   return null;
+}
+
+// Fetch the selected sky resolution before decoding it on memory-constrained browsers.
+// Ultra and legacy/external URLs keep their existing source and client-side cap behavior.
+export function skyTextureURL(ref, resolution) {
+  if (!Object.hasOwn(SKY_TEXTURE_SIZES, resolution) || typeof ref !== 'string') return ref;
+  const match = LOCAL_ASSET_IMAGE.exec(ref);
+  if (match?.[1] === 'sky')
+    return `/asset-textures/v1/sky/${encodeURIComponent(match[2])}.webp?quality=sky-${resolution}`;
+  if (ref.startsWith('/sky/') && BUNDLED_THUMBNAIL_IMAGE.test(ref))
+    return `/asset-textures/v1/bundled/${encodeURIComponent(ref.slice(1))}.webp?quality=sky-${resolution}`;
+  return ref;
 }

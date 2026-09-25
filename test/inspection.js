@@ -36,6 +36,7 @@ function fixture({ appearance = false } = {}) {
   const cardMesh = () =>
     new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1.5), new THREE.MeshBasicMaterial());
   let previewDisposals = 0;
+  const diceDisposed = [];
   const inspection = createInspection({
     makeBrowsePreview: () => ({ mesh: cardMesh(), dispose: () => previewDisposals++ }),
     THREE,
@@ -46,7 +47,10 @@ function fixture({ appearance = false } = {}) {
       setPointerCapture: (id) => capture.push(['set', id]),
       releasePointerCapture: (id) => capture.push(['release', id]),
     },
-    kinds: { die: { mesh: () => cardMesh() }, card: { mesh: cardMesh } },
+    kinds: {
+      die: { mesh: () => cardMesh(), dispose: (mesh) => diceDisposed.push(mesh) },
+      card: { mesh: cardMesh },
+    },
     config: {
       inspect: { fit: 2, drop: 0, dist: 3 },
       input: { dblMs: 300, clickMs: 320, inspectPx: 4 },
@@ -79,6 +83,7 @@ function fixture({ appearance = false } = {}) {
   });
   return {
     previewDisposals: () => previewDisposals,
+    diceDisposed,
     inspection,
     camera,
     controls,
@@ -183,6 +188,11 @@ test('inspected die color changes update the preview and send the same recolor m
   body.onchange();
   assert.equal(f.camera.children[0].children[0] === before, false);
   assert.equal(original.visible, false);
+  assert.deepEqual(f.diceDisposed, [before]);
+  const current = f.camera.children[0].children[0];
+  f.inspection.releaseInspect();
+  assert.deepEqual(f.diceDisposed, [before, current]);
+  assert.equal(original.visible, true);
   assert.deepEqual(f.sent, [['recolor', { id: 'die-1', color: 0x336699, textColor: 0xf4f1ea }]]);
 });
 
@@ -216,4 +226,14 @@ test('browse preview replacements dispose owned resources without closing the ac
   f.inspection.closeBrowseCard();
   assert.equal(f.previewDisposals(), 3);
   assert.equal(closed, 1, 'server-side close must not echo a client close');
+});
+
+test('inspection does not dispose a borrowed die clone when its piece state is gone', () => {
+  const f = fixture();
+  const original = f.cardMesh();
+  f.visuals.set('stale-die', { type: 'die', mesh: original });
+  f.inspection.enterInspect('stale-die');
+  f.inspection.releaseInspect();
+  assert.deepEqual(f.diceDisposed, []);
+  assert.equal(original.visible, true);
 });

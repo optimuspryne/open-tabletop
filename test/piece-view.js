@@ -87,6 +87,7 @@ test('piece replacement restores the last transform and keeps inspected meshes h
     ['piece-a', [{ t: 1, x: 4, y: 5, z: 6, qx: 0, qy: 0.5, qz: 0, qw: 0.5 }]],
   ]);
   const removed = [];
+  const disposed = [];
   const added = [];
   const refreshed = [];
   const view = createPieceView({
@@ -96,7 +97,7 @@ test('piece replacement restores the last transform and keeps inspected meshes h
     },
     meshes,
     buffers,
-    kinds: { prop: { mesh: () => replacement } },
+    kinds: { prop: { mesh: () => replacement, dispose: (mesh) => disposed.push(mesh) } },
     physics: { prop: { mass: 1 } },
     deckHeight,
     createQuaternion: quaternion,
@@ -107,6 +108,7 @@ test('piece replacement restores the last transform and keeps inspected meshes h
 
   assert.equal(view.rebuildPiece('piece-a', piece), true);
   assert.deepEqual(removed, [oldMesh]);
+  assert.deepEqual(disposed, [oldMesh]);
   assert.deepEqual(added, [replacement]);
   assert.equal(meshes.get('piece-a').mesh, replacement);
   assert.deepEqual(replacement.position.values, [4, 5, 6]);
@@ -215,7 +217,10 @@ test('room bindings hydrate pieces, follow replacement/count patches and clean u
     meshes,
     buffers,
     kinds: Object.fromEntries(
-      ['deck', 'dispenser', 'board'].map((type) => [type, { mesh: testMesh }]),
+      ['deck', 'dispenser', 'board'].map((type) => [
+        type,
+        { mesh: testMesh, dispose: () => events.push('dispose') },
+      ]),
     ),
     physics: { deck: { mass: 1 }, dispenser: { mass: 0 }, board: { mass: 0 } },
     deckHeight,
@@ -277,8 +282,43 @@ test('room bindings hydrate pieces, follow replacement/count patches and clean u
   assert.equal(buffers.get('deck').at(-1).t, 130);
   events.length = 0;
   remove(deck, 'deck');
-  assert.deepEqual(events, ['hydrate', 'scene remove', 'feature cleanup', 'surface']);
+  assert.deepEqual(events, ['hydrate', 'scene remove', 'dispose', 'feature cleanup', 'surface']);
   assert.equal(buffers.has('deck'), false);
   view.recordState({ pieces });
   assert.equal(buffers.has('deck'), false);
+});
+
+test('failed recolor construction leaves the current mesh attached and undisposed', () => {
+  const mesh = testMesh();
+  let removed = false;
+  let disposed = false;
+  const meshes = new Map([['die', { mesh, type: 'die' }]]);
+  const view = createPieceView({
+    scene: {
+      remove: () => {
+        removed = true;
+      },
+    },
+    meshes,
+    buffers: new Map(),
+    kinds: {
+      die: {
+        mesh: () => {
+          throw new Error('allocation');
+        },
+        dispose: () => {
+          disposed = true;
+        },
+      },
+    },
+    physics: { die: { mass: 1 } },
+    deckHeight,
+    createQuaternion: quaternion,
+    refreshCollider() {},
+    isInspected: () => false,
+  });
+  assert.throws(() => view.rebuildPiece('die', { type: 'die', props: '{}' }), /allocation/);
+  assert.equal(meshes.get('die').mesh, mesh);
+  assert.equal(removed, false);
+  assert.equal(disposed, false);
 });

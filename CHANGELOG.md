@@ -8,7 +8,22 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Fixed
+- Restore generated library thumbnails on Safari by accepting PNG canvas-export fallback as
+  well as WebP. Covers 3D models/boards, dice, built-in cards and tile sets while retaining
+  bounded thumbnail dimensions and rendering-resource cleanup.
+- Reduce generated dice textures to 256px on Low/Medium and 512px on High. Share polyhedral
+  number masks across ink colors; release replaced/removed dice and inspection previews, including
+  their owned canvases and late model loads. Dispose generated dice thumbnails and temporary
+  thumbnail canvases; defer dice thumbnails until visible in the library.
+- Load bundled and uploaded skyboxes at the selected Low/Medium/High resolution through cached
+  WebP derivatives, avoiding full-image download/decode before downscaling on iPad. Ultra preserves
+  original sources; legacy URLs retain local downscaling. Release downscaled sky canvases on swap.
+  Restart the server and refresh browsers to use the new sky derivative variants. No migration.
+
 ### Documentation
+- Record user-confirmed iPad performance improvement after the dice/sky memory fixes and
+  successful library-thumbnail verification after the PNG fallback fix.
 - Record successful user-reported 0.19.0 deployment tests on Docker, bare metal and Proxmox,
   along with successful asset-pack uploads.
 

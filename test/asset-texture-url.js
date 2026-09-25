@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetTextureURL, assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
+import {
+  assetTextureURL,
+  assetThumbnailURL,
+  skyTextureURL,
+} from '../public/rendering/asset-texture-url.js';
 
 test('all saved image categories and bundled rasters use WebP thumbnail derivatives', () => {
   for (const kind of ['uploads', 'decks', 'dice', 'sky', 'boards', 'mats', 'props']) {
@@ -25,7 +29,7 @@ test('unsupported thumbnail refs never fall back to raw source images', () => {
     undefined,
     '/assets/sky/original.png',
     'https://example.test/image.png',
-    'data:image/png;base64,AAAA',
+    'data:image/svg+xml;base64,AAAA',
     '/sky/../secret.png',
     '/models/secret.png',
     '/asset-textures/v1/sky/not-an-asset.png.webp?quality=thumbnail',
@@ -68,4 +72,31 @@ test('external, data, procedural, and non-random asset references pass through',
   ]) {
     assert.equal(assetTextureURL(ref), ref);
   }
+});
+
+test('sky display URLs select bounded derivatives without changing original/legacy refs', () => {
+  for (const resolution of ['low', 'medium', 'high']) {
+    assert.equal(
+      skyTextureURL('/sky/equirect/noon.png', resolution),
+      `/asset-textures/v1/bundled/sky%2Fequirect%2Fnoon.png.webp?quality=sky-${resolution}`,
+    );
+    assert.equal(
+      skyTextureURL('/assets/sky/0123456789abcdefab.png', resolution),
+      `/asset-textures/v1/sky/0123456789abcdefab.png.webp?quality=sky-${resolution}`,
+    );
+  }
+  for (const ref of ['/sky/equirect/noon.png', '/assets/sky/0123456789abcdefab.png'])
+    assert.equal(skyTextureURL(ref, 'ultra'), ref);
+  for (const ref of ['/legacy.jpg', 'https://example.test/sky.png', '/sky/../secret.png'])
+    assert.equal(skyTextureURL(ref, 'low'), ref);
+});
+
+test('generated thumbnails retain PNG when canvas export cannot encode WebP', () => {
+  for (const format of ['webp', 'png']) {
+    const url = `data:image/${format};base64,AAAA`;
+    assert.equal(assetThumbnailURL(url), url);
+    assert.equal(assetThumbnailURL(assetThumbnailURL(url)), url);
+    assert.equal(assetThumbnailURL(url + '"junk'), null);
+  }
+  assert.equal(assetThumbnailURL('data:,'), null);
 });

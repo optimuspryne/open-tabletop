@@ -909,18 +909,21 @@ bundled filenames may be updated in place. Uploaded random-name image caches rem
   references keep their existing path.
 
 Thumbnail callers use `assetThumbnailURL` in `public/rendering/asset-texture-url.js`, which maps
-saved and bundled images to 320px WebP derivatives, accepts generated WebP data URLs, and returns
+saved and bundled images to 320px WebP derivatives, accepts generated WebP or PNG data URLs, and returns
 null for unsupported sources instead of loading raw originals. `shared/image-thumbnails.js`
 owns the common size and bundled-path allowlist. In `public/rendering/graphics.js`,
 `cardPreviewURL` defaults to thumbnails (`thumbnail:false` explicitly retains standard previews),
 `boardPreviewURL` converts image boards/mats, and `canvasThumbnailURL` bounds generated card,
-board and model snapshots. `imageFilePreviewURL` reuses `resizeToCanvas` with aspect-preserving
+board and model snapshots. Browsers without canvas WebP encoding return PNG from
+`toDataURL('image/webp')`; the mapper accepts that base64 PNG fallback instead of silently
+blanking the preview. Both formats originate from the same bounded canvas; remote originals,
+SVG data URLs and malformed data URLs remain unsupported thumbnail inputs. `imageFilePreviewURL` reuses `resizeToCanvas` with aspect-preserving
 `inside` sizing for not-yet-uploaded files; object URLs are revoked on both load and decode error.
 Original files still supply uploads, measurements, editing geometry, and tabletop rendering.
 
 `public/editor/editor-panel.js` funnels synchronous and lazy image sinks through this mapper;
 sky/dice previews use the near-viewport loader, upload squares and face grids use local WebP
-previews, and cleared/replaced squares ignore stale completions. `public/table/dice-preferences.js`
+previews (PNG fallback where needed), and cleared/replaced squares ignore stale completions. `public/table/dice-preferences.js`
 uses thumbnail URLs in `buildTextureChips` while callbacks retain original finish refs; this covers
 both tray and inspection pickers. `public/table/hand.js` uses `cardPreviewURL` for image faces too.
 
@@ -928,7 +931,58 @@ Regression coverage lives in `test/asset-texture-url.js` (all categories, bundle
 fallback), `test/backend-asset-textures.js` (real HTTP size/cache isolation, bundled refresh and
 path rejection), and `scripts/component-parity.mjs` (library dice/sky/board/mat images, finish-chip
 actions, generated/local WebP previews and stale file-selection cleanup on desktop/touch).
+The `library-png-fallback` scene forces canvas WebP requests to return PNG and verifies actual
+image decoding and 320px bounds through library dice, deck, domino, board and object sinks;
+`test/asset-texture-url.js` covers repeated mapper passes and malformed fallback rejection.
 This contract is also summarized in `docs/ARCHITECTURE.md` and `CHANGELOG.md`.
+
+### Dice rendering memory and sky display derivatives
+
+`public/rendering/core.js` resolves `CONFIG.tex.die` once at boot: Low/Medium 256px,
+High 512px. Like card detail, changing the texture tier requires a page reload.
+`public/rendering/graphics.js` uses a shared white `digitTexture` mask per number;
+`numberLabel` applies ink through material tint. Default d6 faces stay shared, while colored,
+marbled and custom d6 face canvases belong to their mesh. `customFaceTexture` no longer retains
+an unbounded cache of each ink/image combination and cancels its redraw callback on disposal.
+
+`public/rendering/resources.js` owns `releaseCanvasOnDispose` and the existing
+`disposeHierarchy` implementation extracted from graphics: deduplicate owned materials,
+geometries and textures; retain `ottSharedTexture`/`ottSharedFinish` maps; zero disposed canvas
+backing stores. Only independently built meshes may use this disposer. `KIND.die.dispose`
+registers it with `public/table/piece-view.js` replacement/removal and
+`public/table/inspection.js` swap/release. Borrowed card/dispenser geometry is outside that
+ownership boundary. A failed replacement keeps the current mesh attached. `loadModelGroup`
+discards/disposes a late-loaded model when its destination group has already been disposed.
+`diePreviewURL` disposes its temporary mesh in `finally`; `snapshot` always removes it from the
+preview scene. `canvasThumbnailURL` releases its temporary canvas after encoding, and
+`public/editor/editor-panel.js` routes generated dice through the existing lazy `fillAsync` path.
+
+`shared/image-thumbnails.js` also defines `SKY_TEXTURE_SIZES` (512/1024/2048).
+`skyTextureURL` in `public/rendering/asset-texture-url.js` maps bundled `/sky/` and random-name
+`/assets/sky/` images to `quality=sky-low|sky-medium|sky-high` derivatives. The existing
+`server/http/routes/asset-textures.js` router validates those scopes and generates/caches each
+variant separately under `.texture-cache/v1-sky-<tier>/`. Originals and thumbnail/card caches
+remain unchanged. `public/table/skybox.js` applies these URLs to equirects and cube faces before
+loading; Ultra and legacy/external references retain their original path. Local fallback
+resizing releases canvas storage on disposal and preserves matching cube-face dimensions if
+allocation fails. Server restart plus browser refresh is required; no database migration.
+
+Regression tests: `test/rendering-resources.js` covers owned/shared cleanup and idempotence;
+`test/piece-view.js` covers replacement/removal and failed builds; `test/inspection.js` covers
+preview swaps/releases; `test/asset-texture-url.js`, `test/skybox.js`, and
+`test/backend-asset-textures.js` cover URL selection, canvas release, derivative dimensions,
+cache separation and path rejection. `node scripts/rendering-memory.mjs` exercises actual
+production dice builders, previews, repeated six-die recolors and late model disposal in
+Chromium/WebGL for all graphics tiers. It is a resource-lifecycle check, not an iPad benchmark.
+Verified locally: `npm run check` (775 passing tests), `npm run test:components`, and the
+WebGL stress script (174 recolors per tier; texture/geometry counts return to baseline).
+
+Manual iPad smoke test (5th generation, iPadOS 16.7.11): after restart and refresh, enter an empty
+room with a Low sky; spawn d4/d6/d8/d10/d12/d20; recolor six together repeatedly; change inspected
+die body/ink colors and close it; remove/respawn dice and reopen the library. Check readable
+numbers, sky appearance and lack of Safari reloads. The user confirmed substantially improved
+performance on this iPad after the memory/sky fixes and confirmed that library thumbnails work
+after the PNG fallback fix. Completion of every individual smoke-test step is not inferred.
 
 ### `server/asset-cleanup.js` — orphan preview and trash
 

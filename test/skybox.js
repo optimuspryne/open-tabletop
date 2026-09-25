@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../public/vendor/three/three.module.js';
 import { createSkybox } from '../public/table/skybox.js';
 
-function fixture({ device = 'desktop', preference, blocked = false } = {}) {
+function fixture({ device = 'desktop', preference, blocked = false, failCanvas = false } = {}) {
   const scene = new THREE.Scene();
   const fallback = (scene.background = new THREE.Color('#123456'));
   const loads = [],
@@ -38,7 +38,9 @@ function fixture({ device = 'desktop', preference, blocked = false } = {}) {
     },
     byId: () => ({ querySelectorAll: () => chips }),
     doc: {
-      createElement: () => ({ getContext: () => ({ drawImage: (...args) => draws.push(args) }) }),
+      createElement: () => ({
+        getContext: () => (failCanvas ? null : { drawImage: (...args) => draws.push(args) }),
+      }),
     },
   });
   sky.bindControls();
@@ -158,4 +160,38 @@ test('same-ref resolution changes and A-B-A replacements reject earlier requests
   f.loads[3].loaded(latest);
   f.loads[1].failed();
   assert.equal(f.scene.background, latest);
+});
+
+test('Low sky requests small sources before decode, and released fallback canvases are zeroed', () => {
+  const f = fixture({ preference: 'low' });
+  f.sky.sync('/sky/equirect/noon.png');
+  assert.match(f.loads[0].ref, /quality=sky-low$/);
+  const small = texture(512, 256);
+  f.loads[0].loaded(small);
+  assert.equal(f.draws.length, 0);
+  assert.equal(f.scene.background, small);
+  const faces = Array(6).fill('/assets/sky/0123456789abcdefab.png');
+  f.sky.sync(JSON.stringify({ t: 'cube', f: faces }));
+  assert.ok(f.loads[1].ref.every((ref) => ref.endsWith('?quality=sky-low')));
+  f.sky.sync('/legacy.jpg');
+  f.loads[2].loaded(texture());
+  const canvas = f.scene.background.image;
+  f.sky.sync('');
+  assert.equal(canvas.width, 0);
+  assert.equal(canvas.height, 0);
+});
+
+test('legacy sky resizing keeps usable original textures if canvas allocation is unavailable', () => {
+  const f = fixture({ preference: 'low', failCanvas: true });
+  f.sky.sync('/legacy.jpg');
+  const source = texture();
+  f.loads[0].loaded(source);
+  assert.equal(f.scene.background, source);
+  f.sky.sync(JSON.stringify({ t: 'cube', f: Array(6).fill('/legacy-face.jpg') }));
+  const cube = new THREE.CubeTexture(
+    Array.from({ length: 6 }, () => ({ width: 2048, height: 2048 })),
+  );
+  f.loads[1].loaded(cube);
+  assert.equal(f.scene.background, cube);
+  assert.ok(cube.image.every((face) => face.width === 2048));
 });

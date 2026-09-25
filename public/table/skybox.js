@@ -1,3 +1,7 @@
+import { skyTextureURL } from '../rendering/asset-texture-url.js';
+import { releaseCanvasOnDispose } from '../rendering/resources.js';
+import { SKY_TEXTURE_SIZES } from '../../shared/image-thumbnails.js';
+
 // Room skybox presentation and viewer-local resolution. The library owns the picker;
 // the composition root passes synchronized refs and publishes the built-in catalog.
 export const BUILTIN_SKIES = [
@@ -53,9 +57,9 @@ export function createSkybox({
   }
 
   // Per-viewer skybox resolution (Settings → UI → Graphics). Each level is a MAX equirect width; a
-  // source wider than the cap is downscaled at load so only the smaller texture stays resident. The
+  // bundled/uploaded source uses a server derivative; legacy URLs are downscaled at load. The
   // built-ins are 2048, so 'high' and 'ultra' match on them; a larger custom upload uses 'ultra'.
-  const SKY_RES = { off: 0, low: 512, medium: 1024, high: 2048, ultra: Infinity };
+  const SKY_RES = { off: 0, ...SKY_TEXTURE_SIZES, ultra: Infinity };
   const SKY_RES_KEY = 'tabletop.skyRes';
   function getSkyRes() {
     try {
@@ -86,9 +90,14 @@ export function createSkybox({
     const canvas = document.createElement('canvas');
     canvas.width = nw;
     canvas.height = nh;
-    canvas.getContext('2d').drawImage(img, 0, 0, nw, nh);
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      canvas.width = canvas.height = 0;
+      return tex;
+    }
+    ctx.drawImage(img, 0, 0, nw, nh);
     tex.dispose(); // not yet uploaded — this just drops the full-res image reference
-    return new THREE.CanvasTexture(canvas);
+    return releaseCanvasOnDispose(new THREE.CanvasTexture(canvas), canvas);
   }
   // Same idea for a 6-face cube map: downscale each face to `cap` px, rebuild the CubeTexture.
   function capCubeTexture(cube, cap) {
@@ -101,11 +110,22 @@ export function createSkybox({
       const canvas = document.createElement('canvas');
       canvas.width = nw;
       canvas.height = nh;
-      canvas.getContext('2d').drawImage(img, 0, 0, nw, nh);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        canvas.width = canvas.height = 0;
+        return img;
+      }
+      ctx.drawImage(img, 0, 0, nw, nh);
       return canvas;
     });
+    if (faces.some((face, i) => face === imgs[i])) {
+      // Cube faces must keep matching dimensions, even when a canvas allocation fails.
+      for (const face of faces) if (face.getContext) face.width = face.height = 0;
+      return cube;
+    }
     cube.dispose();
     const ct = new THREE.CubeTexture(faces);
+    for (const canvas of faces) if (canvas.getContext) releaseCanvasOnDispose(ct, canvas);
     ct.needsUpdate = true;
     return ct;
   }
@@ -136,7 +156,7 @@ export function createSkybox({
       }
       if (d && d.t === 'cube' && Array.isArray(d.f) && d.f.length === 6)
         new THREE.CubeTextureLoader().load(
-          d.f,
+          d.f.map((face) => skyTextureURL(face, getSkyRes())),
           (loaded) => {
             const tex = capCubeTexture(loaded, cap);
             tex.colorSpace = THREE.SRGBColorSpace;
@@ -150,7 +170,7 @@ export function createSkybox({
     } else {
       // equirectangular
       new THREE.TextureLoader().load(
-        ref,
+        skyTextureURL(ref, getSkyRes()),
         (loaded) => {
           const tex = capTexture(loaded, cap);
           tex.mapping = THREE.EquirectangularReflectionMapping;

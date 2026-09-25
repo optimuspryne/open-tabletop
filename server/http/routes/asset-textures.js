@@ -8,6 +8,7 @@ import { STATIC_ASSETS_DIR, staticAssetPath } from '../../static-assets.js';
 import {
   BUNDLED_THUMBNAIL_IMAGE,
   THUMBNAIL_MAX_DIMENSION,
+  SKY_TEXTURE_SIZES,
 } from '../../../shared/image-thumbnails.js';
 
 const TEXTURE_FILE = /^([a-f0-9]{18}\.(?:gif|jpe?g|png|webp))\.webp$/i;
@@ -21,25 +22,34 @@ export function textureAssetPaths(
   quality = 'standard',
   bundledAssetsDir = STATIC_ASSETS_DIR,
 ) {
+  const skyQuality =
+    quality.startsWith('sky-') && Object.hasOwn(SKY_TEXTURE_SIZES, quality.slice(4));
+  if (skyQuality && kind !== 'sky' && kind !== 'bundled') return null;
   if (kind === 'bundled') {
     const ref = '/' + requestedFile.replace(/\.webp$/, '');
     if (
-      quality !== 'thumbnail' ||
+      (quality !== 'thumbnail' && !skyQuality) ||
+      (skyQuality && !ref.startsWith('/sky/')) ||
       !requestedFile.endsWith('.webp') ||
       !BUNDLED_THUMBNAIL_IMAGE.test(ref)
     )
       return null;
     return {
       source: staticAssetPath(ref, bundledAssetsDir),
-      cached: path.resolve(assetsDir, '.texture-cache', 'v1-thumbnail', 'bundled', requestedFile),
+      cached: path.resolve(assetsDir, '.texture-cache', `v1-${quality}`, 'bundled', requestedFile),
     };
   }
   if (!assetKinds.includes(kind)) return null;
   const match = TEXTURE_FILE.exec(requestedFile);
   if (!match) return null;
   const sourceName = match[1];
-  const cacheVersion =
-    quality === 'thumbnail' ? 'v1-thumbnail' : quality === 'high' ? 'v1-high' : 'v1';
+  const cacheVersion = skyQuality
+    ? `v1-${quality}`
+    : quality === 'thumbnail'
+      ? 'v1-thumbnail'
+      : quality === 'high'
+        ? 'v1-high'
+        : 'v1';
   return {
     source: path.resolve(assetsDir, kind, sourceName),
     cached: path.resolve(assetsDir, '.texture-cache', cacheVersion, kind, `${sourceName}.webp`),
@@ -206,11 +216,15 @@ export function createAssetTextureRouter({
     '/asset-textures/v1/:kind/:file',
     asyncRoute(async (req, res) => {
       const quality =
-        req.query.quality === 'thumbnail'
-          ? 'thumbnail'
-          : req.query.quality === 'high'
-            ? 'high'
-            : 'standard';
+        typeof req.query.quality === 'string' &&
+        req.query.quality.startsWith('sky-') &&
+        Object.hasOwn(SKY_TEXTURE_SIZES, req.query.quality.slice(4))
+          ? req.query.quality
+          : req.query.quality === 'thumbnail'
+            ? 'thumbnail'
+            : req.query.quality === 'high'
+              ? 'high'
+              : 'standard';
       const paths = textureAssetPaths(
         assetsDir,
         assetKinds,
@@ -236,8 +250,9 @@ export function createAssetTextureRouter({
       } catch {
         let task = pending.get(paths.cached);
         if (!task) {
-          const dimension =
-            quality === 'thumbnail'
+          const dimension = quality.startsWith('sky-')
+            ? SKY_TEXTURE_SIZES[quality.slice(4)]
+            : quality === 'thumbnail'
               ? thumbnailMaxDimension
               : quality === 'high'
                 ? highMaxDimension

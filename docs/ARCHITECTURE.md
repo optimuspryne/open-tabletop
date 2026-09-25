@@ -156,7 +156,9 @@ importing a room singleton:
   reads across action groups. Saved/bundled image thumbnails in the library, dice finish pickers,
   hands and authoring forms use a separate on-demand 320px WebP cache through the existing
   asset-texture route and shared thumbnail mapper. Unsupported thumbnail refs stay empty instead
-  of loading originals. Local-file and generated previews are bounded WebP data URLs. Bundled
+  of loading originals. Local-file and generated previews are bounded WebP data URLs, with PNG
+  accepted when browser canvas encoding falls back from WebP (including Safari). Both formats
+  pass through the same thumbnail mapper and retain the 320px generation bound. Bundled
   caches revalidate source changes; random-name upload caches stay immutable. Originals remain
   available for upload/editing and full tabletop rendering, independently of thumbnail refs.
 - **`public/rendering/core.js`** — scene/camera/renderer/controls + the environment map,
@@ -1600,6 +1602,24 @@ The local seat has a flat YOU chip instead. Explicitly revealed cards occupy lea
 all other faces remain private. Each player also has a
 GM-reorderable `order` independent of their physical seat. `state.turn` holds a
 session id, highlighted in the panel; "Next turn" walks that shared order.
+
+## Dice and sky rendering resource ownership
+
+Dice register an owned-mesh disposer in `KIND`. Piece replacement/removal and inspection
+swap/close invoke it; a failed replacement preserves the previous visual. The shared rendering
+resource helper deduplicates GPU disposal, zeros owned canvas backing stores, and preserves
+shared number/finish maps. Asynchronous model loads discard results for disposed groups.
+Borrowed card and dispenser geometry must not use this owned-hierarchy disposer. Library dice
+previews use the same cleanup and defer work through the existing visibility observer.
+Generated dice resolve face size at page boot (Low/Medium 256px, High 512px); polyhedral labels
+share white masks and tint their materials, avoiding a canvas per die/ink color.
+
+Sky resolution stays viewer-local. Bundled and uploaded sky images use separate 512/1024/2048px
+WebP display derivatives from the existing texture route, so Low avoids downloading/decoding a
+full-size source. Server path allowlists, original preservation and cache isolation remain in
+force. Ultra uses original sources; legacy URLs retain local downscaling, with explicit release
+of temporary sky canvases on replacement. This extends existing rendering and derivative
+boundaries without changing synchronized state, physics, or authored assets.
 
 ## Browser room-binding order
 
