@@ -1,3 +1,4 @@
+import { registerNotecardHandlers } from '../server/game/notecards.js';
 import { registerCollectionHandlers } from '../server/game/handlers/collections.js';
 import { registerDeckBrowseHandlers } from '../server/game/handlers/deck-browsing.js';
 import { test } from 'node:test';
@@ -20,6 +21,7 @@ import { registerRoomFeatureHandlers } from '../server/game/handlers/room-featur
 import { registerRoomStateHandlers } from '../server/game/handlers/room-state.js';
 
 const registrations = [
+  registerNotecardHandlers,
   registerDeckBrowseHandlers,
   registerCardHandlers,
   registerLibraryHandlers,

@@ -1,3 +1,4 @@
+import { createNotecards, registerNotecardHandlers } from './server/game/notecards.js';
 import { createAssetPackages } from './server/assets/packages.js';
 import { createAssetPackagesRouter } from './server/http/routes/asset-packages.js';
 import { createDeckBrowsing } from './server/game/deck-browsing.js';
@@ -420,6 +421,8 @@ class TableRoom extends Room {
     this.pendingInspect = new Map(); // sessionId -> {deckId,front,back}  PRIVATE: a card drawn to inspect, not yet placed
     this.pendingHands = new Map(); // userId -> {name,cards}  saved-game hands awaiting their owner's return (rebind on join)
     this.pendingTurn = null; // userId whose turn it was in a saved game, awaiting their return
+    this.notecards = createNotecards(this);
+    this.clock.setInterval(() => this.notecards.sweep(), 1000);
     this.nextId = 1;
     this.nextHid = 1;
     this.deckBrowsing = createDeckBrowsing(this, { geoOf, maxPieces: SIM.maxPieces });
@@ -460,6 +463,7 @@ class TableRoom extends Room {
     });
 
     // --- Cards: flip, deal, take, inspect, shuffle, split ----------------------
+    registerNotecardHandlers(this);
     registerDeckBrowseHandlers(this);
     registerCardHandlers(this, {
       flipHop: SIM.flipHop,
@@ -526,6 +530,10 @@ class TableRoom extends Room {
       let restored = 0;
       for (const id of batch.ids) {
         const piece = this.state.pieces.get(id);
+        if (piece?.type === 'notecard') {
+          if (this.notecards.take(client, id)) restored++;
+          continue;
+        }
         if (!piece || piece.type !== 'card') continue; // moved, taken, or table reset
         const props = readProps(piece);
         const front = (this.cardData.get(id) || {}).front || props.front;
@@ -662,6 +670,7 @@ class TableRoom extends Room {
   // faces public and lands with the chosen side up (face-down = the back face up); a normal card
   // lands face-up (front+back) or face-down (back shown, front hidden in cardData until flipped).
   spawnHandCard(pos, card, faceDown) {
+    if (card.kind === 'notecard') return this.notecards.placeHandCard(pos, card, !!faceDown);
     return spawnTableCard(this, pos, { ...card, geo: geoOf(card) }, !!faceDown);
   }
 
@@ -902,6 +911,7 @@ class TableRoom extends Room {
   }
   async onDispose() {
     this.disposeCollections?.();
+    for (const client of this.clients) this.notecards?.cancelClient(client.sessionId);
     this.deckBrowsing?.clear();
     // safety net: snapshot the live table so progress survives an empty room even without a manual Save
     roomAccess.dispose(this);

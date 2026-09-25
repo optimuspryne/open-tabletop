@@ -14,6 +14,8 @@ const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html'];
 
 // The full set of icons used across the app, grouped loosely by where they first appeared.
 const ICONS = [
+  'arrow-forward-up',
+  'zoom-out',
   // Custom collider editor
   'hexagon-3d',
   'mood-neutral',

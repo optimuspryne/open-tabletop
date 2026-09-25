@@ -121,7 +121,11 @@ export function registerRoomFeatureHandlers(
     room.shows.set(sid, { to: audience, cards });
     const player = room.state.players.get(sid);
     if (player) player.showing = cards.length;
-    const payload = cards.map((card) => ({ front: card.front, back: card.back }));
+    const payload = cards.map((card) =>
+      card.kind === 'notecard'
+        ? { kind: 'notecard', drawing: card.drawing }
+        : { front: card.front, back: card.back },
+    );
     for (const viewer of audience) {
       room.clientBy(viewer)?.send('showFan', { sid, cards: payload });
     }

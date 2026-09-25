@@ -17,7 +17,7 @@ const messagesByCapability = {
   ],
   communication: ['chat', 'ping', 'highlightPiece'],
   personal: ['notebook', 'setName', 'setAvatar', 'setPlacard', 'setParticipation'],
-  cleanup: ['showStop', 'wbRelease', 'closeDeckBrowse'],
+  cleanup: ['showStop', 'wbRelease', 'closeDeckBrowse', 'notecardCancel'],
   administration: [
     'members',
     'admit',
@@ -44,6 +44,10 @@ const messagesByCapability = {
     'deleteCollection',
   ],
   gameplay: [
+    'notecardEdit',
+    'notecardCommit',
+    'notecardKeepAlive',
+    'notecardFlip',
     'browseDeck',
     'browseStep',
     'browseAction',

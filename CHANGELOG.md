@@ -8,6 +8,18 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Added
+- **Drawable notecards.** Spawn individual landscape notecards from the Library, privately draw
+  with mouse/touch/pen using colors, pen widths, eraser and undo/redo, then place face-up or
+  face-down. A single editor reserves each card; concealed artwork stays server-side, and
+  committed drawings survive scene/game saves. Cancel or interrupted editing preserves the
+  previous artwork. Includes an undoable Clear and spectator-safe public inspection.
+- **Notecard zoom/pan and private hands.** Wheel or pinch to zoom, pan with a tool or two
+  fingers, and reset with Fit card. Keep drawings in account-owned hands, reopen/edit them,
+  play them face-up/down, or pass them privately to an active player. Reuses hand saves,
+  reconnects, reorder and selective Show; failed transfers retain inventory and drafts.
+  Drawing controls use the user-approved Tabler icon set with compact-mode labels/tooltips.
+
 ### Changed
 - Replace the built-in procedural Marbled finish with Behrtron's CC0 white-marble texture.
   Preserve the supplied 4K source; render with one shared 512px WebP, retain colored dice and
@@ -32,6 +44,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Restart the server and refresh browsers to use the new sky derivative variants. No migration.
 
 ### Documentation
+- Record user approval of drawable notecards, zoom/pan, private hands and the compact icon set.
+- Require concrete Tabler icon options and user selection during UI work, with compact-mode
+  accessibility and shared icon/sprite integration recorded in `AGENTS.md`.
 - Record user-confirmed iPad performance improvement after the dice/sky memory fixes and
   successful library-thumbnail verification after the PNG fallback fix.
 - Record successful user-reported 0.19.0 deployment tests on Docker, bare metal and Proxmox,

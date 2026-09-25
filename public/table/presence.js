@@ -62,6 +62,8 @@ export function createPresence({
   camera,
   controls,
   cardMesh,
+  notecardMesh,
+  disposeNotecard,
   makePlayerTexture,
   makeYouChipTexture,
   nameTag,
@@ -152,7 +154,11 @@ export function createPresence({
       scene.add(group);
       handGroups.set(sid, group);
     }
-    while (group.children.length) group.remove(group.children[0]);
+    while (group.children.length) {
+      const child = group.children[0];
+      if (child.userData?.notecard) disposeNotecard(child);
+      group.remove(child);
+    }
 
     const out = new THREE.Vector3(...seat.out).normalize();
     const tangent = new THREE.Vector3(out.z, 0, -out.x); // along the table edge
@@ -164,7 +170,9 @@ export function createPresence({
       // showing the hand's own back image (public) rather than a generic default.
       const card =
         i < shown.length
-          ? cardMesh({ front: shown[i].front, back: shown[i].back })
+          ? shown[i].kind === 'notecard'
+            ? notecardMesh({ drawing: shown[i].drawing })
+            : cardMesh({ front: shown[i].front, back: shown[i].back })
           : cardMesh({ back: player.handBack || undefined });
       card.castShadow = card.receiveShadow = false;
       const offset = i - (count - 1) / 2;
@@ -176,7 +184,7 @@ export function createPresence({
         seat.hand[2] + tangent.z * offset * 0.55,
       );
       card.rotation.y = yaw + offset * 0.06; // slight fan
-      card.scale.setScalar(0.8);
+      card.scale.setScalar(card.userData?.notecard ? 0.4 : 0.8);
       group.add(card);
     }
   }
@@ -184,6 +192,7 @@ export function createPresence({
   function removeFan(sid) {
     const group = handGroups.get(sid);
     if (group) {
+      for (const child of group.children) if (child.userData?.notecard) disposeNotecard(child);
       scene.remove(group);
       handGroups.delete(sid);
     }

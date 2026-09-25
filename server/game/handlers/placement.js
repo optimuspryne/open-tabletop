@@ -60,6 +60,7 @@ export function registerPlacementHandlers(
       return;
     }
     const card = hand[index];
+    room.stopShow?.(client.sessionId);
 
     const pos =
       typeof x === 'number' && typeof z === 'number'
@@ -81,15 +82,16 @@ export function registerPlacementHandlers(
       cz = typeof z === 'number' ? z : 0;
     let spawned = 0;
     const ids = []; // remember what we created, so the drop can be undone
-    for (const card of hand) {
+    room.stopShow?.(client.sessionId);
+    for (const card of [...hand]) {
       if (!hasPieceCapacity(room, maxPieces)) break;
       const pos = [cx + (Math.random() - 0.5) * 3, 0.1, cz + (Math.random() - 0.5) * 1.6];
       const id = room.spawnHandCard(pos, card, faceDown);
       ids.push(id);
       spawned++;
+      hand.splice(0, 1);
     }
-    const capped = spawned < hand.length; // couldn't place the whole hand — table filled up
-    hand.splice(0, spawned);
+    const capped = hand.length > 0; // couldn't place the whole hand — table filled up
     room.sendHand(client);
     if (spawned) {
       room.lastDrop.set(client.sessionId, { ids, ts: Date.now() });

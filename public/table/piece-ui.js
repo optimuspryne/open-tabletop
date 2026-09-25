@@ -62,6 +62,7 @@ export function createPieceUi({
   }
 
   const PIECE_CONTROL_NAMES = {
+    notecard: 'Notecard',
     card: 'Card',
     deck: 'Deck',
     die: 'Die',
@@ -255,6 +256,10 @@ export function createPieceUi({
         items.push(['Inspect', () => inspection.enterInspect(id)]);
       items.push(['Highlight', () => highlightPiece(id)]);
       return items;
+    }
+    if (type === 'notecard') {
+      items.push(['Flip', () => getRoom().send('notecardFlip', { id })]);
+      items.push(['Take to hand', () => pieceDrag.sendAction('takeCard', id)]);
     }
     if (type === 'card') {
       items.push(['Flip', () => getRoom().send('flip', { id })]);

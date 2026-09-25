@@ -122,6 +122,10 @@ export function registerPieceHandlers(
     for (const id of ids) {
       const piece = room.state.pieces.get(id);
       const body = room.bodies.get(id);
+      if (piece?.type === 'notecard') {
+        if (room.notecards?.flip(id)) cues.add('tile-flip');
+        continue;
+      }
       if (!piece || piece.type !== 'card' || !body) continue;
       const props = readProps(piece);
       if (props.open) {
@@ -254,6 +258,13 @@ export function registerPieceHandlers(
       return;
     }
     if (room.rank(client) < RANK.helper) return;
+    if (msg.type === 'notecard' && !room.notecards.hasCapacity()) {
+      client.send('serverError', {
+        operation: 'spawn',
+        message: 'The table already has the maximum number of notecards.',
+      });
+      return;
+    }
     const props = msg.type === 'die' ? dieSpawnProps(msg.props) : msg.props || {};
     room.spawn(msg.type, randomPosition(), props);
   });

@@ -6,12 +6,24 @@ import { readProps, writeProps } from './props-codec.js';
 export function standOf(piece) {
   const props = readProps(piece);
   if (props.stand !== undefined) return props.stand;
-  if (piece.type === 'deck' || piece.type === 'dispenser' || piece.type === 'mat') return 'flat';
+  if (
+    piece.type === 'deck' ||
+    piece.type === 'dispenser' ||
+    piece.type === 'mat' ||
+    piece.type === 'notecard'
+  )
+    return 'flat';
   return (PROPS[props.shape] || {}).stand;
 }
 
 export function naturalStand(piece) {
-  if (piece.type === 'deck' || piece.type === 'dispenser' || piece.type === 'mat') return 'flat';
+  if (
+    piece.type === 'deck' ||
+    piece.type === 'dispenser' ||
+    piece.type === 'mat' ||
+    piece.type === 'notecard'
+  )
+    return 'flat';
   const props = readProps(piece);
   const spec = PROPS[props.shape] || {};
   if (spec.stand) return spec.stand;

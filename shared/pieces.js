@@ -1,3 +1,4 @@
+import { NOTECARD } from './notecards.js';
 // =============================================================================
 // SINGLE SOURCE OF TRUTH  —  every piece dimension, mass, color and proportion.
 // Imported by BOTH the server (to build cannon-es colliders) and the client (to
@@ -32,6 +33,10 @@ export const COLORS = {
 // mass + collider `shape`: 'die' (polyhedron from props.sides), 'prop' (per-shape
 // data in PROPS below), or { box:[hx,hy,hz] }. mass 0 = static/not grabbable.
 export const KINDS = {
+  notecard: {
+    mass: NOTECARD.mass,
+    shape: { box: [NOTECARD.width / 2, NOTECARD.thickness / 2, NOTECARD.height / 2] },
+  },
   die: { mass: 1, shape: 'die' },
   card: { mass: 0.02, shape: { box: [0.75, 0.015, 1.05] } },
   prop: { mass: 0.5, shape: 'prop' },

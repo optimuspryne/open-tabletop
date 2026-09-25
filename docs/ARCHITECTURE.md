@@ -1019,6 +1019,21 @@ machinery:
   isn't you. **Attention ping** (middle-click / `P`) — a table-location marker
   clamped to the table server-side and broadcast to all; public by nature, so no
   routing.
+- **Drawable notecards** — individual physical pieces with one editable face and an opaque
+  back. `server/game/notecards.js` owns committed artwork and session-bound editing tokens;
+  `public/table/notecards.js` owns uncommitted browser drafts. Claiming conceals the face and
+  temporarily makes the body static. The interaction gate rejects mutations targeting reserved
+  cards, and physics maintenance preserves that reservation. Artwork is sent only to the editor
+  or published on a face-up, unreserved card. Private hand entries carry `kind: "notecard"` and
+  committed drawing data, inheriting account-owned park/claim/reassignment and game persistence.
+  An explicit Show sends faces only to the chosen audience; opening a hand editor retracts Show.
+  Transfers validate recipients and table capacity before consuming inventory. The 16-card cap
+  includes physical pieces, active hands and unclaimed hands. View zoom/pan stays browser-local.
+  Scene/game serialization reads the committed
+  document even during editing; restore keeps concealed faces server-only. Departure, loss of
+  gameplay access, expiry and table reset release reservations without replacing committed art.
+  Shared stroke replay is reused from the whiteboard; its public broadcast protocol is not used
+  for private drafts. See [notecard design and limits](DESIGN_notecards.md).
 - **Whiteboard** (shared) — a tilt-up sketch surface. Its _public_ state
   (`enabled/angle/owner/dark`) is synced schema, but **strokes are not**: each
   stroke is a `wbStroke` message appended to a capped server history and broadcast

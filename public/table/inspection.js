@@ -14,6 +14,7 @@ import {
 // Owns inspection previews, their controls, deferred double-clicks, and pointer rotation.
 export function createInspection({
   canInteract = () => true,
+  openNotecard = () => {},
   makeBrowsePreview,
   THREE,
   scene,
@@ -256,7 +257,11 @@ export function createInspection({
   let inspect = null; // { pivot, origId, drag, drawn, placed }
   let pendingClick = null; // defers a single-click so a double-click can pre-empt it
   const INSPECTABLE = (type) =>
-    type === 'die' || type === 'card' || type === 'prop' || type === 'dispenser'; // not boards/decks
+    type === 'notecard' ||
+    type === 'die' ||
+    type === 'card' ||
+    type === 'prop' ||
+    type === 'dispenser'; // not boards/decks
 
   // Core inspect: park `mesh` enlarged in front of the camera. opts: { origId,
   // type, drawn }. A 'card' is stood upright; a 'drawn' card shows the action panel.
@@ -437,6 +442,10 @@ export function createInspection({
   function enterInspect(id) {
     const entry = getPieceVisual(id);
     if (!entry) return;
+    if (entry.type === 'notecard') {
+      openNotecard(id);
+      return;
+    }
     const piece = getRoom().state.pieces.get(id);
     const ownsMesh =
       (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && !!piece;

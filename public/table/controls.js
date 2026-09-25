@@ -49,6 +49,124 @@ const logicalKey = (e) => ({
   preventDefault: () => e.preventDefault(),
 });
 
+// Flat drawing input: pen strokes, explicit pan, wheel zoom and two-finger view transforms.
+// A pinch cancels the unfinished stroke and suppresses drawing until all fingers lift.
+export function attachDrawingControls(canvas, intents) {
+  const pointers = new Map();
+  let owner = null,
+    mode = null,
+    last = null,
+    gesture = null,
+    space = false;
+  const point = (event) => [event.clientX, event.clientY];
+  const pair = () => {
+    const [a, b] = [...pointers.values()];
+    return {
+      center: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+      distance: Math.max(1, Math.hypot(a[0] - b[0], a[1] - b[1])),
+    };
+  };
+  canvas.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 && event.button !== 1) return;
+    if (owner !== null && event.pointerType !== 'touch') return;
+    if (mode && mode !== 'gesture' && !pointers.has(owner)) return;
+    if (event.pointerType === 'touch' && pointers.size && mode !== 'gesture' && !last?.touch)
+      return;
+    if (!pointers.size) canvas.focus();
+    pointers.set(event.pointerId, point(event));
+    canvas.setPointerCapture(event.pointerId);
+    event.preventDefault();
+    if (pointers.size >= 2) {
+      if (mode === 'draw') intents.cancel();
+      mode = 'gesture';
+      gesture = pair();
+      return;
+    }
+    if (mode === 'gesture') return;
+    owner = event.pointerId;
+    last = { point: point(event), touch: event.pointerType === 'touch' };
+    mode = event.button === 1 || space || intents.isPanning?.() ? 'pan' : 'draw';
+    if (mode === 'draw' && !intents.press(logical(event))) mode = 'pan';
+  });
+  const move = (event) => {
+    if (!pointers.has(event.pointerId)) return;
+    pointers.set(event.pointerId, point(event));
+    if (mode === 'gesture') {
+      if (pointers.size < 2) return;
+      const next = pair();
+      intents.transform?.(gesture.center, next.center, next.distance / gesture.distance);
+      gesture = next;
+    } else if (owner === event.pointerId) {
+      if (mode === 'draw') intents.move(logical(event));
+      else intents.transform?.(last.point, point(event), 1);
+      last.point = point(event);
+    }
+  };
+  canvas.addEventListener('pointermove', move);
+  const finish = (event, cancelled) => {
+    if (!pointers.has(event.pointerId)) return;
+    if (mode === 'draw' && owner === event.pointerId) {
+      if (cancelled) intents.cancel();
+      else {
+        move(event);
+        intents.release(logical(event));
+      }
+    }
+    pointers.delete(event.pointerId);
+    if (!pointers.size) {
+      owner = mode = gesture = last = null;
+    } else if (mode === 'gesture' && pointers.size >= 2) gesture = pair();
+    if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+  };
+  canvas.addEventListener('pointerup', (event) => finish(event, false));
+  canvas.addEventListener('pointercancel', (event) => finish(event, true));
+  canvas.addEventListener('lostpointercapture', (event) => finish(event, true));
+  canvas.addEventListener(
+    'wheel',
+    (event) => {
+      event.preventDefault();
+      if (!pointers.size)
+        intents.transform?.(
+          point(event),
+          point(event),
+          Math.exp(
+            -Math.max(
+              -200,
+              Math.min(
+                200,
+                event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1),
+              ),
+            ) * 0.002,
+          ),
+        );
+    },
+    { passive: false },
+  );
+  const host = canvas.closest('dialog') || canvas;
+  host.addEventListener('keydown', (event) => {
+    if (event.key === ' ' && event.target === canvas) {
+      space = true;
+      event.preventDefault();
+    }
+  });
+  host.addEventListener('keyup', (event) => {
+    if (event.key === ' ') space = false;
+  });
+  canvas.addEventListener('blur', () => {
+    space = false;
+  });
+  return {
+    reset() {
+      if (mode === 'draw') intents.cancel();
+      const ids = [...pointers.keys()];
+      pointers.clear();
+      owner = mode = gesture = last = null;
+      space = false;
+      for (const id of ids) if (canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+    },
+  };
+}
+
 // Touch double-tap. WebKit does not synthesize a `dblclick` from a double-tap (Chrome
 // does), so on iOS/iPadOS the whiteboard claim was simply unreachable. The touch profile
 // raises the same doubleClick intent itself; the native handler stands down when the last

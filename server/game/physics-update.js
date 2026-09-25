@@ -56,7 +56,7 @@ export function selfRightPieces(room, sim) {
   const pieceUp = new CANNON.Vec3();
   const axis = new CANNON.Vec3();
   room.state.pieces.forEach((piece, id) => {
-    if (piece.owner) return;
+    if (piece.owner || room.notecards?.isEditing(id)) return;
     const standMode = room.standOf(piece);
     if (!standMode) return;
     const body = room.bodies.get(id);
@@ -83,7 +83,7 @@ export function selfRightPieces(room, sim) {
 // Freeze snap-enabled pieces only after they settle; release stale pins immediately.
 export function maintainSnapPins(room, sim) {
   room.state.pieces.forEach((piece, id) => {
-    if (piece.owner) return;
+    if (piece.owner || room.notecards?.isEditing(id)) return;
     const body = room.bodies.get(id);
     if (!body) return;
     if (room.wantsSnap(piece)) {

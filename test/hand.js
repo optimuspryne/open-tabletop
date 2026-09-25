@@ -13,7 +13,7 @@ class Element {
     this.attributes = new Map();
     this.classes = new Set();
     this.classList = {
-      add: (name) => this.classes.add(name),
+      add: (...names) => names.forEach((name) => this.classes.add(name)),
       remove: (name) => this.classes.delete(name),
       contains: (name) => this.classes.has(name),
       toggle: (name, on) => (on ? this.classes.add(name) : this.classes.delete(name)),
@@ -207,6 +207,16 @@ function fixture() {
     }),
     parseCardFront: (front) => ({ kind: 'rank', rank: front.slice(0, -1), suit: front.at(-1) }),
     cardPreviewURL: () => null,
+    notecardPreviewURL: () => 'data:image/png;base64,test',
+    openHandNotecard: (card) => inspected.push({ notecard: card.hid }),
+    notecardMesh: () => ({
+      userData: { notecard: true },
+      rotation: { x: 0 },
+      position: { set() {} },
+    }),
+    disposeNotecard: (mesh) => {
+      mesh.disposed = true;
+    },
     applyIcons() {},
     setIcon() {},
     getRoom: () => room,
@@ -436,4 +446,28 @@ test('hand binding restores private cards after reconnect and reports partial/st
   assert.deepEqual(f.feedback.at(-1), ['Those cards are no longer on the table', 'x']);
   messages.get('hand')(null);
   assert.equal(f.cards().length, 0);
+});
+
+test('notecards render privately in mixed hands, open their editor and dispose drag artwork', () => {
+  const f = fixture();
+  f.hand.setCards([...sample, { hid: 'note', kind: 'notecard', drawing: [] }]);
+  const card = f.cards()[2];
+  assert.equal(card.classes.has('notecard'), true);
+  assert.match(card.style.backgroundImage, /data:image/);
+  card.ondblclick();
+  assert.deepEqual(f.inspected.at(-1), { notecard: 'note' });
+  card.emit('pointerdown', {
+    button: 0,
+    pointerType: 'mouse',
+    pointerId: 9,
+    clientX: 0,
+    clientY: 0,
+    preventDefault() {},
+  });
+  f.win.dispatch('pointermove', { pointerId: 9, clientX: 20, clientY: 20 });
+  const mesh = f.meshes[0];
+  assert.equal(mesh.userData.notecard, true);
+  f.hand.cancelGesture();
+  assert.equal(mesh.disposed, true);
+  assert.equal(f.meshes.length, 0);
 });

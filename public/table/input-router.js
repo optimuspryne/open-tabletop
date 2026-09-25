@@ -2,6 +2,7 @@
 // in the injected controllers. Branch order is intentional and covered by regression tests.
 export function createInputRouter({
   getRoom,
+  isModalActive = () => false,
   canInteract = () => true,
   canvas,
   controls,
@@ -253,6 +254,7 @@ export function createInputRouter({
       // touch long-press → context menu on a piece, or ping on empty felt
       if (
         !getRoom() ||
+        isModalActive() ||
         overlays.isMeasuring() ||
         whiteboard.isOwning() ||
         inspection.isActive() ||

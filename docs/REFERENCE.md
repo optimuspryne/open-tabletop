@@ -2375,6 +2375,44 @@ overlays and `overlayDrag`; **`bindControls()`** wires the measurement UI. The i
 `select`, `removeSelected`, `relabel`, and `syncSurface` maintain the visible overlay state.
 Height follows rendered board geometry under each overlay, not tall physics colliders.
 
+## Drawable notecards
+
+**`shared/notecards.js`** defines `NOTECARD`, ink/width choices and
+`normalizeNotecardDrawing(strokes)`, returning normalized copies or `null` for invalid/oversized
+input. Notecards are a distinct `KINDS`/`KIND` piece type with fixed shared dimensions and mass.
+
+**`server/game/notecards.js`** exposes `createNotecards(room)` and
+`registerNotecardHandlers(room)`. The private service owns committed drawings and session/token
+reservations. Requests are `notecardEdit({id})` for a table piece or `notecardEdit({hid})` for
+an actor-owned hand notecard, `notecardCommit({id,token,drawing,faceDown,destination,recipient})`,
+`notecardKeepAlive({id,token})`, `notecardCancel({id,token})`, and `notecardFlip({id})`.
+`destination` is `table` (default, requires boolean `faceDown`), `hand`, or `pass` (requires a
+live active `recipient` session). A hand reply uses `id: "hand:" + hid` plus `hid`; keepalive,
+cancel and commit use that returned ID and token. Only cancellation uses the cleanup
+capability; the others require gameplay access.
+Replies `notecardEdit` and `notecardClosed` go only to the actor. Public props contain `drawing`
+only while face-up and unreserved; `editing`/`editingName` identify the current editor.
+Snapshots include committed private drawing data, without editing tokens or draft strokes.
+
+Private hand entries are `{hid,kind:"notecard",back:"back",drawing,noteProps}`; `noteProps`
+retains label/snap/stand metadata. Existing hand ownership, park/claim, reassignment, reorder
+and game persistence preserve these entries; portable scenes exclude hands. The 16-card cap
+counts table documents, live hands and parked hands together. `take` and `placeHandCard`
+extend existing transfer paths, checking physical capacity before consumption. During a hand
+edit, play/drop/Show are blocked; entering the editor stops any prior Show. Explicit selective
+Show sends committed drawings only to its audience. Transfers never publish private faces.
+
+**`public/table/notecards.js`** exposes `createNotecardEditor`: `open`, `openHand`, `syncHand`, `bindRoom`, `cancel`,
+and `isActive`. Inspection routes notecards into the native dialog. The client retains the
+private draft until acknowledgement, supports undo/redo and Clear, and drops it when cancelled
+or disconnected. `attachDrawingControls` in `controls.js` translates drawing, pan, wheel and
+pinch input into intents; `createDrawingView` owns the local normalized 1–8× transform.
+Painting and pointer mapping use inverse transforms; navigation never changes saved strokes.
+The chosen Tabler controls retain accessible names and native tooltips above the dialog layer. `paintNotecard`/`notecardMesh` build surfaces with individually disposable
+textures; `drawCanvasStroke` is shared with whiteboard replay.
+
+See [design, limits, file map and QA](DESIGN_notecards.md). No database migration is required.
+
 ## `public/table/whiteboard.js` — whiteboard
 
 **`createWhiteboard(dependencies)`** owns the board mesh, stroke canvas/replay, owner camera mode,

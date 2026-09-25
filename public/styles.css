@@ -7269,3 +7269,43 @@ body.not-gm .gm-only {
 #placardFields select { width: 100%; max-width: 100%; }
 #placardFields .chipRow { margin-top: 12px; }
 #placardFields .chipRow label { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Private freehand notecard editor; the native dialog contains focus and input. */
+.notecard-dialog {
+  width: min(960px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  margin: auto;
+  padding: 16px;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  overflow: auto;
+}
+.notecard-dialog:not([open]) { display: none; }
+.notecard-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
+.notecard-tools { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+.notecard-tools .button-row { flex-wrap: wrap; }
+.notecard-tools label { display: inline-flex; align-items: center; gap: 6px; }
+.notecard-ink { width: 32px; min-height: 32px; background: var(--ink); border: 2px solid var(--border); }
+.notecard-ink[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
+#notecardCanvas { display: block; width: min(100%, max(300px, calc((100dvh - 380px) * 1.5))); margin-inline: auto; height: auto; aspect-ratio: 3 / 2; touch-action: none; cursor: crosshair; border-radius: 4px; }
+.notecard-dialog .modal__footer { flex-wrap: wrap; }
+@media (pointer: coarse) {
+  .notecard-dialog button, .notecard-dialog select { min-height: 44px; }
+  .notecard-ink { width: 36px; }
+}
+
+.notecard-dialog .modal__header { margin-bottom: 12px; }
+
+#notecardColors { width: 330px; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; max-width: 100%; }
+.notecard-ink { min-width: 0; padding: 0; }
+
+#notecardColors .notecard-ink { width: 100%; }
+
+.notecard-navigation { flex-wrap: wrap; margin-bottom: var(--gap); align-items: center; }
+.notecard-pass { flex-wrap: wrap; margin-top: var(--gap); align-items: center; }
+.notecard-pass select { min-width: 0; max-width: 100%; flex: 1; }
+.notecard-dialog [hidden] { display: none; }
+#notecardCanvas:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.handcard.notecard { width: 120px; background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #fffdf5; }

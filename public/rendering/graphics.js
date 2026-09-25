@@ -1,3 +1,4 @@
+import { notecardMesh, paintNotecard } from './notecards.js';
 import { drawPlacard } from './placards.js';
 import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
@@ -1146,6 +1147,26 @@ function resizeToCanvas(file, w, h, fit, bg) {
     };
     img.src = URL.createObjectURL(file);
   });
+}
+
+export function notecardPreviewURL(drawing) {
+  const { canvas, ctx } = makeCanvas(320, 213);
+  paintNotecard(
+    ctx,
+    drawing ?? [
+      {
+        pts: [0.15, 0.65, 0.3, 0.35, 0.45, 0.55, 0.6, 0.25, 0.85, 0.45],
+        color: '#2878ba',
+        width: 0.015,
+        erase: false,
+      },
+    ],
+  );
+  try {
+    return canvasThumbnailURL(canvas);
+  } finally {
+    canvas.width = canvas.height = 0;
+  }
 }
 
 function canvasThumbnailURL(image) {
@@ -2314,6 +2335,7 @@ function dispenserMesh(props = {}) {
 // lclick / rclick: click actions (message names).
 // Adding a kind = one entry here + one in the shared KINDS descriptor.
 const KIND = {
+  notecard: { mesh: notecardMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   die: { mesh: dieMesh, dispose: disposeHierarchy, grab: 0, rclick: 'roll' },
   card: { mesh: cardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
   prop: { mesh: propMesh, grab: 0 },

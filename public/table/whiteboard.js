@@ -1,3 +1,4 @@
+import { drawCanvasStroke } from '../rendering/strokes.js';
 import { WHITEBOARD_LIMITS } from '../../shared/overlays.js';
 
 const RESOLUTION = 1024;
@@ -101,23 +102,8 @@ export function createWhiteboard({
     texture.needsUpdate = true;
   };
   const drawStroke = (stroke) => {
-    const points = stroke?.pts ? Array.from(stroke.pts) : null;
-    if (!points || points.length < 4) return;
     ensureCanvas();
-    const widthPx = canvas.width,
-      heightPx = canvas.height;
-    context.strokeStyle = stroke.erase ? background() : stroke.color || '#e8e6e0';
-    context.lineWidth = Math.max(1.5, (stroke.width || 0.005) * widthPx);
-    context.lineCap = 'round';
-    context.lineJoin = 'round';
-    context.beginPath();
-    for (let i = 0; i < points.length; i += 2)
-      (i === 0 ? context.moveTo : context.lineTo).call(
-        context,
-        points[i] * widthPx,
-        points[i + 1] * heightPx,
-      );
-    context.stroke();
+    drawCanvasStroke(context, stroke, canvas.width, canvas.height, background());
     texture.needsUpdate = true;
   };
   const redrawStrokes = () => {

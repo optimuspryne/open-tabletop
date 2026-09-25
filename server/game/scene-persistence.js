@@ -1,3 +1,4 @@
+import { NOTECARD, normalizeNotecardDrawing } from '../../shared/notecards.js';
 import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
 import { KINDS, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
 import { MEASURE } from '../../shared/overlays.js';
@@ -10,6 +11,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 // Reset game contents, including private state that may have no visible piece.
 // Room configuration, timer, notes, chat, whiteboard and personal notebooks survive.
 export function clearGameTable(room) {
+  room.notecards?.clear();
   room.deckBrowsing?.clear();
   for (const id of [...room.state.pieces.keys()]) room.removePiece(id);
   for (const map of [
@@ -42,7 +44,12 @@ export function serializeScene(room, { includeLighting = false } = {}) {
   const pieces = [];
   room.state.pieces.forEach((piece, id) => {
     let props = readProps(piece);
-    if (piece.type === 'deck') {
+    if (piece.type === 'notecard') {
+      delete props.editing;
+      delete props.editingName;
+      delete props.drawing;
+      props = { ...props, ...room.notecards.snapshot(id) };
+    } else if (piece.type === 'deck') {
       const cards = (room.deckCards.get(id) || []).slice();
       // Last popped is returned first; the first inspected card was the original top.
       for (const pending of [...room.pendingInspect.values()].reverse()) {
@@ -158,6 +165,18 @@ export function applyScene(
   { createOverlay, maxPieces, overlayKinds, overlayMax, tableLimits },
 ) {
   if (!scene || typeof scene !== 'object') return;
+  const notecards = (Array.isArray(scene.pieces) ? scene.pieces : []).filter(
+    (entry) => entry?.type === 'notecard',
+  );
+  const heldNotes = (Array.isArray(scene.hands) ? scene.hands : []).flatMap((hand) =>
+    Array.isArray(hand?.cards) ? hand.cards.filter((card) => card?.kind === 'notecard') : [],
+  );
+  if (
+    heldNotes.some((card) => !normalizeNotecardDrawing(card.drawing)) ||
+    notecards.length + heldNotes.length > NOTECARD.maxCards ||
+    notecards.some((entry) => !normalizeNotecardDrawing(entry.props?.drawing ?? []))
+  )
+    throw new Error('The scene contains invalid notecard artwork or too many notecards.');
   room.clearTable();
   const tableX = clamp(
     +(scene.table && scene.table.x) || TABLE.x,
@@ -248,7 +267,15 @@ export function applyScene(
       // Saved IDs belong to the previous room lifetime. Assign fresh IDs before
       // these cards can be mixed with newly drawn cards or other restored hands.
       const cards = hand.cards.map((card) =>
-        typeof card === 'object' && card !== null ? { ...card, hid: 'h' + room.nextHid++ } : card,
+        typeof card === 'object' && card !== null
+          ? {
+              ...card,
+              ...(card.kind === 'notecard'
+                ? { drawing: normalizeNotecardDrawing(card.drawing) }
+                : {}),
+              hid: 'h' + room.nextHid++,
+            }
+          : card,
       );
       appendAccountHand(room.pendingHands, hand.userId, hand.name, cards);
       room.state.unclaimed.set(String(hand.userId), hand.name || '');

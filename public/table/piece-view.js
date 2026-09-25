@@ -207,7 +207,7 @@ export function createPieceView({
         // Rebuild the card mesh when its props change (front revealed/hidden on flip).
         cb(piece).listen('props', () => rebuildCard(id, piece), false);
       }
-      if (piece.type === 'die' || piece.type === 'prop') {
+      if (piece.type === 'die' || piece.type === 'prop' || piece.type === 'notecard') {
         cb(piece).listen('props', () => rebuildPiece(id, piece), false); // recolor / prop tweaks
       }
       if (piece.type === 'dispenser') {

@@ -65,6 +65,11 @@
 - Use shared design tokens, canonical component classes, and Tabler icon helpers for static and
   generated UI. Preserve compact/full modes, keyboard accessibility, and desktop/touch behavior.
   Regenerate icon sprites through `npm run build:icons` when adding icons.
+- When adding or changing UI elements, consider appropriate Tabler icons, especially for compact
+  mode where labels may be hidden. Present the user with concrete icon options and their intended
+  controls, ask for their choice before adding or replacing icons, then implement the selected
+  icons using the shared helpers and sprite workflow. Preserve accessible names and tooltips in
+  compact mode. Previously approved icon choices do not need repeated confirmation.
 - Route device input through the existing intent layer. Decide and document the touch path for
   new interactions, updating the in-app help and [GESTURES.md](docs/GESTURES.md) when relevant.
   Keep viewport width and pointer capability as distinct layout concerns; use

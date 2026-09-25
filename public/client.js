@@ -1,3 +1,4 @@
+import { createNotecardEditor } from './table/notecards.js';
 import { createDeckBrowser } from './table/deck-browsing.js';
 import { createParticipation } from './table/participation.js';
 import * as THREE from 'three';
@@ -30,6 +31,7 @@ import {
   resizeToCanvas,
   parseCardFront,
   cardPreviewURL,
+  notecardPreviewURL,
   makePlayerTexture,
   nameTag,
   makeYouChipTexture,
@@ -221,6 +223,7 @@ const participation = createParticipation({
     whiteboard.cancel();
     inspection.cancel();
     deckBrowser.cancel();
+    notecards.cancel();
     pieceUi.closePieceMenu();
     pieceLabels.close();
     shell.closeRadial();
@@ -417,6 +420,7 @@ const membership = createMembership({
   }
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
   effects.bindTableEffects(room);
+  notecards.bindRoom(room);
   inspection.bindRoom(room);
   deckBrowser.bindRoom(room);
   pieceDrag.bindRoom(room);
@@ -576,6 +580,11 @@ shell.bindInteractionControls({
 });
 
 const hand = createHand({
+  notecardMesh: KIND.notecard.mesh,
+  disposeNotecard: KIND.notecard.dispose,
+  notecardPreviewURL,
+  openHandNotecard: (card) => notecards.openHand(card),
+  onCardsChanged: (cards) => notecards.syncHand(cards),
   canInteract: participation.canInteract,
   scene,
   camera,
@@ -598,7 +607,23 @@ const hand = createHand({
   dragThreshold: CONFIG.input.handPx,
   toast,
 });
+const notecards = createNotecardEditor({
+  getRoom: () => room,
+  byId,
+  canInteract: participation.canInteract,
+  toast,
+  beforeOpen: () => {
+    pieceDrag.cancel();
+    inspection.cancel();
+    deckBrowser.cancel();
+    whiteboard.cancel();
+    selection.cancel();
+    overlays.cancel();
+    pieceUi.closePieceMenu();
+  },
+});
 inspection = createInspection({
+  openNotecard: (id) => notecards.open(id),
   makeBrowsePreview: createCardBrowsePreview,
   canInteract: participation.canInteract,
   THREE,
@@ -636,6 +661,8 @@ const presence = createPresence({
   camera,
   controls,
   cardMesh: KIND.card.mesh,
+  notecardMesh: KIND.notecard.mesh,
+  disposeNotecard: KIND.notecard.dispose,
   makePlayerTexture,
   makeYouChipTexture,
   nameTag,
@@ -931,6 +958,7 @@ addEventListener('resize', () => {
 // Raw canvas events → intents (see public/table/controls.js). These handlers own what each
 // intent means through the composed router; controls.js owns which device gesture raises it.
 const INPUT = createInputRouter({
+  isModalActive: () => notecards.isActive(),
   canInteract: participation.canInteract,
   getRoom: () => room,
   canvas: renderer.domElement,

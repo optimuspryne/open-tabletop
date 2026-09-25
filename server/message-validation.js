@@ -778,6 +778,7 @@ export function spawnPayload(
 ) {
   if (!exactObject(message, ['type', 'props']) || !isPlainObject(message.props)) return null;
   const { type, props } = message;
+  if (type === 'notecard') return Object.keys(props).length === 0 ? { type, props: {} } : null;
   if (type === 'die') {
     if (
       !hasOnlyKeys(

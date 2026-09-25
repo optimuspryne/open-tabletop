@@ -26,6 +26,7 @@ import {
   glbFilePreviewURL,
   modelMaterialNames,
   parseCardFront,
+  notecardPreviewURL,
 } from '../rendering/graphics.js';
 import * as THREE from 'three';
 import { overflowMenu, wirePopGroups } from '../ui/icons.js'; // shared with the lobby (7f); this file's own copy retired in 7k
@@ -1056,6 +1057,18 @@ function renderBuiltin(sink) {
   const decks = sink('decks');
   clearPreviewList(decks);
   spawnBar(decks);
+  {
+    const preview = previewBox();
+    preview.append(thumbImg(notecardPreviewURL()));
+    decks.append(
+      spawnCard({
+        preview,
+        title: 'Drawable notecard',
+        color: 'none',
+        send: () => ROOM.send('spawn', { type: 'notecard', props: {} }),
+      }),
+    );
+  }
   {
     const box = previewBox('deckPreview');
     box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));

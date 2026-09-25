@@ -1,3 +1,4 @@
+import { normalizeNotecardDrawing } from '../../shared/notecards.js';
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
@@ -28,6 +29,13 @@ export function createPieceLifecycle({
 }) {
   const spawn = (room, type, pos, props = {}, quat = null) => {
     assertPieceCapacity(room, sim.maxPieces);
+    if (type === 'notecard' && !room.notecards.hasCapacity())
+      throw new Error('The notecard limit was reached.');
+    if (type === 'notecard') {
+      const drawing = normalizeNotecardDrawing(props.drawing ?? []);
+      if (!drawing) throw new Error('Invalid notecard drawing.');
+      props = { ...props, drawing };
+    }
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: room.mat });
     const collider = buildCollider(type, props, {
@@ -38,10 +46,16 @@ export function createPieceLifecycle({
 
     if (quat && quat.length === 4) {
       body.quaternion.set(quat[0], quat[1], quat[2], quat[3]);
-    } else if (KINDS[type].mass > 0 && type !== 'deck' && type !== 'dispenser' && type !== 'mat') {
+    } else if (
+      KINDS[type].mass > 0 &&
+      type !== 'deck' &&
+      type !== 'dispenser' &&
+      type !== 'mat' &&
+      type !== 'notecard'
+    ) {
       body.quaternion.setFromEuler(random() * 6, random() * 6, random() * 6);
     }
-    if (type === 'card') {
+    if (type === 'card' || type === 'notecard') {
       body.angularDamping = sim.cards.angDamp;
       body.linearDamping = sim.cards.linDamp;
       body.sleepSpeedLimit = sim.cards.sleepSpeed;
@@ -112,12 +126,18 @@ export function createPieceLifecycle({
             );
       writeProps(piece, props);
     } else {
-      writeProps(piece, props);
+      writeProps(
+        piece,
+        type === 'notecard'
+          ? { snap: !!props.snap, stand: props.stand, label: props.label, faceDown: true }
+          : props,
+      );
     }
 
     room.writeTransform(piece, body);
     room.state.pieces.set(id, piece);
     room.bodies.set(id, body);
+    if (type === 'notecard') room.notecards.restore(id, props);
     body.addEventListener('collide', (event) => {
       const releasedAt = room._released.get(id);
       if (releasedAt === undefined) return;
@@ -135,6 +155,7 @@ export function createPieceLifecycle({
   };
 
   const removePiece = (room, id) => {
+    room.notecards?.remove(id);
     room.deckBrowsing?.cancelDeck(id, 'The deck was removed.');
     const body = room.bodies.get(id);
     if (body) room.world.removeBody(body);

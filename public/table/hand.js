@@ -9,6 +9,11 @@ export function createHand({
   hit,
   setPointer,
   cardMesh,
+  notecardMesh,
+  disposeNotecard,
+  notecardPreviewURL,
+  openHandNotecard,
+  onCardsChanged = () => {},
   parseCardFront,
   cardPreviewURL,
   applyIcons,
@@ -40,6 +45,10 @@ export function createHand({
   const dropPreview = (m) => {
     if (!m) return;
     scene.remove(m);
+    if (m.userData?.notecard) {
+      disposeNotecard(m);
+      return;
+    }
     // Placed cards and drag previews share immutable geometry; keep the cached GPU buffer alive.
     if (m.geometry && !m.geometry.userData.sharedCardGeometry) m.geometry.dispose();
     (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x && x.dispose());
@@ -49,6 +58,10 @@ export function createHand({
   function inspectHandCard(card) {
     cancelDelay(handClickTimer);
     handClickTimer = null;
+    if (card.kind === 'notecard') {
+      openHandNotecard(card);
+      return;
+    }
     inspectMesh(
       cardMesh({ front: card.front, back: card.back, geom: card.geom, tile: card.tile }),
       {
@@ -119,7 +132,10 @@ export function createHand({
       if (selection) selection.removeAllRanges();
       // A real (local, unsynced) card mesh that rides the table under the pointer — same look as a played card.
       const d = handDrag;
-      const mesh = cardMesh({ front: d.front, back: d.back, geom: d.geom, tile: d.tile });
+      const mesh =
+        d.kind === 'notecard'
+          ? notecardMesh({ drawing: d.drawing })
+          : cardMesh({ front: d.front, back: d.back, geom: d.geom, tile: d.tile });
       mesh.renderOrder = 6;
       scene.add(mesh);
       handDrag.mesh = mesh;
@@ -289,6 +305,7 @@ export function createHand({
   // A comparable key: group by card kind, then by suit/rank (mode picks which leads) for playing
   // cards, or a natural order for tiles/letters/images so mixed hands still tidy up sensibly.
   function cardSortKey(card, mode) {
+    if (card.kind === 'notecard') return '9';
     const cf = parseCardFront(card.front);
     const kg = String(KIND_ORDER[cf.kind] ?? 9);
     if (cf.kind === 'rank') {
@@ -374,8 +391,11 @@ export function createHand({
       const div = document.createElement('div');
       div.className = 'handcard';
       div.dataset.hid = card.hid;
-      const cf = parseCardFront(card.front);
-      if (cf.kind === 'rank') {
+      const cf = card.kind === 'notecard' ? { kind: 'notecard' } : parseCardFront(card.front);
+      if (card.kind === 'notecard') {
+        div.classList.add('img', 'notecard');
+        div.style.backgroundImage = `url("${notecardPreviewURL(card.drawing)}")`;
+      } else if (cf.kind === 'rank') {
         div.textContent = cf.rank + cf.suit;
         div.style.color = cf.color || '#111';
       } else if (
@@ -429,6 +449,8 @@ export function createHand({
         if (ev.button === 0 || ev.button === 2) {
           ev.preventDefault();
           handDrag = {
+            kind: card.kind,
+            drawing: card.drawing,
             hid: card.hid,
             faceDown: ev.button !== 2,
             touch: ev.pointerType === 'touch',
@@ -451,7 +473,7 @@ export function createHand({
       }; // desktop: double-click to inspect
       const eye = document.createElement('button');
       eye.className = 'cardEye';
-      eye.setAttribute('aria-label', 'Inspect card');
+      eye.setAttribute('aria-label', card.kind === 'notecard' ? 'Open notecard' : 'Inspect card');
       setIcon(eye, 'eye');
       eye.addEventListener('pointerdown', (ev) => ev.stopPropagation()); // tapping the eye must not arm a drag
       eye.onclick = (ev) => {
@@ -676,6 +698,7 @@ export function createHand({
   function setCards(cards) {
     myHand = Array.isArray(cards) ? cards : [];
     renderHand(myHand);
+    onCardsChanged(myHand);
   }
   function bindRoom(room) {
     room.onMessage('hand', setCards); // private delivery only

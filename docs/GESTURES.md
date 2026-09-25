@@ -70,6 +70,27 @@ Empty felt only — a press that hits a piece is consumed by the piece dispatche
 OrbitControls is constructed with defaults (`core.js:52`) apart from `maxPolarAngle` and damping,
 so the touch bindings above are three.js's own: one finger rotates, two dolly and pan.
 
+## Drawable notecards
+
+Spawn **Drawable notecard** in the Library's Card Decks/Tiles pane. Double-click/double-tap or
+right-click/long-press → **Inspect** opens a private drawing surface for an active player.
+Mouse, finger and stylus share `attachDrawingControls` pointer intents. Two fingers pinch/drag
+for zoom/pan, cancelling the unfinished stroke and suppressing drawing until all fingers lift.
+Mouse wheel zooms around the pointer; Pan or middle-drag moves the view. With the canvas
+focused, Space-drag pans, +/− zoom, and 0 fits the card. Fit card restores 100%; zoom is 1–8×.
+Pointer cancellation drops the unfinished stroke. Canvas gestures never move the
+table camera. Spectators can view a public face or their own private hand drawing read-only.
+
+Use Pen/Eraser, ink swatches, Width, Undo/Redo and undoable Clear. Ctrl/Cmd+Z undoes;
+Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes. **Place face-up** or **Place face-down** commits; Cancel
+or Escape restores the previous drawing. **Keep in hand** retains it privately; **Pass to** plus
+**Pass privately** transfers directly into the selected active player's hand. Use a hand thumbnail's
+eye button (or desktop double-click) to reopen it. Existing hand click/drag and Drop controls place
+notecards face-up/down; context-menu **Take to hand** retrieves one without editing. Context-menu **Flip** changes the visible face, and
+selection Flip includes notecards. One editor reserves a card at a time. Touch controls use
+coarse-pointer sizing independently of the viewport width. Automated mouse/touch reachability
+is covered by `scripts/notecard-test.mjs`; real-device feel remains on the device QA checklist.
+
 ## Pieces
 
 | Gesture | What it does | Touch | Status |

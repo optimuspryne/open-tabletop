@@ -20,6 +20,25 @@ The user reported all manual tests green for the object-label, low-stock, highli
 and avatar-upload batch and approved it for commit. The checklists below remain reusable for
 future runs; that sign-off does not specify a per-device/browser test matrix.
 
+### Drawable notecards
+The user accepted the freehand editor and approved the zoom/pan, private-hand and compact-icon
+additions for commit. Automated coverage is recorded in [the design notes](DESIGN_notecards.md).
+No per-device or multiplayer test matrix was specified; these checkboxes remain reusable.
+- [ ] Spawn a Drawable notecard from the Library; double-click/double-tap or Inspect opens editing.
+- [ ] Draw with a mouse, finger and real stylus; check line smoothness and toolbar reach on a phone/tablet.
+- [ ] Try colors, all widths, eraser, undo/redo and undoing Clear; the table camera must stay still.
+- [ ] A second account sees only the back and editor name during editing and cannot move/flip/claim it.
+- [ ] Place face-down, pass the card, privately inspect it, then place face-up.
+- [ ] Save/reload both orientations; Cancel, disconnect and time-out retain committed artwork.
+- [ ] Spectators can inspect the public face without revealing a face-down drawing.
+- [ ] Wheel/pinch zoom follows the pointer/fingers; pan and Fit work; no stray pinch stroke remains.
+- [ ] At high zoom, a real stylus draws under its tip; Space/middle-drag and touch Pan stay inside the card.
+- [ ] Keep in hand, reopen, edit, reorder, drag/play/drop and retrieve a notecard in a mixed hand.
+- [ ] Pass privately to a second account; only the recipient receives the artwork. Retry after recipient leaves.
+- [ ] Save/reload and reconnect with hand notecards; unclaimed-hand reassignment preserves drawings.
+- [ ] Selective Show displays a drawing only to the chosen viewer; reopening it retracts the reveal.
+- [ ] Compact/full toolbars fit phone widths; icon tooltips, keyboard names and touch targets remain usable.
+
 ### Shared object highlight smoke test (each device, with a second connected viewer)
 - [ ] Desktop: middle-click a piece while nothing is held; both viewers see a pulsing halo
 - [ ] Touch: long-press a piece and choose **Highlight**; both viewers see the same target
