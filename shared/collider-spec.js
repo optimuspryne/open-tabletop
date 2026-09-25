@@ -1,3 +1,4 @@
+import { NOTECARD, notecardStackHeight } from './notecards.js';
 import { compoundColliderSpec } from './compound-collider.js';
 import { boardGeometry, boardHalfExtents } from './board-geometry.js';
 import {
@@ -46,6 +47,15 @@ export function primitiveColliderSpec(type, hx, hy, hz, options = {}) {
 // Authoritative renderer-neutral collider definition for both Cannon physics and browser debug
 // geometry. `count` is separate because it is a synchronized Piece field rather than part of props.
 export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, count } = {}) {
+  if (type === 'notecardStack')
+    return {
+      type: 'box',
+      halfExtents: [
+        NOTECARD.width / 2,
+        notecardStackHeight(count ?? props.count) / 2,
+        NOTECARD.height / 2,
+      ],
+    };
   const shape = KINDS[type]?.shape;
   if (!shape) return null;
   if ((type === 'prop' || type === 'board') && props.model && props.compoundCollider) {

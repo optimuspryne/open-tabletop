@@ -258,6 +258,7 @@ export function createInspection({
   let pendingClick = null; // defers a single-click so a double-click can pre-empt it
   const INSPECTABLE = (type) =>
     type === 'notecard' ||
+    type === 'notecardStack' ||
     type === 'die' ||
     type === 'card' ||
     type === 'prop' ||
@@ -442,7 +443,7 @@ export function createInspection({
   function enterInspect(id) {
     const entry = getPieceVisual(id);
     if (!entry) return;
-    if (entry.type === 'notecard') {
+    if (entry.type === 'notecard' || entry.type === 'notecardStack') {
       openNotecard(id);
       return;
     }

@@ -1,3 +1,4 @@
+import { applyIcons } from '../ui/icons.js';
 import { makeButton } from '../ui/rows.js';
 import { dispenserDefinition } from '../../shared/pieces.js';
 // Piece menus and contextual feedback. Gesture state and server actions remain injected.
@@ -24,6 +25,8 @@ export function createPieceUi({
   browseDeck,
 }) {
   const RADIAL_MAX = 7;
+  canvas.tabIndex = 0;
+  canvas.setAttribute('aria-label', 'Tabletop. Shift+F10 opens or cycles notecard stack actions.');
   // Hover readout: a small tooltip over the deck or dispenser under the cursor showing
   // how many are left inside (∞ for the infinite go bowl). Pure client-side, shown only
   // when idle (not mid-drag / inspect / draw / measure), and kept live by the render loop
@@ -50,6 +53,7 @@ export function createPieceUi({
     !hand.isDragging() &&
     !overlays.isDraggingMeasure();
   function countLabel(piece) {
+    if (piece.type === 'notecardStack') return `${piece.count} notecards`;
     if (piece.type === 'deck') return `${piece.count} card${piece.count === 1 ? '' : 's'}`;
     const d = dispenserDefinition(JSON.parse(piece.props || '{}'));
     if (!d) return null;
@@ -63,6 +67,7 @@ export function createPieceUi({
 
   const PIECE_CONTROL_NAMES = {
     notecard: 'Notecard',
+    notecardStack: 'Notecard stack',
     card: 'Card',
     deck: 'Deck',
     die: 'Die',
@@ -93,7 +98,14 @@ export function createPieceUi({
     const rows = [];
     rows.push(['Middle-click', 'Highlight for everyone']);
     if (getRank() >= 2) rows.push(['L', 'Edit label / low stock']);
-    if (type === 'deck')
+    if (type === 'notecardStack')
+      rows.push(
+        ['Left-drag', 'Move stack'],
+        ['Double-click', 'Draw & edit'],
+        ['Right-click / long-press', 'Stack actions'],
+        ['Shift + F10', 'Cycle stack menus'],
+      );
+    else if (type === 'deck')
       rows.push(
         ['Left-drag', 'Deal a card'],
         ['Left-click', 'Draw to hand'],
@@ -257,6 +269,34 @@ export function createPieceUi({
       items.push(['Highlight', () => highlightPiece(id)]);
       return items;
     }
+    if (type === 'notecardStack') {
+      items.push(
+        [
+          'Draw to hand',
+          () => getRoom().send('notecardDraw', { id, destination: 'hand' }),
+          null,
+          null,
+          'cards',
+        ],
+        ['Draw & edit', () => inspection.enterInspect(id), null, null, 'writing'],
+        [
+          'Play top face-down',
+          () => getRoom().send('notecardDraw', { id, destination: 'table' }),
+          null,
+          null,
+          'arrow-bar-down',
+        ],
+        ['Shuffle', () => getRoom().send('notecardShuffle', { id }), null, null, 'arrows-shuffle'],
+        ['Split', () => getRoom().send('notecardSplit', { id }), null, null, 'arrows-maximize'],
+        [
+          'Move stack',
+          () => pieceDrag.armMove(id),
+          null,
+          (e) => pieceDrag.beginMoveFromMenu(id, e),
+          'hand-move',
+        ],
+      );
+    }
     if (type === 'notecard') {
       items.push(['Flip', () => getRoom().send('notecardFlip', { id })]);
       items.push(['Take to hand', () => pieceDrag.sendAction('takeCard', id)]);
@@ -311,7 +351,7 @@ export function createPieceUi({
         null,
         (e) => pieceDrag.beginMoveFromMenu(id, e), // press and keep dragging — the piece comes with you
       ]); // deck/dispenser: reposition instead of deal
-    if (inspection.isInspectable(type)) {
+    if (type !== 'notecardStack' && inspection.isInspectable(type)) {
       items.push(['Inspect', () => inspection.enterInspect(id)]);
     }
     items.push(['Highlight', () => highlightPiece(id)]);
@@ -349,15 +389,20 @@ export function createPieceUi({
         return;
     }
     menu.replaceChildren();
-    for (const [label, fn, cls, press] of pieceMenuItems(id, entry.type)) {
+    for (const [label, fn, cls, press, icon] of pieceMenuItems(id, entry.type)) {
       const b = makeButton(
         label,
         () => {
           closePieceMenu();
+          canvas.focus();
           fn();
         },
         cls,
+        icon,
       );
+      b.type = 'button';
+      b.setAttribute('aria-label', label);
+      b.title = label;
       if (press)
         b.addEventListener('pointerdown', (ev) => {
           ev.preventDefault();
@@ -370,11 +415,36 @@ export function createPieceUi({
         });
       menu.appendChild(b);
     }
+    applyIcons(menu);
+    menu.querySelectorAll('button').forEach((b) => {
+      b.title = b.getAttribute('aria-label');
+    });
     menu.hidden = false; // show first so it can be measured
     const w = menu.offsetWidth || 180,
       h = menu.offsetHeight || 0;
     menu.style.left = Math.max(8, Math.min(p.x, innerWidth - w - 8)) + 'px';
     menu.style.top = Math.max(8, Math.min(p.y, innerHeight - h - 8)) + 'px';
+    menu.querySelector('button')?.focus({ preventScroll: true });
+    menu.onkeydown = (ev) => {
+      ev.stopPropagation();
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closePieceMenu();
+        canvas.focus();
+      }
+      if (['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(ev.key)) {
+        ev.preventDefault();
+        const buttons = [...menu.querySelectorAll('button')],
+          i = buttons.indexOf(document.activeElement);
+        buttons[
+          ev.key === 'Home'
+            ? 0
+            : ev.key === 'End'
+              ? buttons.length - 1
+              : (i + (ev.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
+        ]?.focus();
+      }
+    };
     pieceMenuAway = (ev) => {
       if (!menu.contains(ev.target)) closePieceMenu();
     };

@@ -10,7 +10,8 @@ export function standOf(piece) {
     piece.type === 'deck' ||
     piece.type === 'dispenser' ||
     piece.type === 'mat' ||
-    piece.type === 'notecard'
+    piece.type === 'notecard' ||
+    piece.type === 'notecardStack'
   )
     return 'flat';
   return (PROPS[props.shape] || {}).stand;
@@ -21,7 +22,8 @@ export function naturalStand(piece) {
     piece.type === 'deck' ||
     piece.type === 'dispenser' ||
     piece.type === 'mat' ||
-    piece.type === 'notecard'
+    piece.type === 'notecard' ||
+    piece.type === 'notecardStack'
   )
     return 'flat';
   const props = readProps(piece);

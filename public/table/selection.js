@@ -1,3 +1,4 @@
+import { setIcon } from '../ui/icons.js';
 import {
   KINDS as PHYS,
   PALETTE,
@@ -33,6 +34,7 @@ export function selColorDesc(piece) {
 
 // Match geometry, snap and visibility; only secret cards require a shared back.
 export function cardFamilySig(piece) {
+  if (piece.type === 'notecard' || piece.type === 'notecardStack') return 'notecards';
   if (piece.type !== 'card' && piece.type !== 'deck') return null;
   let props;
   try {
@@ -212,11 +214,26 @@ export function createSelection({
   function refreshSelTools() {
     const abar = byId('selActions');
     if (abar) abar.hidden = !selection.size; // batch-op bar shows for any selection (also in the editor, which has no recolor bar)
+    const notes = selectedPieces().some(
+      (piece) => piece && ['notecard', 'notecardStack'].includes(piece.type),
+    );
+    const combine = byId('selCombine');
+    if (combine) {
+      setIcon(combine, notes ? 'arrows-minimize' : 'cards');
+      combine.setAttribute('aria-label', notes ? 'Combine notecards' : 'Combine into one deck');
+    }
     setComposeBtn(
-      byId('selCombine'),
-      composeState(selectedPieces(), cardFamilySig),
-      'Combine into one deck',
-      'Match shape, snap and double-sided settings; secret cards must also share a back',
+      combine,
+      notes &&
+        selectedPieces().some(
+          (piece) => piece && !['notecard', 'notecardStack'].includes(piece.type),
+        )
+        ? 'mixed'
+        : composeState(selectedPieces(), cardFamilySig),
+      notes ? 'Combine notecards into one concealed stack' : 'Combine into one deck',
+      notes
+        ? 'Select only loose notecards and notecard stacks'
+        : 'Match shape, snap and double-sided settings; secret cards must also share a back',
     );
     const gplan = gatherPlan(selectedPieces());
     setComposeBtn(
@@ -395,7 +412,15 @@ export function createSelection({
         clearSelection();
       }
     };
-    on('selCombine', compose('combineIntoDeck'));
+    on('selCombine', () =>
+      compose(
+        selectedPieces().some(
+          (piece) => piece && ['notecard', 'notecardStack'].includes(piece.type),
+        )
+          ? 'notecardCombine'
+          : 'combineIntoDeck',
+      )(),
+    );
     on('selGather', () => {
       const room = getRoom();
       const plan = gatherPlan(selectedPieces());

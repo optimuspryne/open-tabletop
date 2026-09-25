@@ -314,14 +314,16 @@ implementation sequence without making the entire backlog a fixed priority queue
     Settings → Placard offers feminine/masculine bodies, two dog and two cat silhouettes, frog
     and gecko, with six patterns and two colors. Choices save per account across rooms/tabs;
     avatar faces, readable names and seat-color outlines remain. See [implementation notes](DESIGN_placards_sounds.md).
-17. **Mini-whiteboard / notecard objects — drawing, zoom/pan and private hands implemented; user-approved for commit.** Give players a drawable physical object for games
+17. **Mini-whiteboard / notecard objects — drawing, zoom/pan and private hands implemented; stack extension implemented, user-tested and approved.** Give players a drawable physical object for games
     such as Telestrations: card-like handling, but a larger surface and greater mass than a normal
     card. Inspect opens a drawing surface; players can then place the board face-up or face-down
     and pass it around the table. Support mouse and touch drawing, retain artwork with the object
     through saves, and preserve concealed faces through inspection and transfer. Define editing
     and viewing access explicitly; this is a physical game component, not automated game rules.
     The first version provides private freehand editing, one editor per card, face-up/down placement,
-    saved artwork, local zoom/pan, account-owned hands, private passing and compact Tabler controls. See [implementation and QA notes](DESIGN_notecards.md).
+    saved artwork, local zoom/pan, account-owned hands, private passing and compact Tabler controls.
+    Approved finite stacks now support private top-card editing/return, draw, shuffle, split and
+    combination; the user confirmed the notecard work functions correctly and approved it for commit. See [implementation and QA notes](DESIGN_notecards.md).
 18. **Custom asset collections — implemented locally; functionality and UI user-approved.** Let users group multiple custom library assets into named
     collections. Library controls can show or hide collections to keep browsing manageable.
     Treat this as library organization/filtering, separate from per-object visibility on the table

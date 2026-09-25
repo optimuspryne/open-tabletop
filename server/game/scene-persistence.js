@@ -1,4 +1,8 @@
-import { NOTECARD, normalizeNotecardDrawing } from '../../shared/notecards.js';
+import {
+  NOTECARD,
+  normalizeNotecardDrawing,
+  normalizeNotecardStack,
+} from '../../shared/notecards.js';
 import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
 import { KINDS, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
 import { MEASURE } from '../../shared/overlays.js';
@@ -44,7 +48,7 @@ export function serializeScene(room, { includeLighting = false } = {}) {
   const pieces = [];
   room.state.pieces.forEach((piece, id) => {
     let props = readProps(piece);
-    if (piece.type === 'notecard') {
+    if (piece.type === 'notecard' || piece.type === 'notecardStack') {
       delete props.editing;
       delete props.editingName;
       delete props.drawing;
@@ -168,12 +172,17 @@ export function applyScene(
   const notecards = (Array.isArray(scene.pieces) ? scene.pieces : []).filter(
     (entry) => entry?.type === 'notecard',
   );
+  const stacks = (Array.isArray(scene.pieces) ? scene.pieces : [])
+    .filter((entry) => entry?.type === 'notecardStack')
+    .map((entry) => normalizeNotecardStack(entry.props?.cards));
   const heldNotes = (Array.isArray(scene.hands) ? scene.hands : []).flatMap((hand) =>
     Array.isArray(hand?.cards) ? hand.cards.filter((card) => card?.kind === 'notecard') : [],
   );
   if (
     heldNotes.some((card) => !normalizeNotecardDrawing(card.drawing)) ||
-    notecards.length + heldNotes.length > NOTECARD.maxCards ||
+    stacks.some((cards) => !cards) ||
+    notecards.length + heldNotes.length + stacks.reduce((n, cards) => n + (cards?.length || 0), 0) >
+      NOTECARD.maxCards ||
     notecards.some((entry) => !normalizeNotecardDrawing(entry.props?.drawing ?? []))
   )
     throw new Error('The scene contains invalid notecard artwork or too many notecards.');

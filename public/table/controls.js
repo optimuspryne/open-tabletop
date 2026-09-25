@@ -45,6 +45,7 @@ const logical = (e) => ({
 // A device-agnostic key command: exactly the fields the command router reads.
 const logicalKey = (e) => ({
   key: e.key,
+  shiftKey: !!e.shiftKey,
   repeat: e.repeat,
   preventDefault: () => e.preventDefault(),
 });

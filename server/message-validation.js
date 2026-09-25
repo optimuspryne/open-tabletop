@@ -1,3 +1,4 @@
+import { NOTECARD } from '../shared/notecards.js';
 import { normalizeCompoundCollider } from '../shared/compound-collider.js';
 import { normalizeBoardOutline } from '../shared/board-geometry.js';
 // Normalizers for values arriving across the WebSocket trust boundary. A
@@ -778,6 +779,13 @@ export function spawnPayload(
 ) {
   if (!exactObject(message, ['type', 'props']) || !isPlainObject(message.props)) return null;
   const { type, props } = message;
+  if (type === 'notecardStack')
+    return exactObject(props, ['count']) &&
+      Number.isInteger(props.count) &&
+      props.count >= 2 &&
+      props.count <= NOTECARD.maxCards
+      ? { type, props: { count: props.count } }
+      : null;
   if (type === 'notecard') return Object.keys(props).length === 0 ? { type, props: {} } : null;
   if (type === 'die') {
     if (

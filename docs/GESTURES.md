@@ -311,3 +311,15 @@ The preview is private until **Save placard** succeeds. **Default** previews the
 scheme and masculine body; save to apply. Choices belong to the account and follow it across
 rooms. Native selects, color inputs and buttons work with click, tap and keyboard; no new canvas
 gesture is introduced. Spectators and timed-out players may still personalize their appearance.
+
+
+### Notecard stacks
+
+Spawn **Notecard stack** from Card Decks/Tiles (2–16 blank cards, default eight). Left-drag moves
+it; double-click/double-tap opens its top card privately. Right-click/long-press exposes Draw to
+hand, Draw & edit, Play top face-down, Shuffle, Split and Move stack. Select loose notecards
+and/or stacks, then Combine to make one concealed stack. In the editor, Return to top saves
+inside the stack; Cancel retains the previous top. Keep in hand, passing and placement use the
+existing private editor controls. A leased stack cannot be moved or drawn from by another player.
+Shift+F10 or Context Menu outside text inputs/dialogs cycles stack action menus without a pointer;
+arrows/Home/End navigate, Enter/Space activate, and Escape returns focus to the table.

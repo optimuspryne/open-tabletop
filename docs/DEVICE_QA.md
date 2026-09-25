@@ -331,3 +331,19 @@ _Tested: build/version ____________ · date ____________ · by _____________
 
 
 ---
+
+
+### Notecard stacks — user-tested and approved for commit
+
+The user confirmed that the notecard work functions correctly and approved it for commit.
+Automated checks are recorded in [the notecard design](DESIGN_notecards.md). No per-device
+or multiplayer test matrix was specified; the checklist remains available for future QA.
+
+- [ ] Library quantity 2–16, default eight; visible stack count and layered edges.
+- [ ] Desktop drag, double-click and right-click; touch drag, double-tap and long-press.
+- [ ] Draw/edit/Return/Cancel, hand/pass and face-down placement preserve artwork and privacy.
+- [ ] Second account cannot consume, move or mutate a reserved stack.
+- [ ] Split/shuffle/combine/save/reconnect preserve total inventory, order and card metadata.
+- [ ] Compact/full modes: all approved icons, hover/focus hints, touch targets and phone layouts.
+- [ ] Keyboard Shift+F10/Context Menu, arrows/Home/End, Enter/Space and Escape focus behavior.
+- [ ] Full table/capacity failures retain cards; drawing the last card removes only the empty stack.

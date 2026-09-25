@@ -633,6 +633,10 @@ canvas.selecting {
   text-align: left;
   min-height: 40px; /* comfortable finger target */
 }
+/* Context menus keep explicit action names on touch and in compact UI. */
+#pieceMenu button .lbl {
+  display: inline;
+}
 #pieceMenu .button--danger {
   color: var(--danger);
 }

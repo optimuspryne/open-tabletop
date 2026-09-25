@@ -33,6 +33,10 @@ export const COLORS = {
 // mass + collider `shape`: 'die' (polyhedron from props.sides), 'prop' (per-shape
 // data in PROPS below), or { box:[hx,hy,hz] }. mass 0 = static/not grabbable.
 export const KINDS = {
+  notecardStack: {
+    mass: NOTECARD.mass,
+    shape: { box: [NOTECARD.width / 2, NOTECARD.thickness / 2, NOTECARD.height / 2] },
+  },
   notecard: {
     mass: NOTECARD.mass,
     shape: { box: [NOTECARD.width / 2, NOTECARD.thickness / 2, NOTECARD.height / 2] },

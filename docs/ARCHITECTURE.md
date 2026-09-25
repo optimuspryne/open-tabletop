@@ -1033,7 +1033,12 @@ machinery:
   document even during editing; restore keeps concealed faces server-only. Departure, loss of
   gameplay access, expiry and table reset release reservations without replacing committed art.
   Shared stroke replay is reused from the whiteboard; its public broadcast protocol is not used
-  for private drafts. See [notecard design and limits](DESIGN_notecards.md).
+  for private drafts. Notecard stacks add server-only ordered `{drawing,noteProps}` entries
+  within the same service; every entry counts toward the room cap. A stack edit reserves its
+  committed top without consuming it. Transfers validate before consumption, and combining
+  reuses one physical piece to work at the piece cap. Public state contains only count/back
+  and editor metadata; scene/game saves retain committed private order. Shared counted height
+  drives rendering, collider diagnostics and physics. See [notecard design and limits](DESIGN_notecards.md).
 - **Whiteboard** (shared) — a tilt-up sketch surface. Its _public_ state
   (`enabled/angle/owner/dark`) is synced schema, but **strokes are not**: each
   stroke is a `wbStroke` message appended to a capped server history and broadcast

@@ -258,7 +258,10 @@ export function registerPieceHandlers(
       return;
     }
     if (room.rank(client) < RANK.helper) return;
-    if (msg.type === 'notecard' && !room.notecards.hasCapacity()) {
+    if (
+      ['notecard', 'notecardStack'].includes(msg.type) &&
+      !room.notecards.hasCapacity(msg.type === 'notecardStack' ? msg.props.count : 1)
+    ) {
       client.send('serverError', {
         operation: 'spawn',
         message: 'The table already has the maximum number of notecards.',

@@ -60,3 +60,35 @@ export function normalizeNotecardDrawing(value) {
   }
   return result;
 }
+
+// Stacks keep the last entry on top. Only counts/dimensions cross the public boundary.
+export const notecardStackHeight = (count = 1) =>
+  NOTECARD.thickness * Math.max(1, Math.min(NOTECARD.maxCards, Math.trunc(count) || 1));
+
+export function normalizeNotecardStack(value) {
+  if (!Array.isArray(value) || value.length < 1 || value.length > NOTECARD.maxCards) return null;
+  const cards = [];
+  for (const entry of value) {
+    const drawing = normalizeNotecardDrawing(entry?.drawing);
+    const props = entry?.noteProps ?? {};
+    if (
+      !drawing ||
+      !props ||
+      typeof props !== 'object' ||
+      Array.isArray(props) ||
+      (props.snap !== undefined && typeof props.snap !== 'boolean') ||
+      (props.stand !== undefined && ![true, false, 'flat'].includes(props.stand)) ||
+      (props.label !== undefined && (typeof props.label !== 'string' || props.label.length > 60))
+    )
+      return null;
+    cards.push({
+      drawing,
+      noteProps: Object.fromEntries(
+        ['snap', 'stand', 'label']
+          .filter((key) => props[key] !== undefined)
+          .map((key) => [key, props[key]]),
+      ),
+    });
+  }
+  return cards;
+}

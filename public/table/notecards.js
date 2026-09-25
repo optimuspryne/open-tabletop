@@ -71,6 +71,8 @@ export function createNotecardEditor({
     byId('notecardCancel').title = label;
     for (const id of ['notecardKeep', 'notecardPassControls']) byId(id).hidden = !current?.token;
     byId('notecardKeep').disabled = busy;
+    byId('notecardReturn').hidden = !current?.token || !current?.fromStack;
+    byId('notecardReturn').disabled = busy;
     byId('notecardPass').disabled = busy || !byId('notecardRecipient').value;
     byId('notecardRecipient').disabled = busy;
   }
@@ -105,7 +107,9 @@ export function createNotecardEditor({
     busy = false;
     status(
       data.token
-        ? 'Private drawing. Keep in hand, place on the table, or pass to a player.'
+        ? data.fromStack
+          ? 'Private top card. Return to top saves it inside the stack; Cancel keeps the original.'
+          : 'Private drawing. Keep in hand, place on the table, or pass to a player.'
         : data.back
           ? 'This notecard is face-down.'
           : 'Viewing a notecard.',
@@ -124,12 +128,16 @@ export function createNotecardEditor({
     if (busy) return;
     close();
     const piece = getRoom()?.state.pieces.get(id);
-    if (piece?.type !== 'notecard') return;
+    if (!['notecard', 'notecardStack'].includes(piece?.type)) return;
     previousFocus = document.activeElement;
     beforeOpen();
     if (!canInteract()) {
       const props = JSON.parse(piece.props || '{}');
-      show({ id, drawing: props.drawing || [], back: props.faceDown || !!props.editing });
+      show({
+        id,
+        drawing: props.drawing || [],
+        back: piece.type === 'notecardStack' || props.faceDown || !!props.editing,
+      });
       return;
     }
     opening = id;
@@ -315,6 +323,7 @@ export function createNotecardEditor({
       recipient: byId('notecardRecipient').value,
     });
   };
+  byId('notecardReturn').onclick = () => place(true, 'stack');
   byId('notecardKeep').onclick = () => place(true, 'hand');
   byId('notecardPass').onclick = () => place(true, 'pass');
   byId('notecardPlaceUp').onclick = () => place(false);

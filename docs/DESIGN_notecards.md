@@ -27,7 +27,7 @@ did not specify a per-device or multiplayer test matrix.
   deciding whose turn it is to look remains a player-enforced game rule.
 - Notecards move, rotate and flip as individual physical pieces. They have one landscape face,
   an opaque back, a 4.5 × 3 world-unit footprint, 0.1 thickness and 0.18 mass (cards: 0.02).
-  They do not enter decks, combine, shuffle, or carry typed text in this version.
+  They do not enter ordinary playing-card decks or carry typed text. See the stack extension below.
 
 ## State and recovery
 
@@ -53,7 +53,7 @@ Restore installs concealed drawings into server-only storage before publishing p
 Invalid notecard scenes are rejected before the current table is cleared. The schema and database
 migrations are unchanged; restart the server and refresh browsers to load the new piece kind.
 
-Limits are shared: 16 notecards across table, active hands and parked hands, 256 strokes per drawing, 1,024 coordinates per stroke,
+Limits are shared: 16 notecards across table (including every card inside stacks), active hands and parked hands, 256 strokes per drawing, 1,024 coordinates per stroke,
 8,192 coordinates per drawing. Coordinates are normalized and rounded to four decimals.
 No uploaded drawing images, public asset URLs, additional services or build step are involved.
 
@@ -142,3 +142,91 @@ Manual smoke test after a server restart and browser refresh:
 5. Keep, reopen and edit; drag/drop a mixed hand, retrieve it, pass privately and use selective Show.
 6. Save/reload and reconnect with notecards on the table and in hands; reassign an unclaimed hand.
 7. Cancel, disconnect, enter spectator mode or apply a time-out during an edit; verify committed artwork remains.
+
+
+## Notecard stacks — implemented, user-tested and approved for commit
+
+Library → Card Decks/Tiles → **Notecard stack** creates 2–16 blank cards (default eight).
+Each stack is one physical piece with an opaque back, visible count and layered edges. All
+contained drawings stay concealed. Right-click/long-press opens the existing piece menu:
+Draw to hand (`cards`), Draw & edit (`writing`), Play top face-down (`arrow-bar-down`),
+Shuffle (`arrows-shuffle`), Split (`arrows-maximize`), and Move stack (`hand-move`).
+Double-click/double-tap opens the top card's private editor; ordinary left-drag moves the stack.
+Selection Combine (`arrows-minimize`) merges only loose notecards and notecard stacks;
+ordinary playing cards are incompatible. Existing piece actions remain available.
+
+The private editor adds **Return to top** (`arrow-bar-up`), alongside Keep in hand, private
+passing and the existing placement controls. Claiming reserves the whole stack and leaves the
+committed top entry in place. Return saves that entry; Cancel, disconnect or expiry keeps its
+previous artwork and position. Hand/pass/table commits consume the top only after a successful
+transfer. Failed placement or invalid recipients keep the draft and lease available for retry.
+Drawing the final card removes the empty stack. A single remaining card may stay in a stack.
+
+Stack entries are server-only `{drawing,noteProps}` records in bottom-first order. Metadata
+includes each card's label, snap and stand settings. Splitting moves the top half to a new
+stack after capacity checks and successful allocation. Combining preserves each source's
+internal order and places higher source pieces nearer the top. It converts the lowest source
+piece in place, so the physical-piece cap cannot prevent consolidation. Shuffle changes only
+order. The 16-card total includes all entries, loose pieces, live hands and parked hands.
+Scene/game snapshots retain committed entries, order and metadata; restore validates artwork
+and the combined total before clearing the live table. No schema migration or public image
+assets are introduced.
+
+Keyboard users can press Shift+F10 or the Context Menu key outside inputs/dialogs to cycle
+stack action menus without pointing at a piece. Menus focus their first button, support arrows,
+Home/End, Tab and Enter/Space, and return focus to the table with Escape. Actions have accessible
+names and hover/focus hints. Moving physical objects and freehand stroke entry retain their
+existing pointer/touch interaction; this shortcut provides keyboard access to stack inventory
+and editor controls. The UI mock-up and icon choices were explicitly approved before implementation.
+
+This extends the existing private notecard service, hand transfers, editor, Library spawn-card
+builder and selection toolbar. Stack geometry and inventory normalization live in shared code;
+collider reconstruction stays in the physics adapter. No generic card-face reference or deck
+storage is used for mutable drawings.
+
+### Stack extension file map
+
+| Files | Functions or responsibilities added/changed |
+| --- | --- |
+| `shared/notecards.js` | `notecardStackHeight`, `normalizeNotecardStack`: shared height and bounded private inventory. |
+| `shared/pieces.js`, `shared/collider-spec.js` | Register `KINDS.notecardStack`; `colliderSpec` uses counted height. |
+| `shared/room-capabilities.js` | Classify draw, shuffle, split and combine requests as gameplay. |
+| `server/message-validation.js` | `spawnPayload` permits only a bounded blank stack quantity. |
+| `server/game/notecards.js` | Extend count, publish, claim, commit, snapshot and cleanup; add `restoreStack`, `syncStack`, `availableStack`, `placeStackCard`, `draw`, `shuffle`, `split`, `combine`; register their handlers. |
+| `server/game/collider-maintenance.js` | `updateNotecardStackCollider` updates counted geometry and mass. |
+| `server/game/piece-lifecycle.js` | `spawn` validates full inventory before allocating and initializes flat stack bodies without public artwork. |
+| `server/game/piece-operations.js` | `standOf`/`naturalStand` keep stacks flat by default. |
+| `server/game/handlers/pieces.js` | Spawn feedback counts every contained card. |
+| `server/game/scene-persistence.js` | `serializeScene` stores private entries; `applyScene` validates stacks and total inventory before reset. |
+| `public/rendering/notecards.js`, `public/rendering/graphics.js` | Counted back painting, `notecardStackMesh` layered edges, and `KIND` registration/disposal. |
+| `public/table/piece-view.js` | `meshPropsOf`, `replaceMesh`, `bindRoom`: count-aware meshes and live notecard-to-stack conversion. |
+| `public/table/inspection.js` | `INSPECTABLE` and `enterInspect` route stacks into the private editor. |
+| `public/table/notecards.js`, `public/table.html`, `public/styles.css` | `open`, `show`, `sync`, Return-to-top action, stack help and visible menu labels in compact/touch layouts. |
+| `public/table/piece-ui.js` | Stack count/name/control guide/menu actions; approved icons, focus and menu navigation. |
+| `public/table/controls.js`, `public/table/input-router.js` | `logicalKey` retains Shift; `onKeyDown` routes keyboard stack-menu cycling. |
+| `public/table/selection.js` | `cardFamilySig`, `refreshSelTools`, `bindActions` distinguish stack combination and mixed selections. |
+| `public/editor/editor-panel.js` | `countStepper` supports minimum/accessible labels; `renderBuiltin` adds the stack Library tile. |
+| `test/notecards.js`, `test/input-router.js`, `test/selection.js` | Privacy, inventory, failure recovery, saved order, geometry and keyboard/composition regression tests. |
+| `scripts/notecard-test.mjs` | Production Return control, mesh conversion/count rebuilding, menu protocol/icons, keyboard navigation, desktop/phone screenshots. |
+| `CHANGELOG.md`, `docs/{REFERENCE,ARCHITECTURE,ROADMAP,GESTURES,DEVICE_QA,DESIGN_notecards}.md` | Behavior, contracts, implementation map and QA status. |
+
+Stack manual smoke test after **server restart and browser refresh**:
+
+1. Spawn eight cards; confirm count, left-drag and long-press/right-click actions on desktop/touch.
+2. Draw & edit, Return to top, reopen, then Cancel; check that only Return saved the drawing.
+3. With a second account, try to draw, move or shuffle the reserved stack. Confirm no artwork leaks.
+4. Draw to hand, pass privately and play face-down; flip only the loose card to reveal it.
+5. Split, shuffle and combine stacks with loose notes; save/reload and verify all artwork/metadata.
+6. Draw every card, including the last. Test Shift+F10, menu arrows/Enter/Escape and compact hints.
+7. Fill the room's 16-card allowance and the physical table capacity; failed draws/splits must
+   retain the source, while combining and drawing to hand remain available.
+
+Stack automated verification on 2026-09-25: `npm run check` passed (806 tests, lint,
+formatting and CSS checks); `test:input` passed 57/57; `test:components` passed, including
+production-client bootstrap and the extended notecard editor/menu/mesh checks at 1280, 390
+and 360 px; `test:devices` passed all seven profiles. Desktop and phone editor/menu screenshots
+were inspected. The component fixture's seven expected sample-asset 404s remain non-failing
+fixture output. Documentation links and `git diff --check` passed. No database changes require
+an integration migration run. The user subsequently reported that the notecard work functions correctly and approved it
+for commit. No per-device or multiplayer test matrix was specified, so individual checklist
+items remain available for future verification.

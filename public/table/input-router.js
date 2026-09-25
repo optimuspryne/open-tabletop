@@ -158,6 +158,7 @@ export function createInputRouter({
   // a piece, U toggles its upright/flat behaviour, G toggles its snap-to-grid.
   // The held rotate/raise keys (A/D/W/S and the arrows) are NOT here — they repeat while
   // held, so the keyboard profile in controls.js owns them and raises rotateAxis / raiseAxis.
+  let keyboardStack = 0;
   const onKeyDown = (e) => {
     const room = getRoom();
     if (!room) return;
@@ -188,6 +189,20 @@ export function createInputRouter({
       document.activeElement &&
       (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA');
     if (typing) return;
+    if (!isModalActive() && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+      const ids = [...room.state.pieces]
+        .filter(([, piece]) => piece.type === 'notecardStack')
+        .map(([id]) => id);
+      if (ids.length) {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        openPieceMenu(ids[keyboardStack++ % ids.length], {
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        });
+      }
+      return;
+    }
     if (!canInteract()) {
       if (e.key.toLowerCase() === 'p' && !e.repeat) sendPing();
       return;

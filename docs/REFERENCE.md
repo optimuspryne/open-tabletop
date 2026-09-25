@@ -2397,7 +2397,7 @@ Snapshots include committed private drawing data, without editing tokens or draf
 Private hand entries are `{hid,kind:"notecard",back:"back",drawing,noteProps}`; `noteProps`
 retains label/snap/stand metadata. Existing hand ownership, park/claim, reassignment, reorder
 and game persistence preserve these entries; portable scenes exclude hands. The 16-card cap
-counts table documents, live hands and parked hands together. `take` and `placeHandCard`
+counts table documents, every contained stack entry, live hands and parked hands together. `take` and `placeHandCard`
 extend existing transfer paths, checking physical capacity before consumption. During a hand
 edit, play/drop/Show are blocked; entering the editor stops any prior Show. Explicit selective
 Show sends committed drawings only to its audience. Transfers never publish private faces.
@@ -2410,6 +2410,22 @@ pinch input into intents; `createDrawingView` owns the local normalized 1–8× 
 Painting and pointer mapping use inverse transforms; navigation never changes saved strokes.
 The chosen Tabler controls retain accessible names and native tooltips above the dialog layer. `paintNotecard`/`notecardMesh` build surfaces with individually disposable
 textures; `drawCanvasStroke` is shared with whiteboard replay.
+
+**Notecard stacks:** `notecardStack` is a distinct physical kind. Blank spawns accept only
+`{count: 2..16}`. Server-only entries `{drawing,noteProps}` are bottom-first; public props never
+include them. `normalizeNotecardStack` validates/copies private inventories, and
+`notecardStackHeight` drives mesh/collider height. Mass is `NOTECARD.mass * count`.
+`notecardDraw({id,destination:"hand"|"table"})` draws to the actor or plays face-down beside the
+stack; `notecardShuffle({id})`, `notecardSplit({id})`, and `notecardCombine({ids})` operate only
+on available notecards/stacks. Split transfers the top half; combine reuses the lowest source
+piece and preserves each source's bottom-first ordering. A live type listener updates its mesh.
+Claims use `notecardEdit({id})`; a stack reply adds `fromStack:true`. The top remains committed
+and reserved until commit/cancel. `destination:"stack"` saves in place (Return to top); existing
+hand/pass/table destinations remove it only after success. An empty stack disappears.
+The service shares table/hand leases and capacity accounting, including temporary transfer
+credits, so failed spawn/split operations retain recoverable inventory. Saves include the
+private ordered entries, never tokens or drafts. Shift+F10/Context Menu cycles stack menus via
+the input intent layer; menu arrows, Home/End and Escape manage focus.
 
 See [design, limits, file map and QA](DESIGN_notecards.md). No database migration is required.
 

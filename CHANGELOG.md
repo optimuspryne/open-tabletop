@@ -9,6 +9,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- **Notecard stacks.** Spawn 2–16 blank notecards as a finite stack, draw privately to hand or
+  editor, return edited artwork to the top, play the top face-down, shuffle, split, and combine
+  selected loose notecards/stacks. Contents and order remain server-private and survive saves;
+  contained cards count toward the existing 16-notecard room limit. Includes the approved
+  Tabler controls, keyboard stack-menu access, focus navigation and accessible hints.
 - **Drawable notecards.** Spawn individual landscape notecards from the Library, privately draw
   with mouse/touch/pen using colors, pen widths, eraser and undo/redo, then place face-up or
   face-down. A single editor reserves each card; concealed artwork stays server-side, and
@@ -47,6 +52,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Restart the server and refresh browsers to use the new sky derivative variants. No migration.
 
 ### Documentation
+- Record successful user testing and commit approval for notecard stacks.
 - Record user approval of drawable notecards, zoom/pan, private hands and the compact icon set.
 - Require concrete Tabler icon options and user selection during UI work, with compact-mode
   accessibility and shared icon/sprite integration recorded in `AGENTS.md`.

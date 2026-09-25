@@ -244,6 +244,116 @@ try {
     );
     await page.evaluate(`noteTest.leave()`);
     assert.equal(await page.evaluate(`document.getElementById('notecardDialog').open`), false);
+    // Use the production editor, stack mesh, live type-change binding and context menu.
+    await page.evaluate(`(async () => {
+      const stack = { type:'notecardStack', count:8, props:JSON.stringify({faceDown:true}) };
+      noteTest.room.state.pieces.set('stack', stack);
+      noteTest.editor.open('stack');
+      noteTest.messages.get('notecardEdit')({id:'stack',token:'stack-edit',drawing:[],fromStack:true});
+    })()`);
+    assert.equal(await page.evaluate(`document.getElementById('notecardReturn').hidden`), false);
+    assert.equal(
+      await page.evaluate(`document.getElementById('notecardReturn').getAttribute('aria-label')`),
+      'Return to top',
+    );
+    const stackLayout = await page.evaluate(`(() => {
+      const d=document.getElementById('notecardDialog');
+      return { overflow:d.scrollWidth>d.clientWidth, missing:d.querySelectorAll('.ico-missing').length };
+    })()`);
+    assert.deepEqual(stackLayout, { overflow: false, missing: 0 });
+    await writeFile(
+      `/tmp/notecard-stack-editor-${device.width}.png`,
+      Buffer.from(
+        (await browser.send('Page.captureScreenshot', { format: 'png' }, page.sessionId)).data,
+        'base64',
+      ),
+    );
+    await page.evaluate(`document.getElementById('notecardReturn').click()`);
+    assert.equal(await page.evaluate(`noteTest.sent.at(-1).payload.destination`), 'stack');
+    await page.evaluate(`noteTest.messages.get('notecardClosed')({id:'stack',token:'stack-edit'})`);
+    await page.evaluate(`(async () => {
+      const THREE = await import('three');
+      const { notecardStackMesh, notecardMesh } = await import('/rendering/notecards.js');
+      const { disposeHierarchy } = await import('/rendering/resources.js');
+      const { createPieceView } = await import('/table/piece-view.js');
+      const { createPieceUi } = await import('/table/piece-ui.js');
+      const scene = new THREE.Scene(), meshes = new Map(), listeners = new Map();
+      const piece = { type:'notecard',count:0,props:'{}', x:0,y:0,z:0,qx:0,qy:0,qz:0,qw:1 };
+      const kind = { notecard:{mesh:notecardMesh,dispose:disposeHierarchy,grab:0}, notecardStack:{mesh:notecardStackMesh,dispose:disposeHierarchy,grab:0} };
+      const view = createPieceView({ scene,meshes,buffers:new Map(),kinds:kind,physics:{notecard:{mass:0.18},notecardStack:{mass:0.18}},deckHeight:()=>1,createQuaternion:()=>new THREE.Quaternion(),refreshCollider(){},isInspected:()=>false });
+      view.bindRoom(noteTest.room, (target)=>target===noteTest.room.state ? { pieces:{onAdd(fn){fn(piece,'converted');},onRemove(){}} } : {listen(key,fn){listeners.set(key,fn);}}, {onHydration(){},onOwner(){},onBoardTop(){},onRemove(){},disposeSurface(){}});
+      piece.type='notecardStack'; piece.count=4; piece.props=JSON.stringify({faceDown:true});
+      listeners.get('type')();
+      noteTest.convertedType=meshes.get('converted').type;
+      noteTest.meshHeight=meshes.get('converted').mesh.geometry.parameters.height;
+      piece.count=2; listeners.get('count')();
+      noteTest.resizedHeight=meshes.get('converted').mesh.geometry.parameters.height;
+      disposeHierarchy(meshes.get('converted').mesh);
+      meshes.set('stack',{type:'notecardStack'});
+      const canvas=document.getElementById('notecardCanvas');
+      noteTest.ui=createPieceUi({byId:id=>document.getElementById(id),canvas,meshes,kinds:kind,getRoom:()=>noteTest.room,
+        pieceDrag:{current:()=>null,isActive:()=>false,armMove(id){noteTest.move=id;},beginMoveFromMenu(){return false;}},
+        hand:{isDragging:()=>false},inspection:{isActive:()=>false,isInspectable:()=>true,enterInspect:id=>noteTest.editor.open(id)},selection:{size:0},overlays:{isMeasuring:()=>false,isMoving:()=>false,isDraggingMeasure:()=>false},whiteboard:{isOwning:()=>false},
+        setPointer(){},pickId(){},isSheet:()=>false,openRadial(){},highlightPiece(){},getRank:()=>0,editLabels(){},browseDeck(){} });
+      document.getElementById('tableLoading')?.remove(); noteTest.ui.openPieceMenu('stack',{x:20,y:20});
+    })()`);
+    assert.equal(await page.evaluate(`noteTest.convertedType`), 'notecardStack');
+    assert.equal(await page.evaluate(`noteTest.meshHeight`), 0.4);
+    assert.equal(await page.evaluate(`noteTest.resizedHeight`), 0.2);
+    const menu = await page.evaluate(`(() => {
+      const el=document.getElementById('pieceMenu'), buttons=[...el.querySelectorAll('button')];
+      return {labels:buttons.slice(0,6).map(b=>b.getAttribute('aria-label')),icons:buttons.slice(0,6).map(b=>b.dataset.icon),missing:el.querySelectorAll('.ico-missing').length,
+        focused:document.activeElement===buttons[0],overflow:el.scrollWidth>el.clientWidth};
+    })()`);
+    assert.deepEqual(menu.labels, [
+      'Draw to hand',
+      'Draw & edit',
+      'Play top face-down',
+      'Shuffle',
+      'Split',
+      'Move stack',
+    ]);
+    assert.deepEqual(menu.icons, [
+      'cards',
+      'writing',
+      'arrow-bar-down',
+      'arrows-shuffle',
+      'arrows-maximize',
+      'hand-move',
+    ]);
+    assert.equal(menu.missing, 0);
+    assert.equal(menu.focused, true);
+    assert.equal(menu.overflow, false);
+    await writeFile(
+      `/tmp/notecard-stack-menu-${device.width}.png`,
+      Buffer.from(
+        (await browser.send('Page.captureScreenshot', { format: 'png' }, page.sessionId)).data,
+        'base64',
+      ),
+    );
+    await browser.send(
+      'Input.dispatchKeyEvent',
+      { type: 'keyDown', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
+      page.sessionId,
+    );
+    await browser.send(
+      'Input.dispatchKeyEvent',
+      { type: 'keyUp', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
+      page.sessionId,
+    );
+    assert.equal(
+      await page.evaluate(`document.activeElement.getAttribute('aria-label')`),
+      'Draw & edit',
+    );
+    await page.evaluate(`document.querySelectorAll('#pieceMenu button')[2].click()`);
+    assert.deepEqual(await page.evaluate(`noteTest.sent.at(-1)`), {
+      type: 'notecardDraw',
+      payload: { id: 'stack', destination: 'table' },
+    });
+    await page.evaluate(
+      `noteTest.ui.openPieceMenu('stack',{x:20,y:20});document.querySelectorAll('#pieceMenu button')[0].click()`,
+    );
+    assert.equal(await page.evaluate(`noteTest.sent.at(-1).payload.destination`), 'hand');
     assert.deepEqual(page.errors, []);
     await page.close();
     console.log(`Notecard editor: ${device.width}px ${device.touch ? 'touch' : 'mouse'} passed`);

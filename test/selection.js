@@ -320,3 +320,10 @@ test('highlight rings follow meshes/board height and dispose on deselection or m
   f.selection.update();
   assert.equal(f.scene.children.length, 0);
 });
+
+test('notecard composition accepts loose/stack mixtures but rejects ordinary playing cards', () => {
+  assert.equal(compose([piece('notecard'), piece('notecardStack')]), 'ok');
+  assert.equal(compose([piece('notecardStack'), piece('notecardStack')]), 'ok');
+  assert.equal(compose([piece('notecard'), card()]), 'mixed');
+  assert.equal(compose([piece('notecardStack')]), null);
+});

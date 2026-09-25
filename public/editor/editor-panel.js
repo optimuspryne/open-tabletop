@@ -459,18 +459,19 @@ function qtyStepper() {
 }
 // A labelled stack-size field for dispensers: how many items the stack starts with
 // (distinct from qtyStepper's "how many dispensers to spawn"). .get() → 1..max.
-function countStepper(def, max) {
+function countStepper(def, max, min = 1, label = 'Amount') {
   const wrap = document.createElement('span');
   wrap.className = 'stepper qtyStep';
   const cap = document.createElement('span');
   cap.className = 'miniLabel stepCap';
-  cap.textContent = 'Amount';
+  cap.textContent = label;
   const inp = document.createElement('input');
   inp.type = 'number';
-  inp.min = '1';
+  inp.min = String(min);
+  inp.setAttribute('aria-label', label);
   inp.max = String(max);
   inp.value = String(def);
-  const clamp = (v) => Math.max(1, Math.min(max, v | 0 || def));
+  const clamp = (v) => Math.max(min, Math.min(max, v | 0 || def));
   const step = (d) => {
     const b = document.createElement('button');
     b.type = 'button';
@@ -520,7 +521,7 @@ function spawnCard({
   ctrls.className = 'cardCtrls';
   const qty = qtyStepper();
   ctrls.append(qty);
-  const stack = count ? countStepper(count.def, count.max) : null;
+  const stack = count ? countStepper(count.def, count.max, count.min, count.label) : null;
   if (stack)
     ctrls.append(stack); // dispenser stack size
   else if (infinite) {
@@ -1066,6 +1067,18 @@ function renderBuiltin(sink) {
         title: 'Drawable notecard',
         color: 'none',
         send: () => ROOM.send('spawn', { type: 'notecard', props: {} }),
+      }),
+    );
+  }
+  {
+    const preview = previewBox('deckPreview');
+    preview.append(thumbImg(notecardPreviewURL([])), thumbImg(notecardPreviewURL([])));
+    decks.append(
+      spawnCard({
+        preview,
+        title: 'Notecard stack',
+        count: { def: 8, min: 2, max: 16, label: 'Cards in stack' },
+        send: (cp) => ROOM.send('spawn', { type: 'notecardStack', props: { count: cp.count } }),
       }),
     );
   }

@@ -1,8 +1,13 @@
+import { updateNotecardStackCollider } from './collider-maintenance.js';
 import { canUseRoomCapability } from '../permissions.js';
 import { hasPieceCapacity } from './piece-capacity.js';
 import { randomUUID } from 'node:crypto';
 import * as CANNON from 'cannon-es';
-import { NOTECARD, normalizeNotecardDrawing } from '../../shared/notecards.js';
+import {
+  NOTECARD,
+  normalizeNotecardDrawing,
+  normalizeNotecardStack,
+} from '../../shared/notecards.js';
 import { pieceIdPayload, isPlainObject } from '../message-validation.js';
 import { readProps, writeProps } from './props-codec.js';
 import { guardedMessage } from './interaction-policy.js';
@@ -10,12 +15,15 @@ import { guardedMessage } from './interaction-policy.js';
 // Artwork is authoritative here, never in public props while concealed or being edited.
 export function createNotecards(room, { now = Date.now, token = randomUUID } = {}) {
   const documents = new Map();
+  const stacks = new Map();
   const leases = new Map();
   const transferring = new Set();
   const handCard = (sid, hid) =>
     room.hands?.get(sid)?.find((card) => card.hid === hid && card.kind === 'notecard');
   function count() {
     let total = documents.size;
+    for (const cards of stacks.values())
+      total += cards.filter((card) => !transferring.has(card)).length;
     for (const cards of room.hands?.values() || [])
       total += cards.filter((card) => card.kind === 'notecard' && !transferring.has(card)).length;
     for (const held of room.pendingHands?.values() || [])
@@ -68,12 +76,13 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
   function publish(id) {
     const piece = room.state.pieces.get(id),
       doc = documents.get(id);
-    if (!piece || !doc) return;
+    if (!piece || (!doc && !stacks.has(id))) return;
     const props = readProps(piece);
     delete props.drawing;
     delete props.editing;
     delete props.editingName;
-    props.faceDown = doc.faceDown || leases.has(id);
+    delete props.cards;
+    props.faceDown = stacks.has(id) || doc.faceDown || leases.has(id);
     if (!props.faceDown) props.drawing = doc.drawing;
     if (leases.has(id)) {
       props.editing = leases.get(id).sid;
@@ -148,7 +157,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       return;
     }
     const parsed = pieceIdPayload(message);
-    if (!parsed || !documents.has(parsed.id)) return;
+    if (!parsed || (!documents.has(parsed.id) && !stacks.has(parsed.id))) return;
     const { id } = parsed,
       piece = room.state.pieces.get(id),
       body = room.bodies.get(id);
@@ -171,7 +180,12 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     body.updateMassProperties();
     body.sleep();
     publish(id);
-    client.send('notecardEdit', { id, token: lease.token, drawing: documents.get(id).drawing });
+    client.send('notecardEdit', {
+      id,
+      token: lease.token,
+      drawing: (stacks.get(id)?.at(-1) || documents.get(id)).drawing,
+      fromStack: stacks.has(id),
+    });
   }
   function owned(client, message) {
     if (
@@ -196,7 +210,9 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       client.send('serverError', { operation: 'notecardCommit', message: text });
     if (
       !drawing ||
-      !['table', 'hand', 'pass'].includes(destination) ||
+      !['table', 'hand', 'pass', ...(stacks.has(message.id) ? ['stack'] : [])].includes(
+        destination,
+      ) ||
       (destination === 'table' && typeof message.faceDown !== 'boolean')
     ) {
       fail('The drawing could not be saved. Undo some strokes and try again.');
@@ -219,6 +235,24 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         : client;
     if (!recipient) {
       fail('Choose an active player. Your drawing is still here.');
+      return;
+    }
+    if (stacks.has(message.id)) {
+      const cards = stacks.get(message.id),
+        top = cards.at(-1);
+      if (destination === 'stack') top.drawing = drawing;
+      else {
+        if (destination === 'table') {
+          if (!hasPieceCapacity(room)) {
+            fail('The table is full. Return to top or keep the notecard in hand.');
+            return;
+          }
+          placeStackCard(message.id, top, drawing, message.faceDown);
+        } else give(recipient, drawing, top.noteProps);
+        cards.pop();
+      }
+      close(message.id);
+      syncStack(message.id);
       return;
     }
     if (destination === 'table' && card) {
@@ -263,7 +297,165 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     publish(id);
     return true;
   }
+
+  // Stack order and artwork share the existing edit leases and inventory accounting.
+  function syncStack(id) {
+    const cards = stacks.get(id),
+      piece = room.state.pieces.get(id);
+    if (!piece || !cards) return;
+    if (!cards.length) {
+      room.removePiece(id);
+      return;
+    }
+    piece.count = cards.length;
+    publish(id);
+    updateNotecardStackCollider(room, id);
+  }
+  function restoreStack(id, cards) {
+    stacks.set(id, cards);
+    syncStack(id);
+  }
+  function availableStack(client, message) {
+    const parsed = pieceIdPayload(message);
+    if (!parsed || !stacks.has(parsed.id)) return null;
+    const piece = room.state.pieces.get(parsed.id);
+    if (!piece || piece.owner || room.flips.has(parsed.id) || blocked(client, message)) return null;
+    return parsed.id;
+  }
+  function placeStackCard(id, top, drawing, faceDown) {
+    const body = room.bodies.get(id);
+    transferring.add(top);
+    try {
+      return room.spawn(
+        'notecard',
+        [body.position.x + NOTECARD.width + 0.3, body.position.y + 0.5, body.position.z],
+        {
+          ...top.noteProps,
+          drawing,
+          faceDown,
+        },
+      );
+    } finally {
+      transferring.delete(top);
+    }
+  }
+  function draw(client, message) {
+    if (!isPlainObject(message) || !['hand', 'table'].includes(message.destination)) return;
+    const id = availableStack(client, { id: message.id });
+    if (!id) return;
+    const cards = stacks.get(id),
+      top = cards.at(-1);
+    if (message.destination === 'table') {
+      if (!hasPieceCapacity(room)) {
+        room.notifyFull(client);
+        return;
+      }
+      placeStackCard(id, top, top.drawing, true);
+    } else give(client, top.drawing, top.noteProps);
+    cards.pop();
+    syncStack(id);
+  }
+  function shuffle(client, message) {
+    const id = availableStack(client, message);
+    if (!id) return;
+    const cards = stacks.get(id);
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+    room.broadcast('sfx', { type: 'shuffle' });
+  }
+  function split(client, message) {
+    const id = availableStack(client, message);
+    if (!id) return;
+    const cards = stacks.get(id);
+    if (cards.length < 2) return;
+    if (!hasPieceCapacity(room)) {
+      room.notifyFull(client);
+      return;
+    }
+    const top = cards.slice(Math.floor(cards.length / 2)),
+      body = room.bodies.get(id);
+    for (const card of top) transferring.add(card);
+    try {
+      room.spawn(
+        'notecardStack',
+        [body.position.x + NOTECARD.width + 0.3, body.position.y, body.position.z],
+        {
+          ...readProps(room.state.pieces.get(id)),
+          cards: top,
+        },
+      );
+    } finally {
+      for (const card of top) transferring.delete(card);
+    }
+    cards.splice(cards.length - top.length);
+    syncStack(id);
+  }
+  function combine(client, message) {
+    if (
+      !isPlainObject(message) ||
+      !Array.isArray(message.ids) ||
+      message.ids.length < 2 ||
+      message.ids.length > NOTECARD.maxCards
+    )
+      return;
+    const ids = [...new Set(message.ids)];
+    if (ids.length !== message.ids.length || ids.some((id) => typeof id !== 'string')) return;
+    // Reject a mixed selection rather than silently consuming just part of it.
+    if (
+      ids.some((id) => {
+        const piece = room.state.pieces.get(id);
+        return (
+          !piece ||
+          !room.bodies.has(id) ||
+          piece.owner ||
+          room.flips.has(id) ||
+          (!documents.has(id) && !stacks.has(id))
+        );
+      }) ||
+      blocked(client, message)
+    )
+      return;
+    ids.sort((a, b) => room.bodies.get(a).position.y - room.bodies.get(b).position.y);
+    const cards = normalizeNotecardStack(
+      ids.flatMap(
+        (id) =>
+          stacks.get(id) || [
+            {
+              drawing: documents.get(id).drawing,
+              noteProps: readProps(room.state.pieces.get(id)),
+            },
+          ],
+      ),
+    );
+    if (!cards) return;
+    const anchor = ids[0],
+      piece = room.state.pieces.get(anchor);
+    // Reuse one physical piece: combining remains possible at the table piece cap.
+    // Prepare the replacement collider before consuming any source inventory.
+    const previousCount = piece.count;
+    piece.count = cards.length;
+    try {
+      updateNotecardStackCollider(room, anchor);
+    } catch (error) {
+      piece.count = previousCount;
+      throw error;
+    }
+    room.unpinPiece(anchor);
+    documents.delete(anchor);
+    stacks.set(anchor, cards);
+    piece.type = 'notecardStack';
+    publish(anchor);
+    for (const id of ids.slice(1)) room.removePiece(id);
+  }
+
   return {
+    restoreStack,
+    draw,
+    shuffle,
+    split,
+    combine,
     restore,
     take,
     placeHandCard,
@@ -272,9 +464,10 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     flip,
     blocked,
     cancelClient,
-    hasCapacity: () => count() < NOTECARD.maxCards,
+    hasCapacity: (amount = 1) => count() + amount <= NOTECARD.maxCards,
     isEditing: (id) => leases.has(id),
-    snapshot: (id) => documents.get(id),
+    snapshot: (id) =>
+      stacks.has(id) ? { cards: structuredClone(stacks.get(id)) } : documents.get(id),
     cancel: (client, message) => {
       if (owned(client, message)) close(message.id);
     },
@@ -285,10 +478,12 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     remove: (id) => {
       close(id, 'The notecard was removed.');
       documents.delete(id);
+      stacks.delete(id);
     },
     clear: () => {
       for (const id of [...leases.keys()]) close(id, 'The table was reset.');
       documents.clear();
+      stacks.clear();
     },
     sweep: () => {
       for (const [id, lease] of leases)
@@ -300,6 +495,10 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
 
 export function registerNotecardHandlers(room) {
   for (const [type, method] of Object.entries({
+    notecardDraw: 'draw',
+    notecardShuffle: 'shuffle',
+    notecardSplit: 'split',
+    notecardCombine: 'combine',
     notecardEdit: 'claim',
     notecardCommit: 'commit',
     notecardCancel: 'cancel',

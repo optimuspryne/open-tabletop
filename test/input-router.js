@@ -22,6 +22,7 @@ function fixture() {
   const controls = { enabled: true },
     doc = { activeElement: null };
   const canvas = {
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 600 }),
     setPointerCapture: (id) => calls.push(['capture', id]),
     releasePointerCapture: (id) => {
       calls.push(['releaseCapture', id]);
@@ -708,4 +709,20 @@ test('time-out input keeps camera, public inspection and menus but never starts 
     f.calls.some(([name]) => name === 'pan'),
     true,
   );
+});
+
+test('keyboard context-menu intent cycles notecard stacks without a pointer pick and respects typing', () => {
+  const f = fixture();
+  f.state.pieces.set('notes-a', { type: 'notecardStack' });
+  f.state.pieces.set('notes-b', { type: 'notecardStack' });
+  f.router.command({ key: 'F10', shiftKey: true, preventDefault() {} });
+  f.key('ContextMenu');
+  assert.deepEqual(
+    f.calls.filter(([name]) => name === 'menu').map(([, id]) => id),
+    ['notes-a', 'notes-b'],
+  );
+  assert.equal(names(f).includes('pick'), false);
+  f.doc.activeElement = { tagName: 'INPUT' };
+  f.key('ContextMenu');
+  assert.equal(f.calls.filter(([name]) => name === 'menu').length, 2);
 });

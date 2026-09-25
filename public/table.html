@@ -1332,6 +1332,11 @@
                 Space-drag pans, +/− zooms and 0 fits. Keep in hand saves privately; use the hand eye button
                 to reopen. Pass privately sends to the selected active player. Hand click/drag and Drop
                 place notecards; Take to hand retrieves them. Hand drawings survive game saves and reconnects.
+                Spawn a Notecard stack (2–16) to keep drawings concealed together. Double-click/double-tap
+                draws its top into the private editor; Return to top saves inside the stack. Right-click/
+                long-press offers Draw to hand, Play top face-down, Shuffle, Split and Move stack.
+                Select notecards/stacks and Combine to merge them. Left-drag moves the whole stack.
+                Shift+F10 or Context Menu cycles stack menus; arrows/Home/End navigate and Escape closes.
               </li>
               <li>
                 <b data-icon="dots"> > </b><b data-icon="settings">Settings.</b> Go here to change
@@ -2633,6 +2638,7 @@
       </div>
       <div class="modal__footer button-row button-row--end">
         <button id="notecardCancel" type="button" data-icon="x"><span class="lbl">Cancel / close</span></button>
+        <button id="notecardReturn" type="button" data-icon="arrow-bar-up" hidden><span class="lbl">Return to top</span></button>
         <button id="notecardKeep" type="button" data-icon="cards"><span class="lbl">Keep in hand</span></button>
         <button id="notecardPlaceDown" type="button" data-icon="arrow-bar-down"><span class="lbl">Place face-down</span></button>
         <button id="notecardPlaceUp" type="button" class="button button--primary" data-icon="arrow-bar-up"><span class="lbl">Place face-up</span></button>

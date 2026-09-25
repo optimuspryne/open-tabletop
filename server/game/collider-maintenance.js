@@ -1,3 +1,4 @@
+import { NOTECARD } from '../../shared/notecards.js';
 import { dispenserDefinition } from '../../shared/pieces.js';
 import { attachCollider, buildCollider } from '../physics.js';
 import { readProps } from './props-codec.js';
@@ -34,4 +35,12 @@ export function updateStackCollider(room, id) {
     : dispenser.body === 'stack';
   if (!changesWithCount) return;
   replaceCollider(body, buildCollider('dispenser', props, { count: piece.count }));
+}
+
+export function updateNotecardStackCollider(room, id) {
+  const piece = room.state.pieces.get(id),
+    body = room.bodies.get(id);
+  if (!piece || !body) return;
+  body.mass = NOTECARD.mass * piece.count;
+  replaceCollider(body, buildCollider('notecardStack', {}, { count: piece.count }));
 }

@@ -20,7 +20,7 @@ export function pieceProperty(piece, name, fallback) {
 // its own schema field, while the stable id seeds the visible stack's facing jitter.
 export function meshPropsOf(piece, id) {
   const props = piecePropsOf(piece);
-  if (piece?.type === 'dispenser') {
+  if (piece?.type === 'dispenser' || piece?.type === 'notecardStack') {
     props.count = piece.count;
     props._seed = id;
   }
@@ -95,6 +95,7 @@ export function createPieceView({
     restoreBufferedTransform(id, mesh);
     scene.add(mesh);
     entry.mesh = mesh;
+    entry.type = piece.type;
     if (hideWhenInspected && isInspected(id)) mesh.visible = false;
     refreshCollider(id, piece);
     return true;
@@ -207,8 +208,17 @@ export function createPieceView({
         // Rebuild the card mesh when its props change (front revealed/hidden on flip).
         cb(piece).listen('props', () => rebuildCard(id, piece), false);
       }
-      if (piece.type === 'die' || piece.type === 'prop' || piece.type === 'notecard') {
+      if (
+        piece.type === 'die' ||
+        piece.type === 'prop' ||
+        piece.type === 'notecard' ||
+        piece.type === 'notecardStack'
+      ) {
         cb(piece).listen('props', () => rebuildPiece(id, piece), false); // recolor / prop tweaks
+      }
+      if (piece.type === 'notecard' || piece.type === 'notecardStack') {
+        cb(piece).listen('count', () => rebuildPiece(id, piece), false);
+        cb(piece).listen('type', () => rebuildPiece(id, piece), false);
       }
       if (piece.type === 'dispenser') {
         // Rebuild the stack body when it dispenses (count drops) so its height tracks the amount left,

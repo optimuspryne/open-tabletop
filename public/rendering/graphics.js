@@ -1,4 +1,4 @@
-import { notecardMesh, paintNotecard } from './notecards.js';
+import { notecardMesh, notecardStackMesh, paintNotecard } from './notecards.js';
 import { drawPlacard } from './placards.js';
 import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
@@ -2335,6 +2335,7 @@ function dispenserMesh(props = {}) {
 // lclick / rclick: click actions (message names).
 // Adding a kind = one entry here + one in the shared KINDS descriptor.
 const KIND = {
+  notecardStack: { mesh: notecardStackMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   notecard: { mesh: notecardMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   die: { mesh: dieMesh, dispose: disposeHierarchy, grab: 0, rclick: 'roll' },
   card: { mesh: cardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
