@@ -9,6 +9,9 @@ For staged implementation status and **remaining proposed** work, see [DESIGN_ne
 The participation foundation, durable GM time-outs, self-service spectators and private deck browsing are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
+For release 0.19.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0190)
+(migrations 018–021, client refresh, source dependencies and ZIP transfer limits).
+
 The codebase:
 
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |

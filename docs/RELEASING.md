@@ -34,8 +34,9 @@ the image push, and the GitHub release for you. So the whole hand process is now
    into a new `## [X.Y.Z] — YYYY-MM-DD` section, and refresh the compare/release links
    at the bottom. (The workflow uses this section verbatim as the release notes, and
    **fails** if it can't find one — so this step is not optional.)
-2. **Bump the version.** Set `"version"` in `package.json` to `X.Y.Z`, and pin the image
-   tag in `docker-compose.yml`'s commented `image:` line (+ the two `README.md` references)
+2. **Bump the version.** Set `"version"` in `package.json` and both root entries in `package-lock.json` to
+   `X.Y.Z`, and pin the image
+   tag in `docker-compose.yml`'s commented `image:` line (+ all `README.md` image references)
    to `:X.Y.Z`. The workflow **fails** if `package.json` doesn't match the tag, catching a
    forgotten bump.
 3. **Commit + tag + push.**
@@ -60,8 +61,8 @@ variables → Actions**:
 - **`DOCKERHUB_TOKEN`** — a Docker Hub **access token** (Account → Security) with read/write on
   the repository. Use a token, not your password.
 
-`.github/workflows/ci.yml` runs `npm test` on every push to `main` and every PR — no secrets
-needed.
+`.github/workflows/ci.yml` runs `npm run check`, browser input/component suites, the production
+dependency audit and PostgreSQL integration tests on pushes to `main` and pull requests.
 
 ## Migrations
 
@@ -81,29 +82,34 @@ No manual `psql -f`, and **no db-image rebuild required** — existing deploymen
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
-The Unreleased time-out slice requires migration **018_room_participation.sql** before the new
-server runs, followed by a client refresh for the appended player status field. Normal startup
-uses the existing migration role and default runtime grants; no new environment variables or
-infrastructure are required. Installations with automatic migration disabled must apply 018 with
-their schema-owner connection. Existing memberships default to unrestricted; scenes and game
-snapshots require no conversion.
+## Upgrading to 0.19.0
 
-The following self-service spectator slice also requires **019_spectator_mode.sql** before
-starting the new server. Restart and refresh all browsers for the appended `Player.participation`
-field. Automatic startup applies it with the migration role; manual installations apply 019
-with their schema-owner connection. Existing policy rows default to player mode and retain their
-time-out. No environment variables, runtime grants or snapshot conversions change.
+From 0.18.0, startup applies these additive migrations in order:
 
-The subsequent deck-browsing slice adds protocol handlers and client controls. Restart the server
-and refresh browsers together. It uses existing deck properties/snapshot storage and requires no
-new migration, environment variables or grants. Old snapshots remain GM-only by default; leases
-are transient and never restored.
+| Migration | Purpose | Existing data |
+| --- | --- | --- |
+| `018_room_participation.sql` | Durable GM time-outs | Existing members remain unrestricted. |
+| `019_spectator_mode.sql` | Durable player/spectator choice | Existing members remain players; time-outs are preserved. |
+| `020_asset_collections.sql` | Shared custom asset collections | Existing assets remain unchanged and uncollected. |
+| `021_user_placards.sql` | Account placard appearance | Accounts receive the default masculine/gradient preset; avatars are preserved. |
 
-The collections slice requires **020_asset_collections.sql**. Restart with the migration role
-configured, then refresh browsers. When automatic migration is disabled, apply 020 using the
-schema owner before starting the new server. Existing assets are unchanged and begin uncollected.
-The new tables inherit the documented default CRUD grants; no new runtime privileges, environment
-variables, asset conversions or snapshot changes are needed. Fresh installs use the updated baseline.
+Restart the server with the existing migration-role connection configured, then refresh all
+browsers for the appended player fields and new controls. When automatic migration is disabled,
+apply any pending numbered migrations using the schema-owner connection before starting 0.19.0.
+Fresh installs use the updated schema baseline. No scene/game snapshot conversion, new service,
+environment variable, exposed port or runtime grant is required.
+
+Source installs should run `npm ci` to install the updated locked dependencies before restart.
+Docker images include those dependencies. Python/ffmpeg is only used to regenerate bundled tile
+sounds offline and is not required to run the application.
+
+Portable asset exports use `.ott.zip`; earlier `.ott.json` packages remain importable. Each
+package supports up to 64 assets, 5,000 cards/tiles, 4,096 images and 512 MiB of original files,
+with a 544 MiB transfer ceiling and 32 MiB per image. Allow sufficient temporary disk space and,
+if large packages are needed, a matching upload limit on `/asset-packages` in the reverse proxy.
+Only one package operation runs at a time per server process. Imports create separate private
+copies, preserving existing assets. Saved dispenser definitions are included; scene ZIP exports
+and live player data are outside the portable format.
 
 ## Rules that keep the guarantees honest
 

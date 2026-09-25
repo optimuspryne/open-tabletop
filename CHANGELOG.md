@@ -8,181 +8,107 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
-### Fixed
-- Center the masculine placard head around its avatar opening and mirror its outline so the
-  portrait has even clearance on both sides. The user approved the corrected head. Browser refresh required.
-- Store new model-board uploads under `/assets/boards/`, leaving object uploads under
-  `/assets/props/`. Allow package exports to read older model boards from their original props
-  location; board imports write to boards. Existing shared originals are preserved.
-- Exit Multi-Select on a left-click or tap on empty felt without dragging, retaining selected
-  pieces. Reuse the configured drag threshold for finger drift; real drags keep the mode active.
-  Synchronize the floating button and restore normal camera input. Browser refresh required.
-- Move Multi-Select from the Table Actions radial menu to a matching floating button above Seat.
-  Keep its active/pressed state synchronized with selection, raise hover hints to clear the stack,
-  and hide it with the other floating buttons while the mobile hand is open. Browser refresh required.
-- Raise the portable package image limit from 256 to 4,096 for both single decks and collections.
-  Keep the existing byte, pixel and card budgets, and report image-count and image-byte failures
-  separately. Requires a server restart; no migration.
-- Keep the expanded mobile private hand clear by hiding Seat and Table Actions until it closes,
-  preserving the user's left-side button placement and raised control hints. Remeasure hand
-  scroll arrows when the hidden tray opens or resizes, without requiring Rearrange; release
-  observers and pending measurements when rebuilding the hand. Browser refresh required.
-- Route all saved/bundled image thumbnails through bounded WebP previews, including custom dice,
-  sky panoramas/cubemap faces, image boards/mats, finish pickers, hands and editor image squares.
-  Centralize the URL policy with no raw-image fallback; generate small WebP previews for local
-  files and procedural/model snapshots. Keep original refs for apply/spawn/upload actions and
-  full tabletop rendering. Reuse the existing derivative endpoint with a strict bundled-raster
-  allowlist and source-change revalidation. Requires a server restart and browser refresh.
-  User reports improvement and approved the thumbnail changes for commit (2026-09-24).
-- Reduce work while browsing large card/tile libraries: load previews near the viewport with
-  asynchronous decoding and dedicated 320px WebP thumbnails, retain unchanged custom lists,
-  release removed thumbnail observers, and batch shared button-width measurements. Keep original,
-  hand and tabletop image quality intact. Requires a server restart and browser refresh; the
-  thumbnail cache builds on demand without a migration. Automated regression coverage includes
-  40-deck desktop/touch browsing; the user reports scrolling is much better (2026-09-24).
-- Give Collections and library assets one scrolling body below the fixed header, so populated
-  asset panes cannot squeeze the collection controls into a clipped strip. Keep collection
-  Save/Cancel controls visible in a sticky action row on desktop and touch.
-- Increase the server's initial schema-encoding buffer from 128 to 512 KiB after a busy table
-  exceeded the previous allocation. Larger states still use Colyseus's automatic growth;
-  this changes allocation, not table capacity or wire data. Requires a server restart.
-- Keep member names/status visible in the narrow room dock. Put moderation actions in a
-  two-column grid, wrap long names, and highlight Kick/Reject. At user request, reduce action
-  heights and spacing by roughly half while keeping readable labels.
-- Keep the object-label renderer and editor idle until the room's piece collection is available;
-  clear stale labels on state loss and resume when it returns. Cover delayed initial state in the
-  production-client browser fixture as well as label editor/resource cleanup regressions.
+## [0.19.0] — 2026-09-24
 
 ### Added
-- Account-saved placard presets in Settings → Placard: feminine/masculine bodies, pointed-ear
-  and floppy-ear dogs, shorthair/fluffy cats, frog and gecko; solid, gradient, stripes, dots,
-  stars and checkerboard patterns with two custom colors and a private live preview.
-  Reuse the existing seat marker/texture lifecycle; preserve avatar faces and seat-color outlines.
-  Serialize account saves across tabs, update active rooms, and restore on joins/reconnects.
-  Migration **021** requires a server restart and browser refresh. The user approved the appearance after the masculine-head correction.
-- Three original synthesized tile-flip cues and three box-shake shuffle cues. Named tile sets
-  use these sounds; paper cards keep their existing cues, and mixed flips play one cue per material.
-  Reuse existing sound volume/mute controls. Include the deterministic offline generator and CC0
-  provenance. Browser refresh required; the user liked the tile sounds and approved committing them.
-- Export/import custom 3D models as ZIP packages, individually or in collections. Preserve original
-  GLBs, embedded materials/textures, scale, rotation, stand/grid sizing, tint/finish and colliders.
-  Include saved dispenser settings and any separate custom container GLB, without live inventory.
-  Imports create new private copies; restart server and refresh browsers. No migration.
-  User reports green manual tests after the model-board upload fix (2026-09-24).
-- Extend portable ZIP packages to custom boards, player mats and skyboxes, individually or in
-  collections. Preserve model-board GLB originals and embedded materials, model scale/bounds,
-  authored outlines and compound colliders; preserve mat geometry and panorama/cubemap face order.
-  Reuse private transactional imports, dependency validation and cleanup. Restart the server and
-  refresh browsers; no migration or new dependencies. User reports green manual tests after the
-  model package and board-upload follow-up (2026-09-24).
-- Export portable assets as `.ott.zip` archives with a JSON manifest and original binary images;
-  continue importing earlier JSON/base64 packages. Stream uploads/downloads through private
-  temporary storage, validate images one at a time, and serialize package work per server process.
-  Preserve private transactional imports and reject unsafe/mismatched archive contents. ZIP limits
-  allow 512 MiB of originals (544 MiB transfer), 32 MiB per image and larger pixel budgets.
-  Install updated dependencies, restart server and refresh browsers; no migration. Full-size
-  transfers need sufficient temporary storage and reverse-proxy upload allowances.
-  User reports the collection/ZIP package flow works well (2026-09-24).
-- Export saved collections of custom dice textures, decks and tile sets from Library → Collections.
-  Preview all included members, then import a new private collection and private asset copies in
-  one transaction. Share repeated image data across members and preserve saved membership.
-  Unsupported members reject the whole export. Limit packages to 64 assets and 5,000 cards/tiles;
-  existing dice/deck packages remain compatible. Restart server and refresh browsers; no migration.
-- Extend portable asset packages to custom decks and tile sets, including original face/back
-  images, paired tile faces, authored order, generated text, geometry, pouch skins and colors.
-  Deduplicate repeated images in exports; preview card/image counts and import a new private copy.
-  Continue accepting dice packages. Unsupported or missing dependencies fail explicitly; failed
-  imports clean up their own new files. Restart server and refresh browsers; no migration.
-  User reports manual tests passing (2026-09-24).
-- Admin-only portable custom dice textures: Export from a texture’s library menu, then preview
-  and import its `.ott.json` package in Library → Import / export assets. Include the original
-  image, validate checksums and bounded image data, and create a new private copy under the
-  importing admin. Existing assets are never replaced. Other asset types and collections are
-  future slices. Requires server restart and browser refresh; no database migration.
-  User reports the import/export flow worked well in manual testing (2026-09-24).
-- Shared site-admin-managed custom asset collections with private/published visibility, mixed-kind
-  membership, rename/delete and a searchable bulk asset chooser in Library → Collections. Local
-  per-account filters support multiple memberships, Uncollected and Show all, including custom dice.
-  Preserve asset permissions and keep assets when deleting collections; transactional revisions
-  prevent conflicting edits from silently overwriting work. Requires migration **020**, server
-  restart and browser refresh. User approved functionality and final UI (2026-09-24).
-- Private deck browsing through right-click/long-press **Browse deck…**, GM-only by default for
-  every deck. GMs can enable active-player browsing per deck. View one card at a time without
-  changing order, then take it, place it face-up/down, or move it to the top/bottom. Exclusive
-  expiring sessions block conflicting draws, shuffle, combine and absorption; restrictions,
-  disconnects and resets close them. Preserve card metadata and inventory on failed placement
-  or retries. Reuse inspection rendering with owned preview cleanup. Restart the server and
-  refresh browsers; no database migration is required. User reports manual tests passing (2026-09-24).
-- Use Tabler `label` for Labels and `focus-2` for Highlight in the piece radial menu.
-- Tabler eye icons for lobby Watch and More → Spectate, switching to device-gamepad for
-  Return to play. Reuse the existing icon/label helpers and regenerate all three page sprites.
-- Self-service spectator mode through **More → Spectate / Return to play**, or **Watch** in the
-  lobby. Preserve converted players' seats, hands and trays; new spectators join without a seat
-  and are skipped by turns/dealing. Camera, chat and authorized inspection remain available.
-  Mode persists per room/account across tabs and reconnects; returning never lifts a GM time-out.
-  Keep eight playing seats and cap total connections at 24. Migration **019** requires a server
-  restart and browser refresh. Automated checks pass; the user approved spectator functionality and final icons for commit;
-  comprehensive live multiplayer/touch testing is not inferred.
-- Durable GM time-outs in the member list, with room-visible badges and an explanation for the
-  affected player. Apply/lift across all tabs and reconnects; preserve seats, hands and trays.
-  Block gameplay, cancel active gestures, release held objects without throwing, and recover
-  pending inspections. Chat, camera controls, public/own-hand inspection and personal notes remain
-  available. Migration **018** stores room/account policy outside gameplay snapshots; restart the
-  server and refresh clients. Spectator entry follows in the slice above; the user reports time-outs work,
-  and approved the compact member-list UI.
-- GM object labels through **Labels…** in the desktop/touch menu or **L** over a piece. Saved
-  labels follow objects; the same editor configures prominent low-stock counts for decks, tile
-  decks, and finite dispensers using an explicit full quantity and percentage threshold.
-- Highlight a tabletop object for everyone with middle-click or its desktop/touch menu. A pulsing
-  halo follows the object for 3.2 seconds; repeats refresh it, and removal/expiry releases its
-  rendering resources. Preserve held-piece rotation and empty-table pings, with server target
-  validation and throttling plus input, server, and browser lifecycle/menu regression coverage.
+- **Asset collections.** Site admins can organize mixed custom assets into shared, private or
+  published collections, with a searchable bulk chooser and rename/delete controls. Per-account
+  local filters support multiple memberships, Uncollected, and Show all / Show none. Collections
+  preserve each asset's permissions; deleting a collection keeps its assets, and conflicting
+  edits cannot silently overwrite one another.
+- **Portable assets and collections.** Site admins can export custom dice textures, decks/tile
+  sets, boards, player mats, skyboxes and 3D models individually or as saved collections in
+  `.ott.zip` packages. Packages preserve original images/GLBs, embedded materials, authored card
+  order and geometry, colliders, model transforms, and saved dispenser definitions, including
+  separate container models. Imports preview contents and create new private copies with remapped
+  references and collection membership; existing assets are never overwritten. Earlier
+  `.ott.json` packages remain importable. Unsupported members reject the whole collection export.
+  Live player data and scene ZIP exports are outside this format.
+- **Private deck browsing.** Right-click or long-press a deck to browse one card at a time
+  without changing its order. GMs can enable active-player browsing per deck; all decks default
+  to GM-only. Take a card into hand, place it face-up/down, or move it to the top/bottom.
+  Exclusive expiring sessions prevent conflicting draws, shuffles and combines, and recover
+  inventory when placement fails or access changes.
+- **Spectator mode.** Choose More → Spectate / Return to play, or Watch in the lobby. New
+  spectators join without a seat; converted players keep their reserved seats, hands and trays.
+  Spectators retain camera, chat and authorized inspection, and are skipped by turns/dealing.
+  The mode persists per room/account across tabs and reconnects. Rooms support eight playing
+  seats and up to 24 total connections.
+- **GM time-outs.** Apply or lift a durable time-out from the member list, with visible status
+  and an explanation for the affected player. Time-outs block gameplay and release active grabs
+  safely while preserving seats, hands and trays. Camera, chat, authorized inspection and personal
+  notes remain available. Returning from spectator mode never lifts a GM time-out.
+- **Object labels and low-stock warnings.** GMs use Labels… in the desktop/touch menu or press
+  L over a piece to edit a saved label. Decks, tile decks and finite dispensers can show a gold
+  remaining-count label below an explicit full-quantity percentage threshold. Labels follow
+  moving objects; unlimited dispensers do not offer stock warnings.
+- **Shared object highlights.** Middle-click an unheld object or choose Highlight from its menu
+  to show everyone a pulsing halo for 3.2 seconds. Repeating refreshes the halo; it follows movement
+  without changing materials, selection or physics. Held-piece rotation and empty-table pings
+  retain their gestures.
+- **Account placard presets.** Settings → Placard offers feminine/masculine bodies, pointed-ear
+  and floppy-ear dogs, shorthair/fluffy cats, frog and gecko. Choose solid, gradient, stripes,
+  dots, stars or checkerboard with two custom colors and a private live preview. Saved choices
+  follow the account across rooms, tabs and reconnects, retaining avatar faces, readable names
+  and seat-color outlines.
+- **Tile sound variants.** Three original synthesized tile flips and three box-shake shuffles
+  give named tile sets distinct cues. Paper cards keep their existing sounds; mixed selections
+  play one flip cue per material. Existing SFX mute/volume controls apply. Include the reproducible
+  offline generator and CC0 provenance.
 
 ### Changed
-- Toggle named collections with Show all / Show none while preserving the separate Uncollected
-  setting. Keep the label and icon synchronized: Show all uses `eye-off`, Show none uses `eye`.
-  Disable the button for an empty collection list. Browser refresh required.
-- Use Tabler `album` for Collections and `package-import` / `package-export` for asset transfer
-  controls. Reuse the existing icon helpers and regenerate all page sprites; browser refresh required.
-- Close the agreed portable asset-package scope with scene ZIP exports deferred by user decision.
-  Saved dispenser definitions are already included in model packages; existing scene save/load
-  is unchanged. Documentation only.
-- Add the participation-policy foundation: explicitly classify all 119 table requests and guard
-  them through the existing error boundary. Server-owned spectator/time-out state blocks gameplay
-  independently of rank; asynchronous library loads and optional spawns recheck before mutation.
-  Preserve observation, communication, personal notes, cleanup and authorized administration.
-  The following slice adds durable time-outs and GM controls; spectator entry remains planned.
-- Save new lobby/table avatar uploads at 512×512 with JPEG quality 0.85, using shared settings
-  and a 512 KiB encoded-image limit across HTTP and room messages. Re-upload existing avatars
-  to replace their previously saved 96×96 images; existing account data stays compatible.
-- Render player placards at 640×896 on Low/Medium graphics and 960×1344 on High, preserving
-  their world size and anisotropic filtering.
-- Enlarge player placards into human silhouettes with avatar faces, player-colored outlines, and
-  readable name plates. Dispose owned marker geometry/materials/textures when replaced or removed.
+- Centralize server-side participation checks across table requests, including access rechecks
+  after asynchronous reads. Preserve authorized observation, communication, personal notes,
+  cleanup and administration while gameplay is restricted.
+- Enlarge player placards, improve their texture detail, and raise new avatar uploads to 512×512.
+  Existing avatars remain compatible; re-upload to benefit from the higher source resolution.
+  Replaced placards dispose their owned rendering resources.
+- Move Multi-Select into a floating button above Seat. A click/tap on empty felt without a drag
+  exits the mode while retaining the selection; real drags keep it active. Hide Seat and Table
+  Actions while the mobile private hand is expanded.
+- Improve large-library scrolling with lazy, asynchronously decoded WebP thumbnails, retained
+  unchanged asset lists, and batched button measurements. Saved/bundled image previews use bounded
+  derivatives across library cards, finish pickers, hands and editor image squares. Original
+  files and full tabletop rendering retain their quality; thumbnail caches build on demand.
+- Give Collections and library assets one scrolling body with a fixed header and visible
+  collection Save/Cancel controls. Use consistent Tabler icons for collections, asset transfers,
+  labels, highlights and spectator actions.
+- Keep member names/status readable in narrow room docks, with compact moderation controls and
+  emphasized Kick/Reject actions. Increase the initial schema-encoding buffer for busy tables
+  without changing table capacity.
+
+### Fixed
+- Store new model-board uploads under `/assets/boards/`; continue exporting older boards from
+  their original `/assets/props/` location. Imports use the boards directory, preserving existing
+  shared originals and authored model materials.
+- Measure hand scroll arrows when the hidden tray opens or resizes, without requiring Rearrange,
+  and release observers and pending measurements when rebuilding it.
+- Keep object-label rendering/editing idle until room pieces are available, clear stale labels
+  on state loss, and resume on hydration.
+- Center the masculine placard head around its avatar opening and use a symmetrical outline.
+
+### Deployment
+- Apply additive migrations **018–021** for time-outs, spectators, collections and account
+  placards. Normal startup applies pending migrations using the existing migration role; refresh
+  all browsers after restarting the server. With automatic migration disabled, apply the pending
+  numbered migrations in order using the schema-owner connection before starting the new server.
+  Existing memberships remain unrestricted players, assets begin uncollected, and accounts receive
+  the default placard. Existing scenes/game snapshots require no conversion.
+- Source installs must install the updated locked dependencies (`npm ci`); packaged images include
+  them. No new services, environment variables or runtime database privileges are required.
+- ZIP packages support up to 64 assets, 5,000 cards/tiles, 4,096 images and 512 MiB of original
+  files, with a 544 MiB transfer ceiling and 32 MiB per image. Full-size transfers need adequate
+  temporary storage and reverse-proxy upload allowances. Transfers are streamed through private
+  temporary storage, serialized per server process and validated before transactional imports.
+  Image-count and byte-limit failures report distinct errors.
 
 ### Documentation
-- Record approved shared, site-admin-managed ownership for planned custom asset collections;
-  personal collections are outside v1. The implemented slice follows that approved scope.
-- Record user-reported manual-test sign-off for the participation-policy foundation (2026-09-24).
-  The user subsequently confirmed time-outs work and approved the compact member-list UI.
-  Specific devices and edge-case scenarios were not itemized.
-- Add detailed proposed designs for time-out/spectator mode, deck browsing and custom asset
-  collections, plus shorter discovery briefs for the other remaining roadmap work. Link them
-  from the roadmap, reference and architecture; distinguish recommended decisions from shipped APIs.
-- Record user-reported manual-test sign-off for object labels, stock warnings, highlights,
-  placards, and avatar uploads; retain shape/flair customization as future roadmap work.
-- Record owner-confirmed Claude-generated tile/box sound provenance and CC0 distribution;
-  close the roadmap's missing-attribution item.
-- Extend the roadmap with room-persistent player inventories, per-card deck browsing actions,
-  low-stock count labels, and shared object highlighting with desktop/touch input paths.
-- Add roadmap proposals for persistent object labels, GM-hidden objects, player time-outs,
-  avatar placard styling, drawable notecards, asset collections, portable asset imports/exports,
-  and physical rulebooks with a Markdown builder. Connect shared spectator and concealment work
-  while keeping these proposals distinct from implemented features.
-- Reconcile the roadmap with completed turn ordering, footprints, lighting, touch controls,
-  custom dispensers, dice textures, save safeguards, and server extractions. Separate remaining
-  validation from implementation, and clarify device-based graphics defaults and native-resolution
-  skybox uploads in the roadmap, reference, and architecture guides.
+- Reconcile the roadmap with completed gameplay, customization, touch and server/client
+  refactoring work. Add implementation plans and verification checkpoints for recent features
+  and discovery briefs for remaining work.
+- Document gesture paths, account/room privacy boundaries, package formats and asset provenance.
+  Feature approvals are recorded separately from comprehensive real-device and live multiplayer
+  validation; the device checklist remains available for further testing.
 
 ## [0.18.0] — 2026-09-23
 
@@ -1470,7 +1396,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...HEAD
+[0.19.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.18.0
 [0.17.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.2
 [0.17.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.0

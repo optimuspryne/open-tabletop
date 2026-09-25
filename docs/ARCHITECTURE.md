@@ -314,7 +314,7 @@ importing a room singleton:
   than maintaining a second compatibility vocabulary. Control colors, borders, radii, height,
   padding, and form rhythm come from the shared tokens and primitives, so restyling does not
   require editing per-feature `#id` rules).
-- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`020`,
+- **Project dirs** — `postgres/` (numbered SQL migrations `001`→…→`021`,
   auto-applied in order by `migrate.js` on startup, plus `schema.sql` — the flattened
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
@@ -1984,6 +1984,9 @@ Existing reference-aware orphan cleanup handles abandoned permanent files after 
 Export never reads live private hands, inventories or concealed room order. Supported metadata
 is transferred explicitly; other asset kinds still require their own dependency walkers.
 
+
+Release 0.19.0 migration and package-transfer requirements are consolidated in the
+[upgrade guide](RELEASING.md#upgrading-to-0190).
 
 ## Account-owned placard appearance
 
