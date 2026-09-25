@@ -31,6 +31,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   while coins retain 1.0.
 
 ### Fixed
+- Stabilize the notecard browser regression by retaining the held mouse button during CDP
+  drag moves; assert the first stroke commits before testing zoom/pan. Fixes intermittent CI
+  cancellation of the synthetic stroke.
 - Restore generated library thumbnails on Safari by accepting PNG canvas-export fallback as
   well as WebP. Covers 3D models/boards, dice, built-in cards and tile sets while retaining
   bounded thumbnail dimensions and rendering-resource cleanup.

@@ -61,7 +61,9 @@ try {
             type,
             x: px,
             y: py,
-            button: type === 'mouseMoved' ? 'none' : 'left',
+            // Keep the held button consistent throughout a CDP drag. A move with
+            // button:'none' can drop capture and cancel the stroke in Chromium.
+            button: 'left',
             buttons: type === 'mouseReleased' ? 0 : 1,
             clickCount: type === 'mouseMoved' ? 0 : 1,
           },
@@ -85,6 +87,11 @@ try {
         `[...document.querySelectorAll('#notecardDialog button[data-icon]')].every(b=>b.getAttribute('aria-label') && b.title)`,
       ),
       true,
+    );
+    assert.equal(
+      await page.evaluate(`document.getElementById('notecardUndo').disabled`),
+      false,
+      `initial ${device.touch ? 'touch' : 'mouse'} stroke committed at ${device.width}px`,
     );
     // Pinching or panning must never add an accidental stroke.
     if (device.touch) {
@@ -156,7 +163,11 @@ try {
     let sent = await page.evaluate(`noteTest.sent.at(-1)`);
     assert.equal(sent.type, 'notecardCommit');
     assert.equal(sent.payload.faceDown, true);
-    assert.equal(sent.payload.drawing.length, 2, 'view gestures did not add strokes');
+    assert.equal(
+      sent.payload.drawing.length,
+      2,
+      'exactly two authored strokes remain after view gestures',
+    );
     assert.ok(
       Math.abs(sent.payload.drawing[1].pts[0] - 0.3) < 0.015,
       'zoomed ink uses paper coordinates',
