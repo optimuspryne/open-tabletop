@@ -53,6 +53,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ### Documentation
 - Record successful user testing and commit approval for notecard stacks.
+- Require an approved mock-up or example before adding, modifying or removing UI elements;
+  document accessibility expectations for keyboard use, focus, accessible labels, hints and touch.
 - Record user approval of drawable notecards, zoom/pan, private hands and the compact icon set.
 - Require concrete Tabler icon options and user selection during UI work, with compact-mode
   accessibility and shared icon/sprite integration recorded in `AGENTS.md`.

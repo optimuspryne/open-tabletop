@@ -19,7 +19,8 @@
   unless explicitly asked to include others; avoid unrelated formatting.
 - During staged gameplay/UI refactors, leave each cohesive slice ready for in-app testing before
   proceeding, unless a larger sequence was explicitly authorized. This does not prohibit local
-  commits or require approval for each routine implementation choice.
+  commits or require approval for each routine implementation choice within an approved UI design.
+  UI changes must follow the mock-up approval requirement below.
 - Summarize every file touched and the functions/helpers added, changed, or removed.
 - Record changes in `CHANGELOG.md` under `[Unreleased]` during implementation.
 - Update `docs/REFERENCE.md` and `docs/ARCHITECTURE.md` when relevant during documentation
@@ -62,6 +63,17 @@
 
 # UI and input
 
+- For every requested change that adds, modifies, or removes UI elements, first present a concrete
+  mock-up or example showing the proposed result and obtain explicit user approval before
+  implementing the UI change. Preparing the mock-up or example is allowed before approval.
+  Include affected compact/full and desktop/touch layouts where relevant, and show the resulting
+  layout for removals. If the design materially changes, present the revised example for approval.
+- Design all UI with accessibility in mind: prefer semantic controls, provide meaningful accessible
+  names (including `aria-label` for icon-only controls), and expose relevant states to assistive
+  technology. Support keyboard-only operation, logical focus order, visible focus indicators and
+  appropriate focus management. Provide hover hints with keyboard-focus and touch equivalents;
+  essential information or actions must not depend on hover alone. Maintain readable contrast,
+  usable touch targets and cues that do not rely on color alone, including in compact mode.
 - Use shared design tokens, canonical component classes, and Tabler icon helpers for static and
   generated UI. Preserve compact/full modes, keyboard accessibility, and desktop/touch behavior.
   Regenerate icon sprites through `npm run build:icons` when adding icons.
