@@ -1,7 +1,7 @@
 // Bounded public account appearance; no uploaded code, textures or model references.
 export const PLACARD_SHAPES = Object.freeze({
-  feminine: 'Body 1 · Feminine',
-  masculine: 'Body 2 · Masculine',
+  feminine: 'Type 1',
+  masculine: 'Type 2',
   shepherd: 'Dog · Pointed ears',
   retriever: 'Dog · Floppy ears',
   shorthair: 'Cat · Shorthair',
