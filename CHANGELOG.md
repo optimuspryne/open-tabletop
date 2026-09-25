@@ -127,6 +127,14 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   validation and throttling plus input, server, and browser lifecycle/menu regression coverage.
 
 ### Changed
+- Toggle named collections with Show all / Show none while preserving the separate Uncollected
+  setting. Keep the label and icon synchronized: Show all uses `eye-off`, Show none uses `eye`.
+  Disable the button for an empty collection list. Browser refresh required.
+- Use Tabler `album` for Collections and `package-import` / `package-export` for asset transfer
+  controls. Reuse the existing icon helpers and regenerate all page sprites; browser refresh required.
+- Close the agreed portable asset-package scope with scene ZIP exports deferred by user decision.
+  Saved dispenser definitions are already included in model packages; existing scene save/load
+  is unchanged. Documentation only.
 - Add the participation-policy foundation: explicitly classify all 119 table requests and guard
   them through the existing error boundary. Server-owned spectator/time-out state blocks gameplay
   independently of rank; asynchronous library loads and optional spawns recheck before mutation.

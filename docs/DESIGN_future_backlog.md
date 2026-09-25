@@ -29,7 +29,7 @@ No backlog feature below is implemented by these slices.
 | Object hiding, fog, GM staging | 14, 4, distribution §3 | Large architectural work | Authorized state delivery and collision/privacy behavior |
 | Player inventories | 21 | Large | Full object serialization and recoverable transfers |
 | Drawable notecards | 17 | Large | Per-object drawing ownership and concealed artwork |
-| Asset/collection export/import | 19 | Large | Typed dependency graph and bounded package format |
+| Asset/collection export/import | 19 | Completed for agreed asset types | Scene packages deferred by user decision (2026-09-24) |
 | Rulebooks/builder | 20 | Very large; split into releases | Markdown-only reader prototype and pagination |
 | Interactive tutorial | 2 | Medium | Choose walkthrough versus starter scene |
 | User-authored games/starters | 7 | Medium-to-large | Gap between saved scenes and reusable starter definitions |
@@ -119,6 +119,13 @@ two editors cannot overwrite each other silently; pen input does not drag the ph
 time-out releases editing safely; large drawings remain responsive on phones/tablets.
 
 ## Asset and collection export/import
+
+**Current status (2026-09-24): agreed scope complete.** Dice, decks/tiles, boards, mats, skyboxes,
+models (including saved dispenser definitions) and collections of supported assets are implemented.
+The final surface/model slice is committed as `e1652f1`, with automated checks and user-reported
+manual tests passing. The user chose to defer scene exports because the complexity outweighs the
+expected payoff. Scene packages are outside the active scope; revisit only if explicitly requested.
+Existing scene save/load behavior is unaffected. The original discovery brief follows for context.
 
 **Goal:** portable single assets or collections, including their required files and metadata.
 Design this alongside the collection identity model, but implement after collection CRUD/filtering.
@@ -505,7 +512,8 @@ ZIP version 4 now supports `prop` model objects individually and in collections.
 GLB materials/textures, scale, bounds, stand mode, model rotation, grid footprint, color, finish,
 tint material and primitive/compound colliders. Include saved automatic/generic/custom dispenser
 settings and a separate custom-container model when present; only authored supply defaults travel,
-never live remaining counts, inventory or player data. Scene packages remain future work.
+never live remaining counts, inventory or player data. Scene packages were subsequently deferred
+by user decision (2026-09-24); they are outside the active export scope.
 
 Reuse decision: add `package-models.js` with `mapPropReferences` using `propRecordPayload` and shared
 collider types. The existing file resolver handles model bytes, path/type validation, limits,

@@ -1912,7 +1912,9 @@ and applies the predicate to existing card builders. The library shell keeps its
 uses one scrolling body for Collections and asset panes; the editor action row stays sticky.
 Conflict responses retain local edits for review
 and explicit reload. Built-ins, secondary pickers and existing table objects are independent of local
-collection visibility. Collection membership never grants read/spawn/export permissions.
+collection visibility. The bulk Show all / Show none action updates named collection preferences
+only; the Uncollected preference remains independent. Collection membership never grants
+read/spawn/export permissions.
 Other asset types and multi-process invalidation remain separate work; portable packages are described below.
 
 
@@ -1924,6 +1926,8 @@ collections of supported members share the same schema/validation rules. Package
 typed references carry no installation paths, account IDs, publication flags or gameplay state.
 Unsupported collection members fail the whole export. Generated faces, paired tiles, appearance,
 ordered/repeated faces and original uploaded bytes are preserved.
+Scene ZIP packages are outside the agreed scope (user decision, 2026-09-24); existing scene
+save/load remains separate and unchanged.
 
 `server/assets/package-archives.js` owns archive transport and temporary storage. It reuses the
 package service via file-reader/writer adapters instead of duplicating asset rules. Exports stage

@@ -811,7 +811,7 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
     const li = document.createElement('li');
     li.className = 'libEmpty';
     li.textContent = beforeFilter
-      ? 'No assets match your collection filters. Use Show all in Collections to reset.'
+      ? 'No assets match your collection filters. Enable collections or Uncollected in Collections.'
       : 'None yet.';
     ul.appendChild(li);
     return;
@@ -838,7 +838,7 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
                 ? [
                     {
                       label: 'Export',
-                      icon: 'device-floppy',
+                      icon: 'package-export',
                       fn: () => packageController?.exportAsset(kind, it.id),
                     },
                   ]

@@ -826,3 +826,32 @@ adds object packages and corrects new board uploads to `/assets/boards/`, retain
 for older boards stored in props. Automated checks pass: 760 unit tests, 19 PostgreSQL tests and
 desktop/touch component flows. The user reports green manual tests and approved committing both
 slices (2026-09-24). Specific second-installation and real-device scenarios were not separately reported.
+
+
+The surface/model slice is committed as `e1652f1`. The user subsequently chose to defer scene
+exports because the complexity outweighs the expected payoff (2026-09-24). The agreed asset-package
+scope is complete, including saved dispenser definitions within model packages and collections of
+supported assets. Scene packaging is outside the active scope; existing scene save/load is unchanged.
+
+### Collection visibility toggle follow-up — 2026-09-24
+
+Replace the collection filter reset with Show all / Show none for named collections only. Preserve
+Uncollected independently. All-visible offers Show none; mixed/all-hidden offers Show all; no
+collections disables the button. Individual changes update its label without rebuilding the focused
+checkbox, and bulk changes retain button focus. Reuse the existing hidden-ID set, account-local
+persistence, filter predicate and native click/tap/keyboard buttons; no protocol or schema changes.
+
+Files/functions: `public/editor/collections.js` extends `createCollectionController`/`renderFilters`
+and adds `updateVisibilityToggle`; `public/editor/editor-panel.js` updates `renderList` empty-state
+advice; `public/table.html` updates in-app help. `scripts/component-parity.mjs` extends the existing
+collection flow with both Uncollected states, mixed visibility, persistence/refresh, focus and empty
+lists. `CHANGELOG.md`, `docs/GESTURES.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` and this plan
+record the behavior. `npm run check` passed (760 tests plus lint/format/CSS checks),
+`npm run test:components` passed desktop and coarse-touch profiles, and `git diff --check` passed.
+The user approved the toggle behavior and final icons, then requested committing the changes
+(2026-09-24). Specific device coverage was not separately reported. Refresh the browser; no server
+restart is required.
+
+The user approved the toggle behavior and requested matching state icons: Show all uses `eye-off`,
+Show none uses `eye`. `updateVisibilityToggle` reuses `setIcon` and updates `data-icon` together;
+both symbols already exist in the sprite. No new helper or sprite rebuild is needed.

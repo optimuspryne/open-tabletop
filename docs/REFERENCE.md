@@ -2827,7 +2827,9 @@ the fixed header, preventing the panes from shrinking the filters. The editor ke
 sticky within that body. The existing list cache/rendering applies its predicate only to the main custom library, including
 custom dice and prop/dispenser views. Any enabled visible collection membership shows the asset;
 only assets with no visible membership use Uncollected. Search/source/kind controls further filter
-these results. Built-ins and secondary finish pickers remain independent. New collections are visible;
+these results. Show all / Show none changes only named collection IDs; Uncollected remains
+independent. The label follows individual checkbox changes, and the bulk button is disabled when
+there are no collections. Built-ins and secondary finish pickers remain independent. New collections are visible;
 removed/inaccessible IDs are pruned after loading all pages. Role transitions clear private cached
 metadata and discard management drafts before refetching. Export/import is not part of this slice.
 
@@ -2835,13 +2837,15 @@ metadata and discard management drafts before refetching. Export/import is not p
 ## Portable custom assets
 
 Site admins export custom dice textures, decks/tile sets, boards, mats, skyboxes and 3D models from their Library overflow menu,
-or saved collections with the save-file icon beside Edit. Downloads are `.ott.zip` packages
+or saved collections with the package-export icon beside Edit. Downloads are `.ott.zip` packages
 containing `manifest.json` and original image/model files. **Import / export assets** accepts ZIP and
 older `.ott.json` packages. Preview lists included members/files, supports renaming, and requires
 **Import private copy**. Imports create new private rows owned by the importing admin. Collection
 imports create a private collection with private copies of every member; renaming changes only
 the collection name. Duplicate names never replace content. Unsupported member types reject the
 whole export. Single imports remain outside collections.
+Scene ZIP packages are outside the agreed scope (user decision, 2026-09-24); existing scene
+save/load remains separate and unchanged.
 
 `shared/asset-package.js` defines format `open-tabletop-assets`. Version 4 is the binary archive
 format. Versions 1–3 remain readable through the legacy JSON path. All use sequential package-local

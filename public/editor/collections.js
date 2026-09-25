@@ -44,6 +44,17 @@ export function createCollectionController({
   status.setAttribute('role', 'status');
   const filters = element('div', 'collectionFilters');
   const actions = element('div', 'button-row button-row--compact');
+  const visibilityToggle = button('Show all', 'eye', () => {
+    const hideAll = collections.every((value) => !hidden.has(value.id));
+    for (const value of collections) {
+      if (hideAll) hidden.add(value.id);
+      else hidden.delete(value.id);
+    }
+    persist();
+    renderFilters();
+    onFilter();
+    visibilityToggle.focus({ preventScroll: true });
+  });
   const manager = element('section', 'collectionManager');
   manager.hidden = true;
   const name = element('input', 'control');
@@ -123,6 +134,16 @@ export function createCollectionController({
     status.textContent = 'Loading collections…';
     room.send('listCollections', { request });
   }
+  function updateVisibilityToggle() {
+    const allVisible =
+      collections.length > 0 && collections.every((value) => !hidden.has(value.id));
+    const label = allVisible ? 'Show none' : 'Show all';
+    visibilityToggle.querySelector('.lbl').textContent = label;
+    visibilityToggle.setAttribute('aria-label', label);
+    visibilityToggle.dataset.icon = allVisible ? 'eye' : 'eye-off';
+    setIcon(visibilityToggle, visibilityToggle.dataset.icon);
+    visibilityToggle.disabled = collections.length === 0;
+  }
   function renderFilters() {
     filters.replaceChildren();
     actions.replaceChildren();
@@ -134,6 +155,7 @@ export function createCollectionController({
         if (input.checked) hidden.delete(id);
         else hidden.add(id);
         persist();
+        updateVisibilityToggle();
         onFilter();
       };
       const item = element('label', 'collectionChoice');
@@ -157,7 +179,7 @@ export function createCollectionController({
         editButton.disabled = busy;
         wrap.append(editButton);
         if (onExport) {
-          const exportButton = button('Export', 'device-floppy', () => onExport(value.id));
+          const exportButton = button('Export', 'package-export', () => onExport(value.id));
           exportButton.setAttribute('aria-label', `Export saved collection ${value.name}`);
           exportButton.title = 'Export saved collection';
           exportButton.classList.add('button--icon');
@@ -167,14 +189,8 @@ export function createCollectionController({
       }
       filters.append(wrap);
     }
-    actions.append(
-      button('Show all', 'eye', () => {
-        hidden.clear();
-        persist();
-        renderFilters();
-        onFilter();
-      }),
-    );
+    updateVisibilityToggle();
+    actions.append(visibilityToggle);
     actions.append(button('Refresh collections', 'refresh', refresh));
     if (isAdmin()) {
       const create = button('New collection', 'plus', () => {

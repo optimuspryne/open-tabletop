@@ -249,7 +249,9 @@ are holes in the gesture surface itself, not in its documentation.
 ## Asset collections
 
 In Library, expand **Collections** with a click/tap (or keyboard focus and Enter). Check collections
-to show them locally, toggle Uncollected, or choose Show all. An asset in multiple collections stays
+to show them locally, or use Show all / Show none to toggle every named collection. Uncollected
+keeps its own setting. If any named collection is hidden, the button offers Show all; otherwise it
+offers Show none. With no collections, the button is disabled. An asset in multiple collections stays
 visible while any membership is enabled. This does not affect objects on the table or finish pickers.
 Site admins use New collection or a collection's Edit button to open its name/publication controls
 and searchable asset checklist. Collections and library results share one scrollable body below the fixed library header.
@@ -264,7 +266,7 @@ The user approved functionality and the final UI (2026-09-24); specific devices 
 
 In Library, open a custom dice texture, deck/tile set, board, mat, skybox or 3D model's **More actions** menu and choose **Export** (click/tap;
 keyboard users focus the menu button and press Enter). On touch the same action is in its sheet.
-For a saved collection, use the save-file icon next to Edit in **Collections** (click/tap or focus
+For a saved collection, use the package-export icon next to Edit in **Collections** (click/tap or focus
 and Enter). It exports saved membership, including supported dice textures, decks/tile sets, boards, mats, skyboxes and 3D models.
 To import, expand **Import / export assets**, choose a `.ott.zip` file (older `.ott.json` files also work), review its file details, asset types and card/tile count,
 edit the new name if wanted, and choose **Import private copy**. Cancel clears the preview.
