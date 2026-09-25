@@ -1,9 +1,12 @@
+import { readPlacard } from '../shared/placards.js';
+
 export const publicUserRow = (row) =>
   row && {
     id: String(row.id),
     username: row.username,
     email: row.email,
     avatar: row.avatar,
+    placard: readPlacard(row.placard),
     isAdmin: row.is_admin,
     hostStatus: row.host_status,
     hasPassword: !!row.password_hash,

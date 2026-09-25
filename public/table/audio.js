@@ -43,6 +43,8 @@ const SOUNDS = {
   'deck-pickup': ['deck-pickup-1.ogg', 'deck-pickup-2.ogg'],
   'deck-drop': ['deck-drop-1.ogg', 'deck-drop-2.ogg'],
   'tile-drop': ['tile-drop-1.ogg', 'tile-drop-2.ogg', 'tile-drop-3.ogg', 'tile-drop-4.ogg'], // domino/letter/mahjong tiles clack, not paper cards
+  'tile-flip': ['tile-flip-1.ogg', 'tile-flip-2.ogg', 'tile-flip-3.ogg'],
+  'tile-shuffle': ['tile-shuffle-1.ogg', 'tile-shuffle-2.ogg', 'tile-shuffle-3.ogg'],
   'tile-pickup': ['tile-pickup-1.ogg', 'tile-pickup-2.ogg', 'tile-pickup-3.ogg'],
   'tiledeck-drop': ['tiledeck-drop-1.ogg', 'tiledeck-drop-2.ogg'], // the wooden tile box/bag
   'tiledeck-pickup': ['tiledeck-pickup-1.ogg', 'tiledeck-pickup-2.ogg'],

@@ -50,7 +50,7 @@ export function registerCardHandlers(
     writeProps(piece, props);
     body.wakeUp();
     body.velocity.y = flipHop;
-    room.broadcast('sfx', { type: 'card-flip' });
+    room.broadcast('sfx', { type: props.tile ? 'tile-flip' : 'card-flip' });
   });
 
   cardMessage('dealToTable', (client, message) => {
@@ -185,7 +185,8 @@ export function registerCardHandlers(
     if (!cards) return;
     shuffle(cards);
     syncOpenCover(room, deckId); // a new tile is on top → repaint an open set's cover
-    room.broadcast('shuffled', { id: deckId });
+    const props = readProps(room.state.pieces.get(deckId));
+    room.broadcast('shuffled', { id: deckId, ...(props.tile ? { sfx: 'tile-shuffle' } : {}) });
   });
 
   cardMessage('splitDeck', (client, message) => {

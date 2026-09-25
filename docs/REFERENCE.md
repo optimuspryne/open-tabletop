@@ -2965,3 +2965,34 @@ storage. Temporary directories are private and removed on completion, rejection 
 A process/host crash can leave `ott-package-*` temporary directories for OS/operator cleanup;
 never delete directories belonging to an active transfer. Browser download Blob storage and
 per-image decoding still consume resources; the archive format does not imply unlimited capacity.
+
+
+## Account placard presets and tile sound variants
+
+Settings → Placard uses `public/table/placard-settings.js` (`createPlacardSettings`) through
+`createPresence` control/message binding. A local draft shares `drawPlacard` in
+`public/rendering/placards.js` with `makePlayerTexture`; eight silhouettes and six patterns
+retain one plane/texture per remote seat. No avatar upload or silhouette upload is required.
+`shared/placards.js` defines `PLACARD_SHAPES`, `PLACARD_PATTERNS`, `DEFAULT_PLACARD`, strict
+`normalizePlacard`, and legacy-safe `readPlacard`. Colors are six-digit hex; arbitrary keys,
+paths and preset IDs are rejected. Body/pattern colors do not change the assigned seat color.
+
+`setPlacard` is a personal capability, available to spectators and timed-out players. Its exact
+payload is `{shape, pattern, color, accent}`; `placardSaved` acknowledges a successful account write.
+`registerMemberHandlers` validates the actor and delegates to `roomAccess.savePlacard`, which
+serializes writes per account and updates all non-revoked connections in the process. Access is
+rechecked before queued writes and before acknowledgment. DB failures preserve the prior live
+appearance. `setUserPlacard` is exported by the production database facade; migration 021 adds
+`users.placard` JSONB. Public account reads and room auth carry normalized settings, encoded as a
+JSON string in `Player.placard`; joins/reconnects restore them. Portable scenes contain no profile.
+The editor keeps failed drafts and does not overwrite newer edits with an earlier save acknowledgment.
+
+Single/group flips choose `tile-flip` when the public props carry a named `tile` kind; a mixed
+group emits at most one paper cue and one tile cue. Tile `shuffled` events carry
+`{id, sfx:'tile-shuffle'}`; the effects controller accepts this variant or defaults to ordinary
+`shuffle`, preserving animation. `audio.js` supplies three OGG variants for each new cue through
+its existing random selection and master gain/mute. The Python/ffmpeg generator is offline asset
+authoring only. Existing pickup/drop cues and uploaded originals are unchanged.
+
+See [implementation and manual checks](DESIGN_placards_sounds.md). Restart the server for
+migration 021 and refresh browsers; no new runtime dependency or environment setting is required.

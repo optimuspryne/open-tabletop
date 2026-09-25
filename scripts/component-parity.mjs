@@ -973,6 +973,9 @@ const SCENES = [
       time = 2102; deck.position.y = 3; effects.applyAnim('deck', deck);
       assert(deck.position.y === 3, 'Expired animation still offsets the mesh');
       messages.get('sfx')({ type: 'card-drop' }); assert(sounds.at(-1) === 'card-drop', 'Shared sound not routed');
+      messages.get('shuffled')({ id: 'deck', sfx: 'tile-shuffle' }); assert(sounds.at(-1) === 'tile-shuffle', 'Tile shuffle cue lost');
+      messages.get('shuffled')({ id: 'deck', sfx: 'untrusted' }); assert(sounds.at(-1) === 'shuffle', 'Unexpected cue was accepted');
+      messages.get('sfx')({ type: 'tile-flip' }); assert(sounds.at(-1) === 'tile-flip', 'Tile flip not routed');
       const marker = scene.children.find(mesh => mesh.renderOrder === 3);
       effects.updateDropMarker({ id: 'deck', grabbed: true });
       assert(marker.visible && Math.abs(marker.position.y - 1.03) < 0.001, 'Landing marker missed board collider');
@@ -1273,6 +1276,71 @@ const SCENES = [
       stale.addEventListener('dispose', () => { disposed = true; }); loads[0](stale);
       assert(resolution === 'off' && disposed && scene.background === null, 'Sky Off did not reject pending texture');
       byId('roomSettings').click(); lightTab.click();`,
+  },
+  {
+    name: 'placard-settings',
+    root: '#settingsModal',
+    expect: { selector: '#placard-shape option', min: 8 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const { createPlacardSettings } = await import('/table/placard-settings.js');
+      const { PLACARD_SHAPES, PLACARD_PATTERNS, DEFAULT_PLACARD } = await import('/shared/placards.js');
+      const { makePlayerTexture } = await import('/rendering/graphics.js');
+      const byId = id => document.getElementById(id);
+      const player = { name: 'Alex', color: '#c9a25a', avatar: '', showing: 0, placard: JSON.stringify(DEFAULT_PLACARD) };
+      const sent = [], messages = new Map();
+      const room = { state: { players: new Map([['me', player]]) },
+        send: (...args) => sent.push(args), onMessage: (key, fn) => messages.set(key, fn) };
+      const editor = createPlacardSettings({ byId, getRoom: () => room, getSessionId: () => 'me' });
+      editor.bindMessages(room); editor.bindControls();
+      byId('tableLoading').hidden = true;
+      byId('settingsModal').hidden = false;
+      for (const pane of byId('settingsModal').querySelectorAll('[data-pane]')) pane.hidden = pane.dataset.pane !== 'placard';
+      for (const tab of byId('settingsModal').querySelectorAll('[data-tab]')) tab.classList.toggle('on', tab.dataset.tab === 'placard');
+      const edit = (key, value) => { byId('placard-' + key).value = value; byId('placard-' + key).dispatchEvent(new Event('input', { bubbles: true })); };
+      const audio = new AudioContext();
+      for (const kind of ['flip', 'shuffle']) for (let variant = 1; variant <= 3; variant++) {
+        const response = await fetch('/sounds/tile-' + kind + '-' + variant + '.ogg');
+        assert(response.ok, 'Tile sound asset missing');
+        const buffer = await audio.decodeAudioData(await response.arrayBuffer());
+        const samples = buffer.getChannelData(0);
+        assert(buffer.duration > 0.3 && buffer.duration < 1.6 && samples.some(value => Math.abs(value) > 0.01), 'Tile cue is silent or unbounded');
+        assert(samples.every(value => Math.abs(value) < 1), 'Tile sound clips');
+      }
+      await audio.close();
+      const pixels = new Set();
+      for (const shape of Object.keys(PLACARD_SHAPES)) {
+        edit('shape', shape);
+        for (const pattern of Object.keys(PLACARD_PATTERNS)) {
+          edit('pattern', pattern);
+          const texture = makePlayerTexture({ ...player, placard: JSON.stringify({ ...DEFAULT_PLACARD, shape, pattern }) });
+          assert(texture.image.width >= 640, 'Placard lost texture detail');
+          const data = texture.image.getContext('2d').getImageData(0, 0, 1, 1).data;
+          assert(data[3] === 0, 'Silhouette has an opaque rectangular background');
+          texture.dispose();
+        }
+        pixels.add(byId('placardPreview').toDataURL());
+      }
+      assert(pixels.size === 8 && sent.length === 0, 'Presets are identical or preview changed shared state');
+      edit('shape', 'frog'); edit('pattern', 'stars'); edit('color', '#287e67'); edit('accent', '#e7bd54');
+      byId('placardSave').click();
+      assert(sent.at(-1)[0] === 'setPlacard' && sent.at(-1)[1].shape === 'frog', 'Save not wired');
+      assert(byId('placardFields').disabled, 'Duplicate saves allowed');
+      messages.get('serverError')({ operation: 'setPlacard', message: 'Please retry' });
+      assert(!byId('placardFields').disabled && byId('placard-shape').value === 'frog', 'Failure lost draft');
+      byId('placardSave').click();
+      const saved = sent.at(-1)[1]; player.placard = JSON.stringify(saved);
+      messages.get('placardSaved')(saved);
+      assert(byId('placardStatus').textContent.includes('Saved'), 'No durable save acknowledgment');
+      byId('placardReset').click();
+      assert(byId('placard-shape').value === DEFAULT_PLACARD.shape && sent.length === 2, 'Reset saved without consent');
+      edit('shape', 'frog'); edit('pattern', 'stars'); edit('color', '#287e67'); edit('accent', '#e7bd54');
+      messages.get('placardSaved')(DEFAULT_PLACARD);
+      assert(byId('placard-shape').value === 'frog' && byId('placardStatus').textContent.includes('unsaved'), 'Late acknowledgment overwrote the draft');
+      const r = byId('placardSave').getBoundingClientRect();
+      assert(r.width > 0 && r.right <= innerWidth && r.bottom <= innerHeight, 'Save control is clipped');
+      byId('placard-shape').focus(); assert(document.activeElement === byId('placard-shape'), 'Keyboard control unavailable');
+    `,
   },
   {
     name: 'player-presence',

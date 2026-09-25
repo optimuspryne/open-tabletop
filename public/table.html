@@ -387,6 +387,7 @@
               </div>
               <div class="libTabs">
                 <button class="libTab on" data-tab="ui">UI</button>
+                <button class="libTab" data-tab="placard">Placard</button>
                 <button class="libTab" data-tab="sounds">Sounds</button>
                 <button class="libTab" data-tab="credits">Credits</button>
               </div>
@@ -466,6 +467,28 @@
                   <span class="lbl">Ultra</span>
                 </button>
               </div>
+            </div>
+            <div class="modal__body libPane" data-pane="placard" hidden>
+              <p class="hint">Your seat, your style. Saved to your account and visible to everyone across rooms.</p>
+              <div class="placardEditor">
+                <canvas id="placardPreview" width="640" height="896" aria-label="Your placard preview" role="img"></canvas>
+                <fieldset id="placardFields">
+                  <legend>Appearance</legend>
+                  <label for="placard-shape">Silhouette</label>
+                  <select id="placard-shape"></select>
+                  <label for="placard-pattern">Pattern</label>
+                  <select id="placard-pattern"></select>
+                  <div class="chipRow">
+                    <label for="placard-color">Base <input id="placard-color" type="color" value="#344759" /></label>
+                    <label for="placard-accent">Accent <input id="placard-accent" type="color" value="#17212c" /></label>
+                  </div>
+                  <div class="chipRow">
+                    <button id="placardSave" type="button" class="button button--primary">Save placard</button>
+                    <button id="placardReset" type="button" class="chip">Default</button>
+                  </div>
+                </fieldset>
+              </div>
+              <p id="placardStatus" class="hint" role="status" aria-live="polite">Choose a silhouette and try a pattern.</p>
             </div>
             <div class="modal__body libPane" data-pane="sounds" hidden>
               <div class="showLabel"><b>Effects</b></div>
@@ -1300,7 +1323,8 @@
               </li>
               <li>
                 <b data-icon="dots"> > </b><b data-icon="settings">Settings.</b> Go here to change
-                UI and Volume settings.
+                UI and Volume settings. In <b>Placard</b>, choose a silhouette, pattern and two colors,
+                then <b>Save placard</b>. Your appearance follows your account across rooms. Click, tap, or use the keyboard; the preview stays private until saved.
               </li>
             </ul>
             <p><b>Spectators:</b> Choose Spectate in More, or Watch in the lobby. Return to play when ready. Spectators can chat and inspect, are skipped by turns, and keep any reserved seat, hand and tray. Returning to play never lifts a GM time-out.</p>

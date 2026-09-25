@@ -1,3 +1,4 @@
+import { drawPlacard } from './placards.js';
 import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
@@ -2908,77 +2909,7 @@ function makePlayerTexture(player) {
   });
   const draw = (img) => {
     if (disposed) return;
-    ctx.clearRect(0, 0, width, height);
-    // A standing human silhouette, with a face portrait and a broad name plate.
-    const coat = ctx.createLinearGradient(0, 160, 0, height);
-    coat.addColorStop(0, '#344759');
-    coat.addColorStop(1, '#17212c');
-    ctx.fillStyle = coat;
-    ctx.strokeStyle = player.color;
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.moveTo(118, 162);
-    ctx.lineTo(202, 162);
-    ctx.bezierCurveTo(212, 185, 276, 181, 287, 228);
-    ctx.lineTo(303, 352);
-    ctx.quadraticCurveTo(303, 372, 280, 376);
-    ctx.lineTo(40, 376);
-    ctx.quadraticCurveTo(17, 372, 17, 352);
-    ctx.lineTo(33, 228);
-    ctx.bezierCurveTo(44, 181, 108, 185, 118, 162);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(104, 189);
-    ctx.lineTo(160, 239);
-    ctx.lineTo(216, 189);
-    ctx.stroke();
-    // Avatar fills the face; the fallback keeps the silhouette legible without an upload.
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(160, 92, 76, 0, Math.PI * 2);
-    ctx.clip();
-    if (img) ctx.drawImage(img, 84, 16, 152, 152);
-    else {
-      ctx.fillStyle = '#b9c8d4';
-      ctx.fillRect(84, 16, 152, 152);
-      ctx.fillStyle = '#607789';
-      ctx.beginPath();
-      ctx.arc(160, 81, 29, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.ellipse(160, 154, 54, 44, 0, Math.PI, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.restore();
-    ctx.strokeStyle = player.color;
-    ctx.lineWidth = 6;
-    ctx.beginPath();
-    ctx.arc(160, 92, 76, 0, Math.PI * 2);
-    ctx.stroke();
-    // Stable readable identity, regardless of avatar colors.
-    ctx.fillStyle = '#141c25';
-    roundRect(ctx, 10, 351, 300, 84, 18);
-    ctx.fill();
-    ctx.strokeStyle = player.color;
-    ctx.lineWidth = 4;
-    ctx.stroke();
-    ctx.fillStyle = '#f4f1ea';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = 'bold 32px system-ui, sans-serif';
-    ctx.fillText(player.name || 'Player', 160, 393, 274);
-    if (player.showing > 0) {
-      ctx.fillStyle = player.color;
-      roundRect(ctx, 65, 286, 190, 38, 19);
-      ctx.fill();
-      ctx.fillStyle = '#14181d';
-      ctx.font = 'bold 20px system-ui, sans-serif';
-      ctx.fillText('SHOWING ' + player.showing, 160, 306);
-    }
+    drawPlacard(ctx, player, img);
     tex.needsUpdate = true;
   };
   draw(null);

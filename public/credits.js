@@ -65,6 +65,12 @@ export const MUSIC_CREDIT = {
 // Sound effects — /sounds/ URLs (all CC0; listed as a courtesy).
 export const SFX_CREDITS = [
   {
+    title: 'Synthesized tile flips and shuffles',
+    by: 'Open Tabletop · created with Codex',
+    url: '/sounds/tile-flip-1.ogg',
+    license: 'CC0',
+  },
+  {
     title: '54 Casino Sound Effects',
     by: 'Kenney',
     url: 'https://opengameart.org/users/kenney',

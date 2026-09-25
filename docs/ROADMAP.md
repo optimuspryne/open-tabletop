@@ -310,11 +310,10 @@ implementation sequence without making the entire backlog a fixed priority queue
     using the same viewing-only permissions as spectator mode (item 5); implement both together
     if they share a clean boundary. Enforce restrictions server-side, handle any active grab when
     time-out begins, and preserve the player's identity and recoverable inventory when it ends.
-16. **Player avatar placard styling — baseline implemented; customization remains.** Larger
-    human-shaped placards now use the avatar as a face, a player-colored outline, and a broader
-    name plate. Replacement/removal disposes owned rendering resources. Alternative shapes and
-    optional flair remain planned. The user approved the design after manual testing, including
-    sharper placard textures and the increased avatar upload resolution.
+16. ✅ **Player avatar placard styling — presets implemented; appearance user-approved.**
+    Settings → Placard offers feminine/masculine bodies, two dog and two cat silhouettes, frog
+    and gecko, with six patterns and two colors. Choices save per account across rooms/tabs;
+    avatar faces, readable names and seat-color outlines remain. See [implementation notes](DESIGN_placards_sounds.md).
 17. **Mini-whiteboard / notecard objects.** Give players a drawable physical object for games
     such as Telestrations: card-like handling, but a larger surface and greater mass than a normal
     card. Inspect opens a drawing surface; players can then place the board face-up or face-down
@@ -392,8 +391,9 @@ Small, concrete, each completes an existing feature:
   (`DESIGN_multiselect.md`).
 - **Scrabble scoring / Mahjong scoring** — ✅ **CLOSED — not in scope.** The table stays
   physical-first and the scorepad tallies; this is a decision, not an oversight.
-- **Tile shuffle/flip sounds** — tiles got their own drop/pickup cues in 0.9.0, but shuffle and flip
-  still use the generic card cues; a box-shake / tile-flip variant is a small finish.
+- ✅ **Tile shuffle/flip sounds — implemented; user-approved.** Three synthesized
+  tile flips and three box-shake shuffles now use the existing audio manager and mute/volume
+  preferences. Paper card cues remain distinct; mixed flips emit one cue per material.
 - **Cross-file util module** — `api()`, the button factory and the auth-token read are still
   duplicated across `public/`. Re-verified 2026-09-01: `rows.js` now owns a shared `makeButton`
   that `client.js` imports (partial progress on the button-factory half), but `api()` is still

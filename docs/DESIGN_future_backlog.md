@@ -7,7 +7,7 @@ They preserve likely starting approaches and questions for a future source audit
 are relative; they are not delivery estimates or evidence that the underlying design is settled.
 
 Completed object labels, low-stock warnings, highlights, placard styling/resolution, and avatar
-uploads are not being reopened. Placard customization remains a separate optional extension.
+uploads are not being reopened. The agreed placard presets and tile sound variants are now implemented locally; the user approved the corrected placards and tile sounds (see [checkpoint](DESIGN_placards_sounds.md)).
 
 The participation foundation is committed as `c51423a`; durable GM time-outs and transition
 cleanup are now implemented with user-reported functional and UI approval. See the
@@ -33,7 +33,7 @@ No backlog feature below is implemented by these slices.
 | Rulebooks/builder | 20 | Very large; split into releases | Markdown-only reader prototype and pagination |
 | Interactive tutorial | 2 | Medium | Choose walkthrough versus starter scene |
 | User-authored games/starters | 7 | Medium-to-large | Gap between saved scenes and reusable starter definitions |
-| Placard shapes/flair | Remaining part of 16 | Small-to-medium if built-in presets | Readability/scale mockups and ownership of customization |
+| Placard shapes/flair | 16 | Eight presets and six patterns implemented | Appearance user-approved; see [checkpoint](DESIGN_placards_sounds.md) |
 | Additional content/deck skins | Distribution §2 | Small content increments; skins medium | Asset readiness, licensing, editor/geometry compatibility |
 | Reliability/device polish | Distribution §§1/5 | Variable, measured first | Reproducible reconnect, load and device scenarios |
 | Tile cue variants/shared browser helpers | Parked threads | Small focused slices | Current sound dispatch and genuinely duplicated behavior |
@@ -601,6 +601,11 @@ load the setup predictably, with no copied player data or silent partial placeme
 
 ## Optional placard customization
 
+**2026-09-24 checkpoint:** the agreed eight silhouettes, six patterns and two custom colors are
+implemented with per-account persistence and live cross-room updates. The user approved the appearance after the masculine-head correction. See [placard and tile-sound implementation notes](DESIGN_placards_sounds.md).
+The following earlier brief is retained as design context; arbitrary uploaded models remain separate.
+
+
 The baseline silhouette and sharper avatars are complete. Remaining scope is selectable built-in
 shapes, accent/flair presets and possibly per-player decoration. Begin with two or three mockups
 using identical name/face bounds and test all occupied seats at normal zoom. Store a bounded preset
@@ -617,7 +622,7 @@ are a separate larger feature.
 - **Uploaded deck skins:** medium feature. First specify supported geometry/collider and tint
   slots, thumbnailing, how a model fits changing stack height, and source preservation. Prove
   one uploaded skin on cards and tiles before exposing a broad builder. Include export dependencies.
-- **Tile shuffle/flip sounds:** small finish. Audit event dispatch and existing sound assets,
+- **Tile shuffle/flip sounds:** implemented with three synthesized variants of each; user-approved (see [checkpoint](DESIGN_placards_sounds.md)). Original brief: small finish. Audit event dispatch and existing sound assets,
   choose appropriate variants, update credits only if new provenance requires it, and test mute,
   volume, mixed card/tile play and repeated events. Existing Claude-created tile/box cues are CC0.
 - **Shared browser helpers:** narrowly consolidate genuinely repeated API/auth/button behavior

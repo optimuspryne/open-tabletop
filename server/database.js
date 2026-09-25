@@ -563,6 +563,13 @@ export function createDatabase(pool) {
     // a player upgrading to a GM account
     return pool.query('UPDATE users SET password_hash = $2 WHERE id = $1', [userId, passwordHash]);
   }
+  function setUserPlacard(userId, placard) {
+    return pool.query('UPDATE users SET placard = $2::jsonb WHERE id = $1', [
+      userId,
+      JSON.stringify(placard),
+    ]);
+  }
+
   function setUserAvatar(userId, avatar) {
     return pool.query('UPDATE users SET avatar = $2 WHERE id = $1', [userId, avatar]);
   }
@@ -799,6 +806,7 @@ export function createDatabase(pool) {
     revokeUserSessions,
     setPassword,
     setUserAvatar,
+    setUserPlacard,
     listUsers,
     setAdmin,
     setHostStatus,

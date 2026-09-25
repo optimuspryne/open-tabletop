@@ -36,7 +36,12 @@ requirement is actually met.
 ## Sound effects - `public/static_assets/sounds/`
 All CC0 (public domain).
 
-- **Original tile and tile-box cues** — `tile-*.ogg` and `tiledeck-*.ogg` were created with
+- **Synthesized tile flip/shuffle cues** — `tile-flip-{1,2,3}.ogg` and
+  `tile-shuffle-{1,2,3}.ogg` were procedurally synthesized with Codex for Open Tabletop
+  (2026-09-24), using no recordings or third-party samples. CC0. The reproducible authoring
+  source is `scripts/generate-tile-sounds.py` (Python stdlib plus ffmpeg/libvorbis).
+- **Original tile pickup/drop and tile-box cues** — `tile-pickup-*.ogg`, `tile-drop-*.ogg`
+  and `tiledeck-*.ogg` were created with
   Claude for Open Tabletop, as confirmed by the project owner. Distributed as CC0; no
   third-party attribution is required. This note records provenance.
 

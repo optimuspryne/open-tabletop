@@ -7259,3 +7259,13 @@ body.not-gm .gm-only {
 .libraryPackages .button-row { flex-wrap: wrap; }
 
 .packageMembers { max-height: min(24vh, 180px); overflow-y: auto; overflow-wrap: anywhere; padding-inline-start: var(--inset); }
+
+/* Account placards reuse the Settings shell on desktop and touch. */
+.placardEditor { display: flex; flex-wrap: wrap; align-items: center; gap: var(--gap); }
+#placardPreview { width: 144px; max-width: 40%; height: auto; flex: 0 0 auto; }
+#placardFields { flex: 1 1 180px; min-width: 0; margin: 0; padding: 0; border: 0; }
+#placardFields legend { margin-bottom: 8px; font-weight: bold; }
+#placardFields > label { display: block; margin: 8px 0 4px; }
+#placardFields select { width: 100%; max-width: 100%; }
+#placardFields .chipRow { margin-top: 12px; }
+#placardFields .chipRow label { display: inline-flex; align-items: center; gap: 6px; }

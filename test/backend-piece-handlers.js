@@ -554,3 +554,26 @@ test('GM labels validate stock settings, preserve props, and can be cleared', as
   });
   assert.equal(JSON.parse(piece.props).label, undefined);
 });
+
+test('a mixed card/tile group emits at most one flip cue for each material', () => {
+  const { room, handlers, events } = harness();
+  for (const [id, tile] of [
+    ['1', 'mahjong'],
+    ['2', 'letter'],
+    ['3', null],
+  ]) {
+    room.state.pieces.set(id, {
+      type: 'card',
+      props: JSON.stringify({ front: 'a', ...(tile ? { tile } : {}) }),
+    });
+    room.bodies.set(id, body());
+  }
+  handlers.get('flipGroup')({ sessionId: 'one', send() {} }, { ids: ['1', '2', '3'] });
+  assert.deepEqual(
+    events
+      .filter((event) => event.name === 'sfx')
+      .map((event) => event.payload.type)
+      .sort(),
+    ['card-flip', 'tile-flip'],
+  );
+});

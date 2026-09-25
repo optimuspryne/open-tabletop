@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 20); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 21); // Includes durable participation policy.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -1075,4 +1075,15 @@ test('model packages retain saved object/dispenser definitions and import privat
     if (collection) await pool.query('DELETE FROM asset_collections WHERE id=$1', [collection]);
     for (const id of created) await database.deleteAsset('prop', id);
   }
+});
+
+test('account placards persist through the production database facade and fresh account reads', async () => {
+  const user = await database.createUser({
+    username: 'placard-player',
+    email: 'placard@example.test',
+  });
+  const settings = { shape: 'gecko', pattern: 'dots', color: '#123456', accent: '#abcdef' };
+  await database.setUserPlacard(user.id, settings);
+  assert.deepEqual((await database.findUserById(user.id)).placard, settings);
+  assert.deepEqual((await database.findUserByLogin('placard-player')).placard, settings);
 });

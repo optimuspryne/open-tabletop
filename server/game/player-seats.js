@@ -1,3 +1,4 @@
+import { readPlacard } from '../../shared/placards.js';
 import { ServerError } from '@colyseus/core';
 import { Player } from './schema.js';
 import { stopPlayerInteraction } from './interaction-cleanup.js';
@@ -59,6 +60,7 @@ export function createJoinedPlayer(room, client, { seatFor, palette }) {
     name: auth.username || (seat >= 0 ? 'Player ' + (seat + 1) : 'Spectator'),
     color: seat >= 0 ? palette[seat % palette.length] : '#9aa0a6',
     avatar: auth.avatar || '',
+    placard: JSON.stringify(readPlacard(auth.placard)),
     role: auth.role || 'player',
     timedOut: auth.timedOut === true,
     participation: auth.participation || 'player',

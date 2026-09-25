@@ -281,3 +281,12 @@ filters hide its assets. Collections containing unsupported member types cannot 
 ZIP exports contain a manifest and original files. Model boards include their authored colliders and GLB materials. Select the ZIP directly; no manual extraction
 is needed. Import uploads it again after preview. Only one package transfer runs at a time per
 server; a busy message means retry after the other transfer finishes.
+
+
+## Placard appearance
+
+Open **Settings → Placard**, choose a silhouette and pattern, and set Base/Accent colors.
+The preview is private until **Save placard** succeeds. **Default** previews the original color
+scheme and masculine body; save to apply. Choices belong to the account and follow it across
+rooms. Native selects, color inputs and buttons work with click, tap and keyboard; no new canvas
+gesture is introduced. Spectators and timed-out players may still personalize their appearance.

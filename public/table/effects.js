@@ -132,9 +132,9 @@ export function createTableEffects({
   }
 
   function bindTableEffects(room) {
-    room.onMessage('shuffled', ({ id }) => {
+    room.onMessage('shuffled', ({ id, sfx }) => {
       startAnim(id, 'shuffle');
-      playSfx('shuffle');
+      playSfx(sfx === 'tile-shuffle' ? sfx : 'shuffle');
     }); // everyone sees + hears the riffle
     room.onMessage('sfx', ({ type } = {}) => playSfx(type)); // shared cue (roll/flip/deal) broadcast by the server
   }

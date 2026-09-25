@@ -59,6 +59,7 @@ export const {
   revokeUserSessions,
   setPassword,
   setUserAvatar,
+  setUserPlacard,
   listUsers,
   setAdmin,
   setHostStatus,

@@ -1983,3 +1983,25 @@ new files, while uncertain commits retain original data so potentially committed
 Existing reference-aware orphan cleanup handles abandoned permanent files after its grace period.
 Export never reads live private hands, inventories or concealed room order. Supported metadata
 is transferred explicitly; other asset kinds still require their own dependency walkers.
+
+
+## Account-owned placard appearance
+
+Placard choices are public account metadata, independent of camera/accent preferences and game
+snapshots. `shared/placards.js` owns the bounded appearance contract; migration 021 adds its
+JSONB storage. The member handler accepts only the actor's appearance and uses the personal
+participation capability. The process-local room-access registry serializes account writes and
+publishes completed changes across its active connections, refreshing appearance on authorization reads already in flight without revoking access. Join/reconnect reads restore from the account. Database
+failure cannot become a successful UI save. This follows the existing single-process room
+registry; cross-process live profile invalidation is not introduced.
+
+Rendering remains browser-owned: `public/rendering/placards.js` draws clipped vector silhouettes
+and bounded patterns into the existing marker texture; `graphics.makePlayerTexture` retains
+resolution selection, avatar loading and disposal guards. Presence owns marker replacement and
+profile bindings. Its focused settings controller shares the painter, holds unsaved previews
+locally, and reuses the existing Settings/touch/keyboard surface.
+
+Tile sound variants reuse public material-kind metadata and the existing server-event/client-audio
+boundary. No concealed face or deck order is included in sound messages. Group flips deduplicate
+by material; shuffle animation is unchanged. Six original static OGGs are generated offline and
+played with the existing per-viewer volume/mute preferences. See [checkpoint](DESIGN_placards_sounds.md).

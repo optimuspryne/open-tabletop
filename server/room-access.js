@@ -1,3 +1,4 @@
+import { readPlacard } from '../shared/placards.js';
 import { ServerError } from '@colyseus/core';
 
 const sameUser = (auth, userId) => String(auth.userId) === String(userId);
@@ -7,6 +8,7 @@ const sameUser = (auth, userId) => String(auth.userId) === String(userId);
 export function createRoomAccess({ db, hashToken }) {
   const rooms = new Map();
   const pendingChecks = new Set();
+  const placardWrites = new Map();
   const changingParticipation = new WeakMap();
   let checking = false;
 
@@ -24,10 +26,19 @@ export function createRoomAccess({ db, hashToken }) {
   }
 
   async function checkedAccess(room, kind, tokenHash, apply) {
-    const check = { room, tokenHash, invalidated: false, changedUsers: new Set() };
+    const check = {
+      room,
+      tokenHash,
+      invalidated: false,
+      changedUsers: new Set(),
+      placards: new Map(),
+    };
     pendingChecks.add(check);
     try {
       const auth = await readAccess(room, kind, tokenHash);
+      // Cosmetic saves must refresh an in-flight join, never revoke its access.
+      if (check.placards.has(String(auth.userId)))
+        auth.placard = check.placards.get(String(auth.userId));
       if (
         check.invalidated ||
         check.changedUsers.has(String(auth.userId)) ||
@@ -74,6 +85,7 @@ export function createRoomAccess({ db, hashToken }) {
       userId: user.id,
       username: user.username,
       avatar: user.avatar,
+      placard: readPlacard(user.placard),
       role,
       isAdmin: !!user.isAdmin,
       participation,
@@ -176,6 +188,34 @@ export function createRoomAccess({ db, hashToken }) {
       });
     },
 
+    // Serialize account writes across tabs/rooms so database and live state agree.
+    async savePlacard(userId, settings, isActive) {
+      const key = String(userId);
+      const previous = placardWrites.get(key) || Promise.resolve();
+      const write = previous
+        .catch(() => {})
+        .then(async () => {
+          if (!isActive()) return false;
+          await db.setUserPlacard(key, settings);
+          for (const check of pendingChecks) check.placards.set(key, settings);
+          for (const [room, clients] of rooms) {
+            for (const entry of clients.values()) {
+              if (entry.auth.revoked || !sameUser(entry.auth, key)) continue;
+              entry.auth.placard = settings;
+              const player = room.state?.players?.get(entry.client.sessionId);
+              if (player) player.placard = JSON.stringify(settings);
+            }
+          }
+          return true;
+        });
+      placardWrites.set(key, write);
+      try {
+        return await write;
+      } finally {
+        if (placardWrites.get(key) === write) placardWrites.delete(key);
+      }
+    },
+
     setParticipation,
 
     clientsFor(room, userId) {
@@ -207,6 +247,7 @@ export function createRoomAccess({ db, hashToken }) {
           client.auth = entry.auth;
           const player = room.state?.players?.get(client.sessionId);
           if (player) {
+            player.placard = JSON.stringify(readPlacard(auth.placard));
             player.role = auth.role;
             player.timedOut = auth.timedOut;
             player.participation = auth.participation;

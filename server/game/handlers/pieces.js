@@ -118,7 +118,7 @@ export function registerPieceHandlers(
   pieceMessage('flipGroup', (client, message) => {
     const ids = idsFrom(message);
     if (!ids) return;
-    let count = 0;
+    const cues = new Set();
     for (const id of ids) {
       const piece = room.state.pieces.get(id);
       const body = room.bodies.get(id);
@@ -137,9 +137,9 @@ export function registerPieceHandlers(
       writeProps(piece, props);
       body.wakeUp();
       body.velocity.y = flipHop;
-      count++;
+      cues.add(props.tile ? 'tile-flip' : 'card-flip');
     }
-    if (count) room.broadcast('sfx', { type: 'card-flip' });
+    for (const type of cues) room.broadcast('sfx', { type });
   });
 
   // Toggle double-sided (open / turn-over) flip on the selected cards & decks. On a card, turning

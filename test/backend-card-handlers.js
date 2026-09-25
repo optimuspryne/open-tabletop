@@ -595,3 +595,21 @@ test('combining decks keeps player browsing only when every source deck permits 
     assert.equal(events.find((e) => e.name === 'spawn').payload.props.browseAccess, access);
   }
 });
+
+test('tile flips and shuffles select tile cues without exposing concealed faces', () => {
+  for (const tile of ['domino', 'letter', 'mahjong']) {
+    const { room, handlers, events } = harness();
+    room.state.pieces.set('1', { type: 'card', props: JSON.stringify({ tile, front: 'secret' }) });
+    room.bodies.set('1', { wakeUp() {}, velocity: { y: 0 } });
+    handlers.get('flip')(client, { id: '1' });
+    assert.deepEqual(events.at(-1), { name: 'sfx', payload: { type: 'tile-flip' } });
+    assert.equal(JSON.parse(room.state.pieces.get('1').props).front, undefined);
+    room.state.pieces.set('2', { type: 'deck', props: JSON.stringify({ tile }) });
+    room.deckCards.set('2', ['a', 'b']);
+    handlers.get('shuffle')(client, { deckId: '2' });
+    assert.deepEqual(events.at(-1), {
+      name: 'shuffled',
+      payload: { id: '2', sfx: 'tile-shuffle' },
+    });
+  }
+});

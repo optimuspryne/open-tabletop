@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–020, meant for a FRESH
+-- This is the flattened end state of migrations 001–021, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -225,8 +225,12 @@ CREATE TABLE asset_collection_items (
 );
 CREATE INDEX asset_collection_items_asset_idx ON asset_collection_items(kind, asset_id);
 
+-- Public appearance belongs to an account, never to a portable table scene.
+ALTER TABLE users ADD COLUMN placard jsonb NOT NULL DEFAULT
+  '{"shape":"masculine","pattern":"gradient","color":"#344759","accent":"#17212c"}'::jsonb;
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–020, so record them as
+-- This baseline IS the flattened result of migrations 001–021, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -243,6 +247,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
-  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql');
+  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql');
 
 COMMIT;

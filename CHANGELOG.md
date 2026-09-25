@@ -9,6 +9,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Center the masculine placard head around its avatar opening and mirror its outline so the
+  portrait has even clearance on both sides. The user approved the corrected head. Browser refresh required.
 - Store new model-board uploads under `/assets/boards/`, leaving object uploads under
   `/assets/props/`. Allow package exports to read older model boards from their original props
   location; board imports write to boards. Existing shared originals are preserved.
@@ -52,6 +54,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   production-client browser fixture as well as label editor/resource cleanup regressions.
 
 ### Added
+- Account-saved placard presets in Settings → Placard: feminine/masculine bodies, pointed-ear
+  and floppy-ear dogs, shorthair/fluffy cats, frog and gecko; solid, gradient, stripes, dots,
+  stars and checkerboard patterns with two custom colors and a private live preview.
+  Reuse the existing seat marker/texture lifecycle; preserve avatar faces and seat-color outlines.
+  Serialize account saves across tabs, update active rooms, and restore on joins/reconnects.
+  Migration **021** requires a server restart and browser refresh. The user approved the appearance after the masculine-head correction.
+- Three original synthesized tile-flip cues and three box-shake shuffle cues. Named tile sets
+  use these sounds; paper cards keep their existing cues, and mixed flips play one cue per material.
+  Reuse existing sound volume/mute controls. Include the deterministic offline generator and CC0
+  provenance. Browser refresh required; the user liked the tile sounds and approved committing them.
 - Export/import custom 3D models as ZIP packages, individually or in collections. Preserve original
   GLBs, embedded materials/textures, scale, rotation, stand/grid sizing, tint/finish and colliders.
   Include saved dispenser settings and any separate custom container GLB, without live inventory.

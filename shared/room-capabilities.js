@@ -16,7 +16,7 @@ const messagesByCapability = {
     'listCollections',
   ],
   communication: ['chat', 'ping', 'highlightPiece'],
-  personal: ['notebook', 'setName', 'setAvatar', 'setParticipation'],
+  personal: ['notebook', 'setName', 'setAvatar', 'setPlacard', 'setParticipation'],
   cleanup: ['showStop', 'wbRelease', 'closeDeckBrowse'],
   administration: [
     'members',

@@ -1,3 +1,4 @@
+import { createPlacardSettings } from './placard-settings.js';
 import { AVATAR_IMAGE } from '../../shared/avatar.js';
 
 // Public player presentation. Room access and cross-feature effects are injected;
@@ -84,6 +85,7 @@ export function createPresence({
   doc = document,
 }) {
   const document = doc;
+  const placards = createPlacardSettings({ byId, getRoom, getSessionId, doc });
   // ===== seats, other players' fanned hands, and turn order ===================
   // Seats scale with the current table half-extents (state.tableX/tableZ): hands sit
   // just inside each edge and cameras pull back proportionally, so markers/hands stay
@@ -491,6 +493,7 @@ export function createPresence({
           if (mn) mn.textContent = player.name;
         }
         updateMyPreview(player.avatar);
+        placards.hydrate();
         refreshMyChip();
       }
       refreshFan(sid);
@@ -526,6 +529,7 @@ export function createPresence({
             if (mn) mn.textContent = player.name;
           }
           refreshMarker(sid);
+          if (sid === getSessionId()) placards.hydrate();
           renderPlayers();
         },
         false,
@@ -546,6 +550,7 @@ export function createPresence({
         () => {
           if (sid === getSessionId()) updateMyPreview(player.avatar);
           else refreshMarker(sid);
+          if (sid === getSessionId()) placards.hydrate();
           renderPlayers();
         },
         false,
@@ -555,7 +560,16 @@ export function createPresence({
         () => {
           if (sid === getSessionId()) refreshMyChip();
           refreshMarker(sid);
+          if (sid === getSessionId()) placards.hydrate();
           renderPlayers();
+        },
+        false,
+      );
+      cb(player).listen(
+        'placard',
+        () => {
+          refreshMarker(sid);
+          if (sid === getSessionId()) placards.hydrate();
         },
         false,
       );
@@ -580,12 +594,14 @@ export function createPresence({
   }
 
   function bindMessages(room) {
+    placards.bindMessages(room);
     room.onMessage('showFan', ({ sid, cards }) => {
       setRevealed(sid, cards);
       refreshFan(sid);
     });
   }
   function bindControls() {
+    placards.bindControls();
     const wire = (id, fn) => {
       const el = byId(id);
       if (el) el.onclick = fn;

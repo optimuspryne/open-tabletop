@@ -117,15 +117,36 @@ async function prepareDatabase(ownerUrl) {
   try {
     const schema = await fs.readFile(path.join(root, 'postgres/schema.sql'), 'utf8');
     await client.query(schema);
+    // Exercise migration 021 independently against an existing account, preserving its avatar.
+    const placardMigration = await fs.readFile(
+      path.join(root, 'postgres/021_user_placards.sql'),
+      'utf8',
+    );
+    await client.query('CREATE SCHEMA placard_upgrade_test');
+    try {
+      await client.query('SET search_path TO placard_upgrade_test');
+      await client.query('CREATE TABLE users (id bigint PRIMARY KEY, avatar text)');
+      await client.query("INSERT INTO users VALUES (1, 'legacy-avatar')");
+      await client.query(placardMigration);
+      const { rows } = await client.query('SELECT avatar, placard FROM users WHERE id = 1');
+      assert.equal(rows[0].avatar, 'legacy-avatar');
+      assert.equal(rows[0].placard.shape, 'masculine');
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA placard_upgrade_test CASCADE');
+    }
+
     // Exercise the actual numbered upgrade against a populated pre-collections baseline.
     const collectionMigration = await fs.readFile(
       path.join(root, 'postgres/020_asset_collections.sql'),
       'utf8',
     );
     const previous = schema
+      .replace(placardMigration + '\n', '')
+      .replace(", ('021_user_placards.sql')", '')
       .replace(collectionMigration + '\n', '')
       .replace(", ('020_asset_collections.sql')", '')
-      .replace('001–020', '001–019');
+      .replaceAll('001–021', '001–019');
     await client.query('CREATE SCHEMA collection_upgrade_test');
     try {
       await client.query('SET search_path TO collection_upgrade_test');

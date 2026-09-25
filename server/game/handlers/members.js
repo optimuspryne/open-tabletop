@@ -1,3 +1,4 @@
+import { normalizePlacard } from '../../../shared/placards.js';
 import { RANK } from '../../permissions.js';
 import {
   handReassignmentPayload,
@@ -16,6 +17,19 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
       logger,
       publicMessage: 'Member operation unavailable. Try again.',
     });
+
+  memberMessage('setPlacard', async (client, message) => {
+    const settings = normalizePlacard(message);
+    const player = room.state.players.get(client.sessionId);
+    const userId = client.auth?.userId;
+    if (!settings || !player || !userId) return;
+    const isActive = () =>
+      allowRoomCapability(client, 'personal', 'setPlacard') &&
+      client.auth.userId === userId &&
+      room.state.players.get(client.sessionId) === player;
+    const saved = await roomAccess.savePlacard(userId, settings, isActive);
+    if (saved && isActive()) client.send('placardSaved', settings);
+  });
 
   memberMessage('setParticipation', (client, message) => {
     const parsed = participationPayload(message);
