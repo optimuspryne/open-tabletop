@@ -384,17 +384,14 @@ function digitTexture(value) {
 const hexOf = (c) => '#' + ((c >>> 0) & 0xffffff).toString(16).padStart(6, '0');
 function numberFaceTexture(value, body, text, finishKey, finishImg) {
   if (FINISHES[finishKey]?.image && finishImg) return customFaceTexture(value, text, finishImg);
-  const marble = FINISHES[finishKey]?.marble;
-  const def = body == null && text == null && !marble; // the shared, cached ivory face
+  if (FINISHES[finishKey]?.marble)
+    return customFaceTexture(value, text, MARBLE_TEXTURE_URL, body ?? 0xf4f1ea);
+  const def = body == null && text == null; // the shared, cached ivory face
   if (def && _faceTex.has(value)) return _faceTex.get(value);
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
-  if (marble)
-    ctx.drawImage(marbleCanvas(Number.isInteger(body) ? body : 0xf4f1ea), 0, 0, size, size);
-  else {
-    ctx.fillStyle = body != null ? hexOf(body) : COLORS.ivory;
-    ctx.fillRect(0, 0, size, size);
-  }
+  ctx.fillStyle = body != null ? hexOf(body) : COLORS.ivory;
+  ctx.fillRect(0, 0, size, size);
   drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
   const texture = cTex(canvas);
   if (def) {
@@ -407,12 +404,12 @@ function numberFaceTexture(value, body, text, finishKey, finishImg) {
 // ===== Dice finishes (ROADMAP §9) ===========================================
 // A finish is a material look layered on top of the die's color. Param-only ones (matte/satin/
 // glossy/metallic/pearl) just tune roughness/metalness (and read the scene env map for real
-// reflections); 'marbled' generates a procedural swirl texture tinted from the die's color.
+// reflections); 'marbled' uses a shared CC0 image tinted by each material's color.
 const FINISHES = {
   matte: { roughness: 0.5, metalness: 0.0 },
   satin: { roughness: 0.3, metalness: 0.0 },
   glossy: { roughness: 0.1, metalness: 0.05 },
-  metallic: { roughness: 0.15, metalness: 1 }, // material.color = the die color → tinted metal
+  metallic: { roughness: 0.15, metalness: 0.75 }, // material.color = the die color → tinted metal
   pearl: {
     roughness: 0.3,
     metalness: 0.1,
@@ -428,9 +425,10 @@ const FINISHES = {
   }, // plain transparent MeshStandard — no clearcoat, so Android GPUs don't choke on it
   custom: { roughness: 0.45, metalness: 0.0, image: true }, // an uploaded texture as the die surface (needs finishImg)
 };
+const MARBLE_TEXTURE_URL = '/textures/marble-white.webp'; // 512px derivative; preserve the 4K source
 const DIE_MARBLE_UV = 0.9; // triplanar UV scale for the marble map on convex dice (tune to taste)
 
-// --- Procedural marble: value-noise turbulence, base↔vein by a warped sine (classic marble). ---
+// --- Value-noise helpers for the brushed-metal roughness map. ---
 function _hash2(ix, iy) {
   let h = (ix * 374761393 + iy * 668265263) | 0;
   h = Math.imul(h ^ (h >> 13), 1274126177);
@@ -462,49 +460,6 @@ function _turb(x, y, oct) {
   }
   return sum / norm;
 }
-const _marbleCanvas = new Map();
-// Procedural marble tinted from the die color. Domain-warped coordinates (so veins meander instead
-// of running in even bands) feed two ridged vein layers at different scales/orientations — a thin
-// sharp set and a thicker soft set — combined for varied thickness. Vein color contrasts the base:
-// dark veins on a light die, light veins on a dark one.
-function marbleCanvas(colorInt) {
-  const key = colorInt >>> 0;
-  if (_marbleCanvas.has(key)) return _marbleCanvas.get(key);
-  const size = 256;
-  const { canvas, ctx } = makeCanvas(size, size);
-  const img = ctx.createImageData(size, size);
-  const px = img.data;
-  const br = (colorInt >> 16) & 255,
-    bg = (colorInt >> 8) & 255,
-    bb = colorInt & 255;
-  const lum = (0.299 * br + 0.587 * bg + 0.114 * bb) / 255;
-  const toward = lum > 0.5 ? 0 : 255; // dark veins on a light die, light on a dark one
-  const mixV = 0.62;
-  const vr = br + (toward - br) * mixV,
-    vg = bg + (toward - bg) * mixV,
-    vb = bb + (toward - bb) * mixV;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const nx = x / size,
-        ny = y / size;
-      const wx = nx + 0.6 * _turb(nx * 2 + 11, ny * 2 + 3, 4); // domain warp → meandering veins
-      const wy = ny + 0.6 * _turb(nx * 2 + 7, ny * 2 + 19, 4);
-      const t1 = _turb(wx * 3, wy * 3, 5);
-      const v1 = Math.pow(1 - Math.abs(Math.sin((wx * 5 + t1 * 4) * Math.PI)), 3.0); // thin, sharp
-      const t2 = _turb(wy * 2 + 5, wx * 2 + 2, 4);
-      const v2 = Math.pow(1 - Math.abs(Math.sin((wy * 2.3 + t2 * 3) * Math.PI)), 1.6); // thicker, soft
-      const m = Math.min(1, Math.max(v1 * 0.95, v2 * 0.55));
-      const i = (y * size + x) * 4;
-      px[i] = br + (vr - br) * m;
-      px[i + 1] = bg + (vg - bg) * m;
-      px[i + 2] = bb + (vb - bb) * m;
-      px[i + 3] = 255;
-    }
-  }
-  ctx.putImageData(img, 0, 0);
-  _marbleCanvas.set(key, canvas);
-  return canvas;
-}
 let _brushedTex = null;
 // A grayscale roughness map of fine horizontal streaks — metal + this reads as brushed. Color-
 // independent, so one cached texture serves every brushed die (tiled via RepeatWrapping).
@@ -530,15 +485,20 @@ function brushedTexture() {
   _brushedTex = tex;
   return _brushedTex;
 }
-const _marbleTex = new Map();
-function marbleTexture(colorInt) {
-  const key = colorInt >>> 0;
-  if (_marbleTex.has(key)) return _marbleTex.get(key);
-  const tex = cTex(marbleCanvas(colorInt));
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.userData.ottSharedFinish = true; // cached across pieces/previews; thumbnail cleanup must retain it
-  _marbleTex.set(key, tex);
-  return tex;
+let _marbleTex = null;
+let _marbleReady = null;
+function marbleTexture() {
+  if (_marbleTex) return _marbleTex;
+  _marbleReady = new Promise((resolve) => {
+    _marbleTex = loadImageTexture(
+      MARBLE_TEXTURE_URL,
+      () => resolve(_marbleTex),
+      () => resolve(null),
+    );
+  });
+  _marbleTex.wrapS = _marbleTex.wrapT = THREE.RepeatWrapping;
+  _marbleTex.userData.ottSharedFinish = true;
+  return _marbleTex;
 }
 
 // --- Custom dice texture (ROADMAP §9 phase 2): a host-uploaded seamless image used as the die
@@ -566,23 +526,45 @@ function drawImageCover(ctx, img, size) {
   ctx.drawImage(img, (size - w) / 2, (size - h) / 2, w, h);
 }
 
-function customFaceTexture(value, text, url) {
+function customFaceTexture(value, text, url, body = null) {
   const size = CONFIG.tex.die;
   const { canvas, ctx } = makeCanvas(size, size);
-  ctx.fillStyle = COLORS.ivory;
-  ctx.fillRect(0, 0, size, size);
-  drawNumber(ctx, size, value, text != null ? hexOf(text) : null); // legible before the image loads
   const texture = cTex(canvas);
-  const img = new Image();
-  img.onload = () => {
+  let disposed = false;
+  const draw = (img) => {
+    if (disposed) return;
     ctx.clearRect(0, 0, size, size);
-    drawImageCover(ctx, img, size);
-    drawNumber(ctx, size, value, text != null ? hexOf(text) : null); // number stays on top of the art
+    ctx.fillStyle = body == null ? COLORS.ivory : hexOf(body);
+    ctx.fillRect(0, 0, size, size);
+    if (img) {
+      drawImageCover(ctx, img, size);
+      if (body != null) {
+        ctx.globalCompositeOperation = 'multiply';
+        ctx.fillStyle = hexOf(body);
+        ctx.fillRect(0, 0, size, size);
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+    drawNumber(ctx, size, value, text != null ? hexOf(text) : null);
     texture.needsUpdate = true;
   };
-  img.src = url;
+  draw(null); // readable while the image loads
+  let image = null;
+  if (body != null) {
+    const marble = marbleTexture();
+    if (marble.image?.width) draw(marble.image);
+    else
+      _marbleReady.then((loaded) => {
+        if (loaded) draw(loaded.image);
+      });
+  } else {
+    image = new Image();
+    image.onload = () => draw(image);
+    image.src = url;
+  }
   texture.addEventListener('dispose', () => {
-    img.onload = null; // a removed/recolored die must not redraw its released canvas
+    disposed = true;
+    if (image) image.onload = null;
   });
   return texture;
 }
@@ -636,13 +618,13 @@ function finishMaterial(color, finishKey, { finishImg, side, flatShading = false
       ? color.getHex()
       : 0xf4f1ea;
   const params = {
-    color: f.marble || (f.image && finishImg) ? 0xffffff : (color ?? COLORS.ivory),
+    color: f.image && finishImg ? 0xffffff : (color ?? COLORS.ivory),
     roughness: f.roughness,
     metalness: f.metalness || 0,
     flatShading,
   };
   if (side !== undefined) params.side = side;
-  if (f.marble) params.map = marbleTexture(c);
+  if (f.marble) params.map = marbleTexture();
   if (f.image && finishImg) params.map = customTexture(finishImg);
   if (f.brushed) params.roughnessMap = brushedTexture();
   if (f.emissive) {
@@ -698,7 +680,7 @@ function physicalMaterialFrom(source) {
     if (source[key] !== undefined) out[key] = copyMaterialValue(source[key]);
   return out;
 }
-function modelFinishMaterial(source, finishKey, color) {
+function modelFinishMaterial(source, finishKey, color, tuning = {}) {
   const f = FINISHES[finishKey] || FINISHES.matte;
   const material = f.physical
     ? physicalMaterialFrom(source)
@@ -711,10 +693,10 @@ function modelFinishMaterial(source, finishKey, color) {
       ? color.getHex()
       : (source.color?.getHex?.() ?? 0xf4f1ea);
 
-  if (material.color) material.color.set(f.marble ? 0xffffff : tint);
-  material.roughness = f.roughness;
-  material.metalness = f.metalness || 0;
-  if (f.marble) material.map = marbleTexture(tint); // this finish intentionally replaces base color art
+  if (material.color) material.color.set(tint);
+  material.roughness = tuning.roughness ?? f.roughness;
+  material.metalness = tuning.metalness ?? f.metalness ?? 0;
+  if (f.marble) material.map = marbleTexture(); // this finish intentionally replaces base color art
   if (f.brushed) material.roughnessMap = brushedTexture();
   if (f.emissive) {
     material.emissive.set(tint);
@@ -736,7 +718,7 @@ function tintModelMaterial(source, color) {
   return material;
 }
 
-// Procedural marble/brushed maps need UVs. Uploaded models usually have them; for simple unwrapped
+// Marble and brushed maps need UVs. Uploaded models usually have them; for simple unwrapped
 // models, synthesize a normalized box projection from each vertex normal without disturbing indices.
 function addModelFinishUV(geo) {
   if (geo.getAttribute('uv')) return;
@@ -951,8 +933,8 @@ const _texCache = new Map(),
   _texLoader = new THREE.TextureLoader();
 
 // Load an external image URL as an sRGB texture with anisotropic filtering.
-function loadImageTexture(url) {
-  const texture = _texLoader.load(url);
+function loadImageTexture(url, onLoad, onError) {
+  const texture = _texLoader.load(url, onLoad, undefined, onError);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = maxAnisotropy();
   return texture;
@@ -1638,7 +1620,14 @@ function propModelPainter(props, spec, builtin) {
   const finish = safeObjectFinish(spec, props.finish);
   const styled = props.finish !== undefined || finish !== 'matte';
   const surface = (material, color) =>
-    styled ? modelFinishMaterial(material, finish, color) : tintModelMaterial(material, color);
+    styled
+      ? modelFinishMaterial(
+          material,
+          finish,
+          color,
+          builtin ? spec.finishTuning?.[finish] : undefined,
+        )
+      : tintModelMaterial(material, color);
 
   const paint = (material) => {
     if (!builtin) {
@@ -2258,7 +2247,7 @@ function dispenserMesh(props = {}) {
   const styled = props.finish !== undefined || finish !== 'matte';
   const surface = (m) =>
     styled
-      ? modelFinishMaterial(m, finish, tint ?? m.color)
+      ? modelFinishMaterial(m, finish, tint ?? m.color, item.finishTuning?.[finish])
       : tintModelMaterial(m, tint ?? m.color);
   const paint = (m) => {
     if (item.tintMaterial) {
@@ -2749,6 +2738,10 @@ export async function propPreviewURL(props = {}) {
   const spec = PROPS[props.shape] || {};
   const modelUrl = props.model || spec.model;
   const materialKey = props.model ? (props.finish ?? 'original') : objectFinish(spec, props.finish);
+  if (FINISHES[materialKey]?.marble) {
+    marbleTexture();
+    await _marbleReady;
+  }
   const key = modelUrl
     ? ['m', modelUrl, props.color ?? '', materialKey, props.modelRot || ''].join(':')
     : ['s', props.shape, props.color ?? '', objectFinish(spec, props.finish)].join(':');
@@ -2822,7 +2815,7 @@ export async function boardPreviewURL(fileUrl) {
   return url;
 }
 
-// A built-in die (d4…d20) → a rendered thumbnail data-URL. Synchronous (no load).
+// A built-in die (d4…d20) → a rendered thumbnail data-URL; marble waits for its shared image.
 // A pipped-die model preview (async): load the .glb, tint with the default die colors, snapshot.
 // Cached like the other previews. Returns null on failure (the card shows a placeholder).
 export async function dieModelPreviewURL(key) {
@@ -2846,7 +2839,11 @@ export async function dieModelPreviewURL(key) {
   return url;
 }
 
-export function diePreviewURL(sides, finish) {
+export async function diePreviewURL(sides, finish) {
+  if (FINISHES[finish]?.marble) {
+    marbleTexture();
+    await _marbleReady;
+  }
   const key = 'd:' + sides + (finish ? ':' + finish : '');
   if (_prevCache.has(key)) return _prevCache.get(key);
   let url = null;
@@ -2866,6 +2863,10 @@ export function diePreviewURL(sides, finish) {
 
 // A local (not-yet-uploaded) .glb File → a rendered thumbnail data-URL, for previews.
 export async function glbFilePreviewURL(file, rot, finish) {
+  if (FINISHES[finish]?.marble) {
+    marbleTexture();
+    await _marbleReady;
+  }
   const url = URL.createObjectURL(file);
   try {
     const gltf = await gltfLoader.loadAsync(url);

@@ -207,6 +207,8 @@ export const PROPS = {
     modelScale: 0.4,
     ownMaterial: false,
     metal: true,
+    // Independent from dice metallic finish; applies to coins and coin stacks.
+    finishTuning: { metallic: { metalness: 1.0, roughness: 0.15 } },
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,

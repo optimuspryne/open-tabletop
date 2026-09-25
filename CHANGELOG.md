@@ -8,6 +8,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Changed
+- Replace the built-in procedural Marbled finish with Behrtron's CC0 white-marble texture.
+  Preserve the supplied 4K source; render with one shared 512px WebP, retain colored dice and
+  numbering, and wait for marble loading before generating finish previews. Remove the old
+  per-color procedural marble caches.
+- Add independent code tuning for built-in coin/coin-stack metallic metalness and roughness
+  in `PROPS.coin.finishTuning.metallic`; dice keep the `FINISHES.metallic` settings. Other
+  selected coin finishes retain their normal response. Tune metallic dice to metalness 0.75
+  while coins retain 1.0.
+
 ### Fixed
 - Restore generated library thumbnails on Safari by accepting PNG canvas-export fallback as
   well as WebP. Covers 3D models/boards, dice, built-in cards and tile sets while retaining

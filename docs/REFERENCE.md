@@ -475,7 +475,14 @@ chess}` each `[color0, color1]`.
   `translucent`, `glow`, or `marbled`. An explicit `props.finish` set through Inspect wins over
   that definition default, including explicit `matte`. Current authored defaults are metallic for
   the coin; pearl for checkers, poker chips, Go stones, and chess; satin for the human token; and
-  matte for unflagged primitive shapes.
+  matte for unflagged primitive shapes. Coin-only numeric tuning lives at
+  `PROPS.coin.finishTuning.metallic = { metalness: 1.0, roughness: 0.15 }` in `shared/pieces.js`.
+  `propModelPainter` applies it to built-in coin models/previews; `dispenserMesh` also applies
+  it to coin stacks. The override is keyed by the selected finish, so explicit Matte/etc.
+  remain unchanged. Dice use `FINISHES.metallic` in `public/rendering/graphics.js` independently.
+  Values are code settings (0–1), not synchronized per-piece fields or UI sliders. Metalness is
+  1.0 for coins and 0.75 for metallic dice; lowering coin roughness gives sharper reflections
+  without changing dice.
 - **`PROP_LIST`** `[{ id, name, team? }]` — ordered spawn-picker list;
   `team:true` shows the two-color toggle, else the color picker.
 - **`DISPENSERS`** `{ dispenserId → spec }` — finite model/item stacks and infinite sources.
@@ -2106,13 +2113,23 @@ quiet for a full frame), and
 ### Mesh builders + `KIND`
 
 - **`dieMesh` / `convexDie` / `numberedD4`** — numbered dice. `props.finish` sets the material
-  look (`FINISHES` table); `marbled` uses a procedural swirl (`marbleTexture`) and `custom` an
+  look (`FINISHES` table); `marbled` uses Behrtron’s CC0 bitmap (`marbleTexture`) and `custom` an
   uploaded image (`props.finishImg`, via `customTexture` / async `customFaceTexture`), both over
   triplanar UVs on the convex dice. On a phone a GPU-heavy finish is swapped for a safe one
   (`DICE_FINISH_FALLBACK`); `custom` is a plain map and renders as-is. `DICE_FINISHES` (shared)
   is the picker list; host-uploaded textures come from the `custom_dice` library. When `props.model`
   names a `DICE_MODELS` pipped d6, `pippedDiePainter` applies the same standard finish while keeping
   body and `Dots` colors separate; image-backed `custom` is not offered for these models.
+  Marble uses one shared 512px `/textures/marble-white.webp` image, material tint on bodies,
+  and owned tinted/numbered face canvases for generated d6s via `customFaceTexture`.
+  Disposed faces ignore late image completion; old color-keyed marble caches and
+  `marbleCanvas` were removed. Noise helpers remain for Brushed. `diePreviewURL` is now async,
+  and it, `propPreviewURL`, and `glbFilePreviewURL` wait for marble before snapshotting so the
+  first preview is not cached with a temporary plain face. Source/license details are in
+  `docs/ASSET_CREDITS.md` and `public/credits.js`.
+  `node scripts/material-test.mjs` checks cold previews, late disposal, shared maps, bounded
+  recolor resources, and coin/dice numeric independence through actual production builders.
+  `scripts/rendering-memory.mjs` now awaits the async die-preview API.
 - **`cardMesh`** — a card _or tile_, from `cardGeom(props)`: a thin card (a box with
   alpha-cut faces, so the art's own rounded/transparent corners define the silhouette), a
   **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with
@@ -2124,7 +2141,7 @@ quiet for a full frame), and
   extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**
   (true circular-arc corners; the hex matches its 6-gon collider).
 - **`finishMaterial`** — constructs the shared standard/physical material used by dice and
-  objects, including procedural marble, brushed roughness, glow, translucency, and pearl
+  objects, including image-backed marble, brushed roughness, glow, translucency, and pearl
   clearcoat. **`itemSurface`** combines it with `objectFinish` and phone fallbacks for props.
   **`modelFinishMaterial`** clones compatible authored standard/physical GLB material properties
   and maps before applying that response; **`addModelFinishUV`** supplies projection UVs when a

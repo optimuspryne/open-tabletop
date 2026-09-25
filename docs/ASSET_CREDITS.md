@@ -101,3 +101,16 @@ All CC0 (public domain).
   regenerated from a single list by `scripts/build-icons.mjs` (`npm run build:icons`).
 - **License:** MIT - Copyright (c) 2020-2026 Paweł Kuna. Full text in
   [`docs/licenses/tabler-icons-LICENSE`](licenses/tabler-icons-LICENSE).
+
+
+## White marble texture — `public/static_assets/textures/marble-white.webp`
+
+- **Author:** Behrtron.
+- **Source:** [4k Seamless White Marble Stone Textures Public Domain](https://opengameart.org/content/4k-seamless-white-marble-stone-textures-public-domain).
+- **License:** CC0 (public domain), confirmed on the source page; no attribution required.
+  Also credited in the in-app Credits panel as a courtesy.
+- **Original:** The user-supplied 4096×4096 JPEG is preserved byte-for-byte as
+  `public/static_assets/textures/marble-white-source.jpg`.
+- **Rendering derivative:** `marble-white.webp`, 512×512, generated with Sharp `resize(512,512)`
+  and `webp({quality:90})`. Used by the existing tintable Marbled finish on dice and objects;
+  the source pack's optional normal/specular maps are not used.

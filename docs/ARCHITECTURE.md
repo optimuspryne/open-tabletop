@@ -717,12 +717,19 @@ and human-token models are original project assets.
   `brushed`, `pearl`, `translucent`, `glow`, or `marbled`). `objectFinish` gives a valid
   per-instance `props.finish` precedence, so Inspect can override even a definition's finish with
   explicit `matte`. `finishMaterial` supplies the standard/physical shader parameters and
-  procedural maps for primitive pieces. `modelFinishMaterial` clones compatible authored GLB
+  image/procedural maps for primitive pieces. `modelFinishMaterial` clones compatible authored GLB
   materials/maps before applying the selected response, and `addModelFinishUV` supplies fallback
-  projection UVs for procedural brushed/marbled maps. The model painter preserves pips and named
+  projection UVs for brushed/marbled maps. The model painter preserves pips and named
   tint slots independently. This path covers bundled/uploaded model props, modeled dispensers and
   stacks, and built-in pipped dice; low-end phones retain the dice finish fallbacks. `custom`
   remains procedural-dice-only because it requires a `finishImg` from the dice texture library.
+  The coin definition's `finishTuning.metallic` provides independent metalness/roughness for
+  standalone coins, their previews and built-in coin stacks; dice retain the shared numeric
+  finish preset. These definition-only values do not add protocol or persistence fields.
+  Marbled uses a single shared 512px CC0 bitmap, tinted by body materials and composited into
+  owned d6 face canvases. It has no per-color body-texture cache. Preview builders await image
+  readiness, and disposed d6 faces ignore late completion. The full-resolution source is retained
+  for future derivatives; mobile rendering does not load it.
 
 ### Uploaded board outlines
 

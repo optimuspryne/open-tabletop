@@ -115,6 +115,12 @@ export const MODEL_CREDITS = [
 // 2D art — skyboxes (/sky/ URLs) + tile faces (/mahjong/ URLs).
 export const ART_CREDITS = [
   {
+    title: 'Seamless white marble',
+    by: 'Behrtron',
+    url: 'https://opengameart.org/content/4k-seamless-white-marble-stone-textures-public-domain',
+    license: 'CC0',
+  },
+  {
     title: 'Cloudy skyboxes',
     by: 'Screaming Brain Studios',
     url: 'https://opengameart.org/users/screaming-brain-studios',

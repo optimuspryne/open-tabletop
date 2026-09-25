@@ -37,7 +37,7 @@ try {
         createQuaternion: () => new THREE.Quaternion(), refreshCollider() {}, isInspected: () => false });
       const must = (condition, message) => { if (!condition) throw new Error(message); };
       for (const sides of [4, 6, 8, 10, 12, 20]) {
-        must(!!diePreviewURL(sides), 'preview failed: ' + sides);
+        must(!!(await diePreviewURL(sides)), 'preview failed: ' + sides);
         const mesh = KIND.die.mesh({ sides });
         scene.add(mesh);
         renderer.render(scene, camera);
