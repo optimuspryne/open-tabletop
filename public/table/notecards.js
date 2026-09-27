@@ -5,6 +5,9 @@ import {
   normalizeNotecardPaper,
   normalizeNotecardTextBoxes,
   normalizeNotecardContent,
+  normalizeNotecardOrientation,
+  notecardDimensions,
+  reorientNotecardContent,
 } from '../../shared/notecards.js';
 import { paintNotecard } from '../rendering/notecards.js';
 import { createNotecardTextEditor } from './notecard-text.js';
@@ -20,6 +23,7 @@ export function createNotecardEditor({
   getRoom,
   byId,
   canInteract,
+  getRank = () => 0,
   beforeOpen,
   toast,
   repeat = setInterval,
@@ -29,6 +33,8 @@ export function createNotecardEditor({
   const canvas = byId('notecardCanvas');
   const context = canvas.getContext('2d');
   const view = createDrawingView();
+  let orientation = 'landscape',
+    orientationFit = null;
   let paper = normalizeNotecardPaper(),
     tool = 'pen',
     constrain = false;
@@ -70,6 +76,7 @@ export function createNotecardEditor({
     byId('notecardStatus').textContent = text;
   };
   const paint = () => {
+    syncCanvas();
     context.save();
     context.translate(view.x * canvas.width, view.y * canvas.height);
     context.scale(view.scale, view.scale);
@@ -77,6 +84,7 @@ export function createNotecardEditor({
       back: !!current?.back,
       paper,
       textBoxes,
+      orientation,
     });
     context.restore();
     canvas.setAttribute(
@@ -105,7 +113,21 @@ export function createNotecardEditor({
     byId('notecardZoomOut').disabled = view.scale <= 1;
     byId('notecardZoomIn').disabled = view.scale >= 8;
   };
+  function syncCanvas() {
+    const dimensions = notecardDimensions(orientation);
+    if (canvas.width !== dimensions.canvasWidth || canvas.height !== dimensions.canvasHeight) {
+      canvas.width = dimensions.canvasWidth;
+      canvas.height = dimensions.canvasHeight;
+      view.reset();
+    }
+    dialog.dataset.orientation = orientation;
+    dialog.style.setProperty(
+      '--notecard-aspect',
+      String(dimensions.canvasWidth / dimensions.canvasHeight),
+    );
+  }
   function sync() {
+    syncCanvas();
     const editable = hasDraft() && !busy;
     textEditor.sync();
     const invalidText = !!textEditor.error();
@@ -125,6 +147,11 @@ export function createNotecardEditor({
     byId('notecardConstrain').disabled = ['pen', 'eraser', 'text'].includes(tool) || pan;
     byId('notecardPattern').value = paper.pattern;
     byId('notecardTone').value = paper.tone;
+    for (const name of ['Landscape', 'Portrait'])
+      byId('notecard' + name).setAttribute(
+        'aria-pressed',
+        String(orientation === name.toLowerCase()),
+      );
     byId('notecardDrawingHelp').hidden = !hasDraft() || tool === 'text';
     canvas.setAttribute(
       'aria-describedby',
@@ -135,12 +162,21 @@ export function createNotecardEditor({
     byId('notecardCancel').querySelector('.lbl').textContent = label;
     byId('notecardCancel').setAttribute('aria-label', label);
     byId('notecardCancel').title = label;
-    for (const id of ['notecardKeep', 'notecardPassControls']) byId(id).hidden = !hasDraft();
+    byId('notecardKeep').hidden = !hasDraft();
+    const canPass = hasDraft() && canInteract() && getRank() >= 1;
+    const passControls = byId('notecardPassControls');
+    if (!canPass && passControls.contains(document.activeElement)) {
+      canvas.focus();
+      status('Private passing requires the Helper, GM or room owner role.');
+    }
+    passControls.hidden = !canPass;
+    if (!canPass) byId('notecardRecipient').value = '';
     byId('notecardKeep').disabled = busy || invalidText;
     byId('notecardReturn').hidden = !hasDraft() || !current?.fromStack;
     byId('notecardReturn').disabled = busy || invalidText;
-    byId('notecardPass').disabled = busy || invalidText || !byId('notecardRecipient').value;
-    byId('notecardRecipient').disabled = busy;
+    byId('notecardPass').disabled =
+      !canPass || busy || invalidText || !byId('notecardRecipient').value;
+    byId('notecardRecipient').disabled = !canPass || busy;
     byId('notecardTemplateSave').hidden = !hasDraft();
     byId('notecardTemplateSave').disabled = busy || invalidText || !canInteract();
     templateControls?.sync();
@@ -153,6 +189,8 @@ export function createNotecardEditor({
     templateControls?.reset();
     drawingControls.reset();
     current = null;
+    orientation = 'landscape';
+    orientationFit = null;
     opening = null;
     stroke = null;
     drawing = [];
@@ -168,12 +206,14 @@ export function createNotecardEditor({
     if (heartbeat) stopRepeat(heartbeat);
     heartbeat = null;
     dialog.close();
+    syncCanvas();
     paintNotecard(context, []); // release private pixels as well as draft data
     previousFocus?.focus?.();
     previousFocus = null;
   }
   function show(data) {
     current = data;
+    orientation = normalizeNotecardOrientation(data.orientation) || 'landscape';
     byId('notecardTitle').textContent = 'Notecard';
     paper = normalizeNotecardPaper(data.paper) || normalizeNotecardPaper();
     keyboard = false;
@@ -194,7 +234,9 @@ export function createNotecardEditor({
         : data.token
           ? data.fromStack
             ? 'Private top card. Return to top saves it inside the stack; Cancel keeps the original.'
-            : 'Private drawing. Keep in hand, place on the table, or pass to a player.'
+            : getRank() >= 1
+              ? 'Private drawing. Keep in hand, place on the table, or pass to a player.'
+              : 'Private drawing. Keep in hand or place on the table.'
           : data.back
             ? 'This notecard is face-down.'
             : 'Viewing a notecard.',
@@ -223,6 +265,7 @@ export function createNotecardEditor({
         drawing: props.drawing || [],
         paper: props.paper,
         textBoxes: props.textBoxes,
+        orientation: props.orientation,
         back: piece.type === 'notecardStack' || props.faceDown || !!props.editing,
       });
       return;
@@ -257,6 +300,7 @@ export function createNotecardEditor({
         drawing: card.drawing,
         paper: card.paper,
         textBoxes: card.textBoxes,
+        orientation: card.orientation,
       });
       return;
     }
@@ -272,7 +316,7 @@ export function createNotecardEditor({
     paint();
     sync();
   }
-  const snapshot = () => ({ drawing, textBoxes });
+  const snapshot = () => ({ drawing, textBoxes, orientation });
   function remember() {
     undo.push(snapshot());
     if (undo.length > NOTECARD.maxStrokes) undo.shift();
@@ -285,11 +329,11 @@ export function createNotecardEditor({
     textEditor.endEdit();
     if (action === 'undo' && undo.length) {
       redo.push(snapshot());
-      ({ drawing, textBoxes } = undo.pop());
+      ({ drawing, textBoxes, orientation } = undo.pop());
     }
     if (action === 'redo' && redo.length) {
       undo.push(snapshot());
-      ({ drawing, textBoxes } = redo.pop());
+      ({ drawing, textBoxes, orientation } = redo.pop());
     }
     if (action === 'clear' && drawing.length) {
       remember();
@@ -316,6 +360,7 @@ export function createNotecardEditor({
     byId,
     canvas,
     view,
+    getOrientation: () => orientation,
     getBoxes: () => textBoxes,
     setBoxes: (boxes) => {
       textBoxes = boxes;
@@ -334,7 +379,7 @@ export function createNotecardEditor({
     used = drawing.reduce((sum, s) => sum + s.pts.length, 0);
     const pts = ['pen', 'eraser'].includes(tool)
       ? position
-      : notecardShapePoints(tool, position, position, constrain || locked);
+      : notecardShapePoints(tool, position, position, constrain || locked, orientation);
     if (drawing.length >= NOTECARD.maxStrokes || used + pts.length > NOTECARD.maxCoordinates) {
       status('Drawing limit reached. Undo or clear strokes to continue.');
       return false;
@@ -347,7 +392,7 @@ export function createNotecardEditor({
   function extendStroke(next, locked = false) {
     if (!stroke) return;
     if (!['pen', 'eraser'].includes(tool)) {
-      stroke.pts = notecardShapePoints(tool, strokeStart, next, constrain || locked);
+      stroke.pts = notecardShapePoints(tool, strokeStart, next, constrain || locked, orientation);
     } else {
       const pts = stroke.pts;
       if (Math.hypot(next[0] - pts.at(-2), next[1] - pts.at(-1)) < 0.0015) return;
@@ -481,7 +526,12 @@ export function createNotecardEditor({
   byId('notecardConstrain').title =
     'Square, circle, or line in 45° steps. Also available with Shift.';
   const instructions = byId('notecardDrawingHelp').textContent;
-  for (const id of [...Object.values(toolIds), 'notecardConstrain']) {
+  for (const id of [
+    ...Object.values(toolIds),
+    'notecardConstrain',
+    'notecardLandscape',
+    'notecardPortrait',
+  ]) {
     const button = byId(id);
     button.setAttribute(
       'aria-describedby',
@@ -513,6 +563,38 @@ export function createNotecardEditor({
       paint();
       sync();
     };
+  for (const name of ['Landscape', 'Portrait'])
+    byId('notecard' + name).onclick = () => {
+      const nextOrientation = name.toLowerCase();
+      if (!hasDraft() || busy || !canInteract() || orientation === nextOrientation) return;
+      finishStroke();
+      textEditor.release();
+      textEditor.endEdit();
+      const before = snapshot();
+      // Toggling back before changing content restores the original layout exactly.
+      const prior = orientationFit;
+      const next =
+        prior?.from.orientation === nextOrientation &&
+        prior.to.drawing === drawing &&
+        prior.to.textBoxes === textBoxes
+          ? prior.from
+          : reorientNotecardContent({ ...before, paper }, nextOrientation);
+      if (!next) {
+        status('The content is too small to fit again. Undo restores the previous layout.');
+        return;
+      }
+      remember();
+      ({ drawing, textBoxes, orientation } = next);
+      orientationFit = { from: before, to: snapshot() };
+      drawingControls.reset();
+      keyboard = false;
+      view.reset();
+      sync();
+      paint();
+      status(
+        name + ' selected. Contents fitted without stretching; Undo restores the previous layout.',
+      );
+    };
   for (const action of ['undo', 'redo', 'clear'])
     byId(`notecard${action[0].toUpperCase()}${action.slice(1)}`).onclick = () => history(action);
   byId('notecardPan').onclick = () => {
@@ -536,6 +618,11 @@ export function createNotecardEditor({
   byId('notecardCancel').onclick = () => close();
   const place = (faceDown, destination = 'table') => {
     if (!hasDraft() || busy) return;
+    if (destination === 'pass' && (!canInteract() || getRank() < 1)) {
+      sync();
+      status('Private passing requires the Helper, GM or room owner role.');
+      return;
+    }
     finishStroke();
     textEditor.release();
     textEditor.endEdit();
@@ -550,7 +637,7 @@ export function createNotecardEditor({
       current.request ||= crypto.randomUUID();
       getRoom().send('notecardCreate', {
         request: current.request,
-        content: { drawing, paper, textBoxes },
+        content: { drawing, paper, textBoxes, orientation },
         faceDown,
         destination,
         recipient: byId('notecardRecipient').value,
@@ -563,6 +650,7 @@ export function createNotecardEditor({
       drawing,
       paper,
       textBoxes,
+      orientation,
       faceDown,
       destination,
       recipient: byId('notecardRecipient').value,
@@ -599,6 +687,7 @@ export function createNotecardEditor({
     const card = cards.find((entry) => entry.hid === current.hid);
     if (!card) close(false);
     else {
+      orientation = normalizeNotecardOrientation(card.orientation) || 'landscape';
       drawing = card.drawing || [];
       paper = normalizeNotecardPaper(card.paper) || normalizeNotecardPaper();
       textBoxes = normalizeNotecardTextBoxes(card.textBoxes) || [];
@@ -650,6 +739,7 @@ export function createNotecardEditor({
       }
       const props = JSON.parse(piece.props || '{}');
       current.back = props.faceDown || !!props.editing;
+      orientation = normalizeNotecardOrientation(props.orientation) || 'landscape';
       drawing = props.drawing || [];
       paper = normalizeNotecardPaper(props.paper) || normalizeNotecardPaper();
       textBoxes = normalizeNotecardTextBoxes(props.textBoxes) || [];
@@ -659,6 +749,7 @@ export function createNotecardEditor({
     room.onLeave(() => close(false));
   }
   return {
+    applyRole: sync,
     templateContext: () => ({
       editable: hasDraft() && canInteract(),
       busy,
@@ -682,7 +773,7 @@ export function createNotecardEditor({
       textEditor.release();
       textEditor.endEdit();
       if (textEditor.error()) throw new Error(textEditor.error());
-      return structuredClone({ drawing, paper, textBoxes });
+      return structuredClone({ drawing, paper, textBoxes, orientation });
     },
     openTemplate: (template, editing = false) => {
       if (busy || !canInteract()) return false;

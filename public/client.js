@@ -611,6 +611,7 @@ const hand = createHand({
 });
 const notecards = createNotecardEditor({
   getRoom: () => room,
+  getRank: () => myRank,
   byId,
   canInteract: participation.canInteract,
   toast,
@@ -743,6 +744,7 @@ function applyRole(role) {
     if (mb) mb.hidden = true;
   } // no member mgmt in the workshop
   scoreboard.applyRole(); // scoreboard (helper+) and notes (gm+) edit affordances
+  notecards.applyRole();
 }
 
 // Shared player color and sprite cleanup are also used by whiteboard/presence.

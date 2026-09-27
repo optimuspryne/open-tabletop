@@ -1,4 +1,8 @@
-import { normalizeNotecardContent, normalizeNotecardStack } from '../../shared/notecards.js';
+import {
+  normalizeNotecardContent,
+  normalizeNotecardStack,
+  normalizeNotecardOrientation,
+} from '../../shared/notecards.js';
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
@@ -43,7 +47,11 @@ export function createPieceLifecycle({
       if (!cards) throw new Error('Invalid notecard stack.');
       if (!room.notecards.hasCapacity(cards.length))
         throw new Error('The notecard limit was reached.');
-      props = { ...props, cards, count: cards.length };
+      const orientation = normalizeNotecardOrientation(
+        props.orientation === undefined ? cards[0].orientation : props.orientation,
+      );
+      if (!orientation) throw new Error('Invalid notecard orientation.');
+      props = { ...props, cards, count: cards.length, orientation };
     }
     const mass = type === 'prop' ? (PROPS[props.shape] || PROPS.box).mass : KINDS[type].mass;
     const body = new CANNON.Body({ mass, material: room.mat });
@@ -139,7 +147,13 @@ export function createPieceLifecycle({
       writeProps(
         piece,
         type === 'notecard' || type === 'notecardStack'
-          ? { snap: !!props.snap, stand: props.stand, label: props.label, faceDown: true }
+          ? {
+              snap: !!props.snap,
+              stand: props.stand,
+              label: props.label,
+              faceDown: true,
+              orientation: props.orientation,
+            }
           : props,
       );
     }

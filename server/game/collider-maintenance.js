@@ -42,5 +42,10 @@ export function updateNotecardStackCollider(room, id) {
     body = room.bodies.get(id);
   if (!piece || !body) return;
   body.mass = NOTECARD.mass * piece.count;
-  replaceCollider(body, buildCollider('notecardStack', {}, { count: piece.count }));
+  replaceCollider(body, buildCollider('notecardStack', readProps(piece), { count: piece.count }));
+}
+
+export function updateNotecardCollider(room, id, orientation) {
+  const body = room.bodies.get(id);
+  if (body) replaceCollider(body, buildCollider('notecard', { orientation }));
 }

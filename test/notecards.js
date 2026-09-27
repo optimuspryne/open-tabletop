@@ -4,6 +4,7 @@ import { registerPlacementHandlers } from '../server/game/handlers/placement.js'
 import { registerCardHandlers } from '../server/game/handlers/cards.js';
 import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
 import { stopPlayerInteraction } from '../server/game/interaction-cleanup.js';
+import { rankOf } from '../server/permissions.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
@@ -14,6 +15,8 @@ import {
   normalizeNotecardTextBoxes,
   normalizeNotecardContent,
   normalizeNotecardStack,
+  notecardDimensions,
+  reorientNotecardContent,
 } from '../shared/notecards.js';
 import { colliderSpec } from '../shared/collider-spec.js';
 import { createNotecards, registerNotecardHandlers } from '../server/game/notecards.js';
@@ -59,6 +62,7 @@ function harness() {
   });
   const room = {
     clients: [alice, bob],
+    rank: (client) => (client.auth.revoked ? -1 : rankOf(client.auth.role)),
     nextId: 1,
     nextHid: 1,
     handOwners: new Map([['alice', 'account-a']]),
@@ -145,6 +149,7 @@ function harness() {
     drawing: artwork,
     paper: defaultPaper,
     textBoxes: [],
+    orientation: 'landscape',
     faceDown: true,
   });
   const send = (type, payload, actor = alice) => handlers.get(type)(actor, payload);
@@ -281,6 +286,7 @@ test('disconnect cleanup and expired leases restore committed contents and rejec
     drawing: artwork,
     paper: defaultPaper,
     textBoxes: [],
+    orientation: 'landscape',
     faceDown: true,
   });
 });
@@ -304,6 +310,7 @@ test('scene round-trip retains concealed contents and committed orientation duri
     drawing: artwork,
     paper: defaultPaper,
     textBoxes: [],
+    orientation: 'landscape',
     faceDown: true,
   });
   assert.equal(readProps(room.state.pieces.get(restoredId)).drawing, undefined);
@@ -387,6 +394,7 @@ test('keep in hand removes the table piece, sends art only to owner and forbids 
 
 test('passing validates live recipients, preserves rejected drafts and delivers only to the selected hand', () => {
   const { room, id, alice, bob, claim, send } = harness();
+  alice.auth.role = 'helper';
   const lease = claim();
   const message = { ...lease, drawing: [], destination: 'pass', recipient: 'bob' };
   bob.auth.participation = 'spectator';
@@ -400,6 +408,7 @@ test('passing validates live recipients, preserves rejected drafts and delivers 
   assert.equal(room.state.pieces.size, 0);
   assert.deepEqual(room.hands.get('bob')[0].drawing, []);
   assert.equal(bob.sent.at(-1).type, 'hand');
+  bob.auth.role = 'gm';
   send('notecardEdit', { hid: room.hands.get('bob')[0].hid }, bob);
   const edit = bob.sent.at(-1).payload;
   send(
@@ -486,7 +495,15 @@ test('explicit Show reveals a hand notecard only to the chosen audience and does
     type: 'showFan',
     payload: {
       sid: 'alice',
-      cards: [{ kind: 'notecard', drawing: artwork, paper: defaultPaper, textBoxes: [] }],
+      cards: [
+        {
+          kind: 'notecard',
+          drawing: artwork,
+          paper: defaultPaper,
+          textBoxes: [],
+          orientation: 'landscape',
+        },
+      ],
     },
   });
   assert.equal(room.state.pieces.size, 0);
@@ -506,9 +523,16 @@ const stackCards = () => [
     drawing: [],
     paper: defaultPaper,
     textBoxes: [],
+    orientation: 'landscape',
     noteProps: { label: 'Bottom', snap: true, stand: 'flat' },
   },
-  { drawing: artwork, paper: defaultPaper, textBoxes: [], noteProps: { label: 'Top' } },
+  {
+    drawing: artwork,
+    paper: defaultPaper,
+    textBoxes: [],
+    orientation: 'landscape',
+    noteProps: { label: 'Top' },
+  },
 ];
 const sceneOptions = {
   maxPieces: 250,
@@ -594,6 +618,7 @@ test('split and combine preserve all drawings and order, work at the notecard ca
     drawing: i % 2 ? artwork : [],
     paper: defaultPaper,
     textBoxes: [],
+    orientation: 'landscape',
     noteProps: { label: String(i) },
   }));
   const id = room.spawn('notecardStack', [0, 1, 0], { cards });
@@ -770,6 +795,7 @@ test('paper is private while concealed or editing, committed atomically, and rev
 
 test('styled cards retain paper through private pass, Show, park/claim and game restore', () => {
   const { room, id, alice, bob, claim, send } = harness();
+  alice.auth.role = 'helper';
   alice.auth.userId = 'account-a';
   bob.auth.userId = 'account-b';
   const paper = { pattern: 'dots', tone: 'white' };
@@ -952,6 +978,7 @@ test('text remains private under leases and backs, rejects forged/invalid update
 
 test('editable text survives hands, private pass, Show, parking and saved games', () => {
   const { room, id, claim, send, alice, bob } = harness();
+  alice.auth.role = 'helper';
   alice.auth.userId = 'account-a';
   bob.auth.userId = 'account-b';
   send('notecardCommit', { ...claim(), textBoxes: noteText, destination: 'hand' });
@@ -1112,6 +1139,7 @@ test('new private drafts create independent cards/stacks and acknowledge retries
 
 test('new notecard creation rejects malformed requests, capacity overflow and restricted players', async () => {
   const { room, send, alice, bob } = harness();
+  alice.auth.role = 'helper';
   const content = { drawing: [], paper: defaultPaper, textBoxes: noteText };
   for (const patch of [
     { count: 17 },
@@ -1143,4 +1171,269 @@ test('new notecard creation rejects malformed requests, capacity overflow and re
   await send('notecardCreate', { request: 'full', destination: 'hand', content });
   assert.equal(room.hands.size, 0);
   assert.match(alice.sent.at(-1).payload.message, /limit/);
+});
+
+test('orientation defaults legacy content, rejects malformed values, and fits artwork without distortion', () => {
+  const original = normalizeNotecardContent({ drawing: artwork, textBoxes: noteText });
+  assert.equal(original.orientation, 'landscape');
+  for (const orientation of [null, '', 'square', 90, {}, ['portrait']]) {
+    assert.equal(normalizeNotecardContent({ ...original, orientation }), null);
+  }
+  for (const orientation of ['landscape', 'portrait']) {
+    const source = { ...original, orientation };
+    const next = orientation === 'landscape' ? 'portrait' : 'landscape';
+    const fitted = reorientNotecardContent(source, next);
+    assert.equal(fitted.orientation, next);
+    assert.deepEqual(normalizeNotecardContent(fitted), fitted);
+    assert.deepEqual(source.drawing, artwork, 'conversion never mutates committed content');
+    const a = notecardDimensions(orientation),
+      b = notecardDimensions(next);
+    const fit = Math.min(b.canvasWidth / a.canvasWidth, b.canvasHeight / a.canvasHeight);
+    const points = fitted.drawing[0].pts;
+    assert.ok(Math.abs((points[2] - points[0]) * b.canvasWidth - 0.3 * a.canvasWidth * fit) < 0.12);
+    assert.ok(
+      Math.abs((points[3] - points[1]) * b.canvasHeight - 0.6 * a.canvasHeight * fit) < 0.12,
+    );
+    assert.ok(
+      Math.abs((fitted.drawing[0].scale ?? 1) * b.canvasWidth - a.canvasWidth * fit) < 1e-6,
+    );
+    assert.ok(
+      Math.abs(fitted.textBoxes[0].w * b.canvasWidth - noteText[0].w * a.canvasWidth * fit) < 0.12,
+    );
+  }
+  for (const scale of [null, 0, -1, 2, Infinity, NaN, '1']) {
+    assert.equal(normalizeNotecardDrawing([{ ...artwork[0], scale }]), null);
+    assert.equal(normalizeNotecardTextBoxes([{ ...noteText[0], scale }]), null);
+  }
+});
+
+test('portrait commit updates public footprint and collider while preserving concealed content and old clients', () => {
+  const { room, id, claim, send, bob } = harness();
+  const lease = claim();
+  send('notecardCommit', { ...lease, orientation: 'portrait', faceDown: true }, bob);
+  assert.equal(room.notecards.snapshot(id).orientation, 'landscape');
+  send('notecardCommit', { ...lease, orientation: 'invalid', faceDown: true });
+  assert.equal(room.notecards.isEditing(id), true);
+  send('notecardCommit', { ...lease, orientation: 'portrait', faceDown: true });
+  const publicProps = readProps(room.state.pieces.get(id));
+  assert.equal(publicProps.orientation, 'portrait');
+  for (const field of ['drawing', 'textBoxes', 'paper'])
+    assert.equal(publicProps[field], undefined);
+  assert.deepEqual(colliderSpec('notecard', publicProps).halfExtents, [1.5, 0.05, 2.25]);
+  assert.deepEqual(room.bodies.get(id).shapes[0].halfExtents.toArray(), [1.5, 0.05, 2.25]);
+  const next = claim();
+  assert.equal(next.orientation, 'portrait');
+  send('notecardCommit', { id, token: next.token, drawing: artwork, faceDown: false });
+  assert.equal(
+    room.notecards.snapshot(id).orientation,
+    'portrait',
+    'missing legacy field preserves orientation',
+  );
+  assert.equal(readProps(room.state.pieces.get(id)).orientation, 'portrait');
+});
+
+test('portrait survives private transfer, Show, game restore and failed hand placement', () => {
+  const { room, id, claim, send, alice, bob } = harness();
+  alice.auth.role = 'helper';
+  alice.auth.userId = 'account-a';
+  bob.auth.userId = 'account-b';
+  send('notecardCommit', {
+    ...claim(),
+    orientation: 'portrait',
+    destination: 'pass',
+    recipient: 'bob',
+  });
+  const card = room.hands.get('bob')[0];
+  assert.equal(card.orientation, 'portrait');
+  send('showStart', { hids: 'all', to: ['alice'] }, bob);
+  assert.equal(alice.sent.at(-1).payload.cards[0].orientation, 'portrait');
+  send('notecardEdit', { hid: card.hid }, bob);
+  const lease = bob.sent.at(-1).payload;
+  const spawn = room.spawn;
+  room.spawn = () => {
+    throw new Error('placement failed');
+  };
+  try {
+    assert.throws(
+      () => room.notecards.commit(bob, { ...lease, orientation: 'landscape', faceDown: false }),
+      /placement failed/,
+    );
+  } finally {
+    room.spawn = spawn;
+  }
+  assert.equal(card.orientation, 'portrait');
+  assert.equal(room.notecards.isEditing(lease.id), true);
+  send('notecardCancel', lease, bob);
+  const game = serializeGame(room);
+  assert.equal(
+    game.hands.find((h) => h.userId === bob.auth.userId).cards[0].orientation,
+    'portrait',
+  );
+  applyScene(room, game, sceneOptions);
+  claimHand(room, 'account-b', 'bob');
+  const restored = room.hands.get('bob')[0];
+  assert.equal(restored.orientation, 'portrait');
+  room.notecards.placeHandCard([0, 2, 0], restored, true);
+  assert.equal(
+    room.notecards.snapshot([...room.state.pieces.keys()].at(-1)).orientation,
+    'portrait',
+  );
+  assert.equal(room.state.pieces.has(id), false);
+});
+
+test('mixed orientation stacks retain individual layouts without exposing order through their footprint', () => {
+  const { room, id: loose, send, alice } = harness();
+  const id = room.spawn('notecardStack', [0, 1, 0], {
+    orientation: 'portrait',
+    cards: [
+      { drawing: [], orientation: 'portrait' },
+      { drawing: artwork, orientation: 'landscape' },
+    ],
+  });
+  assert.deepEqual(room.bodies.get(id).shapes[0].halfExtents.toArray(), [1.5, 0.1, 2.25]);
+  send('notecardShuffle', { id });
+  assert.equal(readProps(room.state.pieces.get(id)).orientation, 'portrait');
+  send('notecardEdit', { id });
+  send('notecardCommit', {
+    ...alice.sent.at(-1).payload,
+    orientation: 'portrait',
+    destination: 'stack',
+  });
+  assert.equal(room.notecards.snapshot(id).cards.at(-1).orientation, 'portrait');
+  send('notecardSplit', { id });
+  const split = [...room.state.pieces.keys()].at(-1);
+  assert.equal(readProps(room.state.pieces.get(split)).orientation, 'portrait');
+  send('notecardCombine', { ids: [id, split, loose] });
+  assert.equal(readProps(room.state.pieces.get(id)).orientation, 'portrait');
+  const cards = room.notecards.snapshot(id).cards;
+  const scene = serializeScene(room);
+  applyScene(room, scene, sceneOptions);
+  const restored = [...room.state.pieces.keys()][0];
+  assert.deepEqual(room.notecards.snapshot(restored).cards, cards);
+  assert.equal(readProps(room.state.pieces.get(restored)).orientation, 'portrait');
+  for (const card of [...cards].reverse()) {
+    send('notecardDraw', { id: restored, destination: 'hand' });
+    assert.equal(room.hands.get('alice').at(-1).orientation, card.orientation);
+  }
+});
+
+test('invalid orientation in saved loose cards, stacks or hands fails before replacing the live table', () => {
+  const { room, id } = harness();
+  for (const scene of [
+    { pieces: [{ type: 'notecard', props: { orientation: 'invalid' } }] },
+    { pieces: [{ type: 'notecardStack', props: { cards: [{ drawing: [] }], orientation: null } }] },
+    {
+      pieces: [
+        { type: 'notecardStack', props: { cards: [{ drawing: [], orientation: 'invalid' }] } },
+      ],
+    },
+    {
+      hands: [{ userId: 'legacy', cards: [{ kind: 'notecard', drawing: [], orientation: null }] }],
+    },
+  ]) {
+    assert.throws(() => applyScene(room, scene, sceneOptions), /invalid notecard/);
+    assert.equal(room.state.pieces.has(id), true);
+  }
+});
+
+test('private passing is Helper+ across table, hand, stack and template drafts; regular players still receive and keep cards', () => {
+  for (const role of [undefined, 'player', 'helper', 'gm', 'owner']) {
+    for (const source of ['table', 'hand', 'stack', 'draft']) {
+      const { room, id, alice, bob, claim, send } = harness();
+      alice.auth.role = role;
+      bob.auth.role = 'player';
+      const permitted = ['helper', 'gm', 'owner'].includes(role);
+      const content = normalizeNotecardContent({
+        drawing: artwork,
+        textBoxes: noteText,
+        orientation: 'portrait',
+      });
+      let lease;
+      if (source === 'table') lease = claim();
+      if (source === 'hand') {
+        send('takeCard', { id });
+        send('notecardEdit', { hid: room.hands.get('alice')[0].hid });
+        lease = alice.sent.at(-1).payload;
+      }
+      if (source === 'stack') {
+        const stack = room.spawn('notecardStack', [0, 1, 0], { count: 2 });
+        send('notecardEdit', { id: stack });
+        lease = alice.sent.at(-1).payload;
+      }
+      const before = JSON.stringify({
+        piece: lease && room.notecards.snapshot(lease.id),
+        hand: room.hands.get('alice'),
+        count: room.state.pieces.size,
+      });
+      const type = source === 'draft' ? 'notecardCreate' : 'notecardCommit';
+      const message = {
+        ...(source === 'draft' ? { request: 'role-draft', content } : { ...lease, ...content }),
+        destination: 'pass',
+        recipient: 'bob',
+        role: 'owner',
+        rank: 3,
+      };
+      send(type, message);
+      if (permitted) {
+        assert.equal(
+          room.hands.get('bob')[0].orientation,
+          'portrait',
+          `${role} can pass from ${source}`,
+        );
+        assert.deepEqual(room.hands.get('bob')[0].drawing, artwork);
+      } else {
+        assert.equal(room.hands.get('bob'), undefined, `${role} cannot pass from ${source}`);
+        assert.equal(alice.sent.at(-1).payload.operation, type);
+        assert.match(alice.sent.at(-1).payload.message, /Only Helpers, GMs and room owners/);
+        assert.equal(
+          JSON.stringify({
+            piece: lease && room.notecards.snapshot(lease.id),
+            hand: room.hands.get('alice'),
+            count: room.state.pieces.size,
+          }),
+          before,
+          'rejection retains committed inventory',
+        );
+        if (lease) assert.equal(room.notecards.isEditing(lease.id), true);
+        send(type, { ...message, destination: 'hand' });
+        assert.equal(
+          room.hands.get('alice').at(-1).orientation,
+          'portrait',
+          'ordinary players can keep the same draft',
+        );
+      }
+    }
+  }
+});
+
+test('private pass permissions use the current role and still enforce participation restrictions', () => {
+  const { room, id, alice, claim, send } = harness();
+  alice.auth.role = 'helper';
+  const lease = claim();
+  alice.auth.role = 'player';
+  const message = { ...lease, destination: 'pass', recipient: 'bob' };
+  send('notecardCommit', message);
+  assert.match(alice.sent.at(-1).payload.message, /Only Helpers/);
+  assert.equal(room.notecards.isEditing(id), true);
+  assert.equal(room.hands.get('bob'), undefined);
+  for (const restriction of [
+    { timedOut: true },
+    { participation: 'spectator' },
+    { participationReady: false },
+    { revoked: true },
+  ]) {
+    alice.auth = { role: 'owner', ...restriction };
+    send('notecardCommit', message);
+    send('notecardCreate', {
+      request: 'restricted-draft',
+      content: { drawing: [] },
+      destination: 'pass',
+      recipient: 'bob',
+    });
+    assert.equal(room.hands.get('bob'), undefined);
+    assert.equal(room.notecards.isEditing(id), true);
+  }
+  alice.auth = { role: 'gm' };
+  send('notecardCommit', message);
+  assert.deepEqual(room.hands.get('bob')[0].drawing, artwork);
 });

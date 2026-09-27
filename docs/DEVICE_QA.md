@@ -34,7 +34,7 @@ No per-device or multiplayer test matrix was specified; these checkboxes remain 
 - [ ] Wheel/pinch zoom follows the pointer/fingers; pan and Fit work; no stray pinch stroke remains.
 - [ ] At high zoom, a real stylus draws under its tip; Space/middle-drag and touch Pan stay inside the card.
 - [ ] Keep in hand, reopen, edit, reorder, drag/play/drop and retrieve a notecard in a mixed hand.
-- [ ] Pass privately to a second account; only the recipient receives the artwork. Retry after recipient leaves.
+- [ ] As a Helper, GM or room owner, pass privately to a second account; only the recipient receives the artwork. Retry after recipient leaves.
 - [ ] Save/reload and reconnect with hand notecards; unclaimed-hand reassignment preserves drawings.
 - [ ] Selective Show displays a drawing only to the chosen viewer; reopening it retracts the reveal.
 - [ ] Compact/full toolbars fit phone widths; icon tooltips, keyboard names and touch targets remain usable.
@@ -410,3 +410,40 @@ with migration 022, restart the server and refresh all clients before manual tes
   controls return; asset search must not include account templates.
 - [ ] Save/reconnect/restart and restore scenes/games containing copies; templates remain account
   data independent from those snapshots. Check pending-response cleanup on disconnect.
+
+
+### Portrait and landscape notecards — manual tests reported green
+
+UI and Tabler `rectangle` / `rectangle-vertical` approved on 2026-09-27. The user confirmed manual
+tests are green on the same date, without specifying individual devices or scenarios. Automated validation
+is recorded in [the design notes](DESIGN_notecards.md); the following real-device/multiplayer
+checks are not inferred from automated passes. Restart the server and refresh browsers.
+
+- [ ] Switch orientation by mouse, touch and keyboard in full/compact modes; check focus, hints,
+      pressed state, scrolling and usable portrait drawing area on phone/tablet.
+- [ ] Fit a card containing text, lines and shapes; Undo/Redo restores it. Toggle back before
+      editing and confirm original placement. Draw, erase, pan/zoom, constrain circles/squares,
+      and move/resize text in portrait without stretching or unexpected strokes.
+- [ ] Place portrait face-up/down, inspect as another player/spectator, flip, take to hand, pass
+      privately and Show to one player. Check the physical footprint matches collisions.
+- [ ] Save a portrait template, create a card and stack, and mix both orientations in a stack.
+      Draw/edit/return, split, combine and shuffle; the stack outline stays stable and each drawn
+      card retains its orientation.
+- [ ] Save/reload/reconnect with table, hand and stacked portrait cards. Verify older saves and
+      templates open landscape; failed placement retains the current draft and prior inventory.
+
+
+### Restricted private notecard passing — user accepted
+
+The user confirmed the restriction works and approved committing it on 2026-09-27. No individual
+device/multiplayer test matrix was reported; the detailed checks below remain reusable.
+
+- [ ] As a regular player, confirm the entire recipient/pass row is absent in full/compact,
+      desktop/touch editors. Keep in hand and table placement still work, and a Helper can send
+      a card to this player.
+- [ ] As Helper, GM and owner, pass a table card, hand card, stack top and new template draft to
+      a regular player; verify only the selected recipient receives its contents.
+- [ ] Demote the sender with the recipient picker focused. The row disappears immediately,
+      selection clears and focus moves to the drawing surface. Promotion restores the controls.
+- [ ] Demote between opening a draft and sending: the server rejects the stale request, retains
+      the draft and inventory, and allows keeping the card instead.

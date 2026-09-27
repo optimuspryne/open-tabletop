@@ -213,6 +213,7 @@ export function createNotecardTemplates({ byId, editor, getRoom, canInteract }) 
         record.content.drawing,
         record.content.paper,
         record.content.textBoxes,
+        record.content.orientation,
       );
       img.alt = record.name + ' template preview';
       const preview = document.createElement('div');

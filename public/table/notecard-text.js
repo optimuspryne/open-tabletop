@@ -14,6 +14,7 @@ export function createNotecardTextEditor({
   byId,
   canvas,
   view,
+  getOrientation = () => 'landscape',
   getBoxes,
   setBoxes,
   editable,
@@ -33,7 +34,7 @@ export function createNotecardTextEditor({
     pickerKey = '';
   const nodes = new Map();
   const selection = () => getBoxes().find((box) => box.id === selected);
-  const layout = (box) => layoutNotecardText(context, box);
+  const layout = (box) => layoutNotecardText(context, box, getOrientation());
   const error = () =>
     !normalizeNotecardTextBoxes(getBoxes())
       ? 'Text limit reached. Use up to 8 boxes and 500 characters per box.'
@@ -259,7 +260,7 @@ export function createNotecardTextEditor({
     const next = { ...box };
     if (resize)
       next.w = Math.max(
-        NOTECARD_TEXT.minWidth,
+        NOTECARD_TEXT.minWidth * (box.scale ?? 1),
         Math.min(1 - box.x, box.w + position[0] - start[0]),
       );
     else {
@@ -316,7 +317,7 @@ export function createNotecardTextEditor({
     const next = { ...box },
       dx = event.key === 'ArrowLeft' ? -MOVE_STEP : event.key === 'ArrowRight' ? MOVE_STEP : 0;
     if (event.shiftKey || target === nodes.get(box.id)?.handle)
-      next.w = Math.max(NOTECARD_TEXT.minWidth, Math.min(1 - box.x, box.w + dx));
+      next.w = Math.max(NOTECARD_TEXT.minWidth * (box.scale ?? 1), Math.min(1 - box.x, box.w + dx));
     else {
       next.x = Math.max(0, Math.min(1 - box.w, box.x + dx));
       next.y = Math.max(

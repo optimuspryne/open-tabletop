@@ -1,4 +1,4 @@
-// One landscape drawing surface. Limits bound messages, textures and saved scenes.
+// Shared paper dimensions. Limits bound messages, textures and saved scenes.
 export const NOTECARD = Object.freeze({
   width: 4.5,
   height: 3,
@@ -14,6 +14,48 @@ export const NOTECARD = Object.freeze({
   paper: '#fffdf5',
   back: '#344759',
 });
+export const NOTECARD_ORIENTATIONS = Object.freeze(['landscape', 'portrait']);
+export function normalizeNotecardOrientation(value = 'landscape') {
+  return NOTECARD_ORIENTATIONS.includes(value) ? value : null;
+}
+export function notecardDimensions(orientation = 'landscape') {
+  const portrait = orientation === 'portrait';
+  return {
+    width: portrait ? NOTECARD.height : NOTECARD.width,
+    height: portrait ? NOTECARD.width : NOTECARD.height,
+    canvasWidth: portrait ? NOTECARD.canvasHeight : NOTECARD.canvasWidth,
+    canvasHeight: portrait ? NOTECARD.canvasWidth : NOTECARD.canvasHeight,
+  };
+}
+// Fitting preserves stroke widths, text wrapping and padding as well as point proportions.
+// The optional per-item scale keeps the existing named pen/font sizes intact.
+const validContentScale = (value = 1) => Number.isFinite(value) && value >= 1e-8 && value <= 1;
+export function reorientNotecardContent(content, orientation) {
+  if (!normalizeNotecardOrientation(orientation)) return null;
+  const from = notecardDimensions(content.orientation),
+    to = notecardDimensions(orientation);
+  const fit = Math.min(to.canvasWidth / from.canvasWidth, to.canvasHeight / from.canvasHeight);
+  const sx = (from.canvasWidth * fit) / to.canvasWidth;
+  const sy = (from.canvasHeight * fit) / to.canvasHeight;
+  const x = (n) => (1 - sx) / 2 + n * sx,
+    y = (n) => (1 - sy) / 2 + n * sy;
+  return normalizeNotecardContent({
+    ...content,
+    orientation,
+    drawing: content.drawing.map((stroke) => ({
+      ...stroke,
+      scale: (stroke.scale ?? 1) * sx,
+      pts: stroke.pts.map((n, i) => (i % 2 ? y(n) : x(n))),
+    })),
+    textBoxes: content.textBoxes.map((box) => ({
+      ...box,
+      x: x(box.x),
+      y: y(box.y),
+      w: box.w * sx,
+      scale: (box.scale ?? 1) * sx,
+    })),
+  });
+}
 export const NOTECARD_COLORS = Object.freeze([
   '#202830',
   '#d43b3b',
@@ -45,7 +87,7 @@ export function normalizeNotecardTextBoxes(value = []) {
       typeof box !== 'object' ||
       Array.isArray(box) ||
       Object.keys(box).some(
-        (key) => !['id', 'text', 'x', 'y', 'w', 'size', 'color', 'align'].includes(key),
+        (key) => !['id', 'text', 'x', 'y', 'w', 'size', 'color', 'align', 'scale'].includes(key),
       ) ||
       !Number.isInteger(box.id) ||
       box.id < 1 ||
@@ -58,7 +100,9 @@ export function normalizeNotecardTextBoxes(value = []) {
       box.x < 0 ||
       box.y < 0 ||
       box.y > 1 ||
-      box.w < NOTECARD_TEXT.minWidth ||
+      !validContentScale(box.scale) ||
+      box.w + 1e-4 < NOTECARD_TEXT.minWidth * (box.scale ?? 1) ||
+      box.w < 0.0001 ||
       box.x + box.w > 1 + 1e-8 ||
       !NOTECARD_TEXT.sizes.includes(box.size) ||
       !NOTECARD_COLORS.includes(box.color) ||
@@ -77,6 +121,7 @@ export function normalizeNotecardTextBoxes(value = []) {
       size: box.size,
       color: box.color,
       align: box.align,
+      ...(box.scale !== undefined && box.scale !== 1 ? { scale: box.scale } : {}),
     });
   }
   return result;
@@ -87,7 +132,10 @@ export function normalizeNotecardContent(value) {
   const drawing = normalizeNotecardDrawing(value?.drawing);
   const paper = normalizeNotecardPaper(value?.paper);
   const textBoxes = normalizeNotecardTextBoxes(value?.textBoxes);
-  return drawing && paper && textBoxes ? { drawing, paper, textBoxes } : null;
+  const orientation = normalizeNotecardOrientation(value?.orientation);
+  return drawing && paper && textBoxes && orientation
+    ? { drawing, paper, textBoxes, orientation }
+    : null;
 }
 export const NOTECARD_PATTERNS = Object.freeze(['blank', 'ruled', 'grid', 'dots']);
 export const NOTECARD_TONES = Object.freeze({
@@ -121,7 +169,10 @@ export function normalizeNotecardDrawing(value) {
       !stroke ||
       typeof stroke !== 'object' ||
       Array.isArray(stroke) ||
-      Object.keys(stroke).some((key) => !['pts', 'color', 'width', 'erase'].includes(key)) ||
+      Object.keys(stroke).some(
+        (key) => !['pts', 'color', 'width', 'erase', 'scale'].includes(key),
+      ) ||
+      !validContentScale(stroke.scale) ||
       !Array.isArray(stroke.pts) ||
       stroke.pts.length < 2 ||
       stroke.pts.length % 2 ||
@@ -142,6 +193,7 @@ export function normalizeNotecardDrawing(value) {
       color: stroke.color,
       width: stroke.width,
       erase: stroke.erase,
+      ...(stroke.scale !== undefined && stroke.scale !== 1 ? { scale: stroke.scale } : {}),
     });
   }
   return result;

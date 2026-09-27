@@ -3,6 +3,7 @@ import {
   NOTECARD,
   NOTECARD_TONES,
   normalizeNotecardPaper,
+  notecardDimensions,
   notecardStackHeight,
 } from '../../shared/notecards.js';
 import { drawCanvasStroke } from './strokes.js';
@@ -21,7 +22,7 @@ const PAPER_GUIDES = Object.freeze({
 export function paintNotecard(
   context,
   drawing,
-  { back = false, name = '', count = 0, paper, textBoxes = [] } = {},
+  { back = false, name = '', count = 0, paper, textBoxes = [], orientation } = {},
 ) {
   const { width, height } = context.canvas;
   const style = normalizeNotecardPaper(paper) || normalizeNotecardPaper();
@@ -48,7 +49,7 @@ export function paintNotecard(
     );
   } else {
     // Pattern spacing follows the paper, so thumbnails and zoomed faces agree.
-    const step = width / PAPER_GUIDES.columns;
+    const step = Math.max(width, height) / PAPER_GUIDES.columns;
     context.strokeStyle = PAPER_GUIDES.line;
     context.fillStyle = PAPER_GUIDES.dot;
     context.lineWidth = width / NOTECARD.canvasWidth;
@@ -83,21 +84,30 @@ export function paintNotecard(
     const inkContext = ink.getContext('2d');
     for (const stroke of drawing || []) {
       inkContext.globalCompositeOperation = stroke.erase ? 'destination-out' : 'source-over';
-      drawCanvasStroke(inkContext, stroke, width, height, '#000000', 1);
+      drawCanvasStroke(
+        inkContext,
+        { ...stroke, width: stroke.width * (stroke.scale ?? 1) },
+        width,
+        height,
+        '#000000',
+        0,
+      );
     }
     context.drawImage(ink, 0, 0);
-    paintNotecardText(context, textBoxes);
+    paintNotecardText(context, textBoxes, orientation);
   }
 }
 
 export function notecardMesh(props = {}) {
+  const dimensions = notecardDimensions(props.orientation);
   const texture = (back) => {
     const canvas = document.createElement('canvas');
-    canvas.width = NOTECARD.canvasWidth;
-    canvas.height = NOTECARD.canvasHeight;
+    canvas.width = dimensions.canvasWidth;
+    canvas.height = dimensions.canvasHeight;
     paintNotecard(canvas.getContext('2d'), props.drawing, {
       paper: props.paper,
       textBoxes: props.textBoxes,
+      orientation: props.orientation,
       back,
       name: props.editingName || '',
       count: props.stackCount || 0,
@@ -114,9 +124,9 @@ export function notecardMesh(props = {}) {
       : new THREE.MeshStandardMaterial({ map: texture(false), roughness: 0.8 });
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(
-      NOTECARD.width,
+      dimensions.width,
       props.stackCount ? notecardStackHeight(props.stackCount) : NOTECARD.thickness,
-      NOTECARD.height,
+      dimensions.height,
     ),
     [edge, edge, front, back, edge, edge],
   );
@@ -125,6 +135,7 @@ export function notecardMesh(props = {}) {
 }
 
 export function notecardStackMesh(props = {}) {
+  const dimensions = notecardDimensions(props.orientation);
   const mesh = notecardMesh({
     ...props,
     drawing: [],
@@ -136,8 +147,8 @@ export function notecardStackMesh(props = {}) {
   const positions = [];
   for (let i = 1; i < count; i++) {
     const y = -notecardStackHeight(count) / 2 + i * NOTECARD.thickness;
-    const x = NOTECARD.width / 2 + 0.001,
-      z = NOTECARD.height / 2 + 0.001;
+    const x = dimensions.width / 2 + 0.001,
+      z = dimensions.height / 2 + 0.001;
     positions.push(-x, y, -z, x, y, -z, x, y, -z, x, y, z, x, y, z, -x, y, z, -x, y, z, -x, y, -z);
   }
   const geometry = new THREE.BufferGeometry();

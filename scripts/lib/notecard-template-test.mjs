@@ -12,7 +12,7 @@ export async function verifyNotecardTemplates({ page, browser, device }) {
   await page.evaluate(`(async()=>{
     noteTest.editor.cancel();document.getElementById('pieceMenu').hidden=true;
     const {createNotecardTemplates}=await import('/table/notecard-templates.js');
-    const content={drawing:[],paper:{pattern:'ruled',tone:'ivory'},textBoxes:[{id:1,text:'Expedition log\\nName:\\nDestination:',x:.1,y:.1,w:.8,size:.04,color:'#202830',align:'left'}]};
+    const content={orientation:'portrait',drawing:[],paper:{pattern:'ruled',tone:'ivory'},textBoxes:[{id:1,text:'Expedition log\\nName:\\nDestination:',x:.1,y:.1,w:.8,size:.04,color:'#202830',align:'left'}]};
     noteTest.templateRecords=[{id:'1',name:'Expedition log',content,isPublic:false,canEdit:true,ownerId:'me',ownerName:'Me',revision:1}];
     noteTest.requests=[];const realFetch=window.fetch;noteTest.restoreFetch=()=>window.fetch=realFetch;
     window.fetch=async(url,options={})=>{
@@ -46,6 +46,7 @@ export async function verifyNotecardTemplates({ page, browser, device }) {
   const saved = await page.evaluate(`noteTest.requests.find(r=>r.method==='POST').body`);
   assert.equal(saved.isPublic, false);
   assert.equal(saved.name, 'Mission sheet');
+  assert.equal(saved.content.orientation, 'portrait');
   assert.equal(saved.content.textBoxes[0].text, 'Expedition log\nName:\nDestination:');
   assert.equal(
     await page.evaluate(`document.getElementById('notecardDialog').open`),

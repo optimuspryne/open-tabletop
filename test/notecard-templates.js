@@ -5,7 +5,12 @@ import {
   createNotecardTemplatesRouter,
 } from '../server/http/routes/notecard-templates.js';
 
-const content = { drawing: [], paper: { pattern: 'grid', tone: 'ivory' }, textBoxes: [] };
+const content = {
+  orientation: 'landscape',
+  drawing: [],
+  paper: { pattern: 'grid', tone: 'ivory' },
+  textBoxes: [],
+};
 const value = { name: ' Sheet ', content };
 function invoke(router, method, path, req = {}) {
   const route = router.stack.find((l) => l.route?.path === path && l.route.methods[method]).route;
@@ -139,4 +144,22 @@ test('template database failures reach the HTTP error boundary instead of report
   const router = createNotecardTemplatesRouter({ db, requireUser: async () => ({ id: '3' }) });
   await assert.rejects(invoke(router, 'get', '/'), /database unavailable/);
   await assert.rejects(invoke(router, 'post', '/', { body: value }), /write unavailable/);
+});
+
+test('templates normalize legacy landscape and persist portrait orientation', () => {
+  const legacy = { ...content };
+  delete legacy.orientation;
+  assert.equal(
+    normalizeNotecardTemplate({ ...value, content: legacy }).content.orientation,
+    'landscape',
+  );
+  assert.equal(
+    normalizeNotecardTemplate({ ...value, content: { ...content, orientation: 'portrait' } })
+      .content.orientation,
+    'portrait',
+  );
+  assert.equal(
+    normalizeNotecardTemplate({ ...value, content: { ...content, orientation: null } }),
+    null,
+  );
 });

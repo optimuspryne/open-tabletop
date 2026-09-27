@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
 import { verifyNotecardTemplates } from './lib/notecard-template-test.mjs';
+import { verifyNotecardOrientation } from './lib/notecard-orientation-test.mjs';
 import { verifyNotecardText } from './lib/notecard-text-test.mjs';
 import { serveDir, launch, newPage } from './lib/headless.mjs';
 
@@ -21,7 +22,7 @@ try {
     await page.evaluate(`(async () => {
       const { createNotecardEditor } = await import('/table/notecards.js');
       const messages = new Map();
-      window.noteTest = { sent: [], messages, allowed: true, leave: null };
+      window.noteTest = { sent: [], messages, allowed: true, rank: 1, leave: null };
       const room = {
         sessionId: 'me',
         state: { players: new Map([['me',{name:'Me',participation:'player'}],['bob',{name:'Bob',participation:'player'}]]), pieces: new Map([['one', { type:'notecard', props:JSON.stringify({faceDown:true}) }]]) },
@@ -32,11 +33,59 @@ try {
       };
       noteTest.room = room;
       noteTest.editor = createNotecardEditor({ getRoom:()=>room, byId:(id)=>document.getElementById(id),
-        canInteract:()=>noteTest.allowed, beforeOpen(){}, toast(){}, repeat:()=>1, stopRepeat(){} });
+        canInteract:()=>noteTest.allowed, getRank:()=>noteTest.rank, beforeOpen(){}, toast(){}, repeat:()=>1, stopRepeat(){} });
       noteTest.editor.bindRoom(room);
       noteTest.editor.open('one');
       messages.get('notecardEdit')({id:'one',token:'first',drawing:[]});
     })()`);
+    // Role changes must update an open editor immediately and never strand focus in hidden controls.
+    await page.evaluate(`noteTest.rank=0;noteTest.editor.applyRole()`);
+    assert.deepEqual(
+      await page.evaluate(
+        `(() => ({hidden:document.getElementById('notecardPassControls').hidden,disabled:document.getElementById('notecardPass').disabled,keep:document.getElementById('notecardKeep').hidden}))()`,
+      ),
+      { hidden: true, disabled: true, keep: false },
+    );
+    const originalFull = await page.evaluate(`document.body.classList.contains('ui-full')`);
+    for (const full of [true, false]) {
+      await page.evaluate(`document.body.classList.toggle('ui-full',${full})`);
+      assert.equal(
+        await page.evaluate(
+          `document.getElementById('notecardDialog').scrollWidth>document.getElementById('notecardDialog').clientWidth`,
+        ),
+        false,
+      );
+      await writeFile(
+        `/tmp/notecard-player-${device.width}-${full ? 'full' : 'compact'}.png`,
+        Buffer.from(
+          (await browser.send('Page.captureScreenshot', { format: 'png' }, page.sessionId)).data,
+          'base64',
+        ),
+      );
+    }
+    await page.evaluate(`document.body.classList.toggle('ui-full',${originalFull})`);
+    for (const rank of [1, 2, 3]) {
+      await page.evaluate(`noteTest.rank=${rank};noteTest.editor.applyRole()`);
+      assert.equal(
+        await page.evaluate(`document.getElementById('notecardPassControls').hidden`),
+        false,
+      );
+    }
+    await page.evaluate(
+      `document.getElementById('notecardRecipient').value='bob';document.getElementById('notecardRecipient').focus();noteTest.rank=0;noteTest.editor.applyRole()`,
+    );
+    assert.equal(await page.evaluate(`document.activeElement.id`), 'notecardCanvas');
+    assert.equal(await page.evaluate(`document.getElementById('notecardRecipient').value`), '');
+    const sentBefore = await page.evaluate(`noteTest.sent.length`);
+    // Even a stale or manually enabled control cannot send after demotion.
+    await page.evaluate(
+      `document.getElementById('notecardPass').disabled=false;document.getElementById('notecardPass').onclick()`,
+    );
+    assert.equal(await page.evaluate(`noteTest.sent.length`), sentBefore);
+    assert.equal(await page.evaluate(`noteTest.editor.templateContext().busy`), false);
+    await page.evaluate(
+      `noteTest.rank=1;noteTest.editor.applyRole();document.getElementById('notecardPen').focus()`,
+    );
     const rect = await page.evaluate(`(() => {
       const dialog = document.getElementById('notecardDialog'), canvas = document.getElementById('notecardCanvas');
       const r = canvas.getBoundingClientRect(), d=dialog.getBoundingClientRect();
@@ -352,6 +401,7 @@ try {
     assert.equal(pixels.backSame, true, 'paper choices do not mark the concealed back');
     assert.equal(pixels.thumbnailChanged, true, 'hand thumbnail includes paper');
     await verifyNotecardText({ page, browser, device, pointer, key });
+    await verifyNotecardOrientation({ page, browser, device, key, pointer });
     await page.evaluate(`noteTest.messages.get('notecardClosed')({token:'hand-token'});
       noteTest.editor.open('one'); noteTest.messages.get('notecardEdit')({id:'one',token:'screenshot',paper:{pattern:'grid',tone:'ivory'},drawing:[{pts:[.1,.2,.2,.6,.4,.25,.6,.7,.8,.3],color:'#2878ba',width:.007,erase:false}]});`);
     for (const full of [true, false]) {
@@ -424,7 +474,9 @@ try {
       const kind = { notecard:{mesh:notecardMesh,dispose:disposeHierarchy,grab:0}, notecardStack:{mesh:notecardStackMesh,dispose:disposeHierarchy,grab:0} };
       const view = createPieceView({ scene,meshes,buffers:new Map(),kinds:kind,physics:{notecard:{mass:0.18},notecardStack:{mass:0.18}},deckHeight:()=>1,createQuaternion:()=>new THREE.Quaternion(),refreshCollider(){},isInspected:()=>false });
       view.bindRoom(noteTest.room, (target)=>target===noteTest.room.state ? { pieces:{onAdd(fn){fn(piece,'converted');},onRemove(){}} } : {listen(key,fn){listeners.set(key,fn);}}, {onHydration(){},onOwner(){},onBoardTop(){},onRemove(){},disposeSurface(){}});
-      piece.type='notecardStack'; piece.count=4; piece.props=JSON.stringify({faceDown:true});
+      piece.props=JSON.stringify({orientation:'portrait',faceDown:true});listeners.get('props')();
+      noteTest.orientedSize=[meshes.get('converted').mesh.geometry.parameters.width,meshes.get('converted').mesh.geometry.parameters.depth];
+      piece.type='notecardStack'; piece.count=4; piece.props=JSON.stringify({faceDown:true,orientation:'portrait'});
       listeners.get('type')();
       noteTest.convertedType=meshes.get('converted').type;
       noteTest.meshHeight=meshes.get('converted').mesh.geometry.parameters.height;
@@ -439,6 +491,7 @@ try {
         setPointer(){},pickId(){},isSheet:()=>false,openRadial(){},highlightPiece(){},getRank:()=>0,editLabels(){},browseDeck(){} });
       document.getElementById('tableLoading')?.remove(); noteTest.ui.openPieceMenu('stack',{x:20,y:20});
     })()`);
+    assert.deepEqual(await page.evaluate(`noteTest.orientedSize`), [3, 4.5]);
     assert.equal(await page.evaluate(`noteTest.convertedType`), 'notecardStack');
     assert.equal(await page.evaluate(`noteTest.meshHeight`), 0.4);
     assert.equal(await page.evaluate(`noteTest.resizedHeight`), 0.2);
@@ -496,6 +549,23 @@ try {
       `noteTest.ui.openPieceMenu('stack',{x:20,y:20});document.querySelectorAll('#pieceMenu button')[0].click()`,
     );
     assert.equal(await page.evaluate(`noteTest.sent.at(-1).payload.destination`), 'hand');
+    await page.evaluate(
+      `noteTest.editor.cancel();noteTest.rank=0;noteTest.editor.openTemplate({content:{drawing:[]}});noteTest.editor.applyRole()`,
+    );
+    assert.equal(
+      await page.evaluate(`document.getElementById('notecardPassControls').hidden`),
+      true,
+    );
+    const draftSentBefore = await page.evaluate(`noteTest.sent.length`);
+    await page.evaluate(
+      `document.getElementById('notecardPass').disabled=false;document.getElementById('notecardPass').onclick()`,
+    );
+    assert.equal(await page.evaluate(`noteTest.sent.length`), draftSentBefore);
+    await page.evaluate(`noteTest.rank=1;noteTest.editor.applyRole()`);
+    assert.equal(
+      await page.evaluate(`document.getElementById('notecardPassControls').hidden`),
+      false,
+    );
     await verifyNotecardTemplates({ page, browser, device });
     assert.deepEqual(page.errors, []);
     await page.close();

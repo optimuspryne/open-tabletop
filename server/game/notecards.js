@@ -1,5 +1,5 @@
-import { updateNotecardStackCollider } from './collider-maintenance.js';
-import { canUseRoomCapability } from '../permissions.js';
+import { updateNotecardStackCollider, updateNotecardCollider } from './collider-maintenance.js';
+import { canUseRoomCapability, RANK } from '../permissions.js';
 import { hasPieceCapacity } from './piece-capacity.js';
 import { randomUUID } from 'node:crypto';
 import * as CANNON from 'cannon-es';
@@ -11,6 +11,8 @@ import {
 import { pieceIdPayload, isPlainObject } from '../message-validation.js';
 import { readProps, writeProps } from './props-codec.js';
 import { guardedMessage } from './interaction-policy.js';
+
+const PASS_ROLE_MESSAGE = 'Only Helpers, GMs and room owners can pass notecards privately.';
 
 // Artwork is authoritative here, never in public props while concealed or being edited.
 export function createNotecards(room, { now = Date.now, token = randomUUID } = {}) {
@@ -31,7 +33,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       total += held.cards.filter((card) => card.kind === 'notecard').length;
     return total;
   }
-  function give(client, { drawing, paper, textBoxes }, props = {}) {
+  function give(client, { drawing, paper, textBoxes, orientation }, props = {}) {
     const hand = room.hands.get(client.sessionId) || [];
     hand.push({
       hid: 'h' + room.nextHid++,
@@ -40,6 +42,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       drawing,
       paper,
       textBoxes,
+      orientation,
       noteProps: Object.fromEntries(
         ['snap', 'stand', 'label']
           .filter((key) => props[key] !== undefined)
@@ -57,6 +60,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         drawing: card.drawing,
         paper: card.paper,
         textBoxes: card.textBoxes,
+        orientation: card.orientation,
         faceDown,
       });
     } finally {
@@ -103,6 +107,10 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       fail('The notecard could not be created. Check the content and copy count.');
       return;
     }
+    if (destination === 'pass' && room.rank(client) < RANK.helper) {
+      fail(PASS_ROLE_MESSAGE);
+      return;
+    }
     const completed = creations.get(client) || new Set();
     if (completed.has(message.request)) {
       client.send('notecardCreated', { request: message.request });
@@ -133,6 +141,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       }
       if (destination === 'stack')
         room.spawn('notecardStack', [0, 3, 0], {
+          orientation: content.orientation,
           cards: Array.from({ length: amount }, () => ({
             ...structuredClone(content),
             noteProps: {},
@@ -156,6 +165,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     delete props.editing;
     delete props.editingName;
     delete props.cards;
+    if (doc) props.orientation = doc.orientation;
     props.faceDown = stacks.has(id) || doc.faceDown || leases.has(id);
     if (!props.faceDown) {
       props.drawing = doc.drawing;
@@ -238,6 +248,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         drawing: card.drawing,
         paper: card.paper,
         textBoxes: card.textBoxes,
+        orientation: card.orientation,
       });
       return;
     }
@@ -271,6 +282,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       drawing: (stacks.get(id)?.at(-1) || documents.get(id)).drawing,
       paper: (stacks.get(id)?.at(-1) || documents.get(id)).paper,
       textBoxes: (stacks.get(id)?.at(-1) || documents.get(id)).textBoxes,
+      orientation: (stacks.get(id)?.at(-1) || documents.get(id)).orientation,
       fromStack: stacks.has(id),
     });
   }
@@ -296,6 +308,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       : stacks.get(message.id)?.at(-1) || documents.get(message.id);
     const content = normalizeNotecardContent({
       drawing: message.drawing,
+      orientation: message.orientation === undefined ? source?.orientation : message.orientation,
       paper: message.paper === undefined ? source?.paper : message.paper,
       textBoxes: message.textBoxes === undefined ? source?.textBoxes : message.textBoxes,
     });
@@ -310,6 +323,10 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       (destination === 'table' && typeof message.faceDown !== 'boolean')
     ) {
       fail('The notecard could not be saved. Check text and drawing limits, then try again.');
+      return;
+    }
+    if (destination === 'pass' && room.rank(client) < RANK.helper) {
+      fail(PASS_ROLE_MESSAGE);
       return;
     }
     const card = lease.hid ? handCard(lease.sid, lease.hid) : null;
@@ -356,7 +373,12 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
         return;
       }
       // Keep inventory and committed artwork intact if creation fails.
-      const previous = { drawing: card.drawing, paper: card.paper, textBoxes: card.textBoxes };
+      const previous = {
+        drawing: card.drawing,
+        paper: card.paper,
+        textBoxes: card.textBoxes,
+        orientation: card.orientation,
+      };
       Object.assign(card, content);
       try {
         placeHandCard([0, 3, 0], card, message.faceDown);
@@ -367,6 +389,8 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       room.hands.get(lease.sid).splice(room.hands.get(lease.sid).indexOf(card), 1);
       room.sendHand(client);
     } else if (destination === 'table') {
+      if (content.orientation !== source.orientation)
+        updateNotecardCollider(room, message.id, content.orientation);
       documents.set(message.id, { ...content, faceDown: message.faceDown });
     } else if (destination === 'hand' && card) {
       Object.assign(card, content);
@@ -417,7 +441,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     if (!piece || piece.owner || room.flips.has(parsed.id) || blocked(client, message)) return null;
     return parsed.id;
   }
-  function placeStackCard(id, top, { drawing, paper, textBoxes }, faceDown) {
+  function placeStackCard(id, top, { drawing, paper, textBoxes, orientation }, faceDown) {
     const body = room.bodies.get(id);
     transferring.add(top);
     try {
@@ -429,6 +453,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
           drawing,
           paper,
           textBoxes,
+          orientation,
           faceDown,
         },
       );
@@ -523,6 +548,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
               drawing: documents.get(id).drawing,
               paper: documents.get(id).paper,
               textBoxes: documents.get(id).textBoxes,
+              orientation: documents.get(id).orientation,
               noteProps: readProps(room.state.pieces.get(id)),
             },
           ],

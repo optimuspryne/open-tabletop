@@ -1,6 +1,6 @@
 # Drawable notecards
 
-Status: account templates are implemented with approved UI/icons; implementation acceptance is pending. Editable text boxes are implemented, user-tested and approved for commit. Paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
+Status: portrait/landscape is implemented with approved UI/icons; the user confirmed manual tests are green on 2026-09-27. Account templates are implemented, user-tested and approved for commit. Editable text boxes are implemented, user-tested and approved for commit. Paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
 implemented and user-approved for commit. Automated verification is recorded below; the user
 did not specify a per-device or multiplayer test matrix.
 
@@ -517,3 +517,126 @@ revision requires no additional migration or server restart.
 User review on 2026-09-27: the user said the result looks great and approved the template changes
 for commit. This records acceptance of the delivered work; it does not establish completion of
 every real-device, assistive-technology or multiplayer check in `DEVICE_QA.md`.
+
+
+## Portrait and landscape — approved 2026-09-27
+
+The user approved Landscape/Portrait controls beside Paper/Tone and Tabler `rectangle` /
+`rectangle-vertical`. The user confirmed manual tests are green on 2026-09-27. No specific real-device or
+multiplayer test matrix was reported, so the detailed checklist remains unmarked.
+
+Landscape remains the legacy default. Portrait swaps the physical width/depth and canonical
+canvas dimensions. Existing content is centered and uniformly fitted when changing orientation;
+text remains editable and ink/eraser widths and font/padding scale together. Undo/Redo includes
+orientation, and toggling back before changing content restores the original layout exactly.
+After content edits or reopening, a new orientation change fits the current document; use Undo
+when the intent is to restore the previous layout. Zoom/pan resets locally on orientation change.
+
+Orientation is retained in cards, templates, private hands, passes, selective Show, stack entries
+and saved games. A loose card's outline is public even face-down. Stacks align mixed reading
+orientations to one stable outline: template stacks use the template orientation, a fresh stack
+uses its first card's orientation, split retains the outline, and combine uses the anchor's.
+Shuffle and top-card edits do not change it; drawing restores the individual card's orientation.
+
+### Reuse and boundaries
+
+Extended the existing content normalizer, combined history, shape helpers, text renderer/editor,
+shared collider specification and private inventory paths. `notecardDimensions` is the shared
+source for both canvas and physical geometry; `reorientNotecardContent` performs proportional
+fitting. Optional bounded item `scale` preserves the existing named pen/font sizes and text
+wrapping. No separate drawing protocol, asset format, database table or migration was added.
+Existing component classes, tokens, native buttons and icon helpers supply the UI; only portrait
+stage sizing needs orientation-specific CSS. The whiteboard protocol remains unchanged.
+
+### File and function map
+
+| File | Changes |
+| --- | --- |
+| `shared/notecards.js` | Add `NOTECARD_ORIENTATIONS`, `normalizeNotecardOrientation`, `notecardDimensions`, `validContentScale`, `reorientNotecardContent`; extend content, stroke and text normalization. |
+| `shared/collider-spec.js` | `colliderSpec` uses orientation dimensions for loose cards and stacks, including diagnostics. |
+| `server/game/collider-maintenance.js` | Add `updateNotecardCollider`; extend `updateNotecardStackCollider` to use the public outline. |
+| `server/game/piece-lifecycle.js` | `spawn` normalizes stack outline and publishes validated orientation. |
+| `server/game/notecards.js` | Extend `give`, `placeHandCard`, `create`, `publish`, `claim`, `commit`, `placeStackCard`, `combine`; preserve orientation and rollback all hand content on placement failure. |
+| `server/game/scene-persistence.js` | `applyScene` validates stack outline before clearing the table; existing normalizers restore individual orientations. |
+| `server/game/handlers/room-features.js` | `registerRoomFeatureHandlers` / `showStart` carries orientation to the selected audience. |
+| `public/rendering/notecards.js` | `paintNotecard` supports scaled ink and portrait text; `notecardMesh` / `notecardStackMesh` use shared orientation dimensions, including textures and seams. |
+| `public/rendering/notecard-text.js` | `layoutNotecardText` / `paintNotecardText` use orientation pixels and fitted font/padding scale. |
+| `public/rendering/graphics.js` | `notecardPreviewURL` returns correctly shaped thumbnails. |
+| `public/table/notecards.js` | Add `syncCanvas`; extend `show`, `open`, `openHand`, `sync`, `paint`, `close`, combined `snapshot`/`history`, shape creation, placement/capture and live view updates; wire orientation buttons and exact immediate toggle-back snapshots. |
+| `public/table/notecard-text.js` | `createNotecardTextEditor` accepts `getOrientation`; layout, overflow, overlays, pointer resize and keyboard resize honor fitted content. |
+| `public/table/notecard-shapes.js` | `notecardShapePoints` uses current orientation for constrained physical shapes. |
+| `public/table/hand.js` | `createHand` passes orientation through thumbnail and drag-preview paths. |
+| `public/table/presence.js` | `refreshFan` renders revealed portrait faces. |
+| `public/table/notecard-templates.js` | `render` includes orientation in preview generation; existing complete-document saves/copies retain it. |
+| `public/styles.css` | Existing editor stage/canvas sizing uses shared aspect; portrait sizes support full/compact and touch layouts. |
+| `public/table.html` | Approved semantic orientation group/buttons and in-app help; regenerated icons. |
+| `public/index.html`, `public/admin.html` | Regenerated shared icon sprites only. |
+| `scripts/build-icons.mjs` | Add the two approved Tabler outline names. |
+| `test/notecards.js` | Legacy/invalid normalization, proportional fitting, concealed public geometry, actual colliders, old-client commits, private transfer/Show, saved-game restore, failed allocation rollback and mixed-stack invariants. |
+| `test/notecard-text.js` | Portrait bounds and unchanged line wrapping after fitting either direction. |
+| `test/notecard-shapes.js` | Physical constrained portrait squares, circles and diagonal lines. |
+| `test/notecard-templates.js` | Legacy default, portrait persistence and malformed orientation rejection. |
+| `scripts/lib/notecard-orientation-test.mjs` | Add `verifyNotecardOrientation`: keyboard selection, history/exact toggle-back, real mouse/touch drawing, text overlay bounds, creation/export, mesh/texture/thumbnail geometry and responsive full/compact screenshots. |
+| `scripts/notecard-test.mjs` | Invoke the orientation fixture and test live synchronized orientation changes through the production piece-view binding. |
+| `scripts/lib/notecard-template-test.mjs` | Exercise portrait template save/share/copy/stack flows through the real editor/controller. |
+| `CHANGELOG.md` | Record the Unreleased feature and restart/refresh requirement. |
+| `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` | Updated protocol, validation, geometry, privacy and stack contracts. |
+| `docs/GESTURES.md`, `docs/DEVICE_QA.md` | Mouse/touch/keyboard interactions and outstanding manual checks. |
+| `docs/ROADMAP.md`, `docs/DESIGN_notecards.md` | Current implementation status, reuse decisions, complete file map and verification record. |
+
+No existing functions were removed. Restart the server and refresh browsers before testing.
+
+### Verification
+
+- `npm run build:icons` regenerated 161 icons across all three pages.
+- `npm run check` passed lint, formatting, CSS validation and all 837 tests. Its first sandboxed
+  run was blocked by local HTTP/child-process permissions; the permitted rerun passed.
+- `npm run test:input`: 57/57 passed; `npm run test:devices`: all seven profiles passed.
+- Focused notecard browser checks passed at 1280px mouse and 390/360px touch, including portrait
+  template flows; desktop/full and phone/compact screenshots were inspected.
+- `npm run test:components` passed the desktop/coarse production fixtures and all three notecard
+  device profiles, including the final live-binding and mouse/touch portrait drawing assertions.
+  The existing component fixtures reported seven missing asset-texture URLs; they did not fail
+  the suite, and notecard rendering checks passed.
+- Final diff, changed-script lint/format, local documentation links and generated-icon checks passed.
+- The user confirmed manual tests are green on 2026-09-27. The detailed device/multiplayer
+  checklist remains unmarked because no individual test matrix was reported.
+
+
+## Restricted private passing — approved 2026-09-27
+
+Only active Helpers, GMs and room owners may send a notecard privately. Ordinary active players
+may still receive, edit, keep in hand and place cards. The user approved removing the entire
+recipient/pass row from regular-player editors in full/compact and desktop/touch layouts. The
+existing approved `send-2` icon is reused; no sprite regeneration or new styles are needed.
+
+Reuse decision: use the established `room.rank` / `RANK.helper` authorization alongside the
+existing gameplay gate. Check both `create` (template drafts) and `commit` (table/hand/stack)
+before mutation. Both use their existing recoverable error boundaries; no separate protocol or
+permissions framework was added. The editor accepts a live `getRank` dependency with a player
+default and exposes `applyRole`, matching the scoreboard's existing role-refresh pattern.
+
+| File | Changes for this restriction |
+| --- | --- |
+| `server/game/notecards.js` | `create` and `commit` check current sender rank; add shared local denial text. |
+| `public/table/notecards.js` | `createNotecardEditor` accepts `getRank`; `sync` gates/clears pass controls and recovers focus, `place` rechecks access, `show` uses role-appropriate instructions; expose `applyRole`. |
+| `public/client.js` | Inject live rank into the editor and call its `applyRole` from the production role update path. |
+| `public/table.html` | Initially hide the pass row; document the role restriction in help. |
+| `test/notecards.js` | Add authoritative rank to the harness; grant sender roles only in authorized-pass tests; test role/source matrix, forged payload roles, preserved inventory, ordinary recipients, fallback keep, live demotion/promotion and participation denials. |
+| `scripts/notecard-test.mjs` | Live rank injection; test hidden/disabled controls, all permitted ranks, focus recovery, stale enabled-button defense and template-draft restrictions at all existing device widths. |
+| `scripts/lib/notecard-orientation-test.mjs` | Focus the canvas before measuring pointer coordinates so focus-hint wrapping cannot invalidate the test's gesture bounds; report endpoint coordinates on failure. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md` | Record current permissions, UI and protocol contracts. |
+| `docs/DEVICE_QA.md`, `docs/DESIGN_notecards.md` | Approved design, reuse/file map and manual checklist; prior orientation acceptance remains unchanged. |
+
+Verification: targeted notecard unit tests passed (49 tests), input tests passed (57 tests), and
+all seven device profiles passed. Notecard browser tests passed at 1280px mouse and 390/360px
+touch, including full/compact role-control states. Desktop/full and phone full/compact captures
+were visually inspected. The orientation browser test initially used canvas bounds measured
+before a focus-hint layout change; focusing the canvas before measurement resolved the failure
+without relaxing its coordinate assertions. Final `npm run check` passed lint, formatting, CSS
+checks and all 839 unit tests. `npm run test:components` passed desktop/coarse component parity
+and all three notecard browser sizes; the existing seven missing fixture asset-texture warnings
+remain nonfatal.
+The user confirmed the restriction works and approved committing it on 2026-09-27. The detailed
+device/multiplayer checklist remains unmarked because no individual test matrix was reported.
+Restart the server and refresh browsers after deploying these changes.

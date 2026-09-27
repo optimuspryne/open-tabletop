@@ -175,6 +175,7 @@ export function createPresence({
                 drawing: shown[i].drawing,
                 paper: shown[i].paper,
                 textBoxes: shown[i].textBoxes,
+                orientation: shown[i].orientation,
               })
             : cardMesh({ front: shown[i].front, back: shown[i].back })
           : cardMesh({ back: player.handBack || undefined });

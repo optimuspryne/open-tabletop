@@ -1149,8 +1149,8 @@ function resizeToCanvas(file, w, h, fit, bg) {
   });
 }
 
-export function notecardPreviewURL(drawing, paper, textBoxes) {
-  const { canvas, ctx } = makeCanvas(320, 213);
+export function notecardPreviewURL(drawing, paper, textBoxes, orientation) {
+  const { canvas, ctx } = orientation === 'portrait' ? makeCanvas(213, 320) : makeCanvas(320, 213);
   paintNotecard(
     ctx,
     drawing ?? [
@@ -1161,7 +1161,7 @@ export function notecardPreviewURL(drawing, paper, textBoxes) {
         erase: false,
       },
     ],
-    { paper, textBoxes },
+    { paper, textBoxes, orientation },
   );
   try {
     return canvasThumbnailURL(canvas);

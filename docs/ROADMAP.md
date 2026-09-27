@@ -329,6 +329,8 @@ implementation sequence without making the entire backlog a fixed priority queue
     Editable text boxes are implemented with approved UI/icons, shared ink/text history, keyboard
     movement/resizing and private persistence; the user confirmed it works great and approved it for commit. Account-owned templates are now implemented with approved UI/icons and private-by-default sharing;
     the user accepted the final Library layout and approved the changes for commit on 2026-09-27.
+    Portrait/landscape is implemented with approved controls/icons, proportional content fitting,
+    shared geometry and persistence; the user confirmed manual tests are green on 2026-09-27.
     Detailed device/multiplayer QA remains tracked in the [implementation and QA notes](DESIGN_notecards.md).
 18. **Custom asset collections — implemented locally; functionality and UI user-approved.** Let users group multiple custom library assets into named
     collections. Library controls can show or hide collections to keep browsing manageable.

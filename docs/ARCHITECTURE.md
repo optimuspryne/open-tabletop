@@ -1028,7 +1028,13 @@ machinery:
   committed drawing, bounded paper-style data and editable plain-text boxes, inheriting account-owned park/claim/reassignment
   and game persistence. Paper follows the artwork's privacy boundary, including on public faces,
   private Show and saved stack entries; older snapshots default to blank ivory and no text boxes.
-  `normalizeNotecardContent` validates the entire private document before mutation/allocation.
+  `normalizeNotecardContent` validates the entire private document before mutation/allocation,
+  including landscape/portrait orientation (legacy content defaults to landscape). Loose-card
+  orientation is public physical geometry even face-down; paper/ink/text remain concealed.
+  `notecardDimensions` drives canvas, mesh and shared collider dimensions; changing a table card's
+  orientation replaces its collider before committing the content. Client orientation changes
+  center and uniformly fit existing ink/text with bounded per-item scale, retaining named sizes
+  and text wrapping. Undo/Redo snapshots include orientation. View zoom/pan remains local.
   Text remains structured editable data, never HTML or flattened ink. The focused text controller
   owns selection and gestures, while the parent editor owns content and shared ink/text history.
   Measured wrapping is shared by editor, thumbnails and meshes; text paints above ink, so Eraser
@@ -1039,17 +1045,24 @@ machinery:
   the shared whiteboard stroke renderer and protocol remain unchanged. Keyboard drawing enters
   through the drawing intent layer; its cursor, zoom and uncommitted shapes stay local.
   An explicit Show sends faces only to the chosen audience; opening a hand editor retracts Show.
+  Private passing requires the sender's current Helper-or-higher room rank in both new-draft
+  creation and existing-card commit, in addition to gameplay participation. Any active player may
+  receive. Rejected passes retain the reservation/content and cannot consume inventory. Browser
+  role updates hide the recipient/pass row and recover focus; the server remains authoritative.
   Transfers validate recipients and table capacity before consuming inventory. The 16-card cap
   includes physical pieces, active hands and unclaimed hands. View zoom/pan stays browser-local.
   Scene/game serialization reads the committed
   document even during editing; restore keeps concealed faces server-only. Departure, loss of
   gameplay access, expiry and table reset release reservations without replacing committed art.
   Shared stroke replay is reused from the whiteboard; its public broadcast protocol is not used
-  for private drafts. Notecard stacks add server-only ordered `{drawing,paper,textBoxes,noteProps}` entries
+  for private drafts. Notecard stacks add server-only ordered `{drawing,paper,textBoxes,orientation,noteProps}` entries
   within the same service; every entry counts toward the room cap. A stack edit reserves its
   committed top without consuming it. Transfers validate before consumption, and combining
   reuses one physical piece to work at the piece cap. Public state contains only count/back
-  and editor metadata; scene/game saves retain committed private order. Shared counted height
+  and editor metadata plus a stable public outline orientation; each contained card keeps its
+  own reading orientation. Shuffle/top edits do not change that outline or disclose top-card
+  orientation; split retains it, combine uses the anchor, and drawn cards recover their individual
+  dimensions. Scene/game saves retain committed private order. Shared counted height
   drives rendering, collider diagnostics and physics. See [notecard design and limits](DESIGN_notecards.md).
 - **Whiteboard** (shared) — a tilt-up sketch surface. Its _public_ state
   (`enabled/angle/owner/dark`) is synced schema, but **strokes are not**: each

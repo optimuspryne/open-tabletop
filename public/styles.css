@@ -7294,9 +7294,9 @@ body.not-gm .gm-only {
 .notecard-tools label { display: inline-flex; align-items: center; gap: 6px; }
 .notecard-ink { width: 32px; min-height: 32px; background: var(--ink); border: 2px solid var(--border); }
 .notecard-ink[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
-.notecard-stage { position: relative; width: min(100%, max(300px, calc((100dvh - 520px) * 1.5))); margin-inline: auto; touch-action: none; border-radius: 4px; overflow: hidden; }
-#notecardCanvas { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; touch-action: none; cursor: crosshair; }
-.notecard-dialog.has-text-tool .notecard-stage { width: min(100%, max(280px, calc((100dvh - 710px) * 1.5))); }
+.notecard-stage { position: relative; width: min(100%, max(300px, calc((100dvh - 570px) * var(--notecard-aspect, 1.5)))); margin-inline: auto; touch-action: none; border-radius: 4px; overflow: hidden; }
+#notecardCanvas { display: block; width: 100%; height: auto; aspect-ratio: var(--notecard-aspect, 1.5); touch-action: none; cursor: crosshair; }
+.notecard-dialog.has-text-tool .notecard-stage { width: min(100%, max(280px, calc((100dvh - 760px) * var(--notecard-aspect, 1.5)))); }
 .notecard-text-panel { margin-bottom: var(--gap); }
 .notecard-text-panel .button-row { flex-wrap: wrap; align-items: center; margin-block: var(--gap); }
 .notecard-text-panel label { display: inline-flex; align-items: center; gap: var(--gap); }
@@ -7349,3 +7349,6 @@ body.not-gm .gm-only {
 .notecard-template-form label { overflow-wrap: anywhere; }
 
 .notecard-dialog .modal__title { min-width: 0; overflow-wrap: anywhere; }
+
+.notecard-dialog[data-orientation="portrait"] .notecard-stage { width: min(100%, max(190px, calc((100dvh - 570px) * var(--notecard-aspect)))); }
+.notecard-dialog.has-text-tool[data-orientation="portrait"] .notecard-stage { width: min(100%, max(170px, calc((100dvh - 760px) * var(--notecard-aspect)))); }

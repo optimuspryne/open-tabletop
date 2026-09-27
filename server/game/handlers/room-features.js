@@ -123,7 +123,13 @@ export function registerRoomFeatureHandlers(
     if (player) player.showing = cards.length;
     const payload = cards.map((card) =>
       card.kind === 'notecard'
-        ? { kind: 'notecard', drawing: card.drawing, paper: card.paper, textBoxes: card.textBoxes }
+        ? {
+            kind: 'notecard',
+            drawing: card.drawing,
+            paper: card.paper,
+            textBoxes: card.textBoxes,
+            orientation: card.orientation,
+          }
         : { front: card.front, back: card.back },
     );
     for (const viewer of audience) {

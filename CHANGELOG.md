@@ -9,6 +9,15 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- **Restricted private notecard passing.** Only Helpers, GMs and room owners can send notecards
+  privately; ordinary active players can still receive them. Server checks cover existing cards
+  and new template drafts, including role changes during editing. Regular-player editors hide
+  the recipient/pass row while keeping hand and table placement available.
+- **Portrait and landscape notecards.** Choose orientation in the private editor with compact
+  Tabler controls. Existing ink and text fit proportionally, with Undo/Redo; orientation follows
+  templates, hands, private passing, Show, stack entries and saved games. Shared dimensions keep
+  meshes, physics and collider diagnostics aligned. Older content defaults to landscape. Restart
+  the server and refresh browsers; no database migration is needed for this extension.
 - **Saveable notecard templates.** Save paper, ink and editable text to your account, private by
   default, with optional sharing across the server. Library templates create independent private
   drafts or face-down stacks; owners and site admins can rename, replace, change sharing or delete

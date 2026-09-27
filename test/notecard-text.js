@@ -39,3 +39,43 @@ test('text layout measures fit using width, font size, newlines and paper positi
   assert.equal(layoutNotecardText(context, { ...box, text: '\n'.repeat(50) }).overflow, true);
   assert.deepEqual(layoutNotecardText(context, box).lines, ['']);
 });
+
+test('portrait text uses the tall paper bounds and fitted text keeps identical line wrapping', async () => {
+  const { normalizeNotecardContent, reorientNotecardContent } =
+    await import('../shared/notecards.js');
+  const measuring = {
+    font: '1px Arial',
+    save() {},
+    restore() {},
+    measureText(text) {
+      return { width: text.length * parseFloat(this.font) * 0.55 };
+    },
+  };
+  for (const orientation of ['landscape', 'portrait']) {
+    const original = normalizeNotecardContent({
+      drawing: [],
+      orientation,
+      textBoxes: [
+        {
+          ...box,
+          x: 0.1,
+          y: 0.1,
+          w: 0.75,
+          text: 'Meet at the old tower.\nBring a lantern and a map of the river.',
+        },
+      ],
+    });
+    const before = layoutNotecardText(measuring, original.textBoxes[0], orientation);
+    const after = reorientNotecardContent(
+      original,
+      orientation === 'landscape' ? 'portrait' : 'landscape',
+    );
+    const fitted = layoutNotecardText(measuring, after.textBoxes[0], after.orientation);
+    assert.deepEqual(fitted.lines, before.lines);
+    assert.equal(fitted.overflow, false);
+  }
+  assert.ok(
+    layoutNotecardText(measuring, { ...box, text: 'Note' }, 'portrait').height <
+      layoutNotecardText(measuring, { ...box, text: 'Note' }, 'landscape').height,
+  );
+});

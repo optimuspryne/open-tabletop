@@ -1,10 +1,9 @@
-import { NOTECARD } from '../../shared/notecards.js';
+import { notecardDimensions } from '../../shared/notecards.js';
 
 const ELLIPSE_SEGMENTS = 64;
 // Helpers produce the existing bounded stroke format; no shape protocol or server geometry.
-export function notecardShapePoints(tool, start, end, constrain = false) {
-  const w = NOTECARD.canvasWidth,
-    h = NOTECARD.canvasHeight;
+export function notecardShapePoints(tool, start, end, constrain = false, orientation) {
+  const { canvasWidth: w, canvasHeight: h } = notecardDimensions(orientation);
   const x = start[0] * w,
     y = start[1] * h;
   let dx = (end[0] - start[0]) * w,

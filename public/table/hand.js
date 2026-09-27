@@ -134,7 +134,12 @@ export function createHand({
       const d = handDrag;
       const mesh =
         d.kind === 'notecard'
-          ? notecardMesh({ drawing: d.drawing, paper: d.paper, textBoxes: d.textBoxes })
+          ? notecardMesh({
+              drawing: d.drawing,
+              paper: d.paper,
+              textBoxes: d.textBoxes,
+              orientation: d.orientation,
+            })
           : cardMesh({ front: d.front, back: d.back, geom: d.geom, tile: d.tile });
       mesh.renderOrder = 6;
       scene.add(mesh);
@@ -394,7 +399,7 @@ export function createHand({
       const cf = card.kind === 'notecard' ? { kind: 'notecard' } : parseCardFront(card.front);
       if (card.kind === 'notecard') {
         div.classList.add('img', 'notecard');
-        div.style.backgroundImage = `url("${notecardPreviewURL(card.drawing, card.paper, card.textBoxes)}")`;
+        div.style.backgroundImage = `url("${notecardPreviewURL(card.drawing, card.paper, card.textBoxes, card.orientation)}")`;
       } else if (cf.kind === 'rank') {
         div.textContent = cf.rank + cf.suit;
         div.style.color = cf.color || '#111';
@@ -453,6 +458,7 @@ export function createHand({
             drawing: card.drawing,
             paper: card.paper,
             textBoxes: card.textBoxes,
+            orientation: card.orientation,
             hid: card.hid,
             faceDown: ev.button !== 2,
             touch: ev.pointerType === 'touch',

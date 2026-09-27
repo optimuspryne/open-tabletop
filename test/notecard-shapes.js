@@ -74,3 +74,18 @@ test('constrained line angles remain snapped even at the paper edge', () => {
     assert.ok(pts.every((n) => n >= 0 && n <= 1));
   }
 });
+
+test('portrait constrained helpers use portrait paper pixels for squares, circles and diagonals', () => {
+  for (const tool of ['rectangle', 'ellipse', 'line']) {
+    const pts = notecardShapePoints(tool, [0.1, 0.1], [0.8, 0.8], true, 'portrait');
+    const xs = pts.filter((_, i) => i % 2 === 0),
+      ys = pts.filter((_, i) => i % 2 === 1);
+    assert.ok(
+      Math.abs(
+        (Math.max(...xs) - Math.min(...xs)) * NOTECARD.canvasHeight -
+          (Math.max(...ys) - Math.min(...ys)) * NOTECARD.canvasWidth,
+      ) < 0.2,
+    );
+    assert.ok(normalizeNotecardDrawing([{ pts, color: '#202830', width: 0.007, erase: false }]));
+  }
+});

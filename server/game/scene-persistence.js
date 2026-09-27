@@ -2,6 +2,7 @@ import {
   NOTECARD,
   normalizeNotecardContent,
   normalizeNotecardStack,
+  normalizeNotecardOrientation,
 } from '../../shared/notecards.js';
 import { inspectedEntry, deckSpawnProps } from '../deck-state.js';
 import { KINDS, TABLE, TABLE_SHAPES, RIM_WOODS } from '../../shared/pieces.js';
@@ -174,15 +175,17 @@ export function applyScene(
   const notecards = (Array.isArray(scene.pieces) ? scene.pieces : []).filter(
     (entry) => entry?.type === 'notecard',
   );
-  const stacks = (Array.isArray(scene.pieces) ? scene.pieces : [])
-    .filter((entry) => entry?.type === 'notecardStack')
-    .map((entry) => normalizeNotecardStack(entry.props?.cards));
+  const stackPieces = (Array.isArray(scene.pieces) ? scene.pieces : []).filter(
+    (entry) => entry?.type === 'notecardStack',
+  );
+  const stacks = stackPieces.map((entry) => normalizeNotecardStack(entry.props?.cards));
   const heldNotes = (Array.isArray(scene.hands) ? scene.hands : []).flatMap((hand) =>
     Array.isArray(hand?.cards) ? hand.cards.filter((card) => card?.kind === 'notecard') : [],
   );
   if (
     heldNotes.some((card) => !normalizeNotecardContent(card)) ||
     stacks.some((cards) => !cards) ||
+    stackPieces.some((entry) => !normalizeNotecardOrientation(entry.props?.orientation)) ||
     notecards.length + heldNotes.length + stacks.reduce((n, cards) => n + (cards?.length || 0), 0) >
       NOTECARD.maxCards ||
     notecards.some(

@@ -81,6 +81,20 @@ focused, Space-drag pans, +/− zoom, and 0 fits the card. Fit card restores 100
 Pointer cancellation drops the unfinished stroke. Canvas gestures never move the
 table camera. Spectators can view a public face or their own private hand drawing read-only.
 
+Choose **Landscape** or **Portrait** beside the paper settings. Click/tap a choice, or Tab to it
+and press Enter/Space; pressed state, accessible labels and focus/hover hints work in compact mode.
+Switching fits the existing ink and text proportionally and resets the local view. Undo/Redo
+restores orientation and content together; toggling back before editing restores the original
+layout exactly. Orientation is retained in templates, private hands, transfers, Show and saves.
+Stacks keep one stable outline while each contained card retains its reading orientation.
+
+**Pass privately** is available to Helpers, GMs and room owners who can currently interact with
+the table. They may send to any other active player, including an ordinary player. Regular players
+see no recipient/pass row; Keep in hand and table placement remain available. Promotion/demotion
+updates an open editor immediately. If a demotion hides the focused pass controls, focus moves to
+the drawing surface. The server rejects unauthorized passes without consuming the card or closing
+the draft, including passes from new template drafts.
+
 Choose Blank, Ruled, Grid or Dots and Ivory, White or Pale yellow paper; these settings save per
 card. Use Pen/Eraser, Line/Rectangle/Ellipse, ink swatches, Width, Undo/Redo and undoable Clear ink.
 Drag with one finger, mouse or stylus to preview a helper; release commits one undoable stroke.
