@@ -11,6 +11,7 @@ import { ASSET_PACKAGE, PACKAGE_ASSET_KINDS, AssetPackageError } from '../shared
 // the game already expects, so nothing is stored twice.
 import { createCollectionQueries, insertCollection } from './collection-queries.js';
 import { createParticipationQueries } from './participation-queries.js';
+import { createNotecardTemplateQueries } from './notecard-template-queries.js';
 import { createColliderPresetQueries } from './collider-preset-queries.js';
 import { createLibraryQueries, ASSET_TABLES as ASSET_TABLE } from './library-queries.js';
 import { createUserQueries, publicUserRow } from './user-queries.js';
@@ -761,6 +762,7 @@ export function createDatabase(pool) {
   return {
     collections: createCollectionQueries(pool),
     ...createParticipationQueries(pool),
+    notecardTemplates: createNotecardTemplateQueries((sql, params) => pool.query(sql, params)),
     colliderPresets: createColliderPresetQueries((sql, params) => pool.query(sql, params)),
     close,
     listDecks,

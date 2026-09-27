@@ -1,6 +1,6 @@
 # Drawable notecards
 
-Status: editable text boxes are implemented, user-tested and approved for commit. Paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
+Status: account templates are implemented with approved UI/icons; implementation acceptance is pending. Editable text boxes are implemented, user-tested and approved for commit. Paper styles and drawing helpers are implemented, user-tested and approved for commit. Previously shipped freehand drawing, zoom/pan, private-hand support and their selected Tabler icons are
 implemented and user-approved for commit. Automated verification is recorded below; the user
 did not specify a per-device or multiplayer test matrix.
 
@@ -373,3 +373,147 @@ fix preventing selection overlays from blurring text. Local documentation links 
 The user reported that the text box extension works great and approved it for commit. No detailed
 real-device, assistive-technology or multiplayer matrix was specified; the checklist remains
 available for future verification in [DEVICE_QA.md](DEVICE_QA.md).
+
+
+## Saveable templates — approved UI, implemented; acceptance pending
+
+The user approved private account templates with explicit server sharing and the editor/Library
+mock-up. Approved icons: `device-floppy` Save, `plus` Create card, `cards` Create stack, `settings`
+Manage, `writing` Edit design and `trash` Delete. Existing cancel/placement icons are reused.
+No new sprite entries are needed. Saving from an editable card stores its current draft separately
+and leaves the card open. The Library opens fresh local drafts or creates independent face-down
+stacks. Owners/site admins manage originals; other users can copy explicitly shared designs.
+Sharing controls have visible explanatory text; compact buttons keep names/hints and native focus.
+
+Reuse decision: extend the existing normalized document, editor, hand/stack creation and renderer.
+A focused query factory and HTTP router follow the existing saved-preset persistence pattern while
+keeping template authorization/revision rules explicit. A focused template UI controller receives
+the editor and room dependencies. The editor retains all content/history; local template copies use
+its existing tools, then a guarded creation request allocates room inventory only when committed.
+No physics geometry, hand ownership, leased editing protocol or whiteboard protocol is replaced.
+
+Privacy and persistence: templates are private by default; explicit sharing exposes the complete
+design to authenticated users on this server. SQL owner/live-admin checks gate changes. Reads
+recheck account access after asynchronous work. Revision checks protect concurrent writes; metadata
+updates cannot overwrite content. Failed operations retain recoverable drafts/inventory. A copied
+card carries its document, not a live link: changing, unsharing or deleting a template never changes
+existing copies. Owner deletion retains private templates for site-admin management. Migration 022
+and the flattened fresh-install schema preserve this account data in the database, independently of
+scene/game snapshots. Collection organization and package export are separate future extensions.
+
+### Template extension file map
+
+| File | Functions/helpers or responsibilities added/changed |
+| --- | --- |
+| `postgres/022_notecard_templates.sql` | Add account-owned JSONB template table, revisions, private default and owner index. |
+| `postgres/schema.sql` | Include migration 022 in fresh schema and bookkeeping. |
+| `server/notecard-template-queries.js` | Add `createNotecardTemplateQueries`: paginated `list`, authorized `get`, `create`, revision-checked `update`/`remove`. |
+| `server/http/routes/notecard-templates.js` | Add `normalizeNotecardTemplate` and `createNotecardTemplatesRouter`: authenticated bounded requests, current-access checks and conflict responses. |
+| `server/database.js`, `db.js` | Compose/export `notecardTemplates` through the production database facade. |
+| `server.js` | Mount `/notecard-templates` with the established authentication boundary. |
+| `server/game/notecards.js` | Add `create`, bounded per-client successful request tracking and `notecardCreate` registration; reuse `give`, capacity checks and spawn paths. |
+| `shared/room-capabilities.js` | Classify `notecardCreate` as gameplay. |
+| `public/table/notecards.js` | Add `hasDraft`, local-draft creation/ack/error handling, generation cleanup and template capture/context/busy/saved/attachment/open seams; preserve leased paths. |
+| `public/table/notecard-templates.js` | Add `createNotecardTemplates`, authenticated `request`, paginated `load`/`render`, `openSave`, `open`, `createStack`, `manageTemplate`, field/icon helpers, async guards and room binding. |
+| `public/client.js` | Construct template controller and bind it alongside the notecard editor. |
+| `public/table.html` | Approved save form/header action and Library template section; accessible names, sharing descriptions and in-app help. |
+| `public/styles.css` | Wrapping template lists/cards/forms using shared tokens and canonical controls. |
+| `test/notecard-templates.js` | Normalization/default privacy, trusted identity, authentication, revision conflicts, post-await access and database-error boundaries. |
+| `test/notecards.js` | New card/stack content independence, retry deduplication, capacity, malformed requests and restricted actors. |
+| `test/backend-database-factory.js` | Verify production template database exports. |
+| `test/integration/database.js` | Migration inventory and real PostgreSQL ownership, sharing, role changes, revisions and independent content. |
+| `scripts/test-database.mjs` | Exercise numbered migration 022 on an existing populated schema and maintain older upgrade fixture isolation. |
+| `scripts/lib/notecard-template-test.mjs` | Add `verifyNotecardTemplates`: real UI save/share/replace/copy/stack flows, failure recovery, stale-response cleanup and full/compact screenshots. |
+| `scripts/notecard-test.mjs` | Run template fixture and compose room callbacks as production does. |
+| `CHANGELOG.md` | Unreleased feature and migration note. |
+| `docs/REFERENCE.md` | Persistence/API/editor/creation contracts and upgrade instructions. |
+| `docs/ARCHITECTURE.md` | Account-template boundaries, access, ownership and copy semantics. |
+| `docs/GESTURES.md` | Save/manage/copy paths and keyboard/touch instructions. |
+| `docs/ROADMAP.md` | Template implementation/acceptance status. |
+| `docs/DEVICE_QA.md` | Manual multiplayer, accessibility, device, migration and failure-recovery checklist. |
+| `docs/DESIGN_notecards.md` | Approved scope, reuse decision, file map and verification record. |
+
+Apply migration 022 via the normal owner-role migrator, restart the server and refresh clients.
+No new configuration, ports, asset files or build tooling are introduced.
+
+Template verification on 2026-09-25: `npm run check` passed **829 unit tests**, lint, formatting
+and CSS checks; `test:input` passed **57/57**; `test:devices` passed all **seven profiles**.
+`test:integration` passed **21/21** against PostgreSQL, including template permissions/revisions;
+its migration fixtures also verified numbered migration 022 against an existing populated schema.
+`test:components` passed desktop/touch production fixtures and the notecard/template flows at
+1280 px mouse and 390/360 px touch. The fixture's seven expected sample-asset 404s remain
+non-failing. Full/compact desktop and phone screenshots were inspected, including long template
+names, save conflicts and responsive wrapping. Local documentation links and `git diff --check`
+passed. Manual acceptance, real-device gesture feel, assistive-technology use and multiplayer
+verification remain pending in [DEVICE_QA.md](DEVICE_QA.md).
+
+### Dedicated Library tab and compact previews — earlier revision, superseded below
+
+The user approved a **Notecard Templates** tab immediately after **Card Decks/Tiles**, with smaller
+220px-wide previews and independent native disclosure controls. Previews start open; names,
+privacy and actions stay visible when collapsed. Collapse choices are local to the page and survive
+list refreshes. The tab retains its My templates/Shared with me filter; asset-specific source,
+search/select, collection and import controls are hidden while this tab is selected. Existing
+Tabler action icons are retained; the native disclosure marker needs no new sprite entry.
+
+Reuse: `wireTabs` still selects the pane, with pressed states exposed for its native buttons.
+The existing template `render` creates the native `details`/`summary` preview and retains collapse
+choices; no new helper or server boundary is introduced.
+
+| File | Revision |
+| --- | --- |
+| `public/table.html` | Dedicated tab/pane, moved template section, updated in-app help. |
+| `public/editor/editor-panel.js` | `wireTabs` exposes selected state for non-ARIA-tab buttons. |
+| `public/table/notecard-templates.js` | `render` adds independent accessible disclosures and session-local collapse state. |
+| `public/styles.css` | Small previews, independently sized grid rows, focus/touch styles and template-only Library chrome. |
+| `scripts/component-parity.mjs` | Real tab switching, selected-state, asset controls and search-reset regression. |
+| `scripts/lib/notecard-template-test.mjs` | Keyboard disclosure, visible actions, collapse retention and thumbnail-size checks. |
+| `CHANGELOG.md`, `docs/GESTURES.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/DEVICE_QA.md`, `docs/DESIGN_notecards.md` | Updated navigation, interaction contract, manual checks and this implementation record. |
+
+Verification on 2026-09-26: `npm run check` passed 829 tests plus lint/format/CSS checks;
+`test:input` passed 57/57 and `test:devices` passed all seven profiles. The component fixture
+passed desktop and coarse-pointer scenarios, including real tab switching and search reset.
+The following notecard fixture initially failed because its simulated Enter omitted the native
+keypress text; after correcting that test event, `node scripts/notecard-test.mjs` passed all
+1280px mouse and 390/360px touch cases, including keyboard disclosure/focus, independent collapse
+retention and preview sizing. Focused ESLint passed after that test-only correction. Desktop/full,
+phone/full and phone/compact screenshots were inspected; documentation links and `git diff --check`
+passed. The fixture's seven expected sample-asset 404s remain non-failing. Manual acceptance and
+assistive-technology/real-device checks remain pending. No database code changed in this revision.
+Refresh browsers after updating; this UI revision requires no additional migration or server
+restart beyond the original template feature setup.
+
+### Shared Library card styling — current approved revision
+
+The user approved two desktop columns with always-visible small thumbnails, removing the preview
+dropdown. Narrow phones use one column. Each card places the thumbnail left, name/privacy right,
+Copies above grouped Create card/Create stack/Manage actions. Existing approved Tabler icons remain.
+
+Reuse decision: use the existing `libList`, `libCard`, `libPreview`, `libThumb`, `libMeta`, `libName`,
+`cardCtrls`, `button-row--compact` and native `control` styles. Template-specific CSS only sets the
+two/one-column layout, metadata wrapping, Copies width and full-width Manage form. No new helpers
+or server behavior are needed; obsolete disclosure state and bespoke card surface styles are removed.
+
+| File | Functions/helpers or responsibilities changed |
+| --- | --- |
+| `public/table/notecard-templates.js` | `render` uses shared Library markup, always-visible thumbnails, grouped controls; removes native disclosure creation and `collapsedPreviews`. |
+| `public/table.html` | Template list becomes a shared `libList` with semantic list items; help reflects visible thumbnails. |
+| `public/styles.css` | Remove duplicate card surface/thumbnail/disclosure styles; retain only template layout/form adjustments. |
+| `public/editor/editor-panel.js` | `wireControls` asset-search loop excludes the separately paginated account-template pane. |
+| `scripts/lib/notecard-template-test.mjs` | Replace disclosure tests with visible-thumbnail, overflow and desktop/phone column checks; retain save/share/manage/create/error flows. |
+| `scripts/component-parity.mjs` | Confirm loaded template names are excluded from asset searches and tab navigation still works. |
+| `CHANGELOG.md`, `docs/GESTURES.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/DEVICE_QA.md`, `docs/DESIGN_notecards.md` | Current layout, reuse contracts, manual QA and revision record. |
+
+Verification on 2026-09-26: `npm run check` passed 829 tests and lint/format/CSS checks;
+`test:input` passed 57/57; `test:devices` passed all seven profiles. `test:components` passed
+desktop/touch Library fixtures and the 1280px mouse plus 390/360px touch notecard flows. The final
+focused notecard rerun also passed the new Manage-form containment check at all three widths;
+focused ESLint passed after that test addition. Screenshot review confirmed shared card styling,
+two desktop columns, one phone column, visible thumbnails and full/compact actions. Documentation
+links and `git diff --check` passed. Expected sample-asset 404s remain non-failing. Manual acceptance
+and real-device/assistive-technology QA remain pending. Refresh clients to test; this styling
+revision requires no additional migration or server restart.
+
+User review on 2026-09-27: the user said the result looks great and approved the template changes
+for commit. This records acceptance of the delivered work; it does not establish completion of
+every real-device, assistive-technology or multiplayer check in `DEVICE_QA.md`.

@@ -96,6 +96,7 @@ import { createAssetCleanup } from './server/asset-cleanup.js';
 import { httpErrorHandler } from './server/http/async-route.js';
 import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
 import { createAuthRouter } from './server/http/routes/auth.js';
+import { createNotecardTemplatesRouter } from './server/http/routes/notecard-templates.js';
 import { createColliderPresetsRouter } from './server/http/routes/collider-presets.js';
 import { createRoomsRouter } from './server/http/routes/rooms.js';
 import { createUploadRouter } from './server/http/routes/uploads.js';
@@ -1363,6 +1364,7 @@ app.use(
   }),
 );
 
+app.use('/notecard-templates', createNotecardTemplatesRouter({ db, requireUser }));
 app.use('/collider-presets', createColliderPresetsRouter({ db, requireUser }));
 
 // Must be registered after every HTTP route so rejected async handlers land here.

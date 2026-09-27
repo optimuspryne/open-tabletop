@@ -2470,7 +2470,55 @@ credits, so failed spawn/split operations retain recoverable inventory. Saves in
 private ordered entries, never tokens or drafts. Shift+F10/Context Menu cycles stack menus via
 the input intent layer; menu arrows, Home/End and Escape manage focus.
 
-See [design, limits, file map and QA](DESIGN_notecards.md). No database migration is required.
+See [design, limits, file map and QA](DESIGN_notecards.md). The drawable-card extensions above
+require no migration; account templates below require migration 022.
+
+**Saved notecard templates:** `postgres/022_notecard_templates.sql` adds `notecard_templates`
+(owner, name, normalized JSONB content, private/public visibility, revision and timestamps).
+`postgres/schema.sql` includes the same table for fresh installs. `createNotecardTemplateQueries`
+in `server/notecard-template-queries.js` is composed/exported through `server/database.js` and
+`db.js`. Reads use owner/public/live-site-admin access in SQL; updates/deletes require owner or
+live site admin and the expected revision. Metadata updates preserve content atomically. Owner
+removal retains the template with null ownership; private orphaned templates remain admin-only.
+
+`createNotecardTemplatesRouter` mounts authenticated `/notecard-templates`: GET list with
+`scope=mine|shared|managed` and `offset` (20 rows/page, `nextOffset`), GET `/:id`, POST a new
+`{name,content,isPublic?}`, PUT `/:id` with full content and `revision`, PATCH metadata with
+`revision`, and DELETE with `{revision}`. Names are trimmed and limited to 60 characters. Missing
+sharing defaults to false; explicit malformed settings/content fail. Client ownership/admin fields
+are ignored. Reads recheck current authentication/role before responding, use private/no-store
+caching, and database failures flow through the HTTP error boundary. Conflicting/inaccessible
+mutations return 409; an unavailable GET returns 404. The editor keeps the draft on failure.
+
+`public/table/notecard-templates.js` owns the template Library, HTTP work and save/manage forms.
+It uses `createNotecardEditor`'s `capture`, `openTemplate`, `templateContext`, `templateBusy`,
+`templateSaved` and `attachTemplates` seam; the editor still owns drawing/history and permissions.
+Generations discard stale async UI results after closing/reopening. Saving a template takes effect
+immediately and leaves the drawing draft open. New copies do not retain a live link to the source.
+The Library fetches current accessible content for every create/edit/stack action. My templates,
+Shared with me and an admin-only All templates view are paginated. Save targets paginate separately.
+Template cards are separate from custom asset collections/package export in this initial version.
+They appear in the dedicated **Notecard Templates** tab after **Card Decks/Tiles**. Asset source,
+search/select, import and collection controls are hidden in this pane and return in asset tabs.
+Templates reuse `libList`, `libCard`, `libPreview`/`libThumb`, `libMeta`/`libName`, `cardCtrls` and
+`button-row--compact`. Thumbnails are always visible; the preview disclosure and collapse state
+were removed. Two columns become one below 600px. Account template lists stay outside asset search;
+their own paginated filter remains authoritative. Manage forms span their card's full width.
+
+`notecardCreate({request,content,destination,faceDown?,recipient?,count?})` is a gameplay request
+registered by `registerNotecardHandlers`. Destinations are table/hand/pass/stack. A local draft
+uses no room inventory until creation; a stack requires 2–16 copies and spawns face-down. The
+service validates normalized content, recipient, total room notecard capacity and physical capacity
+before creating anything. Each copy has independent content. `notecardCreated({request})`
+acknowledges success privately; the last 32 successful request IDs per live client suppress duplicate
+creation. A rejected request retains the local draft and can retry. Local draft cancellation,
+disconnect or loss of gameplay access clears the draft. Existing leased notecards keep their prior
+commit/heartbeat protocol. Account templates persist separately from scenes and game saves.
+
+Upgrade: run migration **022** through the normal owner-role auto-migrator (or apply it manually
+when auto-migration is disabled), then restart the server and refresh clients. The application role
+needs its established CRUD grants on the new table. No new environment variables, ports, files or
+build step are required; include template data in the normal database backup.
 
 ## `public/table/whiteboard.js` — whiteboard
 

@@ -4,6 +4,7 @@ import {
   NOTECARD_WIDTHS,
   normalizeNotecardPaper,
   normalizeNotecardTextBoxes,
+  normalizeNotecardContent,
 } from '../../shared/notecards.js';
 import { paintNotecard } from '../rendering/notecards.js';
 import { createNotecardTextEditor } from './notecard-text.js';
@@ -60,6 +61,9 @@ export function createNotecardEditor({
   let busy = false,
     color = NOTECARD_COLORS[0],
     width = NOTECARD_WIDTHS[1];
+  const hasDraft = () => !!(current?.token || current?.localDraft);
+  let templateControls = null,
+    generation = 0;
   let previousFocus = null,
     heartbeat = null;
   const status = (text) => {
@@ -83,7 +87,7 @@ export function createNotecardEditor({
             (textBoxes.length ? ': ' + textBoxes.map((box) => box.text).join(' · ') : ''),
     );
     textEditor.updateOverlay();
-    if (keyboard && current?.token && !busy) {
+    if (keyboard && hasDraft() && !busy) {
       const x = cursor[0] * canvas.width,
         y = cursor[1] * canvas.height;
       context.save();
@@ -102,11 +106,11 @@ export function createNotecardEditor({
     byId('notecardZoomIn').disabled = view.scale >= 8;
   };
   function sync() {
-    const editable = current?.token && !busy;
+    const editable = hasDraft() && !busy;
     textEditor.sync();
     const invalidText = !!textEditor.error();
-    byId('notecardTools').hidden = !current?.token;
-    byId('notecardPlaceUp').hidden = byId('notecardPlaceDown').hidden = !current?.token;
+    byId('notecardTools').hidden = !hasDraft();
+    byId('notecardPlaceUp').hidden = byId('notecardPlaceDown').hidden = !hasDraft();
     byId('notecardPlaceUp').disabled = byId('notecardPlaceDown').disabled = busy || invalidText;
     byId('notecardTools').inert = !editable;
     byId('notecardInkTools').hidden = byId('notecardColors').hidden = tool === 'text';
@@ -121,27 +125,32 @@ export function createNotecardEditor({
     byId('notecardConstrain').disabled = ['pen', 'eraser', 'text'].includes(tool) || pan;
     byId('notecardPattern').value = paper.pattern;
     byId('notecardTone').value = paper.tone;
-    byId('notecardDrawingHelp').hidden = !current?.token || tool === 'text';
+    byId('notecardDrawingHelp').hidden = !hasDraft() || tool === 'text';
     canvas.setAttribute(
       'aria-describedby',
       tool === 'text' ? 'notecardTextHelp' : 'notecardDrawingHelp',
     );
     byId('notecardCancel').disabled = busy;
-    const label = current?.token ? 'Cancel' : 'Close';
+    const label = hasDraft() ? 'Cancel' : 'Close';
     byId('notecardCancel').querySelector('.lbl').textContent = label;
     byId('notecardCancel').setAttribute('aria-label', label);
     byId('notecardCancel').title = label;
-    for (const id of ['notecardKeep', 'notecardPassControls']) byId(id).hidden = !current?.token;
+    for (const id of ['notecardKeep', 'notecardPassControls']) byId(id).hidden = !hasDraft();
     byId('notecardKeep').disabled = busy || invalidText;
-    byId('notecardReturn').hidden = !current?.token || !current?.fromStack;
+    byId('notecardReturn').hidden = !hasDraft() || !current?.fromStack;
     byId('notecardReturn').disabled = busy || invalidText;
     byId('notecardPass').disabled = busy || invalidText || !byId('notecardRecipient').value;
     byId('notecardRecipient').disabled = busy;
+    byId('notecardTemplateSave').hidden = !hasDraft();
+    byId('notecardTemplateSave').disabled = busy || invalidText || !canInteract();
+    templateControls?.sync();
   }
   function close(send = true) {
     if (send && busy) return; // a placement in flight must be acknowledged, never silently discarded
     if (send && current?.token)
       getRoom()?.send('notecardCancel', { id: current.id, token: current.token });
+    generation++;
+    templateControls?.reset();
     drawingControls.reset();
     current = null;
     opening = null;
@@ -165,6 +174,7 @@ export function createNotecardEditor({
   }
   function show(data) {
     current = data;
+    byId('notecardTitle').textContent = 'Notecard';
     paper = normalizeNotecardPaper(data.paper) || normalizeNotecardPaper();
     keyboard = false;
     cursor = [0.5, 0.5];
@@ -179,18 +189,20 @@ export function createNotecardEditor({
     stroke = null;
     busy = false;
     status(
-      data.token
-        ? data.fromStack
-          ? 'Private top card. Return to top saves it inside the stack; Cancel keeps the original.'
-          : 'Private drawing. Keep in hand, place on the table, or pass to a player.'
-        : data.back
-          ? 'This notecard is face-down.'
-          : 'Viewing a notecard.',
+      data.localDraft
+        ? 'New private draft. Save a template, keep in hand, or place a copy.'
+        : data.token
+          ? data.fromStack
+            ? 'Private top card. Return to top saves it inside the stack; Cancel keeps the original.'
+            : 'Private drawing. Keep in hand, place on the table, or pass to a player.'
+          : data.back
+            ? 'This notecard is face-down.'
+            : 'Viewing a notecard.',
     );
     sync();
     paint();
     dialog.showModal();
-    byId(data.token ? toolIds[tool] : 'notecardCancel').focus();
+    byId(hasDraft() ? toolIds[tool] : 'notecardCancel').focus();
     if (data.token)
       heartbeat = repeat(() => {
         if (current?.token)
@@ -267,7 +279,7 @@ export function createNotecardEditor({
     redo = [];
   }
   function history(action) {
-    if (!current?.token || busy) return;
+    if (!hasDraft() || busy) return;
     finishStroke();
     textEditor.release();
     textEditor.endEdit();
@@ -308,8 +320,8 @@ export function createNotecardEditor({
     setBoxes: (boxes) => {
       textBoxes = boxes;
     },
-    editable: () => !!current?.token && !busy && canInteract(),
-    active: () => !!current?.token && tool === 'text' && !pan,
+    editable: () => hasDraft() && !busy && canInteract(),
+    active: () => hasDraft() && tool === 'text' && !pan,
     remember,
     changed: () => {
       sync();
@@ -318,7 +330,7 @@ export function createNotecardEditor({
     status,
   });
   function beginStroke(position, locked = false) {
-    if (!current?.token || busy || !canInteract()) return false;
+    if (!hasDraft() || busy || !canInteract()) return false;
     used = drawing.reduce((sum, s) => sum + s.pts.length, 0);
     const pts = ['pen', 'eraser'].includes(tool)
       ? position
@@ -381,7 +393,7 @@ export function createNotecardEditor({
         paint();
       },
       command(event, target) {
-        if (!current?.token || busy || !canInteract() || pan) return false;
+        if (!hasDraft() || busy || !canInteract() || pan) return false;
         if (tool === 'text') return textEditor.command(event, target);
         const deltas = {
           ArrowLeft: [-1, 0],
@@ -523,7 +535,7 @@ export function createNotecardEditor({
   byId('notecardRecipient').onchange = sync;
   byId('notecardCancel').onclick = () => close();
   const place = (faceDown, destination = 'table') => {
-    if (!current?.token || busy) return;
+    if (!hasDraft() || busy) return;
     finishStroke();
     textEditor.release();
     textEditor.endEdit();
@@ -534,6 +546,17 @@ export function createNotecardEditor({
     busy = true;
     sync();
     status('Saving drawing…');
+    if (current.localDraft) {
+      current.request ||= crypto.randomUUID();
+      getRoom().send('notecardCreate', {
+        request: current.request,
+        content: { drawing, paper, textBoxes },
+        faceDown,
+        destination,
+        recipient: byId('notecardRecipient').value,
+      });
+      return;
+    }
     getRoom().send('notecardCommit', {
       id: current.id,
       token: current.token,
@@ -556,6 +579,7 @@ export function createNotecardEditor({
   });
   dialog.addEventListener('keydown', (event) => {
     event.stopPropagation();
+    if (event.target.closest('#notecardTemplatePanel')) return;
     if (event.target === canvas && ['+', '=', '-', '0'].includes(event.key)) {
       event.preventDefault();
       if (event.key === '0') byId('notecardFit').click();
@@ -582,6 +606,9 @@ export function createNotecardEditor({
     }
   }
   function bindRoom(room) {
+    room.onMessage('notecardCreated', (data) => {
+      if (current?.localDraft && busy && data.request === current.request) close(false);
+    });
     room.onMessage('notecardEdit', (data) => {
       if (opening !== data.id || !canInteract()) {
         room.send('notecardCancel', { id: data.id, token: data.token });
@@ -591,12 +618,16 @@ export function createNotecardEditor({
       show(data);
     });
     room.onMessage('notecardClosed', (data) => {
-      if (data.token !== current?.token) return;
+      if (!current?.token || data.token !== current.token) return;
       close(false);
       if (data.reason) toast(data.reason);
     });
     room.onMessage('serverError', ({ operation, message }) => {
-      if (operation === 'notecardCommit' && current) {
+      if (
+        current &&
+        (operation === 'notecardCommit' ||
+          (operation === 'notecardCreate' && current.localDraft && busy))
+      ) {
         busy = false;
         sync();
         status(message);
@@ -607,7 +638,11 @@ export function createNotecardEditor({
       if (!current) return;
       refreshRecipients();
       sync();
-      if (current.token || current.hid) return;
+      if (current.localDraft && !canInteract()) {
+        close(false);
+        return;
+      }
+      if (current.token || current.hid || current.localDraft) return;
       const piece = room.state.pieces.get(current.id);
       if (!piece) {
         close(false);
@@ -624,6 +659,42 @@ export function createNotecardEditor({
     room.onLeave(() => close(false));
   }
   return {
+    templateContext: () => ({
+      editable: hasDraft() && canInteract(),
+      busy,
+      generation,
+      template: current?.template || null,
+    }),
+    attachTemplates: (controls) => {
+      templateControls = controls;
+    },
+    templateBusy: (value) => {
+      busy = value;
+      sync();
+    },
+    templateSaved: (template) => {
+      if (current) current.template = template;
+    },
+    capture: () => {
+      if (!hasDraft() || busy || !canInteract())
+        throw new Error('Open an editable notecard first.');
+      finishStroke();
+      textEditor.release();
+      textEditor.endEdit();
+      if (textEditor.error()) throw new Error(textEditor.error());
+      return structuredClone({ drawing, paper, textBoxes });
+    },
+    openTemplate: (template, editing = false) => {
+      if (busy || !canInteract()) return false;
+      const content = normalizeNotecardContent(template.content);
+      if (!content) return false;
+      close();
+      previousFocus = document.activeElement;
+      beforeOpen();
+      show({ ...content, localDraft: true, template: editing ? template : null });
+      byId('notecardTitle').textContent = editing ? 'Edit template: ' + template.name : 'Notecard';
+      return true;
+    },
     open,
     openHand,
     syncHand,

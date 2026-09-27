@@ -1347,6 +1347,12 @@
                 width handle to wrap. With a box or the card focused, arrows move, Shift+left/right resize,
                 Enter edits, and Delete removes. Text stays above ink; Eraser/Clear ink preserve it and
                 Undo/Redo covers both. Keep text within the card before saving. Text remains editable in hands and stacks.
+                Save template stores the current design privately to your account; sharing with everyone on this
+                server is optional. Find saved designs in Library → Notecard Templates, with
+                always-visible thumbnails and the same compact cards as the other Library tabs.
+                Create card opens a private editable copy; Create stack places independent copies face-down.
+                Manage lets owners and site admins rename, edit, change sharing or delete originals. Existing
+                copies are unchanged. Saving a template takes effect immediately, even if you later cancel the card.
               </li>
               <li>
                 <b data-icon="dots"> > </b><b data-icon="settings">Settings.</b> Go here to change
@@ -1486,6 +1492,7 @@
           <div class="libTabs">
             <button class="libTab on" data-tab="dice">Dice</button>
             <button class="libTab" data-tab="decks">Card Decks/Tiles</button>
+            <button type="button" class="libTab" data-tab="notecard-templates" aria-controls="notecardTemplatesPane">Notecard Templates</button>
             <button class="libTab" data-tab="boards">Game Boards</button>
             <button class="libTab" data-tab="mats">Player Mats</button>
             <button class="libTab" data-tab="objects">3D Objects</button>
@@ -1527,6 +1534,14 @@
           <div class="modal__body libPane" data-pane="decks" hidden>
             <ul id="nlb_decks" class="libList lib2-bi"></ul>
             <ul id="nlc_deck" class="libList lib2-cu"></ul>
+          </div>
+          <div id="notecardTemplatesPane" class="modal__body libPane" data-pane="notecard-templates" hidden>
+            <section id="notecardTemplateLibrary" class="notecard-template-library" aria-label="Notecard templates">
+              <div class="button-row"><label>Show <select id="notecardTemplateFilter"><option value="mine">My templates</option><option value="shared">Shared with me</option></select></label></div>
+              <ul id="notecardTemplateList" class="libList" aria-label="Notecard templates"></ul>
+              <button id="notecardTemplateMore" type="button" hidden>Load more</button>
+              <p id="notecardTemplateLibraryStatus" class="hint" role="status"></p>
+            </section>
           </div>
           <div class="modal__body libPane" data-pane="boards" hidden>
             <ul id="nlb_boards" class="libList lib2-bi"></ul>
@@ -2617,8 +2632,20 @@
     <dialog id="notecardDialog" class="modal modalCard notecard-dialog" aria-labelledby="notecardTitle" aria-describedby="notecardStatus">
       <div class="modal__header panel-head">
         <b id="notecardTitle" class="modal__title panel-title">Notecard</b>
+        <button id="notecardTemplateSave" type="button" data-icon="device-floppy" aria-label="Save as template" hidden><span class="lbl">Save template</span></button>
       </div>
       <div class="modal__body">
+        <section id="notecardTemplatePanel" class="notecard-template-form" aria-label="Save notecard template" hidden>
+          <h3>Save current design as a template</h3>
+          <label class="field-group">Save to <select id="notecardTemplateTarget" class="control control--select"><option value="">New template</option></select></label>
+          <button id="notecardTemplateTargetsMore" type="button" hidden>Load more templates</button>
+          <label class="field-group">Name <input id="notecardTemplateName" class="control" maxlength="60"></label>
+          <label class="checkbox"><input id="notecardTemplateShare" class="checkbox__input" type="checkbox"><span>Share with everyone on this server</span></label>
+          <p id="notecardTemplatePrivacy" class="hint">Private to your account. Available across rooms.</p>
+          <p class="hint">Saves paper, ink and editable text immediately. Closing the notecard afterward keeps the saved template.</p>
+          <div class="button-row"><button id="notecardTemplateConfirm" type="button" class="button button--primary" data-icon="device-floppy"><span class="lbl">Save template</span></button><button id="notecardTemplateCancel" type="button">Cancel</button></div>
+          <p id="notecardTemplateStatus" class="hint" role="status"></p>
+        </section>
         <div id="notecardTools" class="notecard-tools">
           <div class="button-row notecard-paper">
             <label>Paper <select id="notecardPattern"><option value="blank">Blank</option><option value="ruled">Ruled</option><option value="grid">Grid</option><option value="dots">Dots</option></select></label>

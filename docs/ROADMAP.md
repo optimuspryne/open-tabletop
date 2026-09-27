@@ -327,8 +327,9 @@ implementation sequence without making the entire backlog a fixed priority queue
     Paper styles and line/rectangle/ellipse helpers are implemented with approved UI, keyboard drawing,
     and automated regression coverage; the user confirmed it works great and approved it for commit.
     Editable text boxes are implemented with approved UI/icons, shared ink/text history, keyboard
-    movement/resizing and private persistence; the user confirmed it works great and approved it for commit. Saveable templates
-    remain a later extension. See [implementation and QA notes](DESIGN_notecards.md).
+    movement/resizing and private persistence; the user confirmed it works great and approved it for commit. Account-owned templates are now implemented with approved UI/icons and private-by-default sharing;
+    the user accepted the final Library layout and approved the changes for commit on 2026-09-27.
+    Detailed device/multiplayer QA remains tracked in the [implementation and QA notes](DESIGN_notecards.md).
 18. **Custom asset collections — implemented locally; functionality and UI user-approved.** Let users group multiple custom library assets into named
     collections. Library controls can show or hide collections to keep browsing manageable.
     Treat this as library organization/filtering, separate from per-object visibility on the table

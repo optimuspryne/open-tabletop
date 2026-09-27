@@ -385,3 +385,28 @@ Restart the server and refresh browsers. No database migration is required.
   Verify text follows the right card, stays editable, and never appears on backs or to excluded viewers.
 - [ ] Check multiline/non-ASCII text on actual supported browsers, including IME/mobile keyboards;
   font fallback can differ between operating systems. Cancel preserves the committed original.
+
+
+### Saveable notecard templates — user review accepted; detailed QA checklist
+
+The user approved private defaults, optional sharing, the mock-up and Tabler controls, then accepted
+the final Library layout and approved the changes for commit on 2026-09-27. The detailed checks
+below remain unverified unless separately reported. Upgrade
+with migration 022, restart the server and refresh all clients before manual testing.
+
+- [ ] Save paper/ink/text as a private template; cancel the card and find the template in another room.
+- [ ] With two accounts, verify private templates stay hidden, sharing allows copies, and only the
+  owner/site admin can edit originals. Unshare/delete while another account browses; future fetches
+  must be denied while already created copies remain intact.
+- [ ] Create a card, edit/reopen it, keep/pass it, then create a face-down stack and draw/edit one
+  copy. The source and sibling copies should remain unchanged. Check insufficient room/table capacity.
+- [ ] Rename/share without changing the design. Edit the same template in two tabs; stale writes
+  must preserve the draft and explain recovery. Simulate a failed save and retry.
+- [ ] Use full/compact desktop and phone layouts, keyboard-only navigation, screen-reader labels,
+  native name-field shortcuts, visible focus and coarse-pointer controls. Verify long names wrap.
+- [ ] Open the dedicated Notecard Templates tab; verify two desktop columns, one narrow-phone
+  column, always-visible thumbnails and grouped actions in full/compact modes. Open Manage and
+  check its form stays inside its card. Switch back to asset tabs and verify source/search/collection
+  controls return; asset search must not include account templates.
+- [ ] Save/reconnect/restart and restore scenes/games containing copies; templates remain account
+  data independent from those snapshots. Check pending-response cleanup on disconnect.

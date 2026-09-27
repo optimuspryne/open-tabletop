@@ -7330,3 +7330,22 @@ body.not-gm .gm-only {
 #notecardCanvas:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 #notecardDrawingHelp { font-size: max(12px, 0.85em); }
 .handcard.notecard { width: 120px; background-size: contain; background-repeat: no-repeat; background-position: center; background-color: #fffdf5; }
+
+/* Account-backed notecard templates: compact actions and wrapping native fields. */
+.notecard-template-library { margin-bottom: var(--gap); }
+#libraryModal #notecardTemplateList { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+@media (max-width: 600px) { #libraryModal #notecardTemplateList { grid-template-columns: minmax(0, 1fr); } }
+.notecard-template-card { min-width: 0; }
+.notecard-template-card .libMeta { flex-direction: column; align-items: flex-start; min-width: 0; }
+.notecard-template-card .libName { max-width: 100%; }
+.notecard-template-card .hint { margin: 0; overflow-wrap: anywhere; }
+.notecard-template-card > .notecard-template-form { grid-column: 1 / -1; }
+/* Account templates have their own filter and actions, independent of asset sources/collections. */
+#libraryModal:has(.libTab[data-tab="notecard-templates"].on) :is(#lib2Source, .libControls, .libraryCollections, .libraryPackages) { display: none; }
+.notecard-template-card input[type="number"] { width: 56px; }
+.notecard-template-form { border-block: 1px solid var(--border); margin-block: var(--gap); padding-block: var(--gap); }
+.notecard-template-form .field-group { margin-block: var(--gap); }
+.notecard-template-form input[type="text"], .notecard-template-form input:not([type]), .notecard-template-form select { width: 100%; min-width: 0; }
+.notecard-template-form label { overflow-wrap: anywhere; }
+
+.notecard-dialog .modal__title { min-width: 0; overflow-wrap: anywhere; }

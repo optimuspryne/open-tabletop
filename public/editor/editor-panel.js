@@ -212,7 +212,7 @@ function wireTabs(root) {
       if (aria) {
         t.setAttribute('aria-selected', on ? 'true' : 'false');
         t.tabIndex = on ? 0 : -1;
-      }
+      } else t.setAttribute('aria-pressed', String(on));
     });
     if (root._clearSearch) root._clearSearch(); // picking a tab jumps INTO that pane, so drop the query
     root.querySelectorAll('.libPane').forEach((pane) => {
@@ -226,6 +226,7 @@ function wireTabs(root) {
     if (root._applySearch) root._applySearch(); // re-filter the newly shown pane
   };
   tabs.forEach((tab, i) => {
+    if (!aria) tab.setAttribute('aria-pressed', String(tab.classList.contains('on')));
     tab.onclick = () => select(tab);
     if (aria)
       tab.onkeydown = (e) => {
@@ -367,6 +368,11 @@ function wireControls(root) {
     let total = 0,
       sections = 0;
     for (const pane of panes) {
+      // Account templates have their own paginated filter; asset search only covers asset panes.
+      if (pane.dataset.pane === 'notecard-templates') {
+        pane.hidden = true;
+        continue;
+      }
       // Only lists the source toggle leaves visible count, same rule as activeUls().
       const uls = [...pane.querySelectorAll('.libList')];
       let hits = 0;

@@ -136,17 +136,48 @@ async function prepareDatabase(ownerUrl) {
       await client.query('DROP SCHEMA placard_upgrade_test CASCADE');
     }
 
+    const templateMigration = await fs.readFile(
+      path.join(root, 'postgres/022_notecard_templates.sql'),
+      'utf8',
+    );
+    await client.query('CREATE SCHEMA template_upgrade_test');
+    try {
+      await client.query('SET search_path TO template_upgrade_test');
+      await client.query(
+        schema
+          .replace(templateMigration + '\n', '')
+          .replace(", ('022_notecard_templates.sql')", ''),
+      );
+      const seeded = await client.query(
+        "INSERT INTO users(username,email) VALUES ('template-upgrade','template-upgrade@example.test') RETURNING id",
+      );
+      await client.query(templateMigration);
+      await client.query(
+        "INSERT INTO notecard_templates(owner_id,name,content) VALUES ($1,'Private','{}')",
+        [seeded.rows[0].id],
+      );
+      assert.equal(
+        (await client.query('SELECT is_public FROM notecard_templates')).rows[0].is_public,
+        false,
+      );
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA template_upgrade_test CASCADE');
+    }
+
     // Exercise the actual numbered upgrade against a populated pre-collections baseline.
     const collectionMigration = await fs.readFile(
       path.join(root, 'postgres/020_asset_collections.sql'),
       'utf8',
     );
     const previous = schema
+      .replace(templateMigration + '\n', '')
+      .replace(", ('022_notecard_templates.sql')", '')
       .replace(placardMigration + '\n', '')
       .replace(", ('021_user_placards.sql')", '')
       .replace(collectionMigration + '\n', '')
       .replace(", ('020_asset_collections.sql')", '')
-      .replaceAll('001–021', '001–019');
+      .replaceAll('001–022', '001–019');
     await client.query('CREATE SCHEMA collection_upgrade_test');
     try {
       await client.query('SET search_path TO collection_upgrade_test');

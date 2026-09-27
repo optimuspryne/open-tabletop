@@ -1084,3 +1084,63 @@ test('failed hand placement restores text as well as ink and paper', () => {
   assert.deepEqual(card.drawing, artwork);
   assert.equal(room.notecards.isEditing(lease.id), true);
 });
+
+test('new private drafts create independent cards/stacks and acknowledge retries without duplication', async () => {
+  const { room, send, alice } = harness();
+  const content = { drawing: artwork, paper: defaultPaper, textBoxes: noteText };
+  await send('notecardCreate', { request: 'draft-1', destination: 'hand', content });
+  assert.deepEqual(room.hands.get('alice')[0].textBoxes, noteText);
+  await send('notecardCreate', { request: 'draft-1', destination: 'hand', content });
+  assert.equal(room.hands.get('alice').length, 1);
+  assert.equal(alice.sent.at(-1).type, 'notecardCreated');
+  await send('notecardCreate', { request: 'stack-1', destination: 'stack', count: 3, content });
+  const [stackId, stack] = [...room.state.pieces].find(([, p]) => p.type === 'notecardStack');
+  assert.equal(readProps(stack).cards, undefined);
+  const cards = room.notecards.snapshot(stackId).cards;
+  assert.equal(cards.length, 3);
+  assert.deepEqual(cards[0].textBoxes, noteText);
+  cards[0].textBoxes[0].text = 'Independent';
+  assert.equal(cards[1].textBoxes[0].text, noteText[0].text);
+  await send('notecardCreate', {
+    request: 'face-1',
+    destination: 'table',
+    faceDown: false,
+    content,
+  });
+  assert.deepEqual(readProps([...room.state.pieces.values()].at(-1)).textBoxes, noteText);
+});
+
+test('new notecard creation rejects malformed requests, capacity overflow and restricted players', async () => {
+  const { room, send, alice, bob } = harness();
+  const content = { drawing: [], paper: defaultPaper, textBoxes: noteText };
+  for (const patch of [
+    { count: 17 },
+    { count: 1 },
+    { content: { drawing: [], textBoxes: null } },
+    { request: '' },
+  ])
+    await send('notecardCreate', {
+      request: 'bad',
+      destination: 'stack',
+      count: 2,
+      content,
+      ...patch,
+    });
+  assert.equal(room.state.pieces.size, 1);
+  alice.auth.participation = 'spectator';
+  await send('notecardCreate', { request: 'denied', destination: 'hand', content });
+  assert.equal(room.hands.size, 0);
+  alice.auth.participation = 'player';
+  bob.auth.timedOut = true;
+  await send('notecardCreate', {
+    request: 'bad-pass',
+    destination: 'pass',
+    recipient: 'bob',
+    content,
+  });
+  assert.equal(room.hands.size, 0);
+  await send('notecardCreate', { request: 'max', destination: 'stack', count: 15, content });
+  await send('notecardCreate', { request: 'full', destination: 'hand', content });
+  assert.equal(room.hands.size, 0);
+  assert.match(alice.sent.at(-1).payload.message, /limit/);
+});

@@ -44,6 +44,7 @@ const messagesByCapability = {
     'deleteCollection',
   ],
   gameplay: [
+    'notecardCreate',
     'notecardEdit',
     'notecardCommit',
     'notecardKeepAlive',

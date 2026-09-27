@@ -1,3 +1,4 @@
+import { createNotecardTemplates } from './table/notecard-templates.js';
 import { createNotecardEditor } from './table/notecards.js';
 import { createDeckBrowser } from './table/deck-browsing.js';
 import { createParticipation } from './table/participation.js';
@@ -421,6 +422,7 @@ const membership = createMembership({
   if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
   effects.bindTableEffects(room);
   notecards.bindRoom(room);
+  notecardTemplates.bindRoom(room);
   inspection.bindRoom(room);
   deckBrowser.bindRoom(room);
   pieceDrag.bindRoom(room);
@@ -621,6 +623,12 @@ const notecards = createNotecardEditor({
     overlays.cancel();
     pieceUi.closePieceMenu();
   },
+});
+const notecardTemplates = createNotecardTemplates({
+  byId,
+  editor: notecards,
+  getRoom: () => room,
+  canInteract: participation.canInteract,
 });
 inspection = createInspection({
   openNotecard: (id) => notecards.open(id),

@@ -9,6 +9,13 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- **Saveable notecard templates.** Save paper, ink and editable text to your account, private by
+  default, with optional sharing across the server. Library templates create independent private
+  drafts or face-down stacks; owners and site admins can rename, replace, change sharing or delete
+  templates. Revision checks prevent stale overwrites, and failed saves/placements preserve drafts.
+  Includes a dedicated **Notecard Templates** Library tab using the shared Library card styles,
+  two desktop columns, always-visible thumbnails, and compact Tabler controls. Migration 022 adds
+  template storage; restart the server and refresh browsers after upgrading.
 - **Editable notecard text boxes.** Add up to eight multiline boxes with size, ink color and
   alignment; move them and resize their wrapping width with mouse, touch or keyboard. Text stays
   above ink and remains editable through hands, private passing, Show, stacks and saves. Shared

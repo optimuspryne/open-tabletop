@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 21); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 22); // Includes durable participation policy.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -1086,4 +1086,119 @@ test('account placards persist through the production database facade and fresh 
   await database.setUserPlacard(user.id, settings);
   assert.deepEqual((await database.findUserById(user.id)).placard, settings);
   assert.deepEqual((await database.findUserByLogin('placard-player')).placard, settings);
+});
+
+test('notecard templates enforce private ownership, live admin roles, revisions and copy independence', async () => {
+  const owner = await database.createUser({
+    username: 'template-owner',
+    email: 'template-owner@example.test',
+  });
+  const other = await database.createUser({
+    username: 'template-other',
+    email: 'template-other@example.test',
+  });
+  const content = {
+    drawing: [],
+    paper: { pattern: 'grid', tone: 'ivory' },
+    textBoxes: [
+      {
+        id: 1,
+        text: 'Private design',
+        x: 0.1,
+        y: 0.1,
+        w: 0.8,
+        size: 0.04,
+        color: '#202830',
+        align: 'left',
+      },
+    ],
+  };
+  const created = await database.notecardTemplates.create(owner, {
+    name: 'Log',
+    content,
+    isPublic: false,
+  });
+  assert.equal(created.canEdit, true);
+  assert.equal(created.revision, 1);
+  assert.equal(await database.notecardTemplates.get(other, created.id), undefined);
+  assert.equal(
+    (await database.notecardTemplates.list(other, 'shared')).templates.some(
+      (t) => t.id === created.id,
+    ),
+    false,
+  );
+  assert.equal(
+    await database.notecardTemplates.update(
+      other,
+      created.id,
+      { name: 'Stolen', isPublic: true },
+      1,
+    ),
+    undefined,
+  );
+  assert.equal(await database.notecardTemplates.remove(other, created.id, 1), false);
+  const shared = await database.notecardTemplates.update(
+    owner,
+    created.id,
+    { name: 'Log', isPublic: true },
+    1,
+  );
+  const copy = await database.notecardTemplates.get(other, created.id);
+  assert.equal(copy.canEdit, false);
+  assert.deepEqual(copy.content, content);
+  assert.equal(
+    (await database.notecardTemplates.list(other, 'shared')).templates.some(
+      (t) => t.id === created.id,
+    ),
+    true,
+  );
+  assert.equal(
+    await database.notecardTemplates.update(
+      owner,
+      created.id,
+      { name: 'stale', isPublic: false },
+      1,
+    ),
+    undefined,
+  );
+  const privateAgain = await database.notecardTemplates.update(
+    owner,
+    created.id,
+    { name: 'Private log', isPublic: false },
+    shared.revision,
+  );
+  assert.equal(await database.notecardTemplates.get(other, created.id), undefined);
+  assert.deepEqual(copy.content, content);
+  // A forged/stale JavaScript admin flag never grants database access.
+  assert.equal(
+    await database.notecardTemplates.get({ ...other, isAdmin: true }, created.id),
+    undefined,
+  );
+  await pool.query('UPDATE users SET is_admin=true WHERE id=$1', [other.id]);
+  assert.equal((await database.notecardTemplates.get(other, created.id)).canEdit, true);
+  assert.equal(
+    (await database.notecardTemplates.list(other, 'managed')).templates.some(
+      (t) => t.id === created.id,
+    ),
+    true,
+  );
+  await pool.query('UPDATE users SET is_admin=false WHERE id=$1', [other.id]);
+  assert.equal(
+    await database.notecardTemplates.remove(
+      { ...other, isAdmin: true },
+      created.id,
+      privateAgain.revision,
+    ),
+    false,
+  );
+  const replaced = await database.notecardTemplates.update(
+    owner,
+    created.id,
+    { name: 'New design', isPublic: false, content: { ...content, textBoxes: [] } },
+    privateAgain.revision,
+  );
+  assert.deepEqual(replaced.content.textBoxes, []);
+  assert.deepEqual(copy.content.textBoxes, content.textBoxes);
+  assert.equal(await database.notecardTemplates.remove(owner, created.id, replaced.revision), true);
+  assert.equal(await database.notecardTemplates.get(owner, created.id), undefined);
 });

@@ -1256,6 +1256,32 @@ modules continue to request the stable public paths. To relocate the bundle agai
 folders together, change `STATIC_ASSETS_DIR`, and restart the server. Deployments must provide the
 configured directory; uploaded originals and their `ASSETS_DIR` configuration are independent.
 
+## Account-owned notecard templates
+
+Templates persist separately from room inventory in `notecard_templates` (migration 022). They
+store normalized `{drawing,paper,textBoxes}` documents and default to private. Explicit sharing
+makes a design available to accounts on this installation; it grants copy access, not edit rights.
+The owner and current site admins can modify/delete originals. SQL checks the live account role,
+and HTTP reads recheck authentication/role after awaits before returning private content. Expected
+revisions prevent silent lost updates; metadata-only writes preserve the content. Account deletion
+clears ownership without publishing private designs. Database failures use the existing HTTP error
+boundary and must not appear as empty lists or successful saves.
+
+The focused template controller owns Library/form state and API work. Its dedicated Library pane
+uses existing tab wiring and shared Library card/thumbnail/control classes. Thumbnails remain
+visible; there is no preview-collapse state. Asset-specific source/search/collection controls stay
+in asset panes, and account templates are excluded from asset search.
+It receives the notecard
+editor as a dependency; content, history and editing state remain in that editor. Generation checks
+prevent late HTTP results from mutating a different draft. Saving a template persists immediately;
+closing a notecard afterward does not undo that save. Copying retrieves current authorized content,
+opens a local editable draft and retains no live template reference in room/game data. Placement
+uses the guarded `notecardCreate` path, with normalized content and capacity checks before allocation.
+Stacks receive independent documents, kept server-private. Successful request IDs prevent duplicate
+allocation during same-session retries. Changing/deleting/unsharing an original leaves existing
+copies intact. Portable scenes/game checkpoints include cards, not the account template library.
+Custom asset collections and asset-package export do not yet include this new document type.
+
 ## Persistence: the asset library
 
 The saved **library** is split across two stores: **metadata in Postgres**

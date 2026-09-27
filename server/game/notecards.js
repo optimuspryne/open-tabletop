@@ -18,6 +18,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
   const stacks = new Map();
   const leases = new Map();
   const transferring = new Set();
+  const creations = new WeakMap();
   const handCard = (sid, hid) =>
     room.hands?.get(sid)?.find((card) => card.hid === hid && card.kind === 'notecard');
   function count() {
@@ -76,6 +77,73 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     give(client, doc, readProps(piece));
     room.removePiece(id);
     return true;
+  }
+  // New local drafts become inventory only on an acknowledged creation request.
+  function create(client, message) {
+    const fail = (messageText) =>
+      client.send('serverError', {
+        operation: 'notecardCreate',
+        request: message?.request,
+        message: messageText,
+      });
+    const content = normalizeNotecardContent(message?.content);
+    const destination = message?.destination;
+    const amount = destination === 'stack' ? message.count : 1;
+    if (
+      !isPlainObject(message) ||
+      typeof message.request !== 'string' ||
+      !/^[a-zA-Z0-9-]{1,64}$/.test(message.request) ||
+      !content ||
+      !['table', 'hand', 'pass', 'stack'].includes(destination) ||
+      !Number.isInteger(amount) ||
+      amount < (destination === 'stack' ? 2 : 1) ||
+      amount > NOTECARD.maxCards ||
+      (destination === 'table' && typeof message.faceDown !== 'boolean')
+    ) {
+      fail('The notecard could not be created. Check the content and copy count.');
+      return;
+    }
+    const completed = creations.get(client) || new Set();
+    if (completed.has(message.request)) {
+      client.send('notecardCreated', { request: message.request });
+      return;
+    }
+    if (count() + amount > NOTECARD.maxCards) {
+      fail('The room notecard limit was reached. Your draft is still available.');
+      return;
+    }
+    const recipient =
+      destination === 'pass'
+        ? room.clients.find(
+            (other) =>
+              other !== client &&
+              other.sessionId === message.recipient &&
+              room.state.players.has(other.sessionId) &&
+              canUseRoomCapability(other.auth, 'gameplay'),
+          )
+        : client;
+    if (!recipient) {
+      fail('Choose an active player. Your draft is still available.');
+      return;
+    }
+    if (destination === 'table' || destination === 'stack') {
+      if (!hasPieceCapacity(room)) {
+        fail('The table is full. Your draft is still available.');
+        return;
+      }
+      if (destination === 'stack')
+        room.spawn('notecardStack', [0, 3, 0], {
+          cards: Array.from({ length: amount }, () => ({
+            ...structuredClone(content),
+            noteProps: {},
+          })),
+        });
+      else room.spawn('notecard', [0, 3, 0], { ...content, faceDown: message.faceDown });
+    } else give(recipient, content);
+    completed.add(message.request);
+    if (completed.size > 32) completed.delete(completed.values().next().value);
+    creations.set(client, completed);
+    client.send('notecardCreated', { request: message.request });
   }
   function publish(id) {
     const piece = room.state.pieces.get(id),
@@ -492,6 +560,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
     placeHandCard,
     claim,
     commit,
+    create,
     flip,
     blocked,
     cancelClient,
@@ -526,6 +595,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
 
 export function registerNotecardHandlers(room) {
   for (const [type, method] of Object.entries({
+    notecardCreate: 'create',
     notecardDraw: 'draw',
     notecardShuffle: 'shuffle',
     notecardSplit: 'split',

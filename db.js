@@ -13,6 +13,7 @@ export { createDatabase };
 export const {
   collections,
   colliderPresets,
+  notecardTemplates,
   setPlayerTimeout,
   setSelfParticipation,
   close,

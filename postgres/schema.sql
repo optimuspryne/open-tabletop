@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–021, meant for a FRESH
+-- This is the flattened end state of migrations 001–022, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -229,8 +229,21 @@ CREATE INDEX asset_collection_items_asset_idx ON asset_collection_items(kind, as
 ALTER TABLE users ADD COLUMN placard jsonb NOT NULL DEFAULT
   '{"shape":"masculine","pattern":"gradient","color":"#344759","accent":"#17212c"}'::jsonb;
 
+-- Account-owned reusable notecard documents, separate from room/game inventories.
+CREATE TABLE notecard_templates (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  owner_id bigint REFERENCES users(id) ON DELETE SET NULL,
+  name text NOT NULL CHECK (length(btrim(name)) BETWEEN 1 AND 60),
+  content jsonb NOT NULL CHECK (jsonb_typeof(content) = 'object'),
+  is_public boolean NOT NULL DEFAULT false,
+  revision integer NOT NULL DEFAULT 1 CHECK (revision > 0),
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX notecard_templates_owner_idx ON notecard_templates(owner_id);
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–021, so record them as
+-- This baseline IS the flattened result of migrations 001–022, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -247,6 +260,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
-  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql');
+  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql');
 
 COMMIT;

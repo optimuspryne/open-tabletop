@@ -1817,6 +1817,38 @@ const SCENES = [
       (await import('/ui/icons.js')).applyIcons();`,
   },
   {
+    name: 'library-notecard-tab',
+    root: '#libraryModal',
+    expect: { selector: '#notecardTemplatesPane:not([hidden])', min: 1 },
+    drive: `
+      window.onOttRoom(${STUB_ROOM});
+      document.getElementById('lib2Btn').click();
+      const modal = document.getElementById('libraryModal');
+      const tab = modal.querySelector('[data-tab="notecard-templates"]');
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      tab.click();
+      assert(!document.getElementById('notecardTemplatesPane').hidden, 'Template tab did not open');
+      assert(tab.getAttribute('aria-pressed') === 'true', 'Selected template tab is not announced');
+      assert(modal.querySelector('[data-pane="decks"]').hidden, 'Decks remain visible under templates');
+      for (const selector of ['#lib2Source', '.libControls', '.libraryCollections'])
+        assert(getComputedStyle(modal.querySelector(selector)).display === 'none', 'Asset controls leaked into templates: '+selector);
+      modal.querySelector('[data-tab="decks"]').click();
+      assert(document.getElementById('notecardTemplatesPane').hidden, 'Templates remain visible under decks');
+      for (const selector of ['#lib2Source', '.libControls', '.libraryCollections'])
+        assert(getComputedStyle(modal.querySelector(selector)).display !== 'none', 'Asset controls did not return: '+selector);
+      // Searching assets and then entering templates must clear the asset search.
+      const template = document.createElement('li');
+      template.className = 'libCard';
+      template.innerHTML = '<span class="libName">Mahjong template</span>';
+      document.getElementById('notecardTemplateList').append(template);
+      const search = modal.querySelector('.libSearch');
+      search.value = 'mahjong'; search.dispatchEvent(new Event('input'));
+      assert(document.getElementById('notecardTemplatesPane').hidden, 'Account templates leaked into asset search');
+      tab.click();
+      assert(!search.value && !document.getElementById('notecardTemplatesPane').hidden, 'Asset search hid template pane');
+      template.remove();`,
+  },
+  {
     // Regression guard. The overflow menu is a .pop-group whose shape matches what
     // wirePopGroups claims, so the generic wiring used to attach a SECOND click handler to the
     // trigger: the first opened and portaled the menu, the second read it as already-open and

@@ -108,6 +108,23 @@ selection Flip includes notecards. One editor reserves a card at a time. Touch c
 coarse-pointer sizing independently of the viewport width. Automated mouse/touch reachability
 is covered by `scripts/notecard-test.mjs`; real-device feel remains on the device QA checklist.
 
+### Reusable notecard templates
+
+In an editable notecard, choose **Save template** in the header. Enter a name and save a new
+private template, or choose an existing editable template to replace. **Share with everyone on
+this server** is explicit and off for new templates. Save includes the current paper, ink and
+editable text and leaves the draft open. Closing the card does not undo a successful template save.
+
+Open **Library → Notecard Templates**. Small thumbnails are always visible beside the name and
+privacy. Cards use two columns on desktop and one on narrow phones, with Copies above the grouped
+Create card/Create stack/Manage actions. **Create card** opens a fresh private
+draft; place it, keep it in hand, or pass it when ready. **Copies → Create stack** creates 2–16
+independent face-down cards within the room's remaining limit. **Manage** offers name/sharing,
+Edit design and Delete with confirmation. Making a template private stops future access; copies
+already created stay unchanged. A revision conflict keeps the draft: save a new template or reopen
+the latest design before replacing it. Keyboard users can Tab through native fields and actions;
+touch uses the same buttons and wrapped layout. Template name editing retains native text shortcuts.
+
 ## Pieces
 
 | Gesture | What it does | Touch | Status |

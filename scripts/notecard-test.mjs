@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { writeFile } from 'node:fs/promises';
+import { verifyNotecardTemplates } from './lib/notecard-template-test.mjs';
 import { verifyNotecardText } from './lib/notecard-text-test.mjs';
 import { serveDir, launch, newPage } from './lib/headless.mjs';
 
@@ -25,9 +26,9 @@ try {
         sessionId: 'me',
         state: { players: new Map([['me',{name:'Me',participation:'player'}],['bob',{name:'Bob',participation:'player'}]]), pieces: new Map([['one', { type:'notecard', props:JSON.stringify({faceDown:true}) }]]) },
         send(type, payload) { noteTest.sent.push({type, payload:structuredClone(payload)}); },
-        onMessage(type, fn) { messages.set(type, fn); },
-        onLeave(fn) { noteTest.leave = fn; },
-        onStateChange(fn) { noteTest.stateChanged = fn; },
+        onMessage(type, fn) { const prior=messages.get(type); messages.set(type,data=>{prior?.(data);fn(data);}); },
+        onLeave(fn) { const prior=noteTest.leave; noteTest.leave=()=>{prior?.();fn();}; },
+        onStateChange(fn) { const prior=noteTest.stateChanged; noteTest.stateChanged=()=>{prior?.();fn();}; },
       };
       noteTest.room = room;
       noteTest.editor = createNotecardEditor({ getRoom:()=>room, byId:(id)=>document.getElementById(id),
@@ -495,6 +496,7 @@ try {
       `noteTest.ui.openPieceMenu('stack',{x:20,y:20});document.querySelectorAll('#pieceMenu button')[0].click()`,
     );
     assert.equal(await page.evaluate(`noteTest.sent.at(-1).payload.destination`), 'hand');
+    await verifyNotecardTemplates({ page, browser, device });
     assert.deepEqual(page.errors, []);
     await page.close();
     console.log(`Notecard editor: ${device.width}px ${device.touch ? 'touch' : 'mouse'} passed`);
