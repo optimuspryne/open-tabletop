@@ -139,6 +139,40 @@ test('library writes, reads, updates, and deletes use real constraints and JSON'
   assert.equal(await database.getMat(matId), null);
 });
 
+test('Library listings retain tile classification for public and private assets', async () => {
+  const ids = [];
+  try {
+    for (const props of [{}, { open: false }, { open: true }, { open: true, isPublic: false }]) {
+      ids.push(
+        await database.insertDeck({
+          name: `Classification ${ids.length}`,
+          back: 'back',
+          fronts: ['front'],
+          isPublic: true,
+          ...props,
+        }),
+      );
+    }
+    for (const includePrivate of [false, true]) {
+      const list = await database.listDecks({ includePrivate });
+      const expectedIds = includePrivate ? ids : ids.slice(0, 3);
+      for (const id of expectedIds) {
+        const listed = list.find((asset) => asset.id === id);
+        assert.ok(listed);
+        assert.equal(listed.open, ids.indexOf(id) >= 2);
+        assert.equal(listed.open, (await database.getDeck(id)).open);
+      }
+      if (!includePrivate)
+        assert.equal(
+          list.some((asset) => asset.id === ids[3]),
+          false,
+        );
+    }
+  } finally {
+    for (const id of ids) await database.deleteAsset('deck', id);
+  }
+});
+
 test('case-insensitive user uniqueness is enforced by PostgreSQL', async () => {
   await assert.rejects(
     database.createUser({ username: 'INTEGRATION-OWNER', email: 'different@example.test' }),

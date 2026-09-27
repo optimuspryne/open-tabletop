@@ -58,6 +58,18 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Drawing controls use the user-approved Tabler icon set with compact-mode labels/tooltips.
 
 ### Changed
+- Library exports use a brief bottom-center toast instead of a persistent message above the
+  assets. Desktop source and collection filters now share sizing, typography and borders in
+  compact/full modes; the tested touch layout is preserved. Refresh browsers; no restart needed.
+- **Grouped Library browsing.** Six tabs contain collapsible Decks/Tiles, Dice/Objects/Dispensers,
+  Boards/Mats/Notecards, Games/Scenes, Skyboxes and collection management. Search still spans
+  asset categories, reveals matching collapsed sections and restores their previous state when
+  cleared. Select operates across visible sections. The Filters funnel exposes source choices
+  and personal collection visibility; Show all/none still leaves Uncollected independent.
+  ZIP/JSON importing now opens a separate dialog; exports report status through the shared toast.
+  Existing template scope/pagination and server permissions are preserved. Refresh browsers;
+  no server restart or migration is required. The user confirmed functional browsing and good
+  mobile layout, then accepted the follow-up toast/desktop filter styling and tile classification fix.
 - Replace the built-in procedural Marbled finish with Behrtron's CC0 white-marble texture.
   Preserve the supplied 4K source; render with one shared 512px WebP, retain colored dice and
   numbering, and wait for marble loading before generating finish previews. Remove the old
@@ -68,6 +80,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   while coins retain 1.0.
 
 ### Fixed
+- Custom tile assets now appear in the Library's Tiles section. Deck listings include the
+  existing tile flag, preserving classification for public and private assets without reimporting.
+  Restart the server and refresh browsers; no database migration is needed.
 - Stabilize the notecard browser regression by retaining the held mouse button during CDP
   drag moves; assert the first stroke commits before testing zoom/pan. Fixes intermittent CI
   cancellation of the synthetic stroke.

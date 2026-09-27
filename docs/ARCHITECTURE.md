@@ -1285,10 +1285,10 @@ revisions prevent silent lost updates; metadata-only writes preserve the content
 clears ownership without publishing private designs. Database failures use the existing HTTP error
 boundary and must not appear as empty lists or successful saves.
 
-The focused template controller owns Library/form state and API work. Its dedicated Library pane
-uses existing tab wiring and shared Library card/thumbnail/control classes. Thumbnails remain
-visible; there is no preview-collapse state. Asset-specific source/search/collection controls stay
-in asset panes, and account templates are excluded from asset search.
+The focused template controller owns Library/form state and API work. Its collapsible section under Boards, Mats & Notecards
+uses existing grouped tab wiring and shared Library card/thumbnail/control classes. Thumbnails remain
+visible; there is no preview-collapse state. Asset source/collection controls do not filter templates, and account templates remain excluded
+from asset search and batch selection. Their own scope/pagination loads on section expansion.
 It receives the notecard
 editor as a dependency; content, history and editing state remain in that editor. Generation checks
 prevent late HTTP results from mutating a different draft. Saving a template persists immediately;
@@ -1383,9 +1383,9 @@ table engine. The game table and workshop share one combined **Library** modal
 (built-ins, custom assets, games, and skyboxes), driven by `editor-panel.js` over
 `window.onOttRoom`; **Add to Library** (creation)
 is editor-only and the asset handlers refuse non-admin creation/curation.
-Custom objects with an authored dispenser also appear in the Dispensers tab. Deleting that
+Custom objects with an authored dispenser also appear in the Dispensers section. Deleting that
 dispenser card invokes the targeted metadata removal rather than generic asset deletion, so the
-object and its primary model remain in the Objects tab.
+object and its primary model remain in the Objects section.
 See "Accounts, rooms & roles" below.
 
 ## Built-in deck inventories
@@ -2012,7 +2012,11 @@ are paginated and creation/membership sizes are bounded. Database failures remai
 
 `public/editor/collections.js` owns filters and admin drafts; `editor-panel.js` passes cached assets
 and applies the predicate to existing card builders. The library shell keeps its header fixed and
-uses one scrolling body for Collections and asset panes; the editor action row stays sticky.
+uses grouped tabs with native collapsible category sections in one scrolling body. Collection
+management occupies its own tab; local visibility controls live in the bounded header filter area.
+The editor action row stays sticky. Search opens matching categories temporarily and restores
+their expansion state when cleared. Deck/tile rendering shares the canonical deck inventory;
+blank notecards live with templates, boards and mats. Grouping does not change role gates.
 Conflict responses retain local edits for review
 and explicit reload. Built-ins, secondary pickers and existing table objects are independent of local
 collection visibility. The bulk Show all / Show none action updates named collection preferences
@@ -2072,7 +2076,12 @@ Preview writes no permanent assets; import uploads/revalidates the chosen file i
 server-side preview sessions. Large binary payloads never pass through JSON parsing/stringification.
 The browser sends `File` objects and receives download `Blob`s; only the bounded manifest and
 legacy packages use JSON. The existing Library controller owns feedback, rename, cancellation,
-identity cleanup and mouse/touch/keyboard controls.
+identity cleanup and mouse/touch/keyboard controls. The ZIP/JSON importer lives in a sibling
+dialog with the Library inert beneath it. The shared dialog controller handles focus and Escape;
+closing preserves in-flight work and preview state. The shell toast is injected through the room handoff for transient bottom-center export feedback;
+existing callers retain their default placement and timer. No persistent export status occupies
+the Library body.
+Local navigation/filter state never enters synchronized room state.
 
 `getCollectionForPackage` reads saved membership/metadata in one read-only repeatable-read
 transaction. `importAssetPackage` creates private member assets, the private collection and

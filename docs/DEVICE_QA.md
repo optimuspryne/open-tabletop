@@ -20,6 +20,20 @@ The user reported all manual tests green for the object-label, low-stock, highli
 and avatar-upload batch and approved it for commit. The checklists below remain reusable for
 future runs; that sign-off does not specify a per-device/browser test matrix.
 
+### Library grouped browsing
+The user reported grouped browsing functional and mobile layout good on 2026-09-27.
+The user subsequently accepted the export toast and desktop filter styling, confirmed the custom
+tile classification fix, and approved the changes for commit. This sign-off does not specify a
+per-device/browser matrix; the checklist below remains reusable for future runs.
+- [ ] On desktop and touch, in compact/full modes, switch every tab and expand/collapse categories.
+- [ ] Search across groups, select matching assets, then clear search; prior collapse state returns.
+- [ ] Toggle All/Custom/Built-In and collection visibility; Show none/all keeps Uncollected unchanged.
+- [ ] Create/edit/export a collection from Collections; failed saves keep the draft.
+- [ ] Export an asset/collection: feedback appears at bottom center and disappears; desktop filters match in full/compact modes.
+- [ ] Import ZIP and legacy JSON in the separate dialog; retry a failure, close/reopen during preview/import.
+- [ ] Use keyboard tabs/arrows, category summaries and Escape; closing Import restores Library focus.
+- [ ] As a Helper, access Mats/Notecards while Boards, Games/Scenes and Skyboxes retain their role gates.
+
 ### Drawable notecards
 The user accepted the freehand editor and approved the zoom/pan, private-hand and compact-icon
 additions for commit. Automated coverage is recorded in [the design notes](DESIGN_notecards.md).

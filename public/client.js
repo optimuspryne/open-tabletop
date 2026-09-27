@@ -419,7 +419,7 @@ const membership = createMembership({
       location.href = '/admin.html';
     };
   }
-  if (window.onOttRoom) window.onOttRoom(room); // hand the room to the library panel (editor + table)
+  if (window.onOttRoom) window.onOttRoom(room, { toast }); // hand the room to the library panel (editor + table)
   effects.bindTableEffects(room);
   notecards.bindRoom(room);
   notecardTemplates.bindRoom(room);
@@ -730,7 +730,11 @@ function applyRole(role) {
       const el = qs(`#${modalId} .libTab[data-tab="${t}"]`);
       if (el) el.hidden = rank < 2;
     });
-  gmTabs('libraryModal', ['boards', 'sky', 'scenes', 'games']); // GM-only tabs within the combined library
+  gmTabs('libraryModal', ['sky', 'games']); // Boards shares a tab with helper-accessible mats/notecards; its section is gm-only.
+  const library = byId('libraryModal');
+  if (library?.querySelector('.libTab.on[hidden]'))
+    library.querySelector('.libTab:not([hidden])')?.click();
+  library?._applySearch?.();
   gate('roomCode', 2); // room code display: GM+/owner/admin only
   gate('ctrlHelper', 1);
   gate('ablGM', 2); // How-to-Play sections revealed by role

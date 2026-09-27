@@ -1890,7 +1890,9 @@ as strings (nullable `owner_id` via the `idOrNull` helper).
 functions take `{ includePrivate }` (admins pass true; otherwise public-only) and
 return the flag:
 
-- **Decks** — `listDecks({includePrivate}) → [{id,name,count,isPublic,ownerId}]`,
+- **Decks** — `listDecks({includePrivate}) → [{id,name,count,first,back,open,isPublic,ownerId}]`.
+  The boolean `open` is true for tile sets, routing them to the Library's Tiles section;
+  false or missing stored flags remain ordinary decks.
   `getDeck(id) → {name,back,fronts,isPublic,ownerId}`,
   `insertDeck({name,back,fronts,geom,ownerId,isPublic}) → id`,
   `updateDeck(id,name,back,fronts,geom)`.
@@ -2530,8 +2532,9 @@ immediately and leaves the drawing draft open. New copies do not retain a live l
 The Library fetches current accessible content for every create/edit/stack action. My templates,
 Shared with me and an admin-only All templates view are paginated. Save targets paginate separately.
 Template cards are separate from custom asset collections/package export in this initial version.
-They appear in the dedicated **Notecard Templates** tab after **Card Decks/Tiles**. Asset source,
-search/select, import and collection controls are hidden in this pane and return in asset tabs.
+They appear in a collapsible **Notecard Templates** section under **Boards, Mats & Notecards**.
+The shared toolbar remains available; asset source/collection/select controls do not filter templates.
+The controller refreshes when this section becomes visible and expanded.
 Templates reuse `libList`, `libCard`, `libPreview`/`libThumb`, `libMeta`/`libName`, `cardCtrls` and
 `button-row--compact`. Thumbnails are always visible; the preview disclosure and collapse state
 were removed. Two columns become one below 600px. Account template lists stay outside asset search;
@@ -3071,25 +3074,58 @@ Writes lock the collection, compare its revision, validate/lock targets and repl
 one transaction. Failed writes roll back; simultaneous saves cannot silently replace each other.
 Creation serializes the total-count limit with an advisory transaction lock.
 
-`public/editor/collections.js` owns the collapsible Library controller, local visibility preferences
+`public/editor/collections.js` owns Library collection management, local visibility preferences
 (`ott.collections.<accountId>`), pagination, admin drafts and the multi-kind asset checklist. The
-Library markup places Collections and all asset panes inside one scrollable `libraryBody` under
-the fixed header, preventing the panes from shrinking the filters. The editor keeps its action row
-sticky within that body. The existing list cache/rendering applies its predicate only to the main custom library, including
+Library markup puts management in the Collections tab and personal visibility in
+Filters → By Collection (`filterHost`). The fixed header has a bounded scrolling filter area;
+category sections share one `libraryBody`. The collection editor keeps its action row sticky. The existing list cache/rendering applies its predicate only to the main custom library, including
 custom dice and prop/dispenser views. Any enabled visible collection membership shows the asset;
 only assets with no visible membership use Uncollected. Search/source/kind controls further filter
 these results. Show all / Show none changes only named collection IDs; Uncollected remains
 independent. The label follows individual checkbox changes, and the bulk button is disabled when
 there are no collections. Built-ins and secondary finish pickers remain independent. New collections are visible;
 removed/inaccessible IDs are pruned after loading all pages. Role transitions clear private cached
-metadata and discard management drafts before refetching. Export/import is not part of this slice.
+metadata and discard management drafts before refetching. Saved collection exports use the package controller.
 
+
+## Library navigation
+
+`wireTabs` and `wireControls` in `public/editor/editor-panel.js` use six `.libGroup` tab panels.
+Each asset category is a native `details.libPane` with a keyboard/touch-accessible summary.
+Decks & Tiles separates closed decks from open tile sets; Objects & Dispensers contains Dice,
+Objects and Dispensers; Boards, Mats & Notecards includes Boards, Mats, blank Notecards and
+Notecard Templates; Games & Scenes separates Games and Scenes. Skyboxes and Collections
+complete the tabs. `renderCustomLibrary` shares the existing card builders between deck/tile
+and object/dispenser views. Both deck variants retain the canonical `deck` collection kind.
+
+Search spans permitted asset categories, expands matching sections, sums counts per group,
+and restores the active tab and prior section expansion when cleared. Templates keep their
+own paginated scope and remain excluded from asset search and batch selection. Selection covers
+all visible, expanded asset sections, respects source visibility, and resets on tab/source/search
+changes or section collapse. Native controls use existing input exclusions; no new canvas intent.
+
+The Filters button (`filter` icon) reveals All/Custom/Built-In and By Collection. Closing the
+filter controls preserves their values. Collection preferences remain local per account. The
+Boards section stays GM-only inside its otherwise helper-accessible group; Games/Scenes and
+Skyboxes retain their GM gates. Load a Scene opens Games & Scenes and expands Scenes.
+
+`createAssetPackageController` accepts the import `dialog`, parent `library`, and injected `toast`.
+`client.js` supplies the shell toast through `onOttRoom(room, {toast})`; the editor forwards it.
+`open()` makes Library inert while the sibling dialog is open. Closing/Escape restores Library
+focus without cancelling an active transfer or clearing its preview; Cancel clears a ready draft
+and returns to Library. Reopening shows retained status. Identity/authority changes clear the
+preview and close the dialog. Exports report progress, success and failure through the shared bottom-center toast without
+opening the import dialog or scrolling the Library. The default dismissal remains 2.6 seconds.
+`toast(text, icon, action, {placement})` defaults to top placement for existing callers; exports
+choose `bottom`. Desktop fine-pointer source/collection controls share height, font and padding;
+touch controls keep their existing segmented source layout.
+The existing `wireDialog` provides focus trapping and Escape, including native disclosure summaries.
 
 ## Portable custom assets
 
 Site admins export custom dice textures, decks/tile sets, boards, mats, skyboxes and 3D models from their Library overflow menu,
 or saved collections with the package-export icon beside Edit. Downloads are `.ott.zip` packages
-containing `manifest.json` and original image/model files. **Import / export assets** accepts ZIP and
+containing `manifest.json` and original image/model files. **Import Assets** opens a separate dialog accepting ZIP and
 older `.ott.json` packages. Preview lists included members/files, supports renaming, and requires
 **Import private copy**. Imports create new private rows owned by the importing admin. Collection
 imports create a private collection with private copies of every member; renaming changes only

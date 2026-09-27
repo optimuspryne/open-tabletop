@@ -116,6 +116,11 @@ const shapeOfGeom = (geom) =>
   geom && geom.shape === 'hex' ? 'hex' : geom && geom.round === 0 ? 'square' : 'rounded';
 const byId = (id) => document.getElementById(id);
 const ICON_FOR = {
+  Select: 'new-section',
+  'Spawn selected': 'category-plus',
+  'Clear search': 'x',
+  Filters: 'filter',
+  'Import Assets': 'package-import',
   Spawn: 'square-rounded-plus',
   Apply: 'checks',
   'Set up': 'go-game',
@@ -129,6 +134,7 @@ const ICON_FOR = {
 const btn = (label, fn, cls) => {
   const button = document.createElement('button');
   button.type = 'button';
+  button.setAttribute('aria-label', label);
   button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
     .filter(Boolean)
     .join(' ');
@@ -214,9 +220,13 @@ function wireTabs(root) {
         t.tabIndex = on ? 0 : -1;
       } else t.setAttribute('aria-pressed', String(on));
     });
+    root.querySelectorAll('.libGroup').forEach((group) => {
+      group.hidden = group.dataset.group !== tab.dataset.tab;
+    });
     if (root._clearSearch) root._clearSearch(); // picking a tab jumps INTO that pane, so drop the query
     root.querySelectorAll('.libPane').forEach((pane) => {
-      pane.hidden = pane.dataset.pane !== tab.dataset.tab;
+      pane.hidden =
+        (pane.closest('.libGroup')?.dataset.group || pane.dataset.pane) !== tab.dataset.tab;
     });
     root.querySelectorAll('.libList.selecting').forEach((ul) => {
       ul.classList.remove('selecting');
@@ -225,21 +235,23 @@ function wireTabs(root) {
     if (root._resetSelect) root._resetSelect();
     if (root._applySearch) root._applySearch(); // re-filter the newly shown pane
   };
-  tabs.forEach((tab, i) => {
+  tabs.forEach((tab) => {
     if (!aria) tab.setAttribute('aria-pressed', String(tab.classList.contains('on')));
     tab.onclick = () => select(tab);
     if (aria)
       tab.onkeydown = (e) => {
+        const visibleTabs = tabs.filter((candidate) => !candidate.hidden);
+        const current = visibleTabs.indexOf(tab);
         let j = -1;
-        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (i + 1) % tabs.length;
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') j = (current + 1) % visibleTabs.length;
         else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp')
-          j = (i - 1 + tabs.length) % tabs.length;
+          j = (current - 1 + visibleTabs.length) % visibleTabs.length;
         else if (e.key === 'Home') j = 0;
-        else if (e.key === 'End') j = tabs.length - 1;
+        else if (e.key === 'End') j = visibleTabs.length - 1;
         if (j >= 0) {
           e.preventDefault();
-          select(tabs[j]);
-          tabs[j].focus();
+          select(visibleTabs[j]);
+          visibleTabs[j].focus();
         }
       };
   });
@@ -251,172 +263,169 @@ function wireControls(root) {
   if (!tabs || root.querySelector('.libControls')) return;
   const row = document.createElement('div');
   row.className = 'libControls';
-  const sel = document.createElement('button');
-  sel.type = 'button';
-  sel.className = 'chip selToggle';
+  const sel = btn('Select', () => {
+    const on = sel.getAttribute('aria-pressed') !== 'true';
+    root._resetSelect();
+    sel.setAttribute('aria-pressed', String(on));
+    sel.classList.toggle('on', on);
+    go.hidden = !on;
+    activeUls().forEach((ul) => ul.classList.toggle('selecting', on));
+  });
+  sel.classList.add('selToggle');
   sel.dataset.icon = 'new-section';
-  sel.innerHTML = '<span class="lbl">Select</span>';
-  const go = document.createElement('button');
-  go.type = 'button';
-  go.className = 'spawnSelBtn';
+  sel.setAttribute('aria-pressed', 'false');
+  const go = btn('Spawn selected', () => {
+    activeUls().forEach((ul) =>
+      ul.querySelectorAll('.libCard.sel').forEach((card) => {
+        if (card.style.display !== 'none') card._spawn?.();
+      }),
+    );
+  });
+  go.classList.add('spawnSelBtn');
   go.dataset.roomMutation = '';
   go.dataset.icon = 'category-plus';
-  go.innerHTML = '<span class="lbl">Spawn selected</span>';
   go.hidden = true;
-  const divider = document.createElement('div');
-  divider.className = 'libDivider';
   const wrap = document.createElement('div');
   wrap.className = 'libSearchWrap';
   const inp = document.createElement('input');
   inp.type = 'search';
-  inp.className = 'libSearch';
-  inp.placeholder = 'Search\u2026';
-  wrap.append(inp);
-  const clear = document.createElement('button');
-  clear.type = 'button';
+  inp.className = 'libSearch control';
+  inp.placeholder = 'Search all assets…';
+  inp.setAttribute('aria-label', 'Search all library assets');
+  const clear = btn('Clear search', () => {
+    root._clearSearch();
+    inp.focus();
+  });
   clear.className = 'libSearchClear';
   clear.dataset.icon = 'x';
-  clear.setAttribute('aria-label', 'Clear search');
   clear.hidden = true;
-  wrap.append(clear);
-  row.append(sel, go, divider, wrap);
+  wrap.append(inp, clear);
+  const filterPanel = byId('libraryFilters');
+  const filters = btn('Filters', () => {
+    filterPanel.hidden = !filterPanel.hidden;
+    filters.setAttribute('aria-expanded', String(!filterPanel.hidden));
+  });
+  filters.id = 'libraryFiltersToggle';
+  filters.dataset.icon = 'filter';
+  filters.setAttribute('aria-controls', 'libraryFilters');
+  filters.setAttribute('aria-expanded', 'false');
+  const importer = btn('Import Assets', () => packageController?.open());
+  importer.id = 'libraryImport';
+  importer.dataset.icon = 'package-import';
+  importer.classList.add('admin-only');
+  importer.setAttribute('aria-haspopup', 'dialog');
+  row.append(sel, go, wrap, filters, importer);
   tabs.after(row);
-  // Search summary — sits under the controls row while a query is active.
   const summary = document.createElement('div');
   summary.className = 'libSummary';
+  summary.setAttribute('role', 'status');
   summary.hidden = true;
   row.after(summary);
-  // A combined-library pane can hold two lists (built-in + custom); act on all VISIBLE ones (respects the source toggle).
-  const activeUls = () => {
-    const pane = [...root.querySelectorAll('.libPane')].find((p) => !p.hidden);
-    return pane
-      ? [...pane.querySelectorAll('.libList')].filter(
-          (ul) => getComputedStyle(ul).display !== 'none',
-        )
-      : [];
-  };
-  sel.onclick = () => {
-    const uls = activeUls();
-    if (!uls.length) return;
-    const on = !sel.classList.contains('on');
-    sel.classList.toggle('on', on);
-    go.hidden = !on;
-    uls.forEach((ul) => {
-      ul.classList.toggle('selecting', on);
-      if (!on) ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
-    });
-  };
-  go.onclick = () => {
-    activeUls().forEach((ul) =>
-      ul.querySelectorAll('.libCard.sel').forEach((c) => c._spawn && c._spawn()),
-    );
-  };
+  const panes = [...root.querySelectorAll('.libPane')];
+  const permitted = (pane) =>
+    !(pane.classList.contains('gm-only') && document.body.classList.contains('not-gm'));
+  const activeUls = () =>
+    panes
+      .filter(
+        (pane) =>
+          !pane.hidden &&
+          pane.open &&
+          permitted(pane) &&
+          pane.dataset.pane !== 'notecard-templates',
+      )
+      .flatMap((pane) => [...pane.querySelectorAll('.libList')])
+      .filter((ul) => getComputedStyle(ul).display !== 'none');
   root._resetSelect = () => {
     sel.classList.remove('on');
+    sel.setAttribute('aria-pressed', 'false');
     go.hidden = true;
     root.querySelectorAll('.libList.selecting').forEach((ul) => {
       ul.classList.remove('selecting');
-      ul.querySelectorAll('.libCard.sel').forEach((c) => c.classList.remove('sel'));
+      ul.querySelectorAll('.libCard.sel').forEach((card) => card.classList.remove('sel'));
     });
   };
-  // A pane's heading while searching — its own tab's label, so a result group is
-  // named the same thing the tab strip calls it.
-  const paneHeadOf = (pane) => {
-    let head = pane.querySelector(':scope > .paneHead');
-    if (head) return head;
-    head = document.createElement('div');
-    head.className = 'paneHead';
-    const tab = root.querySelector('.libTab[data-tab="' + pane.dataset.pane + '"]');
-    head.innerHTML =
-      '<b>' + (tab ? tab.textContent.trim() : pane.dataset.pane) + '</b><span></span>';
-    pane.prepend(head);
-    return head;
-  };
-  const tabCountOf = (tab) => {
-    let c = tab.querySelector(':scope > .tabCount');
-    if (!c) {
-      c = document.createElement('span');
-      c.className = 'tabCount';
-      tab.append(c);
-    }
-    return c;
-  };
-  // Search spans EVERY pane, not just the visible one (UI_Redesign 7c slice 3): panes
-  // with hits are revealed with a heading, panes without are hidden, the tab strip shows
-  // per-tab counts, and clearing restores the pane you were on. Cards are filtered in
-  // place — never moved — so li._spawn, select mode and the ctrls all keep working.
+  const expanded = new Map();
+  let searching = false;
   root._applySearch = () => {
-    const q = inp.value.trim().toLowerCase();
-    const panes = [...root.querySelectorAll('.libPane')];
-    clear.hidden = !q;
-    root.classList.toggle('searching', !!q);
-    if (!q) {
-      // Restore: unfilter every card and drop the search chrome. Pane visibility is left
-      // to wireTabs (which has just set it, or never changed it).
-      panes.forEach((pane) => {
-        pane.querySelectorAll('.libCard').forEach((card) => {
-          card.style.display = '';
-        });
-      });
-      root.querySelectorAll('.libTab').forEach((tab) => {
-        tabCountOf(tab).textContent = '';
-        tab.classList.remove('noHits');
-      });
-      summary.hidden = true;
-      return;
-    }
-    let total = 0,
-      sections = 0;
+    const query = inp.value.trim().toLowerCase();
+    clear.hidden = !query;
+    root.classList.toggle('searching', !!query);
+    if (query && !searching) panes.forEach((pane) => expanded.set(pane, pane.open));
+    const counts = new Map();
     for (const pane of panes) {
-      // Account templates have their own paginated filter; asset search only covers asset panes.
-      if (pane.dataset.pane === 'notecard-templates') {
-        pane.hidden = true;
-        continue;
-      }
-      // Only lists the source toggle leaves visible count, same rule as activeUls().
-      const uls = [...pane.querySelectorAll('.libList')];
+      const group = pane.closest('.libGroup');
+      const template = pane.dataset.pane === 'notecard-templates';
       let hits = 0;
-      for (const ul of uls) {
-        const off = getComputedStyle(ul).display === 'none';
+      pane.querySelectorAll('.libList').forEach((ul) => {
+        const sourceOn =
+          !(root.classList.contains('src-custom') && ul.classList.contains('lib2-bi')) &&
+          !(root.classList.contains('src-builtin') && ul.classList.contains('lib2-cu'));
         ul.querySelectorAll('.libCard').forEach((card) => {
-          const name = (card.querySelector('.libName') || {}).textContent || '';
-          const match = !off && name.toLowerCase().includes(q);
-          card.style.display = match ? '' : 'none';
+          const name = card.querySelector('.libName')?.textContent || '';
+          const match =
+            !template && sourceOn && permitted(pane) && name.toLowerCase().includes(query);
+          card.style.display = !query || match ? '' : 'none';
           if (match) hits++;
         });
-      }
-      const tab = root.querySelector('.libTab[data-tab="' + pane.dataset.pane + '"]');
-      if (tab) {
-        tabCountOf(tab).textContent = hits ? String(hits) : '';
-        tab.classList.toggle('noHits', !hits);
-      }
-      pane.hidden = !hits;
-      if (hits) {
-        const head = paneHeadOf(pane);
-        head.querySelector('span').textContent = String(hits);
-        total += hits;
-        sections++;
+      });
+      counts.set(group.dataset.group, (counts.get(group.dataset.group) || 0) + hits);
+      if (query) {
+        pane.hidden = !hits;
+        if (hits) pane.open = true;
+      } else {
+        pane.hidden = !root.querySelector(`.libTab[data-tab="${group.dataset.group}"].on`);
+        if (searching) pane.open = expanded.get(pane) ?? true;
       }
     }
-    summary.hidden = false;
+    root.querySelectorAll('.libGroup').forEach((group) => {
+      group.hidden = query
+        ? !counts.get(group.dataset.group)
+        : !root.querySelector(`.libTab[data-tab="${group.dataset.group}"].on`);
+    });
+    root.querySelectorAll('.libTab').forEach((tab) => {
+      let count = tab.querySelector('.tabCount');
+      if (!count) {
+        count = document.createElement('span');
+        count.className = 'tabCount';
+        tab.append(count);
+      }
+      const hits = counts.get(tab.dataset.tab) || 0;
+      count.textContent = query && hits ? String(hits) : '';
+      tab.classList.toggle('noHits', !!query && !hits);
+    });
+    searching = !!query;
+    summary.hidden = !query;
+    const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
     summary.textContent = total
-      ? total +
-        (total === 1 ? ' match for "' : ' matches for "') +
-        inp.value.trim() +
-        '"' +
-        (sections > 1 ? ' across ' + sections + ' sections' : '')
-      : 'No matches for "' + inp.value.trim() + '"';
+      ? `${total} matches for “${inp.value.trim()}” across the library`
+      : 'No matching assets.';
+    const collections = !query && !!root.querySelector('.libTab[data-tab="collections"].on');
+    sel.hidden = collections;
+    if (collections) root._resetSelect();
   };
   root._clearSearch = () => {
-    if (!inp.value) return;
     inp.value = '';
+    root._resetSelect();
     root._applySearch();
   };
-  clear.onclick = () => {
-    root._clearSearch();
-    inp.focus();
+  inp.oninput = () => {
+    root._resetSelect();
+    root._applySearch();
   };
-  inp.oninput = root._applySearch;
+  panes.forEach((pane) =>
+    pane.addEventListener('toggle', () => {
+      if (!pane.open) root._resetSelect();
+    }),
+  );
+  const picker = root.querySelector('.libraryCollectionPicker');
+  picker.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && picker.open) {
+      event.preventDefault();
+      event.stopPropagation();
+      picker.open = false;
+      picker.querySelector('summary').focus();
+    }
+  });
 }
 
 // ---- Spawn cards: quantity + color, and multi-select batch spawn ----------
@@ -975,8 +984,7 @@ window.onLibraryList = (kind, list) => {
   collectionController?.assetsChanged();
   const lm = byId('libraryModal');
   if (lm && !lm.hidden) {
-    renderList(kind, list, (k) => byId('nlc_' + k));
-    if (kind === 'prop') renderList(kind, list, () => byId('nlc_dispenser'), { asDispenser: true });
+    renderCustomLibrary(kind, list);
   }
 };
 window.onLibraryAdmin = () => {
@@ -989,9 +997,7 @@ window.onLibraryAdmin = () => {
   const lm = byId('libraryModal');
   if (lm && !lm.hidden)
     for (const k in listCache) {
-      renderList(k, listCache[k], (kk) => byId('nlc_' + kk));
-      if (k === 'prop')
-        renderList(k, listCache[k], () => byId('nlc_dispenser'), { asDispenser: true });
+      renderCustomLibrary(k, listCache[k]);
     }
 }; // admin status arrived → re-render
 
@@ -1064,10 +1070,16 @@ function renderBuiltin(sink) {
   const decks = sink('decks');
   clearPreviewList(decks);
   spawnBar(decks);
+  const tiles = sink('tiles'),
+    notecards = sink('notecards');
+  clearPreviewList(tiles);
+  clearPreviewList(notecards);
+  spawnBar(tiles);
+  spawnBar(notecards);
   {
     const preview = previewBox();
     preview.append(thumbImg(notecardPreviewURL()));
-    decks.append(
+    notecards.append(
       spawnCard({
         preview,
         title: 'Drawable notecard',
@@ -1079,7 +1091,7 @@ function renderBuiltin(sink) {
   {
     const preview = previewBox('deckPreview');
     preview.append(thumbImg(notecardPreviewURL([])), thumbImg(notecardPreviewURL([])));
-    decks.append(
+    notecards.append(
       spawnCard({
         preview,
         title: 'Notecard stack',
@@ -1118,7 +1130,7 @@ function renderBuiltin(sink) {
   {
     const box = previewBox('deckPreview');
     box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
-    decks.append(
+    tiles.append(
       spawnCard({
         preview: box,
         title: 'Dominoes (double-six)',
@@ -1130,7 +1142,7 @@ function renderBuiltin(sink) {
   {
     const box = previewBox('deckPreview');
     box.append(thumbImg(cardPreviewURL('letter:Q:10')), thumbImg(cardPreviewURL('letter:E:1')));
-    decks.append(
+    tiles.append(
       spawnCard({
         preview: box,
         title: 'Word tiles (letter bag)',
@@ -1145,7 +1157,7 @@ function renderBuiltin(sink) {
       thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')),
       thumbImg(cardPreviewURL('/mahjong/faces/cir5.png')),
     );
-    decks.append(
+    tiles.append(
       spawnCard({
         preview: box,
         title: 'Mahjong wall (144)',
@@ -1262,16 +1274,28 @@ function renderBuiltin(sink) {
   if (bm && bm._applySearch) bm._applySearch();
 }
 
-// Combined library (parallel test): built-in + custom into one modal, filtered by the source toggle.
+// Custom variants share their rendering, permissions and collection membership.
+function renderCustomLibrary(kind, list) {
+  if (kind === 'deck') {
+    renderList(
+      kind,
+      list.filter((item) => !item.open),
+      () => byId('nlc_deck'),
+    );
+    renderList(
+      kind,
+      list.filter((item) => item.open),
+      () => byId('nlc_tile'),
+    );
+  } else {
+    renderList(kind, list, (key) => byId('nlc_' + key));
+    if (kind === 'prop') renderList(kind, list, () => byId('nlc_dispenser'), { asDispenser: true });
+  }
+}
 function renderLibrary() {
-  renderBuiltin((k) => byId('nlb_' + k)); // built-in kinds → nlb_* lists
+  renderBuiltin((key) => byId('nlb_' + key));
   for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene', 'dice'])
-    // custom kinds → nlc_* lists
-    renderList(kind, listCache[kind] || [], (k) => byId('nlc_' + k));
-  renderList('prop', listCache.prop || [], () => byId('nlc_dispenser'), {
-    asDispenser: true,
-  });
-  // Built-ins were rebuilt even when every custom list was reused.
+    renderCustomLibrary(kind, listCache[kind] || []);
   byId('libraryModal')?._applySearch?.();
 }
 
@@ -2452,7 +2476,7 @@ function wireAddSky() {
 }
 
 // client.js hands over the live room once connected.
-window.onOttRoom = (room) => {
+window.onOttRoom = (room, { toast = () => {} } = {}) => {
   ROOM = room;
   room.onMessage('deckData', (d) => {
     // deck Edit/Clone: server sent the deck's cards + back — fill the matching form
@@ -2498,6 +2522,9 @@ window.onOttRoom = (room) => {
   packageController = byId('assetPackagePanel')
     ? createAssetPackageController({
         host: byId('assetPackagePanel'),
+        dialog: byId('assetImportModal'),
+        library: byId('libraryModal'),
+        toast,
         isAdmin: () => !!window.OTT_IS_ADMIN,
         onImported: (kind) => {
           if (kind === 'collection') {
@@ -2526,6 +2553,7 @@ window.onOttRoom = (room) => {
   collectionController = byId('collectionPanel')
     ? createCollectionController({
         host: byId('collectionPanel'),
+        filterHost: byId('collectionFiltersPanel'),
         room,
         isAdmin: () => !!window.OTT_IS_ADMIN,
         getAssets: () => listCache,
@@ -2534,10 +2562,7 @@ window.onOttRoom = (room) => {
           const modal = byId('libraryModal');
           if (modal && !modal.hidden) {
             for (const kind of ['deck', 'board', 'mat', 'prop', 'sky', 'scene', 'dice'])
-              renderList(kind, listCache[kind] || [], (key) => byId('nlc_' + key));
-            renderList('prop', listCache.prop || [], () => byId('nlc_dispenser'), {
-              asDispenser: true,
-            });
+              renderCustomLibrary(kind, listCache[kind] || []);
           }
         },
       })
@@ -2573,9 +2598,10 @@ window.onOttRoom = (room) => {
     lib2.querySelectorAll('#lib2Source .chip').forEach(
       (c) =>
         (c.onclick = () => {
-          lib2
-            .querySelectorAll('#lib2Source .chip')
-            .forEach((x) => x.classList.toggle('on', x === c));
+          lib2.querySelectorAll('#lib2Source .chip').forEach((x) => {
+            x.classList.toggle('on', x === c);
+            x.setAttribute('aria-pressed', String(x === c));
+          });
           lib2.classList.remove('src-all', 'src-custom', 'src-builtin');
           lib2.classList.add('src-' + c.dataset.src);
           if (lib2._resetSelect) lib2._resetSelect(); // select mode may span lists that just hid
@@ -2592,8 +2618,11 @@ window.onOttRoom = (room) => {
         lib2.hidden = false;
         renderLibrary();
         refresh();
-        const t = lib2.querySelector('.libTab[data-tab="scenes"]');
+        const t = lib2.querySelector('.libTab[data-tab="games"]');
         if (t) t.click();
+        const scenes = lib2.querySelector('[data-pane="scenes"]');
+        scenes.open = true;
+        scenes.scrollIntoView({ block: 'nearest' });
       };
   }
   // Add-to-Library builder — editor only (absent on the table).

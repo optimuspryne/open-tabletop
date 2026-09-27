@@ -48,10 +48,21 @@ test('library rows retain their public API shapes', async () => {
       count: 2,
       first: 'ace',
       back: 'back',
+      open: false,
       isPublic: true,
       ownerId: '3',
     },
   ]);
+});
+
+test('deck listings distinguish tile sets from closed and legacy decks', async () => {
+  const library = createLibraryQueries(async () => ({
+    rows: [{ open: true }, { open: false }, { open: null }, {}],
+  }));
+  assert.deepEqual(
+    (await library.listDecks()).map((deck) => deck.open),
+    [true, false, false, false],
+  );
 });
 
 test('mixed-back deck rows expose the first front image instead of JSON as a preview URL', async () => {

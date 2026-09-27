@@ -62,7 +62,7 @@ export async function verifyNotecardTemplates({ page, browser, device }) {
   await wait(`!noteTest.editor.templateContext().busy`);
   assert.equal(await page.evaluate(`noteTest.templateRecords[1].isPublic`), true);
   await page.evaluate(
-    `noteTest.editor.cancel();document.getElementById('libraryModal').hidden=false;document.querySelector('#libraryModal [data-pane="notecard-templates"]').hidden=false;document.querySelector('#libraryModal [data-pane="dice"]').hidden=true;document.querySelectorAll('#libraryModal .libTab').forEach(t=>t.classList.toggle('on',t.dataset.tab==='notecard-templates'));`,
+    `noteTest.editor.cancel();document.getElementById('libraryModal').hidden=false;document.querySelector('#libraryModal [data-pane="notecard-templates"]').hidden=false;document.querySelector('#libraryModal [data-pane="dice"]').hidden=true;document.querySelectorAll('#libraryModal .libGroup').forEach(g=>g.hidden=g.dataset.group!=='boards');document.querySelectorAll('#libraryModal .libTab').forEach(t=>t.classList.toggle('on',t.dataset.tab==='boards')); `,
   );
   await wait(`document.querySelectorAll('.notecard-template-card').length===2`);
   await page.evaluate(

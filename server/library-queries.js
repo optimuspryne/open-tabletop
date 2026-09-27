@@ -40,7 +40,7 @@ export function createLibraryQueries(query) {
   return {
     async listDecks({ includePrivate = false } = {}) {
       const { rows } = await query(
-        `SELECT id, name, jsonb_array_length(cards) AS count, cards->>0 AS first, props->>'back' AS back, is_public, owner_id FROM custom_decks
+        `SELECT id, name, jsonb_array_length(cards) AS count, cards->>0 AS first, props->>'back' AS back, props->'open' AS open, is_public, owner_id FROM custom_decks
          ${includePrivate ? '' : 'WHERE is_public = true'} ORDER BY name, id`,
       );
       return rows.map((row) => ({
@@ -49,6 +49,7 @@ export function createLibraryQueries(query) {
         count: Number(row.count),
         first: deckPreviewFront(row.first),
         back: row.back || 'back',
+        open: !!row.open,
         isPublic: row.is_public,
         ownerId: idOrNull(row.owner_id),
       }));

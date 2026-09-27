@@ -72,7 +72,7 @@ so the touch bindings above are three.js's own: one finger rotates, two dolly an
 
 ## Drawable notecards
 
-Spawn **Drawable notecard** in the Library's Card Decks/Tiles pane. Double-click/double-tap or
+Spawn **Drawable notecard** in the Library's Boards, Mats & Notecards → Notecards section. Double-click/double-tap or
 right-click/long-press → **Inspect** opens a private drawing surface for an active player.
 Mouse, finger and stylus share `attachDrawingControls` pointer intents. Two fingers pinch/drag
 for zoom/pan, cancelling the unfinished stroke and suppressing drawing until all fingers lift.
@@ -137,7 +137,7 @@ private template, or choose an existing editable template to replace. **Share wi
 this server** is explicit and off for new templates. Save includes the current paper, ink and
 editable text and leaves the draft open. Closing the card does not undo a successful template save.
 
-Open **Library → Notecard Templates**. Small thumbnails are always visible beside the name and
+Open **Library → Boards, Mats & Notecards → Notecard Templates**. Small thumbnails are always visible beside the name and
 privacy. Cards use two columns on desktop and one on narrow phones, with Copies above the grouped
 Create card/Create stack/Manage actions. **Create card** opens a fresh private
 draft; place it, keep it in hand, or pass it when ready. **Copies → Create stack** creates 2–16
@@ -323,14 +323,25 @@ What no tab spells out is the two exact-angle gaps listed above — there is sti
 are holes in the gesture surface itself, not in its documentation.
 
 
+## Library browsing
+
+Choose a grouped tab, then click/tap a category heading to collapse or expand it. Keyboard users
+navigate tabs with arrows/Home/End and activate category summaries with Enter/Space. Search still
+spans all accessible asset categories; matches expand automatically, and clearing search restores
+the previous category expansion. Templates retain their own My templates/Shared with me filter.
+Select enables batch spawning across visible expanded asset sections. Source/tab/search changes
+and collapsing a section clear selection. On narrow screens, search wraps above the actions;
+touch targets remain usable independently of viewport width. Filters keeps its selections when
+closed. Escape closes an open By Collection disclosure before dismissing Library.
+
 ## Asset collections
 
-In Library, expand **Collections** with a click/tap (or keyboard focus and Enter). Check collections
+In Library, open **Filters → By Collection** with a click/tap (or keyboard focus and Enter). Check collections
 to show them locally, or use Show all / Show none to toggle every named collection. Uncollected
 keeps its own setting. If any named collection is hidden, the button offers Show all; otherwise it
 offers Show none. With no collections, the button is disabled. An asset in multiple collections stays
 visible while any membership is enabled. This does not affect objects on the table or finish pickers.
-Site admins use New collection or a collection's Edit button to open its name/publication controls
+In the **Collections** tab, site admins use New collection or a collection's Edit button to open its name/publication controls
 and searchable asset checklist. Collections and library results share one scrollable body below the fixed library header.
 The asset chooser also scrolls, with Save collection and Cancel visible in its bottom action row.
 Select multiple assets and Save collection; Cancel discards the
@@ -342,13 +353,15 @@ The user approved functionality and the final UI (2026-09-24); specific devices 
 ## Portable assets (site admins)
 
 In Library, open a custom dice texture, deck/tile set, board, mat, skybox or 3D model's **More actions** menu and choose **Export** (click/tap;
-keyboard users focus the menu button and press Enter). On touch the same action is in its sheet.
+keyboard users focus the menu button and press Enter). On touch the same action is in its sheet. Export feedback briefly appears at bottom center and
+dismisses automatically; it does not move the Library scroll position.
 For a saved collection, use the package-export icon next to Edit in **Collections** (click/tap or focus
 and Enter). It exports saved membership, including supported dice textures, decks/tile sets, boards, mats, skyboxes and 3D models.
-To import, expand **Import / export assets**, choose a `.ott.zip` file (older `.ott.json` files also work), review its file details, asset types and card/tile count,
-edit the new name if wanted, and choose **Import private copy**. Cancel clears the preview.
+To import, open **Import Assets**, choose a `.ott.zip` file (older `.ott.json` files also work), review its file details, asset types and card/tile count,
+edit the new name if wanted, and choose **Import private copy**. Cancel clears the preview and returns to Library. Close or Escape returns without clearing a preview
+or interrupting an import; reopen the dialog to see its status.
 Native file/input/button keyboard controls apply; no canvas gesture or shortcut is added.
-The preview and library share one scrollable body. Imports are separate private assets; enable
+The importer scrolls in its own dialog, with Library inactive underneath. Imports are separate private assets; enable
 Uncollected and select the matching asset tab → Custom/All if local filters hide the new asset.
 
 Collection previews list included assets in a bounded scrollable list. Import creates a new private
@@ -371,7 +384,7 @@ gesture is introduced. Spectators and timed-out players may still personalize th
 
 ### Notecard stacks
 
-Spawn **Notecard stack** from Card Decks/Tiles (2–16 blank cards, default eight). Left-drag moves
+Spawn **Notecard stack** from Boards, Mats & Notecards → Notecards (2–16 blank cards, default eight). Left-drag moves
 it; double-click/double-tap opens its top card privately. Right-click/long-press exposes Draw to
 hand, Draw & edit, Play top face-down, Shuffle, Split and Move stack. Select loose notecards
 and/or stacks, then Combine to make one concealed stack. In the editor, Return to top saves

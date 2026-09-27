@@ -9,12 +9,12 @@ const labels = {
   prop: '3D model',
 };
 const panes = {
-  dice: 'Dice',
-  deck: 'Card Decks/Tiles',
-  board: 'Game Boards',
-  mat: 'Player Mats',
+  dice: 'Objects & Dispensers → Dice',
+  deck: 'Decks & Tiles',
+  board: 'Boards, Mats & Notecards → Boards',
+  mat: 'Boards, Mats & Notecards → Mats',
   sky: 'Skyboxes',
-  prop: '3D Objects',
+  prop: 'Objects & Dispensers → Objects',
 };
 function assetDescription(asset) {
   if (asset.kind === 'dice' && asset.files?.[0])
@@ -30,7 +30,29 @@ function assetDescription(asset) {
 }
 
 // Portable assets stay in this library controller; room state never carries package bytes.
-export function createAssetPackageController({ host, isAdmin, onImported }) {
+export function createAssetPackageController({
+  host,
+  isAdmin,
+  onImported,
+  dialog,
+  library,
+  toast = () => {},
+}) {
+  const close = () => {
+    if (!dialog) return;
+    dialog.hidden = true;
+    library.inert = false;
+    if (!library.hidden) library.querySelector('#libraryImport')?.focus();
+  };
+  const open = () => {
+    if (!dialog || !isAdmin()) return;
+    library.inert = true;
+    dialog.hidden = false;
+  };
+  if (dialog) dialog.querySelector('.close-x').onclick = close;
+  const exportMessage = (text) => {
+    toast(text, 'package-export', null, { placement: 'bottom' });
+  };
   const find = (id) => host.querySelector('#' + id);
   const file = find('packageFile'),
     name = find('packageName'),
@@ -162,20 +184,23 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
   };
   cancel.onclick = () => {
     reset();
-    file.focus();
+    if (dialog) close();
+    else file.focus();
   };
   return {
+    open,
     identity(id) {
-      if (id !== account || !isAdmin()) reset();
+      if (id !== account || !isAdmin()) {
+        reset();
+        if (dialog && !dialog.hidden) close();
+      }
       account = id;
       host.hidden = !isAdmin();
     },
     async exportAsset(kind, id) {
       if (!isAdmin()) return;
       const current = epoch;
-      host.open = true;
-      message('Preparing export…');
-      status.scrollIntoView({ block: 'nearest' });
+      exportMessage('Preparing export…');
       try {
         const result = await request(kind + '/' + encodeURIComponent(id));
         if (current !== epoch || !isAdmin()) return;
@@ -192,9 +217,9 @@ export function createAssetPackageController({ host, isAdmin, onImported }) {
         link.click();
         link.remove();
         setTimeout(() => URL.revokeObjectURL(url), 1000);
-        message('Export downloaded. It includes the asset and its required original files.');
+        exportMessage('Export downloaded.');
       } catch (error) {
-        if (current === epoch) message(error.message);
+        if (current === epoch) exportMessage(error.message);
       }
     },
     reset,

@@ -155,9 +155,10 @@ export function createTableShell({ byId, clamp, getRoom }) {
 
   // A brief confirmation for actions that have no visible dialog (drop hand, …).
   let toastTimer = null;
-  function toast(text, icon = 'check', action = null) {
+  function toast(text, icon = 'check', action = null, { placement = 'top' } = {}) {
     const el = byId('toast');
     if (!el) return;
+    el.classList.toggle('toast-bottom', placement === 'bottom');
     el.replaceChildren();
     el.append(
       ...toastContent(text, icon, action, () => {
@@ -344,7 +345,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
     wireDialog(byId('sceneSaveModal'), { modal: true });
     wireDialog(byId('pieceLabelsModal'), { modal: true });
     wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
-    ['libraryModal'].forEach((id) => wireDialog(byId(id), { modal: true }));
+    ['libraryModal', 'assetImportModal'].forEach((id) => wireDialog(byId(id), { modal: true }));
     // Top-left cluster (UI_Redesign phase 2): Chat + Notes share one region (accordion).
     {
       const r = byId('regionTL'),
@@ -395,7 +396,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
       if (r && ib) wireCluster(r, hams, { open: 'right', perHam: true });
     }
     // Library cards render dynamically (editor-panel.js) — icon their data-icon buttons as they appear.
-    ['libraryModal'].forEach((id) => {
+    ['libraryModal', 'assetImportModal'].forEach((id) => {
       const el = byId(id);
       if (el)
         new MutationObserver(() => applyIcons(el)).observe(el, { childList: true, subtree: true });

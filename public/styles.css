@@ -1470,13 +1470,6 @@ a {
   align-items: center;
   gap: 8px;
 }
-.libDivider {
-  flex: 0 0 2px;
-  align-self: stretch;
-  background: var(--border);
-  border-radius: 1px;
-  margin: 2px 6px;
-}
 .libSearchWrap {
   flex: 1 1 auto;
   max-width: 340px;
@@ -4041,32 +4034,6 @@ body.not-gm .gm-only {
   font-size: var(--fs-sm);
   opacity: 0.6;
 }
-.paneHead {
-  display: none; /* only a search turns a pane into a named result group */
-}
-.searching .libPane > .paneHead {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 2px 8px;
-}
-.searching .libPane > .paneHead b {
-  font-size: var(--fs-sm);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text);
-  opacity: 0.55;
-}
-.searching .libPane > .paneHead span {
-  font-size: var(--fs-sm);
-  opacity: 0.4;
-}
-.searching .libPane > .paneHead::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: linear-gradient(90deg, var(--border), transparent);
-}
 /* Stack the revealed panes as sections instead of one tall column of one list. */
 .searching .libPane {
   padding-bottom: calc(4px * var(--ui-elements-scale));
@@ -4493,10 +4460,6 @@ body.not-gm .gm-only {
 #libraryModal .libControls {
   margin: 0;
   padding-top: 10px;
-}
-#libraryModal .libDivider {
-  flex: 0 0 1px;
-  margin: 2px 8px;
 }
 #libraryModal .libSearch {
   border-radius: var(--r);
@@ -7229,7 +7192,7 @@ body.not-gm .gm-only {
   min-height: 0;
   overflow-y: auto;
 }
-#libraryModal .libraryBody > .libPane {
+#libraryModal .libraryBody .libPane {
   flex: none;
   overflow: visible;
 }
@@ -7239,7 +7202,7 @@ body.not-gm .gm-only {
 .collectionFilter { display: flex; align-items: center; gap: var(--gap); min-width: 0; }
 .collectionFilter > label { flex: 1; }
 .collectionFilters { margin-block: var(--gap); }
-.libraryCollections .collectionChoice { display: flex; margin: 0; color: var(--text); align-items: center; gap: var(--gap); overflow-wrap: anywhere; min-width: 0; min-height: var(--control-min-height); }
+:is(.libraryCollections, .libraryCollectionPicker) .collectionChoice { display: flex; margin: 0; color: var(--text); align-items: center; gap: var(--gap); overflow-wrap: anywhere; min-width: 0; min-height: var(--control-min-height); }
 .collectionChoice input { flex-shrink: 0; }
 .collectionManager { display: grid; gap: var(--gap); margin-top: var(--gap); }
 .collectionManager[hidden] { display: none; }
@@ -7350,7 +7313,7 @@ body.not-gm .gm-only {
 .notecard-template-card .hint { margin: 0; overflow-wrap: anywhere; }
 .notecard-template-card > .notecard-template-form { grid-column: 1 / -1; }
 /* Account templates have their own filter and actions, independent of asset sources/collections. */
-#libraryModal:has(.libTab[data-tab="notecard-templates"].on) :is(#lib2Source, .libControls, .libraryCollections, .libraryPackages) { display: none; }
+
 .notecard-template-card input[type="number"] { width: 56px; }
 .notecard-template-form { border-block: 1px solid var(--border); margin-block: var(--gap); padding-block: var(--gap); }
 .notecard-template-form .field-group { margin-block: var(--gap); }
@@ -7368,4 +7331,83 @@ body.not-gm .gm-only {
 @media (pointer: coarse) {
   #notecardColors .notecard-ink { min-width: 40px; min-height: 44px; }
   .notecard-dialog .notecard-shapes button, .notecard-dialog .notecard-navigation button { min-width: 40px; }
+}
+
+/* Library categories, local filters and a separate package dialog. */
+#libraryModal .libControls { flex-wrap: wrap; }
+#libraryModal .libSearchWrap { flex: 1 1 140px; max-width: none; }
+#libraryImport { margin-left: auto; }
+#libraryModal .libGroup[hidden], #libraryModal .libraryCategory[hidden],
+#libraryFilters[hidden] { display: none; }
+#libraryModal .libraryCategory { border-bottom: 1px solid var(--border); padding: var(--gap) var(--inset); }
+#libraryModal .libraryCategory > summary { cursor: pointer; padding-block: var(--gap); font-weight: 600; min-height: var(--control-min-height); }
+#libraryModal .libraryCategory:not([open]) > :not(summary) { display: none; }
+#libraryModal .libraryCategory > .libList { margin-top: var(--gap); }
+.libraryFilters { display: flex; align-items: flex-start; flex-wrap: wrap; gap: var(--gap); max-height: 30vh; overflow-y: auto; }
+.libraryFilters #lib2Source { flex: 0 0 auto; }
+.libraryCollectionPicker { border: 1px solid var(--border); border-radius: var(--r); min-width: 0; max-width: 100%; background: var(--panel-solid); }
+.libraryCollectionPicker > summary { cursor: pointer; padding: var(--gap) var(--inset); min-height: var(--control-min-height); }
+.libraryCollectionPicker > div, .libraryCollectionPicker > p { margin: var(--gap) var(--inset); }
+.libraryCollectionPicker .collectionFilters { grid-template-columns: minmax(0, 1fr); }
+.collectionEntries { display: grid; gap: var(--gap); margin-block: var(--gap); }
+.collectionName { flex: 1; overflow-wrap: anywhere; min-width: 0; }
+#assetImportModal { z-index: 121; }
+.modalCard.libraryCard.assetImportCard { width: min(560px, calc(100vw - 32px)); max-height: min(84vh, calc(100dvh - 16px)); padding: 0; gap: 0; overflow: hidden; }
+#assetImportModal .libraryPackages { padding: 0; }
+@media (max-width: 600px) {
+  #libraryModal .libSearchWrap { flex-basis: 100%; order: -1; }
+  #libraryModal .libTabs { flex-wrap: wrap; overflow: visible; }
+}
+@media (pointer: coarse) {
+  #libraryModal .libraryCategory > summary, .libraryCollectionPicker > summary,
+  #libraryFilters button, #libraryModal .libControls button { min-height: 44px; }
+  .libraryCollectionPicker .collectionChoice { min-height: 44px; }
+}
+
+/* Export confirmations reuse the shared toast, placed above the Library/import overlays. */
+#toast.toast-bottom {
+  top: auto;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + var(--inset));
+  z-index: 122;
+  max-width: calc(100vw - 2 * var(--inset));
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
+  animation-name: toastBottomIn;
+}
+@keyframes toastBottomIn {
+  from { opacity: 0; transform: translate(-50%, 6px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #toast.toast-bottom { animation: none; }
+}
+/* Fine-pointer filters share one control treatment; retain the tested touch layout. */
+@media (pointer: fine) {
+  #libraryFilters #lib2Source {
+    gap: var(--gap);
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    flex-wrap: wrap;
+  }
+  #libraryFilters .libraryCollectionPicker { border: 0; background: none; }
+  #libraryFilters #lib2Source .chip,
+  #libraryFilters .libraryCollectionPicker > summary {
+    box-sizing: border-box;
+    min-height: var(--control-min-height);
+    padding: var(--control-pad-block) var(--control-pad-inline);
+    border: 1px solid var(--border);
+    border-radius: var(--r);
+    background: var(--panel);
+    color: var(--text);
+    font: 500 var(--fs-sm)/1.5 var(--font);
+    opacity: 1;
+  }
+  #libraryFilters #lib2Source .chip.on {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    box-shadow: none;
+  }
+  #libraryFilters .libraryCollectionPicker > summary:hover,
+  #libraryFilters #lib2Source .chip:hover { border-color: var(--accent); }
 }

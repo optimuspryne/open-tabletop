@@ -131,7 +131,9 @@ export function createUiSurfaces({ doc = document, win = window, onSheetStop = (
     if (title && !panel.hasAttribute('aria-label'))
       panel.setAttribute('aria-label', title.textContent.trim());
     const focusables = () =>
-      [...panel.querySelectorAll('a[href], button, input, textarea, select, [tabindex]')].filter(
+      [
+        ...panel.querySelectorAll('a[href], button, input, textarea, select, summary, [tabindex]'),
+      ].filter(
         (node) =>
           !node.disabled &&
           node.tabIndex !== -1 &&

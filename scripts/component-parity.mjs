@@ -210,11 +210,99 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'library-grouped-navigation',
+    root: '#libraryModal',
+    expect: { selector: '.libGroup', min: 6 },
+    drive: `
+      ${BE_ADMIN}
+      document.getElementById('tableLoading').remove();
+      const assert=(ok,message)=>{if(!ok)throw Error(message);};
+      const room=${STUB_ROOM}, sent=[];
+      window.onOttRoom({onMessage:room.onMessage,send:(...args)=>{sent.push(args);room.send(...args);}});
+      document.getElementById('lib2Btn').click();
+      window.onLibraryList('deck',[
+        {id:'201',name:'Match deck',count:5,open:false,isPublic:true},
+        {id:'202',name:'Match tiles',count:5,open:true,isPublic:true},
+      ]);
+      window.onLibraryList('prop',[{id:'203',name:'Match object',isPublic:true,props:{}}]);
+      const modal=document.getElementById('libraryModal'), search=modal.querySelector('.libSearch');
+      const tab=key=>modal.querySelector('[data-tab="'+key+'"]');
+      const pane=key=>modal.querySelector('[data-pane="'+key+'"]');
+      assert(document.querySelector('#nlc_deck .libName').textContent.startsWith('Match deck'),'Closed deck misclassified');
+      assert(document.querySelector('#nlc_tile .libName').textContent.startsWith('Match tiles'),'Open tile set misclassified');
+      pane('tiles').open=false;
+      search.value='Match'; search.dispatchEvent(new Event('input'));
+      assert(!pane('objects').hidden && !pane('tiles').hidden && pane('tiles').open,'Search missed another group or a collapsed section');
+      assert(tab('decks').querySelector('.tabCount').textContent==='2','Grouped search count wrong');
+      modal.querySelector('.selToggle').click();
+      const lists=['nlc_deck','nlc_tile','nlc_prop'].map(id=>document.getElementById(id));
+      assert(lists.every(list=>list.classList.contains('selecting')),'Select does not span search groups');
+      lists.forEach(list=>list.querySelector('.libCard').classList.add('sel'));
+      modal.querySelector('.spawnSelBtn').click();
+      assert(sent.filter(([kind])=>kind==='loadDeck').length===2 && sent.some(([kind])=>kind==='loadProp'),'Batch action skipped a visible category');
+      document.getElementById('libraryFiltersToggle').click();
+      const filters=document.getElementById('libraryFilters');
+      const filterControls=[...filters.querySelectorAll('#lib2Source .chip, .libraryCollectionPicker > summary')];
+      for(const full of [true,false]) {
+        document.body.classList.toggle('ui-full',full);
+        document.body.classList.toggle('ui-compact',!full);
+        if(matchMedia('(pointer: fine)').matches) {
+          const styles=filterControls.map(el=>getComputedStyle(el));
+          const bounds=filterControls.map(el=>el.getBoundingClientRect());
+          assert(bounds.every(rect=>Math.abs(rect.height-bounds[0].height)<1),'Desktop filter heights differ');
+          for(const key of ['fontSize','lineHeight','paddingTop','paddingBottom','borderRadius'])
+            assert(styles.every(style=>style[key]===styles[0][key]),'Desktop filter style differs: '+key);
+        } else {
+          assert(getComputedStyle(document.getElementById('lib2Source')).gap==='0px','Touch source layout changed');
+          assert(filterControls.every(el=>el.getBoundingClientRect().height>=44),'Touch filter target shrank');
+        }
+      }
+      document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
+      document.querySelector('#lib2Source [data-src="builtin"]').click();
+      assert(modal.querySelector('.spawnSelBtn').hidden && !modal.querySelector('.libList.selecting'),'Source change retained selection');
+      assert(!modal.querySelector('.libGroup:not([hidden])'),'Custom matches survived Built-In filter');
+      document.querySelector('#lib2Source [data-src="all"]').click();
+      modal.querySelector('.libSearchClear').click();
+      assert(!pane('decks').hidden && pane('objects').hidden && !pane('tiles').open,'Clearing search lost tab/collapse state');
+      document.getElementById('libraryFiltersToggle').click();
+      tab('boards').click();
+      assert(!pane('mats').hidden && !pane('notecard-templates').hidden,'Grouped mats/templates unavailable');
+      document.getElementById('roomScene').click();
+      assert(tab('games').getAttribute('aria-selected')==='true' && pane('scenes').open,'Load a Scene shortcut did not expand Scenes');
+      // Real dialog mechanics must keep summaries in the keyboard loop and return focus.
+      const {createUiSurfaces}=await import('/ui/ui-surfaces.js');
+      const surfaces=createUiSurfaces();
+      const dialog=document.getElementById('assetImportModal');
+      surfaces.wireDialog(modal,{modal:true});surfaces.wireDialog(dialog,{modal:true});
+      document.getElementById('libraryImport').focus();document.getElementById('libraryImport').click();
+      await new Promise(r=>setTimeout(r,0));
+      assert(modal.inert && !dialog.hidden && dialog.contains(document.activeElement),'Import dialog did not take focus');
+      dialog.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+      await new Promise(r=>setTimeout(r,0));
+      assert(!modal.inert && dialog.hidden && document.activeElement.id==='libraryImport','Import Escape lost focus or kept Library inert');
+      tab('decks').click();
+      (await import('/ui/icons.js')).applyIcons();
+      for(const full of [true,false]) {
+        document.body.classList.toggle('ui-full',full);
+        document.body.classList.toggle('ui-compact',!full);
+        assert(modal.scrollWidth<=modal.clientWidth+1,'Library overflows horizontally');
+        for(const selector of ['.libSearch','#libraryFiltersToggle','#libraryImport']) {
+          const element=modal.querySelector(selector),rect=element.getBoundingClientRect();
+          assert(rect.left>=0 && rect.right<=innerWidth && rect.top>=0,'Toolbar action outside viewport: '+selector);
+        }
+      }
+      document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
+      window.onOttRoom(room);
+      assert(document.querySelectorAll('#collectionFiltersPanel .collectionFilters').length===1,'Reconnect duplicated collection filters');
+    `,
+  },
+
+  {
     name: 'library-png-fallback',
     root: '#libraryModal',
     expect: {
       selector: '#nlb_dice .libPreview img[src], #nlb_decks .libPreview img[src]',
-      min: 14,
+      min: 12,
     },
     drive: `
       ${BE_ADMIN}
@@ -228,9 +316,9 @@ const SCENES = [
         window.onOttRoom(${STUB_ROOM});
         document.getElementById('lib2Btn').click();
         const modal = document.getElementById('libraryModal');
-        for (const [kind, count] of [['dice', 8], ['decks', 4], ['boards', 2], ['objects', 3]]) {
+        for (const [kind, count] of [['dice', 8], ['decks', 2], ['notecards', 2], ['tiles', 2], ['boards', 2], ['objects', 3]]) {
           const list = document.getElementById('nlb_'+kind);
-          modal.querySelector('[data-tab="'+list.closest('.libPane').dataset.pane+'"]').click();
+          modal.querySelector('[data-tab="'+list.closest('.libGroup').dataset.group+'"]').click();
           const boxes = [...list.querySelectorAll('.libPreview')].slice(0, count);
           assert(boxes.length === count, kind+' fixture is incomplete');
           for (const box of boxes) {
@@ -278,7 +366,7 @@ const SCENES = [
       const modal = document.getElementById('libraryModal');
       for (const kind of ['sky','dice','board','mat']) {
         const list = document.getElementById('nlc_'+kind);
-        modal.querySelector('[data-tab="'+list.closest('.libPane').dataset.pane+'"]').click();
+        modal.querySelector('[data-tab="'+list.closest('.libGroup').dataset.group+'"]').click();
         for (const box of list.querySelectorAll('.libPreview')) {
           box.scrollIntoView({block:'center'});
           await waitFor(()=>box.querySelector('img')?.hasAttribute('src'));
@@ -312,7 +400,7 @@ const SCENES = [
   },
   {
     name: 'asset-packages',
-    root: '#libraryModal',
+    root: '#assetImportModal',
     expect: { selector: '#assetPackagePanel', min: 1 },
     drive: `
       ${BE_ADMIN}
@@ -322,6 +410,8 @@ const SCENES = [
       const sent = [], requests = [], savedBoards = [];
       const room = ${STUB_ROOM};
       const send = room.send, messages = new Map();
+      const {createTableShell}=await import('/table/table-shell.js');
+      const {toast}=createTableShell({byId:id=>document.getElementById(id),clamp:(v,a,b)=>Math.max(a,Math.min(b,v)),getRoom:()=>room});
       const groups = [{id:'10',name:'Package group',isPublic:false,revision:1,items:[{kind:'dice',id:'1'},{kind:'deck',id:'2'}]}];
       window.onOttRoom({
         onMessage: (type, fn) => { messages.set(type, fn); room.onMessage(type, fn); },
@@ -331,10 +421,10 @@ const SCENES = [
           if (type === 'listCollections') messages.get('collectionList')?.({request:data.request,collections:window.OTT_IS_ADMIN ? groups : [],next:null});
           else send(type, data);
         }
-      });
+      }, {toast});
       document.getElementById('lib2Btn').click();
       (await import('/ui/icons.js')).applyIcons();
-      const host = document.getElementById('assetPackagePanel'); host.open = true;
+      const host = document.getElementById('assetPackagePanel'); document.getElementById('libraryImport').click();
       assert(!host.hidden, 'Admin package controls hidden');
       const fetchOriginal = window.fetch;
       let fail = false, resolvePreview = null, packageKind = 'dice';
@@ -347,6 +437,7 @@ const SCENES = [
           return {ok:true, json:async()=>['board','mat','sky','prop'].includes(packageKind) ? {kind:packageKind,name:'Portable surface',model:packageKind==='board',collider:'compound',type:'cube',totalBytes:123,files:[{mediaType:'model/gltf-binary'}]} : packageKind==='collection' ? {kind:'collection',name:'Portable collection',count:64,members:Array.from({length:64},(_,i)=>({kind:i%2?'deck':'dice',name:i===0?'<b>Authored name</b>':'Collection asset '+(i+1),count:4,open:!!(i%2)})),totalBytes:123,files:[{width:32,height:32}]} : packageKind==='deck' ? {kind:'deck',name:'Portable tiles',count:4,open:true,deckModel:'bag',totalBytes:0,files:[]} : {kind:'dice',name:'Portable finish',totalBytes:123,files:[{width:32,height:32}]}};
         }
         if (url.includes('/import')) return {ok:!fail,json:async()=>fail?{error:'Import unavailable'}:{kind:packageKind,name:options.body instanceof File ? new URL(url,location.href).searchParams.get('name') : JSON.parse(options.body).name}};
+        if (fail==='export') return {ok:false,status:500,json:async()=>({error:'Export unavailable. Try again.'})};
         return {ok:true,blob:async()=>new Blob(['PK fixture'],{type:'application/zip'})};
       };
       // Exercise the real board Save -> uploadModel -> measureBoard -> room message path.
@@ -379,6 +470,7 @@ const SCENES = [
       const file = document.getElementById('packageFile'), name = document.getElementById('packageName');
       const save = document.getElementById('packageImport'), cancel = document.getElementById('packageCancel');
       async function choose(text = 'PK fixture', legacy = false) {
+        document.getElementById('libraryImport').click();
         const transfer = new DataTransfer(); transfer.items.add(new File([text], legacy ? 'dice.ott.json' : 'assets.ott.zip', {type:legacy ? 'application/json' : 'application/zip'}));
         file.files = transfer.files; await file.onchange();
       }
@@ -412,6 +504,8 @@ const SCENES = [
       let downloaded=false;
       HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='dice-texture.ott.zip';};
       // Open the real library overflow (desktop popup or touch sheet).
+      document.getElementById('assetImportClose').click();
+      document.querySelector('#libraryModal [data-tab="objects"]').click();
       document.querySelector('#nlc_dice .pop-trigger').click();
       const exportButton=[...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export');
       assert(exportButton,'Dice export action missing'); exportButton.click();
@@ -425,6 +519,7 @@ const SCENES = [
       await save.onclick();
       assert(sent.filter(type=>type==='listDecks').length===deckRefreshes+1, 'Deck import did not refresh deck list');
       window.onLibraryList('deck',[{id:'2',name:'Tile export',back:'back',first:'text:Tile',count:4,isPublic:false}]);
+      document.getElementById('assetImportClose').click();
       document.querySelector('#libraryModal [data-tab="decks"]').click();
       document.querySelector('#nlc_deck .pop-trigger').click();
       HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='deck.ott.zip';};
@@ -432,7 +527,7 @@ const SCENES = [
       [...document.querySelectorAll('.sheet-backdrop button, .overflowMenu:not([hidden]) button')].find(b=>b.textContent.trim()==='Export').click();
       await new Promise(resolve=>setTimeout(resolve,20));
       assert(downloaded && requests.some(([url])=>url.endsWith('/deck/2')), 'Deck export action not wired');
-      for (const [kind, tab, refresh, expected] of [['board','boards','listBoards','Model board · compound collider'],['mat','mats','listMats','Player mat'],['sky','sky','listSkyboxes','6-face cubemap'],['prop','objects','listProps','3D model · compound collider']]) {
+      for (const [kind, tab, refresh, expected] of [['board','boards','listBoards','Model board · compound collider'],['mat','boards','listMats','Player mat'],['sky','sky','listSkyboxes','6-face cubemap'],['prop','objects','listProps','3D model · compound collider']]) {
         packageKind=kind;
         await choose();
         assert(document.getElementById('packageContents').textContent.includes(expected), kind+' preview missing');
@@ -441,6 +536,7 @@ const SCENES = [
         assert(sent.filter(type=>type===refresh).length===before+1, kind+' list did not refresh');
         assert(document.getElementById('packageStatus').textContent.includes('private'), kind+' success missing');
         window.onLibraryList(kind,[{id:'3',name:'Surface export',w:4,d:3,tex:'/missing-fixture.png',url:'/missing-fixture.png',geom:{w:2,h:1},isPublic:false}]);
+        document.getElementById('assetImportClose').click();
         document.querySelector('#libraryModal [data-tab="'+tab+'"]').click();
         document.querySelector('#nlc_'+kind+' .overflowTrigger').click();
         HTMLAnchorElement.prototype.click=function(){downloaded=this.download===kind+'.ott.zip';};
@@ -453,7 +549,8 @@ const SCENES = [
       packageKind='collection';
       HTMLAnchorElement.prototype.click=function(){downloaded=this.download==='collection.ott.zip';};
       downloaded=false;
-      document.getElementById('collectionPanel').closest('details').open=true;
+      document.getElementById('assetImportClose').click();
+      document.querySelector('#libraryModal [data-tab="collections"]').click();
       const collectionExport=document.querySelector('[aria-label="Export saved collection Package group"]');
       assert(collectionExport, 'Collection export action missing');
       collectionExport.scrollIntoView({block:'nearest'});
@@ -462,6 +559,21 @@ const SCENES = [
       collectionExport.click();
       await new Promise(resolve=>setTimeout(resolve,20));
       assert(downloaded && requests.some(([url])=>url.endsWith('/collection/10')), 'Collection export action not wired');
+      const notice=document.getElementById('toast');
+      assert(!notice.hidden && notice.textContent==='Export downloaded.' && notice.getAttribute('role')==='status','Export toast missing');
+      assert(!document.getElementById('libraryTransferStatus'),'Persistent export message retained');
+      const toastBounds=notice.getBoundingClientRect();
+      assert(toastBounds.bottom<=innerHeight && toastBounds.top>innerHeight/2 && Math.abs(toastBounds.left+toastBounds.width/2-innerWidth/2)<2,'Export toast is not bottom centered');
+      assert(notice.contains(document.elementFromPoint(toastBounds.left+toastBounds.width/2,toastBounds.top+toastBounds.height/2)),'Export toast covered by Library');
+      await new Promise(resolve=>setTimeout(resolve,2700));
+      assert(notice.hidden,'Export toast did not dismiss automatically');
+      fail='export';collectionExport.click();
+      await new Promise(resolve=>setTimeout(resolve,20));
+      assert(!notice.hidden && notice.textContent==='Export unavailable. Try again.','Export failure was lost');
+      fail=false;
+      toast('Existing toast');
+      assert(!notice.classList.contains('toast-bottom'),'Export placement leaked into ordinary toasts');
+
       HTMLAnchorElement.prototype.click=originalClick;
       await choose();
       const members=document.getElementById('packageMembers');
@@ -561,7 +673,9 @@ const SCENES = [
       window.onLibraryList('dice',[{id:'1',name:'Dice finish',isPublic:true,url:'/missing-fixture.png'}]);
       window.onLibraryList('prop',[{id:'2',name:'Uncollected prop',isPublic:true}, ...Array.from({length:60},(_,i)=>({id:String(i+3),name:'Extra asset '+i,isPublic:true}))]);
       const panel=document.getElementById('collectionPanel');
-      panel.parentElement.open=true;
+      const filtersPanel=document.getElementById('collectionFiltersPanel');
+      document.getElementById('libraryFiltersToggle').click();
+      filtersPanel.parentElement.open=true;
       const libraryBody=document.querySelector('#libraryModal .libraryBody');
       const reachable = (element, message) => {
         const rect=element.getBoundingClientRect();
@@ -569,32 +683,24 @@ const SCENES = [
         assert(rect.top>=0 && rect.bottom<=innerHeight && target && element.contains(target), message);
       };
       const checkExpandedFilters = () => {
-        assert(panel.parentElement.scrollHeight <= panel.parentElement.clientHeight + 1,
-          'Collections was squeezed into a separate clipped scroll strip');
-        for(const label of panel.querySelectorAll('.collectionFilters label')) {
+        for(const label of filtersPanel.querySelectorAll('.collectionFilters label')) {
           label.scrollIntoView({block:'nearest'});
-          reachable(label.querySelector('input'), 'Expanded collection filter is clipped by the asset list');
+          reachable(label.querySelector('input'), 'Expanded collection filter is clipped');
         }
-        const newButton=panel.querySelector('[aria-label="New collection"]');
-        newButton.scrollIntoView({block:'nearest'});
-        reachable(newButton, 'Collection management action is clipped by the asset list');
-        const collectionBounds=panel.parentElement.getBoundingClientRect();
-        const paneBounds=document.querySelector('#libraryModal .libPane:not([hidden])').getBoundingClientRect();
-        assert(collectionBounds.bottom<=paneBounds.top, 'Asset pane overlaps expanded Collections');
         libraryBody.scrollTop=0;
       };
       checkExpandedFilters();
       document.body.classList.replace('ui-full','ui-compact');
       checkExpandedFilters();
       document.body.classList.replace('ui-compact','ui-full');
-      const click = text => { const b=[...panel.querySelectorAll('button')].find(b=>b.textContent===text || b.getAttribute('aria-label')===text); assert(b, 'Missing button: '+text); b.click(); };
-      const filter = text => [...panel.querySelectorAll('.collectionFilters label')].find(label=>label.textContent.startsWith(text)).querySelector('input');
-      assert(panel.querySelector('[aria-label="Show none"]'), 'All-visible collections did not offer Show none');
+      const click = text => { const b=[...document.querySelectorAll('#collectionPanel button, #collectionFiltersPanel button')].find(b=>b.textContent===text || b.getAttribute('aria-label')===text); assert(b, 'Missing button: '+text); b.click(); };
+      const filter = text => [...filtersPanel.querySelectorAll('.collectionFilters label')].find(label=>label.textContent.startsWith(text)).querySelector('input');
+      assert(filtersPanel.querySelector('[aria-label="Show none"]'), 'All-visible collections did not offer Show none');
       const firstFilter = filter('Shared game');
       firstFilter.focus();
       firstFilter.click();
       assert(document.activeElement === firstFilter, 'Individual filter change lost keyboard focus');
-      assert(panel.querySelector('[aria-label="Show all"]'), 'Mixed visibility did not offer Show all');
+      assert(filtersPanel.querySelector('[aria-label="Show all"]'), 'Mixed visibility did not offer Show all');
       assert(document.querySelector('#nlc_deck .libCard'), 'Union membership hid an asset in an enabled collection');
       filter('Second collection').click();
       assert(!document.querySelector('#nlc_deck .libCard'), 'Hidden member leaked through Uncollected');
@@ -609,12 +715,12 @@ const SCENES = [
       const savedHidden = JSON.parse(localStorage.getItem('ott.collections.collection-fixture'));
       assert(['1','2','uncollected'].every(id => savedHidden.includes(id)), 'Bulk hide did not persist independent preferences');
       click('Refresh collections');
-      assert(panel.querySelector('[aria-label="Show all"]') && !filter('Uncollected').checked, 'Refresh lost bulk filter state');
+      assert(filtersPanel.querySelector('[aria-label="Show all"]') && !filter('Uncollected').checked, 'Refresh lost bulk filter state');
       click('Show all');
       assert(!filter('Uncollected').checked && !document.querySelector('#nlc_prop .libCard'), 'Show all re-enabled Uncollected');
       assert(document.querySelector('#nlc_deck .libCard') && document.querySelector('#nlc_dice .libCard'), 'Show all failed to restore named members');
       assert(JSON.stringify(JSON.parse(localStorage.getItem('ott.collections.collection-fixture'))) === '["uncollected"]', 'Show all cleared the Uncollected preference');
-      assert(document.activeElement === panel.querySelector('[aria-label="Show none"]'), 'Bulk toggle lost keyboard focus');
+      assert(document.activeElement === filtersPanel.querySelector('[aria-label="Show none"]'), 'Bulk toggle lost keyboard focus');
       filter('Uncollected').click();
       click('Show none');
       assert(filter('Uncollected').checked && document.querySelector('#nlc_prop .libCard'), 'Show none hid enabled Uncollected');
@@ -623,10 +729,12 @@ const SCENES = [
       const existingGroups = groups;
       groups = [];
       click('Refresh collections');
-      assert(panel.querySelector('[aria-label="Show all"]').disabled, 'Empty collection toggle is enabled');
+      assert(filtersPanel.querySelector('[aria-label="Show all"]').disabled, 'Empty collection toggle is enabled');
       groups = existingGroups;
       click('Refresh collections');
-      assert(panel.querySelector('[aria-label="Show none"]'), 'Refreshed collections have stale toggle label');
+      assert(filtersPanel.querySelector('[aria-label="Show none"]'), 'Refreshed collections have stale toggle label');
+      document.getElementById('libraryFiltersToggle').click();
+      document.querySelector('#libraryModal [data-tab="collections"]').click();
       click('Edit Shared game');
       const manager=panel.querySelector('.collectionManager');
       assert(!manager.hidden, 'Admin management did not open');
@@ -655,7 +763,7 @@ const SCENES = [
       messages.get('collectionsChanged')({});
       assert(name.value==='Updated shared game', 'Refresh erased unsaved draft');
       window.OTT_IS_ADMIN=false; groups=groups.filter(value=>value.isPublic); window.onLibraryAdmin();
-      assert(manager.hidden && ![...panel.querySelectorAll('button')].some(b=>b.textContent==='New collection'), 'Demotion retained management UI');
+      assert(manager.hidden && ![...document.querySelectorAll('#collectionPanel button, #collectionFiltersPanel button')].some(b=>b.textContent==='New collection'), 'Demotion retained management UI');
       assert(!panel.textContent.includes('Second collection'), 'Demotion retained private collection');
       const bounds=panel.getBoundingClientRect(); assert(bounds.left>=0 && bounds.right<=innerWidth, 'Collection panel overflows viewport');
       localStorage.removeItem('ott.collections.collection-fixture');
@@ -1824,18 +1932,16 @@ const SCENES = [
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
       const modal = document.getElementById('libraryModal');
-      const tab = modal.querySelector('[data-tab="notecard-templates"]');
+      const tab = modal.querySelector('[data-tab="boards"]');
       const assert = (ok, message) => { if (!ok) throw new Error(message); };
       tab.click();
       assert(!document.getElementById('notecardTemplatesPane').hidden, 'Template tab did not open');
-      assert(tab.getAttribute('aria-pressed') === 'true', 'Selected template tab is not announced');
+      assert(tab.getAttribute('aria-selected') === 'true', 'Selected template tab is not announced');
       assert(modal.querySelector('[data-pane="decks"]').hidden, 'Decks remain visible under templates');
-      for (const selector of ['#lib2Source', '.libControls', '.libraryCollections'])
-        assert(getComputedStyle(modal.querySelector(selector)).display === 'none', 'Asset controls leaked into templates: '+selector);
+      assert(!modal.querySelector('[data-pane="mats"]').hidden, 'Mats missing from grouped tab');
+      assert(getComputedStyle(modal.querySelector('.libControls')).display !== 'none', 'Shared controls disappeared');
       modal.querySelector('[data-tab="decks"]').click();
       assert(document.getElementById('notecardTemplatesPane').hidden, 'Templates remain visible under decks');
-      for (const selector of ['#lib2Source', '.libControls', '.libraryCollections'])
-        assert(getComputedStyle(modal.querySelector(selector)).display !== 'none', 'Asset controls did not return: '+selector);
       // Searching assets and then entering templates must clear the asset search.
       const template = document.createElement('li');
       template.className = 'libCard';

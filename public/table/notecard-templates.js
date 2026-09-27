@@ -411,14 +411,15 @@ export function createNotecardTemplates({ byId, editor, getRoom, canInteract }) 
   filter.onchange = () => load();
   byId('notecardTemplateMore').onclick = () => load(true);
   new MutationObserver(() => {
-    const nowVisible = !library.hidden && !pane.hidden;
+    const nowVisible =
+      !library.hidden && !pane.hidden && pane.open && !pane.closest('.libGroup')?.hidden;
     if (nowVisible && !visible) {
       if (window.OTT_IS_ADMIN && !filter.querySelector('[value="managed"]'))
         filter.add(new Option('All templates (admin)', 'managed'));
       load();
     }
     visible = nowVisible;
-  }).observe(library, { attributes: true, attributeFilter: ['hidden'], subtree: true });
+  }).observe(library, { attributes: true, attributeFilter: ['hidden', 'open'], subtree: true });
   editor.attachTemplates({
     sync() {
       panel.inert = loadingChoices || editor.templateContext().busy;

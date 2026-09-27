@@ -9,6 +9,7 @@ import {
 // Library-only organization: finish pickers and already-spawned objects are independent.
 export function createCollectionController({
   host,
+  filterHost = host,
   room,
   isAdmin,
   getAssets,
@@ -44,6 +45,7 @@ export function createCollectionController({
   status.setAttribute('role', 'status');
   const filters = element('div', 'collectionFilters');
   const actions = element('div', 'button-row button-row--compact');
+  const entries = element('div', 'collectionEntries');
   const visibilityToggle = button('Show all', 'eye', () => {
     const hideAll = collections.every((value) => !hidden.has(value.id));
     for (const value of collections) {
@@ -109,7 +111,9 @@ export function createCollectionController({
   });
   controls.append(save, reload, remove, cancel);
   manager.append(name, publicLabel, hint, search, count, inventory, controls);
-  host.replaceChildren(filters, actions, status, manager);
+  host.replaceChildren(actions, entries, status, manager);
+  if (filterHost === host) filterHost.prepend(visibilityToggle, filters);
+  else filterHost.replaceChildren(visibilityToggle, filters);
   // Inputs/buttons already use the normal intent layer's editable/UI exclusions.
   manager.addEventListener('keydown', (event) => {
     event.stopPropagation();
@@ -147,6 +151,7 @@ export function createCollectionController({
   function renderFilters() {
     filters.replaceChildren();
     actions.replaceChildren();
+    entries.replaceChildren();
     const choice = (id, label) => {
       const input = element('input');
       input.type = 'checkbox';
@@ -169,7 +174,12 @@ export function createCollectionController({
         value.id,
         `${value.name} (${value.items.length})${value.isPublic ? '' : ' · private'}`,
       );
-      wrap.append(filters.lastElementChild);
+      const label = element(
+        'span',
+        'collectionName',
+        `${value.name} (${value.items.length})${value.isPublic ? '' : ' · private'}`,
+      );
+      wrap.append(label);
       if (isAdmin()) {
         const editButton = button('Edit', 'edit', () => {
           if (!busy) edit(value);
@@ -187,10 +197,9 @@ export function createCollectionController({
           wrap.append(exportButton);
         }
       }
-      filters.append(wrap);
+      entries.append(wrap);
     }
     updateVisibilityToggle();
-    actions.append(visibilityToggle);
     actions.append(button('Refresh collections', 'refresh', refresh));
     if (isAdmin()) {
       const create = button('New collection', 'plus', () => {

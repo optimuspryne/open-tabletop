@@ -59,6 +59,7 @@ const ICONS = [
   'building-warehouse',
   'books',
   'album',
+  'filter',
   'package-import',
   'package-export',
   'library-plus',
