@@ -7288,15 +7288,21 @@ body.not-gm .gm-only {
 }
 .notecard-dialog:not([open]) { display: none; }
 .notecard-dialog::backdrop { background: rgba(0, 0, 0, 0.65); }
-.notecard-tools { display: flex; flex-wrap: wrap; gap: var(--gap); margin-bottom: 12px; }
+.notecard-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); grid-template-rows: min-content 1fr; grid-template-areas: "controls preview" "actions preview"; gap: 16px 20px; align-items: start; }
+.notecard-controls { grid-area: controls; min-width: 0; }
+.notecard-preview { grid-area: preview; min-width: 0; }
+.notecard-actions { grid-area: actions; min-width: 0; }
+.notecard-tools { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--gap); margin-bottom: 12px; }
 .notecard-paper { flex-basis: 100%; }
-.notecard-tools .button-row { flex-wrap: wrap; }
+.notecard-dialog .button-row--compact button { min-width: 0; font-size: max(11px, var(--fs-sm)); }
+.notecard-dialog .button-row--compact .ico { width: var(--ico-size-md); height: var(--ico-size-md); }
+.notecard-tools .notecard-shapes, .notecard-navigation { flex-wrap: nowrap; }
 .notecard-tools label { display: inline-flex; align-items: center; gap: 6px; }
+.notecard-dialog select.control--compact { padding-right: calc(25px * var(--ui-elements-scale)); }
 .notecard-ink { width: 32px; min-height: 32px; background: var(--ink); border: 2px solid var(--border); }
 .notecard-ink[aria-pressed="true"] { outline: 2px solid var(--text); outline-offset: 2px; }
-.notecard-stage { position: relative; width: min(100%, max(300px, calc((100dvh - 570px) * var(--notecard-aspect, 1.5)))); margin-inline: auto; touch-action: none; border-radius: 4px; overflow: hidden; }
+.notecard-stage { position: relative; width: min(100%, calc(min(600px, 100dvh - 230px) * var(--notecard-aspect, 1.5))); margin-inline: auto; touch-action: none; border-radius: 4px; overflow: hidden; }
 #notecardCanvas { display: block; width: 100%; height: auto; aspect-ratio: var(--notecard-aspect, 1.5); touch-action: none; cursor: crosshair; }
-.notecard-dialog.has-text-tool .notecard-stage { width: min(100%, max(280px, calc((100dvh - 760px) * var(--notecard-aspect, 1.5)))); }
 .notecard-text-panel { margin-bottom: var(--gap); }
 .notecard-text-panel .button-row { flex-wrap: wrap; align-items: center; margin-block: var(--gap); }
 .notecard-text-panel label { display: inline-flex; align-items: center; gap: var(--gap); }
@@ -7310,20 +7316,23 @@ body.not-gm .gm-only {
 .notecard-text-overlay .notecard-text-box:focus-visible { outline: 2px solid #202830; outline-offset: -3px; }
 .notecard-text-overlay .notecard-text-resize { position: absolute; pointer-events: auto; min-width: 30px; min-height: 30px; padding: 4px; transform: translate(-100%, 0); background: var(--panel-solid); touch-action: none; }
 @media (pointer: coarse) { .notecard-text-overlay .notecard-text-resize { min-width: 44px; min-height: 44px; } }
-.notecard-dialog .modal__footer { flex-wrap: wrap; }
+.notecard-dialog .modal__footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; margin-top: var(--gap); }
 @media (pointer: coarse) {
   .notecard-dialog button, .notecard-dialog select { min-height: 44px; }
   .notecard-ink { width: 36px; }
 }
 
 .notecard-dialog .modal__header { margin-bottom: 12px; }
+.notecard-dialog .modal__header > button { flex-shrink: 0; }
 
-#notecardColors { width: 330px; display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; max-width: 100%; }
+#notecardColors { display: flex; flex-wrap: wrap; gap: 4px; max-width: 100%; }
 .notecard-ink { min-width: 0; padding: 0; }
 
-#notecardColors .notecard-ink { width: 100%; }
+#notecardColors .notecard-ink { width: 28px; min-width: 28px; }
+#notecardCustomInk { padding: 2px; background: var(--panel-solid); }
 
-.notecard-navigation { flex-wrap: wrap; margin-bottom: var(--gap); align-items: center; }
+.notecard-navigation { justify-content: center; margin-bottom: var(--gap); align-items: center; }
+#notecardZoomLevel { flex: none; font-size: max(11px, var(--fs-sm)); }
 .notecard-pass { flex-wrap: wrap; margin-top: var(--gap); align-items: center; }
 .notecard-pass select { min-width: 0; max-width: 100%; flex: 1; }
 .notecard-dialog [hidden] { display: none; }
@@ -7350,5 +7359,13 @@ body.not-gm .gm-only {
 
 .notecard-dialog .modal__title { min-width: 0; overflow-wrap: anywhere; }
 
-.notecard-dialog[data-orientation="portrait"] .notecard-stage { width: min(100%, max(190px, calc((100dvh - 570px) * var(--notecard-aspect)))); }
-.notecard-dialog.has-text-tool[data-orientation="portrait"] .notecard-stage { width: min(100%, max(170px, calc((100dvh - 760px) * var(--notecard-aspect)))); }
+@media (max-width: 780px) {
+  .notecard-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; grid-template-areas: "controls" "preview" "actions"; }
+  .notecard-dialog .notecard-shapes, .notecard-dialog .notecard-navigation { gap: 4px; }
+  .notecard-dialog .notecard-shapes button, .notecard-dialog .notecard-navigation button { padding-inline: 4px; gap: 4px; }
+  .notecard-dialog[data-orientation="portrait"] .notecard-stage { width: min(100%, max(190px, calc((100dvh - 380px) * var(--notecard-aspect)))); }
+}
+@media (pointer: coarse) {
+  #notecardColors .notecard-ink { min-width: 40px; min-height: 44px; }
+  .notecard-dialog .notecard-shapes button, .notecard-dialog .notecard-navigation button { min-width: 40px; }
+}

@@ -447,3 +447,20 @@ device/multiplayer test matrix was reported; the detailed checks below remain re
       selection clears and focus moves to the drawing surface. Promotion restores the controls.
 - [ ] Demote between opening a draft and sending: the server rejects the stale request, retains
       the draft and inventory, and allows keeping the card instead.
+
+### Notecard editor layout and custom drawing ink — manual tests reported green
+
+The user confirmed manual tests are green and approved committing on 2026-09-27. No individual
+device/browser matrix was reported; the detailed checks below remain reusable.
+
+- [ ] In full and compact modes, confirm the shape controls and Pan/Zoom/Fit each stay on one
+      row; desktop tools are beside the card and phone actions follow the card. Check landscape
+      and portrait, long template names, and scrolling with Text/template settings open.
+- [ ] Open Text with keyboard/touch, edit, close it with Text again, and reopen. Content and
+      Undo/Redo survive, the previous drawing tool is restored, and expanded state is announced.
+- [ ] Choose a custom drawing color using the native swatch; verify focus hints, picker dismissal,
+      preset selection, drawing/erasing, and persistence through hand, stack, save and template flows.
+- [ ] Verify regular-player private-pass restrictions and read-only inspection after the rearrangement.
+
+Restart the server and refresh browsers before testing custom ink. Native color picker appearance
+and keyboard controls vary by browser/OS; automation does not establish real-device usability.

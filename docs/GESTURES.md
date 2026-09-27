@@ -100,8 +100,16 @@ card. Use Pen/Eraser, Line/Rectangle/Ellipse, ink swatches, Width, Undo/Redo and
 Drag with one finger, mouse or stylus to preview a helper; release commits one undoable stroke.
 Constrain is a persistent touch-friendly toggle; holding Shift provides the same 45° line,
 square or circle constraint on desktop. Eraser and Clear ink preserve the selected paper and text.
-Choose **Text → Add** for a multiline text box. Select a box on the card or in the Box picker;
-type in the Text field, then choose size, alignment and ink. Drag the box with mouse/finger/stylus
+Choose **Text → Add** for a multiline text box. Click/tap **Text** again to hide its settings
+and return to the previous drawing tool. The Text
+button is below Undo/Redo/Clear and supports Enter/Space with an accessible expanded state.
+The native color swatch after the eight ink presets opens the device's custom drawing-color picker;
+Tab to it and activate it with the keyboard, or tap it on touch. Custom ink applies to subsequent
+drawing strokes; text boxes retain their Ink dropdown. Desktop editing controls are left of the
+card, with Pan/Zoom/Fit above it; narrow layouts stack tools, preview and placement actions.
+Shape controls and view controls each stay on one row; compact mode preserves hints and names.
+Select a box on the card or in the Box picker, type in the Text field, then choose size,
+alignment and ink. Drag the box with mouse/finger/stylus
 to move it; drag its width handle to change wrapping. With a box or the card focused, arrows move,
 Shift+left/right resize, Enter edits, and Delete/Backspace removes. A focused width handle also
 uses left/right arrows. Up to eight boxes with 500 characters each remain editable after saving.

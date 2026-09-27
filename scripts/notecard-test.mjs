@@ -49,11 +49,31 @@ try {
     const originalFull = await page.evaluate(`document.body.classList.contains('ui-full')`);
     for (const full of [true, false]) {
       await page.evaluate(`document.body.classList.toggle('ui-full',${full})`);
+      const rows = await page.evaluate(`['.notecard-shapes','.notecard-navigation'].map(selector=>{
+        const row=document.querySelector(selector),buttons=[...row.querySelectorAll('button')],rects=buttons.map(b=>b.getBoundingClientRect());
+        return {selector,overflow:row.scrollWidth>row.clientWidth,tops:rects.map(r=>r.top),heights:rects.map(r=>r.height)};
+      })`);
+      for (const row of rows) {
+        assert.equal(
+          row.overflow,
+          false,
+          `${row.selector} fits at ${device.width}px, full=${full}`,
+        );
+        assert.equal(new Set(row.tops).size, 1, `${row.selector} stays on one row`);
+        if (device.touch)
+          assert.ok(
+            row.heights.every((height) => height >= 44),
+            'touch targets stay usable',
+          );
+      }
       assert.equal(
         await page.evaluate(
           `document.getElementById('notecardDialog').scrollWidth>document.getElementById('notecardDialog').clientWidth`,
         ),
         false,
+        await page.evaluate(
+          `JSON.stringify({width:innerWidth,full:document.body.classList.contains('ui-full'),outside:[...document.querySelectorAll('#notecardDialog *')].filter(el=>el.getBoundingClientRect().right>document.getElementById('notecardDialog').getBoundingClientRect().right).map(el=>({id:el.id||el.className,parent:el.parentElement.id,text:el.textContent.slice(0,60)}))})`,
+        ),
       );
       await writeFile(
         `/tmp/notecard-player-${device.width}-${full ? 'full' : 'compact'}.png`,
@@ -85,6 +105,16 @@ try {
     assert.equal(await page.evaluate(`noteTest.editor.templateContext().busy`), false);
     await page.evaluate(
       `noteTest.rank=1;noteTest.editor.applyRole();document.getElementById('notecardPen').focus()`,
+    );
+    await page.evaluate(
+      `const ink=document.getElementById('notecardCustomInk');ink.value='#a17bc9';ink.dispatchEvent(new Event('change',{bubbles:true}));`,
+    );
+    assert.equal(
+      await page.evaluate(
+        `document.querySelectorAll('#notecardColors button[aria-pressed="true"]').length`,
+      ),
+      0,
+      'custom ink clears preset selection',
     );
     const rect = await page.evaluate(`(() => {
       const dialog = document.getElementById('notecardDialog'), canvas = document.getElementById('notecardCanvas');
@@ -213,6 +243,11 @@ try {
     );
     let sent = await page.evaluate(`noteTest.sent.at(-1)`);
     assert.equal(sent.type, 'notecardCommit');
+    assert.equal(
+      sent.payload.drawing[0].color,
+      '#a17bc9',
+      'native custom ink reaches the committed drawing',
+    );
     assert.equal(sent.payload.faceDown, true);
     assert.equal(
       sent.payload.drawing.length,
@@ -309,6 +344,32 @@ try {
           page.sessionId,
         );
     };
+    await page.evaluate(
+      `document.getElementById('notecardEllipse').click();document.getElementById('notecardText').focus()`,
+    );
+    for (const expanded of [true, false, true, false]) {
+      await key(' ', 'Space', 32);
+      assert.equal(
+        await page.evaluate(
+          `document.getElementById('notecardText').getAttribute('aria-expanded')`,
+        ),
+        String(expanded),
+        await page.evaluate(
+          `JSON.stringify({active:document.activeElement.id,status:document.getElementById('notecardStatus').textContent,busy:noteTest.editor.templateContext().busy})`,
+        ),
+      );
+      assert.equal(
+        await page.evaluate(`document.getElementById('notecardTextPanel').hidden`),
+        !expanded,
+      );
+    }
+    assert.equal(
+      await page.evaluate(
+        `document.getElementById('notecardEllipse').getAttribute('aria-pressed')`,
+      ),
+      'true',
+      'closing Text restores the previous drawing tool',
+    );
     await page.evaluate(
       `document.getElementById('notecardLine').click();document.getElementById('notecardCanvas').focus();`,
     );

@@ -37,6 +37,7 @@ export function createNotecardEditor({
     orientationFit = null;
   let paper = normalizeNotecardPaper(),
     tool = 'pen',
+    previousDrawingTool = 'pen',
     constrain = false;
   let keyboard = false,
     cursor = [0.5, 0.5],
@@ -135,7 +136,17 @@ export function createNotecardEditor({
     byId('notecardPlaceUp').hidden = byId('notecardPlaceDown').hidden = !hasDraft();
     byId('notecardPlaceUp').disabled = byId('notecardPlaceDown').disabled = busy || invalidText;
     byId('notecardTools').inert = !editable;
-    byId('notecardInkTools').hidden = byId('notecardColors').hidden = tool === 'text';
+    byId('notecardWidth').disabled = tool === 'text';
+    byId('notecardCustomInk').value = color;
+    byId('notecardColors')
+      .querySelectorAll('button')
+      .forEach((button) =>
+        button.setAttribute('aria-pressed', String(button.dataset.ink === color)),
+      );
+    byId('notecardText').setAttribute(
+      'aria-expanded',
+      String(hasDraft() && tool === 'text' && !pan),
+    );
     byId('notecardUndo').disabled = !undo.length;
     byId('notecardRedo').disabled = !redo.length;
     byId('notecardClear').disabled = !drawing.length;
@@ -214,7 +225,7 @@ export function createNotecardEditor({
   function show(data) {
     current = data;
     orientation = normalizeNotecardOrientation(data.orientation) || 'landscape';
-    byId('notecardTitle').textContent = 'Notecard';
+    byId('notecardTitle').textContent = 'Notecard Editor';
     paper = normalizeNotecardPaper(data.paper) || normalizeNotecardPaper();
     keyboard = false;
     cursor = [0.5, 0.5];
@@ -485,42 +496,57 @@ export function createNotecardEditor({
     },
     canvas,
   );
+  function selectInk(ink) {
+    if (!hasDraft() || busy || !canInteract()) return;
+    finishStroke();
+    color = ink;
+    if (tool === 'eraser') tool = 'pen';
+    pan = false;
+    sync();
+    status(`Drawing ink ${ink} selected.`);
+  }
   for (const ink of NOTECARD_COLORS) {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'notecard-ink';
     button.style.setProperty('--ink', ink);
+    button.dataset.ink = ink;
     button.setAttribute('aria-label', `Ink ${ink}`);
+    button.title = `Ink ${ink}`;
     button.setAttribute('aria-pressed', String(ink === color));
-    button.onclick = () => {
-      finishStroke();
-      color = ink;
-      if (tool === 'eraser') tool = 'pen';
-      pan = false;
-      byId('notecardColors')
-        .querySelectorAll('button')
-        .forEach((b) => b.setAttribute('aria-pressed', String(b === button)));
-      sync();
-    };
-    byId('notecardColors').append(button);
+    button.onclick = () => selectInk(ink);
+    button.addEventListener('focus', () => status(`Drawing ink ${ink}.`));
+    byId('notecardColors').insertBefore(button, byId('notecardCustomInk'));
   }
+  byId('notecardCustomInk').onchange = (event) => selectInk(event.target.value);
+  byId('notecardCustomInk').addEventListener('focus', () =>
+    status('Custom drawing ink. Open the color picker to choose any color.'),
+  );
   byId('notecardWidth').onchange = (event) => {
     finishStroke();
     width = NOTECARD_WIDTHS[Number(event.target.value)];
   };
   for (const [name, id] of Object.entries(toolIds))
     byId(id).onclick = () => {
+      if (!hasDraft() || busy || !canInteract()) return;
       finishStroke();
+      textEditor.release();
       textEditor.endEdit();
       keyboard = false;
-      tool = name;
+      if (name === 'text') {
+        if (tool === 'text') tool = previousDrawingTool;
+        else {
+          previousDrawingTool = tool;
+          tool = 'text';
+        }
+      } else tool = name;
       pan = false;
       sync();
       paint();
       status(
-        name === 'text'
+        tool === 'text'
           ? 'Text selected. Add a box or choose an existing one to edit.'
-          : `${name[0].toUpperCase() + name.slice(1)} selected.`,
+          : `${tool[0].toUpperCase() + tool.slice(1)} selected.`,
       );
     };
   byId('notecardConstrain').title =

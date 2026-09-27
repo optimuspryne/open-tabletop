@@ -640,3 +640,41 @@ remain nonfatal.
 The user confirmed the restriction works and approved committing it on 2026-09-27. The detailed
 device/multiplayer checklist remains unmarked because no individual test matrix was reported.
 Restart the server and refresh browsers after deploying these changes.
+
+## Editor layout and custom drawing ink — approved 2026-09-27
+
+The user approved the reference-based two-column editor, smaller existing compact controls,
+single-row Line/Rectangle/Ellipse/Constrain and Pan/Zoom/Fit groups, and a native custom color
+swatch after the presets. No separate hex input is included. Text sits beneath Undo/Redo/Clear;
+clicking it toggles settings and closing restores the previous drawing tool. Narrow layouts
+stack controls, preview and placement actions. Existing role restrictions remain in force.
+
+Reuse: retain the same editor, text controller, intent routing, palette, history and save paths.
+Use shared `button-row--compact`, `control--compact` and icon-size tokens, with scoped layout
+rules and coarse-pointer target sizing. No icons were added or replaced. The new `selectInk`
+handler shares preset/native selection; extend the existing drawing validator to accept only
+six-digit hex colors and normalize case. Text colors retain the existing preset dropdown.
+
+| File | Functions or behavior changed |
+| --- | --- |
+| `public/table.html` | Rearrange editor groups, retain IDs, add native custom ink input and Text expanded/panel semantics; update help. |
+| `public/styles.css` | Scoped desktop/mobile layout, nonwrapping toolbars, compact sizing, preview sizing, native selector spacing and template header fit. |
+| `public/table/notecards.js` | `sync` updates palette/expanded state; new `selectInk` reuses stroke finalization and validation guards; tool handlers toggle Text and restore previous tool; `show` uses editor title. |
+| `shared/notecards.js` | `normalizeNotecardDrawing` accepts six-digit hex ink and normalizes lowercase. No new protocol or persistence layer. |
+| `test/notecards.js` | Validate custom and malformed colors; exercise hands, game restore, stack creation and reopening with custom ink. |
+| `test/notecard-templates.js` | Exercise the template normalization boundary with custom/malformed ink. |
+| `scripts/notecard-test.mjs` | Assert single-row controls and touch heights in full/compact mode, custom ink in real drawing commits, and keyboard Text toggling/previous-tool restoration. |
+| `scripts/lib/notecard-template-test.mjs` | Verify custom ink in template saves and include offending elements in template-layout overflow failures. |
+| `scripts/lib/notecard-text-test.mjs` | Verify settings toggles preserve existing drawing and editable text. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md` | Record user-visible behavior, normalized color contract and interaction/layout ownership. |
+| `docs/DEVICE_QA.md`, `docs/DESIGN_notecards.md` | Approved design, file/helper map and manual checks. |
+
+Verification: `npm run check` passed lint, formatting, CSS checks and all 840 unit tests;
+`test:input` passed 57/57 and `test:devices` passed all seven profiles. `test:components` passed
+desktop/coarse fixtures and notecard tests at 1280px mouse and 390/360px touch. The existing seven
+missing fixture asset-texture warnings remain nonfatal. The final CSS adjustment also passed
+`css:lint`. Desktop/full, desktop/compact portrait, phone/full and long-template-header captures
+were visually inspected; local documentation links and diff checks passed. The user reported manual
+tests green and approved committing on 2026-09-27. No individual device/browser matrix was reported;
+the detailed manual checklist remains reusable.
+Restart the server and refresh browsers for the expanded stroke-color validation; no migration.

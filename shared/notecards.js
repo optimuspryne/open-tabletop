@@ -177,7 +177,8 @@ export function normalizeNotecardDrawing(value) {
       stroke.pts.length < 2 ||
       stroke.pts.length % 2 ||
       stroke.pts.length > NOTECARD.maxStrokeCoordinates ||
-      !NOTECARD_COLORS.includes(stroke.color) ||
+      typeof stroke.color !== 'string' ||
+      !/^#[0-9a-f]{6}$/i.test(stroke.color) ||
       !NOTECARD_WIDTHS.includes(stroke.width) ||
       typeof stroke.erase !== 'boolean'
     )
@@ -190,7 +191,7 @@ export function normalizeNotecardDrawing(value) {
       return null;
     result.push({
       pts: stroke.pts.map((n) => Math.round(n * 10000) / 10000),
-      color: stroke.color,
+      color: stroke.color.toLowerCase(),
       width: stroke.width,
       erase: stroke.erase,
       ...(stroke.scale !== undefined && stroke.scale !== 1 ? { scale: stroke.scale } : {}),

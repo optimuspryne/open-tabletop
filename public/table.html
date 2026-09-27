@@ -1345,6 +1345,8 @@
                 makes 45° lines, squares and circles. Eraser and Clear ink preserve the paper.
                 With the drawing canvas focused, arrows move a cursor and Enter starts/finishes a stroke;
                 Escape cancels that keyboard stroke first, then closes the editor. Tab cancels unfinished keyboard ink.
+                The custom color swatch after the ink presets opens your device’s drawing-color picker.
+                Text toggles its settings; click it again to return to the previous drawing tool.
                 Text → Add creates a multiline text box. Select a box on the card or in the Box picker,
                 type in the Text field, and choose size, alignment and ink. Drag the box to move; drag its
                 width handle to wrap. With a box or the card focused, arrows move, Shift+left/right resize,
@@ -2632,92 +2634,309 @@
       </div>
     </div>
 
-    <dialog id="notecardDialog" class="modal modalCard notecard-dialog" aria-labelledby="notecardTitle" aria-describedby="notecardStatus">
-      <div class="modal__header panel-head">
-        <b id="notecardTitle" class="modal__title panel-title">Notecard</b>
-        <button id="notecardTemplateSave" type="button" data-icon="device-floppy" aria-label="Save as template" hidden><span class="lbl">Save template</span></button>
+    <dialog
+      id="notecardDialog"
+      class="modal modalCard notecard-dialog"
+      aria-labelledby="notecardTitle"
+      aria-describedby="notecardStatus"
+    >
+      <div class="modal__header panel-head button-row--compact">
+        <b id="notecardTitle" class="modal__title panel-title">Notecard Editor</b>
+        <button
+          id="notecardTemplateSave"
+          type="button"
+          data-icon="device-floppy"
+          aria-label="Save as template"
+          hidden
+        >
+          <span class="lbl">Save template</span>
+        </button>
       </div>
-      <div class="modal__body">
-        <section id="notecardTemplatePanel" class="notecard-template-form" aria-label="Save notecard template" hidden>
-          <h3>Save current design as a template</h3>
-          <label class="field-group">Save to <select id="notecardTemplateTarget" class="control control--select"><option value="">New template</option></select></label>
-          <button id="notecardTemplateTargetsMore" type="button" hidden>Load more templates</button>
-          <label class="field-group">Name <input id="notecardTemplateName" class="control" maxlength="60"></label>
-          <label class="checkbox"><input id="notecardTemplateShare" class="checkbox__input" type="checkbox"><span>Share with everyone on this server</span></label>
-          <p id="notecardTemplatePrivacy" class="hint">Private to your account. Available across rooms.</p>
-          <p class="hint">Saves paper, ink and editable text immediately. Closing the notecard afterward keeps the saved template.</p>
-          <div class="button-row"><button id="notecardTemplateConfirm" type="button" class="button button--primary" data-icon="device-floppy"><span class="lbl">Save template</span></button><button id="notecardTemplateCancel" type="button">Cancel</button></div>
-          <p id="notecardTemplateStatus" class="hint" role="status"></p>
-        </section>
-        <div id="notecardTools" class="notecard-tools">
-          <div class="button-row notecard-paper">
-            <label>Paper <select id="notecardPattern"><option value="blank">Blank</option><option value="ruled">Ruled</option><option value="grid">Grid</option><option value="dots">Dots</option></select></label>
-            <label>Tone <select id="notecardTone"><option value="ivory">Ivory</option><option value="white">White</option><option value="yellow">Pale yellow</option></select></label>
+      <div class="modal__body notecard-layout">
+        <div class="notecard-controls">
+          <div id="notecardTools" class="notecard-tools">
+            <div
+              class="button-row button-row--compact notecard-paper"
+              role="group"
+              aria-labelledby="notecardOrientationLabel"
+            >
+              <span id="notecardOrientationLabel">Orientation</span>
+              <button id="notecardLandscape" type="button" aria-pressed="true" data-icon="rectangle">
+                <span class="lbl">Landscape</span>
+              </button>
+              <button
+                id="notecardPortrait"
+                type="button"
+                aria-pressed="false"
+                data-icon="rectangle-vertical"
+              >
+                <span class="lbl">Portrait</span>
+              </button>
+            </div>
+            <div class="button-row button-row--compact notecard-paper">
+              <label
+                >Paper
+                <select id="notecardPattern" class="control control--select control--compact">
+                  <option value="blank">Blank</option>
+                  <option value="ruled">Ruled</option>
+                  <option value="grid">Grid</option>
+                  <option value="dots">Dots</option>
+                </select></label
+              >
+              <label
+                >Tone
+                <select id="notecardTone" class="control control--select control--compact">
+                  <option value="ivory">Ivory</option>
+                  <option value="white">White</option>
+                  <option value="yellow">Pale yellow</option>
+                </select></label
+              >
+            </div>
+            <div class="button-row button-row--compact">
+              <button id="notecardPen" type="button" aria-pressed="true" data-icon="writing">
+                <span class="lbl">Pen</span></button
+              ><button id="notecardEraser" type="button" aria-pressed="false" data-icon="eraser">
+                <span class="lbl">Eraser</span></button
+              ><span id="notecardInkTools"
+                ><label
+                  >Width
+                  <select id="notecardWidth" class="control control--select control--compact">
+                    <option value="0">Fine</option>
+                    <option value="1" selected>Medium</option>
+                    <option value="2">Broad</option>
+                  </select></label
+                ></span
+              >
+            </div>
+            <div class="button-row--compact">
+              <div class="button-row notecard-shapes">
+                <button id="notecardLine" type="button" aria-pressed="false" data-icon="line">
+                  <span class="lbl">Line</span></button
+                ><button id="notecardRectangle" type="button" aria-pressed="false" data-icon="square">
+                  <span class="lbl">Rectangle</span></button
+                ><button id="notecardEllipse" type="button" aria-pressed="false" data-icon="circle">
+                  <span class="lbl">Ellipse</span></button
+                ><button
+                  id="notecardConstrain"
+                  type="button"
+                  aria-pressed="false"
+                  data-icon="ruler-measure"
+                >
+                  <span class="lbl">Constrain</span>
+                </button>
+              </div>
+            </div>
+            <div
+              id="notecardColors"
+              class="button-row button-row--compact"
+              role="group"
+              aria-label="Ink colors"
+            >
+              <input
+                id="notecardCustomInk"
+                class="control control--compact notecard-ink"
+                type="color"
+                value="#202830"
+                aria-label="Custom ink color"
+                title="Custom ink color"
+                aria-describedby="notecardStatus"
+              />
+            </div>
+            <div class="button-row button-row--compact">
+              <button id="notecardUndo" type="button" data-icon="arrow-back-up">
+                <span class="lbl">Undo</span></button
+              ><button id="notecardRedo" type="button" data-icon="arrow-forward-up">
+                <span class="lbl">Redo</span></button
+              ><button id="notecardClear" type="button" data-icon="wiper">
+                <span class="lbl">Clear ink</span>
+              </button>
+            </div>
+            <div class="button-row button-row--compact">
+              <button
+                id="notecardText"
+                type="button"
+                aria-pressed="false"
+                aria-expanded="false"
+                aria-controls="notecardTextPanel"
+                data-icon="cursor-text"
+              >
+                <span class="lbl">Text</span>
+              </button>
+            </div>
           </div>
-          <div class="button-row notecard-paper" role="group" aria-labelledby="notecardOrientationLabel">
-            <span id="notecardOrientationLabel">Orientation</span>
-            <button id="notecardLandscape" type="button" aria-pressed="true" data-icon="rectangle"><span class="lbl">Landscape</span></button>
-            <button id="notecardPortrait" type="button" aria-pressed="false" data-icon="rectangle-vertical"><span class="lbl">Portrait</span></button>
+          <section
+            id="notecardTextPanel"
+            class="notecard-text-panel"
+            aria-label="Text box controls"
+            hidden
+          >
+            <div class="button-row button-row--compact">
+              <label class="notecard-text-picker"
+                >Box
+                <select id="notecardTextPicker" aria-label="Select text box"></select
+              ></label>
+              <button id="notecardTextAdd" type="button" data-icon="plus">
+                <span class="lbl">Add</span>
+              </button>
+              <button
+                id="notecardTextDelete"
+                type="button"
+                data-icon="trash"
+                aria-label="Delete selected text box"
+              >
+                <span class="lbl">Delete</span>
+              </button>
+            </div>
+            <label for="notecardTextContent">Text</label>
+            <textarea
+              id="notecardTextContent"
+              rows="2"
+              maxlength="500"
+              aria-describedby="notecardTextHelp"
+            ></textarea>
+            <div class="button-row button-row--compact">
+              <label
+                >Size
+                <select id="notecardTextSize" class="control control--select control--compact">
+                  <option value="0.03">Small</option>
+                  <option value="0.04" selected>Medium</option>
+                  <option value="0.06">Large</option>
+                </select></label
+              >
+              <label
+                >Align
+                <select id="notecardTextAlign" class="control control--select control--compact">
+                  <option value="left">Left</option>
+                  <option value="center">Center</option>
+                  <option value="right">Right</option>
+                </select></label
+              >
+              <label
+                >Ink
+                <select id="notecardTextColor" class="control control--select control--compact"></select
+              ></label>
+            </div>
+            <p id="notecardTextHelp" class="hint">
+              Add or select a box, then type. Drag to move; use the width handle to wrap text. Keyboard:
+              focus a box or the card, arrows move, Shift + left/right resize, Enter edits. Text stays
+              above ink; Eraser and Clear ink preserve it.
+            </p>
+          </section>
+          <p id="notecardTextError" class="hint" role="status" hidden></p>
+          <section
+            id="notecardTemplatePanel"
+            class="notecard-template-form"
+            aria-label="Save notecard template"
+            hidden
+          >
+            <h3>Save current design as a template</h3>
+            <label class="field-group"
+              >Save to
+              <select id="notecardTemplateTarget" class="control control--select">
+                <option value="">New template</option>
+              </select></label
+            >
+            <button id="notecardTemplateTargetsMore" type="button" hidden>Load more templates</button>
+            <label class="field-group"
+              >Name <input id="notecardTemplateName" class="control" maxlength="60"
+            /></label>
+            <label class="checkbox"
+              ><input id="notecardTemplateShare" class="checkbox__input" type="checkbox" /><span
+                >Share with everyone on this server</span
+              ></label
+            >
+            <p id="notecardTemplatePrivacy" class="hint">
+              Private to your account. Available across rooms.
+            </p>
+            <p class="hint">
+              Saves paper, ink and editable text immediately. Closing the notecard afterward keeps the
+              saved template.
+            </p>
+            <div class="button-row button-row--compact">
+              <button
+                id="notecardTemplateConfirm"
+                type="button"
+                class="button button--primary"
+                data-icon="device-floppy"
+              >
+                <span class="lbl">Save template</span></button
+              ><button id="notecardTemplateCancel" type="button">Cancel</button>
+            </div>
+            <p id="notecardTemplateStatus" class="hint" role="status"></p>
+          </section>
+        </div>
+        <div class="notecard-preview">
+          <div class="button-row--compact">
+            <div class="button-row notecard-navigation" role="group" aria-label="Drawing view">
+              <button id="notecardPan" type="button" aria-pressed="false" data-icon="hand-move">
+                <span class="lbl">Pan</span>
+              </button>
+              <button id="notecardZoomOut" type="button" data-icon="zoom-out">
+                <span class="lbl">Zoom out</span>
+              </button>
+              <output id="notecardZoomLevel" aria-label="Zoom level">100%</output>
+              <button id="notecardZoomIn" type="button" data-icon="zoom-in">
+                <span class="lbl">Zoom in</span>
+              </button>
+              <button id="notecardFit" type="button" data-icon="focus-2">
+                <span class="lbl">Fit card</span>
+              </button>
+            </div>
           </div>
-          <div class="button-row">
-            <button id="notecardPen" type="button" aria-pressed="true" data-icon="writing"><span class="lbl">Pen</span></button>
-            <button id="notecardEraser" type="button" aria-pressed="false" data-icon="eraser"><span class="lbl">Eraser</span></button>
-            <button id="notecardLine" type="button" aria-pressed="false" data-icon="line"><span class="lbl">Line</span></button>
-            <button id="notecardRectangle" type="button" aria-pressed="false" data-icon="square"><span class="lbl">Rectangle</span></button>
-            <button id="notecardEllipse" type="button" aria-pressed="false" data-icon="circle"><span class="lbl">Ellipse</span></button>
-            <button id="notecardText" type="button" aria-pressed="false" data-icon="cursor-text"><span class="lbl">Text</span></button>
+          <div id="notecardStage" class="notecard-stage">
+            <canvas
+              id="notecardCanvas"
+              width="1024"
+              height="682"
+              tabindex="0"
+              aria-label="Notecard drawing surface"
+              aria-describedby="notecardDrawingHelp"
+            ></canvas>
+            <div
+              id="notecardTextOverlay"
+              class="notecard-text-overlay"
+              role="group"
+              aria-label="Editable text boxes"
+              hidden
+            ></div>
           </div>
-          <div id="notecardInkTools" class="button-row">
-            <label>Width <select id="notecardWidth"><option value="0">Fine</option><option value="1" selected>Medium</option><option value="2">Broad</option></select></label>
-            <button id="notecardConstrain" type="button" aria-pressed="false" data-icon="ruler-measure"><span class="lbl">Constrain</span></button>
+          <p id="notecardDrawingHelp" class="hint">
+            Drag to draw. Keyboard: focus the card, use arrows to move, Enter to start/finish, Escape to
+            cancel a stroke. Constrain (or Shift) makes squares, circles and 45° lines.
+          </p>
+        </div>
+        <div class="notecard-actions">
+          <div id="notecardPassControls" class="button-row button-row--compact notecard-pass" hidden>
+            <label for="notecardRecipient">Pass to</label
+            ><select id="notecardRecipient" aria-label="Private recipient"></select>
+            <button id="notecardPass" type="button" data-icon="send-2">
+              <span class="lbl">Pass privately</span>
+            </button>
           </div>
-          <div id="notecardColors" class="button-row" role="group" aria-label="Ink colors"></div>
-          <div class="button-row">
-            <button id="notecardUndo" type="button" data-icon="arrow-back-up"><span class="lbl">Undo</span></button>
-            <button id="notecardRedo" type="button" data-icon="arrow-forward-up"><span class="lbl">Redo</span></button>
-            <button id="notecardClear" type="button" data-icon="wiper"><span class="lbl">Clear ink</span></button>
+          <p id="notecardStatus" class="hint" role="status"></p>
+          <div class="modal__footer button-row button-row--compact">
+            <button id="notecardCancel" type="button" data-icon="x">
+              <span class="lbl">Cancel / close</span>
+            </button>
+            <button id="notecardReturn" type="button" data-icon="arrow-bar-up" hidden>
+              <span class="lbl">Return to top</span>
+            </button>
+            <button id="notecardKeep" type="button" data-icon="cards">
+              <span class="lbl">Keep in hand</span>
+            </button>
+            <button id="notecardPlaceDown" type="button" data-icon="arrow-bar-down">
+              <span class="lbl">Place face-down</span>
+            </button>
+            <button
+              id="notecardPlaceUp"
+              type="button"
+              class="button button--primary"
+              data-icon="arrow-bar-up"
+            >
+              <span class="lbl">Place face-up</span>
+            </button>
           </div>
         </div>
-        <section id="notecardTextPanel" class="notecard-text-panel" aria-label="Text box controls" hidden>
-          <div class="button-row">
-            <label class="notecard-text-picker">Box <select id="notecardTextPicker" aria-label="Select text box"></select></label>
-            <button id="notecardTextAdd" type="button" data-icon="plus"><span class="lbl">Add</span></button>
-            <button id="notecardTextDelete" type="button" data-icon="trash" aria-label="Delete selected text box"><span class="lbl">Delete</span></button>
-          </div>
-          <label for="notecardTextContent">Text</label>
-          <textarea id="notecardTextContent" rows="2" maxlength="500" aria-describedby="notecardTextHelp"></textarea>
-          <div class="button-row">
-            <label>Size <select id="notecardTextSize"><option value="0.03">Small</option><option value="0.04" selected>Medium</option><option value="0.06">Large</option></select></label>
-            <label>Align <select id="notecardTextAlign"><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-            <label>Ink <select id="notecardTextColor"></select></label>
-          </div>
-          <p id="notecardTextHelp" class="hint">Add or select a box, then type. Drag to move; use the width handle to wrap text. Keyboard: focus a box or the card, arrows move, Shift + left/right resize, Enter edits. Text stays above ink; Eraser and Clear ink preserve it.</p>
-        </section>
-        <p id="notecardTextError" class="hint" role="status" hidden></p>
-        <div class="button-row notecard-navigation" role="group" aria-label="Drawing view">
-          <button id="notecardPan" type="button" aria-pressed="false" data-icon="hand-move"><span class="lbl">Pan</span></button>
-          <button id="notecardZoomOut" type="button" data-icon="zoom-out"><span class="lbl">Zoom out</span></button>
-          <output id="notecardZoomLevel" aria-label="Zoom level">100%</output>
-          <button id="notecardZoomIn" type="button" data-icon="zoom-in"><span class="lbl">Zoom in</span></button>
-          <button id="notecardFit" type="button" data-icon="focus-2"><span class="lbl">Fit card</span></button>
-        </div>
-        <div id="notecardStage" class="notecard-stage">
-          <canvas id="notecardCanvas" width="1024" height="682" tabindex="0" aria-label="Notecard drawing surface" aria-describedby="notecardDrawingHelp"></canvas>
-          <div id="notecardTextOverlay" class="notecard-text-overlay" role="group" aria-label="Editable text boxes" hidden></div>
-        </div>
-        <p id="notecardDrawingHelp" class="hint">Drag to draw. Keyboard: focus the card, use arrows to move, Enter to start/finish, Escape to cancel a stroke. Constrain (or Shift) makes squares, circles and 45° lines.</p>
-        <div id="notecardPassControls" class="button-row notecard-pass" hidden>
-          <label for="notecardRecipient">Pass to</label><select id="notecardRecipient" aria-label="Private recipient"></select>
-          <button id="notecardPass" type="button" data-icon="send-2"><span class="lbl">Pass privately</span></button>
-        </div>
-        <p id="notecardStatus" class="hint" role="status"></p>
-      </div>
-      <div class="modal__footer button-row button-row--end">
-        <button id="notecardCancel" type="button" data-icon="x"><span class="lbl">Cancel / close</span></button>
-        <button id="notecardReturn" type="button" data-icon="arrow-bar-up" hidden><span class="lbl">Return to top</span></button>
-        <button id="notecardKeep" type="button" data-icon="cards"><span class="lbl">Keep in hand</span></button>
-        <button id="notecardPlaceDown" type="button" data-icon="arrow-bar-down"><span class="lbl">Place face-down</span></button>
-        <button id="notecardPlaceUp" type="button" class="button button--primary" data-icon="arrow-bar-up"><span class="lbl">Place face-up</span></button>
       </div>
     </dialog>
 

@@ -1037,6 +1037,11 @@ machinery:
   and text wrapping. Undo/Redo snapshots include orientation. View zoom/pan remains local.
   Text remains structured editable data, never HTML or flattened ink. The focused text controller
   owns selection and gestures, while the parent editor owns content and shared ink/text history.
+  The editor's compact two-column desktop layout stacks on narrow screens. Text toggles its
+  settings and returns to the previous drawing tool without changing document history. The native
+  custom drawing-ink picker and preset swatches share one selection handler. Stroke validation
+  accepts bounded six-digit hex colors and normalizes case at the existing shared content boundary;
+  text colors still use presets. Neither layout nor color selection adds synchronized UI state.
   Measured wrapping is shared by editor, thumbnails and meshes; text paints above ink, so Eraser
   and Clear ink preserve it. Text overflow blocks editor commit with a recoverable warning;
   server validation bounds payload/geometry independently of browser font metrics. Client shape helpers

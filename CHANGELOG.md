@@ -9,6 +9,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- **Rearranged notecard editor and custom drawing ink.** Desktop editing controls sit beside the
+  card, with single-row shape and view toolbars using shared compact controls. Phone layouts stack
+  the card above placement actions. A native color swatch selects custom drawing ink, and Text
+  toggles its settings below Undo/Redo/Clear, returning to the previous drawing tool when closed.
+  Restart the server and refresh browsers to enable custom ink validation.
 - **Restricted private notecard passing.** Only Helpers, GMs and room owners can send notecards
   privately; ordinary active players can still receive them. Server checks cover existing cards
   and new template drafts, including role changes during editing. Regular-player editors hide

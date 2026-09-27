@@ -174,6 +174,18 @@ function harness() {
 test('notecard validation bounds total artwork and rejects arbitrary properties, colors and coordinates', () => {
   assert.deepEqual(normalizeNotecardDrawing(artwork), artwork);
   assert.deepEqual(normalizeNotecardDrawing([]), []);
+  assert.equal(normalizeNotecardDrawing([{ ...artwork[0], color: '#A17BC9' }])[0].color, '#a17bc9');
+  for (const color of [
+    null,
+    123456,
+    '#abc',
+    '#12345678',
+    'red',
+    'rgba(0,0,0,1)',
+    '#gggggg',
+    ' #123456',
+  ])
+    assert.equal(normalizeNotecardDrawing([{ ...artwork[0], color }]), null);
   for (const extra of [
     { pts: [NaN, 0] },
     { pts: [0, 2] },
@@ -191,6 +203,28 @@ test('notecard validation bounds total artwork and rejects arbitrary properties,
   );
   assert.deepEqual(spawnPayload({ type: 'notecard', props: {} }), { type: 'notecard', props: {} });
   assert.equal(spawnPayload({ type: 'notecard', props: { drawing: artwork } }), null);
+});
+
+test('custom drawing ink survives private hands, game saves, stacks and template-created cards', () => {
+  const { room, id, alice, claim, send } = harness();
+  const drawing = [{ ...artwork[0], color: '#a17bc9' }];
+  send('notecardCommit', { ...claim(), drawing, destination: 'hand' });
+  assert.equal(room.state.pieces.has(id), false);
+  assert.deepEqual(room.hands.get('alice')[0].drawing, drawing);
+  const saved = serializeGame(room);
+  applyScene(room, saved, sceneOptions);
+  claimHand(room, 'account-a', 'alice');
+  assert.deepEqual(room.hands.get('alice')[0].drawing, drawing);
+  send('notecardCreate', {
+    request: 'custom-template',
+    content: { drawing, orientation: 'portrait' },
+    destination: 'stack',
+    count: 2,
+  });
+  const stack = [...room.state.pieces.keys()].at(-1);
+  assert.deepEqual(room.notecards.snapshot(stack).cards[0].drawing, drawing);
+  send('notecardEdit', { id: stack });
+  assert.deepEqual(alice.sent.at(-1).payload.drawing, drawing);
 });
 
 test('physical notecards share their collider dimensions and are heavier than cards', () => {

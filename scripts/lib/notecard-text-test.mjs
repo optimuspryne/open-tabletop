@@ -62,6 +62,16 @@ export async function verifyNotecardText({ page, browser, device, pointer, key }
     await page.evaluate(`document.getElementById('notecardTextContent').value`),
     'A clue\nFind the compass.',
   );
+  const beforeToggle = await page.evaluate(`noteTest.editor.capture()`);
+  await page.evaluate(`document.getElementById('notecardText').click()`);
+  assert.equal(await page.evaluate(`document.getElementById('notecardTextPanel').hidden`), true);
+  await page.evaluate(`document.getElementById('notecardText').click()`);
+  assert.equal(await page.evaluate(`document.getElementById('notecardTextPanel').hidden`), false);
+  assert.deepEqual(
+    await page.evaluate(`noteTest.editor.capture()`),
+    beforeToggle,
+    'toggling text settings preserves ink and editable text',
+  );
   // Resize the actual handle while zoomed; Undo must restore the saved paper-space width.
   await page.evaluate(
     `document.getElementById('notecardZoomIn').click();document.querySelector('.notecard-text-resize').scrollIntoView({block:'center'})`,

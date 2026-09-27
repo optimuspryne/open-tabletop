@@ -34,6 +34,24 @@ function invoke(router, method, path, req = {}) {
   });
 }
 test('template content stays structured and private by default; malformed metadata/content fails', () => {
+  const customInk = {
+    ...value,
+    content: {
+      ...content,
+      drawing: [{ pts: [0.1, 0.2], color: '#A17BC9', width: 0.007, erase: false }],
+    },
+  };
+  assert.equal(normalizeNotecardTemplate(customInk).content.drawing[0].color, '#a17bc9');
+  assert.equal(
+    normalizeNotecardTemplate({
+      ...customInk,
+      content: {
+        ...customInk.content,
+        drawing: [{ ...customInk.content.drawing[0], color: 'url(secret)' }],
+      },
+    }),
+    null,
+  );
   assert.deepEqual(normalizeNotecardTemplate({ ...value, ownerId: '999', canEdit: true }), {
     name: 'Sheet',
     content,

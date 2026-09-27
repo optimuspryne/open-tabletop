@@ -12,7 +12,7 @@ export async function verifyNotecardTemplates({ page, browser, device }) {
   await page.evaluate(`(async()=>{
     noteTest.editor.cancel();document.getElementById('pieceMenu').hidden=true;
     const {createNotecardTemplates}=await import('/table/notecard-templates.js');
-    const content={orientation:'portrait',drawing:[],paper:{pattern:'ruled',tone:'ivory'},textBoxes:[{id:1,text:'Expedition log\\nName:\\nDestination:',x:.1,y:.1,w:.8,size:.04,color:'#202830',align:'left'}]};
+    const content={orientation:'portrait',drawing:[{pts:[.1,.8,.8,.8],color:'#a17bc9',width:.007,erase:false}],paper:{pattern:'ruled',tone:'ivory'},textBoxes:[{id:1,text:'Expedition log\\nName:\\nDestination:',x:.1,y:.1,w:.8,size:.04,color:'#202830',align:'left'}]};
     noteTest.templateRecords=[{id:'1',name:'Expedition log',content,isPublic:false,canEdit:true,ownerId:'me',ownerName:'Me',revision:1}];
     noteTest.requests=[];const realFetch=window.fetch;noteTest.restoreFetch=()=>window.fetch=realFetch;
     window.fetch=async(url,options={})=>{
@@ -47,6 +47,7 @@ export async function verifyNotecardTemplates({ page, browser, device }) {
   assert.equal(saved.isPublic, false);
   assert.equal(saved.name, 'Mission sheet');
   assert.equal(saved.content.orientation, 'portrait');
+  assert.equal(saved.content.drawing[0].color, '#a17bc9', 'custom ink reaches template save');
   assert.equal(saved.content.textBoxes[0].text, 'Expedition log\nName:\nDestination:');
   assert.equal(
     await page.evaluate(`document.getElementById('notecardDialog').open`),
@@ -202,6 +203,9 @@ export async function verifyNotecardTemplates({ page, browser, device }) {
         `document.getElementById('notecardDialog').scrollWidth>document.getElementById('notecardDialog').clientWidth`,
       ),
       false,
+      await page.evaluate(
+        `JSON.stringify([...document.querySelectorAll('#notecardDialog *')].filter(el=>el.getBoundingClientRect().right>document.getElementById('notecardDialog').getBoundingClientRect().right).map(el=>({id:el.id||el.className,parent:el.parentElement.id,text:el.textContent,width:el.getBoundingClientRect().width})))`,
+      ),
     );
     await writeFile(
       '/tmp/notecard-templates-save-' + device.width + '-' + (full ? 'full' : 'compact') + '.png',

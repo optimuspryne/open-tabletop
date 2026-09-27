@@ -2380,6 +2380,10 @@ Height follows rendered board geometry under each overlay, not tall physics coll
 **`shared/notecards.js`** defines `NOTECARD`, ink/width choices and
 `normalizeNotecardDrawing(strokes)`, returning normalized copies or `null` for invalid/oversized
 input. Notecards are a distinct `KINDS`/`KIND` piece type with shared dimensions and mass.
+Drawing strokes accept only six-digit `#RRGGBB` colors, normalized to lowercase; the eight
+`NOTECARD_COLORS` remain quick presets. Named colors, alpha values and CSS expressions are rejected.
+Text-box colors retain the preset palette. All existing content/save/template boundaries use
+the shared drawing validator, so custom ink needs no database schema change.
 `NOTECARD_ORIENTATIONS`, `normalizeNotecardOrientation` and `notecardDimensions(orientation)`
 define landscape (4.5 × 3; 1024 × 682 pixels) and portrait (3 × 4.5; 682 × 1024 pixels).
 Omitted orientation defaults to landscape; invalid explicit values fail closed. Older commits
@@ -2438,7 +2442,13 @@ private draft until acknowledgement, supports undo/redo and Clear, and drops it 
 or disconnected. `attachDrawingControls` in `controls.js` translates drawing, pan, wheel and
 pinch input into intents; `createDrawingView` owns the local normalized 1–8× transform.
 Painting and pointer mapping use inverse transforms; navigation never changes saved strokes.
-The chosen Tabler controls retain accessible names and native tooltips above the dialog layer. `paintNotecard`/`notecardMesh` build surfaces with individually disposable
+The editor lays out editing controls/actions beside the preview on desktop and stacks controls,
+preview and actions at narrow widths. Shape and view toolbars stay on single rows using
+`button-row--compact`, existing icon-size tokens and `control--compact` fields. The native
+`notecardCustomInk` color input shares `selectInk` with preset buttons; it has an accessible name,
+native tooltip and focus status, with no separate hex input. Text toggles its panel below history
+controls, reports `aria-expanded`, and restores the previous drawing tool on closing; ink/text
+history remains intact. The chosen Tabler controls retain accessible names and native tooltips above the dialog layer. `paintNotecard`/`notecardMesh` build surfaces with individually disposable
 textures; `drawCanvasStroke` is shared with whiteboard replay.
 `paintNotecard(context,drawing,{paper,textBoxes,orientation,back,name,count})` uses one weakly held scratch ink canvas
 per live destination. Destination-out erasing affects only ink; paper/pattern is painted behind
@@ -2463,8 +2473,8 @@ canvas instructions and status feedback remain accessible in compact mode.
 **`public/table/notecard-text.js`** exposes `createNotecardTextEditor`. It owns text selection,
 typing sessions, cancellable gestures and accessible overlay controls; the parent editor owns
 content, permissions and combined history. Add selects a new box and focuses the native textarea.
-Typing, formatting, move, resize and Delete are undoable; a drag is one action. Text mode hides
-ink-only settings and adds a box picker, size/alignment/color controls and width handle. Arrows
+Typing, formatting, move, resize and Delete are undoable; a drag is one action. Text mode disables
+pen width and adds a box picker, size/alignment/color controls and width handle. Arrows
 move a focused box/card, Shift+left/right or the focused handle's arrows resize, Enter edits,
 and Delete removes. Two-finger navigation cancels a tentative text move. Controls are removed
 and private text cleared on close. `attachDrawingControls(stage,intents,focusTarget)` keeps
