@@ -8,6 +8,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-09-27
+
+### Upgrade notes
+- From 0.19.0, startup applies additive migration `022_notecard_templates.sql` using the existing
+  migration-role connection. If automatic migration is disabled, apply pending migrations with
+  the schema-owner connection before starting this version.
+- Restart the server and refresh all browsers. Source installs should run `npm ci` first.
+  Existing assets and saved games remain compatible; no new service, environment variable or
+  exposed port is required. See [upgrade instructions](docs/RELEASING.md#upgrading-to-0200).
+
 ### Added
 - **Rearranged notecard editor and custom drawing ink.** Desktop editing controls sit beside the
   card, with single-row shape and view toolbars using shared compact controls. Phone layouts stack
@@ -27,7 +37,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   default, with optional sharing across the server. Library templates create independent private
   drafts or face-down stacks; owners and site admins can rename, replace, change sharing or delete
   templates. Revision checks prevent stale overwrites, and failed saves/placements preserve drafts.
-  Includes a dedicated **Notecard Templates** Library tab using the shared Library card styles,
+  Includes a collapsible **Notecard Templates** section under **Boards, Mats & Notecards**, using shared Library card styles,
   two desktop columns, always-visible thumbnails, and compact Tabler controls. Migration 022 adds
   template storage; restart the server and refresh browsers after upgrading.
 - **Editable notecard text boxes.** Add up to eight multiline boxes with size, ink color and
@@ -58,18 +68,19 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Drawing controls use the user-approved Tabler icon set with compact-mode labels/tooltips.
 
 ### Changed
+- Rename the two human placard choices to **Type 1** and **Type 2**, preserving saved selections.
 - Library exports use a brief bottom-center toast instead of a persistent message above the
   assets. Desktop source and collection filters now share sizing, typography and borders in
-  compact/full modes; the tested touch layout is preserved. Refresh browsers; no restart needed.
+  compact/full modes; the tested touch layout is preserved.
 - **Grouped Library browsing.** Six tabs contain collapsible Decks/Tiles, Dice/Objects/Dispensers,
   Boards/Mats/Notecards, Games/Scenes, Skyboxes and collection management. Search still spans
   asset categories, reveals matching collapsed sections and restores their previous state when
   cleared. Select operates across visible sections. The Filters funnel exposes source choices
   and personal collection visibility; Show all/none still leaves Uncollected independent.
   ZIP/JSON importing now opens a separate dialog; exports report status through the shared toast.
-  Existing template scope/pagination and server permissions are preserved. Refresh browsers;
-  no server restart or migration is required. The user confirmed functional browsing and good
-  mobile layout, then accepted the follow-up toast/desktop filter styling and tile classification fix.
+  Existing template scope/pagination and server permissions are preserved. The user confirmed
+  functional browsing and good mobile layout, then accepted the follow-up toast/desktop filter
+  styling and tile classification fix.
 - Replace the built-in procedural Marbled finish with Behrtron's CC0 white-marble texture.
   Preserve the supplied 4K source; render with one shared 512px WebP, retain colored dice and
   numbering, and wait for marble loading before generating finish previews. Remove the old
@@ -1499,7 +1510,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.18.0
 [0.17.2]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.17.2

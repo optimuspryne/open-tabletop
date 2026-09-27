@@ -82,6 +82,29 @@ No manual `psql -f`, and **no db-image rebuild required** — existing deploymen
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
+## Upgrading to 0.20.0
+
+From 0.19.0, startup applies one additive migration:
+
+| Migration | Purpose | Existing data |
+| --- | --- | --- |
+| `022_notecard_templates.sql` | Account-owned private/shared notecard templates | Adds a new table; existing assets, accounts and saved games are preserved. |
+
+Restart the server with the existing migration-role connection configured, then refresh all
+browsers for the new notecard tools and Library layout. When automatic migration is disabled,
+apply pending numbered migrations using the schema-owner connection before starting 0.20.0.
+Fresh installs use the updated schema baseline. No scene/game snapshot conversion, new service,
+environment variable or exposed port is required. Source installs should run `npm ci` before
+restart; Docker images include the locked dependencies.
+
+Existing custom tile assets move to the Library's Tiles section automatically; no reimport is
+needed. Notecard templates are under Boards, Mats & Notecards. Only Helpers, GMs and room owners
+can send notecards privately; regular active players can receive them and use their own editor,
+hand and table placement.
+
+When upgrading from a version older than 0.19.0, also follow the earlier upgrade notes below,
+including the existing portable asset-package limits and reverse-proxy guidance.
+
 ## Upgrading to 0.19.0
 
 From 0.18.0, startup applies these additive migrations in order:

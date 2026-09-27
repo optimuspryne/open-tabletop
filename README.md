@@ -35,15 +35,16 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.19.0` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.20.0` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
 > [Security & production posture](#security--production-posture).
 
-**Upgrading to 0.19.0:** restart the server with automatic migrations enabled to apply migrations
-018–021, then refresh all browsers. Source installs should run `npm ci` first. For manual migrations
-and large asset-package upload limits, see [0.19.0 upgrade notes](docs/RELEASING.md#upgrading-to-0190).
+**Upgrading from 0.19.0 to 0.20.0:** restart the server with automatic migrations enabled to apply
+migration 022 for saved notecard templates, then refresh all browsers. Source installs should run
+`npm ci` first. For manual migrations and earlier upgrades, see
+[0.20.0 upgrade notes](docs/RELEASING.md#upgrading-to-0200).
 
 Prefer to run it directly with Node, bring your own Postgres, or deploy through Portainer? Those
 paths are below.
@@ -178,7 +179,7 @@ docker run --name open-tabletop-app -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
   -e REDIS_URL=redis://redis-host:6379 \
-  optimuspryne/open-tabletop:0.19.0
+  optimuspryne/open-tabletop:0.20.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -268,7 +269,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.19.0
+    image: optimuspryne/open-tabletop:0.20.0
     user: appuser                         # matches the image's non-root runtime user
     restart: unless-stopped
     container_name: open-tabletop-app
