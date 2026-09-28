@@ -9,7 +9,6 @@ const roomCode = () => crypto.randomBytes(4).toString('hex').toUpperCase();
 export function createRoomsRouter({
   db,
   requireUser,
-  hashPassword,
   isBoundedImageDataURL,
   matchMaker,
   disposeLive,
@@ -156,14 +155,10 @@ export function createRoomsRouter({
       const user = await requireUser(req, res);
       if (!user) return;
       if (user.canOwnRooms) return res.json({ user: clientUser(user) });
-      if (!user.hasPassword) {
-        const password = req.body && req.body.password;
-        if (!password || String(password).length < 8)
-          return res
-            .status(400)
-            .json({ error: 'set a password (8+ characters) to request host access' });
-        await db.setPassword(user.id, await hashPassword(String(password)));
-      }
+      if (!user.hasPassword)
+        return res
+          .status(400)
+          .json({ error: 'Set a password in Account security before requesting host access.' });
       await db.setHostStatus(user.id, 'pending');
       res.json({ user: clientUser(await db.findUserById(user.id)) });
     }),

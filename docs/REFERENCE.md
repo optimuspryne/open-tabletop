@@ -1987,6 +1987,21 @@ row, so `persistentRoomId` is null and the member-management handlers no-op; it'
 admin sandbox for building and testing library assets live. Registered as the
 `editor` room type (`table` stays `filterBy(['code'])`).
 
+### Account passwords, recovery and reset
+
+See [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md) for the API, SMTP configuration and migration 023.
+Its setup guide covers bare-metal environment/password files, Docker secret mounts, Fastmail app
+passwords and delivery/recovery checks. The same SMTP configuration parser serves both deployments.
+`shared/passwords.js` provides matching 8–128-character password validation. Signup now requires
+`confirmation` with a password; `/host/request` requires a password already set through `/auth/password`.
+`public/account-security.js` owns the masked forms, recovery enrollment and transient proof/code UI;
+`public/landing.js` retains landing navigation and session handoff.
+`server/account-security-queries.js` is composed through `createDatabase` and exported as
+`db.accountSecurity`; its transactions own verification, code replacement, proof exchange and atomic
+credential/session rotation. `server/http/routes/account-security.js` performs HTTP validation and
+live revocation. `server/recovery-mail.js` owns optional SMTP configuration and bounded mail work.
+No recovery secrets are synchronized to rooms or exposed in public user projections.
+
 ### HTTP (Express)
 
 `package.json` overrides transitive **`qs` to `6.16.0`**, with the resolved package

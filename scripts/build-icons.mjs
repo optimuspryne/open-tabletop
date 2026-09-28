@@ -14,6 +14,9 @@ const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html'];
 
 // The full set of icons used across the app, grouped loosely by where they first appeared.
 const ICONS = [
+  'lock',
+  'mail',
+  'key',
   'rectangle',
   'rectangle-vertical',
   'arrow-forward-up',

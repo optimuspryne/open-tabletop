@@ -4279,6 +4279,29 @@ body.not-gm .gm-only {
   font-size: var(--fs-sm);
 }
 /* Default UI / Log out are secondary — chip-sized, and never wrapping mid-label. */
+#topbar .landing-account-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+#landing .account-row {
+  flex-wrap: wrap;
+}
+#landing .account-row .who {
+  flex: 1 1 160px;
+}
+#landing .account-row .who > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+#landing .account-row .hgroup {
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  max-width: 100%;
+  margin-left: auto;
+}
 #landing .hgroup button {
   min-width: 0;
   padding: 6px 10px;
@@ -7486,4 +7509,43 @@ canvas.fog-painting {
   }
   #libraryFilters .libraryCollectionPicker > summary:hover,
   #libraryFilters #lib2Source .chip:hover { border-color: var(--accent); }
+}
+
+/* Account security keeps essential action names visible in both interface modes. */
+#securityView {
+  max-width: 480px;
+  margin-inline: auto;
+}
+#securityView .lbl,
+#recoverBtn .lbl {
+  display: inline;
+}
+#securityView button,
+#recoverBtn {
+  white-space: normal;
+  min-height: 44px;
+}
+#securityView [role='status'] {
+  min-height: 1.5em;
+}
+#securityView input[aria-invalid='true'] {
+  outline: 2px solid var(--accent);
+}
+#recoveryCodeList {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  user-select: text;
+  line-height: 1.8;
+}
+#securityView .button-row {
+  flex-wrap: wrap;
+}
+@media (max-width: 560px), (pointer: coarse) {
+  #securityView .button-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #securityView button {
+    width: 100%;
+  }
 }

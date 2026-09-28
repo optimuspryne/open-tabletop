@@ -1,3 +1,4 @@
+import { passwordError } from '../../../shared/passwords.js';
 import express from 'express';
 import { asyncRoute } from '../async-route.js';
 import { clientUser } from '../auth-context.js';
@@ -15,6 +16,10 @@ export function createAuthRouter({
   roomAccess,
 }) {
   const router = express.Router();
+  router.use((_req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    next();
+  });
   const json = express.json({ limit: '1kb' });
 
   router.post(
@@ -22,14 +27,16 @@ export function createAuthRouter({
     rateLimitAuth,
     json,
     asyncRoute(async (req, res) => {
-      const { username, email, password } = req.body || {};
+      const { username, email, password, confirmation } = req.body || {};
       if (!validUsername(username))
         return res
           .status(400)
           .json({ error: 'username must be 3–20 chars (letters, numbers, _ or -)' });
       if (!validEmail(email)) return res.status(400).json({ error: 'invalid email' });
-      if (password != null && String(password).length < 8)
-        return res.status(400).json({ error: 'password must be at least 8 characters' });
+      if (password != null) {
+        const error = passwordError(password, confirmation);
+        if (error) return res.status(400).json({ error });
+      }
       try {
         const passwordHash = password ? await hashPassword(String(password)) : null;
         const raw = makeToken();

@@ -1987,6 +1987,19 @@ New rooms start **empty**
 
 ## Accounts, rooms & roles
 
+Password/recovery enrollment and resets are documented in [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md).
+They use account-scoped transactions independent of game state and host approval. Verification is
+explicit for existing emails. Random email/code proofs are stored as hashes, consumed atomically,
+and exchanged for a short-lived grant before final recovery. Final recovery/password changes revoke
+old sessions and proofs, issue one replacement session and invalidate live access via `roomAccess`.
+An optional bounded SMTP queue sends server-authored links using a configured canonical origin;
+recovery codes work without email infrastructure. Migration 023 adds verification metadata and
+account-owned proof/code tables; room snapshots and membership identity remain unchanged.
+SMTP is an outbound dependency configured at process startup. Bare-metal deployments read a local
+password file; Compose deployments mount the equivalent secret into the container. Both share the
+same TLS transport and canonical-origin validation; see the account-security guide for setup.
+
+
 The [2026-09-28 security audit](SECURITY_AUDIT_2026-09-28.md#remediation) has source fixes
 for SEC-01 through SEC-03. Static authentication checks access before matchmaking allocation;
 public explicit `create` is disabled. `onJoin` reauthorizes against the actual room and registers

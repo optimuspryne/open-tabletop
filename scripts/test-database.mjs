@@ -136,6 +136,32 @@ async function prepareDatabase(ownerUrl) {
       await client.query('DROP SCHEMA placard_upgrade_test CASCADE');
     }
 
+    const recoveryMigration = await fs.readFile(
+      path.join(root, 'postgres/023_account_recovery.sql'),
+      'utf8',
+    );
+    await client.query('CREATE SCHEMA recovery_upgrade_test');
+    try {
+      await client.query('SET search_path TO recovery_upgrade_test');
+      await client.query(
+        'CREATE TABLE users (id bigint PRIMARY KEY, email text, password_hash text)',
+      );
+      await client.query(
+        "INSERT INTO users VALUES (1, 'legacy@example.test', NULL), (2, 'host@example.test', 'legacy-hash')",
+      );
+      await client.query(recoveryMigration);
+      const { rows } = await client.query(
+        'SELECT email_verified_at, password_hash FROM users ORDER BY id',
+      );
+      assert.equal(rows[0].email_verified_at, null);
+      assert.equal(rows[0].password_hash, null);
+      assert.equal(rows[1].email_verified_at, null);
+      assert.equal(rows[1].password_hash, 'legacy-hash');
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA recovery_upgrade_test CASCADE');
+    }
+
     const templateMigration = await fs.readFile(
       path.join(root, 'postgres/022_notecard_templates.sql'),
       'utf8',

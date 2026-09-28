@@ -60,6 +60,15 @@ services:
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:?set BOOTSTRAP_ADMIN_USERNAME in .env}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:?set BOOTSTRAP_ADMIN_EMAIL in .env}
       BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      # Optional recovery email. Password-file mounts are configured via an override;
+      # see docs/ACCOUNT_SECURITY.md. Recovery codes work without SMTP.
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_PASSWORD_FILE: ${SMTP_PASSWORD_FILE:-}
       ASSETS_DIR: /data/assets
       # PORT: 2567
     ports:

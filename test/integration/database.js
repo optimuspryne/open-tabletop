@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 22); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 23); // Includes durable participation policy.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -1235,4 +1235,255 @@ test('notecard templates enforce private ownership, live admin roles, revisions 
   assert.deepEqual(copy.content.textBoxes, content.textBoxes);
   assert.equal(await database.notecardTemplates.remove(owner, created.id, replaced.revision), true);
   assert.equal(await database.notecardTemplates.get(owner, created.id), undefined);
+});
+
+test('account recovery is atomic, one-use, account-bound and preserves membership', async () => {
+  const future = new Date(Date.now() + 3600_000);
+  const past = new Date(Date.now() - 1000);
+  const recovery = database.accountSecurity;
+  const user = await database.createUser({
+    username: 'recoverable',
+    email: 'recoverable@example.test',
+    loginTokenHash: 'original-session',
+    sessionExpiresAt: future,
+  });
+  const other = await database.createUser({
+    username: 'recover-other',
+    email: 'recover-other@example.test',
+    loginTokenHash: 'other-session',
+    sessionExpiresAt: future,
+  });
+  const room = await database.createRoom({
+    ownerId: user.id,
+    code: 'RECOVERY',
+    name: 'Recovery room',
+  });
+  assert.equal((await recovery.status('original-session')).emailVerified, false);
+  assert.equal(
+    await recovery.issueEmail({
+      email: user.email,
+      purpose: 'recover',
+      tokenHash: 'unverified',
+      expiresAt: future,
+    }),
+    null,
+  );
+  assert.equal(await recovery.replaceCodes('expired-session', ['bad']), false);
+  assert.equal(await recovery.replaceCodes('original-session', ['old-code']), true);
+  assert.equal(await recovery.replaceCodes('original-session', ['code-1', 'code-2']), true);
+  assert.equal(
+    await recovery.exchange({
+      login: user.username,
+      codeHash: 'old-code',
+      grantHash: 'invalid-grant',
+      expiresAt: future,
+    }),
+    null,
+  );
+  assert.equal(
+    await recovery.exchange({
+      login: other.username,
+      codeHash: 'code-1',
+      grantHash: 'invalid-grant',
+      expiresAt: future,
+    }),
+    null,
+  );
+  const request = {
+    sessionHash: 'original-session',
+    purpose: 'verify',
+    tokenHash: 'verify-token',
+    expiresAt: future,
+  };
+  assert.deepEqual(await recovery.issueEmail(request), { email: user.email });
+  assert.equal(await recovery.issueEmail({ ...request, tokenHash: 'throttled' }), null);
+  assert.equal(await recovery.verifyEmail('other-session', 'verify-token'), false);
+  assert.equal(await recovery.verifyEmail('original-session', 'verify-token'), true);
+  assert.equal(await recovery.verifyEmail('original-session', 'verify-token'), false);
+  assert.equal((await recovery.status('original-session')).emailVerified, true);
+  await pool.query('UPDATE users SET recovery_mail_sent_at = NULL WHERE id = $1', [user.id]);
+  assert.deepEqual(
+    await recovery.issueEmail({
+      email: user.email,
+      purpose: 'recover',
+      tokenHash: 'expired-email',
+      expiresAt: past,
+    }),
+    { email: user.email },
+  );
+  assert.equal(
+    await recovery.exchange({
+      tokenHash: 'expired-email',
+      grantHash: 'grant-x',
+      expiresAt: future,
+    }),
+    null,
+  );
+  const grants = await Promise.all(
+    ['grant-1', 'grant-2'].map((grantHash) =>
+      recovery.exchange({ login: user.username, codeHash: 'code-1', grantHash, expiresAt: future }),
+    ),
+  );
+  assert.equal(grants.filter(Boolean).length, 1);
+  const grantHash = grants[0] ? 'grant-1' : 'grant-2';
+  const results = await Promise.all(
+    ['new-session-1', 'new-session-2'].map((tokenHash) =>
+      recovery.recover({
+        grantHash,
+        passwordHash: null,
+        session: { tokenHash, expiresAt: future },
+      }),
+    ),
+  );
+  assert.equal(results.filter(Boolean).length, 1);
+  const newSession = results[0] ? 'new-session-1' : 'new-session-2';
+  assert.equal(await database.findUserByToken('original-session'), null);
+  assert.equal((await database.findUserByToken(newSession)).id, user.id);
+  assert.equal((await recovery.status(newSession)).codesRemaining, 0);
+  assert.equal((await database.getMembership(room.id, user.id)).role, 'owner');
+  assert.equal((await database.findUserByToken('other-session')).id, other.id);
+  // Password changes cannot use an expired session or a stale password verification.
+  assert.equal(
+    await recovery.setPassword({
+      sessionHash: 'original-session',
+      expectedHash: null,
+      passwordHash: 'hash',
+      session: { tokenHash: 'bad', expiresAt: future },
+    }),
+    null,
+  );
+  const updated = await recovery.setPassword({
+    sessionHash: newSession,
+    expectedHash: null,
+    passwordHash: 'first-hash',
+    session: { tokenHash: 'password-session', expiresAt: future },
+  });
+  assert.equal(updated.hasPassword, true);
+  assert.equal(updated.hostStatus, 'none');
+  assert.equal(
+    await recovery.setPassword({
+      sessionHash: 'password-session',
+      expectedHash: 'stale-hash',
+      passwordHash: 'bad',
+      session: { tokenHash: 'bad', expiresAt: future },
+    }),
+    null,
+  );
+  await recovery.replaceCodes('password-session', ['reset-code']);
+  await recovery.exchange({
+    login: user.username,
+    codeHash: 'reset-code',
+    grantHash: 'reset-grant',
+    expiresAt: future,
+  });
+  assert.equal(
+    await recovery.recover({
+      grantHash: 'reset-grant',
+      passwordHash: null,
+      session: { tokenHash: 'bad', expiresAt: future },
+    }),
+    null,
+  );
+  // A failed final write rolls back consumption and revocation.
+  await assert.rejects(
+    recovery.recover({
+      grantHash: 'reset-grant',
+      passwordHash: 'reset-hash',
+      session: { tokenHash: 'other-session', expiresAt: future },
+    }),
+  );
+  assert.ok(await database.findUserByToken('password-session'));
+  assert.ok(
+    await recovery.recover({
+      grantHash: 'reset-grant',
+      passwordHash: 'reset-hash',
+      session: { tokenHash: 'reset-session', expiresAt: future },
+    }),
+  );
+  assert.equal((await database.findUserByLogin(user.username)).passwordHash, 'reset-hash');
+  assert.equal(await database.findUserByToken('password-session'), null);
+});
+
+test('recovery email replacement, expiration and credential regeneration invalidate old proofs', async () => {
+  const recovery = database.accountSecurity;
+  const future = new Date(Date.now() + 3600_000);
+  const user = await database.createUser({
+    username: 'email-recovery',
+    email: 'email-recovery@example.test',
+    loginTokenHash: 'email-session',
+    sessionExpiresAt: future,
+  });
+  await recovery.issueEmail({
+    sessionHash: 'email-session',
+    purpose: 'verify',
+    tokenHash: 'email-verify',
+    expiresAt: future,
+  });
+  await recovery.verifyEmail('email-session', 'email-verify');
+  const issue = async (tokenHash) => {
+    await pool.query('UPDATE users SET recovery_mail_sent_at = NULL WHERE id = $1', [user.id]);
+    return recovery.issueEmail({
+      email: user.email,
+      purpose: 'recover',
+      tokenHash,
+      expiresAt: future,
+    });
+  };
+  await issue('email-old');
+  await issue('email-new');
+  assert.equal(
+    await recovery.exchange({ tokenHash: 'email-old', grantHash: 'stale', expiresAt: future }),
+    null,
+  );
+  assert.ok(
+    await recovery.exchange({
+      tokenHash: 'email-new',
+      grantHash: 'email-grant',
+      expiresAt: future,
+    }),
+  );
+  assert.equal(
+    await recovery.exchange({ tokenHash: 'email-new', grantHash: 'replay', expiresAt: future }),
+    null,
+  );
+  await recovery.replaceCodes('email-session', ['fresh-code']);
+  assert.equal(
+    await recovery.recover({
+      grantHash: 'email-grant',
+      passwordHash: null,
+      session: { tokenHash: 'bad', expiresAt: future },
+    }),
+    null,
+  );
+  await recovery.exchange({
+    login: user.username,
+    codeHash: 'fresh-code',
+    grantHash: 'expired-grant',
+    expiresAt: new Date(Date.now() - 1000),
+  });
+  assert.equal(
+    await recovery.recover({
+      grantHash: 'expired-grant',
+      passwordHash: null,
+      session: { tokenHash: 'bad', expiresAt: future },
+    }),
+    null,
+  );
+  await issue('failed-mail');
+  await recovery.discardEmail('failed-mail');
+  assert.equal(
+    await recovery.exchange({ tokenHash: 'failed-mail', grantHash: 'bad', expiresAt: future }),
+    null,
+  );
+  await database.revokeSession('email-session');
+  assert.equal(await recovery.status('email-session'), null);
+  assert.equal(
+    await recovery.issueEmail({
+      sessionHash: 'email-session',
+      purpose: 'verify',
+      tokenHash: 'bad',
+      expiresAt: future,
+    }),
+    null,
+  );
 });

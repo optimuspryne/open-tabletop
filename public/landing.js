@@ -1,3 +1,4 @@
+import { createAccountSecurityUI, validatePasswordFields } from './account-security.js';
 import { applyIcons, setIcon, initTip, overflowMenu } from './ui/icons.js';
 import { makeButton } from './ui/button.js';
 import {
@@ -11,6 +12,7 @@ import { AVATAR_IMAGE } from '../shared/avatar.js';
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.
 const byId = (id) => document.getElementById(id);
+let securityUI = null;
 
 const enterRoom = (code, spectate = false) => {
   location.href = 'table.html?room=' + encodeURIComponent(code) + (spectate ? '&spectate=1' : '');
@@ -52,9 +54,13 @@ function onActivate(el, fn) {
 // ---- views: quick | auth | home ----
 // Show exactly one of the three top-level views (quick-join / auth / home).
 function setView(view) {
+  byId('securityView').hidden = view !== 'security';
+  if (view !== 'security') securityUI?.clear();
+  if (view !== 'home') stopPolling();
   byId('quickJoinView').hidden = view !== 'quick';
   byId('authView').hidden = view !== 'auth';
   byId('homeView').hidden = view !== 'home';
+  byId('securityBtn').hidden = view !== 'home';
   byId('accountBtn').hidden = view !== 'quick'; // the top-right "Log in" only shows on the quick-join screen
 }
 const showQuickJoin = () => setView('quick');
@@ -109,19 +115,19 @@ async function updateAdminBadge() {
 }
 
 async function onRequestHost() {
-  let password;
   if (!me.hasPassword) {
-    password = prompt('Hosting needs a password. Set one (8+ characters):');
-    if (!password) return;
+    securityUI.showPassword(me, true);
+    return;
   }
   try {
     const { user } = await api('/host/request', {
       method: 'POST',
       auth: true,
-      body: password ? { password } : {},
+      body: {},
     });
     await showHome(user);
   } catch (e) {
+    await showHome(me);
     byId('hostNote').textContent = e.message;
   }
 }
@@ -407,10 +413,7 @@ async function onSignup() {
   const errEl = byId('suErr');
   setStatus(errEl, '');
   const password = byId('suPw').value;
-  if (password.length < 8) {
-    setStatus(errEl, 'Password must be at least 8 characters.');
-    return;
-  }
+  if (!validatePasswordFields('suPw', 'suConfirm', 'suErr', setStatus)) return;
   try {
     // token: t — aliased so the destructured token doesn't shadow the token() getter
     const { user, token: t } = await api('/auth/signup', {
@@ -419,9 +422,11 @@ async function onSignup() {
         username: byId('suUser').value.trim(),
         email: byId('suEmail').value.trim(),
         password,
+        confirmation: byId('suConfirm').value,
       },
     });
     setToken(t);
+    byId('signupForm').reset();
     showHome(user);
   } catch (e) {
     setStatus(errEl, e.message);
@@ -613,9 +618,25 @@ onActivate(byId('toLogin'), () => {
   byId('loginForm').hidden = false;
 });
 
+securityUI = createAccountSecurityUI({
+  api,
+  setView,
+  showHome,
+  showAuth,
+  setStatus,
+  acceptSession: ({ user, token: next }) => {
+    me = user;
+    setToken(next);
+  },
+  requestHost: onRequestHost,
+});
+byId('securityBtn').onclick = () => securityUI.showSecurity();
+byId('recoverBtn').onclick = () => securityUI.showRecovery();
+
 // Boot: if a stored token still resolves to a user, land on home; otherwise (no
 // token, a stale one that 401s, or a 2xx that somehow lacks a user) show quick-join.
 (async function boot() {
+  if (securityUI.openLink(location.hash)) return;
   if (token()) {
     try {
       const { user } = await api('/auth/token', { method: 'POST', body: { token: token() } });

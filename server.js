@@ -1,3 +1,5 @@
+import { createAccountSecurityRouter } from './server/http/routes/account-security.js';
+import { createRecoveryMailer } from './server/recovery-mail.js';
 import { createAssetFilesRouter } from './server/http/routes/asset-files.js';
 import { createPieceVisibility, broadcastPieceEvent } from './server/game/piece-visibility.js';
 import { registerMapFog } from './server/game/map-fog.js';
@@ -1335,6 +1337,21 @@ app.use(
   }),
 );
 
+app.use(
+  '/auth',
+  createAccountSecurityRouter({
+    db,
+    requireUser,
+    rateLimitAuth,
+    hashPassword,
+    verifyPassword,
+    makeToken,
+    hashToken,
+    roomAccess,
+    mailer: createRecoveryMailer(),
+  }),
+);
+
 // --- Admin console (site superusers only) ---------------------------------
 async function disposeLive(code) {
   // shut down a running table for this code, if any
@@ -1349,7 +1366,6 @@ app.use(
   createRoomsRouter({
     db,
     requireUser,
-    hashPassword,
     isBoundedImageDataURL,
     matchMaker,
     disposeLive,

@@ -20,6 +20,15 @@ does; the tables below are the ledger of how far that has gotten.
 
 ---
 
+## Account security forms
+
+The landing page's **Account security** and **Recover account / reset password** controls open
+single-column forms. Touch taps the same semantic controls used by mouse; keyboard uses Tab and
+Enter, with focus moved to the new form and validation errors. Password fields support the device
+keyboard and password-manager paste. Recovery codes support Copy, Download and native text selection.
+Compact mode keeps action labels visible; touch action rows stack with 44px-minimum buttons. These
+account forms do not add tabletop gestures or bypass the gameplay intent layer.
+
 ## GM object Hide/Reveal
 
 Open a piece menu by right-click (except cards, which still flip), touch long-press, or

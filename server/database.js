@@ -1,3 +1,4 @@
+import { createAccountSecurityQueries } from './account-security-queries.js';
 import { ASSET_PACKAGE, PACKAGE_ASSET_KINDS, AssetPackageError } from '../shared/asset-package.js';
 // Pool-injected Postgres operations for the library, users, rooms, and membership.
 //
@@ -760,6 +761,7 @@ export function createDatabase(pool) {
   }
 
   return {
+    accountSecurity: createAccountSecurityQueries(pool),
     collections: createCollectionQueries(pool),
     ...createParticipationQueries(pool),
     notecardTemplates: createNotecardTemplateQueries((sql, params) => pool.query(sql, params)),

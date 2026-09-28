@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–022, meant for a FRESH
+-- This is the flattened end state of migrations 001–023, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -242,8 +242,26 @@ CREATE TABLE notecard_templates (
 );
 CREATE INDEX notecard_templates_owner_idx ON notecard_templates(owner_id);
 
+-- Account recovery (migration 023).
+-- Existing emails are deliberately NOT verified by migration.
+ALTER TABLE users ADD COLUMN email_verified_at timestamptz;
+ALTER TABLE users ADD COLUMN recovery_mail_sent_at timestamptz;
+CREATE TABLE account_recovery_tokens (
+  token_hash text PRIMARY KEY,
+  user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose text NOT NULL CHECK (purpose IN ('verify', 'recover', 'grant')),
+  email text NOT NULL,
+  expires_at timestamptz NOT NULL,
+  UNIQUE (user_id, purpose)
+);
+CREATE TABLE account_recovery_codes (
+  code_hash text PRIMARY KEY,
+  user_id bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX account_recovery_codes_user_idx ON account_recovery_codes(user_id);
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–022, so record them as
+-- This baseline IS the flattened result of migrations 001–023, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -260,6 +278,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
-  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql');
+  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql'), ('023_account_recovery.sql');
 
 COMMIT;

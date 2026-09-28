@@ -9,6 +9,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Landing account header overlap: moved Account security beside Admin in the page header,
+  and allowed identity/actions to wrap without overlap on narrow screens.
 - README migration and tuning references, test commands and database-test prerequisites;
   added documentation navigation, notecard/concealment/fog summaries, and scoped security guidance.
 - Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
@@ -22,6 +24,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 
 ### Added
+- Account security with masked password confirmation at signup and password setting, a dedicated
+  in-app password form replacing the native hosting prompt, and current-password verification for
+  changes. Password setting remains independent of host approval. Verified-email recovery and ten
+  single-use saved recovery codes support passwordless accounts and existing-account password reset.
+  Credential changes revoke old sessions/proofs/codes; recovery preserves account ownership and roles.
+  Optional TLS SMTP uses Nodemailer; migration 023 and a server restart/client refresh are required.
+  See `docs/ACCOUNT_SECURITY.md` for configuration, behavior and validation status.
+  Documented bare-metal and Docker SMTP setup, Fastmail app passwords, exact password-file contents,
+  restart requirements and recovery smoke tests. User reported feature, layout and SMTP success.
+
 - Contributor guidance in `CONTRIBUTING.md` and private vulnerability reporting
   instructions in `SECURITY.md`, using `admin@open-tabletop.com`.
 - A source security audit with isolated reproductions of unauthenticated duplicate-room
