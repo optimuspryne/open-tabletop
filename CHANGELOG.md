@@ -9,6 +9,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- README migration and tuning references, test commands and database-test prerequisites;
+  added documentation navigation, notecard/concealment/fog summaries, and scoped security guidance.
 - Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
   room creation, retain unique transport IDs, and use a separate persistent room ID. One local
   writer holds ownership through its final save; failed/unadmitted instances cannot overwrite

@@ -11,6 +11,21 @@ because the engine only simulates physical objects and lets people enforce the
 rules. One server runs a single cannon-es world and syncs piece transforms to
 every client over Colyseus; clients render and send intent, never physics.
 
+## Documentation
+
+- **Getting running:** [Docker quick start](#quick-start-docker),
+  [direct Node.js setup](#run-via-npm), and the deployment options below.
+- **Contributing:** [contributor guide](CONTRIBUTING.md) for development setup,
+  design review, testing, and pull requests.
+- **Understanding the code:** [architecture](docs/ARCHITECTURE.md),
+  [code reference](docs/REFERENCE.md), and the [file map](#files).
+- **Interaction and device support:** [gestures](docs/GESTURES.md),
+  [device matrix](docs/DEVICE_MATRIX.md), and [manual device QA](docs/DEVICE_QA.md).
+- **Project direction and releases:** [roadmap](docs/ROADMAP.md),
+  [changelog](CHANGELOG.md), and [release and upgrade guidance](docs/RELEASING.md).
+- **Security and assets:** [private vulnerability reporting](SECURITY.md),
+  [asset credits](docs/ASSET_CREDITS.md), and [license](LICENSE).
+
 ## Quick start (Docker)
 
 The fastest way to get a table up for your group. Docker Compose brings up the app **and** its
@@ -95,8 +110,10 @@ Table State**, or an auto-save when the room empties — written into the room's
      URL, and only at boot. Works against stock Postgres or any managed instance.
    - **Or apply it by hand** (as the owner). Fresh install: `psql -U tabletop -d
      tabletop -f postgres/schema.sql` (the flattened current schema, which also
-     seeds `schema_migrations`). Upgrade: apply the numbered migrations in order
-     (`001_custom_assets.sql` → … → `021_user_placards.sql`). Set **`AUTO_MIGRATE=false`**
+     seeds `schema_migrations`). Upgrade: apply only pending numbered migrations in
+     order through the last migration shipped with your target version. Version
+     0.20.0 requires `022_notecard_templates.sql`; see the
+     [upgrade notes](docs/RELEASING.md#upgrading-to-0200). Set **`AUTO_MIGRATE=false`**
      (or just leave `MIGRATE_DATABASE_URL` unset) to keep the app out of the schema.
      (The per-migration backfills matter on a populated DB but are no-ops on an empty
      one, so they're dropped from the baseline.)
@@ -559,17 +576,31 @@ upgrade must be rolled back. For logs, run
 
 ```bash
 npm test                  # fast unit/harness suite; no services required
-npm run test:integration  # disposable PostgreSQL 16 integration suite
-npm run check             # lint, formatting, and fast tests
+npm run check             # ESLint, formatting, CSS checks, and fast tests
+npm run test:input        # browser input/gesture tests
+npm run test:components   # browser component and notecard tests
+npm run test:devices      # responsive/device layout checks
+npm run test:integration  # PostgreSQL integration suite
+npm run audit             # production dependency vulnerability audit
 ```
 
-`test:integration` starts a randomly named PostgreSQL container on a random local
-port, applies the production schema and least-privilege app grants, runs the real
-database tests, then removes the container and its storage. Docker is required;
-Docker Compose is not. The runner refuses any database whose name does not end in
-`_test`.
+By default, `test:integration` starts a randomly named PostgreSQL 16 container on a
+random local port, applies the production schema and least-privilege app grants,
+runs the real database tests, then removes the container and its storage. This
+mode requires Docker, but not Docker Compose. Alternatively, provide both
+`TEST_DATABASE_OWNER_URL` and `TEST_DATABASE_URL` for a dedicated test database;
+the runner then uses that database without starting Docker. The owner URL must
+allow schema setup and the app URL must use the least-privilege runtime role.
+Both URLs must name a database ending in `_test`. Use disposable test data:
+the suite prepares the schema and mutates database contents.
 
-CI runs the same integration tests against its own PostgreSQL 16 service.
+Browser checks require Chrome/Chromium; use `CHROME_BIN` to select the executable.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for checks required by change type and
+[Device QA](docs/DEVICE_QA.md) for manual acceptance. Automated checks do not
+establish real-device gesture feel, GPU performance, or multiplayer correctness.
+
+CI runs quality checks, input/component browser suites, a production dependency
+audit, and integration tests against its own PostgreSQL 16 service.
 
 ## What's in the box
 
@@ -601,6 +632,16 @@ CI runs the same integration tests against its own PostgreSQL 16 service.
 - **Seven one-click games.** Chess, Checkers, Go, Dominoes, Wordy McWordface,
   Mahjong, and Poker Night set up their board, pieces, deck, starting hands,
   bowls, or chip stacks as appropriate.
+- **Drawable notecards.** Create cards with freehand drawings, text, paper styles,
+  and portrait/landscape layouts. Cards can be flipped and organized into stacks;
+  reusable notecard templates are saved separately from room inventories. See
+  [notecard behavior](docs/REFERENCE.md#drawable-notecards).
+- **GM concealment and map fog.** GMs can hide/reveal objects and spawn pieces
+  hidden; hidden objects are omitted from player state and do not collide. Board
+  fog supports manual reveal/cover brushes, adjustable thickness, and session
+  undo. Configurable piece auras reveal fog as visible pieces move. Exploration
+  persists through saves; fog and object hiding are separate controls and do not
+  enforce game rules. See [visibility and fog](docs/REFERENCE.md#object-visibility).
 - **Room presentation and collaboration.** Resizable/recolorable felt, built-in
   or custom equirectangular/cubemap skyboxes, seated name/avatar markers, turn
   tracking, attention pings, a shared timer, scoreboard and GM notes, public chat,
@@ -650,7 +691,7 @@ server/
     auth-context.js    Bearer-user and administrator guards
 
 shared/pieces.js       shared piece physics/render data, registries, geometry, grids, and trays
-postgres/              migrations 001–011, flattened schema, and app-role grants
+postgres/              numbered migrations, flattened schema, and app-role grants
 scripts/               admin roles, icon generation, secret migration, DB integration runner
 test/                  unit/harness tests plus PostgreSQL integration tests
 docs/                  architecture, code reference, credits, release, and design notes
@@ -712,14 +753,16 @@ Nothing is bundled or transpiled — Three.js (via an import map) and Colyseus a
 - **`LIGHTING`** in `public/rendering/core.js` — hemisphere fill, sun, environment-map
   strength (three numbers).
 - **Server limits** in `server.js` — `TABLE_LIMIT` (resizable-table bounds),
-  `SCENE_MAX_BYTES` (snapshot-size guard), `GRID_LIFT_MAX` (maximum grid height),
-  `OVERLAY_MAX` / `OVERLAY_MAX_PER_PLAYER` (placed-template caps), and
-  `ORPHAN_MIN_AGE_MS` (cleanup age guard).
+  `SCENE_MAX_BYTES` (snapshot-size guard), and `GRID_LIFT_MAX` (maximum grid height).
+  Placed-template caps are `OVERLAY_LIMITS.maxRoom` / `maxPerPlayer` in
+  `shared/overlays.js`; the cleanup age guard is `MIN_AGE_MS` in
+  `server/asset-cleanup.js`.
 - **Whiteboard** — `RESOLUTION` and `BOARD` in `public/table/whiteboard.js` control canvas
   resolution and physical size/placement. Replay and protocol limits come from shared
   `WHITEBOARD_LIMITS` in `shared/overlays.js`, used by the client and server.
-- **Input and cameras** — `LEAN_AMOUNT` and `VIEW` in `public/client.js` control the
-  Lean In offset and normal seat camera. `HAND_HOVER` in `public/table/hand.js`
+- **Input and cameras** — `LEAN_AMOUNT` in `public/client.js` controls the Lean In
+  offset; `VIEW` in `public/table/presence.js` controls the normal seat camera.
+  `HAND_HOVER` in `public/table/hand.js`
   controls a dragged hand card's preview height; the tray camera and transition
   live in `public/table/trays.js`. In
   `public/table/controls.js`, `LONG_PRESS_MS` / `LONG_PRESS_SLOP` control touch
@@ -979,8 +1022,8 @@ header and on the lobby's Admin link.
 
 ## Security & production posture
 
-The full accounts / rooms / roles / admin / library-curation layer is built, and the
-hardening pass is complete: admin-gated + validated uploads (glTF magic + external-URI
+Implemented protections include server-side account and room permissions,
+admin-gated library curation, validated uploads (glTF magic + external-URI
 stripping, image magic bytes), Redis-backed per-IP rate limits shared across app
 replicas for uploads and auth, a per-user
 cross-room **live kick**, a socket **push** for the "you're admitted" signal (with a
@@ -989,13 +1032,16 @@ Policy** — `script-src 'self'`, no `unsafe-*`, with Three and Colyseus self-ho
 under `public/vendor/` (no CDN). The first administrator is explicitly provisioned
 from a password file before the public listener opens; ordinary signup never grants admin.
 Remaining optional hardening (post-parse model complexity limits and per-user storage
-caps) is noted in
-`docs/ARCHITECTURE.md`.
+caps) is noted in [the architecture documentation](docs/ARCHITECTURE.md).
+
+For internet-facing deployments, use a reverse proxy with TLS, configure
+`TRUST_PROXY_HOPS` for your actual proxy chain, and keep database/cache ports
+private. Report suspected vulnerabilities privately using [SECURITY.md](SECURITY.md).
 
 ## Notes
 
 - `defineTypes()` (build-step-free schema) is deprecated but works in 0.17.
 - No client build step: Three.js (via import map) and the Colyseus SDK are both
   self-hosted under `public/vendor/` — no third-party CDN fetches at runtime.
-- Releases follow SemVer; see `CHANGELOG.md` for changes and `RELEASING.md` for
-  how a release is cut.
+- Releases follow SemVer; see [CHANGELOG.md](CHANGELOG.md) for changes and
+  [RELEASING.md](docs/RELEASING.md) for how a release is cut.
