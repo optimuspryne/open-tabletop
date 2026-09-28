@@ -1,7 +1,7 @@
 # Account passwords and recovery
 
 Status: implemented, with automated verification completed. The user reported the account flows,
-revised layout and Fastmail setup working on 2026-09-28. This does not certify every device or
+revised layout and configured SMTP setup working on 2026-09-28. This does not certify every device or
 every recovery failure case; the acceptance checklist below remains available for deployment testing.
 
 The user reported the account features working on 2026-09-28. The subsequent approved layout fix
@@ -64,14 +64,15 @@ required. No inbound SMTP listener, local mail server or new web port is introdu
 
 Set these values in the project `.env` when launching with `npm start`, which loads that file.
 Alternatively, supply them through the service manager; a direct `node server.js` invocation must
-explicitly load the environment. Replace the example origin, sender and login with your own:
+explicitly load the environment. Replace the example origin, SMTP host, sender and login with your
+own, and use the port specified by your provider:
 
 ```dotenv
 PUBLIC_ORIGIN=https://tabletop.example.com
-SMTP_HOST=smtp.fastmail.com
-SMTP_PORT=465
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
 SMTP_FROM=tabletop@example.com
-SMTP_USER=your-fastmail-login@example.com
+SMTP_USER=your-smtp-username
 SMTP_PASSWORD_FILE=/etc/open-tabletop/smtp_password
 ```
 
@@ -122,18 +123,18 @@ docker compose up -d --force-recreate app
 An ordinary container restart does not load changed Compose environment values. If this is also a
 code upgrade, rebuild/deploy the updated application image using the normal upgrade procedure.
 
-### Fastmail
+### SMTP provider setup
 
-Fastmail uses `smtp.fastmail.com` with port `465` (implicit TLS), or `587` (STARTTLS).
-Use your actual Fastmail login address for `SMTP_USER` and an address configured for sending from
-that account for `SMTP_FROM`. The public website origin and sender address need not have identical
+Use your provider's documented SMTP hostname, port and authentication username. The application
+uses implicit TLS on port `465` and requires STARTTLS on other ports, commonly `587`.
+Set `SMTP_FROM` to an address your provider authorizes for sending. The public website origin
+and sender address need not have identical
 hostnames. For example, a site at `https://tabletop.example.com` can send from `tabletop@example.com`.
 
-Create a dedicated app password under **Settings → Privacy & Security → Manage app passwords and
-access → New app password**. Name it **Open Tabletop**, select Mail access, and save the generated
-password in the file. Your normal Fastmail login password will not work. Fastmail Basic plans do not
-include SMTP/app-password access. See the official [server settings](https://www.fastmail.help/hc/en-us/articles/1500000278342-Server-names-and-ports)
-and [app-password instructions](https://www.fastmail.help/hc/en-us/articles/360058752854-App-passwords).
+Check your provider's documentation for SMTP access requirements. It may require a dedicated app
+password or SMTP credential instead of your normal account password, and SMTP access may depend
+on your account plan. Where supported, create a dedicated credential for Open Tabletop with only
+the access needed to send mail, and store its password in the configured password file.
 
 Configure the provider's sender/domain verification and DNS requirements with that provider. Test
 actual delivery, spam-folder placement and expired links before relying on email recovery.

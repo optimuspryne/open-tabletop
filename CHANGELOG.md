@@ -9,6 +9,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Made SMTP setup documentation and configuration examples provider-neutral.
 - Landing account header overlap: moved Account security beside Admin in the page header,
   and allowed identity/actions to wrap without overlap on narrow screens.
 - README migration and tuning references, test commands and database-test prerequisites;
@@ -31,7 +32,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Credential changes revoke old sessions/proofs/codes; recovery preserves account ownership and roles.
   Optional TLS SMTP uses Nodemailer; migration 023 and a server restart/client refresh are required.
   See `docs/ACCOUNT_SECURITY.md` for configuration, behavior and validation status.
-  Documented bare-metal and Docker SMTP setup, Fastmail app passwords, exact password-file contents,
+  Documented bare-metal and Docker SMTP setup, provider credentials, exact password-file contents,
   restart requirements and recovery smoke tests. User reported feature, layout and SMTP success.
 
 - Contributor guidance in `CONTRIBUTING.md` and private vulnerability reporting

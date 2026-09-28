@@ -1990,8 +1990,8 @@ admin sandbox for building and testing library assets live. Registered as the
 ### Account passwords, recovery and reset
 
 See [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md) for the API, SMTP configuration and migration 023.
-Its setup guide covers bare-metal environment/password files, Docker secret mounts, Fastmail app
-passwords and delivery/recovery checks. The same SMTP configuration parser serves both deployments.
+Its setup guide covers bare-metal environment/password files, Docker secret mounts, SMTP provider
+credentials and delivery/recovery checks. The same SMTP configuration parser serves both deployments.
 `shared/passwords.js` provides matching 8–128-character password validation. Signup now requires
 `confirmation` with a password; `/host/request` requires a password already set through `/auth/password`.
 `public/account-security.js` owns the masked forms, recovery enrollment and transient proof/code UI;
