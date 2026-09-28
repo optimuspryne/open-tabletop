@@ -403,7 +403,9 @@ importing a room singleton:
   drives _both_ the music player and the credits panel) plus `SFX_CREDITS` and
   `LIB_CREDITS`. The CC-BY music makes the in-app credits mandatory, not cosmetic.
 - **`public/ui/icons.js` / `public/ui/equalize.js`** — shared icon/tooltip behavior plus
-  early UI-mode restoration and grouped-action sizing across pages.
+  early UI-mode restoration and grouped-action sizing across pages. Overflow action labels/notes
+  and sheet names/metadata are constructed as text nodes, including stored room and asset names.
+  This boundary prevents HTML injection independently of the page's Content Security Policy.
 - **`public/auth.js` / `public/http.js`** — browser session-token storage and lobby/admin JSON
   requests. Tokens are read on demand, never cached by the helpers. JSON authentication is opt-in;
   the admin adapter always enables it. Uploads, asset packages, collider presets and notecard

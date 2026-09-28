@@ -255,6 +255,13 @@ are text content. An omitted type remains omitted for legacy row callers; admin,
 adapters explicitly use `button`. Icon maps, ARIA labels and room-mutation flags belong to callers.
 `ui/rows.js` keeps its original `makeButton` signature and member-icon fallback for existing imports.
 
+`ui/icons.js` builds `overflowRow` action labels/notes and `openActionSheet` subject names/metadata
+with DOM elements and `textContent`. These fields are plain text, never HTML; callers can pass
+stored room/asset names without escaping. Optional notes/metadata still omit their elements when
+empty, and `applyIcons` derives accessible names from the literal `.lbl` text. The component
+suite exercises injection-shaped strings, icons, callbacks, confirmations and dismissal through
+`overflowMenu` and `openActionSheet` on desktop/touch in both compact/full modes.
+
 The main client composition has no cycles: `shared` feeds `core`/`graphics`, `client` imports the
 focused `table` modules and injects their mutable dependencies, and the remaining side branches are
 `controls` plus `audio ← credits`. `collider-debug` imports only static rendering dependencies and

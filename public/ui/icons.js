@@ -91,11 +91,16 @@ function overflowRow(item, done) {
     .filter(Boolean)
     .join(' ');
   if (item.icon) row.dataset.icon = item.icon;
-  row.innerHTML =
-    '<span class="lbl">' +
-    item.label +
-    '</span>' +
-    (item.note ? '<span class="sheetNote">' + item.note + '</span>' : '');
+  const label = document.createElement('span');
+  label.className = 'lbl';
+  label.textContent = item.label;
+  row.append(label);
+  if (item.note) {
+    const note = document.createElement('span');
+    note.className = 'sheetNote';
+    note.textContent = item.note;
+    row.append(note);
+  }
   row.onclick = () => {
     item.fn();
     if (done) done();
@@ -114,8 +119,14 @@ export function openActionSheet(subject, items, host) {
   grab.className = 'sheetGrab';
   const head = document.createElement('div');
   head.className = 'sheetHead';
-  head.innerHTML =
-    '<b>' + subject.name + '</b>' + (subject.meta ? '<span>' + subject.meta + '</span>' : '');
+  const name = document.createElement('b');
+  name.textContent = subject.name;
+  head.append(name);
+  if (subject.meta) {
+    const meta = document.createElement('span');
+    meta.textContent = subject.meta;
+    head.append(meta);
+  }
   sheet.append(grab, head);
   for (const item of items) {
     if (!item.confirm) {

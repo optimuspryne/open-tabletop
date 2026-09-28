@@ -39,6 +39,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   dice stay visible. Restart the server and refresh all clients; no database migration is needed.
 
 ### Fixed
+- Render overflow action labels/notes and touch action-sheet names/metadata as plain text,
+  preventing stored room or asset names from injecting HTML. Existing classes, icons, accessible
+  labels, confirmation and close behavior are retained. Browser regressions cover desktop/touch
+  and compact/full modes. Refresh browsers; no server restart or migration is required.
 - Make the native installer test fixture resolve Node from the test runner's executable,
   fixing package-setup checks on CI hosts without `/usr/bin/node`. Production installer
   paths and runtime validation remain unchanged; no server restart is needed.

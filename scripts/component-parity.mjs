@@ -2288,6 +2288,70 @@ const SCENES = [
       template.remove();`,
   },
   {
+    name: 'overflow-text-safety',
+    root: '#overflowTextFixture',
+    expect: { selector: '#overflowTextFixture .sheetHead b', min: 1 },
+    drive: `
+      const { overflowMenu, openActionSheet } = await import('/ui/icons.js');
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const host = document.createElement('div');host.id='overflowTextFixture';document.body.append(host);
+      const subject = {
+        name:'<em data-overflow-injected="name">Room &amp; asset</em>',
+        meta:'<i data-overflow-injected="meta">Metadata</i>',
+      };
+      const label='<strong data-overflow-injected="label">Rename</strong>';
+      const note='<span data-overflow-injected="note">Public &amp; private</span>';
+      const checkRow = row => {
+        assert(row.querySelector('.lbl').textContent===label,'Action label was parsed as HTML');
+        assert(row.querySelector('.sheetNote').textContent===note,'Action note was parsed as HTML');
+        assert(row.getAttribute('aria-label')===label,'Accessible action name changed');
+        assert(row.querySelector('.ico use').getAttribute('href')==='#i-cursor-text','Action icon changed');
+      };
+      const checkHead = sheet => {
+        assert(sheet.querySelector('.sheetHead b').textContent===subject.name,'Subject name was parsed as HTML');
+        assert(sheet.querySelector('.sheetHead span').textContent===subject.meta,'Subject metadata was parsed as HTML');
+      };
+      let actions=0;
+      const item={label,note,icon:'cursor-text',fn:()=>actions++};
+      for (const compact of [false,true]) {
+        document.body.classList.toggle('ui-compact',compact);
+        document.body.classList.toggle('ui-full',!compact);
+        const group=overflowMenu(subject,[item],{host});host.append(group);
+        const popup=group.querySelector('.overflowMenu');
+        checkRow(group.querySelector('.sheetItem')); // built even before the menu is opened
+        group.querySelector('.overflowTrigger').click();
+        const sheet=host.querySelector('.sheet-backdrop');
+        if (matchMedia('(pointer: coarse)').matches) {
+          assert(sheet,'Touch trigger did not open the sheet');checkHead(sheet);
+        } else assert(!popup.hidden,'Desktop menu did not open');
+        const menu=sheet || document.querySelector('.overflowMenu:not([hidden])');
+        checkRow(menu.querySelector('.sheetItem'));
+        const before=actions;menu.querySelector('.sheetItem').click();
+        assert(actions===before+1,'Action callback did not fire once');
+        assert(!host.querySelector('.sheet-backdrop') && popup.hidden,'Action did not close its menu');
+        group.remove();
+
+        // The shared sheet also handles destructive actions and omitted optional text.
+        const confirmation=openActionSheet(subject,[{...item,confirm:'Confirm this action',cls:'danger'}],host);
+        checkHead(confirmation);checkRow(confirmation.querySelector('.sheetItem'));
+        const wrap=confirmation.querySelector('.sheetDanger');
+        const beforeConfirm=actions;
+        wrap.querySelector('.sheetItem').click();
+        assert(wrap.classList.contains('confirming') && actions===beforeConfirm,'Confirmation fired the action too early');
+        wrap.querySelector('.sheetConfirmActions button').click();
+        assert(!wrap.classList.contains('confirming') && actions===beforeConfirm,'Cancel did not preserve the action');
+        wrap.querySelector('.sheetItem').click();
+        wrap.querySelector('.sheetConfirmActions .button--danger').click();
+        assert(actions===beforeConfirm+1 && !host.querySelector('.sheet-backdrop'),'Confirmation did not execute and close');
+        const plain=openActionSheet({name:subject.name},[{label,icon:'cursor-text',fn:()=>{}}],host);
+        assert(!plain.querySelector('.sheetHead span, .sheetNote'),'Empty optional fields created extra elements');
+        assert(!document.querySelector('[data-overflow-injected]'),'User text created injected elements');
+        plain.remove();
+      }
+      document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
+      openActionSheet(subject,[item],host);`,
+  },
+  {
     // Regression guard. The overflow menu is a .pop-group whose shape matches what
     // wirePopGroups claims, so the generic wiring used to attach a SECOND click handler to the
     // trigger: the first opened and portaled the menu, the second read it as already-open and
