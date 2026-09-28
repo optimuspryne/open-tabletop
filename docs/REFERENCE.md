@@ -12,6 +12,35 @@ modules and schemas are not current API contracts.
 For release 0.19.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0190)
 (migrations 018–021, client refresh, source dependencies and ZIP transfer limits).
 
+### Native host deployment
+
+- `linux/open-tabletop.sh`: `main` accepts `install` / `update`; `prepare_source` fetches
+  `SOURCE_REPO` / `SOURCE_REF` or reads `SOURCE_ARCHIVE`, checks required archive entries,
+  computes `SOURCE_ID`, and extracts `proxmox/install.sh` from the same revision. It checks
+  `--check-platform` before provisioning, rejecting older companions without Linux support. `usage` and
+  `fail` provide command help and error reporting. Pass bootstrap username/email on install.
+- `proxmox/install.sh`: shared `main` accepts `install` / `upgrade` and a read-only `--check-platform`;
+  `OTT_INSTALL_PROFILE=linux`
+  selects ordinary hosts, while the default `proxmox` profile preserves Debian 13, PostgreSQL 16,
+  Node.js 26 and UID/GID 1000 for existing LXC/NFS mappings. `detect_platform` selects supported
+  distro versions and Redis/Valkey service/CLI names. `install_packages` / `install_apt_packages`
+  provision dependencies; `apt_update` retains its bounded retry behavior. `initialize_postgres`
+  initializes Fedora/Arch clusters only when `PG_VERSION` is absent. `create_app_user` allocates
+  a system account on Linux and rejects existing account/group conflicts. `configure_database_auth`
+  preserves the HBA file and prepends an application-scoped localhost SCRAM rule for Linux.
+- Both paths preserve the separate migration/runtime database roles, password files, bootstrap
+  admin credentials, release directories, database dump before update, and HTTP readiness check.
+  Fresh databases explicitly revoke public schema creation from PUBLIC and grant it to the
+  migration role, preserving the runtime boundary on PostgreSQL 14 as well as newer versions.
+  Updates leave host packages and configuration alone. No new database migration is introduced.
+- `test/linux-installer.js` checks distro selection, package commands, account allocation,
+  existing cluster preservation, source preparation, real install/update orchestration with
+  mocked system commands, backup failure, and dependency/readiness failure. `npm run check`,
+  `npm run test:integration` (PostgreSQL 16), and a PostgreSQL 14 smoke test of the installer’s
+  actual role/grant SQL passed during implementation. Live distro and
+  reboot tests remain pending. See [Linux host installation](../README.md#linux-host-installer)
+  for commands, paths, ports, supported versions, and manual acceptance checks.
+
 ### Object visibility
 
 - `Piece.hidden` is a boolean appended to the schema. `State.pieces` uses Colyseus view filtering.

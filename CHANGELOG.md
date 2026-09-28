@@ -9,6 +9,13 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- A regular Linux host installer for systemd Debian 12/13, Ubuntu 22.04/24.04/26.04 LTS,
+  Fedora and Arch. It shares the Proxmox native deployment flow, adds distro package/cache
+  selection and PostgreSQL initialization, and allocates a system account without claiming
+  UID 1000. Source revisions/archives, separate database roles, credentials, release switching,
+  backup-before-update and readiness checks are retained. Proxmox keeps its existing package
+  pins and NFS UID mapping. Command-mocked tests are provided; live distro installation and
+  reboot acceptance remain pending. No application migration or browser UI change is required.
 - GM-configured piece fog auras, with the approved circle menu entry, room-unit radius and local
   preview. Moving a visible tabletop piece reveals a persistent circular path through map fog;
   hidden pieces pause their auras. Settings survive scene/game saves. Manual fog controls remain

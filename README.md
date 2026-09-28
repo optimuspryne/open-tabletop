@@ -379,6 +379,84 @@ After the app starts, create an account and promote it explicitly:
 docker exec open-tabletop-app npm run admin:grant -- your@email.example
 ```
 
+### Linux host installer
+
+[`linux/open-tabletop.sh`](linux/open-tabletop.sh) installs directly on a regular **systemd**
+Linux host or VM: Debian 12/13, Ubuntu 22.04/24.04/26.04 LTS, package-managed Fedora, or Arch Linux.
+Use a dedicated host with current distro packages. Fedora Atomic desktops and non-systemd
+variants are outside this installer’s scope. Full VM installation testing on each distro is
+still pending; automated command-mocked tests cover provisioning and update behavior.
+
+It reuses the Proxmox native installer for releases, separate database roles, credentials,
+upload storage, backups, and the non-root systemd service. Debian/Ubuntu use NodeSource Node.js 26,
+the distro’s PostgreSQL package, and Redis. Fedora/Arch use their Node.js/npm, PostgreSQL, and
+Valkey packages ([Fedora package](https://packages.fedoraproject.org/pkgs/valkey/valkey/),
+[Arch package](https://archlinux.org/packages/extra/x86_64/valkey/)); Node.js 22.12 or newer
+is required. Arch installation runs a full
+`pacman -Syu --needed --noconfirm` to avoid partial upgrades. Install `git` first for repository
+fetches (`apt install git`, `dnf install git`, or `pacman -Syu git` as appropriate).
+
+From a checkout containing this launcher, install a **pushed** revision with:
+
+```bash
+sudo env SOURCE_REF=main BOOTSTRAP_ADMIN_EMAIL=you@example.com \
+  bash linux/open-tabletop.sh install
+```
+
+The source defaults to `https://github.com/optimuspryne/open-tabletop.git` at `main`.
+Use a tag or full commit ID for `SOURCE_REF` to select a revision, or override `SOURCE_REPO`.
+The installer is extracted from that same source archive. The selected revision must include
+this Linux-capable companion installer; an older pushed revision will not gain Linux support
+from a newer launcher alone. Admin username defaults to `admin`; omitting the email prompts for it.
+
+To test these local changes **before pushing**, package the tracked working-tree files
+(including edited files), then pass that trusted archive:
+
+```bash
+git ls-files -z | tar --null -T - -cf /tmp/open-tabletop-source.tar
+sudo env SOURCE_ARCHIVE=/tmp/open-tabletop-source.tar BOOTSTRAP_ADMIN_EMAIL=you@example.com \
+  bash linux/open-tabletop.sh install
+```
+
+This packaging command excludes untracked files, including new application files; add any
+required new files explicitly to your archive. Archives must contain root-level `package.json`,
+`package-lock.json`, `server.js`, and `proxmox/install.sh`. Only use source and archives you trust:
+the companion installer executes as root. Downloading dependencies still requires internet access.
+
+Open `http://HOST-IP:2567` after installation. Credentials are stored with root-only permissions
+in `/root/open-tabletop-credentials.txt`; configuration and password files are in
+`/etc/open-tabletop/`. The installer allocates an `open-tabletop` system account without taking
+UID 1000. Uploads live at `/var/lib/open-tabletop/assets`; releases live under
+`/opt/open-tabletop/releases/`, with `current` pointing to the active release.
+PostgreSQL uses local port 5432; Redis/Valkey uses 6379. Linux setup adds a localhost SCRAM rule
+only for the `tabletop` database and its two roles, preserving other PostgreSQL access rules.
+It requires unused `open-tabletop` user/group and `tabletop`/`tabletop_app` database roles on
+first installation; it does not adopt an existing manual or Docker deployment.
+
+Firewall rules, TLS/reverse proxy configuration, and SELinux policy remain host-managed.
+Allow inbound TCP 2567 only on the intended network, or proxy it through your existing HTTPS
+endpoint; keep database/cache ports private. Set proxy trust in
+`/etc/open-tabletop/open-tabletop.env` if needed (see the deployment configuration above).
+For mounted upload storage, prepare ownership for `id -u open-tabletop` / `id -g open-tabletop`
+on that host and ensure the mount is available before starting the service; the installer
+checks writability and does not change mount-point ownership.
+
+```bash
+sudo env SOURCE_REF=main bash linux/open-tabletop.sh update
+sudo journalctl -u open-tabletop -n 100 --no-pager
+```
+
+Updates also accept `SOURCE_ARCHIVE`, preserve credentials/configuration, and create a database
+dump in `/var/backups/open-tabletop/` before switching releases and restarting the service.
+They do not upgrade OS packages or PostgreSQL major versions. Back up uploaded files separately;
+for rollback, restore both the database dump and the matching old release because migrations
+may not be reversible. Interrupted fresh installs may leave accounts, roles, or configuration:
+inspect the failure before retrying; the installer does not delete or overwrite that state.
+
+Manual acceptance remains: fresh install and reboot on each distro, administrator login,
+asset upload, two-client room connection, then update with data and credentials preserved.
+The installer restarts the application; refresh clients after an application update.
+
 ### Local Proxmox LXC installer
 
 The scripts in [`proxmox/`](proxmox/) provide a local, Community Scripts-style deployment while
@@ -579,7 +657,8 @@ docs/                  architecture, code reference, credits, release, and desig
 docker/                first-start least-privilege Postgres role setup
 Dockerfile             production Node 24 image
 docker-compose.yml     app + Postgres + Redis with Docker secret files
-proxmox/               host LXC launcher and in-container bare-metal installer
+proxmox/               host LXC launcher and shared native installer
+linux/                 regular Linux host launcher
 
 public/
   index.html/landing.js    lobby, authentication, room list, and host requests

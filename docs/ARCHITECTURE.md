@@ -431,10 +431,18 @@ importing a room singleton:
   fresh-install baseline that also seeds `schema_migrations`), `docs/` (these
   documents), `docker/` (`init-app-role.sh`, which creates the least-privilege app
   role on first DB start; the `Dockerfile` itself lives at the repo root), and
-  `proxmox/` (the host-side LXC launcher and matching in-container bare-metal
-  installer, extracted from the same selected source revision; the unprivileged
-  Debian 13 LXC enables nesting for Redis's systemd user namespace and waits for
-  an IPv4 address and default route before starting package setup).
+  `proxmox/` (the host-side LXC launcher and shared native installer, extracted from
+  the same selected source revision), plus `linux/` (the regular systemd Linux host
+  launcher). Platform helpers own package installation, PostgreSQL initialization,
+  cache service selection and account allocation; release activation, credentials,
+  least-privilege database roles, backup and readiness remain shared. Linux uses a
+  dynamically allocated system UID and distro PostgreSQL; the Proxmox profile keeps
+  PostgreSQL 16 and UID/GID 1000 for existing unprivileged NFS mappings. The Debian 13
+  LXC enables nesting for Redis's systemd user namespace and waits for an IPv4 address
+  and default route before starting package setup. Linux PostgreSQL authentication
+  adds only a localhost rule for the app database/roles. OS upgrades, firewall, TLS,
+  SELinux policy and external mounts remain operator responsibilities. App updates
+  preserve configuration and do not perform PostgreSQL major upgrades.
 
 ## Trust and failure boundaries
 
