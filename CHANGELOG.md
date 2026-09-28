@@ -20,6 +20,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 
 ### Added
+- Contributor guidance in `CONTRIBUTING.md` and private vulnerability reporting
+  instructions in `SECURITY.md`, using `admin@open-tabletop.com`.
 - A source security audit with isolated reproductions of unauthenticated duplicate-room
   creation/save overwrite, admin-only legacy inline-image script hosting, and an encoded-URL
   bypass of the asset JSON guard. See `docs/SECURITY_AUDIT_2026-09-28.md`; remediation is recorded above and in the audit.
