@@ -400,7 +400,7 @@ test('scene persistence preserves the exact remaining dispenser inventory', () =
 
 test('final save persists hands without table pieces and restores them on reopen', async () => {
   const room = serializationRoom();
-  room.roomId = 'room';
+  room.persistentRoomId = 'room';
   room.state.pieces.clear();
   room.state.scores = new Map();
   room.pendingTurn = 'departed';

@@ -1455,8 +1455,9 @@ over all random-name JPG/JPEG/PNG uploads. Its status endpoint exposes scan/buil
 totals, repeat starts reuse the running job, and neither the originals nor database references change.
 
 Room-facing library operations are composed through `server/game/library.js`. `TableRoom` keeps
-small `saveDeckById` and `sendAssetList` forwarding methods so existing handlers retain their room
-contract. Filesystem writing and database access remain injected; message validation, creation and
+`sendAssetList` forwarding for authorized list delivery. The obsolete `saveDeckById` facade and
+inline-image writer were removed; current editor saves use uploaded references through
+`deckBegin`/`deckAppend`/`deckFinish`. Database access stays injected; message validation, creation and
 curation permissions, and asset-specific load/spawn rules remain visible in the library handlers.
 
 Separately, each **room** persists its non-piece **settings** — scoreboard, GM
@@ -1923,7 +1924,7 @@ handler explains the exit and removes its stale reconnection token.
   `drawToHand`, `dealDrag`, `takeCard`, `playCard`, `handToTable`, `reorderHand`, `shuffle`,
   `splitDeck`, `drawInspect`,
   `inspectPlace`, `recolor`, `deckBegin`/`deckAppend`/`deckFinish`,
-  `saveDeck`/`listDecks`/`loadDeck`, `saveProp`/`listProps`/`loadProp`,
+  `listDecks`/`loadDeck`, `saveProp`/`listProps`/`loadProp`,
   `removePropDispenser` (admin-only targeted custom-dispenser removal),
   `listBoards`/`saveBoard`/`loadBoard`, `sceneSave`/`sceneLoad`/`listScenes`,
   `saveSkybox`/`listSkyboxes`/`skybox`,
@@ -1986,6 +1987,21 @@ New rooms start **empty**
 
 ## Accounts, rooms & roles
 
+The [2026-09-28 security audit](SECURITY_AUDIT_2026-09-28.md#remediation) has source fixes
+for SEC-01 through SEC-03. Static authentication checks access before matchmaking allocation;
+public explicit `create` is disabled. `onJoin` reauthorizes against the actual room and registers
+revocation tracking, preserving spectator initialization and reconnect checks. Colyseus transport
+IDs remain unique; database operations use `persistentRoomId`. A process-local writer claim is
+held from before state loading through final save. Only an admitted owning instance may persist;
+failed creations and unused reservations cannot overwrite a checkpoint. This assumes the existing
+single-server deployment, not a distributed multi-server writer lease.
+
+The obsolete `saveDeck` inline-image saver is removed. Uploaded files are served only when the
+decoded URL has an approved category, generated 18-hex filename and raster/GLB extension.
+Explicit MIME types, `nosniff` and a sandbox CSP apply; metadata and old executable uploads are
+inaccessible even through encoded suffixes. Encoded separators and malformed URLs are rejected.
+Original files are retained. Non-generated legacy media names require supported re-uploading.
+
 The lobby/auth layer is built and enforced server-side. **Postgres** holds
 accounts (passwords hashed with scrypt in `auth.js`; every browser credential is
 stored only as a hash in an expiring `user_sessions` row), rooms, and per-room membership; asset **files** stay
@@ -1994,7 +2010,7 @@ environment, never code.
 
 **Accounts.** A _player_ is passwordless (display name + device token); a _host_
 has a password. Each browser login has its own hashed, expiring row in
-`user_sessions`, so devices coexist and can be revoked independently. `onAuth`
+`user_sessions`, so devices coexist and can be revoked independently. Join authorization
 resolves the token to a user and uses the live room's own code to resolve membership,
 admits only admitted members (else rejects with a waiting/forbidden message), and
 stamps the membership **role** — and the account's admin flag — onto the connection
@@ -2027,12 +2043,12 @@ outside the database rollback.
 require-approval gate; roles rank **owner → GM → helper → player** (`RANK`), and
 every privileged handler checks `this.rank(client)` — spawn = helper+,
 reshape/reset/board = GM+, member management = GM+. **Admins** are a global flag
-(`is_admin`), threaded through `onAuth` as `client.auth.isAdmin`: they join any
+(`is_admin`), threaded through join authorization as `client.auth.isAdmin`: they join any
 room as an owner and can act on private library assets anywhere. GMs manage members
 (admit / kick / promote) live from the Members panel; the server pushes
 `memberList` to GMs plus a pending-join pulse. The existing `memberRow` builder owns
 identity/status and action presentation; narrow dock rows use a separate identity block and
-wrapping two-column action grid, retaining the same membership callbacks and server authority. Because `onAuth` turns a _pending_
+wrapping two-column action grid, retaining the same membership callbacks and server authority. Because authorization turns a _pending_
 joiner away from the table, they instead hold a socket to a tiny per-code
 **`LobbyRoom`** while waiting; on admit/decline the table room calls into that lobby
 (via the matchmaker) to push `admitted`/`declined` and release them — instant, with a

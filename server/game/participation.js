@@ -20,7 +20,7 @@ export function createParticipationService({ db, roomAccess }) {
   function setPlayerTimeout(room, client, message) {
     const { userId, timedOut } = message;
     const isLive = (targetRole) =>
-      !!room.roomId &&
+      !!room.persistentRoomId &&
       canUseRoomCapability(client.auth ?? {}, 'administration') &&
       room.rank(client) >= RANK.gm &&
       (!targetRole || canManageMember(room.rank(client), targetRole)) &&
@@ -29,7 +29,7 @@ export function createParticipationService({ db, roomAccess }) {
       if (!isLive()) return;
       const policy = await db.setPlayerTimeout(
         {
-          roomId: room.roomId,
+          roomId: room.persistentRoomId,
           actorId: client.auth.userId,
           userId,
           timedOut,
@@ -54,7 +54,7 @@ export function createParticipationService({ db, roomAccess }) {
   }
   function setParticipation(room, client, { participation }, { acknowledge = true } = {}) {
     const userId = String(client.auth?.userId);
-    const isLive = () => !!room.roomId && canUseRoomCapability(client.auth, 'personal');
+    const isLive = () => !!room.persistentRoomId && canUseRoomCapability(client.auth, 'personal');
     return queue(room, userId, async () => {
       if (!isLive()) return false;
       const finish = roomAccess.beginParticipationChange(room, userId);
@@ -80,7 +80,7 @@ export function createParticipationService({ db, roomAccess }) {
           }
         }
         const policy = await db.setSelfParticipation(
-          { roomId: room.roomId, userId, participation },
+          { roomId: room.persistentRoomId, userId, participation },
           isLive,
         );
         if (!policy) {

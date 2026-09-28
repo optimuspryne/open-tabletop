@@ -27,7 +27,6 @@ const messagesByCapability = {
     'deckBegin',
     'deckAppend',
     'deckFinish',
-    'saveDeck',
     'saveBoard',
     'saveMat',
     'saveProp',

@@ -2,8 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createLibraryOperations } from '../server/game/library.js';
 
-const data = (value) => `data:image/png;base64,${value}`;
-
 function harness() {
   const calls = [];
   const db = {
@@ -11,13 +9,7 @@ function harness() {
       calls.push(['insertDeck', record]);
     },
   };
-  const operations = createLibraryOperations({
-    db,
-    saveImageRef(value, kind) {
-      calls.push(['saveImageRef', value, kind]);
-      return value.includes('invalid') ? null : `/assets/${kind}/${calls.length}.png`;
-    },
-  });
+  const operations = createLibraryOperations({ db });
   const room = {
     deckCards: new Map(),
     state: { pieces: new Map() },
@@ -34,45 +26,6 @@ const client = ({ admin = false } = {}) => ({
   send(type, payload) {
     this.sent.push([type, payload]);
   },
-});
-
-test('saving a table deck normalizes its name and stores inline art through the injected writer', async () => {
-  const { calls, operations, room } = harness();
-  room.state.pieces.set('deck', {
-    type: 'deck',
-    props: JSON.stringify({ back: data('back') }),
-  });
-  room.deckCards.set('deck', ['ace', data('front'), data('invalid')]);
-
-  assert.equal(await operations.saveDeckById(room, 'deck', '  Saved deck  ', 'owner'), true);
-  assert.deepEqual(calls, [
-    ['saveImageRef', data('back'), 'decks'],
-    ['saveImageRef', data('front'), 'decks'],
-    ['saveImageRef', data('invalid'), 'decks'],
-    [
-      'insertDeck',
-      {
-        name: 'Saved deck',
-        back: '/assets/decks/1.png',
-        fronts: ['ace', '/assets/decks/2.png', data('invalid')],
-        ownerId: 'owner',
-      },
-    ],
-  ]);
-});
-
-test('invalid table decks and empty names do not write library records', async () => {
-  const { calls, operations, room } = harness();
-  room.state.pieces.set('card', { type: 'card', props: '{}' });
-  room.deckCards.set('card', ['ace']);
-  room.state.pieces.set('deck', { type: 'deck', props: '{}' });
-  room.deckCards.set('deck', []);
-  assert.equal(await operations.saveDeckById(room, 'missing', 'name'), false);
-  assert.equal(await operations.saveDeckById(room, 'card', 'name'), false);
-  assert.equal(await operations.saveDeckById(room, 'deck', 'name'), false);
-  room.deckCards.set('deck', ['ace']);
-  assert.equal(await operations.saveDeckById(room, 'deck', '   '), false);
-  assert.deepEqual(calls, []);
 });
 
 test('asset listings map every kind to its database reader and client message', async () => {
@@ -133,14 +86,8 @@ test('revoked clients and unknown asset kinds fail without a database read', asy
 
 test('library database failures propagate to the existing safe message boundary', async () => {
   const { db, operations, room } = harness();
-  room.state.pieces.set('deck', { type: 'deck', props: '{}' });
-  room.deckCards.set('deck', ['ace']);
-  db.insertDeck = async () => {
-    throw new Error('insert unavailable');
-  };
   db.listDecks = async () => {
     throw new Error('list unavailable');
   };
-  await assert.rejects(operations.saveDeckById(room, 'deck', 'name'), /insert unavailable/);
   await assert.rejects(operations.sendAssetList(room, client(), 'deck'), /list unavailable/);
 });

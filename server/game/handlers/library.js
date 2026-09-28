@@ -6,7 +6,6 @@ import {
   deckAppendPayload,
   deckBeginPayload,
   deckFinishPayload,
-  namedIdPayload,
   saveBoardPayload,
   saveDicePayload,
   saveMatPayload,
@@ -124,14 +123,6 @@ export function registerLibraryHandlers(
     await room.sendAssetList(client, 'deck');
   });
 
-  assetMessage('saveDeck', async (client, message) => {
-    if (!room.isAdmin(client)) return;
-    const msg = namedIdPayload(message, { idKey: 'deckId' });
-    if (!msg) return;
-    if (await room.saveDeckById(msg.deckId, msg.name, client.auth.userId)) {
-      await room.sendAssetList(client, 'deck');
-    }
-  });
   assetMessage('listDecks', (client) => room.sendAssetList(client, 'deck'));
   assetMessage('loadDeck', async (client, message) => {
     if (room.rank(client) < RANK.helper) return;

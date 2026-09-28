@@ -5,12 +5,12 @@ import { RANK, canUseRoomCapability } from '../permissions.js';
 export function createMemberService({ db, matchMaker }) {
   const sendMembers = async (room, client) => {
     if (
-      !room.roomId ||
+      !room.persistentRoomId ||
       !canUseRoomCapability(client.auth ?? {}, 'administration') ||
       room.rank(client) < RANK.gm
     )
       return;
-    const list = await db.listMembers(room.roomId);
+    const list = await db.listMembers(room.persistentRoomId);
     if (!canUseRoomCapability(client.auth ?? {}, 'administration') || room.rank(client) < RANK.gm)
       return;
     client.send(
@@ -23,8 +23,8 @@ export function createMemberService({ db, matchMaker }) {
   };
 
   const broadcastMembers = async (room) => {
-    if (!room.roomId) return;
-    const list = await db.listMembers(room.roomId);
+    if (!room.persistentRoomId) return;
+    const list = await db.listMembers(room.persistentRoomId);
     for (const client of room.clients)
       if (canUseRoomCapability(client.auth ?? {}, 'administration') && room.rank(client) >= RANK.gm)
         client.send(

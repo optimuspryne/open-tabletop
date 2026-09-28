@@ -27,7 +27,7 @@ function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}
   const handlers = new Map();
   const events = [];
   const room = {
-    roomId: 'room-1',
+    persistentRoomId: 'room-1',
     savedScene: null,
     notebooks: new Map(),
     nextScoreId: 1,
@@ -210,7 +210,7 @@ test('durable room serialization includes settings, score rows, scene, and scale
   });
   assert.deepEqual(calls, [
     [
-      room.roomId,
+      room.persistentRoomId,
       {
         scoreboard: [{ id: 's1', label: 'Heroes', score: 7 }],
         notes: 'notes',
@@ -276,7 +276,7 @@ test('manual Save acknowledges only after durable completion and reports write f
 
 test('manual Save never claims durability for a nonpersistent table', async () => {
   const { room, handlers } = harness();
-  room.roomId = null;
+  room.persistentRoomId = null;
   const user = client();
   await handlers.get('stateSave')(user);
   assert.equal(user.sent[0].type, 'sceneError');

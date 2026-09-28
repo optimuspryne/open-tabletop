@@ -6,7 +6,6 @@ const MESSAGE_NAMES = [
   'deckBegin',
   'deckAppend',
   'deckFinish',
-  'saveDeck',
   'listDecks',
   'loadDeck',
   'saveBoard',
@@ -69,10 +68,6 @@ function harness({ admin = true, rank = 3 } = {}) {
     },
     async sendAssetList(...args) {
       calls.push({ name: 'sendAssetList', args });
-    },
-    async saveDeckById(...args) {
-      calls.push({ name: 'saveDeckById', args });
-      return true;
     },
     serializeScene(...args) {
       calls.push({ name: 'serializeScene', args });
@@ -586,4 +581,33 @@ test('private deck data is suppressed if participation policy starts loading dur
     actor.sent.some(({ type }) => type === 'deckData'),
     false,
   );
+});
+
+test('uploaded deck and tile references survive edit and clone saves', async () => {
+  for (const open of [false, true]) {
+    for (const editId of ['42', undefined]) {
+      const { handlers, calls } = harness();
+      const user = client();
+      const back = '/assets/decks/0123456789abcdef01.png';
+      const front = '/assets/decks/0123456789abcdef02.webp';
+      const fronts = open ? [{ front, back }] : [front];
+      await handlers.get('deckBegin')(user, { back, open });
+      await handlers.get('deckAppend')(user, { fronts });
+      await handlers.get('deckFinish')(user, { name: 'Saved', editId, spawn: false });
+      const operation = calls.find(({ name }) => name === (editId ? 'updateDeck' : 'insertDeck'));
+      assert.ok(operation);
+      if (editId) {
+        assert.deepEqual(operation.args.slice(0, 4), [editId, 'Saved', back, fronts]);
+        assert.equal(operation.args[5], open);
+      } else {
+        assert.equal(operation.args[0].back, back);
+        assert.deepEqual(operation.args[0].fronts, fronts);
+        assert.equal(operation.args[0].open, open);
+      }
+      assert.equal(
+        calls.some(({ name }) => name === 'spawn'),
+        false,
+      );
+    }
+  }
 });

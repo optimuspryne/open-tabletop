@@ -29,7 +29,7 @@ function harness() {
   };
   const service = createMemberService({ db, matchMaker });
   const room = {
-    roomId: 'room-1',
+    persistentRoomId: 'room-1',
     roomCode: 'CODE',
     clients: [],
     rank(client) {
@@ -42,7 +42,7 @@ function harness() {
 test('member lists require a persistent room and a live GM rank', async () => {
   const { calls, room, service } = harness();
   await service.sendMembers(room, actor(1));
-  room.roomId = null;
+  room.persistentRoomId = null;
   await service.sendMembers(room, actor(3));
   assert.deepEqual(calls, []);
 });

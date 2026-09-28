@@ -195,7 +195,7 @@ for (const operation of ['kick', 'setRole']) {
     const handlers = new Map();
     let resolveRead;
     const room = {
-      roomId: 'room',
+      persistentRoomId: 'room',
       onMessage(type, handler) {
         handlers.set(type, handler);
       },

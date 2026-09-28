@@ -38,7 +38,7 @@ export function registerRoomStateHandlers(
     'stateSave',
     async (client) => {
       if (room.rank(client) < RANK.gm) return;
-      if (!room.roomId) {
+      if (!room.persistentRoomId) {
         client.send('sceneError', { message: 'This table has no persistent room to save.' });
         return;
       }
@@ -194,7 +194,7 @@ export function scheduleRoomSave(
   room,
   { delay = 800, setTimer = setTimeout, logger = console } = {},
 ) {
-  if (!room.roomId || room._saveTimer) return;
+  if (!room.persistentRoomId || room._saveTimer) return;
   room._saveTimer = setTimer(() => {
     room._saveTimer = null;
     void safeRoomTask(room, 'saveState', null, () => room.saveStateNow(), {
@@ -214,7 +214,7 @@ export async function saveFinalRoomState(room, { sceneMaxBytes, clearTimer = cle
 }
 
 export async function saveRoomStateNow(room, { db }) {
-  if (!room.roomId) return;
+  if (!room.persistentRoomId) return;
   const scoreboard = [];
   room.state.scores.forEach((row, id) =>
     scoreboard.push({
@@ -223,7 +223,7 @@ export async function saveRoomStateNow(room, { db }) {
       score: row.score,
     }),
   );
-  const roomId = room.roomId;
+  const roomId = room.persistentRoomId;
   const payload = structuredClone({
     scoreboard,
     notes: room.state.notes,

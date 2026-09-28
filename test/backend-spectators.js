@@ -36,7 +36,7 @@ function harness() {
   const seatOptions = { seatFor: service.seatFor, palette: ['red', 'blue'] };
   const room = {
     roomCode: 'CODE',
-    roomId: 'room',
+    persistentRoomId: 'room',
     connectionLimit: MAX_ROOM_CLIENTS,
     state: {
       players: new Map(),

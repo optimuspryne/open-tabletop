@@ -59,6 +59,8 @@ export function createRoomAccess({ db, hashToken }) {
   async function readAccess(room, kind, tokenHash) {
     const user = await db.findUserByToken(tokenHash);
     if (!user) throw new ServerError(401, 'Please sign in first.');
+    let persistentRoomId = null;
+    let roomName = '';
     let role = 'owner';
     let timedOut = false;
     let participation = 'player';
@@ -67,6 +69,10 @@ export function createRoomAccess({ db, hashToken }) {
     } else {
       const record = await db.findRoomByCode(room.roomCode);
       if (!record) throw new ServerError(404, 'That room no longer exists.');
+      if (room.persistentRoomId && String(room.persistentRoomId) !== String(record.id))
+        throw new ServerError(403, 'The room identity changed. Please join again.');
+      persistentRoomId = record.id;
+      roomName = record.name;
       const member = await db.getMembership(record.id, user.id);
       if (kind === 'lobby') {
         if (!member || member.status !== 'pending')
@@ -82,6 +88,8 @@ export function createRoomAccess({ db, hashToken }) {
       }
     }
     return {
+      persistentRoomId,
+      roomName,
       userId: user.id,
       username: user.username,
       avatar: user.avatar,
@@ -160,6 +168,24 @@ export function createRoomAccess({ db, hashToken }) {
   }
 
   return {
+    // Matchmaking preflight performs no allocation and installs no client admission.
+    // onJoin must authorize again against the actual room and register revocation tracking.
+    async preflight(options, kind = 'table') {
+      if (typeof options?.token !== 'string' || !options.token || options.token.length > 1024)
+        throw new ServerError(401, 'Please sign in first.');
+      if (
+        kind !== 'editor' &&
+        (typeof options?.code !== 'string' || !options.code || options.code.length > 128)
+      )
+        throw new ServerError(403, 'Invalid room code.');
+      return checkedAccess(
+        { roomCode: options?.code },
+        kind,
+        hashToken(options.token),
+        (auth) => auth,
+      );
+    },
+
     assertActive(room, client) {
       const entry = rooms.get(room)?.get(client.sessionId);
       if (

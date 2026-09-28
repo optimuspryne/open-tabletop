@@ -29,7 +29,7 @@ function harness() {
   const service = createParticipationService({ db, roomAccess });
   const cleanups = [];
   const room = {
-    roomId: 'room',
+    persistentRoomId: 'room',
     roomCode: 'ROOM',
     state: { players: new Map() },
     rank: (c) => (c.auth.role === 'owner' ? 3 : 0),

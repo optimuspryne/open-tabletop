@@ -26,7 +26,7 @@ const GROUP = new Set(
   ),
 );
 const DECK = new Set(
-  'dealToTable drawToHand dealDrag drawInspect shuffle splitDeck browseDeck setDeckBrowseAccess saveDeck'.split(
+  'dealToTable drawToHand dealDrag drawInspect shuffle splitDeck browseDeck setDeckBrowseAccess'.split(
     ' ',
   ),
 );

@@ -294,7 +294,7 @@ classDiagram
     }
     class Server["server.js"] {
         +SIM config
-        +saveAsset() / saveImageRef()
+        +saveAsset()
         +compose extracted message handlers and HTTP routers
     }
     class SyncedSchema["server/game/schema.js"] {
@@ -347,8 +347,8 @@ classDiagram
         bodies, deckCards, cardData, hands, drafts: Map
         notebooks, shows, pendingInspect: Map
         pendingHands, pendingTurn, chatLog
-        +onAuth() rank() isAdmin()
-        +spawn() update() sendHand() saveDeckById() advanceTurn()
+        +onAuth() authorizeJoin() rank() isAdmin()
+        +spawn() update() sendHand() advanceTurn()
         +serialization/restoration facade methods
         +sendMembers/broadcastMembers/sendAssetList/closeAndDispose
         +gameplay + library + member handlers
@@ -1033,8 +1033,8 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
   subfolders `uploads/ decks/ boards/ props/ sky/ dice/ mats/` — **files only** now.
 - **`saveAsset(kind, buf, ext) → /assets/<kind>/<name>`** — writes a random-named
   file into a validated category folder (`assetKind`).
-- **`saveImageRef(dataURL, kind)`** — an inline `data:` image → a disk file → URL.
-- **`isDataURL`**, **`deckRefOk`** — ref validators (kept for the save paths).
+- **`deckRefOk`** bounds card references used by the current draft-saving flow.
+  The obsolete `saveImageRef` writer and `saveDeck` message have been removed.
   _(The old `slugify` / `metaFile` / `listSaved*` / `boardKindLabel` helpers are
   gone — that logic now lives in `db.js`.)_
 
@@ -1434,7 +1434,8 @@ that supply room-specific limits and constructors. Debouncing and the final
 Postgres write remain in `server/game/handlers/room-state.js`.
 
 **`saveFinalRoomState(room, {sceneMaxBytes, clearTimer})`** in that module is called
-by `TableRoom.onDispose()` through `safeRoomTask`. It cancels the pending debounce
+by `TableRoom.onDispose()` through `safeRoomTask`, only for the owning writer after a
+successful admission. Unused reservations and failed/duplicate creations never save. It cancels the pending debounce
 timer, snapshots even hands-only or empty games, and awaits `saveStateNow()`.
 Snapshots exceeding the existing size limit leave the previous checkpoint intact;
 database failures propagate to the lifecycle error boundary.
@@ -1522,13 +1523,21 @@ roundStep`. Grid half (live since 0.7.0): `gridStyle` (`off|square|hex`), `cellW
 
 ### `TableRoom extends Room`
 
-**`onAuth(client, options)`** delegates to `roomAccess.authorize()`, binds the supplied
-code to the actual room, and admits only _admitted_ members (an admin gets `owner` in any room),
-and returns `{ userId, username, avatar, role, isAdmin }` onto `client.auth`.
+**Static `onAuth(token, options)`** calls `roomAccess.preflight()` before matchmaking allocates
+any table, editor or lobby. Public explicit `create` is disabled. `onCreate` repeats preflight,
+leaves the Colyseus transport `roomId` intact and uses `persistentRoomId` for database work.
+A process-local `ROOM_WRITERS` map claims each persistent ID before loading its state and holds
+that claim through final persistence. This matches the supported single-server deployment;
+it is not a distributed database lock for multiple application servers.
+
+**`authorizeJoin(client, options)`** delegates to `roomAccess.authorize()`, binds the supplied
+code and persistent identity to the actual room, registers live revocation tracking and applies
+requested spectator participation. **`onJoin`** always calls it again, because Colyseus skips
+instance authentication after successful static authentication. Editor admission is admin-only;
+table admission requires admitted membership (admins get owner access).
 Roles rank in **`RANK`** (`player < helper < gm < owner`); **`rank(client)`** and
 **`isAdmin(client)`** back the gates.
 
-**`onJoin`** checks that authorization has not been revoked since `onAuth`.
 **`onReconnect`** revalidates session and membership, updates the role, and sends
 `whoami`. **`onLeave`** retains tracked access during the reconnect window and removes
 it on final departure; **`onDispose`** releases the room's access records. Revoked
@@ -1538,6 +1547,8 @@ clients have rank `-1` and cannot pass `isAdmin()`.
 
 **`createRoomAccess({db, hashToken})`** returns a process-local service:
 
+- `preflight(options,kind)` validates bounded credentials/code and access before allocation,
+  without installing a client admission.
 - `authorize(room,client,options,kind)` checks table/lobby room binding, membership,
   or editor-admin access; `assertActive(room,client)` guards join completion.
 - `waitForReconnect(room,client,seconds)` tracks the reservation;
@@ -1591,7 +1602,7 @@ persistence flush completes.
 Methods: **`spawn(type,pos,props,quat,hidden?) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → hidden-body parking → profiled world step →
 extracted tray/table recovery → extracted transform publication; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
 **`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
-**`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
+**`stopShow(sid)`**,
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
 deck order + face-down fronts + finite-dispenser counts + overlays + the room **`scale`**
@@ -1698,10 +1709,8 @@ It owns the step and its profiling, then calls `recoverEscapedBodies` and `publi
 that order.
 
 Saved-library methods forward to the operations returned by
-`createLibraryOperations({db,saveImageRef})` in `server/game/library.js`:
+`createLibraryOperations({db})` in `server/game/library.js`:
 
-- **`saveDeckById(room,deckId,name,ownerId)`** validates a live table deck, normalizes its name,
-  externalizes inline front/back images through the injected writer, and inserts the private deck.
 - **`sendAssetList(room,client,kind)`** maps all seven asset kinds to their database readers and
   client messages, includes private rows only for admins, and rechecks access after the read.
 
@@ -1940,7 +1949,7 @@ table snapshot — pieces + settings — as an admin-curated library asset) and
 **`saveSkybox`/`listSkyboxes`** (equirect URL or a 6-face cubemap, admin-curated).
 
 Library handlers (all async, via `db`; keyed on a row **id**): creation —
-`deckBegin`/`deckAppend`/`deckFinish`, `saveDeck`, `saveBoard`, `saveProp` — is
+`deckBegin`/`deckAppend`/`deckFinish`, `saveBoard`, `saveProp` — is
 **admin-only** and stamps `owner_id` + private. `deckBegin` takes an `open` flag and
 `deckAppend` accepts card entries that are a bare front ref OR a `{front, back}` pair, so the
 editor's **Double-Sided Tiles** tab saves a tile set as an `open` deck with per-tile backs
@@ -1957,9 +1966,8 @@ attaches `customAssetSnapshot`; clients cannot submit an `asset` field through t
 payload. `saveProp` accepts an optional Save+Spawn flag and uses the newly inserted/updated row ID
 for the same snapshot. `removePropDispenser` is admin-only and deletes only the nested dispenser
 definition before refreshing `propList`, leaving the custom object record intact.
-The handlers call the stable `TableRoom.saveDeckById`/`sendAssetList` facades; the injected
-library service owns their reusable persistence/list-delivery mechanics without absorbing payload
-validation or operation-specific permissions.
+The handlers call `TableRoom.sendAssetList`; the injected library service owns authorized
+list delivery. The draft handlers own deck/tile creation and editing using uploaded references.
 
 Member-management handlers (gm+, keyed on the DB room): `members` (send the list),
 `admit`, `kick` (also disconnects the live client), `setRole` (owner is
@@ -1975,7 +1983,7 @@ client uses to hide creation UI from non-admins.
 
 The library **editor** — the same engine with an admin-only `onAuth` (non-admins
 rejected) that seats the admin at `owner` role with `isAdmin`. It has no DB room
-row, so `roomId` is null and the member-management handlers no-op; it's a shared
+row, so `persistentRoomId` is null and the member-management handlers no-op; it's a shared
 admin sandbox for building and testing library assets live. Registered as the
 `editor` room type (`table` stays `filterBy(['code'])`).
 
@@ -1989,8 +1997,14 @@ otherwise exclude the patched release. Reassess the override when upgrading them
 Use `npm audit` to inspect production and development dependencies; `npm run audit`
 checks production dependencies and fails only at high severity or above.
 
-- `express.static` for `public/`, `/shared`; **`/assets`** serves category files
-  but a guard 404s any `.json` (metadata stays private).
+- `express.static` serves `public/` and `/shared`. **`/assets`** uses
+  `createAssetFilesRouter({assetsDir,assetKinds})`: a decoded category plus 18-hex-character
+  filename and JPG/JPEG/PNG/GIF/WebP/GLB extension allowlist. Encoded separators, malformed
+  encodings, metadata, scripts, HTML, SVG and backups are rejected. Responses use explicit
+  media MIME types, `nosniff`, a restrictive sandbox CSP and immutable caching. Existing
+  disallowed files remain on disk but are no longer served. Non-generated legacy media names
+  must be re-uploaded through the supported uploader. Originals and derivative routes remain intact.
+  See [security remediation and validation](SECURITY_AUDIT_2026-09-28.md#remediation).
 - **Uploads:** `POST /upload?kind=` (one resized image → `{ url }`),
   `POST /upload-model?kind=props` (a raw `.glb` → `{ url }`).
 - **Auth:** `POST /auth/signup` (with a password → host, pending approval; without

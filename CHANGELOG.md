@@ -8,7 +8,21 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Fixed
+- Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
+  room creation, retain unique transport IDs, and use a separate persistent room ID. One local
+  writer holds ownership through its final save; failed/unadmitted instances cannot overwrite
+  checkpoints. Connection admission rechecks access and preserves revocation/spectator handling.
+- Security audit SEC-02/SEC-03: remove the obsolete `saveDeck`/inline-image writer and serve only
+  approved generated raster/GLB asset paths with explicit safe MIME types and response headers.
+  Encoded metadata paths, scripts, HTML and malformed URLs are blocked, including existing files.
+  Current editor deck/tile saves and normal uploads are retained. Restart the server; no migration
+  or dependency change is required. Manual tests reported green by the user on 2026-09-28.
+
 ### Added
+- A source security audit with isolated reproductions of unauthenticated duplicate-room
+  creation/save overwrite, admin-only legacy inline-image script hosting, and an encoded-URL
+  bypass of the asset JSON guard. See `docs/SECURITY_AUDIT_2026-09-28.md`; remediation is recorded above and in the audit.
 - A regular Linux host installer for systemd Debian 12/13, Ubuntu 22.04/24.04/26.04 LTS,
   Fedora and Arch. It shares the Proxmox native deployment flow, adds distro package/cache
   selection and PostgreSQL initialization, and allocates a system account without claiming

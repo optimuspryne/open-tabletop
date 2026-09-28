@@ -14,7 +14,7 @@ function harness(entries = ['bottom', 'same', 'same'], props = {}) {
   const handlers = new Map(),
     broadcasts = [];
   const room = {
-    roomId: 'room',
+    persistentRoomId: 'room',
     nextId: 2,
     nextHid: 1,
     state: {

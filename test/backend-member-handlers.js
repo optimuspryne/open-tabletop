@@ -35,7 +35,7 @@ function harness() {
     },
   };
   const room = {
-    roomId: 'room-1',
+    persistentRoomId: 'room-1',
     roomCode: 'CODE',
     clients: [],
     pendingHands: new Map(),

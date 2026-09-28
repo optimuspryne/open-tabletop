@@ -47,21 +47,21 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
   });
 
   memberMessage('admit', async (client, message) => {
-    if (room.rank(client) < RANK.gm || !room.roomId) return;
+    if (room.rank(client) < RANK.gm || !room.persistentRoomId) return;
     const parsed = memberUserPayload(message);
     if (!parsed) return;
     const { userId } = parsed;
-    await db.admitMember(room.roomId, userId);
+    await db.admitMember(room.persistentRoomId, userId);
     await Promise.all([room.notifyLobby(userId, 'notifyAdmitted'), room.broadcastMembers()]);
   });
 
   memberMessage('kick', async (client, message) => {
-    if (room.rank(client) < RANK.gm || !room.roomId) return;
+    if (room.rank(client) < RANK.gm || !room.persistentRoomId) return;
     const parsed = memberUserPayload(message);
     if (!parsed) return;
     const { userId } = parsed;
     if (String(userId) === String(client.auth && client.auth.userId)) return;
-    const membership = await db.getMembership(room.roomId, userId);
+    const membership = await db.getMembership(room.persistentRoomId, userId);
     if (!allowRoomCapability(client, 'administration', 'kick')) return;
     if (!membership || !room.canManage(room.rank(client), membership.role)) return;
     const targetUser = await db.findUserById(userId);
@@ -71,18 +71,18 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
       !room.canManage(room.rank(client), membership.role)
     )
       return;
-    await db.kickMember(room.roomId, userId);
+    await db.kickMember(room.persistentRoomId, userId);
     roomAccess.kickRoom(room, userId);
     await Promise.all([room.notifyLobby(userId, 'notifyDeclined'), room.broadcastMembers()]);
   });
 
   memberMessage('setRole', async (client, message) => {
-    if (room.rank(client) < RANK.gm || !room.roomId) return;
+    if (room.rank(client) < RANK.gm || !room.persistentRoomId) return;
     const parsed = memberRolePayload(message);
     if (!parsed) return;
     const { userId, role } = parsed;
     if (String(userId) === String(client.auth && client.auth.userId)) return;
-    const membership = await db.getMembership(room.roomId, userId);
+    const membership = await db.getMembership(room.persistentRoomId, userId);
     if (!allowRoomCapability(client, 'administration', 'setRole')) return;
     if (!membership || !room.canSetRole(room.rank(client), membership.role, role)) return;
     const targetUser = await db.findUserById(userId);
@@ -92,7 +92,7 @@ export function registerMemberHandlers(room, { db, roomAccess, logger = console 
       !room.canSetRole(room.rank(client), membership.role, role)
     )
       return;
-    await db.setMemberRole(room.roomId, userId, role);
+    await db.setMemberRole(room.persistentRoomId, userId, role);
     roomAccess.setRole(room, userId, role);
     await room.broadcastMembers();
   });

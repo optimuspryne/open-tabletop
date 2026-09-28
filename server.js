@@ -1,3 +1,4 @@
+import { createAssetFilesRouter } from './server/http/routes/asset-files.js';
 import { createPieceVisibility, broadcastPieceEvent } from './server/game/piece-visibility.js';
 import { registerMapFog } from './server/game/map-fog.js';
 import { createNotecards, registerNotecardHandlers } from './server/game/notecards.js';
@@ -190,7 +191,7 @@ const PERF_LOG = process.env.PERF_LOG === '1';
 //
 //   <ASSETS_DIR>/{uploads,decks,boards,props}/
 //     <random>.<ext>   uploaded images / models, served at /assets/<kind>/<random>
-//     <slug>.json       metadata, NEVER web-served (a route guard blocks .json)
+//     <slug>.json       legacy metadata, NEVER web-served (media allowlist)
 //
 // Because filenames are random and the .json metadata is never served, a card
 // front that's meant to stay hidden can't be discovered by poking at /assets.
@@ -244,19 +245,7 @@ function saveAsset(kind, bytes, ext = 'jpg') {
   return `/assets/${validKind}/${name}`;
 }
 
-// Move an inline base64 image (data-URL) onto disk and return its URL, or null
-// if the string isn't a data-URL. Used when saving a deck whose art was pasted
-// inline rather than uploaded as a file.
-function saveImageRef(dataURL, kind = 'decks') {
-  const match = /^data:(image\/\w+);base64,(.+)$/s.exec(dataURL);
-  if (!match) return null;
-  const [, mimeType, base64] = match;
-  const ext = mimeType.split('/')[1].replace('jpeg', 'jpg');
-  return saveAsset(kind, Buffer.from(base64, 'base64'), ext);
-}
-
-const { saveDeckById: saveRoomDeckById, sendAssetList: sendRoomAssetList } =
-  createLibraryOperations({ db, saveImageRef });
+const { sendAssetList: sendRoomAssetList } = createLibraryOperations({ db });
 const {
   broadcastMembers: broadcastRoomMembers,
   notifyLobby: notifyRoomLobby,
@@ -265,6 +254,8 @@ const {
 
 // Track rooms through their final persistence flush so cleanup can protect their data.
 const LIVE_ROOMS = new Set();
+// Single-process writer ownership lasts through the final queued save.
+const ROOM_WRITERS = new Map();
 const roomAccess = createRoomAccess({ db, hashToken });
 const participation = createParticipationService({ db, roomAccess });
 setInterval(() => void roomAccess.revalidate(), 30_000).unref();
@@ -368,7 +359,22 @@ const {
 
 // --- The room --------------------------------------------------------------
 class TableRoom extends Room {
+  static accessKind = 'table';
+  static async onAuth(_token, options) {
+    await roomAccess.preflight(options, this.accessKind);
+    return true; // admission is repeated in onJoin, never trusted from the reservation
+  }
+
   async onCreate(options) {
+    const admission = await roomAccess.preflight(options, this.constructor.accessKind);
+    this.roomCode = this.constructor.accessKind === 'editor' ? null : options.code;
+    this.persistentRoomId = admission.persistentRoomId;
+    if (this.persistentRoomId) {
+      if (ROOM_WRITERS.has(this.persistentRoomId))
+        throw new ServerError(409, 'This table is already active. Please join again.');
+      ROOM_WRITERS.set(this.persistentRoomId, this);
+    }
+
     // Enforce our total connection cap in authorization, without auto-locking the room:
     // an auto-locked code would make joinOrCreate create a second table for that code.
     this.maxClients = Infinity;
@@ -377,15 +383,12 @@ class TableRoom extends Room {
     this.world = buildWorld(SIM);
     this.mat = this.world.__mat;
     LIVE_ROOMS.add(this); // so orphan cleanup can see this table's live asset references
-    this.roomCode = (options && options.code) || null;
-    const roomRec = this.roomCode ? await db.findRoomByCode(this.roomCode) : null;
-    this.roomId = roomRec ? roomRec.id : null; // this live table's persistent room id (for membership)
-    this.state.roomName = roomRec ? String(roomRec.name || '').slice(0, 60) : ''; // synced display name for the table header (empty for the code-less editor room)
+    this.state.roomName = String(admission.roomName || '').slice(0, 60); // synced display name for the table header (empty for the code-less editor room)
     this.factoryLighting = FACTORY_LIGHTING;
     this.defaultLighting = normalizeLighting();
-    if (this.roomId) {
+    if (this.persistentRoomId) {
       // restore the durable scoreboard, notes, and table size for this room
-      const rs = await db.getRoomState(this.roomId);
+      const rs = await db.getRoomState(this.persistentRoomId);
       for (const row of rs.scoreboard) {
         if (row && row.id)
           this.state.scores.set(
@@ -759,12 +762,6 @@ class TableRoom extends Room {
     consumeDispensedItem(this, piece, id);
   }
 
-  // Write a table deck to the disk library; returns true on success. Any inline
-  // image art (data-URLs) is moved to files so the saved JSON stays small.
-  async saveDeckById(deckId, name, ownerId = null) {
-    return saveRoomDeckById(this, deckId, name, ownerId);
-  }
-
   // The effective self-right mode for a piece:
   //   true   → keep it standing tall (chess, tokens)
   //   'flat' → keep it lying flat (decks, checkers, coins)
@@ -915,6 +912,7 @@ class TableRoom extends Room {
     scheduleRoomSave(this);
   }
   async saveStateNow() {
+    if (ROOM_WRITERS.get(this.persistentRoomId) !== this || !this._admitted) return;
     await saveRoomStateNow(this, { db });
   }
   async onDispose() {
@@ -927,10 +925,15 @@ class TableRoom extends Room {
       this,
       'disposeSave',
       null,
-      () => saveFinalRoomState(this, { sceneMaxBytes: SCENE_MAX_BYTES }),
+      () =>
+        this._admitted && ROOM_WRITERS.get(this.persistentRoomId) === this
+          ? saveFinalRoomState(this, { sceneMaxBytes: SCENE_MAX_BYTES })
+          : undefined,
       { notify: false },
     );
     LIVE_ROOMS.delete(this);
+    if (ROOM_WRITERS.get(this.persistentRoomId) === this)
+      ROOM_WRITERS.delete(this.persistentRoomId);
   }
 
   // Send a client the library list for one asset kind. Admins get everything
@@ -987,7 +990,7 @@ class TableRoom extends Room {
   }
 
   // Bind authorization to this room, including joins made directly by room ID.
-  async onAuth(client, options) {
+  async authorizeJoin(client, options) {
     const auth = await roomAccess.authorize(this, client, options);
     client.auth = auth;
     if (options?.participation === 'spectator' && auth.participation !== 'spectator') {
@@ -1038,7 +1041,8 @@ class TableRoom extends Room {
     return !!(client.auth && !client.auth.revoked && client.auth.isAdmin);
   } // site admin — curates the library, spawns private assets anywhere
 
-  async onJoin(client) {
+  async onJoin(client, options) {
+    client.auth = await this.authorizeJoin(client, options);
     roomAccess.assertActive(this, client);
     this.visibility.syncClient(client);
     const auth = client.auth || {};
@@ -1052,6 +1056,8 @@ class TableRoom extends Room {
       roomAccess.forget(this, client);
       throw error;
     }
+
+    this._admitted = true;
 
     // Reclaim a saved hand / the turn if this account owned one in the loaded game.
     const uid = auth.userId != null ? String(auth.userId) : null;
@@ -1205,11 +1211,12 @@ class TableRoom extends Room {
 }
 
 // The library editor: a full table (physics, spawning, asset CRUD — all inherited)
-// that only SITE ADMINS may enter. It has no DB room row, so roomId stays null and
+// that only SITE ADMINS may enter. It has no DB room row, so persistentRoomId stays null and
 // the member-management handlers no-op; it's a shared admin sandbox for building and
 // testing library assets live. The admin joins at max role + admin rights.
 class EditorRoom extends TableRoom {
-  async onAuth(client, options) {
+  static accessKind = 'editor';
+  async authorizeJoin(client, options) {
     return roomAccess.authorize(this, client, options, 'editor');
   }
 }
@@ -1296,17 +1303,7 @@ app.use('/shared', express.static('shared'));
 // editing and future reprocessing; the derivative is generated once and then cached immutably.
 app.use(createAssetTextureRouter({ assetsDir: ASSETS_DIR, assetKinds: ASSET_KINDS }));
 
-// Serve uploaded images/models, but NEVER the .json metadata beside them — that
-// keeps a hidden card front living on disk from being fetched directly.
-app.use(
-  '/assets',
-  (req, res, next) => {
-    if (/\.json$/i.test(req.path)) return res.sendStatus(404);
-    next();
-  },
-  // Uploaded files receive random names and are never overwritten; edits create a new URL.
-  express.static(ASSETS_DIR, { maxAge: '1y', immutable: true }),
-);
+app.use('/assets', createAssetFilesRouter({ assetsDir: ASSETS_DIR, assetKinds: ASSET_KINDS }));
 
 // Raw image/model uploads are authenticated, byte-validated, and throttled in
 // their own router. saveAsset retains the allowlisted destination policy.
@@ -1391,13 +1388,15 @@ const httpServer = createServer(app);
 // should join the table, non-members must request first. When a GM admits/declines,
 // the table room calls notifyAdmitted/notifyDeclined here to push + release them.
 class LobbyRoom extends Room {
+  static async onAuth(_token, options) {
+    await roomAccess.preflight(options, 'lobby');
+    return true;
+  }
   onCreate(options) {
     this.roomCode = options?.code || null;
   }
-  async onAuth(client, options) {
-    return roomAccess.authorize(this, client, options, 'lobby');
-  }
-  onJoin(client) {
+  async onJoin(client, options) {
+    client.auth = await roomAccess.authorize(this, client, options, 'lobby');
     roomAccess.assertActive(this, client);
   }
   async onReconnect(client) {
@@ -1438,6 +1437,8 @@ class LobbyRoom extends Room {
   }
 }
 
+// The application joins existing tables or creates them through joinOrCreate only.
+matchMaker.controller.exposedMethods = ['joinOrCreate', 'join', 'joinById', 'reconnect'];
 const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer, maxPayload: 4 * 1024 * 1024 }),
 });
