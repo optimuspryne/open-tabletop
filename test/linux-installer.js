@@ -7,6 +7,7 @@ import {
   readdirSync,
   readlinkSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -107,9 +108,19 @@ apt_update`,
 function fixture(t, id = 'fedora', profile = 'linux') {
   const root = mkdtempSync(join(tmpdir(), 'tabletop-install-test-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  for (const path of ['etc/systemd/system', 'run/systemd/system', 'root', 'src', 'work']) {
+  for (const path of [
+    'etc/systemd/system',
+    'run/systemd/system',
+    'usr/bin',
+    'root',
+    'src',
+    'work',
+  ]) {
     mkdirSync(join(root, path), { recursive: true });
   }
+  // CI can install Node in a tool cache instead of /usr/bin. Keep the real
+  // runtime validation, but resolve its executable inside the fixture too.
+  symlinkSync(process.execPath, join(root, 'usr/bin/node'));
   writeFileSync(join(root, 'etc/os-release'), `ID=${id}\nVERSION_ID=13\n`);
   writeFileSync(join(root, 'hba'), 'local all all peer\nhost all all 127.0.0.1/32 ident\n');
   mkdirSync(join(root, 'src/proxmox'));
@@ -128,7 +139,8 @@ function fixture(t, id = 'fedora', profile = 'linux') {
     .replace(
       /\/(?:etc|opt|root|var\/lib|var\/backups|run\/systemd|usr\/share)(?=\/)/g,
       (path) => `${root}${path}`,
-    );
+    )
+    .replaceAll('/usr/bin/node', join(root, 'usr/bin/node'));
   writeFileSync(join(root, 'installer.sh'), source);
   const mocks = `
 source "$ROOT/installer.sh"

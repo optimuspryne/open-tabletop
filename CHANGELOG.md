@@ -39,6 +39,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   dice stay visible. Restart the server and refresh all clients; no database migration is needed.
 
 ### Fixed
+- Make the native installer test fixture resolve Node from the test runner's executable,
+  fixing package-setup checks on CI hosts without `/usr/bin/node`. Production installer
+  paths and runtime validation remain unchanged; no server restart is needed.
 - Hidden objects now settle onto the board/mat collider surface (or tabletop) when released,
   after horizontal grid snapping, instead of remaining suspended at drag height. Single and
   group drops remain non-colliding and GM-only. Restart the server; no migration is needed.
