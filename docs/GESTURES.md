@@ -40,6 +40,35 @@ GM spectators retain authorized sight, while participation restrictions still bl
 The user reports manual tests passing (2026-09-27); specific devices and multiplayer scenarios
 were not separately itemized.
 
+## Manual map fog
+
+Active GMs open **Fog** beside Measure, or **drawer → Table → Fog** on narrow/touch layouts.
+The cloud-fog entry opens controls for the current image, procedural or 3D board. Enable starts fully covered;
+choose **Reveal** (eye) or **Cover** (eye-off), then drag or tap to paint a circular brush.
+Radius uses the room's displayed units (configure inches in Scale & Grid if desired).
+Brush buttons focus the table: arrows move the brush in board-local directions; Enter/Space
+stamps a circle. Native inputs/selects retain their own keyboard behavior.
+**Fog thickness** grows the volume above the board’s top in room units: drag with mouse/touch or
+focus the slider and use arrow keys. The local preview commits on release/change, is shared
+and saved, and preserves exploration. Escape/pointer cancellation discards an unfinished preview.
+The base stays fixed, with closed sides and bottom. Revealing cuts through the full volume;
+covered areas block low-angle views. Terrain above the volume remains visible.
+
+While painting, piece grabs, menus, selection, pings, double-tap inspection and camera movement
+are suppressed. A second finger or pointer cancellation discards the unfinished stroke. Use
+**Done**, Escape or close the panel to resume ordinary table/camera gestures. A stroke exceeding
+256 samples is saved with a notice to lift and continue. Other players receive completed strokes.
+
+**Undo** reverses the last fog edit on this map (shared GM history, up to 20 edits in the current
+room session); thickness, Cover all, Reveal all and enable/disable are undoable. Disabling preserves explored
+areas. GMs see translucent fog; **Player fog preview** locally shows opaque map coverage and does
+not change object Hide/Reveal. It resets when the panel closes. Fog persists with scenes/games;
+loading another board starts its own fog. Piece physics and visibility remain separate.
+
+Automated coverage is recorded in [the implementation record](DESIGN_concealment.md). The user reports
+the original manual fog slice works well; specific devices were not itemized. The user also approved
+the volume/thickness follow-up for commit; specific devices and multiplayer scenarios were not itemized.
+
 ## Time-out
 
 A GM uses **Room info → Members → Time-out / End time-out** on desktop or touch. The affected

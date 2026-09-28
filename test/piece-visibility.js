@@ -16,6 +16,7 @@ import { registerPlacementHandlers } from '../server/game/handlers/placement.js'
 import { guardedMessage } from '../server/game/interaction-policy.js';
 import { RANK } from '../server/permissions.js';
 import { serializeScene, applyScene } from '../server/game/scene-persistence.js';
+import { emptyFog } from '../shared/map-fog.js';
 
 function harness() {
   const serializer = new SchemaSerializer(),
@@ -422,4 +423,25 @@ test('dropping a public card over a hidden browsed deck neither absorbs it nor d
   assert.equal(room.state.pieces.has(card), true);
   assert.equal(room.deckCards.get(deck).length, 1);
   assert.equal(player.events.length, 0);
+});
+
+test('map fog follows board visibility through reflected initial state and patches', () => {
+  const { room, client, patch } = harness();
+  const id = room.spawn('board', [0, 0.05, 0], { w: 8, d: 8, tex: '/hidden-map.png' }, null, true);
+  const board = room.state.pieces.get(id);
+  board.fog = JSON.stringify({ ...emptyFog(), enabled: true });
+  const player = client('player'),
+    gm = client('gm');
+  assert.equal(player.decoded.pieces.has(id), false);
+  assert.equal(gm.decoded.pieces.get(id).fog, board.fog);
+  patch();
+  room.visibility.setVisibility(gm, { ids: [id], hidden: false });
+  patch();
+  assert.equal(player.decoded.pieces.get(id).fog, board.fog);
+  board.fog = JSON.stringify({ ...emptyFog(), enabled: false, revision: 1 });
+  patch();
+  assert.equal(player.decoded.pieces.get(id).fog, board.fog);
+  room.visibility.setVisibility(gm, { ids: [id], hidden: true });
+  patch();
+  assert.equal(player.decoded.pieces.has(id), false);
 });

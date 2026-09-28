@@ -4663,8 +4663,58 @@ body.not-gm .gm-only {
    keeps its text because that text is the live value. */
 #scoreBtn .lbl,
 #audioBtn .lbl,
-#measureBtn .lbl {
+#measureBtn .lbl,
+#fogBtn .lbl {
   display: none;
+}
+
+.pane[data-pane='fog'] {
+  font: var(--fs)/1.5 var(--font);
+}
+
+.pane[data-pane='fog'] .chipRow {
+  margin-block: var(--gap);
+}
+
+#rightStack:has(#regionTR:not([hidden]) .pane[data-pane='fog'].on) {
+  z-index: 9; /* above the fixed selection/seat buttons while the sheet is open */
+}
+
+@media (pointer: coarse) {
+  .pane[data-pane='fog'] button,
+  .pane[data-pane='fog'] input:not([type='checkbox']),
+  .pane[data-pane='fog'] select {
+    min-height: 44px;
+  }
+}
+
+.pane[data-pane='fog'] .fogField {
+  display: grid;
+  gap: var(--gap);
+  margin-block: var(--gap);
+}
+
+.pane[data-pane='fog'] .fogField > input,
+.pane[data-pane='fog'] .fogField > select {
+  width: 100%;
+  min-width: 0;
+}
+
+.fogThicknessLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+
+.fogEnable {
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  min-height: 44px;
+}
+
+canvas.fog-painting {
+  cursor: crosshair;
 }
 #clusterTR > button {
   padding: calc(7px * var(--ui-elements-scale));

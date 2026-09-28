@@ -20,7 +20,10 @@ import { registerPlacementHandlers } from '../server/game/handlers/placement.js'
 import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
 import { registerRoomStateHandlers } from '../server/game/handlers/room-state.js';
 
+import { registerMapFog } from '../server/game/map-fog.js';
+
 const registrations = [
+  registerMapFog,
   registerNotecardHandlers,
   registerDeckBrowseHandlers,
   registerCardHandlers,

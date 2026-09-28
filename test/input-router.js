@@ -225,6 +225,19 @@ function fixture() {
   });
   pieces.bindRoom(room);
   const router = createInputRouter({
+    fog: {
+      isActive: () => !!modes.fog,
+      begin: () => {
+        calls.push(['fog.begin']);
+        return true;
+      },
+      move: mark('fog.move'),
+      finish: mark('fog.finish'),
+      command: (e) => {
+        calls.push(['fog.command', e.key]);
+        return true;
+      },
+    },
     canInteract: () => !modes.blocked,
     getRoom: () => room,
     canvas,
@@ -725,4 +738,30 @@ test('keyboard context-menu intent cycles pieces without a pointer pick and resp
   f.doc.activeElement = { tagName: 'INPUT' };
   f.key('ContextMenu');
   assert.equal(f.calls.filter(([name]) => name === 'menu').length, 2);
+});
+
+test('fog owns brush input and suppresses piece, camera, ping and inspection gestures', () => {
+  const f = fixture();
+  f.modes.fog = true;
+  f.router.press(pointer());
+  f.router.move(pointer({ clientX: 20 }));
+  f.router.release(pointer({ cancelled: true }));
+  f.router.secondaryPress({ x: 0, y: 0 });
+  f.router.doubleClick({ x: 0, y: 0 });
+  f.router.ping({ x: 0, y: 0 });
+  f.router.panCamera(1, 0);
+  f.router.raiseAxis(1);
+  f.router.rotateAxis(1);
+  assert.equal(f.router.toolCommand({ key: 'ArrowRight' }), true);
+  assert.equal(f.router.hasHeld(), false);
+  assert.equal(f.router.hasAxisTarget('rotateAxis'), false);
+  assert.deepEqual(f.sent, []);
+  assert.ok(f.calls.some((c) => c[0] === 'fog.finish' && c[1].cancelled));
+  assert.ok(
+    f.calls.every((c) => c[0].startsWith('fog.') || ['capture', 'releaseCapture'].includes(c[0])),
+  );
+  f.modes.fog = false;
+  assert.equal(f.router.toolCommand({ key: 'ArrowRight' }), false);
+  f.router.panCamera(1, 0);
+  assert.equal(f.calls.at(-1)[0], 'pan');
 });

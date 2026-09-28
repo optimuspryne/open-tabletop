@@ -297,7 +297,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
       });
     }
   }
-  function bindControls({ input: INPUT, selection, overlays, scoreboard, presence }) {
+  function bindControls({ input: INPUT, selection, overlays, scoreboard, presence, fog }) {
     // Universal icon buttons: any button labeled "EMOJI text" collapses to just the emoji on small
     // screens — its text is wrapped in <span class="lbl"> (hidden by CSS). Skips buttons that are
     // already structured (a child element) or have no leading emoji to fall back to (e.g. "+ d4").
@@ -383,6 +383,16 @@ export function createTableShell({ byId, clamp, getRoom }) {
           },
           { btn: ab, pane: 'music' },
           { btn: mb, pane: 'measure', onOpen: overlays.enter, onClose: overlays.exit },
+          ...(byId('fogBtn')
+            ? [
+                {
+                  btn: byId('fogBtn'),
+                  pane: 'fog',
+                  onOpen: () => fog?.open(),
+                  onClose: () => fog?.close(),
+                },
+              ]
+            : []),
           { btn: tb, pane: 'timer' },
         ]);
     }
@@ -502,7 +512,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
         },
         {
           label: 'Table',
-          ids: ['measureBtn', 'audioBtn', 'timerBtn', 'settingsBtn', 'controlsBtn'],
+          ids: ['measureBtn', 'fogBtn', 'audioBtn', 'timerBtn', 'settingsBtn', 'controlsBtn'],
         },
       ];
       const FOOT = ['roomReset', 'lobbyBtn'];

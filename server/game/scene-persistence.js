@@ -10,6 +10,7 @@ import { MEASURE } from '../../shared/overlays.js';
 import { appendAccountHand } from './hand-state.js';
 import { readProps } from './props-codec.js';
 import { lightingSnapshot, normalizeLighting } from '../../shared/lighting.js';
+import { fogBoardSize, normalizeFog, parseFog } from '../../shared/map-fog.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -70,6 +71,7 @@ export function serializeScene(room, { includeLighting = false } = {}) {
     pieces.push({
       type: piece.type,
       ...(piece.hidden ? { hidden: true } : {}),
+      ...(piece.fog ? { fog: parseFog(piece.fog) } : {}),
       props,
       ...(piece.type === 'dispenser' ? { count: piece.count } : {}),
       x: piece.x,
@@ -179,6 +181,13 @@ export function applyScene(
   { createOverlay, maxPieces, overlayKinds, overlayMax, tableLimits },
 ) {
   if (!scene || typeof scene !== 'object') return;
+  for (const entry of Array.isArray(scene.pieces) ? scene.pieces : []) {
+    if (
+      entry?.fog !== undefined &&
+      (!fogBoardSize(entry.type, entry.props) || !normalizeFog(entry.fog))
+    )
+      throw new Error('The scene contains invalid map fog.');
+  }
   const notecards = (Array.isArray(scene.pieces) ? scene.pieces : []).filter(
     (entry) => entry?.type === 'notecard',
   );
@@ -229,7 +238,8 @@ export function applyScene(
     if (!entry || !KINDS[entry.type]) continue;
     const props = entry.props || {};
     if (entry.type === 'board') {
-      room.swapBoard(props, entry.hidden === true);
+      const id = room.swapBoard(props, entry.hidden === true);
+      if (entry.fog) room.state.pieces.get(id).fog = JSON.stringify(normalizeFog(entry.fog));
       continue;
     }
     const faceDownFront =

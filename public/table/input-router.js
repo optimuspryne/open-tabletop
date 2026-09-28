@@ -8,6 +8,7 @@ export function createInputRouter({
   controls,
   selection,
   overlays,
+  fog,
   whiteboard,
   inspection,
   trays,
@@ -37,6 +38,10 @@ export function createInputRouter({
       setPointer(e);
       observedId = pickId(e.touch ? touchHitPx : 0);
       if (e.secondary && observedId) openPieceMenu(observedId, { x: e.clientX, y: e.clientY });
+      return;
+    }
+    if (fog?.isActive()) {
+      if (fog.begin(e)) canvas.setPointerCapture(e.pointerId);
       return;
     }
     const wasArmed = pieces.consumeArmedMove(); // Move is one-shot: this press consumes it (if on that piece) or cancels it
@@ -87,6 +92,10 @@ export function createInputRouter({
     pieces.press(e, id, wasArmed);
   };
   const onPointerMove = (e) => {
+    if (fog?.isActive()) {
+      fog.move(e);
+      return;
+    }
     if (!canInteract()) {
       inspection.movePointer(e);
       return;
@@ -114,6 +123,11 @@ export function createInputRouter({
     pieces.move(e);
   };
   const endGesture = (e) => {
+    if (fog?.isActive()) {
+      fog.finish(e);
+      releaseCapture(e);
+      return;
+    }
     if (!canInteract()) {
       inspection.endPointer(e);
       releaseCapture(e);
@@ -160,6 +174,10 @@ export function createInputRouter({
   // held, so the keyboard profile in controls.js owns them and raises rotateAxis / raiseAxis.
   let keyboardPiece = 0;
   const onKeyDown = (e) => {
+    if (fog?.isActive()) {
+      if (fog.command(e)) e.preventDefault();
+      return;
+    }
     const room = getRoom();
     if (!room) return;
     if (e.key === 'Escape' && trays.isViewing()) {
@@ -255,7 +273,12 @@ export function createInputRouter({
     move: onPointerMove, // pointermove → drag routing for every mode
     release: endGesture, // pointerup / pointercancel → commit/settle the gesture
     command: onKeyDown, // keydown → the command router (Esc-exits, batch ops, per-piece verbs, ping)
+    toolCommand: (event) => {
+      if (!fog?.isActive()) return false;
+      return fog.command(event);
+    },
     secondaryPress: (p) => {
+      if (fog?.isActive()) return;
       if (!canInteract()) {
         if (inspection.isActive()) return;
         if (observedId) openPieceMenu(observedId, p);
@@ -283,13 +306,15 @@ export function createInputRouter({
         sendPing();
       } // long-press empty felt → ping
     },
-    hasHeld: () => canInteract() && pieces.hasHeld(),
+    hasHeld: () => !fog?.isActive() && canInteract() && pieces.hasHeld(),
     // Axis keys keep their object meaning only where that action has a target. Otherwise the input
     // profile routes the same physical key to camera panning.
     hasAxisTarget: (name) =>
+      !fog?.isActive() &&
       canInteract() &&
       (name === 'raiseAxis' ? pieces.hasHeld() : pieces.hasHeld() || selection.size > 0),
     panCamera: (right, forward) => {
+      if (fog?.isActive()) return;
       if (
         !getRoom() ||
         inspection.isActive() ||
@@ -303,12 +328,15 @@ export function createInputRouter({
     // Turn the held piece by a raw angle — the device-agnostic form of the Alt-drag dial.
     // The touch profile raises it from a two-finger twist; a gamepad stick would too.
     rotateHeld: (...args) => {
+      if (fog?.isActive()) return;
       if (canInteract()) pieces.rotateHeld(...args);
     },
     snapHeld: (...args) => {
+      if (fog?.isActive()) return;
       if (canInteract()) pieces.snapHeld(...args);
     },
     ping: (p) => {
+      if (fog?.isActive()) return;
       if (
         !getRoom() ||
         inspection.isActive() ||
@@ -325,13 +353,16 @@ export function createInputRouter({
     // Turn the selection (or the held piece) one small step. The continuous complement to the
     // [ / ] 45° keys, and what the ⟲ / ⟳ hold buttons and the A/D + arrow keys all drive.
     rotateAxis: (...args) => {
+      if (fog?.isActive()) return;
       if (canInteract()) pieces.rotateAxis(...args);
     },
     raiseAxis: (...args) => {
+      if (fog?.isActive()) return;
       if (canInteract()) pieces.raiseAxis(...args);
     },
     // double-click the board to own it and draw; true if a claim was sent
     doubleClick: (p) => {
+      if (fog?.isActive()) return false;
       if (!canInteract()) {
         setPointer({ clientX: p.x, clientY: p.y });
         const id = pickId();

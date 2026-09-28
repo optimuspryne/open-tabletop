@@ -63,8 +63,46 @@ their source visibility. Taking a piece into a private hand ends its tabletop vi
 normal explicit hand play/sharing remains available. Hidden-object access loss cancels incompatible
 grabs and drawing/browsing leases and returns pending inspections without discarding inventory.
 
-Future map fog is separate: the agreed visual covering may sit over full downloaded map artwork.
-Manual GM discovery and circular reveal auras are not implemented by this object-concealment slice.
+## Manual map fog
+
+Map fog is a visual covering over downloaded artwork, separate from object delivery protection.
+It never changes physics, piece visibility, movement legality or game rules. Image, procedural and model
+boards are eligible; player mats are outside this slice. The existing
+single-board lifecycle is preserved. Circular piece reveal auras remain future work.
+
+`shared/map-fog.js` owns a fixed 256×256 bit mask and capsule rasterization between circular
+brush samples. Board-local world coordinates and the existing board geometry keep the mask
+aligned with artwork and clipped to its authored outline for flat boards. Models/procedural
+boards use their shared bounding footprint. A saved thickness grows the fog above the
+shared board top bound. Masked top and bottom caps and boundary walls form a closed volume,
+anchored just below the board base. Revealed regions cut through its full depth. Covered regions
+occlude low-angle and underside views; terrain above the volume remains visible. The mask has
+fixed size regardless of exploration history. `Piece.fog` carries versioned JSON through the piece's existing view
+filter, so a hidden board's fog is also absent from unauthorized clients.
+
+`server/game/map-fog.js` registers `fogEdit` through the shared error, capability and visibility
+boundaries, requires an active GM, validates bounds/radius/sample limits, and rejects stale
+revisions before mutation. A per-client interval bounds repeated work. The room keeps at most
+20 prior masks per live board in weakly held history; Undo is a shared map operation, not a
+per-player history. Scene/game snapshots retain coverage/enabled/thickness state; malformed fog is rejected
+before clearing the current table. No database schema change is needed.
+
+`public/table/map-fog.js` owns temporary canvas textures, outline geometry, brush preview and
+controls. The thickness slider previews locally and commits once per native change; brush picking
+intersects the raised fog surface. Thickness edits reuse revisions, undo, permission gates and
+snapshot normalization; older masks default to zero extra thickness, and legacy `height` values
+migrate to `thickness`. It copies board transforms without modifying authored materials. Players
+receive opaque coverage; GMs get translucent coverage or a local opaque preview. Resource cleanup follows board
+replacement/removal and room handover. The existing input intent router grants painting precedence
+over piece/camera gestures; Escape/Done, access loss and pointer cancellation release that ownership.
+
+`public/table/map-fog-volume.js` builds only mask-boundary and outer-perimeter walls, clipped to
+convex board outlines. Collinear runs merge into quads and wall Y coordinates are normalized;
+changing thickness scales existing walls. Rebuilds happen only when mask bytes change. Caps
+share one nearest-filtered texture and geometry, so their alpha edges meet the walls exactly.
+Player/opaque-preview materials write depth; GM materials remain translucent. The controller
+owns/disposes wall geometry and materials, and disposes shared cap resources once. No new
+physics shapes or server geometry are introduced.
 
 ## Kinds vs. instances (where OO belongs)
 

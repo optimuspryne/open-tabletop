@@ -1,4 +1,5 @@
 import { createPieceVisibility, broadcastPieceEvent } from './server/game/piece-visibility.js';
+import { registerMapFog } from './server/game/map-fog.js';
 import { createNotecards, registerNotecardHandlers } from './server/game/notecards.js';
 import { createAssetPackages } from './server/assets/packages.js';
 import { createAssetPackagesRouter } from './server/http/routes/asset-packages.js';
@@ -447,6 +448,7 @@ class TableRoom extends Room {
     tableMessage('setPieceVisibility', (client, message) =>
       this.visibility.setVisibility(client, message),
     );
+    registerMapFog(this);
 
     // --- Movement: grab → drag → release (single + multi-select) ---------
     registerMovementHandlers(this, {

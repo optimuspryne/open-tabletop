@@ -234,11 +234,11 @@ implementation sequence without making the entire backlog a fixed priority queue
    starter scene — the latter reuses `setupStarter` and stays physical-first.
 3. ✅ **Hex grid + multi-cell footprints — DONE.** Hex grids and uploaded objects with 1–12 cell
    N×N footprints are implemented. See the completed entries below and `CHANGELOG.md`.
-4. **Fog of war.** Planned area-based concealment. Coordinate authorized visibility with the
-   GM staging area (§3) and per-object hiding (item 14); hiding individual objects is a distinct
-   feature and does not by itself complete fog of war. Agreed direction: freeform GM revealing of
-   a shared map, visual covering of artwork, then simple circular piece reveal auras; see
-   [the staged design](DESIGN_concealment.md). Fog implementation is not yet authorized.
+4. **Fog of war — manual covering and volume/thickness controls implemented and user-approved.** Active GMs paint
+   circular Reveal/Cover strokes on image, procedural and 3D boards, with room-unit radius, undo
+   and whole-map actions. Adjustable, saved fog thickness creates a closed volume with walls around revealed areas. Exploration persists in scenes/games; normal visual covering is sufficient for artwork.
+   Object Hide/Reveal remains separate. Simple circular piece reveal auras are the next slice;
+   see [the staged design](DESIGN_concealment.md).
 5. **Spectator mode — implemented; functionality and UI user-approved.** Players choose
    **More → Spectate / Return to play** or lobby **Watch**. New observers are seatless; converted
    players reserve seats/hands/trays and are skipped by turns. Durable self-mode shares the
@@ -305,7 +305,7 @@ implementation sequence without making the entire backlog a fixed priority queue
     parked without collisions; safe placement/support checks guard reveal/hide. Visibility
     survives scenes/games and derivatives on the table. Private hands keep their own privacy;
     personal tray dice remain visible. See [implementation and smoke tests](DESIGN_concealment.md).
-    Map fog and GM staging remain separate future work.
+    Manual map fog is tracked separately in item 4; automatic auras and GM staging remain future work.
 15. **Player time-out mode (GM) — implemented; user-approved functionality and UI.** Temporarily stop a selected player from interacting with
     tabletop objects while allowing them to observe. Provide a clear GM control to apply and
     lift the restriction, and make the restricted state clear to the player. Explore temporarily

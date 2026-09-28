@@ -28,6 +28,7 @@ import { attachControls } from '/table/controls.js';
 const rec = [];
 let held = false;
 let axisTarget = true;
+let toolActive = false;
 const flags = (p) =>
   ['primary','secondary','additive','rotate','fineRotate','touch','transforming'].filter((k) => p[k]).join('+') || '-';
 attachControls(document.getElementById('surface'), {
@@ -35,6 +36,7 @@ attachControls(document.getElementById('surface'), {
   move:   (p) => rec.push(['move', flags(p)]),
   release:(p) => rec.push(['release', flags(p)]),
   command:(k) => rec.push(['command', k.key]),
+  toolCommand:(k) => { if (!toolActive) return false; rec.push(['toolCommand',k.key]); return true; },
   raiseAxis:(d) => rec.push(['raiseAxis', d]),
   rotateHeld:(r) => rec.push(['rotateHeld', r]),
   rotateAxis:(d) => rec.push(['rotateAxis', d]),
@@ -59,6 +61,7 @@ Object.assign(window, {
   rec, P, M,
   setHeld: (v) => { held = v; },
   setAxisTarget: (v) => { axisTarget = v; },
+  setToolActive: (v) => { toolActive = v; },
   // Every case starts from a clean profile: lift any fingers the previous case left down
   // (controls.js keeps live-pointer and transform state that a bare rec.length=0 would not
   // clear), drop the held piece, then clear the recording.
@@ -66,6 +69,7 @@ Object.assign(window, {
     for (const id of [1, 2, 3]) P('pointercancel', { x: 0, y: 0, id });
     held = false;
     axisTarget = true;
+    toolActive = false;
     rec.length = 0;
   },
   only: (...names) => rec.filter((r) => names.includes(r[0])),
@@ -450,6 +454,12 @@ const CASES = [
     `reset(); keyDown('a'); keyDown('a', true); keyDown('a', true); keyUp('a');`,
     `only('command').length`,
     0,
+  ],
+  [
+    'a focused tool consumes arrow keys before object and camera axes',
+    `reset(); setToolActive(true); keyDown('ArrowRight'); keyDown('ArrowRight', true); keyUp('ArrowRight');`,
+    `JSON.stringify(rec)`,
+    '[["toolCommand","ArrowRight"],["toolCommand","ArrowRight"]]',
   ],
   [
     'a non-axis key is still a command',

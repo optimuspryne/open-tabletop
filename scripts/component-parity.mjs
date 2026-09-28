@@ -210,6 +210,133 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'map-fog-controls',
+    root: '#regionTR',
+    expect: { selector: '.pane[data-pane="fog"].on button', min: 8 },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const THREE = await import('/vendor/three/three.module.js');
+      const { createMapFog } = await import('/table/map-fog.js');
+      const shared = await import('/shared/map-fog.js');
+      const { applyIcons } = await import('/ui/icons.js');
+      const byId = id => document.getElementById(id);
+      const messages = new Map(), requests = [], scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(50,1,.1,100);
+      camera.position.set(0,12,0);camera.up.set(0,0,-1);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+      const canvas = document.createElement('canvas');document.body.append(canvas);
+      const pointer = new THREE.Vector2(), controls = {enabled:true};
+      let rank = 2, interactive = true;
+      const piece = {type:'board',props:JSON.stringify({w:12,d:6,tex:'/map.png',label:'Dungeon'}),fog:JSON.stringify({...shared.emptyFog(),enabled:true})};
+      const material = new THREE.MeshBasicMaterial({color:0xdacdaa});
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(12,.1,6), material);
+      scene.add(mesh);
+      const meshes = new Map([['1',{type:'board',mesh}]]);
+      const room = {state:{pieces:new Map([['1',piece]]),scale:{worldPerUnit:2,unitLabel:'in'}},onMessage:(type,fn)=>messages.set(type,fn),send:(...args)=>requests.push(args)};
+      const fog = createMapFog({THREE,scene,camera,ray:new THREE.Raycaster(),pointer,canvas,controls,meshes,getRoom:()=>room,getRank:()=>rank,canInteract:()=>interactive,setPointer:()=>pointer.set(0,0),byId,onEnter(){},toast(){}});
+      fog.bindRoom(room);fog.bindControls();fog.sync();
+      const panel = byId('regionTR');panel.hidden=false;
+      panel.querySelectorAll('.pane').forEach(p=>p.classList.toggle('on',p.dataset.pane==='fog'));
+      const group=scene.children.find(x=>x!==mesh), surface=group.children[0], texture=surface.material.map;
+      assert(surface.material.opacity===.5,'GM fog was not translucent');
+      byId('fogPlayerView').click();assert(surface.material.opacity===1,'Player fog preview was not opaque');
+      byId('fogGMView').click();
+      byId('fogReveal').click();assert(fog.isActive()&&!controls.enabled,'Reveal did not own input');
+      assert(document.activeElement===canvas,'Brush canvas did not receive keyboard focus');
+      assert(fog.command({key:'ArrowRight'}),'Keyboard arrow not consumed');
+      assert(fog.command({key:'Enter'}),'Keyboard stamp not consumed');
+      const [type,stamp]=requests.at(-1);assert(type==='fogEdit'&&stamp.radius===2&&stamp.points[0][0]>.0,'Keyboard stamp or inch scale incorrect');
+      messages.get('fogEdited')({id:'1',revision:1});assert(byId('fogReveal').disabled,'Ack unlocked painting before state arrived');
+      const next=shared.parseFog(piece.fog), mask=shared.decodeFogMask(next.mask);
+      shared.paintFog(mask,stamp,{w:12,d:6});next.mask=shared.encodeFogMask(mask);next.revision=1;piece.fog=JSON.stringify(next);fog.sync();
+      assert(!byId('fogReveal').disabled,'State patch did not unlock painting');
+      const image=texture.image.getContext('2d').getImageData(128,128,1,1).data;
+      assert(image[3]===0,'Revealed area is still covered');
+      const thickness=byId('fogThickness'), beforeThickness=shared.parseFog(piece.fog);
+      thickness.focus();thickness.value='2';thickness.dispatchEvent(new Event('input'));
+      assert(surface.position.y===4&&byId('fogThicknessValue').textContent==='2 in','Thickness preview or room units incorrect');
+      assert(shared.parseFog(piece.fog).thickness===0,'Thickness preview mutated shared state');
+      const bottom=group.children[2], walls=group.children[3], wallGeometry=walls.geometry;
+      assert(bottom.geometry===surface.geometry&&bottom.material===surface.material,'Caps do not share the exploration mask');
+      assert(Math.abs(walls.position.y+.053)<.001&&Math.abs(walls.scale.y-4.106)<.001,'Volume base moved or walls failed to grow');
+      assert(Math.abs(bottom.position.y+surface.geometry.attributes.position.getY(0)+.053)<.001,'Volume underside is not sealed at board base');
+      byId('fogPlayerView').click();
+      assert(!walls.material.transparent&&walls.material.depthWrite&&surface.material.depthWrite,'Player volume is not opaque with depth occlusion');
+      byId('fogGMView').click();
+      assert(walls.geometry===wallGeometry,'Thickness or view preview rebuilt wall geometry');
+      thickness.dispatchEvent(new Event('change'));
+      assert(requests.at(-1)[1].action==='thickness'&&requests.at(-1)[1].thickness===4,'Thickness request incorrect');
+      messages.get('fogEdited')({id:'1',revision:2});assert(thickness.getAttribute('aria-disabled')==='true'&&document.activeElement===thickness,'Thickness save lost focus or unlocked before patch');
+      thickness.value='3';thickness.dispatchEvent(new Event('input'));assert(thickness.value==='2','Pending thickness accepted another edit');
+      piece.fog=JSON.stringify({...beforeThickness,thickness:4,revision:2});fog.sync();
+      assert(thickness.getAttribute('aria-disabled')==='false'&&document.activeElement===thickness&&surface.position.y===4&&texture.image.getContext('2d').getImageData(128,128,1,1).data[3]===0,'Thickness patch lost exploration');
+      thickness.value='3';thickness.dispatchEvent(new Event('input'));thickness.dispatchEvent(new Event('pointercancel'));
+      assert(surface.position.y===4&&thickness.value==='2','Cancelled thickness did not restore shared value');
+      thickness.value='3';thickness.dispatchEvent(new Event('input'));thickness.dispatchEvent(new Event('change'));
+      messages.get('serverError')({operation:'fogEdit'});assert(surface.position.y===4&&thickness.value==='2','Rejected thickness preview remained');
+      // Render actual pixels: a bright target must be occluded by outside, reveal-hole and bottom walls.
+      const renderer=new THREE.WebGLRenderer(), target=new THREE.WebGLRenderTarget(32,32), pixel=new Uint8Array(4);
+      const marker=new THREE.Mesh(new THREE.SphereGeometry(.3,12,8),new THREE.MeshBasicMaterial({color:0x00ff00}));
+      scene.add(marker);marker.position.set(4,1,0);mesh.visible=false;
+      const view=new THREE.PerspectiveCamera(40,1,.1,50);
+      const sample=()=>{renderer.setRenderTarget(target);renderer.render(scene,view);renderer.readRenderTargetPixels(target,16,16,1,1,pixel);return pixel[1];};
+      byId('fogPlayerView').click();group.visible=true;
+      for(const position of [[4,1,10],[.5,1,0],[4,-2,0]]) {
+        view.position.set(...position);view.lookAt(marker.position);view.updateMatrixWorld();
+        group.visible=false;assert(sample()>200,'GPU target fixture is not visible');
+        group.visible=true;assert(sample()<80,'Opaque volume leaked from '+position);
+      }
+      marker.position.set(.5,1,0);view.position.set(.5,8,0);view.lookAt(marker.position);view.updateMatrixWorld();
+      assert(sample()>200,'Reveal did not cut through the volume');
+      scene.remove(marker);marker.geometry.dispose();marker.material.dispose();target.dispose();renderer.dispose();
+      mesh.visible=true;byId('fogGMView').click();
+      camera.position.set(0,12,10);camera.lookAt(0,4.053,0);camera.updateMatrixWorld();
+      assert(fog.begin({primary:true,pointerId:7}),'Raised fog brush missed');fog.finish({pointerId:7});
+      assert(Math.abs(requests.at(-1)[1].points[0][1])<.01,'Brush targeted terrain instead of raised sheet');
+      messages.get('serverError')({operation:'fogEdit'});
+      camera.position.set(0,12,0);camera.lookAt(0,0,0);camera.updateMatrixWorld();
+      const count=requests.length;
+      assert(fog.begin({primary:true,pointerId:1}),'Brush missed board');
+      fog.finish({pointerId:1,cancelled:true});assert(requests.length===count,'Cancelled stroke committed');
+      assert(fog.begin({primary:true,pointerId:2}),'Brush did not resume');
+      fog.begin({primary:true,pointerId:3});fog.finish({pointerId:2});assert(requests.length===count,'Second finger committed unfinished stroke');
+      assert(fog.begin({primary:true,pointerId:4}),'Brush missed tap');fog.finish({pointerId:4});assert(requests.length===count+1,'Tap did not commit');
+      messages.get('serverError')({operation:'fogEdit'});
+      byId('fogDone').click();assert(!fog.isActive()&&controls.enabled,'Done did not restore camera');
+      byId('fogCover').click();interactive=false;fog.sync();assert(!fog.isActive()&&controls.enabled,'Participation loss did not cancel painting');
+      interactive=true;rank=0;fog.applyRole();assert(surface.material.opacity===1&&byId('fogEnabled').disabled,'Role loss retained GM view or controls');
+      rank=2;fog.sync();byId('fogCover').click();
+      mesh.position.set(2,0,3);mesh.rotation.y=.5;fog.sync();assert(group.matrix.elements[12]===2&&group.matrix.elements[14]===3,'Fog did not follow board transform');
+      let disposed=0;texture.addEventListener('dispose',()=>disposed++);let wallsDisposed=0;walls.geometry.addEventListener('dispose',()=>wallsDisposed++);room.state.pieces.clear();fog.sync();
+      assert(wallsDisposed===1,'Volume wall geometry was not disposed');
+      assert(disposed===1&&!scene.children.includes(group)&&!fog.isActive(),'Board removal retained fog resources or input');
+      assert(mesh.material===material&&material.opacity===1,'Fog altered board artwork material');
+      room.state.pieces.set('1',piece);fog.sync();byId('fogReveal').click();
+      piece.props=JSON.stringify({model:'/terrain.glb',box:[6,2,3],label:'3D dungeon'});fog.sync();
+      const modelGroup=scene.children.find(x=>x!==mesh), modelSurface=modelGroup.children[0];
+      assert(Math.abs(modelSurface.geometry.attributes.position.getY(0)-2.003)<.001&&modelSurface.position.y===4,'3D fog did not use shared top bounds plus thickness');
+      assert(byId('fogMap').selectedOptions[0].textContent==='3D dungeon','3D board missing from fog picker');
+      thickness.focus();thickness.value='2.025';thickness.dispatchEvent(new Event('input'));thickness.dispatchEvent(new Event('change'));
+      assert(requests.at(-1)[1].thickness===4.05,'Keyboard-sized thickness step lost unit conversion');
+      messages.get('serverError')({operation:'fogEdit'});
+      applyIcons();
+      for(const [id,icon] of [['fogBtn','cloud-fog'],['fogReveal','eye'],['fogCover','eye-off'],['fogUndo','arrow-back-up']])assert(byId(id).querySelector('use')?.getAttribute('href')==='#i-'+icon,'Wrong fog icon '+id);
+      document.body.classList.add('ui-compact');document.body.classList.remove('ui-full');
+      assert(byId('fogReveal').getAttribute('aria-label')==='Reveal area','Compact reveal lost its name');
+      document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
+      const rect=byId('fogRadius').getBoundingClientRect();assert(rect.width>0&&rect.right<=innerWidth,'Fog controls overflow viewport');
+      const { createUiSurfaces } = await import('/ui/ui-surfaces.js');
+      byId('tableLoading').hidden=true;byId('fogBtn').hidden=false;
+      createUiSurfaces().wireCluster(panel,[{btn:byId('fogBtn'),pane:'fog',onOpen:fog.open,onClose:fog.close}]);byId('fogBtn').click();
+      for(const button of panel.querySelectorAll('.pane.on button, .pane.on input, .pane.on select')) {
+        button.scrollIntoView({block:'center'});
+        const box=button.getBoundingClientRect(),hit=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
+        assert(hit===button||button.contains(hit),'Fog control obscured after scrolling: '+button.id);
+      }
+      panel.querySelector('.pane.on').scrollTop=0;
+    `,
+  },
+  {
     name: 'library-grouped-navigation',
     root: '#libraryModal',
     expect: { selector: '.libGroup', min: 6 },

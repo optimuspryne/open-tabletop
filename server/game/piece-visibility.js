@@ -16,7 +16,7 @@ const SPAWNS = new Set([
   'saveProp',
 ]);
 const SINGLE = new Set(
-  'grab move release setPieceLabels recolor rollOne setStand setSnap snap remove flip takeCard dispense dispenseDrag highlightPiece notecardEdit notecardCommit notecardKeepAlive notecardFlip notecardDraw notecardShuffle notecardSplit notecardCancel'.split(
+  'fogEdit grab move release setPieceLabels recolor rollOne setStand setSnap snap remove flip takeCard dispense dispenseDrag highlightPiece notecardEdit notecardCommit notecardKeepAlive notecardFlip notecardDraw notecardShuffle notecardSplit notecardCancel'.split(
     ' ',
   ),
 );

@@ -44,6 +44,49 @@ Restart the server and refresh all clients for this schema/UI change; no migrati
 infrastructure is required. See [the concealment implementation record](DESIGN_concealment.md)
 for validation status and remaining manual smoke tests.
 
+### Manual map fog
+
+- `shared/map-fog.js`: `MAP_FOG` constants, `fogBoardSize`, `emptyFog`, `parseFog`/`normalizeFog`,
+  `encodeFogMask`/`decodeFogMask`, `normalizeFogStroke` and `paintFog`. Resolution is 256×256 bits
+  (8 KiB, 10,924 base64 characters), with a 256-point stroke cap and world-radius range 0.01–256.
+  Circle distances account for both board dimensions; segments are filled without gaps.
+- `Piece.fog` appends a string to the reflected schema. Empty/absent means disabled, fully covered
+  when first enabled. Nonempty JSON is `{v:1, enabled:boolean, revision:integer, thickness:number, mask:base64}`.
+  `serializeScene` stores the parsed record beside board props; `applyScene` validates before
+  clearing and restores it on the replacement board. Legacy saves omit it; older fog records
+  without either dimension normalize to zero; legacy `height` values become `thickness`.
+  Thickness is a 0–64 world-unit extension above the shared board top bound (`boardHalfExtents`), independent of the reveal mask.
+- `registerMapFog(room)` registers GM/gameplay-only `fogEdit {id,revision,action,...}`. Actions:
+  `enable` with boolean `enabled`; `stroke` with `mode:"reveal"|"cover"`, world-unit `radius`
+  and board-local `points:[[x,z],...]`; `all` with `mode`; `thickness` with world-unit `thickness`; or `undo`.
+  All edits require the current revision. Success replies `fogEdited {id,revision}`; rejected edits use `serverError` with
+  operation `fogEdit`. Completed changes schedule the existing save path. Rate interval: 75 ms.
+- Undo retains the last 20 changed states per board for the current room lifetime. It includes
+  enable/disable, thickness and whole-map operations, is shared between GMs, and is not persisted.
+- `createMapFog(...)`: `bindControls`, `bindRoom`, `sync`, `open`/`close`, `exit`, `isActive`,
+  `begin`/`move`/`finish`, `command`, `applyRole`. Reuses `boardGeometry` and piece props parsing.
+  It shares cap geometry/texture/materials, owns separate boundary walls, and disposes each once;
+  authored artwork stays intact. CanvasTexture
+  alpha uses the shared mask; the GM opacity is 0.5, player opacity 1. Brush input owns the canvas
+  until Done/Escape/close. Pointer cancellation/second finger discards an uncommitted stroke.
+- `input-router` routes fog pointers and suppresses conflicting actions. `controls.toolCommand`
+  gives a focused brush first chance at axis keys; the logical pointer exposes `cancelled`.
+  UI radius and thickness convert through `state.scale.worldPerUnit`; no physical rescaling occurs.
+  The base stays fixed just below the shared board bottom.
+  Thickness slider step is 0.05 world units. It previews locally until native change/release, then
+  waits for shared state; rejection, cancellation or access loss discards the preview.
+  `hitPoint` picks the volume’s top cap, including on models, with normal piece picking unaffected.
+
+- `fogWallPositions(mask, size, outline)` in `public/table/map-fog-volume.js` returns normalized-Y
+  boundary quads. It merges collinear cell edges, clips to the convex outline and closes covered
+  parts of the perimeter. Top/bottom texture alpha and walls use the same mask. Thickness/view
+  changes reuse wall geometry; brush preview, undo and shared-mask updates rebuild it as needed.
+  Opaque player fog writes depth and masks low-angle views through covered terrain; revealed
+  openings have vertical walls. GM fog is translucent. Terrain above the volume remains visible.
+
+Restart the server and refresh clients. Image, procedural and 3D boards are supported; object hiding
+is independent and piece reveal auras are still deferred.
+
 The codebase:
 
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |

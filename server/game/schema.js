@@ -19,6 +19,7 @@ defineTypes(Piece, {
   qz: 'number',
   qw: 'number',
   hidden: 'boolean',
+  fog: 'string', // bounded visual exploration mask; follows the board's visibility view
 });
 
 // PUBLIC per-player info: seat/turn order + hand count (never card identities).

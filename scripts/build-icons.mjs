@@ -156,6 +156,7 @@ const ICONS = [
   'hexagon',
   'eye',
   'eye-off',
+  'cloud-fog',
   'box-align-top-left',
   'user-up',
   'user-down',

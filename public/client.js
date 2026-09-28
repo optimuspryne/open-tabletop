@@ -45,6 +45,7 @@ import { colliderSpec } from '/shared/collider-spec.js';
 import { createColliderDebug } from './table/collider-debug.js';
 import { createWhiteboard } from './table/whiteboard.js';
 import { createOverlays } from './table/overlays.js';
+import { createMapFog } from './table/map-fog.js';
 import { createTrays } from './table/trays.js';
 import { createHand } from './table/hand.js';
 import { createInspection } from './table/inspection.js';
@@ -222,6 +223,7 @@ const participation = createParticipation({
     hand.cancelGesture({ resetModes: true });
     selection.cancel();
     overlays.cancel();
+    fog.exit();
     whiteboard.cancel();
     inspection.cancel();
     deckBrowser.cancel();
@@ -315,6 +317,7 @@ const membership = createMembership({
   });
 
   overlays.bindRoom(room, cb, noteSceneHydration);
+  fog.bindRoom(room);
 
   whiteboard.bindRoom(room); // install replay handlers before the first state-driven request
   // Record one timestamped snapshot per piece on every patch (~the server patch
@@ -453,6 +456,7 @@ const membership = createMembership({
   roomSettings.bindControls();
   whiteboard.bindControls(); // Room Settings config and the drawing toolbar
   overlays.bindControls(); // Measure pane kind picker and clear actions
+  fog.bindControls();
 
   selection.bindModeControls();
   trays.bindControls(); // visit/leave the tray, spawn dice, roll, scoop, and clear
@@ -746,6 +750,8 @@ function applyRole(role) {
   gate('scenesBtn', 2);
   gate('membersBtn', 2); // legacy standalone buttons (editor / older pages)
   gate('measureClearAll', 2); // "Clear all overlays" (Measure panel): GM+
+  gate('fogBtn', 2);
+  fog.applyRole();
   if (window.OTT_EDITOR) {
     const mb = byId('membersBtn');
     if (mb) mb.hidden = true;
@@ -791,6 +797,32 @@ const overlays = createOverlays({
 });
 
 // Whiteboard owns its mesh, stroke history, camera mode, and room protocol.
+const fog = createMapFog({
+  THREE,
+  scene,
+  camera,
+  ray,
+  pointer,
+  controls,
+  meshes,
+  canvas: renderer.domElement,
+  getRoom: () => room,
+  getRank: () => myRank,
+  canInteract: participation.canInteract,
+  setPointer,
+  byId,
+  toast,
+  onEnter: () => {
+    pieceDrag.cancel();
+    selection.cancel();
+    overlays.cancel();
+    whiteboard.cancel();
+    inspection.cancel();
+    pieceUi.closePieceMenu();
+    shell.closeRadial();
+  },
+});
+
 const whiteboard = createWhiteboard({
   THREE,
   scene,
@@ -940,6 +972,7 @@ const effects = createTableEffects({
       ms.z * 17;
   }
   overlays.syncSurface(); // GLB boards can finish loading after restored overlays arrive
+  fog.sync();
   presence.update(); // keep held-piece labels over the interpolated meshes
   pieceUi.update(); // contextual guide and live hover counts
   pieceView.updateVisibility();
@@ -986,6 +1019,7 @@ const INPUT = createInputRouter({
   selection,
   overlays,
   whiteboard,
+  fog,
   inspection,
   trays,
   pieces: pieceDrag,
@@ -1002,4 +1036,4 @@ const INPUT = createInputRouter({
 });
 attachControls(renderer.domElement, INPUT);
 
-shell.bindControls({ input: INPUT, selection, overlays, scoreboard, presence });
+shell.bindControls({ input: INPUT, selection, overlays, scoreboard, presence, fog });

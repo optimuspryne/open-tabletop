@@ -9,6 +9,15 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Manual map fog for image, procedural and 3D boards, with approved cloud-fog entry, circular Reveal/Cover brushes,
+  room-unit radii, session undo, Cover all/Reveal all, and a local player fog preview. GMs see
+  translucent coverage; other players see opaque coverage. Exploration is saved with scenes/games
+  and survives disabling fog. Painting supports mouse, touch and keyboard through the input router.
+  A shared, saved Fog thickness slider grows a closed volume with masked top/bottom caps and
+  walls along outer and revealed boundaries, preventing low-angle views under covered areas.
+  Thickness edits preserve exploration and join session undo; older height settings carry over. Piece visibility and
+  physics stay independent; reveal auras remain future work.
+  Restart the server and refresh all clients; no database migration or new dependency is needed.
 - GM object Hide/Reveal with approved eye-off/eye controls, batch selection actions, ghosted
   GM-only pieces, and Library **Spawn hidden**. Hidden pieces are omitted from player state
   and object events, remain non-colliding and parked until revealed, and retain visibility in
@@ -25,7 +34,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ### Documentation
 - Record the approved and implemented object-concealment slice, its protocol/physics boundaries
-  and user-reported manual test pass. Map fog and circular reveal auras remain future work.
+  and user-reported manual test pass. Record the manual map-fog user test pass and the implemented volume/thickness follow-up and subsequent user approval separately;
+  circular reveal auras remain future work.
 - Correct the roadmap to mark the agreed asset/collection export-import scope complete, retaining
   the deliberate scene-package deferral. Refresh the shared browser-helper cleanup scope against
   current code and remove its stale backlog-file reference; record its subsequent implementation

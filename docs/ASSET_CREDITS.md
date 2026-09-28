@@ -97,7 +97,7 @@ All CC0 (public domain).
 ### Tabler Icons
 - **Author:** Paweł Kuna and contributors - https://github.com/tabler/tabler-icons
 - **Source:** https://tabler.io/icons (outline style)
-- **Usage:** ~122 outline SVGs embedded as `<symbol>` elements in the inline icon sprite,
+- **Usage:** 163 outline SVGs, including `cloud-fog` for the fog tool, embedded as `<symbol>` elements in the inline icon sprite,
   regenerated from a single list by `scripts/build-icons.mjs` (`npm run build:icons`).
 - **License:** MIT - Copyright (c) 2020-2026 Paweł Kuna. Full text in
   [`docs/licenses/tabler-icons-LICENSE`](licenses/tabler-icons-LICENSE).

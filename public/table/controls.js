@@ -40,6 +40,7 @@ const logical = (e) => ({
   pointerId: e.pointerId, // for pointer capture on the canvas
   touch: e.pointerType === 'touch', // so client.js can show touch-only affordances (height control)
   transforming: false, // set true while a two-finger twist/pinch owns the held piece
+  cancelled: e.type === 'pointercancel' || e.type === 'lostpointercapture',
 });
 
 // A device-agnostic key command: exactly the fields the command router reads.
@@ -397,6 +398,10 @@ export function attachControls(dom, intents) {
   // keydown → command (keyboard profile). client.js's handler is the command router;
   // touch / gamepad profiles will raise the same commands from menu items / buttons.
   window.addEventListener('keydown', (e) => {
+    if (intents.toolCommand?.(logicalKey(e))) {
+      e.preventDefault();
+      return;
+    }
     const key = e.key.toLowerCase(),
       axis = AXIS_KEYS[key];
     if (axis) {
