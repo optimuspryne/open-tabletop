@@ -45,6 +45,7 @@ const messagesByCapability = {
   ],
   gameplay: [
     'fogEdit',
+    'setFogAura',
     'notecardCreate',
     'notecardEdit',
     'notecardCommit',

@@ -23,9 +23,24 @@ export function createTableShell({ byId, clamp, getRoom }) {
         b.textContent = label;
         b.tabIndex = -1;
         b.onclick = () => {
-          step > 0 ? input.stepUp() : input.stepDown();
+          if (input.disabled || input.readOnly) return;
+          if (input.step === 'any') {
+            // Native stepping throws for step="any". Keep arbitrary typed decimals valid,
+            // and use an explicit button increment without changing the input's step grid.
+            const configured = Number(input.dataset.step),
+              increment = Number.isFinite(configured) && configured > 0 ? configured : 1,
+              value = Number.isFinite(input.valueAsNumber) ? input.valueAsNumber : 0,
+              min = input.min === '' ? NaN : Number(input.min),
+              max = input.max === '' ? NaN : Number(input.max),
+              next = Number((value + step * increment).toPrecision(15));
+            if (!Number.isFinite(next)) return;
+            input.valueAsNumber = Math.max(
+              Number.isFinite(min) ? min : -Infinity,
+              Math.min(Number.isFinite(max) ? max : Infinity, next),
+            );
+          } else step > 0 ? input.stepUp() : input.stepDown();
           fire();
-        }; // stepUp/Down honour min/max/step
+        }; // Fixed-step inputs retain native min/max/step behavior.
         return b;
       };
       wrap.append(btn('\u2212', -1), input, btn('+', 1));
@@ -344,6 +359,7 @@ export function createTableShell({ byId, clamp, getRoom }) {
     wireDialog(byId('roomSettingsModal'), { modal: true });
     wireDialog(byId('sceneSaveModal'), { modal: true });
     wireDialog(byId('pieceLabelsModal'), { modal: true });
+    wireDialog(byId('fogAuraModal'), { modal: true });
     wireDialog(byId('controlsModal'), { modal: true, close: byId('controlsClose') });
     ['libraryModal', 'assetImportModal'].forEach((id) => wireDialog(byId(id), { modal: true }));
     // Top-left cluster (UI_Redesign phase 2): Chat + Notes share one region (accordion).

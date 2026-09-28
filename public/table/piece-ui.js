@@ -1,6 +1,8 @@
 import { applyIcons } from '../ui/icons.js';
 import { makeButton } from '../ui/rows.js';
 import { dispenserDefinition } from '../../shared/pieces.js';
+import { canHaveFogAura } from '../../shared/fog-auras.js';
+import { piecePropsOf } from './piece-view.js';
 // Piece menus and contextual feedback. Gesture state and server actions remain injected.
 export function createPieceUi({
   byId,
@@ -23,6 +25,7 @@ export function createPieceUi({
   highlightPiece,
   getRank,
   editLabels,
+  editFogAura,
   browseDeck,
 }) {
   const RADIAL_MAX = 7;
@@ -358,6 +361,8 @@ export function createPieceUi({
     items.push(['Highlight', () => highlightPiece(id)]);
     if (getRank() >= 2) {
       items.push(['Labels…', () => editLabels(id)]);
+      if (editFogAura && canHaveFogAura(type, piecePropsOf(getRoom().state.pieces.get(id))))
+        items.push(['Fog aura…', () => editFogAura(id), null, null, 'circle']);
       const hidden = !!getRoom().state.pieces.get(id)?.hidden;
       items.push([
         hidden ? 'Reveal to players' : 'Hide from players',

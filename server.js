@@ -448,7 +448,7 @@ class TableRoom extends Room {
     tableMessage('setPieceVisibility', (client, message) =>
       this.visibility.setVisibility(client, message),
     );
-    registerMapFog(this);
+    this.mapFog = registerMapFog(this);
 
     // --- Movement: grab → drag → release (single + multi-select) ---------
     registerMovementHandlers(this, {
@@ -1154,6 +1154,7 @@ class TableRoom extends Room {
 
     recoverEscapedBodies(this, SIM);
     publishTransforms(this);
+    this.mapFog.updateAuras();
   }
 
   async onLeave(client, arg) {

@@ -40,6 +40,26 @@ GM spectators retain authorized sight, while participation restrictions still bl
 The user reports manual tests passing (2026-09-27); specific devices and multiplayer scenarios
 were not separately itemized.
 
+## Piece fog auras
+
+Active GMs use **piece actions → Fog aura…** (circle): right-click on desktop, long-press on
+touch, or ContextMenu/Shift+F10 to open/cycle piece menus from the table canvas. Card right-click
+still flips; use keyboard actions or long-press for their aura settings. Full and compact modes
+keep the action's accessible name and hint. Long action lists use the existing scrollable menu.
+
+Enable **Reveal fog as this piece moves**, enter a radius in room units and choose **Apply**.
+The radius ring is visible only to the editing GM. **Cancel** or Escape discards drafts and
+returns focus. Tab stays within the editor; fields keep native keys without steering the table.
+Ordinary mouse, touch, keyboard and group movement reveal a persistent path once configured.
+Hidden pieces pause their auras; disabling or removing an aura leaves exploration intact.
+Boards, mats and personal tray dice are not aura sources.
+
+Manual Cover remains until an aura moves across it again. Automatic movement does not consume
+manual Undo slots, but Undo restores the older coverage snapshot as well as its settings. Pause
+auras when editing fog around moving pieces to avoid concurrent-revision cancellations. Auras
+ignore walls and never change explicit Hide/Reveal. Save/reload retains the radius and enable
+state; an active aura resumes at its current position without replaying old movement.
+
 ## Manual map fog
 
 Active GMs open **Fog** beside Measure, or **drawer → Table → Fog** on narrow/touch layouts.

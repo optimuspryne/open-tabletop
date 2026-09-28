@@ -237,7 +237,9 @@ implementation sequence without making the entire backlog a fixed priority queue
 4. **Fog of war — manual covering and volume/thickness controls implemented and user-approved.** Active GMs paint
    circular Reveal/Cover strokes on image, procedural and 3D boards, with room-unit radius, undo
    and whole-map actions. Adjustable, saved fog thickness creates a closed volume with walls around revealed areas. Exploration persists in scenes/games; normal visual covering is sufficient for artwork.
-   Object Hide/Reveal remains separate. Simple circular piece reveal auras are the next slice;
+   Object Hide/Reveal remains separate. Circular piece reveal auras are implemented with an
+   approved GM editor; the user reports they work great after the radius-stepper fix and approves
+   committing them. Specific devices/scenarios were not itemized;
    see [the staged design](DESIGN_concealment.md).
 5. **Spectator mode — implemented; functionality and UI user-approved.** Players choose
    **More → Spectate / Return to play** or lobby **Watch**. New observers are seatless; converted
@@ -305,7 +307,7 @@ implementation sequence without making the entire backlog a fixed priority queue
     parked without collisions; safe placement/support checks guard reveal/hide. Visibility
     survives scenes/games and derivatives on the table. Private hands keep their own privacy;
     personal tray dice remain visible. See [implementation and smoke tests](DESIGN_concealment.md).
-    Manual map fog is tracked separately in item 4; automatic auras and GM staging remain future work.
+    Manual map fog and piece auras are tracked separately in item 4; GM staging remains future work.
 15. **Player time-out mode (GM) — implemented; user-approved functionality and UI.** Temporarily stop a selected player from interacting with
     tabletop objects while allowing them to observe. Provide a clear GM control to apply and
     lift the restriction, and make the restricted state clear to the player. Explore temporarily

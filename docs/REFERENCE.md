@@ -85,7 +85,40 @@ for validation status and remaining manual smoke tests.
   openings have vertical walls. GM fog is translucent. Terrain above the volume remains visible.
 
 Restart the server and refresh clients. Image, procedural and 3D boards are supported; object hiding
-is independent and piece reveal auras are still deferred.
+is independent. Piece reveal auras use the contracts below.
+
+### Piece fog auras
+
+- `shared/fog-auras.js`: `FOG_AURA`, `canHaveFogAura`, `normalizeFogAura`, `parseFogAura` and
+  `fogAuraPoint`. Auras apply to tabletop piece kinds except boards, mats and personal tray dice.
+  `Piece.fogAura` is empty/absent (off) or JSON `{v:1,enabled:boolean,radius:number}`. Radius is
+  0.01–256 world units, displayed using `scale.worldPerUnit` and `unitLabel`.
+- `registerMapFog(room)` also registers `setFogAura {id,previous,aura}`; `previous` must exactly
+  equal the current string (or `""` for unset). Active GMs only; successful configuration returns
+  `fogAuraEdited {id,fogAura}`. Failures use `serverError` operation `setFogAura`. Configuration
+  requests are limited to one per client per 75 ms. Hidden source IDs pass through normal access checks.
+- The service returns `updateAuras()`, called after `publishTransforms` in `TableRoom.update`.
+  Board-local paths sample every simulation step, publish normally every 100 ms, and flush early
+  at 256 samples. A 0.001 world-unit movement threshold suppresses physics jitter. Automatic
+  coverage uses `paintFog`, advances fog revision and schedules saving without adding undo entries.
+  Manual Cover/Undo discards queued paths; a stationary source does not immediately repaint.
+  Manual brush edits retain normal revision checks and may be cancelled if another reveal changes
+  the map while painting. Pause the source aura when a stable manual edit is needed.
+- Hidden/disabled pieces and boards, removals and replacements break path continuity. Resuming
+  reveals only the current circle before tracking subsequent movement. New/reloaded active auras
+  also reveal their current circle; scene loading does not replay previous movement. Settings and
+  exploration persist; ephemeral paths and undo do not. Aura settings are not inherited by deck,
+  dispenser or hand-transfer outputs.
+- `createFogAuras(...)` exposes `edit`, `close`, `update`, `bindRoom`, `isActive`. The piece menu
+  injects `editFogAura`; the approved Tabler circle already exists in the shared sprite. Local
+  drafts and ring previews remain unsynchronized. Apply waits for acknowledgment and state;
+  Cancel/Escape discards drafts. The editor closes on access loss, removal, room or scale change.
+- Aura radius keeps `step="any"` for arbitrary world/display conversions and uses `data-step="0.25"`
+  for its +/− buttons. `enhanceNumberInputs` handles arbitrary-decimal stepping arithmetically,
+  clamps to current bounds and ignores disabled/read-only inputs. Other fields retain native
+  `stepUp`/`stepDown` semantics; arbitrary-decimal fields without a button increment default to 1.
+
+See [the slice 3 record](DESIGN_concealment.md#slice-3-piece-reveal-auras) for changed files and checks.
 
 The codebase:
 

@@ -15,6 +15,13 @@ import { registerMapFog } from '../server/game/map-fog.js';
 import { State, Piece } from '../server/game/schema.js';
 import { serializeScene, applyScene } from '../server/game/scene-persistence.js';
 import { RANK } from '../server/permissions.js';
+import {
+  FOG_AURA,
+  canHaveFogAura,
+  normalizeFogAura,
+  parseFogAura,
+  fogAuraPoint,
+} from '../shared/fog-auras.js';
 
 const size = { w: 12, d: 6 };
 function covered(mask, x, z) {
@@ -48,6 +55,24 @@ function fixture() {
       this.state.pieces.set('2', piece);
       return '2';
     },
+    spawn(type, position, props, q, hidden) {
+      const id = String(this.state.pieces.size + 10),
+        piece = new Piece();
+      Object.assign(piece, {
+        type,
+        props: JSON.stringify(props),
+        x: position[0],
+        y: position[1],
+        z: position[2],
+        qx: q?.[0] || 0,
+        qy: q?.[1] || 0,
+        qz: q?.[2] || 0,
+        qw: q?.[3] ?? 1,
+        hidden,
+      });
+      this.state.pieces.set(id, piece);
+      return id;
+    },
   };
   const piece = new Piece();
   Object.assign(piece, {
@@ -63,7 +88,7 @@ function fixture() {
   });
   room.state.pieces.set('1', piece);
   const client = { sessionId: 'gm', auth: { role: 'gm' }, send: (...args) => sent.push(args) };
-  registerMapFog(room, { now: () => time });
+  const service = registerMapFog(room, { now: () => time });
   const edit = async (data) => {
     time += 100;
     await handlers.get('fogEdit')(client, {
@@ -82,6 +107,10 @@ function fixture() {
       return saves;
     },
     handlers,
+    tick(ms = FOG_AURA.interval) {
+      time += ms;
+      service.updateAuras();
+    },
   };
 }
 test('fog mask round trips and paints circular capsules on a non-square board', () => {
@@ -271,4 +300,194 @@ test('fog thickness is bounded, backward compatible, undoable and preserves expl
   });
   assert.deepEqual(parseFog(f.room.state.pieces.get('2').fog), saved.pieces[0].fog);
   assert.equal(saved.pieces[0].fog.thickness, MAP_FOG.maxThickness);
+});
+
+function auraPiece(f, position = [-3, 1, 0]) {
+  const id = f.room.spawn('prop', position, { shape: 'cube' }, null, false);
+  return { id, piece: f.room.state.pieces.get(id) };
+}
+async function setAura(f, source, enabled = true, radius = 0.3) {
+  await f.handlers.get('setFogAura')(f.client, {
+    id: source.id,
+    previous: source.piece.fogAura || '',
+    aura: { v: 1, enabled, radius },
+  });
+}
+
+test('aura validation bounds radii and projects translated, rotated board coordinates', () => {
+  assert.deepEqual(parseFogAura(''), { v: 1, enabled: false, radius: 1 });
+  assert.equal(parseFogAura('{'), null);
+  for (const value of [
+    null,
+    {},
+    { v: 2, enabled: true, radius: 1 },
+    { v: 1, enabled: 'true', radius: 1 },
+    ...[-1, 0, Infinity, NaN, 257, '1'].map((radius) => ({ v: 1, enabled: true, radius })),
+  ])
+    assert.equal(normalizeFogAura(value), null);
+  for (const type of ['board', 'mat', '__proto__', 'unknown'])
+    assert.equal(canHaveFogAura(type), false);
+  assert.equal(canHaveFogAura('die', { traySeat: 0 }), false);
+  assert.equal(canHaveFogAura('prop'), true);
+  const board = { x: 5, y: 2, z: 4, qx: 0, qy: Math.SQRT1_2, qz: 0, qw: Math.SQRT1_2 };
+  const point = fogAuraPoint({ x: 5, y: 10, z: 2 }, board);
+  assert.ok(Math.abs(point[0] - 2) < 1e-10 && Math.abs(point[1]) < 1e-10);
+  assert.equal(fogAuraPoint({ x: NaN, y: 0, z: 0 }, board), null);
+});
+
+test('aura configuration uses the production permission gate, validates targets and rejects stale drafts', async () => {
+  const f = fixture(),
+    source = auraPiece(f);
+  for (const auth of [
+    { role: 'player' },
+    { role: 'helper' },
+    { role: 'gm', revoked: true },
+    { role: 'gm', timedOut: true },
+    { role: 'gm', participation: 'spectator' },
+  ]) {
+    f.client.auth = auth;
+    await setAura(f, source);
+    assert.equal(source.piece.fogAura, undefined);
+  }
+  f.client.auth = { role: 'gm' };
+  await setAura(f, { id: '1', piece: f.piece });
+  assert.equal(f.piece.fogAura, undefined);
+  await setAura(f, source, true, Infinity);
+  assert.equal(source.piece.fogAura, undefined);
+  await setAura(f, source);
+  const saved = source.piece.fogAura;
+  await f.handlers.get('setFogAura')(f.client, {
+    id: source.id,
+    previous: '',
+    aura: { v: 1, enabled: false, radius: 1 },
+  });
+  assert.equal(source.piece.fogAura, saved);
+  await setAura(f, source, false);
+  assert.equal(source.piece.fogAura, saved, 'rapid edit was rate limited');
+  f.tick();
+  await setAura(f, source, false);
+  assert.equal(parseFogAura(source.piece.fogAura).enabled, false);
+});
+
+test('auras reveal sampled curved movement at a bounded publication rate without filling manual undo', async () => {
+  const f = fixture(),
+    source = auraPiece(f, [-2, 1, -1]);
+  await f.edit({ action: 'enable', enabled: true });
+  await setAura(f, source);
+  f.tick();
+  const initial = f.piece.fog;
+  source.piece.z = 1;
+  f.tick(16);
+  source.piece.x = 2;
+  f.tick(16);
+  assert.equal(f.piece.fog, initial, 'each physics frame must not publish');
+  f.tick(100);
+  const mask = decodeFogMask(parseFog(f.piece.fog).mask);
+  assert.equal(covered(mask, -2, 0), false);
+  assert.equal(covered(mask, 0, 1), false);
+  assert.equal(covered(mask, 0, 0), true, 'sampled turn must not become a diagonal shortcut');
+  const saves = f.saves;
+  f.tick();
+  f.tick();
+  assert.equal(f.saves, saves, 'stationary source must not write');
+  await f.edit({ action: 'undo' });
+  assert.equal(
+    parseFog(f.piece.fog).enabled,
+    false,
+    'automatic movement did not consume manual undo entries',
+  );
+});
+
+test('manual cover discards pending paths, and hidden, disabled or removed sources leave no reveal bridge', async () => {
+  const f = fixture(),
+    source = auraPiece(f);
+  await f.edit({ action: 'enable', enabled: true });
+  await setAura(f, source);
+  f.tick();
+  source.piece.x = -2;
+  f.tick(16);
+  await f.edit({ action: 'all', mode: 'cover' });
+  f.tick();
+  assert.equal(parseFog(f.piece.fog).mask, emptyFog().mask);
+  source.piece.hidden = true;
+  f.tick();
+  source.piece.x = 3;
+  f.tick();
+  assert.equal(parseFog(f.piece.fog).mask, emptyFog().mask);
+  source.piece.hidden = false;
+  f.tick();
+  let mask = decodeFogMask(parseFog(f.piece.fog).mask);
+  assert.equal(covered(mask, 3, 0), false);
+  assert.equal(covered(mask, 0, 0), true);
+  await setAura(f, source, false);
+  f.tick();
+  source.piece.x = -3;
+  f.tick();
+  mask = decodeFogMask(parseFog(f.piece.fog).mask);
+  assert.equal(covered(mask, -3, 0), true);
+  await setAura(f, source);
+  f.tick();
+  f.room.state.pieces.delete(source.id);
+  f.tick();
+  const before = f.piece.fog;
+  source.piece.x = 0;
+  f.tick();
+  assert.equal(f.piece.fog, before);
+});
+
+test('hidden boards and disabled fog pause paths; replacement boards do not inherit exploration', async () => {
+  const f = fixture(),
+    source = auraPiece(f);
+  await f.edit({ action: 'enable', enabled: true });
+  await setAura(f, source);
+  f.tick();
+  await f.edit({ action: 'enable', enabled: false });
+  f.tick();
+  source.piece.x = 3;
+  f.tick();
+  await f.edit({ action: 'enable', enabled: true });
+  f.tick();
+  assert.equal(covered(decodeFogMask(parseFog(f.piece.fog).mask), 0, 0), true);
+  f.piece.hidden = true;
+  f.tick();
+  source.piece.x = 0;
+  f.tick();
+  assert.equal(covered(decodeFogMask(parseFog(f.piece.fog).mask), 0, 0), true);
+  const replacement = new Piece();
+  Object.assign(replacement, f.piece.toJSON());
+  replacement.hidden = false;
+  replacement.fog = JSON.stringify({ ...emptyFog(), enabled: true });
+  f.room.state.pieces.set('1', replacement);
+  f.tick();
+  const mask = decodeFogMask(parseFog(replacement.fog).mask);
+  assert.equal(covered(mask, 0, 0), false);
+  assert.equal(covered(mask, -3, 0), true);
+});
+
+test('scene restoration preserves aura settings, rejects malformed settings before clearing and accepts legacy scenes', async () => {
+  const f = fixture(),
+    source = auraPiece(f);
+  await setAura(f, source);
+  source.piece.hidden = true;
+  const saved = serializeScene(f.room),
+    opts = {
+      maxPieces: 100,
+      tableLimits: { minX: 1, maxX: 100, minZ: 1, maxZ: 100 },
+      overlayKinds: new Set(),
+      overlayMax: 100,
+    };
+  assert.equal(saved.pieces[1].fogAura.radius, 0.3);
+  assert.throws(
+    () =>
+      applyScene(f.room, { ...saved, pieces: [{ ...saved.pieces[1], fogAura: { v: 99 } }] }, opts),
+    /invalid fog aura/,
+  );
+  assert.equal(f.room.state.pieces.get(source.id), source.piece);
+  applyScene(f.room, saved, opts);
+  const restored = [...f.room.state.pieces.values()].find((p) => p.type === 'prop');
+  assert.deepEqual(parseFogAura(restored.fogAura), saved.pieces[1].fogAura);
+  assert.equal(restored.hidden, true);
+  delete saved.pieces[1].fogAura;
+  applyScene(f.room, saved, opts);
+  assert.equal([...f.room.state.pieces.values()].find((p) => p.type === 'prop').fogAura, undefined);
 });

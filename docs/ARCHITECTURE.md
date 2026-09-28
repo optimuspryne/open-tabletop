@@ -68,7 +68,7 @@ grabs and drawing/browsing leases and returns pending inspections without discar
 Map fog is a visual covering over downloaded artwork, separate from object delivery protection.
 It never changes physics, piece visibility, movement legality or game rules. Image, procedural and model
 boards are eligible; player mats are outside this slice. The existing
-single-board lifecycle is preserved. Circular piece reveal auras remain future work.
+single-board lifecycle is preserved. Circular piece reveal auras use this same mask.
 
 `shared/map-fog.js` owns a fixed 256×256 bit mask and capsule rasterization between circular
 brush samples. Board-local world coordinates and the existing board geometry keep the mask
@@ -103,6 +103,34 @@ share one nearest-filtered texture and geometry, so their alpha edges meet the w
 Player/opaque-preview materials write depth; GM materials remain translucent. The controller
 owns/disposes wall geometry and materials, and disposes shared cap resources once. No new
 physics shapes or server geometry are introduced.
+
+### Piece reveal auras
+
+`shared/fog-auras.js` defines source eligibility, bounded radius normalization and inverse-board
+coordinate projection. A versioned `Piece.fogAura` record follows the existing piece view and is
+saved beside its transform; malformed aura snapshots fail before clearing. Old saves have no
+enabled aura. Boards, mats and personal tray dice cannot be sources. New objects and derivatives
+start without an aura; hand transfers end the original tabletop identity.
+
+The map-fog service owns configuration and automatic reveals. `setFogAura` requires a live active
+GM and the current configuration; the normal capability/source visibility gates run first.
+`TableRoom.update` samples auras after final physics transforms are published. Pending paths
+preserve bends between updates, have a 256-sample cap and normally rasterize/publish every 100 ms.
+Stationary pieces do not generate mask writes. Hidden/disabled sources, hidden/disabled boards,
+removal and board replacement reset path continuity, so paused movement does not reveal a bridge.
+Radius settings are physical world units, displayed through room scale without rescaling objects.
+
+Automatic reveals increment the ordinary fog revision and schedule saves, but do not fill the
+20-entry manual undo history. Manual edits discard already sampled pending paths; Cover persists
+until a source next moves across it. Undo restores a prior manual snapshot, including its older
+coverage. Enabling an aura or resuming it reveals its current circle. Auras ignore wall geometry
+and do not alter explicitly hidden objects, inventory or permissions.
+
+`public/table/fog-auras.js` owns only the GM editor and a temporary ring projected onto the map's
+fog top. The shared dialog wiring manages focus/escape; keys stay in the dialog. The controller
+closes on role/participation loss, piece removal, scale changes and room handover, disposes its
+own resources and never changes authored piece materials. Configuration acknowledgment waits
+for state delivery; stale edits report through the established error boundary.
 
 ## Kinds vs. instances (where OO belongs)
 

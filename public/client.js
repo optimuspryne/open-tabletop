@@ -46,6 +46,7 @@ import { createColliderDebug } from './table/collider-debug.js';
 import { createWhiteboard } from './table/whiteboard.js';
 import { createOverlays } from './table/overlays.js';
 import { createMapFog } from './table/map-fog.js';
+import { createFogAuras } from './table/fog-auras.js';
 import { createTrays } from './table/trays.js';
 import { createHand } from './table/hand.js';
 import { createInspection } from './table/inspection.js';
@@ -224,6 +225,7 @@ const participation = createParticipation({
     selection.cancel();
     overlays.cancel();
     fog.exit();
+    fogAuras.close();
     whiteboard.cancel();
     inspection.cancel();
     deckBrowser.cancel();
@@ -318,6 +320,7 @@ const membership = createMembership({
 
   overlays.bindRoom(room, cb, noteSceneHydration);
   fog.bindRoom(room);
+  fogAuras.bindRoom(room);
 
   whiteboard.bindRoom(room); // install replay handlers before the first state-driven request
   // Record one timestamped snapshot per piece on every patch (~the server patch
@@ -926,6 +929,25 @@ const pieceUi = createPieceUi({
   highlightPiece: (id) => effects.highlightPiece(id),
   getRank: () => myRank,
   editLabels: pieceLabels.edit,
+  editFogAura: (id) => fogAuras.edit(id),
+});
+const fogAuras = createFogAuras({
+  THREE,
+  scene,
+  meshes,
+  getRoom: () => room,
+  getRank: () => myRank,
+  canInteract: participation.canInteract,
+  byId,
+  onOpen: () => {
+    fog.exit();
+    pieceDrag.cancel();
+    selection.cancel();
+    overlays.cancel();
+    whiteboard.cancel();
+    inspection.cancel();
+    shell.closeRadial();
+  },
 });
 const effects = createTableEffects({
   THREE,
@@ -973,6 +995,7 @@ const effects = createTableEffects({
   }
   overlays.syncSurface(); // GLB boards can finish loading after restored overlays arrive
   fog.sync();
+  fogAuras.update();
   presence.update(); // keep held-piece labels over the interpolated meshes
   pieceUi.update(); // contextual guide and live hover counts
   pieceView.updateVisibility();
@@ -1011,7 +1034,7 @@ addEventListener('resize', () => {
 // Raw canvas events → intents (see public/table/controls.js). These handlers own what each
 // intent means through the composed router; controls.js owns which device gesture raises it.
 const INPUT = createInputRouter({
-  isModalActive: () => notecards.isActive(),
+  isModalActive: () => notecards.isActive() || fogAuras.isActive(),
   canInteract: participation.canInteract,
   getRoom: () => room,
   canvas: renderer.domElement,

@@ -210,6 +210,86 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'piece-fog-aura',
+    root: '#fogAuraModal',
+    expect: { selector: '#fogAuraModal:not([hidden]) input', min: 2 },
+    drive: `
+      ${BE_ADMIN}
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const THREE = await import('/vendor/three/three.module.js');
+      const { createFogAuras } = await import('/table/fog-auras.js');
+      const { createTableShell } = await import('/table/table-shell.js');
+      const { emptyFog } = await import('/shared/map-fog.js');
+      const { createUiSurfaces } = await import('/ui/ui-surfaces.js');
+      const byId = id => document.getElementById(id), scene = new THREE.Scene();
+      const tick = () => new Promise(resolve => setTimeout(resolve,0));
+      const piece = { type:'prop', props:JSON.stringify({label:'Ranger'}), hidden:false };
+      const board = { type:'board', props:JSON.stringify({w:12,d:6}), fog:JSON.stringify({...emptyFog(),enabled:true,thickness:2}) };
+      const boardMesh = new THREE.Mesh(), sourceMesh = new THREE.Mesh();
+      sourceMesh.position.set(2,1,3); scene.add(boardMesh,sourceMesh);
+      const meshes = new Map([['1',{type:'board',mesh:boardMesh}],['2',{type:'prop',mesh:sourceMesh}]]);
+      let rank=2, interactive=true;
+      const messages=new Map(), requests=[];
+      const room={state:{pieces:new Map([['1',board],['2',piece]]),scale:{worldPerUnit:2,unitLabel:'in'}},onMessage:(type,fn)=>messages.set(type,fn),send:(...args)=>requests.push(args)};
+      createTableShell({byId,getRoom:()=>room,clamp:(v,min,max)=>Math.max(min,Math.min(max,v))}).prepare();
+      const auras=createFogAuras({THREE,scene,meshes,getRoom:()=>room,getRank:()=>rank,canInteract:()=>interactive,byId,onOpen(){}});
+      createUiSurfaces().wireDialog(byId('fogAuraModal'),{modal:true});auras.bindRoom(room);
+      const opener=document.createElement('button');opener.textContent='Fog aura';document.body.append(opener);opener.focus();
+      auras.edit('2');await tick();
+      assert(byId('fogAuraModal').getAttribute('aria-modal')==='true','Aura dialog is not modal');
+      assert(byId('fogAuraRadius').value==='0.5'&&byId('fogAuraUnit').textContent==='in','Aura radius did not use room scale');
+      const radiusField=byId('fogAuraRadius'), [minus,plus]=radiusField.closest('.stepper').querySelectorAll('button');
+      plus.click();assert(radiusField.value==='0.5','Disabled aura field was stepped');
+      byId('fogAuraEnabled').click();byId('fogAuraRadius').value='3';byId('fogAuraRadius').dispatchEvent(new Event('input'));
+      plus.click();assert(radiusField.value==='3.25','Aura plus did not step a quarter display unit');
+      minus.click();assert(radiusField.value==='3','Aura minus did not restore radius');
+      radiusField.value='0.123';plus.click();assert(radiusField.value==='0.373'&&radiusField.validity.valid,'Stepping rejected an arbitrary decimal radius');
+      radiusField.value=radiusField.max;plus.click();assert(radiusField.value===radiusField.max,'Aura step exceeded max');
+      radiusField.value=radiusField.min;minus.click();assert(radiusField.value===radiusField.min,'Aura step crossed min');
+      radiusField.readOnly=true;plus.click();assert(radiusField.value===radiusField.min,'Read-only field was stepped');radiusField.readOnly=false;
+      radiusField.value='';plus.click();assert(radiusField.value==='0.25','Empty aura field did not get a valid increment');
+      radiusField.value='3';radiusField.dispatchEvent(new Event('input'));
+      const brush=byId('fogRadius');brush.value='0.01';brush.closest('.stepper').querySelector('button:last-child').click();
+      assert(brush.value==='0.26'&&brush.validity.valid,'Native fixed-step controls changed behavior');
+      const ring=scene.children.find(child=>child!==boardMesh&&child!==sourceMesh);
+      assert(ring.visible&&Math.abs(ring.matrix.elements[0]-6)<.001,'Local aura preview radius incorrect');
+      assert(ring.matrix.elements[12]===2&&ring.matrix.elements[14]===3&&ring.matrix.elements[13]>2,'Preview missed piece or fog top');
+      assert(!requests.length&&!piece.fogAura,'Draft mutated shared state');
+      let leakedKeys=0;const leaked=()=>leakedKeys++;window.addEventListener('keydown',leaked);
+      byId('fogAuraApply').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}));
+      window.removeEventListener('keydown',leaked);assert(!leakedKeys,'Dialog leaked camera axes');
+      byId('fogAuraForm').requestSubmit();
+      const [type,edit]=requests.at(-1);assert(type==='setFogAura'&&edit.aura.radius===6&&edit.previous==='','Aura request lost scale or baseline');
+      messages.get('fogAuraEdited')({id:'2',fogAura:JSON.stringify(edit.aura)});
+      assert(auras.isActive()&&byId('fogAuraApply').disabled,'Ack unlocked before state');
+      let disposed=0;ring.geometry.addEventListener('dispose',()=>disposed++);ring.material.addEventListener('dispose',()=>disposed++);
+      piece.fogAura=JSON.stringify(edit.aura);auras.update();await tick();
+      assert(!auras.isActive()&&disposed===2&&document.activeElement===opener,'Save leaked preview or lost focus return');
+      auras.edit('2');await tick();
+      byId('fogAuraForm').requestSubmit();messages.get('serverError')({operation:'setFogAura',message:'Concurrent edit'});auras.update();
+      assert(!byId('fogAuraApply').disabled&&byId('fogAuraStatus').textContent==='Concurrent edit','Error was not retained');
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await tick();
+      assert(!auras.isActive()&&document.activeElement===opener,'Escape did not cancel and return focus');
+      auras.edit('2');rank=0;auras.update();assert(!auras.isActive(),'Role loss retained editor');
+      rank=2;auras.edit('2');interactive=false;auras.update();assert(!auras.isActive(),'Time-out retained editor');
+      interactive=true;auras.edit('2');piece.hidden=true;auras.update();
+      assert(byId('fogAuraStatus').textContent.includes('paused'),'Hidden piece did not pause preview');
+      room.state.pieces.delete('2');auras.update();assert(!auras.isActive(),'Piece removal retained editor');room.state.pieces.set('2',piece);piece.hidden=false;
+      auras.edit('2');room.state.scale.worldPerUnit=1;auras.update();assert(!auras.isActive(),'Scale change reinterpreted a draft');room.state.scale.worldPerUnit=2;
+      for(const compact of [false,true]) {
+        document.body.classList.toggle('ui-full',!compact);document.body.classList.toggle('ui-compact',compact);
+        auras.edit('2');await tick();
+        for(const id of ['fogAuraRadius','fogAuraEnabled','fogAuraApply','fogAuraCancel']) {
+          const rect=byId(id).getBoundingClientRect();assert(rect.width>0&&rect.left>=0&&rect.right<=innerWidth,'Aura controls overflow '+id);
+        }
+        byId('fogAuraApply').focus();byId('fogAuraApply').dispatchEvent(new KeyboardEvent('keydown',{key:'Tab',bubbles:true,cancelable:true}));
+        assert(document.activeElement===byId('fogAuraClose'),'Dialog Tab did not wrap');
+      }
+      document.body.classList.add('ui-full');document.body.classList.remove('ui-compact');auras.edit('2');
+      window.auraTest={auras,scene,room};
+    `,
+  },
+  {
     name: 'map-fog-controls',
     root: '#regionTR',
     expect: { selector: '.pane[data-pane="fog"].on button', min: 8 },
@@ -1419,7 +1499,8 @@ const SCENES = [
         whiteboard: { isOwning: () => false }, setPointer() {}, pickId: () => 'deck',
         isSheet: () => sheet, openRadial: (...args) => { radial = args; return true; },
         highlightPiece: (id) => sent.push(['menuHighlight', id]), getRank: () => rank,
-        editLabels: (id) => sent.push(['menuLabels', id]) });
+        editLabels: (id) => sent.push(['menuLabels', id]),
+        editFogAura: (id) => sent.push(['menuAura', id]) });
       canvas.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: 80, clientY: 80 }));
       assert(byId('hoverCount').textContent === '12 cards', 'Hover count missing');
       state.pieces.get('deck').count = 8; ui.update();
@@ -1437,11 +1518,16 @@ const SCENES = [
       assert(sent.at(-1)[0] === 'menuHighlight' && sent.at(-1)[1] === 'die', 'Touch highlight action missing');
       assert(!radial[2].some(item => item.label === 'Labels…'), 'Player menu offered GM labels');
       assert(!radial[2].some(item => /players/.test(item.label)), 'Player menu offered concealment');
+      assert(!radial[2].some(item => item.label === 'Fog aura…'), 'Player menu offered aura configuration');
       rank = 2;
       for (const touch of [false, true]) {
         sheet = touch; ui.openPieceMenu('deck', { x: 80, y: 80 });
         const labelAction = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Labels…');
         assert(labelAction, 'GM label action missing from desktop/touch menu');
+        const auraAction=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Fog aura…');
+        assert(auraAction?.querySelector('use')?.getAttribute('href')==='#i-circle','Aura entry lost approved circle icon');
+        auraAction.click();assert(sent.at(-1)[0]==='menuAura'&&sent.at(-1)[1]==='deck','Aura entry targeted wrong piece');
+        ui.openPieceMenu('deck', { x: 80, y: 80 });
         const hide=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Hide from players');
         assert(hide?.querySelector('use')?.getAttribute('href')==='#i-eye-off','Hide icon missing');
         hide.click();
@@ -1458,7 +1544,11 @@ const SCENES = [
       }
       sheet=true; state.pieces.set('other',{type:'prop',hidden:true});
       ui.openPieceMenu('other',{x:100,y:100});
+      assert(!byId('pieceMenu').hidden,'Long GM action list did not use the scrollable touch menu');
+      state.pieces.get('other').type='mat';meshes.get('other').type='mat';
+      ui.openPieceMenu('other',{x:100,y:100});
       assert(radial[2].some(item=>item.label==='Reveal to players' && item.icon==='eye'),'Radial lost explicit visibility icon');
+      assert(!radial[2].some(item=>item.label==='Fog aura…'),'Mat offered a fog aura');
       held = { id: 'deck', type: 'deck', grabbed: true, touch: true }; ui.updateHoldControls();
       assert(!document.querySelector('.heightUp').hidden, 'Touch height controls missing');
       held = null; selection.size = 1; ui.updateHoldControls();

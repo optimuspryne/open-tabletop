@@ -9,6 +9,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- GM-configured piece fog auras, with the approved circle menu entry, room-unit radius and local
+  preview. Moving a visible tabletop piece reveals a persistent circular path through map fog;
+  hidden pieces pause their auras. Settings survive scene/game saves. Manual fog controls remain
+  available; auras neither reveal explicitly hidden objects nor enforce walls or movement rules.
+  Restart the server and refresh clients; no migration or new dependency is required.
 - Manual map fog for image, procedural and 3D boards, with approved cloud-fog entry, circular Reveal/Cover brushes,
   room-unit radii, session undo, Cover all/Reveal all, and a local player fog preview. GMs see
   translucent coverage; other players see opaque coverage. Exploration is saved with scenes/games
@@ -16,7 +21,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   A shared, saved Fog thickness slider grows a closed volume with masked top/bottom caps and
   walls along outer and revealed boundaries, preventing low-angle views under covered areas.
   Thickness edits preserve exploration and join session undo; older height settings carry over. Piece visibility and
-  physics stay independent; reveal auras remain future work.
+  physics stay independent; piece reveal auras are tracked separately above.
   Restart the server and refresh all clients; no database migration or new dependency is needed.
 - GM object Hide/Reveal with approved eye-off/eye controls, batch selection actions, ghosted
   GM-only pieces, and Library **Spawn hidden**. Hidden pieces are omitted from player state
@@ -25,6 +30,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Reveal rejects occupied placements; hiding rejects held/edited pieces and visible supports.
   Private hands retain their separate privacy and explicit sharing/play behavior; personal tray
   dice stay visible. Restart the server and refresh all clients; no database migration is needed.
+
+### Fixed
+- Fix the fog-aura radius +/− buttons throwing `InvalidStateError` for arbitrary decimal inputs.
+  The shared stepper supports `step="any"` with bounded increments (0.25 displayed units for
+  aura radii), preserves typed decimals, and ignores disabled/read-only fields. Refresh clients.
 
 ### Changed
 - Consolidate browser session-token access, lobby/admin JSON requests, and shared button DOM
@@ -35,7 +45,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ### Documentation
 - Record the approved and implemented object-concealment slice, its protocol/physics boundaries
   and user-reported manual test pass. Record the manual map-fog user test pass and the implemented volume/thickness follow-up and subsequent user approval separately;
-  circular reveal auras remain future work.
+  record the approved piece-aura implementation and subsequent user-reported test pass after
+  the radius-stepper fix separately.
 - Correct the roadmap to mark the agreed asset/collection export-import scope complete, retaining
   the deliberate scene-package deferral. Refresh the shared browser-helper cleanup scope against
   current code and remove its stale backlog-file reference; record its subsequent implementation

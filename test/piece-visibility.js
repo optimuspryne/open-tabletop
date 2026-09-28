@@ -445,3 +445,24 @@ test('map fog follows board visibility through reflected initial state and patch
   patch();
   assert.equal(player.decoded.pieces.has(id), false);
 });
+
+test('aura configuration follows hidden piece schema delivery and live visibility changes', () => {
+  const { room, client, patch } = harness();
+  const id = room.spawn('prop', [0, 2, 0], { shape: 'cube' }, null, true);
+  const piece = room.state.pieces.get(id);
+  piece.fogAura = JSON.stringify({ v: 1, enabled: true, radius: 3 });
+  const player = client('player'),
+    gm = client('gm');
+  assert.equal(player.decoded.pieces.has(id), false);
+  assert.equal(gm.decoded.pieces.get(id).fogAura, piece.fogAura);
+  patch();
+  room.visibility.setVisibility(gm, { ids: [id], hidden: false });
+  patch();
+  assert.equal(player.decoded.pieces.get(id).fogAura, piece.fogAura);
+  piece.fogAura = JSON.stringify({ v: 1, enabled: false, radius: 3 });
+  patch();
+  assert.equal(player.decoded.pieces.get(id).fogAura, piece.fogAura);
+  room.visibility.setVisibility(gm, { ids: [id], hidden: true });
+  patch();
+  assert.equal(player.decoded.pieces.has(id), false);
+});

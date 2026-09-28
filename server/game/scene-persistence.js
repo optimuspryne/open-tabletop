@@ -11,6 +11,7 @@ import { appendAccountHand } from './hand-state.js';
 import { readProps } from './props-codec.js';
 import { lightingSnapshot, normalizeLighting } from '../../shared/lighting.js';
 import { fogBoardSize, normalizeFog, parseFog } from '../../shared/map-fog.js';
+import { canHaveFogAura, normalizeFogAura, parseFogAura } from '../../shared/fog-auras.js';
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 
@@ -72,6 +73,7 @@ export function serializeScene(room, { includeLighting = false } = {}) {
       type: piece.type,
       ...(piece.hidden ? { hidden: true } : {}),
       ...(piece.fog ? { fog: parseFog(piece.fog) } : {}),
+      ...(piece.fogAura ? { fogAura: parseFogAura(piece.fogAura) } : {}),
       props,
       ...(piece.type === 'dispenser' ? { count: piece.count } : {}),
       x: piece.x,
@@ -187,6 +189,11 @@ export function applyScene(
       (!fogBoardSize(entry.type, entry.props) || !normalizeFog(entry.fog))
     )
       throw new Error('The scene contains invalid map fog.');
+    if (
+      entry?.fogAura !== undefined &&
+      (!canHaveFogAura(entry.type, entry.props) || !normalizeFogAura(entry.fogAura))
+    )
+      throw new Error('The scene contains an invalid fog aura.');
   }
   const notecards = (Array.isArray(scene.pieces) ? scene.pieces : []).filter(
     (entry) => entry?.type === 'notecard',
@@ -258,6 +265,8 @@ export function applyScene(
       entry.hidden === true,
     );
     if (faceDownFront) room.cardData.set(id, { front: faceDownFront });
+    if (entry.fogAura && room.state.pieces.has(id))
+      room.state.pieces.get(id).fogAura = JSON.stringify(normalizeFogAura(entry.fogAura));
     if (entry.type === 'dispenser' && Number.isSafeInteger(entry.count) && entry.count > 0) {
       const piece = room.state.pieces.get(id);
       if (piece) {

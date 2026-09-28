@@ -2235,6 +2235,28 @@ input[type='range']::-moz-range-thumb {
   opacity: 0.65;
 }
 
+#fogAuraForm {
+  --fs: max(var(--fs-base), calc(var(--fs-base) * var(--ui-text-scale)));
+  --fs-sm: max(var(--fs-sm-base), calc(var(--fs-sm-base) * var(--ui-text-scale)));
+}
+#fogAuraForm .help-text {
+  opacity: 1;
+  color: var(--text);
+}
+#fogAuraForm .checkRow {
+  min-height: 44px;
+  align-items: center;
+}
+#fogAuraEnabled::before {
+  width: calc(10px * var(--ui-elements-scale));
+  height: calc(10px * var(--ui-elements-scale));
+}
+@media (pointer: coarse) {
+  #fogAuraRadius {
+    font-size: max(16px, var(--fs));
+  }
+}
+
 @media (max-width: 520px) {
   .lightingDirectionGrid {
     grid-template-columns: 1fr 78px 16px;

@@ -5,7 +5,10 @@ icon pair A (Tabler `eye-off` / `eye`). Automated verification is recorded below
 manual tests passing. Slice 2, manual map fog, is implemented with the subsequently approved
 mock-up and original eye-off entry; the user reports it works well. The subsequently approved
 cloud-fog entry and volume/thickness extension are implemented. The user reports the result
-looks good and approves committing it; specific devices/scenarios were not itemized. Reveal auras remain a future slice.
+looks good and approves committing it; specific devices/scenarios were not itemized. Slice 3,
+piece reveal auras, is implemented after approval of its mock-up and recommended circle icon
+on 2026-09-28. After the radius-stepper fix, the user reports it works great and approves
+committing it; specific devices and individual scenarios were not itemized.
 
 ## Agreed direction
 
@@ -13,12 +16,12 @@ looks good and approves committing it; specific devices/scenarios were not itemi
 - Fog represents shared party exploration: the GM freely uncovers/covers the map during
   play, and explored regions persist. Normal visual covering over downloaded map artwork is
   sufficient; this does not weaken server delivery protection for hidden objects.
-- Later GM-configured piece auras reveal simple circles along movement, with radii expressed
+- GM-configured piece auras reveal simple circles along movement, with radii expressed
   in map units (for example 1in or 3in). No wall detection or character-rule calculations.
 - Manual reveal remains available alongside auras. Revealing terrain will not implicitly reveal
   an object the GM explicitly hid.
 - Delivery order: object Hide/Reveal; manual map fog; circular reveal auras. Slices 1 and 2 are
-  implemented here; automatic auras have not been started.
+  implemented and user-tested; slice 3 is implemented with a subsequent user-reported test pass.
 
 ## Slice 1: object Hide/Reveal
 
@@ -367,3 +370,115 @@ Restart the server and refresh all clients. In opaque player preview and on a se
 look across a covered board at a low angle, then reveal a hole and look toward its covered edge.
 Adjust thickness, undo, save/reload, and verify that exploration remains intact and the bottom
 never rises. Check mouse, keyboard and real touch; GM translucency should remain available.
+
+## Slice 3: piece reveal auras
+
+The user approved the full/compact/touch mock-up and recommended Tabler **circle** entry on
+2026-09-28. The existing sprite already contains that icon; no new bundled asset was needed.
+
+Active GMs choose **Fog aura…** from piece actions, enable revealing and set a radius in room
+units. Apply saves; Cancel/Escape discards drafts. A local ring follows the piece on the fog top
+while editing. Access loss, removal, room handover and scale changes close the editor. The
+shared dialog owns focus return/trapping, while native fields retain keys without table actions.
+Ordinary piece/group movement, including physics movement, reveals continuous circular paths.
+No additional input gesture, wall detection, scoring or character rules were added.
+
+Auras reuse the fixed map mask and circle/capsule rasterizer. The server samples final published
+physics positions every tick, preserving turns between normal 100 ms mask publications. Pending
+paths are bounded to 256 points and flush early at the cap. Stationary sources do not rewrite
+masks. Hidden/disabled sources, hidden/disabled boards and replacements break path continuity.
+Resuming reveals the current circle without connecting across paused movement. Fog thickness
+continues to affect rendering only; reveals cut through the whole mask depth.
+
+The versioned aura setting is attached to the original tabletop piece, saved beside its transform,
+and delivered through its visibility view. Old saves start without auras; invalid settings fail
+before scene clearing. Boards, mats and personal tray dice cannot emit auras. Taking a piece into
+a hand, consuming it into inventory or spawning a derivative does not transfer its aura identity.
+Explicitly hidden objects remain hidden even when the surrounding terrain is explored.
+
+Automatic reveals advance the shared fog revision but do not occupy manual undo slots. Manual
+Cover/Undo discards queued paths and is retained until the next source movement. Undo restores
+an older manual snapshot, including its earlier coverage; it does not disable aura settings.
+Movement during a manual brush stroke may cancel that stroke through existing revision handling;
+pause the relevant aura to make a stable manual edit. Saved/reloaded active auras resume by
+revealing their current circles, with no old movement replay.
+
+### Changed files and functions
+
+| File | Functions/contracts added or changed |
+| --- | --- |
+| `shared/fog-auras.js` | New `FOG_AURA`, eligibility, normalization/parser and inverse-board projection |
+| `server/game/map-fog.js` | Extend `registerMapFog` with guarded `setFogAura` and returned `updateAuras`; bounded paths, source resets and shared-mask publication |
+| `server/game/schema.js` | Append `Piece.fogAura` |
+| `server.js` | Store fog service during initialization and update auras after `publishTransforms` |
+| `server/game/scene-persistence.js` | `serializeScene`/`applyScene` persist, preflight and restore aura settings |
+| `server/game/piece-visibility.js` | Include aura configuration in source-ID access checking |
+| `shared/room-capabilities.js` | Classify `setFogAura` as gameplay |
+| `public/table/fog-auras.js` | New editor controller: `edit`, `update`, `close`, `bindRoom`, `isActive`; local ring ownership, acknowledgment/state coordination and lifecycle cleanup |
+| `public/table/piece-ui.js` | `pieceMenuItems` adds approved GM aura entry through injected `editFogAura` |
+| `public/table/table-shell.js` | `bindControls` registers aura dialog; `enhanceNumberInputs` supports bounded arbitrary-decimal +/− stepping and guards disabled/read-only fields |
+| `public/client.js` | Compose/bind/update aura controller, close on participation loss and include in modal input gate |
+| `public/table.html` | Approved editor controls, accessible status and in-app help |
+| `public/styles.css` | Keep aura controls readable and touch-usable with shared tokens; retain a visible checkbox check mark |
+| `test/map-fog.js` | Configuration/access, geometry, sampled motion, publication rate, undo, pause/replacement and persistence regressions |
+| `test/piece-visibility.js` | Real reflected schema initial/patch delivery of hidden/visible aura sources |
+| `scripts/component-parity.mjs` | Real browser editor, radius preview, scale, state/error ordering, focus, lifecycle, compact/touch layouts and menu routing/icon checks |
+| `CHANGELOG.md` | Record aura behavior and restart/refresh requirement under Unreleased |
+| `docs/ARCHITECTURE.md`, `docs/REFERENCE.md` | Document ownership, public schema, protocol, persistence and update ordering |
+| `docs/GESTURES.md` | Desktop/touch/keyboard entry and manual/automatic fog interaction |
+| `docs/ROADMAP.md`, `docs/DESIGN_future_backlog.md` | Mark auras implemented and record the subsequent user-reported test pass |
+| `docs/DESIGN_concealment.md` | Approved design, implementation record and verification handoff |
+
+### Slice 3 verification and handoff
+
+- `npm run check`: lint, formatting and CSS validation passed; 874 runtime tests passed.
+  The sandboxed attempt encountered local environment restrictions in six existing asset-related
+  test files; the full run outside that sandbox passed.
+- `npm run test:input`: 58/58 passed.
+- `npm run test:devices`: all seven profiles passed.
+- `npm run test:components`: desktop and coarse-390 passed, plus notecard checks at 1280px mouse,
+  390px touch and 360px touch. Existing fixture thumbnail derivative 404s exercised fallbacks.
+- Final targeted browser assertions covered the refined aura dialog at 1280, 390 and 360px,
+  plus updated desktop/touch menu routing, long-menu fallback and circle icon. Rendered desktop
+  and phone screenshots were inspected; typography and checked-state visibility were corrected.
+- Final lint, formatting, CSS validation and `git diff --check` passed after those refinements.
+
+The user reported "Works great" and approved committing the aura slice and stepper fix on
+2026-09-28. Specific devices and individual scenarios were not itemized; this does not certify
+every multiplayer, real-device gesture or GPU-performance scenario below. No database query
+or migration changed; integration tests are not required.
+
+**Restart the server and refresh all clients.** No migration, dependency or infrastructure change.
+
+1. As GM, configure a miniature/token aura, preview different radii and Apply. Move it as an
+   ordinary player with mouse/touch and group movement; confirm both clients see persistent trails.
+2. Use a non-square and a 3D board; change fog thickness, board scale display and aura radius.
+   Check bends in a dragged path and preserved coverage when the piece leaves the board.
+3. Hide the source, move it, reveal it; disable/re-enable the aura and fog. Check no connecting
+   reveal through paused movement, and no exposure of independently hidden monsters/props.
+4. Cover/Undo while sources are stationary, then move them again. Try concurrent GM edits;
+   confirm stale drafts fail clearly and previous exploration behaves as documented above.
+5. Save/load, reconnect and restart. Verify radius/enable state and exploration, including disabled
+   auras. Try Cancel/Escape, compact mode, keyboard focus, touch long-press and demotion mid-edit.
+
+### Slice 3 follow-up: radius stepper
+
+The user reported `InvalidStateError` from `HTMLInputElement.stepUp`. The radius uses `step="any"`
+to preserve arbitrary decimal radii after room-unit conversion, while shell-generated +/− buttons
+unconditionally used native stepping, which rejects `any`. Extend that existing stepper with
+bounded arithmetic for this mode and retain native behavior for fixed-step fields. The aura input
+declares a 0.25 display-unit button increment; disabled/read-only fields do not change.
+
+The browser fixture now calls the production shell `prepare()` before opening the aura editor,
+and clicks its actual generated buttons. It covers both directions, arbitrary decimals, current
+min/max, empty values, disabled/read-only guards and the existing fixed-step brush field. This
+also corrects the earlier test gap: the original fixture edited the bare input directly.
+
+Changed for this fix: `public/table/table-shell.js` (`enhanceNumberInputs`), `public/table.html`
+(radius increment), `scripts/component-parity.mjs` (production stepper regression), `CHANGELOG.md`,
+`docs/REFERENCE.md` and this record. Client refresh is sufficient; no server restart is needed.
+Follow-up verification: `npm run check` passed (874 runtime tests plus lint/format/CSS checks),
+`npm run test:input` passed 58/58, and `npm run test:components` passed desktop/coarse-390 and
+all three notecard profiles. The updated regression failed before the fix and passed after it.
+Separate final browser assertions passed at 1280, 390 and 360px; the rendered phone stepper was
+visually inspected. `git diff --check` passed. No responsive-layout rule or server code changed.

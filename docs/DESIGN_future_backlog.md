@@ -26,7 +26,7 @@ No backlog feature below is implemented by these slices.
 
 | Area | Roadmap scope | Assessment | First investigation |
 | --- | --- | --- | --- |
-| Object hiding, fog, GM staging | 14, 4, distribution §3 | Object hiding and manual map fog implemented | Circular reveal auras next; staging deferred |
+| Object hiding, fog, GM staging | 14, 4, distribution §3 | Object hiding, manual fog and piece auras implemented | User reports auras work well; staging deferred |
 | Player inventories | 21 | Large | Full object serialization and recoverable transfers |
 | Drawable notecards | 17 | Large | Per-object drawing ownership and concealed artwork |
 | Asset/collection export/import | 19 | Completed for agreed asset types | Scene packages deferred by user decision (2026-09-24) |
@@ -48,8 +48,10 @@ can ship before export/import. A read-only Markdown rulebook is a useful release
 **Implementation update (2026-09-27):** object Hide/Reveal with approved icon pair A is implemented;
 the user reports manual tests passing. See [the staged design](DESIGN_concealment.md) for the
 implemented boundaries and checks. The user reports manual map fog works well. The approved
-cloud-fog entry and thickness slider now create closed fog volumes on image/3D boards; the user reports the result looks good and approves committing it. Circular reveal auras
-remain a future slice. The original discovery brief below is historical context.
+cloud-fog entry and thickness slider now create closed fog volumes on image/3D boards; the user reports the result looks good and approves committing it.
+Circular reveal auras are implemented with the subsequently approved GM editor and circle icon;
+the user subsequently reports they work great after the radius-stepper fix and approves committing
+them. Specific devices/scenarios were not itemized. The original discovery brief below is historical context.
 
 **Goal:** hide an individual object from players while showing a ghosted version to GMs; later
 support concealed areas and a preparation zone. Include persistent labels, held-by labels, count

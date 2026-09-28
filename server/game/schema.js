@@ -20,6 +20,7 @@ defineTypes(Piece, {
   qw: 'number',
   hidden: 'boolean',
   fog: 'string', // bounded visual exploration mask; follows the board's visibility view
+  fogAura: 'string', // GM-configured circular reveal radius; follows piece visibility
 });
 
 // PUBLIC per-player info: seat/turn order + hand count (never card identities).

@@ -1429,6 +1429,13 @@
             <p><b>Time-out:</b> In Members, choose Time-out or End time-out. The member keeps their hand and seat and can chat, inspect and move the camera. Only owners manage GMs; nobody can time out an owner or themselves.</p>
             <h4>GM abilities</h4>
             <ul>
+              <li><b>Piece fog auras.</b> GMs open a piece's actions with right-click, touch long-press,
+                or Shift+F10, then choose <b>Fog aura…</b> (circle). Enable it, set a radius in room
+                units and choose Apply. The circle preview is local; movement reveals a persistent path
+                through map fog. Hidden pieces pause their auras. Cancel or Escape discards the draft.
+                Card right-click still flips; use Shift+F10 or long-press for card actions.
+                Manual Cover stays until an aura moves across it again. Auras ignore walls and do not
+                reveal objects explicitly hidden from players.</li>
               <li><b>Map fog.</b> Open <b>Fog</b> beside Measure, or under the drawer's Table tools.
                 Load an image or 3D board, enable fog, then choose <b>Reveal</b> or <b>Cover</b>.
                 Drag or tap with a circular brush; radius uses the room's measurement units.
@@ -2664,6 +2671,32 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div id="fogAuraModal" class="modal-backdrop" hidden>
+      <form id="fogAuraForm" class="modal modalCard sceneSaveCard">
+        <div class="modal__header panel-head">
+          <b class="modal__title panel-title">Fog aura</b>
+          <button type="button" id="fogAuraClose" class="modal__close close-x" aria-label="Close fog aura">✕</button>
+        </div>
+        <div class="modal__body">
+          <p id="fogAuraPiece" class="hint"></p>
+          <label class="checkRow" for="fogAuraEnabled">
+            <input id="fogAuraEnabled" class="checkbox__input" type="checkbox" data-room-mutation />
+            <span>Reveal fog as this piece moves</span>
+          </label>
+          <label class="field-group" for="fogAuraRadius">
+            <span class="field-label">Radius (<span id="fogAuraUnit">u</span>)</span>
+            <input id="fogAuraRadius" class="control" type="number" min="0.01" max="256" step="any" data-step="0.25" value="1" required data-room-mutation />
+            <span class="help-text">Explored areas stay revealed. Hidden pieces pause their auras.</span>
+          </label>
+          <p id="fogAuraStatus" class="hint" role="status" aria-live="polite"></p>
+        </div>
+        <div class="modal__footer button-row button-row--end">
+          <button id="fogAuraCancel" type="button" class="button">Cancel</button>
+          <button id="fogAuraApply" type="submit" class="button button--primary" data-room-mutation>Apply</button>
+        </div>
+      </form>
     </div>
 
     <div id="pieceLabelsModal" class="modal-backdrop" hidden>
