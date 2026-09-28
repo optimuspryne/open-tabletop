@@ -286,6 +286,84 @@ test('hidden bodies remain parked, do not collide, can move for GMs, and reveal 
   assert.notEqual(body.collisionFilterMask, 0);
 });
 
+for (const gridStyle of ['square', 'hex', 'off']) {
+  test(`hidden ${gridStyle} drops settle on the board without restoring collisions or player visibility`, async () => {
+    const { room, client, request, patch } = harness();
+    Object.assign(room.state.scale, { gridStyle, cellWorld: 1, snapAnchor: 'cross' });
+    const board = room.spawn('board', [0, 0.2, 0], { w: 8, d: 8, thickness: 0.4 });
+    const id = room.spawn('prop', [0.1, 3, 0.1], { shape: 'box', snap: true }, [0, 0, 0, 1]);
+    const gm = client('gm'),
+      player = client('player'),
+      body = room.bodies.get(id);
+    await request(gm, 'setPieceVisibility', { ids: [id], hidden: true });
+    await request(gm, 'grab', { id });
+    body.velocity.set(1, 2, 3);
+    await request(gm, 'release', { id, v: [1, 2, 3] });
+    body.updateAABB();
+    assert.ok(Math.abs(body.aabb.lowerBound.y - 0.4) < 1e-8);
+    assert.ok(Math.abs(body.position.x - (gridStyle === 'off' ? 0.1 : 0)) < 1e-8);
+    assert.ok(Math.abs(body.position.z - (gridStyle === 'off' ? 0.1 : 0)) < 1e-8);
+    assert.equal(body.type, CANNON.Body.KINEMATIC);
+    assert.equal(body.collisionFilterMask, 0);
+    assert.equal(body.velocity.length(), 0);
+    assert.equal(room.bodies.get(board).position.y, 0.2);
+    const landedY = body.position.y;
+    for (let i = 0; i < 60; i++) {
+      room.visibility.preparePhysics();
+      room.world.step(1 / 60);
+    }
+    assert.equal(body.position.y, landedY);
+    patch();
+    assert.equal(player.decoded.pieces.has(id), false);
+    assert.ok(Math.abs(gm.decoded.pieces.get(id).y - landedY) < 1e-6);
+    await request(gm, 'setPieceVisibility', { ids: [id], hidden: false });
+    assert.equal(room.state.pieces.get(id).hidden, false);
+  });
+}
+
+test('group release settles hidden pieces on actual rotated compound board parts and the table', async () => {
+  const { room, client, request } = harness();
+  Object.assign(room.state.scale, { gridStyle: 'square', cellWorld: 1, snapAnchor: 'cross' });
+  const rotation = new CANNON.Quaternion().setFromEuler(0, Math.PI / 2, 0);
+  const board = room.spawn(
+    'board',
+    [0, 0.5, 0],
+    {
+      model: '/assets/boards/raised.glb',
+      box: [4, 0.5, 4],
+      compoundCollider: {
+        version: 1,
+        shapes: [
+          { type: 'box', position: [0.25, 0, 0], size: [0.125, 0.125, 0.125], rotation: [0, 0, 0] },
+        ],
+      },
+    },
+    rotation.toArray(),
+    true,
+  );
+  const onBoard = room.spawn('prop', [0.1, 4, -1.9], { snap: true }, rotation.toArray(), true);
+  const inGap = room.spawn('prop', [0.1, 4, 0.1], { snap: true }, [0, 0, 0, 1], true);
+  const visible = room.spawn('prop', [3, 4, 3], { snap: true }, [0, 0, 0, 1]);
+  const gm = client('gm');
+  await request(gm, 'grabGroup', { ids: [onBoard, inGap, visible], anchor: onBoard });
+  await request(gm, 'releaseGroup', { v: [0, 0, 0] });
+  for (const [id, height] of [
+    [onBoard, 1],
+    [inGap, 0],
+  ]) {
+    const body = room.bodies.get(id);
+    body.updateAABB();
+    assert.ok(
+      Math.abs(body.aabb.lowerBound.y - height) < 1e-8,
+      `${id}: ${body.aabb.lowerBound.y} vs ${height}`,
+    );
+    assert.equal(body.collisionFilterMask, 0);
+  }
+  assert.equal(room.bodies.get(board).collisionFilterMask, 0);
+  assert.equal(room.bodies.get(visible).position.y, 4);
+  assert.equal(room.bodies.get(visible).type, CANNON.Body.DYNAMIC);
+});
+
 test('hidden library spawns capture each request independently and recheck roles after asynchronous reads', async () => {
   const { room, client } = harness();
   const gm = client('gm'),

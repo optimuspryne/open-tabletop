@@ -51,7 +51,10 @@ a request. New object-targeting handlers must join the visibility source registr
 events must use that boundary. Combining/gathering across visibility states is rejected atomically.
 
 Hidden bodies remain in the authoritative physics world with a zero collision mask and kinematic
-motion. They stay parked unless a GM drags them; reveal restores dynamic/static behavior. Hide
+motion. They stay parked unless a GM drags them. Release resolves their height after horizontal
+snapping: a downward query against board/mat collider parts places their world-space collider
+bottom on the surface below their center, falling back to the tabletop. Hidden supports participate
+without enabling collisions; visible drops retain ordinary physics. Reveal restores dynamic/static behavior. Hide
 rejects held/edited/flipping pieces, personal tray dice, and objects supporting visible pieces
 outside the batch. Reveal conservatively rejects intersecting piece AABBs and placement below the
 tabletop. No inventory or unrelated objects are moved to force a reveal. Hidden dice cannot roll.

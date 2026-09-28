@@ -1608,7 +1608,11 @@ Piece lifecycle methods forward to the operations returned by
 - **`removePiece(room,id)`** removes the Cannon body plus synchronized, target, flip, deck-card,
   and private-card records.
 - **`releasePiece(room,id,velocity)`** clears ownership, snaps or caps throw velocity, then applies
-  compatible card-to-deck and item-to-dispenser absorption. It delegates collider rebuilding,
+  **`visibility.settleReleasedPiece(id)`** before compatible card-to-deck and item-to-dispenser
+  absorption. The visibility service settles hidden movable bodies onto the board/mat collider
+  surface below their center (or the tabletop), accounting for body orientation and collider
+  offsets and publishing the corrected transform. Queries include hidden supports without
+  changing collision masks; visible releases keep normal physics. It delegates collider rebuilding,
   dispenser item resolution, removal, and broadcast through the stable room API.
 
 Collider methods forward to `server/game/collider-maintenance.js`:

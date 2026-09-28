@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { StateView } from '@colyseus/schema';
-import { Body } from 'cannon-es';
+import { Body, Quaternion, Ray, Vec3 } from 'cannon-es';
 import { RANK, canUseRoomCapability } from '../permissions.js';
 import { groupIds, isPlainObject, pieceIdPayload } from '../message-validation.js';
 import { returnInspectedCard } from './inspection-recovery.js';
@@ -127,6 +127,40 @@ export function createPieceVisibility(room) {
       body.wakeUp();
       parked.delete(body);
     }
+  }
+
+  // Hidden bodies cannot fall under gravity. Resolve the same board/table drop surface
+  // explicitly, using real collider parts without changing their collision filters.
+  function settleReleasedPiece(id) {
+    const piece = room.state.pieces.get(id),
+      body = room.bodies.get(id);
+    if (!piece?.hidden || !body || body.mass <= 0) return;
+    body.updateAABB();
+    const bottomOffset = body.position.y - body.aabb.lowerBound.y;
+    const ray = new Ray(
+      new Vec3(body.position.x, Math.max(0, body.aabb.upperBound.y), body.position.z),
+      new Vec3(body.position.x, 0, body.position.z),
+    );
+    ray.mode = Ray.CLOSEST;
+    ray.skipBackfaces = true;
+    ray.updateDirection();
+    const position = new Vec3(),
+      orientation = new Quaternion();
+    for (const [otherId, other] of room.state.pieces) {
+      if (otherId === id || other.owner || !['board', 'mat'].includes(other.type)) continue;
+      const support = room.bodies.get(otherId);
+      if (!support) continue;
+      for (let i = 0; i < support.shapes.length; i++) {
+        support.quaternion.mult(support.shapeOrientations[i], orientation);
+        support.quaternion.vmult(support.shapeOffsets[i], position);
+        position.vadd(support.position, position);
+        ray.intersectShape(support.shapes[i], orientation, position, support);
+      }
+    }
+    body.position.y = (ray.hasHit ? ray.result.hitPointWorld.y : 0) + bottomOffset;
+    body.aabbNeedsUpdate = true;
+    prepareBody(id);
+    room.writeTransform(piece, body);
   }
 
   function syncClient(client) {
@@ -289,6 +323,7 @@ export function createPieceVisibility(room) {
     runRequest,
     spawnHidden,
     prepareBody,
+    settleReleasedPiece,
     sync,
     syncClient,
     setVisibility,

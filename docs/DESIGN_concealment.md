@@ -74,7 +74,10 @@ Mixed visible/hidden combines and gathers are rejected before consuming inventor
 ### Physics boundaries
 
 Hidden bodies use kinematic motion and a zero collision mask. Unheld hidden pieces stay parked;
-GMs can reposition movable hidden pieces using the existing drag controls. Reveal restores the
+GMs can reposition movable hidden pieces using the existing drag controls. On release, after X/Z
+snapping, movable hidden bodies settle onto board/mat collider surfaces below their centers, or
+the tabletop outside those surfaces. The query uses collider parts and transforms, including
+hidden boards, without restoring collisions. Visible drops retain normal gravity. Reveal restores the
 appropriate dynamic/static body behavior without changing identity or inventory.
 
 Hide/Reveal validates the whole batch before mutation. Finish grabs, scripted flips and edits
@@ -482,3 +485,33 @@ Follow-up verification: `npm run check` passed (874 runtime tests plus lint/form
 all three notecard profiles. The updated regression failed before the fix and passed after it.
 Separate final browser assertions passed at 1280, 390 and 360px; the rendered phone stepper was
 visually inspected. `git diff --check` passed. No responsive-layout rule or server code changed.
+
+### Concealment follow-up: suspended hidden drops
+
+The user reported that a hidden object remained at drag height after a grid-snapped drop.
+`releasePiece` snapped X/Z, but hidden bodies deliberately receive no gravity and were parked
+at that height. Extend the existing visibility service with `settleReleasedPiece`, called from
+the common release path after snapping. It queries existing board/mat collider parts directly;
+no parallel geometry definition or collision-enabled simulation is introduced. Single/group
+release and square/hex/free placement share this correction. Arbitrary object stacking remains
+subject to the existing conservative reveal-placement checks.
+
+Files changed:
+- `server/game/piece-visibility.js`: adds `settleReleasedPiece`, reusing `prepareBody` to stop
+  release velocity and preserve hidden-body physics; publishes the corrected transform.
+- `server/game/piece-lifecycle.js`: calls the service from `releasePiece` before absorption.
+- `test/piece-visibility.js`: adds regressions through real single/group message handlers for
+  square/hex/free drops, rotated compound boards and gaps, tabletop fallback, persistent parking,
+  reveal, player-state exclusion and unchanged visible drops.
+- `CHANGELOG.md`, `docs/ARCHITECTURE.md`, `docs/REFERENCE.md`, and this plan: document the fix,
+  placement boundary, service contract and verification status.
+
+Verification: `npm run check` passed (878 runtime tests plus lint, format and CSS checks).
+The targeted visibility tests also passed, and `git diff --check` passed. Browser/component,
+device and database suites were not rerun for this server-only physics correction.
+
+The user reported "Works great" and approved committing this fix on 2026-09-28. Individual
+devices and scenarios were not itemized. For future smoke testing, restart the server, then hide
+and drop a snapping piece on a board; repeat with a group and off the board. Confirm pieces sit
+on the surface, stay hidden from a player client, and can be revealed in clear positions. No
+client module or input binding changed; no migration is required.

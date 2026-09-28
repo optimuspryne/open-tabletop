@@ -229,6 +229,8 @@ export function createPieceLifecycle({
       body.wakeUp();
     }
 
+    room.visibility?.settleReleasedPiece(id);
+
     if (piece.type === 'card' && body) {
       for (const [deckId, cards] of room.deckCards) {
         const deckPiece = room.state.pieces.get(deckId);
