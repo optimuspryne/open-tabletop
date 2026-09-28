@@ -336,11 +336,13 @@ implementation sequence without making the entire backlog a fixed priority queue
     collections. Library controls can show or hide collections to keep browsing manageable.
     Treat this as library organization/filtering, separate from per-object visibility on the table
     (item 14), and preserve each asset's access permissions.
-19. **Collection and custom asset export/import.** Export individual custom assets or whole
-    collections and import them into another installation. Include the required files and
-    metadata, preserve collection membership, and plan for versioning, duplicate handling, and
-    remapping internal references. Keep these portable asset packages distinct from live game
-    snapshots containing player data. Design the package format alongside collections (item 18).
+19. ✅ **Collection and custom asset export/import — agreed scope complete (2026-09-24).**
+    Dice textures, decks/tiles, boards, mats, skyboxes, models (including saved dispenser
+    definitions), and collections of supported assets can be exported and imported with their
+    required files, metadata and collection membership. Versioned packages remap references and
+    create independent private copies. Automated checks and user-reported manual tests passed.
+    Scene packages were deliberately deferred by user decision; live game/player snapshots remain
+    separate. See the [completed scope and checkpoints](DESIGN_future_backlog.md#asset-and-collection-exportimport).
 20. **Physical rulebooks and rulebook builder.** Add built-in rulebooks for selected games as
     spawnable 3D objects; Inspect opens their contents for reading and page navigation. Support
     uploaded/custom rulebooks from ordered image series, multipage PDFs, or Markdown files.
@@ -406,12 +408,12 @@ Small, concrete, each completes an existing feature:
 - ✅ **Tile shuffle/flip sounds — implemented; user-approved.** Three synthesized
   tile flips and three box-shake shuffles now use the existing audio manager and mute/volume
   preferences. Paper card cues remain distinct; mixed flips emit one cue per material.
-- **Cross-file util module** — `api()`, the button factory and the auth-token read are still
-  duplicated across `public/`. Re-verified 2026-09-01: `rows.js` now owns a shared `makeButton`
-  that `client.js` imports (partial progress on the button-factory half), but `api()` is still
-  copied in `admin.js` and `landing.js`, `landing.js` keeps its own `mkBtn`, and the token read
-  (`localStorage.getItem('tabletop.token')`) is still inline in both `client.js` and `graphics.js`.
-  A real extraction, scoped in `UI_backlog.md`.
+- ✅ **Shared browser helpers — complete; user reports everything still works (2026-09-27).**
+  `public/auth.js`, `public/http.js` and `public/ui/button.js` share session-token access,
+  lobby/admin JSON requests and button DOM construction. Caller-specific auth defaults, icons,
+  button types, accessible labels and action guards remain intact. Specialized request handlers
+  retain their existing response/error rules. See the
+  [implementation checkpoint](DESIGN_future_backlog.md#shared-browser-helper-checkpoint--2026-09-27).
 - ✅ **Tile/box sound provenance — resolved.** The project owner confirmed the `tile-*.ogg`
   and `tiledeck-*.ogg` cues were created with Claude for Open Tabletop and are distributed as
   CC0. No third-party attribution is required; `docs/ASSET_CREDITS.md` records their provenance.

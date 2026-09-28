@@ -93,13 +93,30 @@ The codebase:
 | `public/rendering/collider-surface.js` | browser | Shared collision-surface geometry, height queries, and disposal |
 | `public/rendering/perf.js` | browser | Optional render-cost overlay |
 | `public/ui/rows.js` | browser | Shared DOM row, button, and toast builders |
+| `public/ui/button.js` | browser | Common button DOM; caller-owned icons, type and feature policy |
+| `public/auth.js` / `public/http.js` | browser | Session-token storage and opt-in authenticated JSON requests |
 | `public/table/{clicks,drag}.js` | browser | Pure click routing and drag-anchor math |
 | `public/*.html` + `styles.css`                                                                         | browser | Page shells plus token-driven shared button, form-control, checkbox, panel, and feature styling                                                                                                  |
 
 Browser modules are grouped by responsibility: `editor/` for workshop authoring, `rendering/`
 for graphics support, `ui/` for shared DOM behavior, and `table/` for table features/input/audio.
-The three page entry points and central attribution manifest stay at the public root.
+The three page entry points, browser auth/HTTP helpers and central attribution manifest stay at the public root.
 `ui/equalize.js` keeps its early classic `defer` loading order; the other modules use ES imports.
+
+`auth.js` exports `getAuthToken`, `setAuthToken` and `clearAuthToken` over the existing
+`tabletop.token` localStorage key. Reads happen at use time; storage exceptions still propagate.
+`http.js` exports `requestJSON(path, { method = 'GET', body, auth = false })`: truthy bodies are
+JSON-encoded, auth opt-in adds the current Bearer token, empty/invalid JSON responses fall back
+to `{}`, and non-2xx responses throw the server error or `request failed (STATUS)`.
+The admin's `api` adapter pins `auth: true`; lobby calls keep their existing per-request choice.
+Binary transfers, strict JSON parsing, template `no-store` behavior and feature-specific error
+messages stay in their original request handlers, which import shared token access.
+
+`ui/button.js` exports `makeButton(label, fn, cls, icon, { type } = {})`, preserving the canonical
+`button`/`button--danger` classes, optional `data-icon`/`.lbl` markup and click callback. Labels
+are text content. An omitted type remains omitted for legacy row callers; admin, lobby and editor
+adapters explicitly use `button`. Icon maps, ARIA labels and room-mutation flags belong to callers.
+`ui/rows.js` keeps its original `makeButton` signature and member-icon fallback for existing imports.
 
 The main client composition has no cycles: `shared` feeds `core`/`graphics`, `client` imports the
 focused `table` modules and injects their mutable dependencies, and the remaining side branches are

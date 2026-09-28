@@ -1,3 +1,4 @@
+import { getAuthToken } from '../auth.js';
 import { drawGroupThumbnail } from './collider-groups.js';
 
 // The library is account-backed. Insertion returns a snapshot, never a live reference.
@@ -27,7 +28,7 @@ export function wireColliderPresets(host, { capture, insert }) {
     const response = await fetch('/collider-presets' + path, {
       method,
       headers: {
-        Authorization: 'Bearer ' + (localStorage.getItem('tabletop.token') || ''),
+        Authorization: 'Bearer ' + getAuthToken(),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),

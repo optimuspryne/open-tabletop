@@ -1,3 +1,4 @@
+import { getAuthToken } from '../auth.js';
 import { applyIcons } from '../ui/icons.js';
 import { notecardPreviewURL } from '../rendering/graphics.js';
 
@@ -32,7 +33,7 @@ export function createNotecardTemplates({ byId, editor, getRoom, canInteract }) 
       method,
       cache: 'no-store',
       headers: {
-        Authorization: 'Bearer ' + (localStorage.getItem('tabletop.token') || ''),
+        Authorization: 'Bearer ' + getAuthToken(),
         ...(body ? { 'Content-Type': 'application/json' } : {}),
       },
       ...(body ? { body: JSON.stringify(body) } : {}),

@@ -1,3 +1,4 @@
+import { getAuthToken } from '../auth.js';
 import { notecardMesh, notecardStackMesh, paintNotecard } from './notecards.js';
 import { drawPlacard } from './placards.js';
 import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
@@ -1206,14 +1207,12 @@ function imgToBlob(file, w, h, fit, bg) {
 }
 
 // POST a body to an upload endpoint with the auth token; return the stored URL ref.
-// (The raw token read here is auth plumbing that really belongs in a shared api
-// helper — parked with the cross-file util-module refactor.)
 async function postUpload(path, contentType, body) {
   const response = await fetch(path, {
     method: 'POST',
     headers: {
       'Content-Type': contentType,
-      Authorization: 'Bearer ' + (localStorage.getItem('tabletop.token') || ''),
+      Authorization: 'Bearer ' + getAuthToken(),
     },
     body,
   });

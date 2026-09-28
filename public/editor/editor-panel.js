@@ -1,3 +1,4 @@
+import { makeButton } from '../ui/button.js';
 import { PACKAGE_ASSET_KINDS } from '/shared/asset-package.js';
 import { createAssetPackageController } from './asset-packages.js';
 import { createCollectionController } from './collections.js';
@@ -132,19 +133,9 @@ const ICON_FOR = {
   Unpublish: 'flag-cancel',
 };
 const btn = (label, fn, cls) => {
-  const button = document.createElement('button');
-  button.type = 'button';
+  const button = makeButton(label, fn, cls, ICON_FOR[label], { type: 'button' });
   button.setAttribute('aria-label', label);
-  button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
-    .filter(Boolean)
-    .join(' ');
-  const ic = ICON_FOR[label];
-  if (ic) {
-    button.dataset.icon = ic;
-    button.innerHTML = '<span class="lbl">' + label + '</span>';
-  } else button.textContent = label;
   if (['Spawn', 'Apply', 'Load', 'Set up'].includes(label)) button.dataset.roomMutation = '';
-  button.onclick = fn;
   return button;
 };
 

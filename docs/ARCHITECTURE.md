@@ -301,6 +301,13 @@ importing a room singleton:
   `LIB_CREDITS`. The CC-BY music makes the in-app credits mandatory, not cosmetic.
 - **`public/ui/icons.js` / `public/ui/equalize.js`** — shared icon/tooltip behavior plus
   early UI-mode restoration and grouped-action sizing across pages.
+- **`public/auth.js` / `public/http.js`** — browser session-token storage and lobby/admin JSON
+  requests. Tokens are read on demand, never cached by the helpers. JSON authentication is opt-in;
+  the admin adapter always enables it. Uploads, asset packages, collider presets and notecard
+  templates share token access while retaining their specialized response, cache and error rules.
+- **`public/ui/button.js`** — common button DOM construction. Page/feature adapters own icon
+  mappings, explicit button types, accessible labels and room-mutation markers. `ui/rows.js`
+  retains its compatible `makeButton` adapter for member icons and existing table-menu callers.
 - **The pages** — `index.html` + `landing.js` (the lobby: quick-join, login, room
   list, host request), `table.html` (the game table, which loads the client
   chain and, with `?workshop=1`, the admin-only library workshop plus

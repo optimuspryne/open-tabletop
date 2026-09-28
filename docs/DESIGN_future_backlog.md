@@ -36,7 +36,7 @@ No backlog feature below is implemented by these slices.
 | Placard shapes/flair | 16 | Eight presets and six patterns implemented | Appearance user-approved; see [checkpoint](DESIGN_placards_sounds.md) |
 | Additional content/deck skins | Distribution §2 | Small content increments; skins medium | Asset readiness, licensing, editor/geometry compatibility |
 | Reliability/device polish | Distribution §§1/5 | Variable, measured first | Reproducible reconnect, load and device scenarios |
-| Tile cue variants/shared browser helpers | Parked threads | Small focused slices | Current sound dispatch and genuinely duplicated behavior |
+| Tile cue variants/shared browser helpers | Parked threads | Complete | Sounds user-approved; browser helpers user-reported manual pass (2026-09-27) |
 | Public demo | Distribution §4, optional | Operational project | Hosting, reset, upload and abuse limits |
 
 Do not bundle the first five into one overhaul. Hiding needs its own proof of concept; inventories
@@ -625,10 +625,55 @@ are a separate larger feature.
 - **Tile shuffle/flip sounds:** implemented with three synthesized variants of each; user-approved (see [checkpoint](DESIGN_placards_sounds.md)). Original brief: small finish. Audit event dispatch and existing sound assets,
   choose appropriate variants, update credits only if new provenance requires it, and test mute,
   volume, mixed card/tile play and repeated events. Existing Claude-created tile/box cues are CC0.
-- **Shared browser helpers:** narrowly consolidate genuinely repeated API/auth/button behavior
-  after checking current callers. Older roadmap module/line references are historical clues, not
-  proof of duplication. Keep error behavior, HTTP auth and existing UI components compatible;
-  follow [CLIENT_REFACTOR.md](CLIENT_REFACTOR.md) and [DRY_CLEANUP.md](DRY_CLEANUP.md).
+- **Shared browser helpers:** implemented; see the checkpoint below. Auth defaults, request
+  errors and caller-owned UI policy remain compatible.
+
+### Shared browser helper checkpoint — 2026-09-27
+
+Implemented locally; automated verification passed. The user reported “Everything still works”
+on 2026-09-27, confirming a manual functional pass. Specific devices and individual smoke-test
+scenarios were not separately reported.
+This is a behavior-preserving extraction with no visual/layout or icon changes.
+
+Reuse decision: extract the repeated lobby/admin JSON wrapper and token storage into focused
+browser modules; move common button construction beneath the existing page/row adapters.
+Keep editor accessibility/mutation metadata and each caller's icon map at their feature boundary.
+Binary upload/package handlers and strict collider/template JSON handlers only share token access;
+combining their distinct response/error/cache rules would expand the scope. Numeric stepper buttons
+retain their distinct class, focus and input behavior.
+
+Files/functions changed:
+
+| Files | Changes |
+| --- | --- |
+| `public/auth.js` | Add `getAuthToken`, `setAuthToken`, `clearAuthToken`; read live storage rather than caching credentials. |
+| `public/http.js` | Add `requestJSON` from the existing lobby/admin implementations, preserving auth opt-in, truthy-body encoding and error fallback. |
+| `public/ui/button.js` | Extract `makeButton` DOM creation with explicit icon/type inputs and text-only labels. |
+| `public/admin.js` | Replace token getter, `api` implementation and `btn` DOM factory with shared helpers; `api` still forces auth. |
+| `public/landing.js` | Replace token getter/setter/clearer and `api`; delegate `renderRoomList`'s `mkBtn` to the shared factory with existing room icons. |
+| `public/ui/rows.js` | Retain exported `makeButton` as a thin member-icon compatibility adapter. |
+| `public/editor/editor-panel.js` | Delegate `btn` DOM creation while retaining ARIA labels and room-mutation markers. |
+| `public/client.js` | Use shared token access during connection setup. |
+| `public/rendering/graphics.js` | Use shared token access in `postUpload`; preserve raw upload format/error behavior. |
+| `public/editor/asset-packages.js`, `public/editor/collider-presets.js`, `public/table/notecard-templates.js` | Replace inline token reads inside existing `request` handlers. |
+| `test/browser-http.js` | Add live-token/auth opt-in, body/empty-response and error/network regressions. |
+| `scripts/component-parity.mjs` | Extend real lobby request/button checks and add real admin boot/rename/error checks in desktop/coarse-touch profiles. |
+| `CHANGELOG.md`, `docs/ROADMAP.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, this plan | Record scope, ownership, compatibility and validation status. |
+
+Validation: `npm run check` passed lint, formatting, CSS checks and all 844 tests.
+`npm run test:components` passed the desktop/coarse-touch component suite, including real
+lobby/admin callers, and the notecard suite at 1280px mouse, 390px touch and 360px touch.
+The initial sandboxed runs could not open local HTTP listeners; both required suites were rerun
+successfully with localhost access. Roadmap checkpoint links and `git diff --check` passed.
+No input-intent, responsive CSS or database changes were made, so the separate input/device/database
+suites were not run. Automated profiles do not establish real-device or multiplayer correctness.
+
+Refresh browsers; no server restart, migration or icon rebuild is required. Retained smoke-test checklist:
+
+1. Sign in/out, list rooms, Enter/Watch and use lobby room actions.
+2. Load the admin room/user lists and rename a room; verify normal and rejected-action feedback.
+3. Open the Library and object menu, use member/score controls, and upload/export an asset.
+   Check existing icons, labels and click behavior in full/compact mode and on touch.
 
 ## Reliability, device polish, and optional demo
 

@@ -1,3 +1,4 @@
+import { getAuthToken } from '../auth.js';
 import { ASSET_PACKAGE, ASSET_ARCHIVE } from '/shared/asset-package.js';
 
 const labels = {
@@ -86,7 +87,7 @@ export function createAssetPackageController({
     const response = await fetch('/asset-packages/' + path, {
       method: body === undefined ? 'GET' : 'POST',
       headers: {
-        Authorization: 'Bearer ' + (localStorage.getItem('tabletop.token') || ''),
+        Authorization: 'Bearer ' + getAuthToken(),
         ...(body === undefined
           ? {}
           : { 'Content-Type': body instanceof File ? 'application/zip' : 'application/json' }),

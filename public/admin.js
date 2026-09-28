@@ -1,44 +1,24 @@
 import { applyIcons, initTip } from './ui/icons.js';
+import { makeButton } from './ui/button.js';
+import { getAuthToken as token } from './auth.js';
+import { requestJSON } from './http.js';
 applyIcons();
 initTip();
 
 // admin.js — site-wide room & user management. Admin-gated: the page only renders
 // if /auth/token resolves to a user with isAdmin. Every action hits an admin-only
 // endpoint, so the gate here is courtesy — the server enforces it.
-const TOKEN_KEY = 'tabletop.token';
 const MB = 1024 * 1024; // bytes → MB divisor for the cleanup readout
 const byId = (id) => document.getElementById(id);
-const token = () => localStorage.getItem(TOKEN_KEY) || '';
 let texturePollTimer = null;
 
 // Authenticated fetch wrapper: attaches the Bearer token, JSON-encodes a body,
 // and THROWS on any non-2xx — so callers just try/catch and alert the message.
-async function api(path, { method = 'GET', body } = {}) {
-  const headers = { Authorization: 'Bearer ' + token() };
-  if (body) headers['Content-Type'] = 'application/json';
-  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  let data = {};
-  try {
-    data = await res.json();
-  } catch {
-    /* no body */
-  }
-  if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
-  return data;
-}
+const api = (path, options) => requestJSON(path, { ...options, auth: true });
 
 // Small DOM factories: a <button> from label + click handler (+ optional class),
 // and a <td> wrapping either a string or an existing node.
-const btn = (label, fn, cls) => {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
-    .filter(Boolean)
-    .join(' ');
-  button.textContent = label;
-  button.onclick = fn;
-  return button;
-};
+const btn = (label, fn, cls) => makeButton(label, fn, cls, null, { type: 'button' });
 const cell = (content) => {
   const td = document.createElement('td');
   if (typeof content === 'string') td.textContent = content;

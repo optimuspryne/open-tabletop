@@ -1,31 +1,16 @@
 import { applyIcons, setIcon, initTip, overflowMenu } from './ui/icons.js';
+import { makeButton } from './ui/button.js';
+import {
+  getAuthToken as token,
+  setAuthToken as setToken,
+  clearAuthToken as clearToken,
+} from './auth.js';
+import { requestJSON as api } from './http.js';
 import { AVATAR_IMAGE } from '../shared/avatar.js';
 // landing.js — quick-join (default) + login/account + lobby. Talks to the /auth
 // and /rooms HTTP endpoints; stores the device token in localStorage for
 // auto-login. No game engine here — entering a room hands off to table.html.
-const TOKEN_KEY = 'tabletop.token';
 const byId = (id) => document.getElementById(id);
-const token = () => localStorage.getItem(TOKEN_KEY) || '';
-const setToken = (t) => localStorage.setItem(TOKEN_KEY, t);
-const clearToken = () => localStorage.removeItem(TOKEN_KEY);
-
-// Fetch wrapper: JSON-encodes a body, attaches the Bearer token when
-// { auth: true } (opt-in per call, unlike admin.js's always-on), and THROWS on
-// any non-2xx — so callers just try/catch and show the message.
-async function api(path, { method = 'GET', body, auth = false } = {}) {
-  const headers = {};
-  if (body) headers['Content-Type'] = 'application/json';
-  if (auth) headers['Authorization'] = 'Bearer ' + token();
-  const res = await fetch(path, { method, headers, body: body ? JSON.stringify(body) : undefined });
-  let data = {};
-  try {
-    data = await res.json();
-  } catch {
-    /* no/invalid body */
-  }
-  if (!res.ok) throw new Error(data.error || `request failed (${res.status})`);
-  return data;
-}
 
 const enterRoom = (code, spectate = false) => {
   location.href = 'table.html?room=' + encodeURIComponent(code) + (spectate ? '&spectate=1' : '');
@@ -256,20 +241,8 @@ function renderRoomList(rooms) {
     return;
   }
   const ROOM_ICON = { Enter: 'door-enter', Watch: 'eye', Rename: 'cursor-text', Close: 'trash' };
-  const mkBtn = (label, fn, cls) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
-      .filter(Boolean)
-      .join(' ');
-    const ic = ROOM_ICON[label];
-    if (ic) {
-      button.dataset.icon = ic;
-      button.innerHTML = '<span class="lbl">' + label + '</span>';
-    } else button.textContent = label;
-    button.onclick = fn;
-    return button;
-  };
+  const mkBtn = (label, fn, cls) =>
+    makeButton(label, fn, cls, ROOM_ICON[label], { type: 'button' });
   for (const room of rooms) {
     const li = document.createElement('li');
     li.className = 'roomRow';

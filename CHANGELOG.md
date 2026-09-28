@@ -8,6 +8,18 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Changed
+- Consolidate browser session-token access, lobby/admin JSON requests, and shared button DOM
+  creation. Preserve authentication defaults, request errors, icons, button types, accessible
+  labels and room-action guards; specialized upload/package/template request behavior remains
+  local. Refresh browsers to load the updated modules; no server restart or migration is needed.
+
+### Documentation
+- Correct the roadmap to mark the agreed asset/collection export-import scope complete, retaining
+  the deliberate scene-package deferral. Refresh the shared browser-helper cleanup scope against
+  current code and remove its stale backlog-file reference; record its subsequent implementation
+  and user-reported manual functional pass.
+
 ## [0.20.0] — 2026-09-27
 
 ### Upgrade notes

@@ -12,23 +12,15 @@
 //
 // Adding a row builder here means it is testable the moment it exists.
 
+import { makeButton as createButton } from './button.js';
+
 export const rankOf = (role) => ({ owner: 3, gm: 2, helper: 1, player: 0 })[role] ?? 0;
 
 const MEMBER_ICON = { Helper: 'user-up', Player: 'user-down', GM: 'user-cog', Kick: 'user-minus' };
 
-/** A <button> from label + click handler (+ optional class / icon) — the shared factory. */
+/** Row/menu compatibility adapter: retain member icons and an omitted type attribute. */
 export function makeButton(label, fn, cls, icon) {
-  const button = document.createElement('button');
-  button.className = ['button', cls === 'danger' ? 'button--danger' : cls]
-    .filter(Boolean)
-    .join(' ');
-  const ic = icon || MEMBER_ICON[label];
-  if (ic) {
-    button.dataset.icon = ic;
-    button.innerHTML = '<span class="lbl">' + label + '</span>';
-  } else button.textContent = label;
-  button.onclick = fn;
-  return button;
+  return createButton(label, fn, cls, icon || MEMBER_ICON[label]);
 }
 
 /**

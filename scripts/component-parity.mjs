@@ -833,22 +833,70 @@ const SCENES = [
     expect: { selector: '#roomList .roomRow', min: 2 },
     drive: `
       localStorage.setItem('tabletop.token', 'fixture');
-      window.fetch = async (url) => ({ ok: true, json: async () => String(url).includes('/auth/token')
+      const requests = [];
+      window.fetch = async (url, options) => {
+        requests.push([String(url), options]);
+        return { ok: true, json: async () => String(url).includes('/auth/token')
         ? { user: { id: '1', username: 'Viewer', email: 'viewer@example.test', isAdmin: false } }
         : { rooms: [
           { id: '1', name: 'A table with a longer descriptive name', code: 'WATCH1', role: 'player', status: 'admitted' },
           { id: '2', name: 'Another table', code: 'WATCH2', role: 'helper', status: 'admitted' },
-        ] } });
+        ] } };
+      };
       await import('/__landing-live.js');
       for (let i = 0; i < 20 && !document.querySelector('#roomList .roomRow'); i++) await new Promise(resolve => setTimeout(resolve, 20));
       const rows = [...document.querySelectorAll('#roomList .roomRow')];
       if (rows.length !== 2) throw Error('Lobby rooms did not render');
+      const login = requests.find(([url]) => url === '/auth/token')[1];
+      if (login.headers.Authorization || JSON.parse(login.body).token !== 'fixture') throw Error('Lobby token resolution changed auth policy');
+      if (requests.find(([url]) => url === '/rooms')[1].headers.Authorization !== 'Bearer fixture') throw Error('Lobby rooms lost authenticated request');
       for (const row of rows) {
         const watch = [...row.querySelectorAll('button')].find(button => button.textContent.trim() === 'Watch');
         if (!watch || watch.disabled) throw Error('Admitted player has no Watch action');
+        if (watch.getAttribute('type') !== 'button') throw Error('Lobby action became a submit button');
         if (!watch.querySelector('use[href="#i-eye"]')) throw Error('Watch eye icon is missing');
         if (row.scrollWidth > row.clientWidth + 1) throw Error('Watch action overflows lobby row');
       }
+    `,
+  },
+  {
+    name: 'admin-shared-helpers',
+    page: '/admin.html',
+    root: '#admin',
+    expect: { selector: '#roomsBody button', min: 4 },
+    drive: `
+      const assert = (value, message) => { if (!value) throw Error(message); };
+      const requests = [], alerts = [];
+      const waitFor = async (predicate) => {
+        for (let i = 0; i < 30 && !predicate(); i++) await new Promise(resolve => setTimeout(resolve, 20));
+        assert(predicate(), 'Admin action did not finish');
+      };
+      localStorage.setItem('tabletop.token', 'admin-fixture');
+      window.alert = text => alerts.push(text);
+      window.prompt = () => 'Renamed table';
+      window.fetch = async (url, options) => {
+        requests.push([String(url), options]);
+        if (options.method === 'PATCH') return { ok: false, status: 403, json: async () => ({ error: 'Access revoked' }) };
+        return { ok: true, json: async () => String(url) === '/auth/token'
+          ? { user: { id: '1', isAdmin: true } }
+          : String(url) === '/admin/texture-cache' ? { state: 'idle' }
+          : String(url) === '/admin/users' ? { users: [{ id: '2', username: 'Guest', email: 'guest@example.test', hostStatus: 'none' }] }
+          : { rooms: [{ id: '1', name: 'Table', code: 'ROOM', ownerName: 'Host' }] } };
+      };
+      await import('/__admin-live.js');
+      await waitFor(() => document.querySelector('#usersBody button'));
+      assert(requests.every(([, options]) => options.headers.Authorization === 'Bearer admin-fixture'), 'Admin request lost automatic authentication');
+      const buttons = [...document.querySelectorAll('#roomsBody button, #usersBody button')];
+      assert(buttons.every(button => button.getAttribute('type') === 'button'), 'Admin action became a submit button');
+      assert(buttons.every(button => !button.dataset.icon), 'Member/lobby icons leaked into admin buttons');
+      assert(buttons.find(button => button.textContent === 'Purge').classList.contains('button--danger'), 'Destructive button lost styling');
+      localStorage.setItem('tabletop.token', 'new-session');
+      buttons.find(button => button.textContent === 'Rename').click();
+      await waitFor(() => alerts.length > 0);
+      const patch = requests.find(([, options]) => options.method === 'PATCH');
+      assert(patch[0] === '/rooms/1' && JSON.parse(patch[1].body).name === 'Renamed table', 'Admin rename lost target or body');
+      assert(patch[1].headers.Authorization === 'Bearer new-session', 'Admin request used a stale token');
+      assert(alerts[0] === 'Access revoked', 'Admin error feedback changed');
     `,
   },
   {
@@ -2115,9 +2163,13 @@ const VIEWPORTS = [
 const out = {};
 const server = await serveDir({
   root: ROOT,
-  stubOnly: ['/client.js', '/landing.js'], // most scenes exercise controllers independently
+  stubOnly: ['/client.js', '/landing.js', '/admin.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
+    '/__admin-live.js': {
+      body: await readFile(resolve(ROOT, 'admin.js'), 'utf8'),
+      type: 'text/javascript',
+    },
     '/__landing-live.js': {
       body: await readFile(resolve(ROOT, 'landing.js'), 'utf8'),
       type: 'text/javascript',
