@@ -11,3 +11,5 @@
 
 # Claude Code local session data
 .claude/
+/.agents/
+/.codex/
