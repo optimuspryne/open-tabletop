@@ -1,3 +1,4 @@
+import { broadcastPieceEvent } from './piece-visibility.js';
 import { updateNotecardStackCollider, updateNotecardCollider } from './collider-maintenance.js';
 import { canUseRoomCapability, RANK } from '../permissions.js';
 import { hasPieceCapacity } from './piece-capacity.js';
@@ -485,7 +486,7 @@ export function createNotecards(room, { now = Date.now, token = randomUUID } = {
       const j = Math.floor(Math.random() * (i + 1));
       [cards[i], cards[j]] = [cards[j], cards[i]];
     }
-    room.broadcast('sfx', { type: 'shuffle' });
+    broadcastPieceEvent(room, 'sfx', { type: 'shuffle' });
   }
   function split(client, message) {
     const id = availableStack(client, message);

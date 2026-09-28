@@ -45,6 +45,11 @@ can ship before export/import. A read-only Markdown rulebook is a useful release
 
 ## Concealment: hidden objects, fog of war, and GM staging
 
+**Implementation update (2026-09-27):** object Hide/Reveal with approved icon pair A is implemented;
+the user reports manual tests passing. See [the staged design](DESIGN_concealment.md) for the
+implemented boundaries and checks. Visual map covering, freeform manual exploration and later
+circular reveal auras remain future slices. The original discovery brief below is historical context.
+
 **Goal:** hide an individual object from players while showing a ghosted version to GMs; later
 support concealed areas and a preparation zone. Include persistent labels, held-by labels, count
 warnings, highlights, previews and sound events in the visibility policy.

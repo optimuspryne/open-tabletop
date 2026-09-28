@@ -10,5 +10,5 @@ test('every inline TableRoom message uses the shared error boundary', async () =
   );
   assert.equal(tableRoom.includes('this.onMessage('), false);
   assert.equal(tableRoom.includes('assetMessage('), false);
-  assert.equal((tableRoom.match(/tableMessage\('/g) || []).length, 8); // placement handlers extracted
+  assert.equal((tableRoom.match(/tableMessage\('/g) || []).length, 9); // placement handlers extracted
 });

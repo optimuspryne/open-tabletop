@@ -116,6 +116,11 @@ const applyShapeToGeom = (geom, shape = imgShape()) => {
 const shapeOfGeom = (geom) =>
   geom && geom.shape === 'hex' ? 'hex' : geom && geom.round === 0 ? 'square' : 'rounded';
 const byId = (id) => document.getElementById(id);
+// Placement choice is local to this room session; each request captures its value.
+function sendPlacement(type, payload) {
+  const hidden = !!byId('spawnHidden')?.checked && !byId('spawnHiddenControl')?.hidden;
+  ROOM.send(type, { ...payload, spawnHidden: hidden });
+}
 const ICON_FOR = {
   Select: 'new-section',
   'Spawn selected': 'category-plus',
@@ -693,10 +698,10 @@ const LIST_UL = {
   sky: 'libSky',
 };
 const spawnOf = {
-  deck: (it) => ROOM.send('loadDeck', { id: it.id }),
-  board: (it) => ROOM.send('loadBoard', { id: it.id }),
-  mat: (it) => ROOM.send('loadMat', { id: it.id }),
-  prop: (it) => ROOM.send('spawn', { type: 'prop', props: it.props }),
+  deck: (it) => sendPlacement('loadDeck', { id: it.id }),
+  board: (it) => sendPlacement('loadBoard', { id: it.id }),
+  mat: (it) => sendPlacement('loadMat', { id: it.id }),
+  prop: (it) => sendPlacement('spawn', { type: 'prop', props: it.props }),
 };
 
 // A lazy-loaded thumbnail <img> (optional extra class), and an async filler that
@@ -924,8 +929,8 @@ function renderList(kind, list, sink, { asDispenser = false } = {}) {
           standOn: false, // custom models: a Stand-upright toggle, off by default (free to tumble)
           send:
             kind === 'deck'
-              ? () => ROOM.send('loadDeck', { id: it.id })
-              : (cp) => ROOM.send('loadProp', { id: it.id, asDispenser, ...cp }),
+              ? () => sendPlacement('loadDeck', { id: it.id })
+              : (cp) => sendPlacement('loadProp', { id: it.id, asDispenser, ...cp }),
         }),
       );
     } else {
@@ -1040,7 +1045,7 @@ function renderBuiltin(sink) {
         title: 'd' + sides,
         color: 'palette',
         dice: true,
-        send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides, ...cp } }),
+        send: (cp) => sendPlacement('spawn', { type: 'die', props: { sides, ...cp } }),
       }),
     );
   }
@@ -1053,7 +1058,8 @@ function renderBuiltin(sink) {
         title: DICE_MODELS[key].name,
         color: 'palette',
         dice: true,
-        send: (cp) => ROOM.send('spawn', { type: 'die', props: { sides: 6, model: key, ...cp } }),
+        send: (cp) =>
+          sendPlacement('spawn', { type: 'die', props: { sides: 6, model: key, ...cp } }),
       }),
     );
   }
@@ -1075,7 +1081,7 @@ function renderBuiltin(sink) {
         preview,
         title: 'Drawable notecard',
         color: 'none',
-        send: () => ROOM.send('spawn', { type: 'notecard', props: {} }),
+        send: () => sendPlacement('spawn', { type: 'notecard', props: {} }),
       }),
     );
   }
@@ -1087,7 +1093,7 @@ function renderBuiltin(sink) {
         preview,
         title: 'Notecard stack',
         count: { def: 8, min: 2, max: 16, label: 'Cards in stack' },
-        send: (cp) => ROOM.send('spawn', { type: 'notecardStack', props: { count: cp.count } }),
+        send: (cp) => sendPlacement('spawn', { type: 'notecardStack', props: { count: cp.count } }),
       }),
     );
   }
@@ -1099,7 +1105,7 @@ function renderBuiltin(sink) {
         preview: box,
         title: 'Standard 52-card',
         color: 'none',
-        send: () => ROOM.send('spawn', { type: 'deck', props: {} }),
+        send: () => sendPlacement('spawn', { type: 'deck', props: {} }),
       }),
     );
   }
@@ -1114,7 +1120,7 @@ function renderBuiltin(sink) {
         preview: box,
         title: 'Standard 54 (with Jokers)',
         color: 'none',
-        send: () => ROOM.send('spawn', { type: 'deck', props: { jokers: true } }),
+        send: () => sendPlacement('spawn', { type: 'deck', props: { jokers: true } }),
       }),
     );
   }
@@ -1126,7 +1132,7 @@ function renderBuiltin(sink) {
         preview: box,
         title: 'Dominoes (double-six)',
         color: 'none',
-        send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'domino' } }),
+        send: () => sendPlacement('spawn', { type: 'deck', props: { set: 'domino' } }),
       }),
     );
   } // a boneyard on its own — no table-clear/deal
@@ -1138,7 +1144,7 @@ function renderBuiltin(sink) {
         preview: box,
         title: 'Word tiles (letter bag)',
         color: 'none',
-        send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'letter' } }),
+        send: () => sendPlacement('spawn', { type: 'deck', props: { set: 'letter' } }),
       }),
     );
   } // the 100-tile bag on its own
@@ -1153,7 +1159,7 @@ function renderBuiltin(sink) {
         preview: box,
         title: 'Mahjong wall (144)',
         color: 'none',
-        send: () => ROOM.send('spawn', { type: 'deck', props: { set: 'mahjong' } }),
+        send: () => sendPlacement('spawn', { type: 'deck', props: { set: 'mahjong' } }),
       }),
     );
   } // the full wall on its own
@@ -1167,7 +1173,7 @@ function renderBuiltin(sink) {
     ); // proc boards paint their own preview
     boards.append(
       builtinCard(box, BOARDS[key].name, 'Spawn', () =>
-        ROOM.send('spawn', { type: 'board', props: { board: key } }),
+        sendPlacement('spawn', { type: 'board', props: { board: key } }),
       ),
     );
   }
@@ -1224,7 +1230,7 @@ function renderBuiltin(sink) {
         snapDefault: !!(PROPS[p.id] && PROPS[p.id].team), // grid games (go/checkers/chess) default to snap-on
         stand: standMode(p.id),
         standOn: !!(PROPS[p.id] && PROPS[p.id].stand), // Stand toggle, on for shapes that stand naturally
-        send: (cp) => ROOM.send('spawn', { type: 'prop', props: { shape: p.id, ...cp } }),
+        send: (cp) => sendPlacement('spawn', { type: 'prop', props: { shape: p.id, ...cp } }),
       }),
     );
   }
@@ -1248,7 +1254,7 @@ function renderBuiltin(sink) {
         swatches: spec.swatches,
         count: spec.infinite ? null : spec.count, // stack size for finite dispensers; a bowl is unlimited
         infinite: !!spec.infinite,
-        send: (cp) => ROOM.send('spawn', { type: 'dispenser', props: { disp: id, ...cp } }),
+        send: (cp) => sendPlacement('spawn', { type: 'dispenser', props: { disp: id, ...cp } }),
       }),
     );
   }
@@ -1317,7 +1323,7 @@ function sendDeck(back, fronts, name, spawn, editId, geom) {
   ROOM.send('deckBegin', { back, geom }); // geom (optional): the card shape for a fit-to-image deck
   for (let i = 0; i < fronts.length; i += 50)
     ROOM.send('deckAppend', { fronts: fronts.slice(i, i + 50) });
-  ROOM.send('deckFinish', { name, spawn, editId });
+  sendPlacement('deckFinish', { name, spawn, editId });
 }
 
 // Build a double-sided TILE SET on the server: it's an `open` deck whose cards may carry per-tile
@@ -1326,7 +1332,7 @@ function sendTileSet(back, cards, name, spawn, editId, geom, skin) {
   ROOM.send('deckBegin', { back, geom, open: true, ...(skin || {}) });
   for (let i = 0; i < cards.length; i += 50)
     ROOM.send('deckAppend', { fronts: cards.slice(i, i + 50) });
-  ROOM.send('deckFinish', { name, spawn, editId });
+  sendPlacement('deckFinish', { name, spawn, editId });
 }
 
 // Fill a thumbnail grid from a multi-file input (image-deck fronts or tile fronts / backs).
@@ -1802,7 +1808,7 @@ function wireAddBoard() {
   // saveBoard inserts to the library (no spawn); Save + Spawn also swaps it onto the table.
   const save = (spec, name, spawn) => {
     ROOM.send('saveBoard', { name, board: spec, editId: editCtx && editCtx.id });
-    if (spawn) ROOM.send('spawn', { type: 'board', props: spec });
+    if (spawn) sendPlacement('spawn', { type: 'board', props: spec });
   };
   const clearBoard = () => {
     ['adBoardGlbName', 'adBoardImgName'].forEach((id) => {
@@ -2036,7 +2042,7 @@ function wireAddMat() {
         round: 0.04,
         shape: 'rect',
       };
-      ROOM.send('saveMat', { name, tex, geom, spawn, editId: editCtx && editCtx.id });
+      sendPlacement('saveMat', { name, tex, geom, spawn, editId: editCtx && editCtx.id });
       clearMat();
       closeAddModal();
     } catch (e) {
@@ -2071,7 +2077,7 @@ function wireAddObject() {
 
   // saveProp inserts to the library (no spawn); Save + Spawn also drops one on the table.
   const save = (props, name, spawn) => {
-    ROOM.send('saveProp', { name, props, editId: editCtx && editCtx.id, spawn });
+    sendPlacement('saveProp', { name, props, editId: editCtx && editCtx.id, spawn });
   };
   const tintValue = (select) =>
     select.value === '__none__' ? null : select.value === '__all__' ? undefined : select.value;
@@ -2469,6 +2475,7 @@ function wireAddSky() {
 // client.js hands over the live room once connected.
 window.onOttRoom = (room, { toast = () => {} } = {}) => {
   ROOM = room;
+  if (byId('spawnHidden')) byId('spawnHidden').checked = false;
   room.onMessage('deckData', (d) => {
     // deck Edit/Clone: server sent the deck's cards + back — fill the matching form
     if (!pendingDeck) return;

@@ -33,13 +33,18 @@ export function guardedMessage(room, type, handler, options) {
     type,
     (client, message) => {
       if (!allowRoomCapability(client, capability, type)) return;
-      if (
-        capability === 'gameplay' &&
-        !type.startsWith('notecard') &&
-        room.notecards?.blocked(client, message, type)
-      )
-        return;
-      return handler(client, message);
+      const handle = (client, message) => {
+        if (
+          capability === 'gameplay' &&
+          !type.startsWith('notecard') &&
+          room.notecards?.blocked(client, message, type)
+        )
+          return;
+        return handler(client, message);
+      };
+      return room.visibility
+        ? room.visibility.runRequest(client, type, message, handle)
+        : handle(client, message);
     },
     options,
   );

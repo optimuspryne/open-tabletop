@@ -281,6 +281,7 @@ export function createRoomAccess({ db, hashToken }) {
         entry.auth.role = role;
         const player = room.state?.players?.get(entry.client.sessionId);
         if (player) player.role = role;
+        room.visibility?.syncClient(entry.client);
       }
     },
 

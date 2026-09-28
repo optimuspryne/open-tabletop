@@ -1,0 +1,35 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import * as THREE from '../public/vendor/three/three.module.js';
+import { createHiddenPieceMaterials } from '../public/table/hidden-piece-materials.js';
+
+test('ghost materials preserve shared originals, restore shadows, and dispose copies across lazy model replacement', () => {
+  const visibility = createHiddenPieceMaterials();
+  const material = new THREE.MeshStandardMaterial({ opacity: 0.8, transparent: true });
+  const root = new THREE.Group();
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(), [material, material]);
+  const visible = new THREE.Mesh(mesh.geometry, material);
+  mesh.castShadow = true;
+  root.add(mesh);
+  visibility.update(root, true);
+  const copies = mesh.material;
+  let disposed = 0;
+  copies.forEach((copy) => copy.addEventListener('dispose', () => disposed++));
+  assert.equal(visible.material.opacity, 0.8);
+  assert.equal(material.depthWrite, true);
+  assert.equal(mesh.castShadow, false);
+  assert.ok(mesh.material[0].opacity < material.opacity);
+  visibility.update(root, true);
+  assert.equal(mesh.material, copies);
+  root.remove(mesh);
+  const lazy = new THREE.Mesh(mesh.geometry, material);
+  root.add(lazy);
+  visibility.update(root, true);
+  assert.equal(disposed, 2);
+  assert.equal(mesh.material[0], material);
+  assert.equal(mesh.castShadow, true);
+  assert.notEqual(lazy.material, material);
+  visibility.restore(root);
+  assert.equal(lazy.material, material);
+  assert.equal(material.opacity, 0.8);
+});

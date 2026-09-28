@@ -118,8 +118,9 @@ export function createPieceLabels({ THREE, scene, meshes, getRoom, getRank, doc 
       const mesh = meshes.get(id)?.mesh;
       if (!mesh?.visible) return;
       const props = piecePropsOf(piece);
-      const label =
+      const name =
         typeof props.label === 'string' ? props.label.slice(0, PIECE_LABEL_LIMITS.text) : '';
+      const label = piece.hidden ? `GM only${name ? ' · ' + name : ''}` : name;
       const stock = lowStockText(piece, props);
       const key = JSON.stringify([label, stock]);
       if (!label && !stock) {

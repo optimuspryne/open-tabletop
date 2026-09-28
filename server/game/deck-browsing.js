@@ -23,6 +23,7 @@ export function createDeckBrowsing(room, { geoOf, maxPieces, now = Date.now, tok
   const error = (client, message) =>
     send(client, 'serverError', { operation: 'deckBrowse', message });
   const allowed = (client, piece) =>
+    (!room.visibility || room.visibility.canSee(client, piece)) &&
     canUseRoomCapability(client.auth ?? {}, 'gameplay') &&
     (room.rank(client) >= RANK.gm || readProps(piece).browseAccess === 'players');
   function close(session, reason = 'Deck browsing closed.') {
@@ -231,6 +232,9 @@ export function createDeckBrowsing(room, { geoOf, maxPieces, now = Date.now, tok
     writeProps(piece, props);
   }
   return {
+    sourceFor(client) {
+      return sessions.get(client.sessionId)?.deckId;
+    },
     start,
     step,
     keepAlive,

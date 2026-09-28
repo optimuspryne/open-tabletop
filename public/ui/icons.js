@@ -264,6 +264,17 @@ export function initTip() {
       tipTimer = null;
     }
   };
+  // Keyboard focus gets the same readable hint as hover and touch long-press.
+  document.addEventListener('focusin', (event) => {
+    const button = event.target.closest('button[aria-label], a.button[aria-label]');
+    if (!button?.querySelector('.ico')) return;
+    hide();
+    tipBtn = button;
+    place(button);
+  });
+  document.addEventListener('focusout', (event) => {
+    if (tipBtn?.contains(event.target) && !tipBtn.contains(event.relatedTarget)) hide();
+  });
   document.addEventListener('pointerover', (e) => {
     if (e.pointerType !== 'mouse') return;
     const btn = e.target.closest('button[aria-label]');

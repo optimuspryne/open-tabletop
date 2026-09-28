@@ -14,14 +14,19 @@ export function takeTableCard(room, client, id, geoOf) {
 // Shared table placement for hands, deck draws, inspections, and recovery.
 // Callers own capacity checks, positions, and inventory consumption. The room's
 // spawnCardFlat keeps responsibility for physics orientation and grid snapping.
-export function spawnTableCard(room, position, { front, back, open, geo = {} }, faceDown = true) {
+export function spawnTableCard(
+  room,
+  position,
+  { front, back, open, geo = {}, hidden },
+  faceDown = true,
+) {
   const props = { ...geo, back };
   if (open || !faceDown) props.front = front;
   if (open) {
     props.open = true;
     if (faceDown) props.down = true;
   }
-  const id = room.spawnCardFlat(position, props);
+  const id = room.spawnCardFlat(position, props, hidden);
   if (!open && faceDown) room.cardData.set(id, { front });
   return id;
 }

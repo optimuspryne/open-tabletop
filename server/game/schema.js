@@ -1,4 +1,4 @@
-import { Schema, MapSchema, defineTypes } from '@colyseus/schema';
+import { Schema, MapSchema, defineTypes, view } from '@colyseus/schema';
 import { TABLE } from '../../shared/pieces.js';
 import { FACTORY_LIGHTING } from '../../shared/lighting.js';
 
@@ -18,6 +18,7 @@ defineTypes(Piece, {
   qy: 'number',
   qz: 'number',
   qw: 'number',
+  hidden: 'boolean',
 });
 
 // PUBLIC per-player info: seat/turn order + hand count (never card identities).
@@ -203,3 +204,6 @@ defineTypes(State, {
   overlays: { map: Overlay },
   lighting: Lighting,
 });
+
+// Pieces are explicitly admitted to each client view by the visibility service.
+view()(State.prototype, 'pieces');

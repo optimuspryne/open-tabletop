@@ -1,3 +1,4 @@
+import { broadcastPieceEvent } from '../piece-visibility.js';
 import { RANK } from '../../permissions.js';
 import {
   boundedString,
@@ -24,7 +25,7 @@ export function registerRoomFeatureHandlers(
     const time = now();
     if (time - (lastHighlight.get(client) ?? -Infinity) < HIGHLIGHT_INTERVAL_MS) return;
     lastHighlight.set(client, time);
-    room.broadcast('pieceHighlighted', { id: parsed.id, sid: client.sessionId });
+    broadcastPieceEvent(room, 'pieceHighlighted', { id: parsed.id, sid: client.sessionId });
   });
 
   featureMessage('roll', (client) => {
@@ -37,14 +38,14 @@ export function registerRoomFeatureHandlers(
       rollBody(body, trayRoll, random);
       count++;
     });
-    if (count) room.broadcast('sfx', { type: count > 1 ? 'dice-roll' : 'die-roll' });
+    if (count) broadcastPieceEvent(room, 'sfx', { type: count > 1 ? 'dice-roll' : 'die-roll' });
   });
 
   featureMessage('trayScoop', (client) => {
     const seat = room.seatOf(client);
     if (seat == null || !room.state.trays.get(String(seat))) return;
     const count = scoopTrayDice(room, seat);
-    if (count) room.broadcast('sfx', { type: 'die-roll' });
+    if (count) broadcastPieceEvent(room, 'sfx', { type: 'die-roll' });
   });
 
   featureMessage('trayClear', (client) => {

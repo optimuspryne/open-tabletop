@@ -1,3 +1,4 @@
+import { broadcastPieceEvent } from '../piece-visibility.js';
 import { syncOpenCover } from '../deck-sync.js';
 import { returnInspectedCard } from '../inspection-recovery.js';
 import { spawnTableCard, takeTableCard } from '../card-transfer.js';
@@ -50,7 +51,7 @@ export function registerCardHandlers(
     writeProps(piece, props);
     body.wakeUp();
     body.velocity.y = flipHop;
-    room.broadcast('sfx', { type: props.tile ? 'tile-flip' : 'card-flip' });
+    broadcastPieceEvent(room, 'sfx', { type: props.tile ? 'tile-flip' : 'card-flip' });
   });
 
   cardMessage('dealToTable', (client, message) => {
@@ -70,7 +71,7 @@ export function registerCardHandlers(
       geo: geoOf(props),
     });
     finishDraw(room, deckId, draw.empty);
-    room.broadcast('sfx', { type: dropSfx('card', props) });
+    broadcastPieceEvent(room, 'sfx', { type: dropSfx('card', props) });
   });
 
   cardMessage('drawToHand', (client, message) => {
@@ -84,7 +85,7 @@ export function registerCardHandlers(
     const props = readProps(deck);
     room.addToHand(client, draw.front, draw.back || props.back || 'back', geoOf(props), props.open);
     finishDraw(room, deckId, draw.empty);
-    room.broadcast('sfx', { type: dropSfx('card', props) });
+    broadcastPieceEvent(room, 'sfx', { type: dropSfx('card', props) });
   });
 
   cardMessage('dealDrag', (client, message) => {
@@ -134,6 +135,7 @@ export function registerCardHandlers(
     const back = draw.back || props.back || 'back';
     room.pendingInspect.set(client.sessionId, {
       deckId,
+      hidden: !!deck.hidden,
       front: draw.front,
       back,
       cardBack: draw.back, // the per-tile back (undefined → shares the deck's back)
@@ -186,7 +188,10 @@ export function registerCardHandlers(
     shuffle(cards);
     syncOpenCover(room, deckId); // a new tile is on top → repaint an open set's cover
     const props = readProps(room.state.pieces.get(deckId));
-    room.broadcast('shuffled', { id: deckId, ...(props.tile ? { sfx: 'tile-shuffle' } : {}) });
+    broadcastPieceEvent(room, 'shuffled', {
+      id: deckId,
+      ...(props.tile ? { sfx: 'tile-shuffle' } : {}),
+    });
   });
 
   cardMessage('splitDeck', (client, message) => {
@@ -261,7 +266,7 @@ export function registerCardHandlers(
     cz /= members.length;
     for (const m of members) room.removePiece(m.id); // remove first → the new deck always fits
     room.spawn('deck', [cx, spawnY, cz], deckSpawnProps(props, cards));
-    room.broadcast('sfx', { type: dropSfx('deck', props) });
+    broadcastPieceEvent(room, 'sfx', { type: dropSfx('deck', props) });
   });
 }
 

@@ -1330,6 +1330,10 @@ a {
   gap: calc(7px * var(--ui-elements-scale));
   cursor: pointer;
 }
+#spawnHiddenControl {
+  min-height: max(44px, var(--control-min-height));
+  padding-inline: var(--control-pad-inline);
+}
 
 /* Number stepper — a themed field flanked by − / + buttons. Any input[type=number]
    is wrapped in .stepper by the client on load, so this is the universal number style. */

@@ -555,6 +555,9 @@ export function createInspection({
     return true;
   }
   function bindRoom(room) {
+    room.onMessage('inspectionClosed', () => {
+      if (inspect?.drawn) releaseInspect();
+    });
     room.onMessage('inspectCard', ({ front, back, tile, geom }) => {
       if (!canInteract()) return;
       inspectMesh(kinds.card.mesh({ front, back, tile, geom }), { drawn: true, type: 'card' });

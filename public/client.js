@@ -722,6 +722,8 @@ function applyRole(role) {
   document.body.classList.toggle('not-gm', rank < 2); // mirrors .not-admin; gates .gm-only
   syncColliderDebugButton();
   colliderDebug.sync();
+  gate('spawnHiddenControl', 2);
+  if (rank < 2 && byId('spawnHidden')) byId('spawnHidden').checked = false;
   gate('memberSection', 2); // Members management (dock): GM+
   if (rank >= 2 && room) room.send('members'); // (re)fetch on join/reconnect/promotion — allowReconnection skips onJoin's push, so the dock would otherwise stay blank after a refresh
   gate('lib2Btn', 1); // Library (combined): Helper+
@@ -837,6 +839,7 @@ const selection = createSelection({
   dragThreshold: CONFIG.input.dragPx,
   getRoom: () => room,
   getBoardTopY: () => boardTopY,
+  getRank: () => myRank,
   byId,
 });
 
@@ -887,6 +890,7 @@ const pieceUi = createPieceUi({
   pickId,
   isSheet: shell.isSheet,
   openRadial: shell.openRadial,
+  closeRadial: shell.closeRadial,
   highlightPiece: (id) => effects.highlightPiece(id),
   getRank: () => myRank,
   editLabels: pieceLabels.edit,
@@ -938,6 +942,7 @@ const effects = createTableEffects({
   overlays.syncSurface(); // GLB boards can finish loading after restored overlays arrive
   presence.update(); // keep held-piece labels over the interpolated meshes
   pieceUi.update(); // contextual guide and live hover counts
+  pieceView.updateVisibility();
   pieceLabels.update(); // persistent object annotations follow interpolated bounds
   effects.updatePings();
   effects.updateDropMarker(pieceDrag.current());

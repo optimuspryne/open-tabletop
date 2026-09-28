@@ -1,3 +1,4 @@
+import { broadcastPieceEvent } from '../piece-visibility.js';
 import {
   cardPlacementPayload,
   dispenserDragPayload,
@@ -24,7 +25,7 @@ export function registerPlacementHandlers(
     const body = room.bodies.get(id);
     room.spawn(item.type, body ? room.besideDeck(body) : randomPosition(), item.props);
     room.afterDispense(disp, id);
-    room.broadcast('sfx', { type: 'object-drop' });
+    broadcastPieceEvent(room, 'sfx', { type: 'object-drop' });
   });
   tableMessage('dispenseDrag', (client, message) => {
     const msg = dispenserDragPayload(message);
@@ -69,7 +70,7 @@ export function registerPlacementHandlers(
     room.spawnHandCard(pos, card, faceDown);
     hand.splice(index, 1);
     room.sendHand(client);
-    room.broadcast('sfx', { type: dropSfx('card', card) }); // played tile clacks
+    broadcastPieceEvent(room, 'sfx', { type: dropSfx('card', card) }); // played tile clacks
   });
 
   tableMessage('handToTable', (client, message) => {
@@ -95,7 +96,7 @@ export function registerPlacementHandlers(
     room.sendHand(client);
     if (spawned) {
       room.lastDrop.set(client.sessionId, { ids, ts: Date.now() });
-      room.broadcast('sfx', { type: 'hand-drop' });
+      broadcastPieceEvent(room, 'sfx', { type: 'hand-drop' });
     }
     if (capped) room.notifyFull(client);
   });

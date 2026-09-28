@@ -12,6 +12,38 @@ modules and schemas are not current API contracts.
 For release 0.19.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0190)
 (migrations 018–021, client refresh, source dependencies and ZIP transfer limits).
 
+### Object visibility
+
+- `Piece.hidden` is a boolean appended to the schema. `State.pieces` uses Colyseus view filtering.
+  `createPieceVisibility(room)` supplies `canSee`, `isGM`, `runRequest`, `spawnHidden`,
+  `setVisibility`, `syncClient`/`sync`, `prepareBody`/`preparePhysics`, and filtered `broadcast`.
+- `setPieceVisibility { ids: string[], hidden: boolean }`: live owner/GM gameplay request,
+  validates the entire batch before mutating. Supports ordinary pieces, cards, decks, mats,
+  boards, dispensers and notecards/stacks. Personal tray dice stay public. Busy/supporting
+  pieces and unsafe reveal overlaps return `serverError`; hidden dice must be revealed to roll.
+- `spawn`, `loadDeck`, `loadBoard`, `loadMat`, `loadProp`, `deckFinish`, `saveMat`, `saveProp`
+  accept an optional top-level boolean `spawnHidden`. The request boundary validates/removes
+  it before existing payload validation. Hidden spawning requires GM role at request and spawn.
+- `TableRoom.spawn(type, pos, props, quat, hidden?)`, `spawnCardFlat(pos, props, hidden?)`,
+  and `swapBoard(props, hidden?)` accept trusted explicit visibility for snapshot/recovery paths;
+  otherwise they inherit the room request scope. `spawnTableCard` also accepts `hidden` in its
+  card record. `serializeScene`/`applyScene` preserve hidden pieces and orphan inspections.
+- `broadcastPieceEvent(room, type, payload, ids?)` filters object events; collision events pass
+  IDs because they run outside request scope. `deckBrowsing.sourceFor(client)` exposes only
+  the internal source ID for request provenance. `inspectionClosed` dismisses revoked peeks.
+- `createHiddenPieceMaterials().update(mesh, hidden)` clones materials only for ghosted instances;
+  `restore(mesh)` returns originals and disposes copies. `pieceView.updateVisibility()` handles
+  asynchronously loaded children. Existing piece labels add **GM only** to hidden objects.
+- Existing `pieceMenuItems`/`openPieceMenu`, selection `bindActions`, and the input intent router
+  expose approved eye-off/eye actions. ContextMenu/Shift+F10 cycles selected pieces, or all pieces
+  when nothing is selected. Library `sendPlacement` captures the room-local checkbox per request.
+  The checkbox resets on room handover; role demotion clears it. Private hands retain their own
+  privacy and explicit play/sharing semantics.
+
+Restart the server and refresh all clients for this schema/UI change; no migration or added
+infrastructure is required. See [the concealment implementation record](DESIGN_concealment.md)
+for validation status and remaining manual smoke tests.
+
 The codebase:
 
 | File                                                                                                   | Runtime | Role                                                                                                                                                                                             |
@@ -1319,7 +1351,8 @@ re-encodes on overflow; larger states may still log a growth warning. The increa
 covers the reported 384 KiB allocation recommendation with headroom. Restart the server to apply.
 
 - **`Piece`** — `type, owner, props` (strings), `count` (deck cards or remaining
-  finite-dispenser items), transform `x,y,z,qx,qy,qz,qw`. Cosmetic tints ride in the
+  finite-dispenser items), transform `x,y,z,qx,qy,qz,qw`, and appended `hidden` (boolean).
+  The room visibility service filters hidden instances to owner/GM views. Cosmetic tints ride in the
   `props` JSON, not the schema:
   `color` (die body / prop tint), `textColor` (die numbers), and `finish`. Dice accept
   `matte`/`satin`/`glossy`/`metallic`/`pearl`/`marbled`/`brushed`/`glow`/`translucent`, or
@@ -1443,7 +1476,7 @@ Module-scope **`LIVE_ROOMS`** (a Set of live rooms) lets the orphan-cleanup scan
 see in-play asset references. A disposing room remains tracked until its final
 persistence flush completes.
 
-Methods: **`spawn(type,pos,props) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → profiled world step →
+Methods: **`spawn(type,pos,props,quat,hidden?) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → hidden-body parking → profiled world step →
 extracted tray/table recovery → extracted transform publication; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
 **`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
 **`stopShow(sid)`**, **`saveDeckById(id,name,ownerId)`** (async facade over the library service),
@@ -2910,8 +2943,8 @@ and halo texture resolution. `createTableEffects` maintains one halo per object;
 its sender color and lifetime. Halos follow current mesh bounds, vanish when pieces disappear or
 become locally invisible, and leave authored materials unchanged. Sprite materials are released
 individually and the shared texture after the final halo. Highlights are transient and not saved.
-Future hidden-object/spectator/time-out features must apply their visibility and communication
-policies to this message path.
+The visibility request gate rejects hidden targets for players, and `broadcastPieceEvent` sends
+hidden-object highlights only to GMs. Spectators/time-outs retain authorized communication access.
 
 ## `public/table/audio.js` — sound effects + music
 

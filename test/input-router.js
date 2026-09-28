@@ -711,7 +711,7 @@ test('time-out input keeps camera, public inspection and menus but never starts 
   );
 });
 
-test('keyboard context-menu intent cycles notecard stacks without a pointer pick and respects typing', () => {
+test('keyboard context-menu intent cycles pieces without a pointer pick and respects typing', () => {
   const f = fixture();
   f.state.pieces.set('notes-a', { type: 'notecardStack' });
   f.state.pieces.set('notes-b', { type: 'notecardStack' });
@@ -719,7 +719,7 @@ test('keyboard context-menu intent cycles notecard stacks without a pointer pick
   f.key('ContextMenu');
   assert.deepEqual(
     f.calls.filter(([name]) => name === 'menu').map(([, id]) => id),
-    ['notes-a', 'notes-b'],
+    ['die', 'card'],
   );
   assert.equal(names(f).includes('pick'), false);
   f.doc.activeElement = { tagName: 'INPUT' };

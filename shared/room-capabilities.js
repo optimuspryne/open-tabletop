@@ -65,6 +65,7 @@ const messagesByCapability = {
     'moveGroup',
     'releaseGroup',
     'setPieceLabels',
+    'setPieceVisibility',
     'setStandGroup',
     'setSnapGroup',
     'rollGroup',

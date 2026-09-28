@@ -69,6 +69,7 @@ export function serializeScene(room, { includeLighting = false } = {}) {
     }
     pieces.push({
       type: piece.type,
+      ...(piece.hidden ? { hidden: true } : {}),
       props,
       ...(piece.type === 'dispenser' ? { count: piece.count } : {}),
       x: piece.x,
@@ -101,7 +102,13 @@ export function serializeScene(room, { includeLighting = false } = {}) {
   // separately so a full snapshot never truncates recovery cards at the piece cap.
   const recoveryCards = [...room.pendingInspect.values()]
     .filter((pending) => room.state.pieces.get(pending.deckId)?.type !== 'deck')
-    .map(({ front, back, open, geo }) => ({ front, back, open, geo }));
+    .map(({ front, back, open, geo, hidden }) => ({
+      front,
+      back,
+      open,
+      geo,
+      ...(hidden ? { hidden: true } : {}),
+    }));
 
   return {
     ...(includeLighting ? { lighting: lightingSnapshot(room.state.lighting) } : {}),
@@ -222,7 +229,7 @@ export function applyScene(
     if (!entry || !KINDS[entry.type]) continue;
     const props = entry.props || {};
     if (entry.type === 'board') {
-      room.swapBoard(props);
+      room.swapBoard(props, entry.hidden === true);
       continue;
     }
     const faceDownFront =
@@ -238,6 +245,7 @@ export function applyScene(
       [+entry.x || 0, Number.isFinite(+entry.y) ? +entry.y : 2, +entry.z || 0],
       publicProps,
       Array.isArray(entry.q) ? entry.q : null,
+      entry.hidden === true,
     );
     if (faceDownFront) room.cardData.set(id, { front: faceDownFront });
     if (entry.type === 'dispenser' && Number.isSafeInteger(entry.count) && entry.count > 0) {

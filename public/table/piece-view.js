@@ -1,3 +1,4 @@
+import { createHiddenPieceMaterials } from './hidden-piece-materials.js';
 import { BOARDS } from '../../shared/pieces.js';
 
 // Parse synchronized piece props defensively. A malformed legacy/custom payload should fall back
@@ -62,6 +63,7 @@ export function createPieceView({
   isInspected,
   now = () => performance.now(),
 }) {
+  const hiddenMaterials = createHiddenPieceMaterials();
   const qa = createQuaternion();
   const qb = createQuaternion();
 
@@ -88,6 +90,7 @@ export function createPieceView({
     if (!entry) return false;
 
     const mesh = build(); // retain the current visual if construction fails
+    hiddenMaterials.restore(entry.mesh);
     scene.remove(entry.mesh);
     kinds[entry.type]?.dispose?.(entry.mesh);
     configure(mesh);
@@ -96,6 +99,8 @@ export function createPieceView({
     scene.add(mesh);
     entry.mesh = mesh;
     entry.type = piece.type;
+    entry.hidden = !!piece.hidden;
+    hiddenMaterials.update(mesh, entry.hidden);
     if (hideWhenInspected && isInspected(id)) mesh.visible = false;
     refreshCollider(id, piece);
     return true;
@@ -177,7 +182,19 @@ export function createPieceView({
       applyTransform(mesh, piece);
       configurePieceMesh(mesh, id, castsShadow);
       scene.add(mesh);
-      meshes.set(id, { mesh, type: piece.type });
+      meshes.set(id, { mesh, type: piece.type, hidden: !!piece.hidden });
+      hiddenMaterials.update(mesh, !!piece.hidden);
+      cb(piece).listen(
+        'hidden',
+        (hidden) => {
+          const entry = meshes.get(id);
+          if (entry) {
+            entry.hidden = !!hidden;
+            hiddenMaterials.update(entry.mesh, !!hidden);
+          }
+        },
+        false,
+      );
       buffers.set(id, [snapshot(now(), piece)]);
       refreshCollider(id, piece);
       cb(piece).listen(
@@ -243,6 +260,7 @@ export function createPieceView({
       onHydration();
       const entry = meshes.get(id);
       if (entry) {
+        hiddenMaterials.restore(entry.mesh);
         scene.remove(entry.mesh);
         kinds[entry.type]?.dispose?.(entry.mesh);
       }
@@ -263,6 +281,10 @@ export function createPieceView({
   }
 
   return {
+    updateVisibility() {
+      for (const entry of meshes.values())
+        if (entry.hidden) hiddenMaterials.update(entry.mesh, true);
+    },
     rebuildCard,
     rebuildPiece,
     rebuildDeck,

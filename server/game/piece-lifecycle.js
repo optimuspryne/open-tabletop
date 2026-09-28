@@ -1,3 +1,4 @@
+import { broadcastPieceEvent } from './piece-visibility.js';
 import {
   normalizeNotecardContent,
   normalizeNotecardStack,
@@ -31,7 +32,9 @@ export function createPieceLifecycle({
   random = Math.random,
   sim,
 }) {
-  const spawn = (room, type, pos, props = {}, quat = null) => {
+  const spawn = (room, type, pos, props = {}, quat = null, hidden) => {
+    hidden = room.visibility?.spawnHidden(hidden) ?? hidden === true;
+    if (hidden && props.traySeat != null) throw new Error('Personal tray dice cannot be hidden.');
     assertPieceCapacity(room, sim.maxPieces);
     if (type === 'notecard' && !room.notecards.hasCapacity())
       throw new Error('The notecard limit was reached.');
@@ -90,6 +93,7 @@ export function createPieceLifecycle({
     const id = String(room.nextId++);
     const piece = new Piece();
     piece.type = type;
+    piece.hidden = hidden;
     piece.owner = '';
     piece.count = 0;
     piece.props = '{}';
@@ -172,10 +176,11 @@ export function createPieceLifecycle({
       }
       if (Math.abs(event.contact.getImpactVelocityAlongNormal()) < sim.impact.minVel) return;
       room._released.delete(id);
-      room.broadcast('sfx', { type: dropSfx(type, props) });
+      broadcastPieceEvent(room, 'sfx', { type: dropSfx(type, props) }, [id]);
     });
     if (type === 'deck') room.updateDeckCollider(id);
     if (type === 'dispenser') room.updateStackCollider(id);
+    room.visibility?.prepareBody(id);
     return id;
   };
 
@@ -226,6 +231,8 @@ export function createPieceLifecycle({
 
     if (piece.type === 'card' && body) {
       for (const [deckId, cards] of room.deckCards) {
+        const deckPiece = room.state.pieces.get(deckId);
+        if (deckPiece?.type !== 'deck' || !!deckPiece.hidden !== !!piece.hidden) continue;
         const deckBody = room.bodies.get(deckId);
         if (!deckBody) continue;
         const onDeck =
@@ -234,8 +241,6 @@ export function createPieceLifecycle({
         if (!onDeck) continue;
         if (room.deckBrowsing?.blocked(releasingClient, [deckId])) continue;
         const cardProps = readProps(piece);
-        const deckPiece = room.state.pieces.get(deckId);
-        if (deckPiece?.type !== 'deck') continue;
         const deckProps = readProps(deckPiece);
         if (cardCompatibilityKey(cardProps) !== cardCompatibilityKey(deckProps)) continue;
         const front = (room.cardData.get(id) || {}).front || cardProps.front;
@@ -260,7 +265,8 @@ export function createPieceLifecycle({
     if (piece.type === 'prop' && body) {
       const pieceProps = readProps(piece);
       for (const [dispenserId, dispenserPiece] of room.state.pieces) {
-        if (dispenserPiece.type !== 'dispenser') continue;
+        if (dispenserPiece.type !== 'dispenser' || !!dispenserPiece.hidden !== !!piece.hidden)
+          continue;
         const wanted = room.dispenserItem(dispenserPiece);
         if (!itemMatchesDispenser(wanted, pieceProps)) continue;
         const dispenserBody = room.bodies.get(dispenserId);
@@ -285,7 +291,7 @@ export function createPieceLifecycle({
           room.updateStackCollider(dispenserId);
         }
         room.removePiece(id);
-        room.broadcast('sfx', { type: 'object-drop' });
+        broadcastPieceEvent(room, 'sfx', { type: 'object-drop' }, [dispenserId]);
         break;
       }
     }

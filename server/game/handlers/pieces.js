@@ -1,3 +1,4 @@
+import { broadcastPieceEvent } from '../piece-visibility.js';
 import { takeTableCard } from '../card-transfer.js';
 import * as CANNON from 'cannon-es';
 import {
@@ -112,7 +113,7 @@ export function registerPieceHandlers(
       rollBody(body, body.__traySeat != null ? trayRoll : roll, random);
       count++;
     }
-    if (count) room.broadcast('sfx', { type: count > 1 ? 'dice-roll' : 'die-roll' });
+    if (count) broadcastPieceEvent(room, 'sfx', { type: count > 1 ? 'dice-roll' : 'die-roll' });
   });
 
   pieceMessage('flipGroup', (client, message) => {
@@ -143,7 +144,7 @@ export function registerPieceHandlers(
       body.velocity.y = flipHop;
       cues.add(props.tile ? 'tile-flip' : 'card-flip');
     }
-    for (const type of cues) room.broadcast('sfx', { type });
+    for (const type of cues) broadcastPieceEvent(room, 'sfx', { type });
   });
 
   // Toggle double-sided (open / turn-over) flip on the selected cards & decks. On a card, turning
@@ -254,7 +255,7 @@ export function registerPieceHandlers(
       const seat = room.seatOf(client);
       if (msg.type !== 'die' || seat == null || !room.state.trays.get(String(seat))) return;
       room.spawn('die', room.trayDropPos(seat), { ...dieSpawnProps(msg.props), traySeat: seat });
-      room.broadcast('sfx', { type: 'die-roll' });
+      broadcastPieceEvent(room, 'sfx', { type: 'die-roll' });
       return;
     }
     if (room.rank(client) < RANK.helper) return;
@@ -279,7 +280,7 @@ export function registerPieceHandlers(
     const body = room.bodies.get(msg.id);
     if (!piece || piece.type !== 'die' || !body) return;
     rollBody(body, body.__traySeat != null ? trayRoll : roll, random);
-    room.broadcast('sfx', { type: 'die-roll' });
+    broadcastPieceEvent(room, 'sfx', { type: 'die-roll' });
   });
 
   pieceMessage('setStand', (client, message) => {
@@ -386,7 +387,7 @@ export function registerPieceHandlers(
       merged.count = total; // preserve the true total past the per-stack spawn clamp
       room.updateStackCollider(id);
     }
-    room.broadcast('sfx', { type: 'object-drop' });
+    broadcastPieceEvent(room, 'sfx', { type: 'object-drop' });
   });
 
   // Pour a multi-selection of loose pieces back into the one dispenser also selected. Each piece
@@ -423,7 +424,7 @@ export function registerPieceHandlers(
     }
     if (!absorbed) return;
     if (def && !def.infinite) room.updateStackCollider(dispId);
-    room.broadcast('sfx', { type: 'object-drop' });
+    broadcastPieceEvent(room, 'sfx', { type: 'object-drop' });
   });
 
   // Mint a fresh dispenser from a multi-selection of loose pieces that have one (poker chips -> a
@@ -469,7 +470,7 @@ export function registerPieceHandlers(
     if (!def.infinite) spawnProps.count = items.length;
     for (const it of items) room.removePiece(it.id);
     room.spawn('dispenser', [cx, spawnY, cz], spawnProps);
-    room.broadcast('sfx', { type: 'object-drop' });
+    broadcastPieceEvent(room, 'sfx', { type: 'object-drop' });
   });
 }
 

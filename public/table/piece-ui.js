@@ -19,6 +19,7 @@ export function createPieceUi({
   pickId,
   isSheet,
   openRadial,
+  closeRadial = () => {},
   highlightPiece,
   getRank,
   editLabels,
@@ -26,7 +27,7 @@ export function createPieceUi({
 }) {
   const RADIAL_MAX = 7;
   canvas.tabIndex = 0;
-  canvas.setAttribute('aria-label', 'Tabletop. Shift+F10 opens or cycles notecard stack actions.');
+  canvas.setAttribute('aria-label', 'Tabletop. Shift+F10 opens or cycles piece actions.');
   // Hover readout: a small tooltip over the deck or dispenser under the cursor showing
   // how many are left inside (∞ for the infinite go bowl). Pure client-side, shown only
   // when idle (not mid-drag / inspect / draw / measure), and kept live by the render loop
@@ -103,7 +104,7 @@ export function createPieceUi({
         ['Left-drag', 'Move stack'],
         ['Double-click', 'Draw & edit'],
         ['Right-click / long-press', 'Stack actions'],
-        ['Shift + F10', 'Cycle stack menus'],
+        ['Shift + F10', 'Cycle piece menus'],
       );
     else if (type === 'deck')
       rows.push(
@@ -355,14 +356,28 @@ export function createPieceUi({
       items.push(['Inspect', () => inspection.enterInspect(id)]);
     }
     items.push(['Highlight', () => highlightPiece(id)]);
-    if (getRank() >= 2) items.push(['Labels…', () => editLabels(id)]);
+    if (getRank() >= 2) {
+      items.push(['Labels…', () => editLabels(id)]);
+      const hidden = !!getRoom().state.pieces.get(id)?.hidden;
+      items.push([
+        hidden ? 'Reveal to players' : 'Hide from players',
+        () => getRoom().send('setPieceVisibility', { ids: [id], hidden: !hidden }),
+        null,
+        null,
+        hidden ? 'eye' : 'eye-off',
+      ]);
+    }
     if (type !== 'mat') items.push(['Stand / lay flat', () => getRoom().send('setStand', { id })]); // a mat is always flat
     items.push(['Snap to grid', () => getRoom().send('setSnap', { id })]);
     items.push(['Delete', () => getRoom().send('remove', { id }), 'danger']);
     return items;
   }
+  let menuPiece = null,
+    menuSignature = null;
+  const visibilitySignature = (id) => `${getRank()}:${!!getRoom()?.state?.pieces?.get(id)?.hidden}`;
   let pieceMenuAway = null; // outside-tap dismiss handler installed while the menu is open
   function closePieceMenu() {
+    menuPiece = null;
     const menu = byId('pieceMenu');
     if (menu) menu.hidden = true;
     if (pieceMenuAway) {
@@ -377,17 +392,21 @@ export function createPieceUi({
     if (!entry) return;
     // Touch gets the radial (7e slice 7) — same items, arced around the press point.
     const arc = pieceMenuItems(id, entry.type);
-    if (isSheet() && arc.length <= RADIAL_MAX) {
+    if (isSheet() && !p.keyboard && arc.length <= RADIAL_MAX) {
       closePieceMenu();
+      menuPiece = id;
+      menuSignature = visibilitySignature(id);
       if (
         openRadial(
           p.x,
           p.y,
-          arc.map(([label, fn, cls, press]) => ({ label, fn, cls, press })),
+          arc.map(([label, fn, cls, press, icon]) => ({ label, fn, cls, press, icon })),
         )
       )
         return;
     }
+    menuPiece = id;
+    menuSignature = visibilitySignature(id);
     menu.replaceChildren();
     for (const [label, fn, cls, press, icon] of pieceMenuItems(id, entry.type)) {
       const b = makeButton(
@@ -452,6 +471,18 @@ export function createPieceUi({
   }
 
   function update() {
+    if (
+      menuPiece &&
+      (!getRoom()?.state?.pieces?.has(menuPiece) ||
+        visibilitySignature(menuPiece) !== menuSignature)
+    ) {
+      const focused =
+        byId('pieceMenu')?.contains(document.activeElement) ||
+        byId('radial')?.contains(document.activeElement);
+      closePieceMenu();
+      closeRadial();
+      if (focused) canvas.focus();
+    }
     syncControlGuide(); // held/hovered context can change from state without another pointer move
     if (hoverId != null && !hoverTip.hidden) {
       // keep the hover count live while it's shown (deal/dispense without moving)

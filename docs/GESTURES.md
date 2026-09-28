@@ -20,6 +20,26 @@ does; the tables below are the ledger of how far that has gotten.
 
 ---
 
+## GM object Hide/Reveal
+
+Open a piece menu by right-click (except cards, which still flip), touch long-press, or
+**ContextMenu / Shift+F10**. The keyboard path cycles selected pieces, or all pieces when there
+is no selection; Escape returns focus to the table canvas. Owner/GM menus offer **Hide from
+players** (eye-off) or **Reveal to players** (eye). Existing radial menus carry the same icons;
+longer menus use the scrollable flat layout. The selection bar also provides explicit Hide and
+Reveal buttons, with accessible names and hints in compact mode. Mixed selections use the
+chosen target state.
+
+The Library's GM-only **Spawn hidden** checkbox starts off and resets on room handover. Hidden
+objects appear ghosted with **GM only** above them for GMs; other players have no pick target or
+object cues. Hidden pieces stay parked and non-colliding. Release held pieces and finish edits
+before changing visibility; move pieces into free space before revealing, and include/move
+supported objects before hiding a surface. Personal tray dice stay visible. Taking a hidden card
+into your private hand uses normal hand privacy; playing/sharing it is an explicit hand action.
+GM spectators retain authorized sight, while participation restrictions still block mutations.
+The user reports manual tests passing (2026-09-27); specific devices and multiplayer scenarios
+were not separately itemized.
+
 ## Time-out
 
 A GM uses **Room info → Members → Time-out / End time-out** on desktop or touch. The affected

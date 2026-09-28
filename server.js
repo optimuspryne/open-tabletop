@@ -1,3 +1,4 @@
+import { createPieceVisibility, broadcastPieceEvent } from './server/game/piece-visibility.js';
 import { createNotecards, registerNotecardHandlers } from './server/game/notecards.js';
 import { createAssetPackages } from './server/assets/packages.js';
 import { createAssetPackagesRouter } from './server/http/routes/asset-packages.js';
@@ -436,12 +437,16 @@ class TableRoom extends Room {
       const n = /^s(\d+)$/.exec(id);
       if (n) this.nextScoreId = Math.max(this.nextScoreId, +n[1] + 1);
     });
+    this.visibility = createPieceVisibility(this);
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
     // Contain unexpected failures in every inline table message. Specialized
     // library handlers below override the public message while sharing the same
     // logging and recovery behavior.
     const tableMessage = (type, handler) => guardedMessage(this, type, handler);
+    tableMessage('setPieceVisibility', (client, message) =>
+      this.visibility.setVisibility(client, message),
+    );
 
     // --- Movement: grab → drag → release (single + multi-select) ---------
     registerMovementHandlers(this, {
@@ -543,7 +548,7 @@ class TableRoom extends Room {
         restored++;
       }
       client.send('dropUndone', { restored });
-      if (restored) this.broadcast('sfx', { type: 'card-take' });
+      if (restored) broadcastPieceEvent(this, 'sfx', { type: 'card-take' });
     });
     // Wipe the room back to an empty table — pieces and all private state.
     tableMessage('reset', (client) => {
@@ -627,21 +632,21 @@ class TableRoom extends Room {
 
   // Create a piece: a physics body + a synced Piece record, wired together by id.
   // pos is [x,y,z]; props are the type-specific fields (shape, sides, back, …).
-  spawn(type, pos, props = {}, quat = null) {
-    return spawnRoomPiece(this, type, pos, props, quat);
+  spawn(type, pos, props = {}, quat = null, hidden) {
+    return spawnRoomPiece(this, type, pos, props, quat, hidden);
   }
 
   // --- Small card helpers (shared by the deal/draw/play handlers) -------------
 
   // Spawn a card lying flat at pos (no random tumble); returns its id. Callers
   // set the private front (cardData) and/or owner afterward as needed.
-  spawnCardFlat(pos, publicProps) {
+  spawnCardFlat(pos, publicProps, hidden) {
     if (publicProps && publicProps.snap && gridActive(this.state.scale)) {
       // a word tile played onto the board snaps into its cell
       const p = snapToCell(pos[0], pos[2], this.state.scale, gridFootprintCells(publicProps));
       pos = [p.x, pos[1], p.z];
     }
-    const id = this.spawn('card', pos, publicProps);
+    const id = this.spawn('card', pos, publicProps, null, hidden);
     const body = this.bodies.get(id);
     body.quaternion.set(0, 0, 0, 1);
     this.writeTransform(this.state.pieces.get(id), body);
@@ -677,14 +682,14 @@ class TableRoom extends Room {
 
   // Replace the current board with a new one (there's only ever one). The board
   // rests on the table by its own half-height so it sits flush, not sunk in.
-  swapBoard(props) {
+  swapBoard(props, hidden) {
     const oldBoards = [];
     this.state.pieces.forEach((piece, id) => {
       if (piece.type === 'board') oldBoards.push(id);
     });
     oldBoards.forEach((id) => this.removePiece(id));
 
-    return this.spawn('board', [0, boardSpawnHeight(props), 0], props);
+    return this.spawn('board', [0, boardSpawnHeight(props), 0], props, null, hidden);
   }
 
   // Set the room's square grid from the current board's real size: cell = board width ÷ gaps.
@@ -1001,8 +1006,13 @@ class TableRoom extends Room {
     return auth;
   }
 
+  onBeforePatch() {
+    this.visibility?.sync();
+  }
+
   async onReconnect(client) {
     await roomAccess.reconnect(this, client);
+    this.visibility.syncClient(client);
     client.send('whoami', { isAdmin: this.isAdmin(client), userId: String(client.auth.userId) });
   }
 
@@ -1028,6 +1038,7 @@ class TableRoom extends Room {
 
   async onJoin(client) {
     roomAccess.assertActive(this, client);
+    this.visibility.syncClient(client);
     const auth = client.auth || {};
     let player;
     try {
@@ -1132,6 +1143,7 @@ class TableRoom extends Room {
     recoverPendingInspections(this);
     const dt = dtMs / 1000;
     preparePieceMotion(this, dt, SIM);
+    this.visibility.preparePhysics();
 
     let __perfT0 = 0;
     if (PERF_LOG) __perfT0 = performance.now();

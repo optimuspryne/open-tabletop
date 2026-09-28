@@ -22,7 +22,8 @@ table, and separating them is what makes everything work.
   Clients run **no physics at all**. They receive positions and draw them.
 
 Colyseus is the bridge: it keeps a chunk of server memory (the "state")
-synchronized to every client, sending only what changed, ~60×/second.
+projected to each authorized client, sending only what changed, ~60×/second.
+The authoritative piece collection includes GM-hidden objects; ordinary clients receive a filtered view.
 
     server simulates  →  Colyseus syncs state  →  clients interpolate & draw
     clients send intent (grab/move/release/…)  →  server applies it
@@ -32,6 +33,39 @@ disagree and no client can cheat the physics — they aren't running any.
 cannon-es was chosen specifically because it is pure JavaScript, so the exact
 same physics code runs unchanged on Node.
 
+## GM object concealment
+
+`server/game/piece-visibility.js` owns per-client Colyseus `StateView`s over the single authoritative
+`State.pieces` collection. The collection is view-filtered; a client without a view receives no
+pieces. Visible pieces enter all admitted views; hidden pieces enter only live owner/GM views.
+Join/reconnect, role changes and `onBeforePatch` reconcile membership. Piece removals use the
+existing client cleanup for selection, labels, highlights, inspection and meshes. This is a
+server delivery boundary; GM ghost materials are only a presentation of already-authorized state.
+
+`guardedMessage` applies visibility before notecard reservation feedback or handler lookup. The
+room-owned async request scope carries source visibility through derived spawns and delayed library
+loads without mutating a global spawn setting. `spawnHidden` is captured on each placement request;
+spawning rechecks live participation and role after asynchronous work. Object sounds, shuffle and
+highlight events use `broadcastPieceEvent`, with explicit piece IDs for collision callbacks outside
+a request. New object-targeting handlers must join the visibility source registry, and new object
+events must use that boundary. Combining/gathering across visibility states is rejected atomically.
+
+Hidden bodies remain in the authoritative physics world with a zero collision mask and kinematic
+motion. They stay parked unless a GM drags them; reveal restores dynamic/static behavior. Hide
+rejects held/edited/flipping pieces, personal tray dice, and objects supporting visible pieces
+outside the batch. Reveal conservatively rejects intersecting piece AABBs and placement below the
+tabletop. No inventory or unrelated objects are moved to force a reveal. Hidden dice cannot roll.
+These placement rules are safety for the physical simulation, not game-rule enforcement.
+
+Snapshots store `hidden: true` per piece and preserve existing private card/notecard storage;
+legacy snapshots default to visible. Deck, dispenser and notecard-stack outputs on the table inherit
+their source visibility. Taking a piece into a private hand ends its tabletop visibility identity;
+normal explicit hand play/sharing remains available. Hidden-object access loss cancels incompatible
+grabs and drawing/browsing leases and returns pending inspections without discarding inventory.
+
+Future map fog is separate: the agreed visual covering may sit over full downloaded map artwork.
+Manual GM discovery and circular reveal auras are not implemented by this object-concealment slice.
+
 ## Kinds vs. instances (where OO belongs)
 
 Two things both feel like "objects", but they are fundamentally different:
@@ -39,7 +73,7 @@ Two things both feel like "objects", but they are fundamentally different:
 - An **instance** is a specific die on the table right now. Instances live in
   synced state — serialized and rebuilt on every client many times a second — so
   they **must** be flat, plain records:
-  `{ type, props, owner, x/y/z, quaternion, count }`. A rich class instance
+  `{ type, props, owner, hidden, x/y/z, quaternion, count }`. A rich class instance
   wouldn't survive serialization.
 - A **kind** is the _concept_ "a d20", "the chess king", "the standard deck" —
   geometry, collider, textures, behavior. One exists per type, created once.

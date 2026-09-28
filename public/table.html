@@ -255,6 +255,8 @@
           <span class="lbl">Gather</span>
         </button>
         <button id="selTake" data-icon="hand-grab"><span class="lbl">Take</span></button>
+        <button id="selHide" data-icon="eye-off" aria-label="Hide selected from players" title="Hide selected from players" hidden><span class="lbl">Hide</span></button>
+        <button id="selReveal" data-icon="eye" aria-label="Reveal selected to players" title="Reveal selected to players" hidden><span class="lbl">Reveal</span></button>
         <button id="selDelete" class="button button--danger" data-icon="trash">
           <span class="lbl">Delete</span>
         </button>
@@ -1276,6 +1278,17 @@
             <h4>Multi-Select Button</h4>
             <p><b data-icon="select-all">Multi-Select</b> sits above Seat. Click or tap to turn it on, then drag empty table to box a selection or tap pieces to add and remove them. Click or tap it again, or click/tap empty felt without dragging, to turn it off. Existing selected pieces stay selected. It hides with Seat while the mobile hand is open.</p>
           </div>
+          <div class="helpSec gm-only">
+            <h4>Hide and Reveal</h4>
+            <p>Use a piece's right-click or long-press menu to <b>Hide from players</b> or <b>Reveal to players</b>.
+              Cards still flip on right-click; <b>Shift+F10</b> or the Context Menu key cycles piece menus.
+              Select several pieces to use the <b>Hide</b> and <b>Reveal</b> buttons.</p>
+            <p>Hidden pieces are ghosted with a <b>GM only</b> label. They stay in place without collisions.
+              Release pieces and finish edits before hiding; move them into free space before revealing.
+              Include or move pieces resting on a surface before hiding it. Personal dice-box dice stay visible.</p>
+            <p>Turn on <b>Spawn hidden</b> in the Library to place new pieces privately. It starts off for each room.
+              Cards taken into your private hand use normal hand privacy; playing or sharing them is an explicit action.</p>
+          </div>
           <div class="helpSec">
             <h4>Your Seat Button</h4>
             <ul>
@@ -1489,6 +1502,7 @@
             <b class="modal__title panel-title">Library</b>
             <button type="button" id="lib2Close" class="modal__close close-x" aria-label="Close">✕</button>
           </div>
+          <label id="spawnHiddenControl" class="checkbox gm-only" hidden><input id="spawnHidden" class="checkbox__input" type="checkbox" /> Spawn hidden <span class="hint">GM only</span></label>
           <div class="libTabs" role="tablist" aria-label="Library categories">
             <button type="button" id="libraryTab-decks" class="libTab on" data-tab="decks" role="tab" aria-controls="libraryGroup-decks" aria-selected="true" tabindex="0">Decks &amp; Tiles</button>
             <button type="button" id="libraryTab-objects" class="libTab" data-tab="objects" role="tab" aria-controls="libraryGroup-objects" aria-selected="false" tabindex="-1">Objects &amp; Dispensers</button>

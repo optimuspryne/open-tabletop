@@ -236,7 +236,9 @@ implementation sequence without making the entire backlog a fixed priority queue
    N×N footprints are implemented. See the completed entries below and `CHANGELOG.md`.
 4. **Fog of war.** Planned area-based concealment. Coordinate authorized visibility with the
    GM staging area (§3) and per-object hiding (item 14); hiding individual objects is a distinct
-   feature and does not by itself complete fog of war.
+   feature and does not by itself complete fog of war. Agreed direction: freeform GM revealing of
+   a shared map, visual covering of artwork, then simple circular piece reveal auras; see
+   [the staged design](DESIGN_concealment.md). Fog implementation is not yet authorized.
 5. **Spectator mode — implemented; functionality and UI user-approved.** Players choose
    **More → Spectate / Return to play** or lobby **Watch**. New observers are seatless; converted
    players reserve seats/hands/trays and are skipped by turns. Durable self-mode shares the
@@ -296,14 +298,14 @@ implementation sequence without making the entire backlog a fixed priority queue
     **Labels…** in the right-click/touch menu creates, edits, or removes a label above an object.
     **L** edits the held/hovered object, including desktop cards whose right-click still flips.
     Labels follow movement and use saved, synchronized object props. Rendering follows object
-    visibility; future GM-hidden objects (item 14) still require server-side concealment support.
-14. **Hide individual objects from players (GM).** Add Hide/Reveal to the object's right-click
-    menu and touch long-press menu. A hidden object remains visible to GMs as a translucent or
-    ghosted object indicating its status; players cannot see or interact with it. Moving a hidden
-    object must also conceal its pickup/held-by label and persistent label from players.
-    Concealment must be enforced by server-controlled delivery, including reconnect and save/load,
-    rather than only reducing opacity on a player's client. Coordinate with fog of war and GM
-    staging; resolve collision and other indirect visibility cues during design.
+    visibility, including server-filtered GM-hidden objects (item 14).
+14. ✅ **Hide individual objects from players (GM) — implemented; user reports manual tests passing.**
+    Approved eye-off/eye menu and selection controls, ghosted GM-only rendering and Library
+    Spawn hidden are wired to server-filtered state and object events. Hidden pieces remain
+    parked without collisions; safe placement/support checks guard reveal/hide. Visibility
+    survives scenes/games and derivatives on the table. Private hands keep their own privacy;
+    personal tray dice remain visible. See [implementation and smoke tests](DESIGN_concealment.md).
+    Map fog and GM staging remain separate future work.
 15. **Player time-out mode (GM) — implemented; user-approved functionality and UI.** Temporarily stop a selected player from interacting with
     tabletop objects while allowing them to observe. Provide a clear GM control to apply and
     lift the restriction, and make the restricted state clear to the player. Explore temporarily

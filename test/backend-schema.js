@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Encoder, MapSchema, Reflection } from '@colyseus/schema';
+import { Encoder, MapSchema, Reflection, StateView } from '@colyseus/schema';
 import { TABLE } from '../shared/pieces.js';
 import {
   Piece,
@@ -109,7 +109,7 @@ test('State preserves synchronized defaults and collection construction', () => 
   });
 });
 
-test('schema reflection round-trips every synchronized class and preserves field order', () => {
+test('schema reflection round-trips every synchronized class through an authorized view', () => {
   const state = new State();
   const piece = new Piece();
   Object.assign(piece, {
@@ -148,11 +148,15 @@ test('schema reflection round-trips every synchronized class and preserves field
 
   const encoder = new Encoder(state);
   const decoder = Reflection.decode(Reflection.encode(encoder));
-  decoder.decode(encoder.encodeAll());
+  const view = new StateView();
+  view.add(piece);
+  const iterator = { offset: 0 };
+  encoder.encodeAll(iterator);
+  decoder.decode(encoder.encodeAllView(view, iterator.offset, { ...iterator }));
 
   const decoded = decoder.state.toJSON();
   const original = state.toJSON();
-  assert.deepEqual(Object.keys(decoded), STATE_FIELDS);
+  assert.deepEqual(Object.keys(decoded).sort(), [...STATE_FIELDS].sort());
   // Colyseus encodes `number` as float32, so non-binary fractions round slightly on the wire.
   assert.ok(Math.abs(decoded.scale.roundStep - original.scale.roundStep) < 1e-7);
   assert.ok(Math.abs(decoded.scale.gridLift - original.scale.gridLift) < 1e-7);

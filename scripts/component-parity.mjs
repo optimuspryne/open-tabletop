@@ -219,6 +219,10 @@ const SCENES = [
       const assert=(ok,message)=>{if(!ok)throw Error(message);};
       const room=${STUB_ROOM}, sent=[];
       window.onOttRoom({onMessage:room.onMessage,send:(...args)=>{sent.push(args);room.send(...args);}});
+      const hiddenControl=document.getElementById('spawnHiddenControl'), hiddenInput=document.getElementById('spawnHidden');
+      hiddenControl.hidden=false;
+      assert(!hiddenInput.checked,'Hidden placement must start off');
+      hiddenInput.checked=true;
       document.getElementById('lib2Btn').click();
       window.onLibraryList('deck',[
         {id:'201',name:'Match deck',count:5,open:false,isPublic:true},
@@ -240,6 +244,7 @@ const SCENES = [
       lists.forEach(list=>list.querySelector('.libCard').classList.add('sel'));
       modal.querySelector('.spawnSelBtn').click();
       assert(sent.filter(([kind])=>kind==='loadDeck').length===2 && sent.some(([kind])=>kind==='loadProp'),'Batch action skipped a visible category');
+      assert(sent.filter(([kind])=>['loadDeck','loadProp'].includes(kind)).every(([,payload])=>payload.spawnHidden===true),'Batch placement lost hidden choice');
       document.getElementById('libraryFiltersToggle').click();
       const filters=document.getElementById('libraryFilters');
       const filterControls=[...filters.querySelectorAll('#lib2Source .chip, .libraryCollectionPicker > summary')];
@@ -293,6 +298,7 @@ const SCENES = [
       }
       document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
       window.onOttRoom(room);
+      assert(!hiddenInput.checked,'New room retained hidden placement');
       assert(document.querySelectorAll('#collectionFiltersPanel .collectionFilters').length===1,'Reconnect duplicated collection filters');
     `,
   },
@@ -1130,6 +1136,53 @@ const SCENES = [
     `,
   },
   {
+    name: 'concealment-selection',
+    root: '#selBars',
+    expect: { selector: '#selHide:not([hidden]), #selReveal:not([hidden])', min: 2 },
+    drive: `
+      const assert=(ok,message)=>{if(!ok)throw Error(message);};
+      const THREE=await import('three');
+      const {createSelection}=await import('/table/selection.js');
+      const byId=id=>document.getElementById(id), sent=[];
+      document.getElementById('tableLoading')?.remove();
+      const scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera();
+      const canvas=document.createElement('canvas');document.body.append(canvas);
+      const pieces=new Map([['1',{type:'prop',props:'{}',hidden:false}],['2',{type:'prop',props:'{}',hidden:true}]]);
+      const meshes=new Map([...pieces].map(([id])=>[id,{type:'prop',mesh:new THREE.Mesh(new THREE.BoxGeometry(),new THREE.MeshBasicMaterial())}]));
+      let rank=2;
+      const selection=createSelection({THREE,scene,camera,canvas,meshes,marker:{inner:0.8,outer:1,lift:0.01},
+        getRoom:()=>({state:{pieces},send:(...args)=>sent.push(args)}),getRank:()=>rank,getBoardTopY:()=>0,byId});
+      selection.bindActions();
+      for(const id of pieces.keys()) {selection.beginPointer({primary:true,additive:true},id);selection.endPointer({});}
+      selection.update();
+      assert(!byId('selHide').disabled&&!byId('selReveal').disabled,'Mixed selection must offer explicit actions');
+      byId('selHide').click();byId('selReveal').click();
+      assert(sent.length===2&&sent[0][1].hidden===true&&sent[1][1].hidden===false&&sent[0][1].ids.length===2,'Batch visibility intents changed');
+      pieces.get('1').hidden=true;selection.update();
+      assert(byId('selHide').disabled&&!byId('selReveal').disabled,'All-hidden selection state incorrect');
+      rank=0;selection.update();assert(byId('selHide').hidden&&byId('selReveal').hidden,'Player got GM batch controls');
+      rank=2;selection.update();
+      (await import('/ui/icons.js')).applyIcons();
+      for(const full of [true,false]) {
+        document.body.classList.toggle('ui-full',full);document.body.classList.toggle('ui-compact',!full);
+        for(const id of ['selHide','selReveal']) {
+          const el=byId(id), r=el.getBoundingClientRect();
+          assert(r.width>=30&&r.height>=40&&r.left>=0&&r.right<=innerWidth,'Visibility control outside usable layout: '+id);
+          assert(el.getAttribute('aria-label').includes('selected'),'Compact action lost accessible name');
+        }
+      }
+      (await import('/ui/icons.js')).initTip();
+      byId('selReveal').focus();
+      assert(!byId('tip').hidden&&byId('tip').textContent==='Reveal selected to players','Keyboard focus hint missing');
+      byId('selReveal').blur();
+      assert(byId('tip').hidden,'Focus hint survived leaving control');
+      byId('selReveal').dispatchEvent(new PointerEvent('pointerdown',{pointerType:'touch',bubbles:true,clientX:10,clientY:10}));
+      await new Promise(resolve=>setTimeout(resolve,450));
+      assert(!byId('tip').hidden&&byId('tip').textContent==='Reveal selected to players','Touch hint missing');
+      byId('selReveal').dispatchEvent(new PointerEvent('pointercancel',{pointerType:'touch',bubbles:true}));
+    `,
+  },
+  {
     name: 'piece-ui-and-effects',
     root: '#pieceMenu',
     expect: { selector: '#pieceMenu:not([hidden]) button', min: 4 },
@@ -1256,14 +1309,29 @@ const SCENES = [
       radial[2].find(item => item.label === 'Highlight').fn();
       assert(sent.at(-1)[0] === 'menuHighlight' && sent.at(-1)[1] === 'die', 'Touch highlight action missing');
       assert(!radial[2].some(item => item.label === 'Labels…'), 'Player menu offered GM labels');
+      assert(!radial[2].some(item => /players/.test(item.label)), 'Player menu offered concealment');
       rank = 2;
       for (const touch of [false, true]) {
         sheet = touch; ui.openPieceMenu('deck', { x: 80, y: 80 });
         const labelAction = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Labels…');
         assert(labelAction, 'GM label action missing from desktop/touch menu');
+        const hide=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Hide from players');
+        assert(hide?.querySelector('use')?.getAttribute('href')==='#i-eye-off','Hide icon missing');
+        hide.click();
+        assert(sent.at(-1)[0]==='setPieceVisibility' && sent.at(-1)[1].hidden===true,'Hide request lost');
+        state.pieces.get('deck').hidden=true;
+        ui.openPieceMenu('deck', {x:80,y:80});
+        const reveal=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Reveal to players');
+        assert(reveal?.querySelector('use')?.getAttribute('href')==='#i-eye','Reveal icon missing');
+        reveal.click();
+        assert(sent.at(-1)[0]==='setPieceVisibility' && sent.at(-1)[1].hidden===false,'Reveal request lost');
+        state.pieces.get('deck').hidden=false;
         labelAction.click();
         assert(sent.at(-1)[0] === 'menuLabels' && sent.at(-1)[1] === 'deck', 'GM label menu target lost');
       }
+      sheet=true; state.pieces.set('other',{type:'prop',hidden:true});
+      ui.openPieceMenu('other',{x:100,y:100});
+      assert(radial[2].some(item=>item.label==='Reveal to players' && item.icon==='eye'),'Radial lost explicit visibility icon');
       held = { id: 'deck', type: 'deck', grabbed: true, touch: true }; ui.updateHoldControls();
       assert(!document.querySelector('.heightUp').hidden, 'Touch height controls missing');
       held = null; selection.size = 1; ui.updateHoldControls();

@@ -151,6 +151,7 @@ export function createSelection({
   marker,
   dragThreshold = 6,
   getRoom,
+  getRank = () => 0,
   getBoardTopY,
   byId,
   doc = document,
@@ -212,6 +213,16 @@ export function createSelection({
   // selection agrees, a disabled "mixed" state when it doesn't, hidden when nothing's recolorable.
   let selBarSig = null; // last-rendered state, to avoid rebuilding every frame
   function refreshSelTools() {
+    for (const [id, hidden] of [
+      ['selHide', true],
+      ['selReveal', false],
+    ]) {
+      const button = byId(id);
+      if (button) {
+        button.hidden = getRank() < 2;
+        button.disabled = !selectedPieces().some((piece) => piece && !!piece.hidden !== hidden);
+      }
+    }
     const abar = byId('selActions');
     if (abar) abar.hidden = !selection.size; // batch-op bar shows for any selection (also in the editor, which has no recolor bar)
     const notes = selectedPieces().some(
@@ -399,6 +410,8 @@ export function createSelection({
       const el = byId(id);
       if (el) el.onclick = fn;
     };
+    on('selHide', () => sendBatch('setPieceVisibility', { hidden: true }));
+    on('selReveal', () => sendBatch('setPieceVisibility', { hidden: false }));
     on('selStand', send('setStandGroup'));
     on('selSnap', send('setSnapGroup'));
     on('selFlip', send('flipGroup'));
