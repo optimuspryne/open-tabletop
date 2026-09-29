@@ -483,11 +483,58 @@ Updates also accept `SOURCE_ARCHIVE`, preserve credentials/configuration, and cr
 dump in `/var/backups/open-tabletop/` before switching releases and restarting the service.
 They do not upgrade OS packages or PostgreSQL major versions. Back up uploaded files separately;
 for rollback, restore both the database dump and the matching old release because migrations
-may not be reversible. Interrupted fresh installs may leave accounts, roles, or configuration:
-inspect the failure before retrying; the installer does not delete or overwrite that state.
+may not be reversible.
+
+To recover an interrupted install, or reinstall after removing the application while retaining data:
+
+```bash
+sudo env SOURCE_REF=main bash linux/open-tabletop.sh resume
+# Equivalent: reinstall (uses the same recovery path)
+sudo env SOURCE_REF=main bash linux/open-tabletop.sh reinstall
+```
+
+Resume/reinstall accept the same source options as install. They may install/update host packages,
+reuse the existing account and stored passwords, preserve the environment file and uploads,
+back up an existing database, and restore the service/release. They never reset existing role
+passwords or replace a missing database from a completed installation with an empty one.
+New installs save recovery state before creating accounts/roles. Older interrupted installs
+can be resumed if their configuration and password files exist; otherwise manual inspection is
+required. Custom database endpoints/credentials or asset paths require manual recovery.
+
+Run removal from a current repository checkout on the Linux host:
+
+```bash
+sudo bash linux/open-tabletop.sh uninstall --dry-run
+sudo bash linux/open-tabletop.sh uninstall
+# Permanent removal of the retained application data:
+sudo bash linux/open-tabletop.sh purge --dry-run
+sudo bash linux/open-tabletop.sh purge
+```
+
+`uninstall` stops/disables the service and removes `/opt/open-tabletop` and the systemd unit.
+It retains the database/roles, uploads, configuration/password files, service account, service
+drop-ins, and backups so `reinstall` can restore the application. Removal uses the local shared
+installer (or a retained `/etc/open-tabletop/installer.sh`), with no source download.
+
+`purge` requires typing `PURGE open-tabletop`. It also removes the local `tabletop` database,
+`tabletop`/`tabletop_app` roles, `/var/lib/open-tabletop`, `/etc/open-tabletop`, service drop-ins,
+the app user/group, and `/root/open-tabletop-credentials.txt`. It makes a fresh database backup
+before dropping an existing database and retains `/var/backups/open-tabletop`. Back up uploaded
+files separately before purging. Backup or database failures stop removal; a failure after the
+service has stopped may leave it stopped. Role dependencies outside this database cause an error,
+not cascading deletion. Inspect the error before retrying a partial purge.
+
+Purge refuses mounted storage (including nested bind mounts), redirected installation roots,
+shared filesystems, and customized database/assets settings. Detach external storage and handle
+its contents separately; the script never unmounts it. Node.js, PostgreSQL, Redis/Valkey, package
+repositories, unrelated HBA rules, and host firewall/proxy settings remain installed. Only the
+exact installer-added PostgreSQL authentication rule is removed. `--dry-run` makes no changes.
+For a dedicated Proxmox deployment, removing the container remains a separate host operation;
+these Linux commands do not delete a container or its host-mounted storage.
 
 Manual acceptance remains: fresh install and reboot on each distro, administrator login,
-asset upload, two-client room connection, then update with data and credentials preserved.
+asset upload, two-client room connection, then update, uninstall/reinstall, interrupted-install
+resume, and purge with backups and unrelated services preserved.
 The installer restarts the application; refresh clients after an application update.
 
 ### Local Proxmox LXC installer

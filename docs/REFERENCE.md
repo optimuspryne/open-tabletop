@@ -38,31 +38,52 @@ are transient. Template ownership remains distinct from administrator-only uploa
 
 ### Native host deployment
 
-- `linux/open-tabletop.sh`: `main` accepts `install` / `update`; `prepare_source` fetches
+- `linux/open-tabletop.sh`: `main` accepts `install` / `update`, `reinstall` / `resume`, and
+  `uninstall` / `purge` (optionally `--dry-run` for removal). Recovery aliases dispatch to shared
+  `resume`; removal dispatches to a local companion or retained installer without fetching source.
+  `prepare_source` fetches
   `SOURCE_REPO` / `SOURCE_REF` or reads `SOURCE_ARCHIVE`, checks required archive entries,
   computes `SOURCE_ID`, and extracts `proxmox/install.sh` from the same revision. It checks
   `--check-platform` before provisioning, rejecting older companions without Linux support. `usage` and
   `fail` provide command help and error reporting. Pass bootstrap username/email on install.
-- `proxmox/install.sh`: shared `main` accepts `install` / `upgrade` and a read-only `--check-platform`;
+- `proxmox/install.sh`: shared `main` accepts `install` / `upgrade` / `resume`, `uninstall` /
+  `purge` with optional `--dry-run`, and a read-only `--check-platform`;
   `OTT_INSTALL_PROFILE=linux`
   selects ordinary hosts, while the default `proxmox` profile preserves Debian 13, PostgreSQL 16,
   Node.js 26 and UID/GID 1000 for existing LXC/NFS mappings. `detect_platform` selects supported
   distro versions and Redis/Valkey service/CLI names. `install_packages` / `install_apt_packages`
   provision dependencies; `apt_update` retains its bounded retry behavior. `initialize_postgres`
   initializes Fedora/Arch clusters only when `PG_VERSION` is absent. `create_app_user` allocates
-  a system account on Linux and rejects existing account/group conflicts. `configure_database_auth`
-  preserves the HBA file and prepends an application-scoped localhost SCRAM rule for Linux.
+  a system account on Linux and rejects fresh-install account/group conflicts; `validate_app_user`
+  permits reuse of matching retained accounts on resume. `configure_database_auth` preserves the
+  HBA file and adds an application-scoped localhost SCRAM rule only when absent.
+- Recovery helpers: `prepare_password` persists complete secrets before provisioning;
+  `assert_unused_resources` prevents adopting unrelated accounts/roles/databases on fresh installs;
+  `validate_local_config` checks installer-owned local database/assets settings without sourcing
+  shell code. `pg_value`, `database_exists`, `role_exists`, and `verify_database_owner` fail on
+  database errors. `ensure_database` creates missing resources during initial provisioning and
+  authenticates retained passwords before applying grants; `backup_database` is shared by update,
+  resume, and purge. Environment/service files are installed by rename after complete writes.
+- `remove_installation` prints the removal plan, supports a mutation-free dry run, and requires
+  typed confirmation for purge. `assert_local_tree` rejects redirected roots and mounted/shared
+  storage; `remove_database_auth` removes only the exact app rule, never restores a stale HBA
+  backup. Uninstall retains data/configuration/account for reinstall. Purge retains backups and
+  host dependencies. Customized deployments require manual recovery/purge. Mutations use a
+  shared `/run/open-tabletop-installer.lock`; no Proxmox host/container deletion is performed.
 - Both paths preserve the separate migration/runtime database roles, password files, bootstrap
   admin credentials, release directories, database dump before update, and HTTP readiness check.
   Fresh databases explicitly revoke public schema creation from PUBLIC and grant it to the
   migration role, preserving the runtime boundary on PostgreSQL 14 as well as newer versions.
   Updates leave host packages and configuration alone. No new database migration is introduced.
 - `test/linux-installer.js` checks distro selection, package commands, account allocation,
-  existing cluster preservation, source preparation, real install/update orchestration with
-  mocked system commands, backup failure, and dependency/readiness failure. `npm run check`,
-  `npm run test:integration` (PostgreSQL 16), and a PostgreSQL 14 smoke test of the installer’s
-  actual role/grant SQL passed during implementation. Live distro and
-  reboot tests remain pending. See [Linux host installation](../README.md#linux-host-installer)
+  existing cluster preservation, source preparation, real lifecycle orchestration with
+  mocked system commands, recovery without secret rotation, offline removal dispatch, confirmation,
+  mount guards, and backup/database/dependency/readiness failures. Lifecycle validation passed:
+  43 focused installer tests, `npm run check` (928 tests), `npm run test:integration` (24 tests),
+  and a disposable PostgreSQL 16 smoke test of the actual provisioning/resume SQL, retained data,
+  runtime DDL restrictions, and scoped role/database removal. Earlier installer work also tested
+  its grants on PostgreSQL 14; the new lifecycle was not rerun there. Live distro and reboot
+  tests remain pending. See [Linux host installation](../README.md#linux-host-installer)
   for commands, paths, ports, supported versions, and manual acceptance checks.
 
 ### Object visibility

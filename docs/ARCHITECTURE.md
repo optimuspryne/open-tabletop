@@ -463,6 +463,15 @@ importing a room singleton:
   adds only a localhost rule for the app database/roles. OS upgrades, firewall, TLS,
   SELinux policy and external mounts remain operator responsibilities. App updates
   preserve configuration and do not perform PostgreSQL major upgrades.
+  Native lifecycle operations share the installer: Linux `reinstall`/`resume` recover retained
+  state, while `uninstall` removes the service/releases and retains persistent data and identity.
+  Initial secrets are saved before role creation; resume validates existing credentials without
+  rotating them, backs up existing databases, and restores service/release activation. A completed
+  installation with a missing database requires restoration, not implicit empty initialization.
+  Confirmed `purge` removes only local application resources and the exact installer HBA rule,
+  preserving backups and host dependencies. Removal is offline and supports a read-only dry run;
+  mount/redirect checks prevent recursive deletion into external storage. Customized database or
+  asset settings require manual recovery/purge. A host-local lock serializes mutating operations.
 
 ## Trust and failure boundaries
 

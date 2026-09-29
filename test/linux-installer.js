@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -137,7 +138,7 @@ function fixture(t, id = 'fedora', profile = 'linux') {
   const source = readFileSync(installer, 'utf8')
     .replaceAll('[[ $EUID -eq 0 ]]', 'true')
     .replace(
-      /\/(?:etc|opt|root|var\/lib|var\/backups|run\/systemd|usr\/share)(?=\/)/g,
+      /\/(?:etc|opt|root|var\/lib|var\/backups|run|usr\/share)(?=\/)/g,
       (path) => `${root}${path}`,
     )
     .replaceAll('/usr/bin/node', join(root, 'usr/bin/node'));
@@ -147,9 +148,22 @@ source "$ROOT/installer.sh"
 log() { echo "$*" >> "$ROOT/calls"; }
 install_packages() { log packages; }
 initialize_postgres() { log initdb; }
-getent() { return 2; }
-groupadd() { log "groupadd $*"; }
-useradd() { log "useradd $*"; }
+getent() {
+  [[ -f "$ROOT/account-$1" ]] || return 2
+  if [[ "$1" == passwd ]]; then echo "open-tabletop:x:1000:1000::$ROOT/var/lib/open-tabletop:/usr/sbin/nologin";
+  else echo 'open-tabletop:x:1000:'; fi
+}
+id() { case "$1" in -gn) echo open-tabletop ;; *) echo 1000 ;; esac; }
+groupadd() { log "groupadd $*"; touch "$ROOT/account-group"; }
+useradd() { log "useradd $*"; touch "$ROOT/account-passwd"; }
+userdel() { log "userdel $*"; rm "$ROOT/account-passwd"; }
+groupdel() { log "groupdel $*"; rm "$ROOT/account-group"; }
+findmnt() {
+  if [[ "$*" == '-rn -o TARGET' ]]; then printf '%s\\n' "\${MOCK_MOUNT:-/}";
+  else echo ext4; fi
+}
+psql() { [[ "\${FAIL_AUTH:-0}" == 0 ]]; }
+
 chown() { :; }
 install() {
   local args=()
@@ -166,7 +180,27 @@ runuser() {
   shift 3
   case "$1" in
     psql)
-      if [[ "$*" == *'SHOW hba_file'* ]]; then echo "$ROOT/hba"; fi
+      [[ "\${FAIL_PG:-0}" == 0 ]] || return 1
+      case "$*" in
+        *'SHOW hba_file'*) echo "$ROOT/hba" ;;
+        *'SELECT pg_get_userbyid'*) echo tabletop ;;
+        *"SELECT rolname FROM pg_roles"*) [[ ! -f "$ROOT/role-tabletop" ]] || echo tabletop ;;
+        *"SELECT 1 FROM pg_roles"*)
+          if [[ "$*" == *"rolname='tabletop_app'"* ]]; then [[ ! -f "$ROOT/role-tabletop_app" ]] || echo 1;
+          else [[ ! -f "$ROOT/role-tabletop" ]] || echo 1; fi ;;
+        *"SELECT 1 FROM pg_database"*) [[ ! -f "$ROOT/database" ]] || echo 1 ;;
+        *'CREATE DATABASE'*) log create-database; touch "$ROOT/database" ;;
+        *'DROP DATABASE'*) log drop-database; rm -f "$ROOT/database" ;;
+        *'DROP ROLE IF EXISTS tabletop_app'*) log drop-app-role; rm -f "$ROOT/role-tabletop_app" ;;
+        *'DROP ROLE IF EXISTS tabletop'*) log drop-owner-role; rm -f "$ROOT/role-tabletop" ;;
+        *' -c '*) : ;;
+        *)
+          local sql
+          sql=$(cat)
+          if [[ "$sql" == *'CREATE ROLE tabletop_app '* ]]; then log create-app-role; touch "$ROOT/role-tabletop_app";
+          elif [[ "$sql" == *'CREATE ROLE tabletop '* ]]; then log create-owner-role; touch "$ROOT/role-tabletop"; fi
+          ;;
+      esac
       ;;
     pg_dump) log dump; [[ "\${FAIL_DUMP:-0}" == 0 ]] || return 1; echo backup ;;
     *) "$@" ;;
@@ -187,7 +221,8 @@ SOURCE_ID=$(sha256sum "$SOURCE_ARCHIVE" | awk '{ print substr($1, 1, 40) }')
   return {
     root,
     env,
-    run: (mode, extra = {}) => bash(`${mocks}\nmain ${mode}`, { ...env, ...extra }),
+    run: (mode, extra = {}, input = '') =>
+      bash(`${mocks}\nmain ${mode} <<< ${quote(input)}`, { ...env, ...extra }),
   };
 }
 
@@ -333,7 +368,7 @@ test('Linux launcher help is available without root', () => {
   assert.match(run.stdout, /install\|update/);
 });
 
-for (const mode of ['install', 'update']) {
+for (const mode of ['install', 'update', 'reinstall', 'resume']) {
   test(`Linux launcher dispatches ${mode} to the matching Linux-capable installer`, (t) => {
     const f = fixture(t);
     // Only the disposable fixture's extracted installer runs in the child process.
@@ -352,7 +387,7 @@ printf '%s' "$1" > "$ROOT/dispatched"
       f.env,
     );
     assert.equal(packed.status, 0, packed.stderr);
-    if (mode === 'update') {
+    if (mode !== 'install') {
       mkdirSync(join(f.root, 'etc/open-tabletop'));
       writeFileSync(join(f.root, 'etc/open-tabletop/open-tabletop.env'), '');
       mkdirSync(join(f.root, 'opt/open-tabletop'), { recursive: true });
@@ -366,7 +401,207 @@ printf '%s' "$1" > "$ROOT/dispatched"
     assert.equal(run.status, 0, run.stderr);
     assert.equal(
       readFileSync(join(f.root, 'dispatched'), 'utf8'),
-      mode === 'update' ? 'upgrade' : 'install',
+      mode === 'update' ? 'upgrade' : mode === 'install' ? 'install' : 'resume',
     );
   });
 }
+
+for (const [id, profile] of [
+  ['fedora', 'linux'],
+  ['debian', 'proxmox'],
+]) {
+  test(`${profile} uninstall preserves data and resume restores service without changing secrets`, (t) => {
+    const f = fixture(t, id, profile);
+    assert.equal(f.run('install').status, 0);
+    const configPath = join(f.root, 'etc/open-tabletop/open-tabletop.env');
+    const config = readFileSync(configPath, 'utf8');
+    const secretPath = join(f.root, 'etc/open-tabletop/owner-password');
+    const secret = readFileSync(secretPath, 'utf8');
+    const asset = join(f.root, 'var/lib/open-tabletop/assets/keep.png');
+    writeFileSync(asset, 'uploaded original');
+    writeFileSync(join(f.root, 'calls'), '');
+    assert.equal(f.run('uninstall --dry-run').status, 0);
+    assert.equal(readFileSync(join(f.root, 'calls'), 'utf8'), '');
+    assert.ok(existsSync(join(f.root, 'opt/open-tabletop/current')));
+    const removed = f.run('uninstall');
+    assert.equal(removed.status, 0, removed.stderr);
+    assert.ok(!existsSync(join(f.root, 'opt/open-tabletop')));
+    assert.ok(!existsSync(join(f.root, 'etc/systemd/system/open-tabletop.service')));
+    assert.ok(existsSync(join(f.root, 'database')));
+    assert.ok(existsSync(join(f.root, 'account-passwd')));
+    assert.equal(readFileSync(asset, 'utf8'), 'uploaded original');
+    assert.equal(f.run('uninstall').status, 0);
+    writeFileSync(join(f.root, 'calls'), '');
+    const resumed = f.run('resume');
+    assert.equal(resumed.status, 0, resumed.stderr);
+    assert.equal(readFileSync(configPath, 'utf8'), config);
+    assert.equal(readFileSync(secretPath, 'utf8'), secret);
+    assert.equal(readFileSync(asset, 'utf8'), 'uploaded original');
+    assert.ok(existsSync(join(f.root, 'opt/open-tabletop/current')));
+    const calls = readFileSync(join(f.root, 'calls'), 'utf8');
+    assert.doesNotMatch(calls, /create-.*role|create-database|useradd|groupadd/);
+    assert.ok(calls.indexOf('dump') < calls.indexOf('systemctl restart'));
+    assert.equal(
+      readFileSync(join(f.root, 'hba'), 'utf8').split('host tabletop').length - 1,
+      profile === 'linux' ? 1 : 0,
+    );
+  });
+}
+
+test('resume repairs an interrupted dependency install and retains credentials', (t) => {
+  const f = fixture(t);
+  assert.notEqual(f.run('install', { FAIL_NPM: '1' }).status, 0);
+  const secret = readFileSync(join(f.root, 'etc/open-tabletop/app-password'), 'utf8');
+  const resumed = f.run('resume');
+  assert.equal(resumed.status, 0, resumed.stderr);
+  assert.equal(readFileSync(join(f.root, 'etc/open-tabletop/app-password'), 'utf8'), secret);
+  assert.ok(!existsSync(join(f.root, 'etc/open-tabletop/install-pending')));
+});
+
+test('resume recovers provisioning before the environment file was written', (t) => {
+  const f = fixture(t);
+  assert.notEqual(f.run('install', { FAIL_AUTH: '1' }).status, 0);
+  const config = join(f.root, 'etc/open-tabletop/open-tabletop.env');
+  assert.ok(!existsSync(config));
+  const secret = readFileSync(join(f.root, 'etc/open-tabletop/owner-password'), 'utf8');
+  const resumed = f.run('resume', { BOOTSTRAP_ADMIN_EMAIL: 'different@example.com' });
+  assert.equal(resumed.status, 0, resumed.stderr);
+  assert.match(readFileSync(config, 'utf8'), /BOOTSTRAP_ADMIN_EMAIL=admin@example.com/);
+  assert.equal(readFileSync(join(f.root, 'etc/open-tabletop/owner-password'), 'utf8'), secret);
+});
+
+test('purge requires confirmation, backs up, and removes only app resources', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('install').status, 0);
+  writeFileSync(join(f.root, 'var/lib/open-tabletop/assets/remove.png'), 'upload');
+  const hba =
+    readFileSync(join(f.root, 'hba'), 'utf8') + 'host other other 127.0.0.1/32 scram-sha-256\n';
+  writeFileSync(join(f.root, 'hba'), hba);
+  writeFileSync(join(f.root, 'calls'), '');
+  assert.equal(f.run('purge --dry-run').status, 0);
+  assert.notEqual(f.run('purge', {}, 'no').status, 0);
+  assert.equal(readFileSync(join(f.root, 'calls'), 'utf8'), '');
+  const removed = f.run('purge', {}, 'PURGE open-tabletop');
+  assert.equal(removed.status, 0, removed.stderr);
+  for (const path of [
+    'database',
+    'role-tabletop',
+    'role-tabletop_app',
+    'account-passwd',
+    'account-group',
+    'etc/open-tabletop',
+    'opt/open-tabletop',
+    'var/lib/open-tabletop',
+    'root/open-tabletop-credentials.txt',
+  ]) {
+    assert.ok(!existsSync(join(f.root, path)), path);
+  }
+  assert.equal(readdirSync(join(f.root, 'var/backups/open-tabletop')).length, 1);
+  assert.match(readFileSync(join(f.root, 'hba'), 'utf8'), /host other other/);
+  assert.doesNotMatch(readFileSync(join(f.root, 'hba'), 'utf8'), /host tabletop/);
+  const calls = readFileSync(join(f.root, 'calls'), 'utf8');
+  assert.ok(calls.indexOf('dump') < calls.indexOf('drop-database'));
+  assert.doesNotMatch(calls, /packages|initdb|systemctl .*postgresql|systemctl .*valkey/);
+  assert.equal(f.run('purge', {}, 'PURGE open-tabletop').status, 0);
+});
+
+for (const fault of ['FAIL_DUMP', 'FAIL_PG']) {
+  test(`purge leaves files/database intact when ${fault}`, (t) => {
+    const f = fixture(t);
+    assert.equal(f.run('install').status, 0);
+    writeFileSync(join(f.root, 'calls'), '');
+    assert.notEqual(f.run('purge', { [fault]: '1' }, 'PURGE open-tabletop').status, 0);
+    assert.ok(existsSync(join(f.root, 'database')));
+    assert.ok(existsSync(join(f.root, 'etc/open-tabletop/open-tabletop.env')));
+    assert.doesNotMatch(readFileSync(join(f.root, 'calls'), 'utf8'), /drop-|userdel/);
+  });
+}
+
+test('purge refuses bind mounts, nested mounts and symlinked asset roots before mutation', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('install').status, 0);
+  writeFileSync(join(f.root, 'calls'), '');
+  for (const path of ['var/lib/open-tabletop/assets', 'var/lib/open-tabletop/assets/nested']) {
+    const failed = f.run('purge', { MOCK_MOUNT: join(f.root, path) }, 'PURGE open-tabletop');
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /mounted storage/);
+  }
+  rmSync(join(f.root, 'var/lib/open-tabletop/assets'), { recursive: true });
+  symlinkSync(join(f.root, 'work'), join(f.root, 'var/lib/open-tabletop/assets'));
+  // A nested symlink is unlinked, never traversed by rm; a redirected root must be refused.
+  rmSync(join(f.root, 'var/lib/open-tabletop'), { recursive: true });
+  symlinkSync(join(f.root, 'work'), join(f.root, 'var/lib/open-tabletop'));
+  const failed = f.run('purge', {}, 'PURGE open-tabletop');
+  assert.notEqual(failed.status, 0);
+  assert.match(failed.stderr, /redirected path/);
+  assert.equal(readFileSync(join(f.root, 'calls'), 'utf8'), '');
+});
+
+test('resume and purge refuse customized database configuration without mutation', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('install').status, 0);
+  const path = join(f.root, 'etc/open-tabletop/open-tabletop.env');
+  writeFileSync(
+    path,
+    readFileSync(path, 'utf8').replace('DATABASE_HOST=127.0.0.1', 'DATABASE_HOST=other-host'),
+  );
+  writeFileSync(join(f.root, 'calls'), '');
+  for (const mode of ['resume', 'purge']) {
+    const failed = f.run(mode, {}, 'PURGE open-tabletop');
+    assert.notEqual(failed.status, 0);
+    assert.match(failed.stderr, /Customized database/);
+  }
+  assert.equal(readFileSync(join(f.root, 'calls'), 'utf8'), '');
+});
+
+test('resume never recreates a missing database for a completed installation', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('install').status, 0);
+  rmSync(join(f.root, 'database'));
+  writeFileSync(join(f.root, 'calls'), '');
+  const failed = f.run('resume');
+  assert.notEqual(failed.status, 0);
+  assert.match(failed.stderr, /database is missing/);
+  assert.doesNotMatch(
+    readFileSync(join(f.root, 'calls'), 'utf8'),
+    /create-database|systemctl restart/,
+  );
+});
+
+test('Linux removal dispatch is offline and forwards dry-run to the local companion', (t) => {
+  const f = fixture(t);
+  mkdirSync(join(f.root, 'linux'));
+  mkdirSync(join(f.root, 'proxmox'));
+  const source = readFileSync(launcher, 'utf8')
+    .replaceAll('[[ $EUID -eq 0 ]]', 'true')
+    .replace(/\/(?:etc|opt|run\/systemd)(?=\/)/g, (path) => `${f.root}${path}`);
+  writeFileSync(join(f.root, 'linux/open-tabletop.sh'), source);
+  writeFileSync(
+    join(f.root, 'proxmox/install.sh'),
+    '#!/bin/bash\n[[ "$OTT_INSTALL_PROFILE" == linux ]] || exit 1\nprintf "%s\\n" "$@" > "$ROOT/dispatched"\n',
+  );
+  for (const mode of ['uninstall', 'purge']) {
+    const run = bash('bash "$ROOT/linux/open-tabletop.sh" "$MODE" --dry-run', {
+      ...f.env,
+      MODE: mode,
+      SOURCE_ARCHIVE: '/does/not/exist',
+    });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(readFileSync(join(f.root, 'dispatched'), 'utf8'), `${mode}\n--dry-run\n`);
+  }
+});
+
+test('resume stops on credential mismatch without resetting roles or activating a release', (t) => {
+  const f = fixture(t);
+  assert.equal(f.run('install').status, 0);
+  const secret = readFileSync(join(f.root, 'etc/open-tabletop/owner-password'), 'utf8');
+  writeFileSync(join(f.root, 'calls'), '');
+  const failed = f.run('resume', { FAIL_AUTH: '1' });
+  assert.notEqual(failed.status, 0);
+  assert.match(failed.stderr, /cannot authenticate/);
+  assert.equal(readFileSync(join(f.root, 'etc/open-tabletop/owner-password'), 'utf8'), secret);
+  assert.doesNotMatch(
+    readFileSync(join(f.root, 'calls'), 'utf8'),
+    /create-.*role|systemctl restart/,
+  );
+});

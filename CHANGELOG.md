@@ -38,6 +38,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 
 ### Added
+- Native Linux `uninstall` and confirmed `purge` modes with offline execution and `--dry-run`,
+  plus `reinstall`/`resume` for retained or interrupted installations. Recovery preserves stored
+  credentials, uploads and configuration; purge retains database backups and shared dependencies,
+  refuses mounted/redirected storage, and removes only the app's PostgreSQL authentication rule.
+  Shared installer tests cover both Linux and Proxmox profiles. Live distro/reboot acceptance
+  remains pending; no application migration or browser UI change is required.
 - Replaced the website header and footer text branding with the existing Open Tabletop
   logo on the landing page and all 17 wiki guides, with accessible names and responsive sizing.
 - Captured four gameplay/library screenshots from two dedicated, saved showcase rooms.
