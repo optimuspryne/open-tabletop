@@ -23,6 +23,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   ordinary deployments retain their entry flow.
 
 ### Fixed
+- Fixed Docker first-run role initialization: pass the database owner as a safely quoted
+  psql identifier, so default grants no longer target the literal "$POSTGRES_USER".
+  Added a disposable PostgreSQL regression test for initialization, password quoting,
+  current/future table and sequence access, and denied schema creation. Existing partially
+  initialized databases still require the two default-privilege grants to be applied manually.
 - Audited all 17 website wiki pages against current documentation, release history and source.
   Corrected Node setup order and grants, Compose environment forwarding and secret permissions,
   native administrator commands, role restrictions, scene/reset consequences and transient state.

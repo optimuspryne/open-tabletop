@@ -2158,6 +2158,11 @@ applies the production schema and app-role grants, then verifies least privilege
 transactions, constraints, membership/state persistence, and library CRUD against
 real PostgreSQL.
 
+Run `sh scripts/test-compose-init.sh` separately to exercise the actual Docker
+first-run role script in a disposable PostgreSQL 16 container, including quoted
+owner/password values, existing and future object grants, and denied DDL. It
+publishes no ports and removes its container and temporary volume on exit.
+
 The production connection string comes from **`DATABASE_URL_FILE`** (a complete URL secret,
 highest priority), **`DATABASE_URL`**, or `DATABASE_HOST` / `DATABASE_PORT` /
 `DATABASE_NAME` / `DATABASE_USER` plus **`DATABASE_PASSWORD_FILE`**. Migration

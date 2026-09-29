@@ -1499,7 +1499,10 @@ string), never bytes, so rows stay small and unrevealed art isn't in the DB.
 `db.js` normalizes a model's URL into the `file_url` column and puts the rest in a
 `props` jsonb bag, splicing them back on read. The running server connects as a
 **CRUD-only role** (`tabletop_app`) — it can't run DDL — so a leaked app credential
-can't reshape or drop the schema.
+can't reshape or drop the schema. Docker first-run initialization passes the owner
+through a psql variable quoted as an SQL identifier, retaining a quoted shell heredoc
+for the SQL. Default privileges are scoped to that migration owner so future tables
+and sequences inherit the runtime role's grants.
 
 An uploaded object's optional custom-dispenser definition lives inside that existing `props`
 JSONB: `{appearance,infinite,defaultCount?,model?,box?,scale?,modelRot?,collider?,tintMaterial?}`.
