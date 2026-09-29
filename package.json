@@ -26,6 +26,7 @@
     "admin:grant": "node --env-file-if-exists=.env scripts/admin-role.mjs grant",
     "admin:revoke": "node --env-file-if-exists=.env scripts/admin-role.mjs revoke",
     "secrets:migrate": "node --env-file-if-exists=.env scripts/migrate-compose-secrets.mjs",
+    "test:admin-login": "node scripts/admin-login-test.mjs",
     "test:demo-ui": "node scripts/demo-entry-test.mjs",
     "preview:demo": "node scripts/demo-entry-test.mjs --serve"
   },

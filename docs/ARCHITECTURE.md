@@ -2383,3 +2383,9 @@ separate from administrator login. The deployment must remain single-process.
 
 Demo dice starters use the canonical `die` piece type with `sides: 6`, through
 the existing piece/physics lifecycle; `d6` is not a piece type.
+
+Admin entry remains available at `/admin.html` when demo mode replaces the ordinary
+landing page. It reuses the account auth endpoints and token store, retaining the
+separate demo guest identity. UI gating does not grant authority: management routes
+continue to require server-side administrator/owner checks. Sign-out revokes the
+account session before clearing browser state; rejected non-admin logins are revoked.

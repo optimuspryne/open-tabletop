@@ -1093,12 +1093,13 @@ const SCENES = [
         return { ok: true, json: async () => String(url) === '/auth/token'
           ? { user: { id: '1', isAdmin: true } }
           : String(url) === '/admin/texture-cache' ? { state: 'idle' }
-          : String(url) === '/admin/users' ? { users: [{ id: '2', username: 'Guest', email: 'guest@example.test', hostStatus: 'none' }] }
+          : String(url) === '/admin/users' ? { users: [{ id: '2', username: 'Guest', email: null, hostStatus: 'none' }] }
           : { rooms: [{ id: '1', name: 'Table', code: 'ROOM', ownerName: 'Host' }] } };
       };
       await import('/__admin-live.js');
       await waitFor(() => document.querySelector('#usersBody button'));
-      assert(requests.every(([, options]) => options.headers.Authorization === 'Bearer admin-fixture'), 'Admin request lost automatic authentication');
+      assert(requests.filter(([url]) => url !== '/demo-config').every(([, options]) => options.headers.Authorization === 'Bearer admin-fixture'), 'Admin request lost automatic authentication');
+      assert(requests.find(([url]) => url === '/demo-config')[1].headers.Authorization === undefined, 'Public demo config should not carry account credentials');
       const buttons = [...document.querySelectorAll('#roomsBody button, #usersBody button')];
       assert(buttons.every(button => button.getAttribute('type') === 'button'), 'Admin action became a submit button');
       assert(buttons.every(button => !button.dataset.icon), 'Member/lobby icons leaked into admin buttons');

@@ -1,6 +1,6 @@
 import { applyIcons, initTip } from './ui/icons.js';
 import { makeButton } from './ui/button.js';
-import { getAuthToken as token } from './auth.js';
+import { getAuthToken as token, setAuthToken, clearAuthToken } from './auth.js';
 import { requestJSON } from './http.js';
 applyIcons();
 initTip();
@@ -21,7 +21,8 @@ const api = (path, options) => requestJSON(path, { ...options, auth: true });
 const btn = (label, fn, cls) => makeButton(label, fn, cls, null, { type: 'button' });
 const cell = (content) => {
   const td = document.createElement('td');
-  if (typeof content === 'string') td.textContent = content;
+  if (content == null) td.textContent = '—';
+  else if (typeof content === 'string') td.textContent = content;
   else td.appendChild(content);
   return td;
 };
@@ -306,8 +307,10 @@ function renderTextureCache(status) {
 
 async function refreshTextureCache() {
   clearTimeout(texturePollTimer);
+  if (byId('admin').hidden) return;
   try {
     const status = await api('/admin/texture-cache');
+    if (byId('admin').hidden) return;
     renderTextureCache(status);
     if (status.state === 'running') {
       texturePollTimer = setTimeout(refreshTextureCache, 1000);
@@ -332,29 +335,116 @@ async function prebuildTextures() {
   }
 }
 
-// Gate the page: require a token → resolve it → require isAdmin, else show the
-// "denied" panel. On success, wire the cleanup button and load the two tables.
-(async function boot() {
-  if (!token()) {
-    byId('denied').hidden = false;
-    return;
-  }
-  let me;
-  try {
-    ({ user: me } = await api('/auth/token', { method: 'POST', body: { token: token() } }));
-  } catch {
-    byId('denied').hidden = false;
-    return;
-  }
-  if (!me.isAdmin) {
-    byId('denied').hidden = false;
-    return;
-  }
-  myId = me.id;
+// Reuse the regular account session; demo guest credentials stay separate.
+function showSignIn(message = '', focus = true) {
+  clearTimeout(texturePollTimer);
+  myId = null;
+  byId('admin').hidden = true;
+  byId('editorBtn').hidden = true;
+  byId('adminSession').hidden = true;
+  byId('adminIdentity').textContent = '';
+  byId('roomsBody').replaceChildren();
+  byId('usersBody').replaceChildren();
+  byId('adminLogin').hidden = false;
+  byId('adminLoginPassword').value = '';
+  byId('adminLoginError').textContent = message;
+  if (focus) byId(message ? 'adminLoginError' : 'adminLoginId').focus();
+}
+
+async function openConsole(user) {
+  myId = user.id;
+  byId('adminLogin').hidden = true;
   byId('admin').hidden = false;
-  byId('scanOrphans').onclick = scanOrphans;
-  byId('prebuildTextures').onclick = prebuildTextures;
+  byId('editorBtn').hidden = false;
+  byId('adminSession').hidden = false;
+  byId('adminIdentity').textContent = user.username;
+  byId('adminHeading').focus();
   await refreshTextureCache();
   await loadRooms();
   await loadUsers();
+}
+
+let signingIn = false;
+async function signIn(event) {
+  event.preventDefault();
+  if (signingIn) return;
+  signingIn = true;
+  byId('adminSignIn').disabled = true;
+  byId('adminSignIn').textContent = 'Signing in…';
+  byId('adminLoginForm').setAttribute('aria-busy', 'true');
+  byId('adminLoginError').textContent = '';
+  try {
+    const { user, token: session } = await requestJSON('/auth/login', {
+      method: 'POST',
+      body: {
+        login: byId('adminLoginId').value.trim(),
+        password: byId('adminLoginPassword').value,
+      },
+    });
+    if (!user?.isAdmin) {
+      // Do not replace a saved account session with a rejected non-admin login.
+      await requestJSON('/auth/logout', {
+        method: 'POST',
+        body: { token: session },
+      });
+      showSignIn('This account does not have administrator access.');
+      return;
+    }
+    setAuthToken(session);
+    byId('adminLoginPassword').value = '';
+    await openConsole(user);
+  } catch (error) {
+    showSignIn(error.message);
+  } finally {
+    signingIn = false;
+    byId('adminSignIn').disabled = false;
+    byId('adminSignIn').textContent = 'Sign in';
+    byId('adminLoginForm').removeAttribute('aria-busy');
+  }
+}
+
+async function signOut() {
+  const button = byId('adminSignOut');
+  if (button.disabled) return;
+  button.disabled = true;
+  try {
+    await requestJSON('/auth/logout', { method: 'POST', body: { token: token() } });
+    clearAuthToken();
+    showSignIn();
+  } catch (error) {
+    // Keep the console/session available so a failed server revocation can be retried.
+    alert('Could not sign out: ' + error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+byId('adminLoginForm').addEventListener('submit', signIn);
+byId('adminSignOut').addEventListener('click', signOut);
+byId('scanOrphans').onclick = scanOrphans;
+byId('prebuildTextures').onclick = prebuildTextures;
+
+(async function boot() {
+  // Keep the page useful on regular installations as well as the demo instance.
+  requestJSON('/demo-config')
+    .then(({ enabled }) => {
+      const label = enabled ? 'Back to demo' : 'Lobby';
+      byId('lobbyBtn').querySelector('.lbl').textContent = label;
+      byId('lobbyBtn').setAttribute('aria-label', label);
+    })
+    .catch(() => {});
+  if (!token()) {
+    showSignIn();
+    return;
+  }
+  try {
+    const { user } = await api('/auth/token', { method: 'POST', body: { token: token() } });
+    if (!user?.isAdmin) {
+      showSignIn('Sign in with an administrator account.');
+      return;
+    }
+    await openConsole(user);
+  } catch {
+    showSignIn('Your session could not be verified. Please sign in again.');
+  }
 })();

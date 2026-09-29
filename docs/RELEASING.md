@@ -174,3 +174,25 @@ and runtime database roles. `DEMO_MODE=true` is for a dedicated single-process d
 restart/recreate the app and refresh browsers. There is no new production listening port or
 database connection. The local test stack uses its own PostgreSQL volume. This branch has only
 been enabled locally; follow the normal backup/upgrade workflow before any eventual rollout.
+
+### Demo administrator access
+
+Open `/admin.html` and use the bootstrapped administrator username/email and
+password. This page now includes its own sign-in form even when `DEMO_MODE=true`.
+Rebuild/restart the app container and refresh after upgrading; no migration is needed.
+
+For a LAN-only Caddy access policy, account for the request paths, not only the page:
+`/admin.html` is the entry, `/admin/*` serves management APIs, POST `/auth/login`,
+`/auth/token` and `/auth/logout` serve account sessions, and PATCH/DELETE
+`/rooms/:id` handle room edits/closure. Other regular-account and library-editor
+operations share additional routes; this is the admin console's path inventory,
+not a complete network isolation policy for every privileged application action.
+Keep `/demo-api/*` and matchmaking/WebSocket access available to public visitors.
+Server-side authorization remains required on every management operation.
+
+Use the actual allowed device/subnet addresses as seen by Caddy, checking LAN and
+mobile-data access after applying the policy. If a CDN or another proxy precedes
+Caddy, configure trusted proxies before relying on forwarded client addresses;
+a direct-peer matcher sees that proxy instead. See
+[Caddy request matchers](https://caddyserver.com/docs/caddyfile/matchers).
+No Caddy configuration is changed by this application update.

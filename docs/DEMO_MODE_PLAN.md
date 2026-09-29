@@ -7,6 +7,24 @@ icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact t
 
 ## Current runtime (2026-09-29)
 
+Admin access: the user approved the `/admin.html` sign-in form, wrapped mobile
+header, persistent labels and existing logout icon. Implemented in `public/admin.html`,
+`public/admin.js` (`showSignIn/openConsole/signIn/signOut`, boot, polling and null-safe `cell` updates),
+and `public/admin-login.css`; the existing account authentication is reused.
+`scripts/admin-login-test.mjs` / `test:admin-login` cover browser auth and layouts.
+No backend auth, database or permission change is required.
+The admin fixture in `scripts/component-parity.mjs` distinguishes public config
+from authenticated requests. `package.json` registers the focused browser test;
+`CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` and
+`docs/RELEASING.md` record the flow and deployment/Caddy route inventory.
+Browser regression and real local Docker login, room listing/closure, saved-session
+restore and server-side logout passed. Real-device and Hetzner checks remain manual.
+Verification: `npm run check` (933), `test:admin-login`, `test:components`,
+`test:devices` (7 profiles) and `test:input` (58) passed. Component fixtures still
+report the existing eight missing bundled texture paths. Phone sign-in screenshot
+was visually checked; after deployment, verify login, close a disposable table,
+sign out, and test the LAN/mobile-data Caddy policy.
+
 Dice starter repair: `TableRoom.onCreate` now spawns five `die` pieces with
 `sides: 6`. The live smoke test accepts `DEMO_TEST_STARTER` and asserts the
 synchronized dice state. Dice matchmaking, invites and expiry passed locally;

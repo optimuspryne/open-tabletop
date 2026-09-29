@@ -6,6 +6,7 @@
     <title>Open Tabletop — Admin</title>
     <link rel="icon" href="/logo-mark.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/admin-login.css" />
     <script src="/ui/equalize.js" defer></script>
   </head>
   <body class="admin">
@@ -18,14 +19,20 @@
           alt="Open Tabletop"
         /><span class="brandSuffix">Admin</span></a
       >
-      <a id="lobbyBtn" class="button" href="/" data-icon="home-move"><span class="lbl">Lobby</span></a>
-      <a id="editorBtn" class="button push-right" href="/table.html?workshop=1" data-icon="edit books"
+      <a id="lobbyBtn" class="button" href="/" data-icon="home-move"><span class="lbl">Back to demo</span></a>
+      <a id="editorBtn" hidden class="button" href="/table.html?workshop=1" data-icon="edit books"
         ><span class="lbl">Library Editor</span></a
       >
+      <div id="adminSession" class="button-row" hidden>
+        <span id="adminIdentity"></span>
+        <button id="adminSignOut" class="button" type="button" data-icon="logout">
+          <span class="lbl">Sign out</span>
+        </button>
+      </div>
     </header>
 
     <main id="admin" hidden>
-      <h1 class="sr-only">Admin console</h1>
+      <h1 id="adminHeading" class="sr-only" tabindex="-1">Admin console</h1>
       <h2>Rooms</h2>
       <table>
         <thead>
@@ -78,9 +85,22 @@
       </div>
     </main>
 
-    <section id="denied" hidden>
-      <p>You need admin access to view this page.</p>
-      <a href="/">← Back to lobby</a>
+    <section id="adminLogin" aria-labelledby="adminLoginHeading" hidden>
+      <h1 id="adminLoginHeading">Admin sign in</h1>
+      <form id="adminLoginForm">
+        <div class="field-group">
+          <label class="field-label" for="adminLoginId">Username or email</label>
+          <input id="adminLoginId" name="login" type="text" autocomplete="username"
+            autocapitalize="none" spellcheck="false" required />
+        </div>
+        <div class="field-group">
+          <label class="field-label" for="adminLoginPassword">Password</label>
+          <input id="adminLoginPassword" name="password" type="password"
+            autocomplete="current-password" required />
+        </div>
+        <button id="adminSignIn" class="button button--primary" type="submit">Sign in</button>
+        <p id="adminLoginError" role="alert" tabindex="-1"></p>
+      </form>
     </section>
 
     <script type="module" src="/admin.js"></script>

@@ -9,6 +9,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Admin sign-in at `/admin.html` for demo and regular installations, using existing account
+  authentication and server-side authorization. The approved responsive form rejects
+  non-admin accounts, restores valid admin sessions, and offers server-revoking sign-out.
+  Demo guest storage is preserved. Added real-browser login, failure, focus and layout
+  regression checks via `npm run test:admin-login`. Rebuild the app image and refresh.
 - Opt-in `DEMO_MODE=true` now connects guest entry to temporary sessions, private table allocation,
   curated empty/dice/cards/chess starters, hashed invites, host-only invite rotation, resume,
   and active/idle expiry cleanup. Migration 025 preserves occupancy deadlines across restarts.
@@ -23,6 +28,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   ordinary deployments retain their entry flow.
 
 ### Fixed
+- Admin user rows now display an em dash for missing email addresses, allowing temporary
+  demo guests to appear without breaking console initialization.
 - Fixed demo dice starter matchmaking: spawn five canonical `die` pieces with
   `sides: 6` instead of the unsupported `d6` piece type that crashed room creation.
   The live demo smoke test now accepts `DEMO_TEST_STARTER` and verifies synchronized

@@ -1,0 +1,70 @@
+/* Approved admin access layout; shared controls, colors and icons remain canonical. */
+body.admin #topbar {
+  position: relative;
+  flex-wrap: wrap;
+}
+body.admin #lobbyBtn {
+  margin-left: auto;
+}
+body.admin #topbar .lbl {
+  display: inline;
+}
+body.admin #adminSession {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+#adminIdentity {
+  overflow-wrap: anywhere;
+}
+body.admin #admin {
+  margin-top: 24px;
+}
+#adminLogin {
+  box-sizing: border-box;
+  width: min(420px, calc(100% - 32px));
+  margin: 64px auto 32px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel-solid);
+  color: var(--text);
+  font-family: var(--font);
+}
+#adminLogin h1 {
+  margin: 0 0 24px;
+  font-size: 22px;
+}
+#adminLoginForm {
+  display: grid;
+  gap: 16px;
+}
+#adminLogin .field-group {
+  min-width: 0;
+}
+#adminLogin input,
+#adminLogin .field-label,
+#adminLogin button {
+  box-sizing: border-box;
+  width: 100%;
+  font-size: 16px;
+}
+#adminLogin input,
+#adminLogin button,
+body.admin #topbar .button {
+  min-height: 44px;
+}
+#adminLoginError {
+  margin: 0;
+  color: var(--danger);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+#adminLoginError:empty {
+  display: none;
+}
+@media (max-width: 560px) {
+  #adminLogin {
+    margin-top: 32px;
+    padding: 20px;
+  }
+}

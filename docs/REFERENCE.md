@@ -3641,3 +3641,16 @@ The local live regression can select a starter with `DEMO_TEST_STARTER=dice`
 (default: chess; also empty/cards) alongside
 `DEMO_TEST_ORIGIN=http://127.0.0.1:2568 node scripts/demo-live-test.mjs`.
 Dice mode asserts five synchronized six-sided dice after real matchmaking.
+
+### Admin entry and sessions
+
+`/admin.html` uses `public/admin.js` to validate a saved account token or present
+the approved username/email and password form. `showSignIn` hides management UI and
+clears rendered room/user rows; `openConsole` loads the existing admin endpoints;
+`cell` renders null values (including demo-guest email) as an em dash;
+`signIn` uses POST `/auth/login`, persists only admin sessions, and revokes a newly
+issued non-admin session; `signOut` calls POST `/auth/logout` before clearing
+`tabletop.token`. Failed logout remains retryable. Guest storage is untouched.
+`public/admin-login.css` scopes responsive entry/header styling using shared tokens
+and controls. `npm run test:admin-login` exercises the actual page in a browser
+against controlled auth responses, including rejected/expired sessions and layouts.
