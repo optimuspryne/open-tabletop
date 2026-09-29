@@ -7,6 +7,8 @@ export const RANK = Object.freeze({ player: 0, helper: 1, gm: 2, owner: 3 });
 // false while loading (including failures), then install authoritative values.
 export function canUseRoomCapability(auth = {}, capability) {
   if (auth.revoked || auth.participationReady === false) return false;
+  if (auth.isDemo && (!Number.isFinite(auth.demoExpiresAt) || Date.now() >= auth.demoExpiresAt))
+    return false;
   switch (capability) {
     case 'gameplay':
       return (

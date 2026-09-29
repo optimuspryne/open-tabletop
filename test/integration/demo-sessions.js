@@ -38,6 +38,7 @@ test('atomic guest allocation uses existing sessions/memberships and preserves h
   const table = await db.demo.createTable({ ...hostKeys, starter: 'chess' });
   const user = await db.findUserByToken(hostKeys.sessionHash);
   assert.equal(user.username, 'Alex');
+  assert.equal((await db.listMembers(table.roomId))[0].username, 'Alex');
   assert.equal(user.isDemo, true);
   assert.equal(user.email, null);
   assert.equal(user.isAdmin, false);
@@ -242,4 +243,31 @@ test('a demo guest cannot use a forged cross-room membership to enter another ta
   const good = await access.preflight({ code: first.code, token: keys.token });
   assert.equal(good.userId, first.userId);
   await assert.rejects(access.preflight({ code: second.code, token: keys.token }), { code: 403 });
+});
+
+test('restart occupancy recovery uses the durable heartbeat and cannot extend an existing idle deadline', async () => {
+  const keys = credentials();
+  const table = await db.demo.createTable(keys);
+  await db.demo.setOccupied(table.roomId, true);
+  const occupied = await db.demo.roomState(table.roomId);
+  assert.equal(occupied.idle_expires_at, null);
+  assert.ok(occupied.last_occupied_at instanceof Date);
+  await db.demo.recoverOccupancy();
+  const recovered = await db.demo.roomState(table.roomId);
+  assert.equal(
+    recovered.idle_expires_at.getTime(),
+    occupied.last_occupied_at.getTime() + DEMO_STORAGE_LIMITS.idleMs,
+  );
+  await db.demo.recoverOccupancy();
+  assert.equal(
+    (await db.demo.roomState(table.roomId)).idle_expires_at.getTime(),
+    recovered.idle_expires_at.getTime(),
+  );
+  await pool.query(
+    "UPDATE demo_rooms SET idle_expires_at=NULL,last_occupied_at=clock_timestamp()-interval '16 minutes' WHERE room_id=$1",
+    [table.roomId],
+  );
+  await db.demo.recoverOccupancy();
+  assert.equal(await db.demo.resume(keys.sessionHash), null);
+  assert.equal(await db.demo.setOccupied(table.roomId, true), false);
 });

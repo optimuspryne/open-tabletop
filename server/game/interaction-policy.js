@@ -10,6 +10,37 @@ export { ROOM_MESSAGE_CAPABILITIES } from '../../shared/room-capabilities.js';
 // Also used at async continuation boundaries. No client payload participates in
 // authorization; auth is server-owned. Lifecycle recovery never calls this gate.
 export function allowRoomCapability(client, capability, operation) {
+  if (
+    client?.auth?.isDemo &&
+    [
+      'admit',
+      'setRole',
+      'setAvatar',
+      'deckBegin',
+      'deckAppend',
+      'deckFinish',
+      'saveBoard',
+      'saveMat',
+      'saveProp',
+      'removePropDispenser',
+      'assetPublic',
+      'assetRename',
+      'assetDelete',
+      'sceneSave',
+      'saveSkybox',
+      'saveDice',
+      'createCollection',
+      'updateCollection',
+      'deleteCollection',
+    ].includes(operation)
+  ) {
+    if (!client.auth.revoked)
+      client.send('serverError', {
+        operation,
+        message: 'This action is unavailable in the public demo.',
+      });
+    return false;
+  }
   if (client && canUseRoomCapability(client.auth ?? {}, capability)) return true;
   if (client && !client.auth?.revoked) {
     client.send('serverError', {

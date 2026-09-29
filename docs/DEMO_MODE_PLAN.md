@@ -3,25 +3,116 @@
 Branch: `codex/public-demo-mode`. Intended public origin: `https://play.open-tabletop.com`.
 The demo is an opt-in deployment of the same application, not a permanent fork.
 User selected a fresh table per visitor/group and approved the entry mock-up and recommended
-icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact in-table shell
-placement/removals still require a concrete example; entry approval does not cover that revision.
+icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact table placement and invite dialog were subsequently approved before implementation.
 
-## Status
+## Current runtime (2026-09-29)
 
-1. **Implemented, awaiting manual testing:** optional process-local admission and message-count
-   budgets. Existing authenticated users can exercise them through the current UI. Automated
-   verification is recorded below after execution. This first slice does not create or delete guests.
-2. **Implemented storage foundation, awaiting runtime wiring:** temporary identity/table
-   transactions, resume, invite exchange/rotation, expiry and guarded purge APIs; migration 024.
-   No public guest route, background sweeper or occupancy hooks are registered yet.
-3. **Proposed:** demo HTTP boundary, invites, resume and curated starter allocation.
-4. **Entry approved, implementation pending:** entry UI and recommended icons. In-table shell
-   changes require their exact placement/removal example before implementation.
-5. **Proposed:** further abuse controls, load tests and public-instance rollout.
+Guest entry, private table allocation, curated starters, resume, invite exchange/rotation,
+active/idle expiry and cleanup are implemented. The user also approved the exact in-table
+placement: replace the top-right copyable room code with expiry status and Invite friends;
+rename the top-left Lobby control to Leave table. Full desktop keeps labels, compact uses
+the approved icons, and touch retains labeled invite actions. The native invite dialog has
+a readonly link, Copy link, Done and host-only Replace invite link with a revocation explanation.
+Existing gameplay controls retain their positions. Only `users-plus` was added to the sprite;
+existing symbols are unchanged.
 
-No changes have been deployed or pushed. Network setup was tested separately by the user:
-Caddy on OPNsense forwards over WireGuard to `172.19.20.5:2567`; the attached Hetzner Cloud
-Firewall blocks direct public access. Keep `PersistentKeepalive = 25` on Debian's OPNsense peer.
+`DEMO_MODE=true` serves the entry at `/` and `/index.html`, mounts `/demo-api`, disables normal
+signup and room-code admission, and uses finite process limits: 5 live rooms, 20 connections,
+2 per identity, 16 pending admissions and 240 messages/second. These are trial values, not
+measured production capacity. Ordinary deployments retain optional `ROOM_MAX_*` settings.
+`/demo-config` reports whether the deployment is enabled. This mode is single-process only.
+
+The API exposes POST create/resume/invite/join/rotate, with 2 KiB bodies, no-store responses,
+eight concurrent requests and Redis token buckets. Each allocating operation has an 8/IP burst
+and refill of 8/10 minutes, with a shared 20/global burst and refill of 20/10 minutes. Other
+operations have a 60/IP burst/refill per minute and shared 120/global burst/refill per minute.
+Trusted proxy configuration determines the IP; IPv6 subnet aggregation is not implemented.
+Redis errors fail closed. Browser-origin mismatches are denied. A valid existing guest bearer
+resumes its current table on create/join, rather than silently allocating another identity.
+Only credential hashes reach SQL. No caller-supplied IDs, roles or purge guards are accepted.
+
+Browser identity uses a separate `tabletop.demo.session` key; ordinary administrator login
+remains stored independently. Invite fragments are removed before requests, then exchanged via
+POST. Demo tables select guest credentials for both HTTP and sockets. Guests cannot enter
+other tables, edit persistent libraries, change admission/roles, or use account-security APIs.
+Public notecard-template GETs retain the existing visibility checks; writes are denied. Existing
+role, payload and capacity checks still govern gameplay. Normal identities cannot enter demo rooms.
+
+`createDemoRuntime` records occupancy every five seconds, including retained reconnect players.
+Absolute deadlines are enforced by shared capability checks and room timers. Cleanup closes
+credentials, revokes connections, disconnects, and purges only after the live writer registry
+clears. Errors retain data for retry rather than freeing quota. Migration 025 adds
+`last_occupied_at`; restart derives the idle deadline from the last recorded occupancy, never
+the restart time. Startup performs recovery and a sweep before listening, including after
+switching demo mode off. Ordinary users/shared assets remain outside the purge scope.
+
+Empty starts with no pieces; dice starts with five d6s; cards reuses the standard deck builder;
+chess reuses the existing starter orchestrator. A stored scene is restored on subsequent loads.
+No scoring or game-rule enforcement is introduced. Leave preserves the temporary session for
+resume; actual occupancy controls idle expiry. Replacing an invite invalidates the old link but
+keeps admitted players. Other players holding the old link must request the new one from the host.
+
+The isolated local Docker app at port 2568 now uses this mode and its own PostgreSQL/Redis and
+volumes. No standalone database connection, public deployment or push was made. Real-device
+multiplayer feel and load/byte/disk-budget evaluation remain rollout work.
+
+### Runtime file and function inventory
+
+| File | Change |
+| --- | --- |
+| `server/http/routes/demo.js` | Added `createDemoRouter`, credential parsing, bounded route wrapper, session lookup and create/resume/inspect/join/rotate handlers. |
+| `server/demo-runtime.js` | Added `createDemoRuntime`, single-flight `sweep`, ordered `run` and startup lifecycle. |
+| `server/demo-queries.js` | Added `roomState`, `activeRooms`, `recoverOccupancy`, `inspectInvite`; records occupancy heartbeat in `setOccupied`. |
+| `postgres/025_demo_occupancy.sql`, `postgres/schema.sql` | New heartbeat migration and updated fresh baseline/ledger. |
+| `server.js` | Registers demo deployment/API/page, finite limits, startup sweep, initial starters, join occupancy and expiry timer; wires readonly template access. |
+| `server/room-access.js` | Loads demo metadata and deadline; enforces typed guest admission and rejects ordinary identities in demo rooms. |
+| `server/permissions.js` | `canUseRoomCapability` rejects expired guest authority, including continuation checks. |
+| `server/game/interaction-policy.js` | `allowRoomCapability` denies guest persistent-library and admission/role mutations. |
+| `server/http/auth-context.js` | `createRequireUser` denies guest account/persistent routes with explicit GET-only exception. |
+| `server/http/routes/rooms.js` | Ordinary code admission rejects marked demo rooms. |
+| `server/user-queries.js` | Guest bearer projection includes the absolute deadline. |
+| `server/room-queries.js` | `listMembers` resolves guest display names. |
+| `public/demo.html`, `public/demo/bootstrap.js` | Actual entry page, fragment inspection, resume and table navigation via the approved component. |
+| `public/demo/session.js` | Separate guest storage and `demoRequest` adapter. |
+| `public/demo/table.js`, `public/demo/table.css` | `mountDemoTable`: status, invite dialog, host rotation, copy feedback, timer cleanup and expiry redirect. |
+| `public/auth.js`, `public/client.js` | Select guest HTTP/socket credentials on demo table visits; mount table UI. |
+| `public/table.html` | Scoped demo CSS and regenerated sprite. |
+| `public/index.html`, `public/admin.html`, `scripts/build-icons.mjs` | Canonical sprite generation adds users-plus and demo page output. |
+| `test/backend-demo-http.js` | HTTP hashing, resume, origin/throttle/error boundaries, guest denial and readonly exception tests. |
+| `test/backend-demo-runtime.js` | Single-flight, disposal/retry ordering, deadline and mutation-policy tests. |
+| `test/integration/demo-sessions.js` | Real occupancy restart/deadline and guest display-name checks. |
+| `test/integration/database.js`, `scripts/test-database.mjs` | Fresh migration count and actual upgrade through 024/025. |
+| `scripts/demo-live-test.mjs` | Opt-in loopback-only browser/API test; forces expiry only for its created room in the named local DB container. |
+| `.env.example`, `docker-compose.yml` | Document and forward opt-in DEMO_MODE. |
+| `CHANGELOG.md`, `docs/ARCHITECTURE.md`, `docs/REFERENCE.md`, `docs/RELEASING.md`, this plan | Current contracts, status, inventory and migration guidance. |
+
+The local ignored `secrets/local-test/setup.sh` enables demo mode; `rebuild-app.sh` recreates
+only the app while retaining its isolated volumes. `README.md` records those operations.
+
+### Runtime verification and next manual check
+
+Final automated runs: `npm run check` passed 933 tests plus lint/format/CSS checks;
+`npm run test:integration` passed 24 existing and 11 demo DB tests, including actual migration
+upgrade. `test:demo-ui` passed the entry cases and 16 layout/input combinations, `test:input`
+passed 58 checks, `test:components` completed, and `test:devices` passed all seven profiles.
+The component harness reported eight missing bundled texture paths; the new entry fixture had
+no missing paths or browser exceptions. These texture warnings were not resolved in this task.
+The live loopback test exercised entry-to-chess-table navigation, the native invite dialog,
+player invite exchange, host-only rotation, old-link rejection, existing guest resume,
+account/signup denial, desktop/touch dialog fit and labels, active expiry redirect and reclamation.
+It caught and fixed a revalidation/expiry-notice race. Desktop/touch screenshots were inspected.
+Automated test tables and only demo test rate-limit buckets were cleared afterward.
+
+Manual next step: refresh http://localhost:2568, enter a name, select a starter and Start.
+Open Invite friends and paste the link into a private browser window to join as another guest.
+Leave and resume; replace the invite and verify the previous link fails in a fresh private
+window. Real-device gesture feel and broader multiplayer/load tests remain outstanding.
+The local app was rebuilt/restarted; browser refresh is required. No production push/deployment.
+
+## Historical slice notes
+
+The sections below record earlier stages and their tests; the current runtime above supersedes
+references to pending HTTP, cleanup or table UI wiring.
 
 ## Implemented foundation
 
@@ -136,8 +227,8 @@ disclosing other users or tables. No public table directory.
 
 ## Concrete UI example — entry and icons approved
 
-This is a design example only; no application markup, CSS, icons or client behavior is changed.
-The standalone HTML mock-up supplied with this slice shows the same layouts visually.
+The approved design below is now implemented as an isolated entry component. The local preview
+uses simulated actions; it does not allocate guests or tables. Production registration is pending.
 
 ### Desktop, full and compact
 
@@ -297,10 +388,55 @@ it adds no production controls, scripts, styles or icons. No functions were remo
 | `docs/DEMO_MODE_PLAN.md` | Records entry/icon approval, storage implementation, test status and remaining runtime work. |
 
 No production UI, environment variables or runtime scheduling changed in the storage slice.
-The admission-slice changes remain in the same unpushed working tree.
+The admission-slice changes remain on the same unpushed branch.
 
 Storage-slice manual staging check (not yet performed): back up and migrate a staging database
 through 024, restart the application, then verify ordinary login, saved-room restoration and
 shared library access. No client refresh is required for a UI change in this slice, but connected
 clients must reconnect after restart. Guest end-to-end testing waits for the HTTP/runtime policy;
 do not expose these internal allocation functions directly to visitors.
+
+
+## Entry UI slice
+
+The approved entry component is implemented and reviewable through `npm run preview:demo`.
+The preview's state/mode controls are test harness controls, not proposed product UI. It is
+served separately on loopback, leaving the Docker app at port 2568 and its login flow intact.
+No credentials, data or accounts are read or created by the preview. The public-facing entry
+is not enabled: the complete HTTP/runtime policy and production caller must come next.
+In-table placements/removals still require the concrete shell example described above.
+
+Reuse decision: retain shared component classes, palette tokens, icon helper and the already
+bundled `player-play` symbol; no new icon asset or sprite rebuild is needed for this slice.
+The standalone component owns presentation because existing ordinary-account login handlers
+also own credential storage and navigation, which must not be used by the simulated preview.
+
+| File | Change |
+| --- | --- |
+| `public/demo/entry.js` | Added `mountDemoEntry`, local `find`, `showError`, `render`, `markExpired`, `updateRemaining`, `handleSubmit` and `destroy`; injected submission and cancellation boundary. |
+| `public/demo/entry.css` | Scoped entry layout using shared tokens, visible compact labels, native control focus and touch targets. |
+| `test/fixtures/demo-entry.html` | Local review harness markup and preview controls; sprite comes from the existing index page. |
+| `test/fixtures/demo-entry.js` | Added fixture `show` with simulated action handler; no network/storage or production registration. |
+| `scripts/demo-entry-test.mjs` | Reuses `serveDir`, `launch`, `newPage`; serves preview with `--serve` or runs browser assertions and optional screenshots. |
+| `package.json` | Adds `preview:demo` and `test:demo-ui` commands. |
+| `CHANGELOG.md` | Records implemented presentation separately from pending guest integration. |
+| `docs/ARCHITECTURE.md` | Records presentation ownership, reuse and production registration boundary. |
+| `docs/REFERENCE.md` | Documents mount/action/disposal contracts and preview/test commands. |
+| `docs/DEMO_MODE_PLAN.md` | Tracks this slice and manual checks. |
+
+Manual review: open the printed preview URL; try name/starter selection and submission, each
+preview state, full/compact modes and a narrow window. Check keyboard Tab/arrow/Enter operation.
+Requests are simulated; successful submission reports its action below the component. Change
+preview state to reset it. Review on a real touch device remains outstanding. Refresh after
+source edits; no Docker rebuild or application-server restart is needed for this static preview.
+
+
+Entry-slice verification: `npm run check` passed (926 tests plus lint/format/CSS checks),
+`npm run test:demo-ui` passed behavioral and 16 layout/input combinations,
+`npm run test:input` passed 58 checks, `npm run test:components` completed successfully,
+and `npm run test:devices` passed all seven profiles. The component harness reported eight
+missing bundled texture paths; the new entry fixture reported no missing paths or browser
+exceptions. Desktop and narrow screenshots of the entry were visually inspected. The local
+preview returned HTTP 200. `git diff --check` passed. No database/query changes were made in
+this UI slice, so the database integration suite was not repeated. Real-device touch review
+and actual guest/multiplayer navigation remain unverified and are not simulated test passes.

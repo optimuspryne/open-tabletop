@@ -2343,3 +2343,37 @@ Tile sound variants reuse public material-kind metadata and the existing server-
 boundary. No concealed face or deck order is included in sound messages. Group flips deduplicate
 by material; shuffle animation is unchanged. Six original static OGGs are generated offline and
 played with the existing per-viewer volume/mute preferences. See [checkpoint](DESIGN_placards_sounds.md).
+
+
+## Demo entry presentation boundary
+
+`public/demo/entry.js` owns only entry-form DOM and submission state. It reuses canonical
+button/panel/field classes, `public/styles.css` design tokens and `applyIcons` with the already
+bundled, approved `player-play` symbol. Scoped `public/demo/entry.css` retains labels in both
+UI modes and makes width, rather than pointer type, determine the column layout. Native form
+controls provide touch and keyboard operation; no table intent or gameplay input is changed.
+
+The mounting caller injects the asynchronous action handler and clock. Credentials, HTTP,
+server authorization, session storage and navigation stay outside this component. Pending and
+successful submissions cannot be duplicated. Display names are trimmed before submission;
+server validation remains required. Known error codes map to fixed text, never raw exception
+messages; host names are inserted as text. Destroy aborts the caller signal, cancels the timer
+and detaches listeners. The visual countdown is advisory; server expiry is still authoritative.
+
+This is a staged UI component, not an enabled demo mode. The only current caller is the
+local browser fixture in `test/fixtures/demo-entry.*`, served on loopback by the existing
+headless-test static server. It has no database or authentication wiring and does not access
+browser credentials. The fixture offers explicitly simulated states for review. Production
+entry registration awaits guest HTTP restrictions, expiry/disposal handling and navigation.
+
+
+## Enabled demo runtime
+
+`DEMO_MODE=true` now registers the entry component and approved table controls. The preceding
+presentation-only section describes the earlier staged slice. See the [current demo contract](DEMO_MODE_PLAN.md#current-runtime-2026-09-29).
+`createDemoRuntime` owns durable occupancy and ordered cleanup: close credentials, revoke,
+disconnect, wait for the writer registry, then purge marked data. Migration 025 records the
+last occupied time so a restart cannot restart the idle clock. Shared capability checks and a
+room timer enforce absolute expiry; startup sweeps before listening. Failures retain data for
+retry. Raw tokens remain outside SQL/synchronized state, and guest browser credentials remain
+separate from administrator login. The deployment must remain single-process.

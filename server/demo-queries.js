@@ -235,7 +235,8 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
     return transaction(async (client) => {
       const result = await client.query(
         `UPDATE demo_rooms d SET idle_expires_at=
-        CASE WHEN $2 THEN NULL ELSE COALESCE(d.idle_expires_at, clock_timestamp()+$3*interval '1 millisecond') END
+        CASE WHEN $2 THEN NULL ELSE COALESCE(d.idle_expires_at, clock_timestamp()+$3*interval '1 millisecond') END,
+        last_occupied_at=CASE WHEN $2 THEN clock_timestamp() ELSE d.last_occupied_at END
         FROM rooms r WHERE d.room_id=$1 AND r.id=d.room_id AND ${live} RETURNING d.room_id`,
         [roomId, occupied, limits.idleMs],
       );
@@ -310,7 +311,41 @@ export function createDemoQueries(pool, limits = DEMO_STORAGE_LIMITS) {
     });
   }
 
+  async function roomState(roomId) {
+    id(roomId);
+    const { rows } = await pool.query('SELECT * FROM demo_rooms WHERE room_id=$1', [roomId]);
+    return rows[0] ?? null;
+  }
+
+  async function activeRooms() {
+    const { rows } = await pool.query('SELECT room_id FROM demo_rooms WHERE closed_at IS NULL');
+    return rows.map((row) => String(row.room_id));
+  }
+
+  async function recoverOccupancy() {
+    await pool.query(
+      `UPDATE demo_rooms SET idle_expires_at =
+      LEAST(expires_at, COALESCE(last_occupied_at, created_at)+$1*interval '1 millisecond')
+      WHERE idle_expires_at IS NULL AND closed_at IS NULL`,
+      [limits.idleMs],
+    );
+  }
+
+  async function inspectInvite(inviteHash) {
+    hash(inviteHash);
+    const { rows } = await pool.query(
+      `SELECT r.name,d.expires_at FROM demo_rooms d
+      JOIN rooms r ON r.id=d.room_id WHERE d.invite_hash=$1 AND ${live}`,
+      [inviteHash],
+    );
+    return rows[0] ? { name: rows[0].name, expiresAt: rows[0].expires_at } : null;
+  }
+
   return {
+    roomState,
+    activeRooms,
+    recoverOccupancy,
+    inspectInvite,
     createTable,
     joinInvite,
     resume,

@@ -10,7 +10,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 
 const REF = 'main';
-const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html'];
+const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html', 'public/demo.html'];
 
 // The full set of icons used across the app, grouped loosely by where they first appeared.
 const ICONS = [
@@ -142,6 +142,7 @@ const ICONS = [
   'music-off',
   'music',
   'player-play',
+  'users-plus',
   'player-pause',
   'player-track-next',
   'arrows-shuffle',

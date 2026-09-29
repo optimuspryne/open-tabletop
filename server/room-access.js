@@ -72,6 +72,7 @@ export function createRoomAccess({ db, hashToken, limits = {} }) {
     let role = 'owner';
     let timedOut = false;
     let participation = 'player';
+    let demo = null;
     if (kind === 'editor') {
       if (!user.isAdmin) throw new ServerError(403, 'The library editor is for site admins only.');
     } else {
@@ -82,6 +83,16 @@ export function createRoomAccess({ db, hashToken, limits = {} }) {
       persistentRoomId = record.id;
       if (user.isDemo && String(user.demoRoomId) !== String(record.id))
         throw new ServerError(403, 'Demo guests can only enter their own table.');
+      demo = await db.demo?.roomState?.(String(record.id));
+      if (
+        demo &&
+        (!user.isDemo ||
+          kind !== 'table' ||
+          demo.closed_at ||
+          new Date(demo.expires_at).getTime() <= Date.now())
+      )
+        throw new ServerError(403, 'This demo table is unavailable.');
+      if (user.isDemo && !demo) throw new ServerError(403, 'Demo table unavailable.');
       roomName = record.name;
       const member = await db.getMembership(record.id, user.id);
       if (kind === 'lobby') {
@@ -109,6 +120,13 @@ export function createRoomAccess({ db, hashToken, limits = {} }) {
       participation,
       timedOut,
       participationReady: true,
+      ...(user.isDemo
+        ? {
+            isDemo: true,
+            demoExpiresAt: new Date(demo.expires_at).getTime(),
+            demoStarter: demo.starter,
+          }
+        : {}),
     };
   }
 

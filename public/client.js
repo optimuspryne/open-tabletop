@@ -1,3 +1,5 @@
+import { readDemoSession, demoRequest } from './demo/session.js';
+import { mountDemoTable } from './demo/table.js';
 import { getAuthToken } from './auth.js';
 import { createNotecardTemplates } from './table/notecard-templates.js';
 import { createNotecardEditor } from './table/notecards.js';
@@ -254,7 +256,10 @@ const membership = createMembership({
   if (params.get('workshop') === '1') window.OTT_EDITOR = true; // admins reach the library workshop via table.html?workshop=1
   const editorMode = !!window.OTT_EDITOR; // workshop mode: admin-only room + workshop chrome
   const code = (params.get('room') || 'LOBBY').toUpperCase(); // which table (handed over by the lobby)
-  const authToken = getAuthToken(); // who you are (for the onAuth gate)
+  const demoVisit = params.get('demo') === '1';
+  let demoTable;
+  if (demoVisit) ({ table: demoTable } = await demoRequest('resume'));
+  const authToken = demoVisit ? readDemoSession().token : getAuthToken(); // who you are (for the onAuth gate)
   const key = 'tt_token:' + code; // per-room reconnection token: survives refresh, distinct per table
   if (editorMode) {
     room = await client.joinOrCreate('editor', { token: authToken }); // admin-only workshop; no code, no reconnect
@@ -404,6 +409,8 @@ const membership = createMembership({
     } catch (e) {}
     location.href = '/';
   };
+
+  if (demoVisit) mountDemoTable(room, demoTable);
 
   if (editorMode) {
     // workshop chrome: no member management, back to the admin console, hand the room to the panel

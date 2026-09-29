@@ -164,3 +164,13 @@ manual verification of those deployment and upload scenarios.
   own compose.
 - **Every user-visible change earns a changelog line.** Pre-1.0 is not a license for
   silent breakage.
+
+
+### Public demo runtime migration 025
+
+Apply `025_demo_occupancy.sql` after 024 before running this branch. It adds
+`demo_rooms.last_occupied_at`; the fresh baseline includes 001–025. Preserve separate migration
+and runtime database roles. `DEMO_MODE=true` is for a dedicated single-process demo deployment;
+restart/recreate the app and refresh browsers. There is no new production listening port or
+database connection. The local test stack uses its own PostgreSQL volume. This branch has only
+been enabled locally; follow the normal backup/upgrade workflow before any eventual rollout.

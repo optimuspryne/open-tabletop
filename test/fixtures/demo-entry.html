@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Open Tabletop — demo entry preview</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/demo/entry.css">
+  <style>
+    body { display: flex; flex-direction: column; font: 16px/1.5 var(--font); }
+    .preview-tools { padding: 12px 20px; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .preview-tools select { min-height: 44px; font-size: 16px; }
+    .preview-tools p { margin: 0; flex-basis: 100%; font-size: 14px; }
+    #entry { min-height: 0; flex: 1; }
+    #preview-result { padding: 8px 20px; margin: 0; }
+    #preview-result:empty { display: none; }
+  </style>
+</head>
+<body class="ui-full">
+  <!-- SPRITE -->
+  <nav class="preview-tools" aria-label="Preview controls">
+    <label for="scenario">Preview state</label>
+    <select id="scenario">
+      <option value="start">New visitor</option>
+      <option value="resume">Returning visitor</option>
+      <option value="invite">Invite from Alex</option>
+      <option value="capacity">Demo full</option>
+      <option value="expired-invite">Expired invite</option>
+      <option value="expired-table">Expired table</option>
+      <option value="network">Connection error</option>
+    </select>
+    <label for="ui-mode">UI mode</label>
+    <select id="ui-mode"><option value="full">Full</option><option value="compact">Compact</option></select>
+    <p>Interactive UI preview. Actions are simulated; no accounts or tables are created.</p>
+  </nav>
+  <main id="entry"></main>
+  <p id="preview-result" role="status" aria-live="polite"></p>
+  <script type="module" src="/preview-fixture.js"></script>
+</body>
+</html>

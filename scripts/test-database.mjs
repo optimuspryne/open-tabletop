@@ -127,7 +127,14 @@ async function prepareDatabase(ownerUrl) {
     try {
       await client.query('SET search_path TO demo_upgrade_test');
       await client.query(
-        schema.replace(demoMigration + '\n', '').replace(", ('024_demo_sessions.sql')", ''),
+        schema
+          .replace(
+            (await fs.readFile(path.join(root, 'postgres/025_demo_occupancy.sql'), 'utf8')) + '\n',
+            '',
+          )
+          .replace(", ('025_demo_occupancy.sql')", '')
+          .replace(demoMigration + '\n', '')
+          .replace(", ('024_demo_sessions.sql')", ''),
       );
       const user = (
         await client.query(
@@ -139,6 +146,9 @@ async function prepareDatabase(ownerUrl) {
         [user.id],
       );
       await client.query(demoMigration);
+      await client.query(
+        await fs.readFile(path.join(root, 'postgres/025_demo_occupancy.sql'), 'utf8'),
+      );
       const existing = (await client.query('SELECT email,is_demo FROM users')).rows[0];
       assert.equal(existing.email, 'survivor@example.test');
       assert.equal(existing.is_demo, false);

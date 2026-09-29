@@ -1,3 +1,5 @@
+import { createDemoRouter } from './server/http/routes/demo.js';
+import { createDemoRuntime } from './server/demo-runtime.js';
 import { createAccountSecurityRouter } from './server/http/routes/account-security.js';
 import { createRecoveryMailer } from './server/recovery-mail.js';
 import { createAssetFilesRouter } from './server/http/routes/asset-files.js';
@@ -259,8 +261,18 @@ const {
 const LIVE_ROOMS = new Set();
 // Single-process writer ownership lasts through the final queued save.
 const ROOM_WRITERS = new Map();
-const roomResourceLimits = readRoomResourceLimits();
+const demoMode = process.env.DEMO_MODE === 'true';
+const roomResourceLimits = demoMode
+  ? readRoomResourceLimits({
+      ROOM_MAX_LIVE: '5',
+      ROOM_MAX_CONNECTIONS: '20',
+      ROOM_MAX_CONNECTIONS_PER_USER: '2',
+      ROOM_MAX_PENDING_AUTH: '16',
+      ROOM_MAX_MESSAGES_PER_SECOND: '240',
+    })
+  : readRoomResourceLimits();
 const roomAccess = createRoomAccess({ db, hashToken, limits: roomResourceLimits });
+const demoRuntime = createDemoRuntime({ demo: db.demo, writers: ROOM_WRITERS, roomAccess });
 const participation = createParticipationService({ db, roomAccess });
 setInterval(() => void roomAccess.revalidate(), 30_000).unref();
 const { findOrphanAssets, trashOrphans } = createAssetCleanup({
@@ -375,6 +387,7 @@ class TableRoom extends Room {
     this.maxMessagesPerSecond = roomResourceLimits.maxMessagesPerSecond;
     this.roomCode = this.constructor.accessKind === 'editor' ? null : options.code;
     this.persistentRoomId = admission.persistentRoomId;
+    this.demoAdmission = admission.isDemo ? admission : null;
     if (this.persistentRoomId) {
       if (ROOM_WRITERS.has(this.persistentRoomId))
         throw new ServerError(409, 'This table is already active. Please join again.');
@@ -448,6 +461,15 @@ class TableRoom extends Room {
       if (n) this.nextScoreId = Math.max(this.nextScoreId, +n[1] + 1);
     });
     this.visibility = createPieceVisibility(this);
+    if (this.demoAdmission && !this.savedScene) {
+      if (admission.demoStarter === 'chess') this.setupStarter('chess');
+      else if (admission.demoStarter === 'cards') {
+        const deck = deckBuilders.buildSimpleDeck(false);
+        this.spawn('deck', [0, 2, 0], { back: deck.back, cards: deck.cards, ...geoOf(deck) });
+      } else if (admission.demoStarter === 'dice') {
+        for (let i = 0; i < 5; i++) this.spawn('d6', [(i - 2) * 1.5, 2, 0]);
+      }
+    }
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
 
     // Contain unexpected failures in every inline table message. Specialized
@@ -638,6 +660,15 @@ class TableRoom extends Room {
     });
 
     this.setSimulationInterval((dt) => this.update(dt), 1000 / 60); // fixed 60Hz sim
+    if (this.demoAdmission)
+      this.clock.setTimeout(
+        () => {
+          roomAccess.dispose(this);
+          this.broadcast('demoExpired');
+          void this.disconnect().catch(() => console.error('[demo] disconnect failed'));
+        },
+        Math.max(0, this.demoAdmission.demoExpiresAt - Date.now()),
+      );
     this.setPatchRate(1000 / 60); // 60Hz state broadcast (delta-compressed; cheap on LAN)
   }
 
@@ -1054,6 +1085,10 @@ class TableRoom extends Room {
 
   async onJoin(client, options) {
     client.auth = await this.authorizeJoin(client, options);
+    if (client.auth.isDemo && !(await db.demo.setOccupied(String(this.persistentRoomId), true))) {
+      roomAccess.forget(this, client);
+      throw new ServerError(410, 'This demo table has expired.');
+    }
     roomAccess.assertActive(this, client);
     this.visibility.syncClient(client);
     const auth = client.auth || {};
@@ -1307,6 +1342,17 @@ app.post(
 
 // Bundled asset URLs are independent of their configured location on disk.
 app.use(createStaticAssetRouter());
+if (demoMode) {
+  app.use(
+    '/demo-api',
+    createDemoRouter({ demo: db.demo, store: rateLimitStore, makeToken, hashToken }),
+  );
+  app.get(['/', '/index.html'], (_req, res) => res.sendFile(path.resolve('public/demo.html')));
+  app.post(['/auth/signup', '/rooms/join', '/rooms'], (_req, res) =>
+    res.status(403).json({ error: 'Use the public demo entry.' }),
+  );
+}
+app.get('/demo-config', (_req, res) => res.json({ enabled: demoMode }));
 app.use(express.static('public'));
 app.use('/shared', express.static('shared'));
 
@@ -1401,7 +1447,13 @@ app.use(
   }),
 );
 
-app.use('/notecard-templates', createNotecardTemplatesRouter({ db, requireUser }));
+app.use(
+  '/notecard-templates',
+  createNotecardTemplatesRouter({
+    db,
+    requireUser: createRequireUser({ db, hashToken, allowDemoReadOnly: true }),
+  }),
+);
 app.use('/collider-presets', createColliderPresetsRouter({ db, requireUser }));
 
 // Must be registered after every HTTP route so rejected async handlers land here.
@@ -1481,6 +1533,7 @@ const PORT = process.env.PORT || 2567;
 // Apply any pending schema migrations before serving. Fails fast (exits) rather than
 // booting on a half-migrated schema; no-ops when MIGRATE_DATABASE_URL isn't set.
 await runMigrations();
+await demoRuntime.start();
 const bootstrap = await bootstrapAdminFromEnvironment({ db, hashPassword });
 if (bootstrap.status === 'created')
   console.log(`[auth] provisioned bootstrap administrator: ${bootstrap.user.username}`);

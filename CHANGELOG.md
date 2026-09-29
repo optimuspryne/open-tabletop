@@ -8,6 +8,20 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Added
+- Opt-in `DEMO_MODE=true` now connects guest entry to temporary sessions, private table allocation,
+  curated empty/dice/cards/chess starters, hashed invites, host-only invite rotation, resume,
+  and active/idle expiry cleanup. Migration 025 preserves occupancy deadlines across restarts.
+  Guest credentials are separate from ordinary browser login; persistent-library/account writes
+  and ordinary demo-instance signup/code admission are denied. Includes the approved table
+  expiry status, invite dialog and Leave table control. Enabled and tested only in the local
+  isolated Docker stack; no public deployment or push.
+- Approved public-demo entry component with name/starter selection, resume and invite variants,
+  pending/retry/expiry states, accessible focus handling and labeled compact/touch controls.
+  `npm run preview:demo` runs an isolated interactive UI fixture; `npm run test:demo-ui`
+  exercises the real component. The runtime slice connects it only when demo mode is enabled;
+  ordinary deployments retain their entry flow.
+
 ### Fixed
 - Audited all 17 website wiki pages against current documentation, release history and source.
   Corrected Node setup order and grants, Compose environment forwarding and secret permissions,

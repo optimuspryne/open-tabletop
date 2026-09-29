@@ -1,10 +1,16 @@
-export function createRequireUser({ db, hashToken }) {
+export function createRequireUser({ db, hashToken, allowDemoReadOnly = false }) {
   return async function requireUser(req, res) {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     const user = token ? await db.findUserByToken(hashToken(token)) : null;
     if (!user) {
       res.status(401).json({ error: 'not signed in' });
+      return null;
+    }
+    if (user.isDemo && !(allowDemoReadOnly && req.method === 'GET')) {
+      res
+        .status(403)
+        .json({ error: 'Demo guests cannot use account or persistent-library routes.' });
       return null;
     }
     return user;

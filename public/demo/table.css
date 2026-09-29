@@ -1,0 +1,13 @@
+.demo-table #roomCode { display: none !important; }
+.demo-table-status { display: block; font-size: max(12px, var(--fs-sm)); margin: 4px 0; }
+.demo-table .demo-invite { min-height: 44px; }
+.demo-invite-dialog { width: min(520px, calc(100vw - 32px)); padding: 24px; color: var(--text); background: var(--panel-solid); font: 16px/1.5 var(--font); }
+.demo-invite-dialog::backdrop { background: var(--overlay); }
+.demo-invite-dialog input { width: 100%; min-height: 44px; font-size: 16px; margin-top: 8px; }
+.demo-invite-dialog .button { min-height: 44px; font-size: 16px; }
+body .demo-invite-dialog :is(button, .button):has(.ico) .lbl { display: inline; }
+.demo-invite-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.demo-invite-dialog :focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+@media (pointer: coarse) {
+  body.demo-table .demo-invite.button:has(.ico) .lbl { display: inline; }
+}

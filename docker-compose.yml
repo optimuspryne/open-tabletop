@@ -49,6 +49,7 @@ services:
       DATABASE_USER: tabletop_app
       DATABASE_PASSWORD_FILE: /run/secrets/app_db_password
       REDIS_URL: redis://redis:6379
+      DEMO_MODE: ${DEMO_MODE:-false}
       ROOM_MAX_LIVE: ${ROOM_MAX_LIVE:-0}
       ROOM_MAX_CONNECTIONS: ${ROOM_MAX_CONNECTIONS:-0}
       ROOM_MAX_CONNECTIONS_PER_USER: ${ROOM_MAX_CONNECTIONS_PER_USER:-0}

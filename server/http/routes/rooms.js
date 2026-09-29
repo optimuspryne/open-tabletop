@@ -75,6 +75,8 @@ export function createRoomsRouter({
         .toUpperCase();
       const room = await db.findRoomByCode(code);
       if (!room) return res.status(404).json({ error: 'no active room with that code' });
+      if (await db.demo?.roomState?.(String(room.id)))
+        return res.status(403).json({ error: 'Use the demo invite link.' });
       const membership = await db.joinRoom({
         roomId: room.id,
         userId: user.id,

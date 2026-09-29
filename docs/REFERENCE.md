@@ -3582,3 +3582,49 @@ authoring only. Existing pickup/drop cues and uploaded originals are unchanged.
 
 See [implementation and manual checks](DESIGN_placards_sounds.md). Restart the server for
 migration 021 and refresh browsers; no new runtime dependency or environment setting is required.
+
+
+### Demo entry component (staged)
+
+`public/demo/entry.js` exports `mountDemoEntry(root, options)`, returning `{destroy()}`.
+Mount one component at a time in a root with available height, load `styles.css` followed by
+`demo/entry.css`, and provide the canonical inline icon sprite. Options:
+
+- `mode`: `start` (default), `resume`, or `invite`.
+- `displayName`: initial field value, default `Guest`; `hostName`: optional invite heading text.
+- `expiresAt`: optional date value in milliseconds or a date string; invalid/elapsed supplied
+  deadlines show expiry. The injected `now` defaults to `Date.now`.
+- `onSubmit(request, {signal})`: required async action handler. Requests contain `action`,
+  `displayName` for start/invite, and `starter` (`empty`, `dice`, `cards`, `chess`) for start.
+  Resume sends only its action; the caller must resolve identity and table from its session.
+  Success disables repeat submission until navigation/unmount. Rejections with `code` equal
+  to `capacity`, `rate_limited` or `expired` receive specific fixed messages; other failures
+  receive generic retry text. Credentials must never be included in display strings.
+
+Internal helpers: `find`, `showError`, `render`, `markExpired`, `updateRemaining`, `handleSubmit`.
+`destroy` aborts the supplied action signal, removes listeners and DOM, and clears the timer.
+It ignores late promise outcomes; the caller remains responsible for aborting its actual I/O.
+The expired view's Start my own table action returns to selection and never allocates implicitly.
+
+`npm run preview:demo` serves the real component in a local simulated fixture and prints its
+loopback URL. `npm run test:demo-ui` uses Chromium and the existing CDP helper to verify entry
+behavior and full/compact layouts at 320/390/720/1440px with fine/coarse pointer profiles.
+No public route, production session integration, guest API or table-shell controls are added.
+
+
+### Enabled guest demo
+
+`DEMO_MODE=true` activates POST `/demo-api/{create,resume,invite,join,rotate}`, the entry page
+and finite process limits. Create takes `{displayName,starter}`, join `{displayName,invite}`,
+inspection `{invite}`; resume/rotation use the Authorization bearer. Success returns `{table}`
+with new `token`/`invite` only on allocation; rotation returns `{invite}`. Fixed error codes
+include `invalid`, `forbidden`, `expired`, `capacity`, `rate_limited`. No caller-supplied IDs,
+roles or purge authority are accepted. See [full contracts and inventory](DEMO_MODE_PLAN.md#current-runtime-2026-09-29).
+
+`db.demo.roomState(id)` supplies server metadata; `activeRooms()` supplies IDs;
+`recoverOccupancy()` restores durable empty deadlines; `inspectInvite(hash)` returns only
+live name/deadline. `createDemoRuntime({demo,writers,roomAccess})` exposes `start()` and
+single-flight `sweep()`; start returns a timer stopper after recovery succeeds.
+`public/demo/session.js` exports read/write/clear guest storage and the HTTP adapter.
+`mountDemoTable(room,table)` owns status, invite UI and timer cleanup. Template GETs are the
+explicit exception to ordinary HTTP guest denial, with existing visibility checks; writes fail.

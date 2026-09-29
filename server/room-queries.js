@@ -125,9 +125,9 @@ export function createRoomQueries(query) {
 
     async listMembers(roomId) {
       const { rows } = await query(
-        `SELECT m.room_id, m.user_id, m.role, m.status, p.timed_out, p.participation, u.username, u.avatar, u.is_admin FROM room_members m
-         JOIN users u ON u.id = m.user_id
-         LEFT JOIN room_participation p USING (room_id, user_id) WHERE m.room_id = $1
+        `SELECT m.room_id, m.user_id, m.role, m.status, p.timed_out, p.participation, COALESCE(g.display_name,u.username) AS username, u.avatar, u.is_admin FROM room_members m
+         JOIN users u ON u.id = m.user_id LEFT JOIN demo_guests g ON g.user_id=u.id
+         LEFT JOIN room_participation p ON p.room_id=m.room_id AND p.user_id=m.user_id WHERE m.room_id = $1
          ORDER BY CASE m.role WHEN 'owner' THEN 0 WHEN 'gm' THEN 1 WHEN 'helper' THEN 2 ELSE 3 END, u.username`,
         [roomId],
       );
