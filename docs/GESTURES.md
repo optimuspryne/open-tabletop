@@ -141,9 +141,9 @@ Empty felt only — a press that hits a piece is consumed by the piece dispatche
 | Left-drag empty felt            | Orbit                           | One-finger drag | ✅ |
 | Right-drag empty felt           | Pan                             | Two-finger drag | ✅ |
 | Wheel (nothing held)            | Zoom                            | Two-finger pinch | ✅ |
-| Interactions → ↩ My Seat        | Camera back to your seat        | Same button | ✅ |
-| Interactions → Bird's Eye View  | Camera directly above the table | Same button | ✅ |
-| Interactions → 🔎 Lean In / Out | Nudge the view in/out           | Same buttons | ✅ |
+| Seat → My Seat        | Camera back to your seat        | Same button | ✅ |
+| Seat → Bird's Eye View  | Camera directly above the table | Same button | ✅ |
+| Seat → Lean In / Out | Nudge the view in/out           | Same buttons | ✅ |
 
 OrbitControls is constructed with defaults (`core.js:52`) apart from `maxPolarAngle` and damping,
 so the touch bindings above are three.js's own: one finger rotates, two dolly and pan.

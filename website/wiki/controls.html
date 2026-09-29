@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Common controls for the camera, pieces, cards, and selection."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Mouse, keyboard, and touch | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html" aria-current="page">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html" aria-current="page">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Playing and creating</div>
+        <div class="eyebrow">Playing and creating</div>
+        <h1>Mouse, keyboard, and touch</h1>
+        <p class="lead">Common controls for the camera, pieces, cards, and selection.</p>
+        <h2 id="camera">Camera</h2>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Mouse</th>
+                <th>Touch</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Orbit</td>
+                <td>Left-drag empty table space</td>
+                <td>One-finger drag</td>
+              </tr>
+              <tr>
+                <td>Pan</td>
+                <td>Right-drag empty table space</td>
+                <td>Two-finger drag</td>
+              </tr>
+              <tr>
+                <td>Zoom</td>
+                <td>Mouse wheel while nothing is held</td>
+                <td>Two-finger pinch</td>
+              </tr>
+              <tr>
+                <td>Return to seat</td>
+                <td>Seat > My Seat</td>
+                <td>Same control</td>
+              </tr>
+              <tr>
+                <td>View from above</td>
+                <td>Seat > Bird's Eye View</td>
+                <td>Same control</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h2 id="pieces">Pieces</h2>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Mouse or keyboard</th>
+                <th>Touch</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Move</td>
+                <td>Hold and drag a piece; release to drop</td>
+                <td>Finger drag</td>
+              </tr>
+              <tr>
+                <td>Raise or lower a held piece</td>
+                <td>Wheel, W/S, or up/down arrows</td>
+                <td>Pinch while holding or use the hold controls</td>
+              </tr>
+              <tr>
+                <td>Rotate a held piece</td>
+                <td>Alt-drag; A/D or left/right arrows</td>
+                <td>Twist with a second finger or use rotate controls</td>
+              </tr>
+              <tr>
+                <td>Inspect</td>
+                <td>Double-click</td>
+                <td>Double-tap</td>
+              </tr>
+              <tr>
+                <td>Open actions</td>
+                <td>Right-click a piece</td>
+                <td>Long-press a piece</td>
+              </tr>
+              <tr>
+                <td>Stand upright or lay flat</td>
+                <td>U, or piece menu</td>
+                <td>Piece menu</td>
+              </tr>
+              <tr>
+                <td>Toggle grid snapping</td>
+                <td>G, or piece menu</td>
+                <td>Piece menu</td>
+              </tr>
+              <tr>
+                <td>Ping the table</td>
+                <td>Middle-click empty space</td>
+                <td>Long-press empty space</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Ordinary cards use right-click to flip instead of opening the piece menu. Use
+          <strong>ContextMenu / Shift+F10</strong> for their other actions, or long-press on touch.
+          Without a selection, the keyboard menu cycles through table pieces.
+        </p>
+        <h2 id="cards-and-decks">Cards and decks</h2>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Action</th>
+                <th>Mouse</th>
+                <th>Touch</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Take a table card to hand</td>
+                <td>Left-click</td>
+                <td>Tap or Take to hand in the menu</td>
+              </tr>
+              <tr>
+                <td>Flip a table card</td>
+                <td>Right-click</td>
+                <td>Flip in the menu</td>
+              </tr>
+              <tr>
+                <td>Draw a card from a deck</td>
+                <td>Left-drag from the deck</td>
+                <td>Finger drag</td>
+              </tr>
+              <tr>
+                <td>Take the top card to hand</td>
+                <td>Click the deck</td>
+                <td>Tap the deck</td>
+              </tr>
+              <tr>
+                <td>Shuffle or split a deck</td>
+                <td>Right-click, then choose the action</td>
+                <td>Long-press, then choose the action</td>
+              </tr>
+              <tr>
+                <td>Move the whole deck</td>
+                <td>Right-drag</td>
+                <td>Press and drag the Move menu action</td>
+              </tr>
+              <tr>
+                <td>Privately inspect the top card</td>
+                <td>Double-click</td>
+                <td>Double-tap</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          In the inspection view, <strong>F</strong> places the card face-up,
+          <strong>D</strong> places it face-down, <strong>H</strong> takes it to hand, and
+          <strong>R</strong> returns it. Touch users can use the four labeled buttons.
+        </p>
+        <h2 id="your-hand">Your hand</h2>
+        <p>
+          Drag or click a hand card out with the left mouse button to play it face-down. Use the
+          right button to play it face-up. On touch, use one finger for face-down and two for
+          face-up.
+        </p>
+        <p>
+          Turn on <strong>Rearrange</strong> to reorder your cards without playing them. In
+          Rearrange mode, the Rank and Suit controls sort the hand. Use the hand's scroll controls
+          when cards extend beyond the visible area.
+        </p>
+        <h2 id="select-several-pieces">Select several pieces</h2>
+        <p>
+          Use Shift-drag on empty table space to draw a selection box, or Shift-click to add and
+          remove pieces. On touch, turn on <strong>Multi-Select</strong>, then drag a box or tap
+          pieces.
+        </p>
+        <p>
+          Selection actions can stand pieces upright, change grid snapping, flip cards, roll dice,
+          take cards to hand, rotate the group, or delete selected pieces. Press Escape or turn off
+          Multi-Select to leave the mode.
+        </p>
+        <h2 id="more-controls">More controls</h2>
+        <p>
+          With nothing held or selected, <strong>W/A/S/D</strong> or the arrow keys pan the camera.
+          <strong>Seat &gt; Lean In / Lean Out</strong> adjusts your view. Middle-click an unheld
+          piece to highlight it for the table; touch users choose <strong>Highlight</strong> from
+          its action menu.
+        </p>
+        <p>
+          GMs use <strong>L</strong> or <strong>Labels…</strong> to name a piece and set eligible
+          low-stock warnings. Deck browsing, notecard editing, fog, and the whiteboard have their
+          own focused controls; see <a href="pieces.html">Cards, dice, and pieces</a>.
+        </p>
+        <p>
+          On narrow or touch layouts, close the expanded hand tray to bring back
+          <strong>Multi-Select</strong>, <strong>Seat</strong>, and <strong>Table Actions</strong>.
+          Full and compact labels are controlled in <strong>More &gt; Settings &gt; UI</strong>, or
+          <strong>Menu &gt; Table &gt; Settings</strong>.
+        </p>
+        <h2 id="keyboard-access">Keyboard access</h2>
+        <p>
+          Use Tab to move between interface controls and Enter or Space to activate buttons.
+          ContextMenu or Shift+F10 opens actions for the selected pieces.
+          <strong>More > How to Play</strong> (or <strong>Menu > Table > How to Play</strong>) lists
+          the controls available to your role.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/GESTURES.md"
+            >docs/GESTURES.md</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/public/table/piece-ui.js"
+            >public/table/piece-ui.js</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/public/table/input-router.js"
+            >public/table/input-router.js</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="networking.html">Previous: Networking and HTTPS</a
+          ><a href="pieces.html">Next: Cards, dice, and pieces</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

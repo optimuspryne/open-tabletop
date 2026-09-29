@@ -10,6 +10,22 @@ requirement is actually met.
 
 ---
 
+## Website artwork - `website/assets/`
+
+- `logo-wordmark.svg` is an unchanged copy of `public/logo-wordmark.svg`, reused for website
+  header and footer branding under the repository's existing terms.
+
+- `tabletop.webp` and `favicon.png` are resized derivatives of the existing Open Tabletop
+  `public/logo-mark.svg` artwork, distributed under the repository's existing terms.
+- The original SVG is unchanged. The logo derivatives are branding, not gameplay captures.
+- `showcase/chess.png`, `cards.png`, `dice.png`, and `library.png` are original browser
+  captures of staged local rooms, taken September 29, 2026. Their page placement was approved
+  and applied to the landing page and Assets and scenes guide. They include bundled assets whose credits appear below; specifically,
+  the chess models are JustinARay's CC BY 4.0 work and need attribution when published.
+  See [capture notes](../website/assets/showcase/README.md). No generated imagery was used.
+
+---
+
 ## 3D models - `public/static_assets/models/`
 
 ### Chess pieces  - `pieces/chess/`

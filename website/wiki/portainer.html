@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Deploy the app and its services using a stack." />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Portainer and Dockhand | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html" aria-current="page">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html" aria-current="page">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Installing and hosting</div>
+        <div class="eyebrow">Installing and hosting</div>
+        <h1>Portainer and Dockhand</h1>
+        <p class="lead">Deploy the app and its services using a stack.</p>
+        <h4 id="web-editor">Web editor</h4>
+        <p>
+          There's no custom database image; deploy against
+          <strong>stock <code>postgres</code></strong
+          >. The app builds and migrates its own schema on boot (via
+          <code>MIGRATE_DATABASE_URL</code>). Database setup requires the least-privilege
+          <code>tabletop_app</code> role and an explicit bootstrap administrator. Since the web
+          editor can't mount local files, the stack below injects both the role setup and bootstrap
+          password as inline <code>config</code> files.
+        </p>
+        <p>
+          Before deploying, add these values to the stack's environment-variable editor. In
+          Dockhand, mark the three password values as secrets so their saved values remain masked.
+          These are stack variables used while Compose renders the YAML; the example explicitly
+          passes only the values the running containers need.
+        </p>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Required</th>
+                <th>Purpose</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>DB_PASSWORD</code></td>
+                <td>Yes</td>
+                <td>Password for the database owner/migration role.</td>
+              </tr>
+              <tr>
+                <td><code>APP_DB_PASSWORD</code></td>
+                <td>Yes</td>
+                <td>Password for the least-privilege runtime role.</td>
+              </tr>
+              <tr>
+                <td><code>BOOTSTRAP_ADMIN_USERNAME</code></td>
+                <td>Yes on first deployment</td>
+                <td>
+                  Initial admin username; 3-20 letters, numbers, <code>_</code>, or <code>-</code>.
+                </td>
+              </tr>
+              <tr>
+                <td><code>BOOTSTRAP_ADMIN_EMAIL</code></td>
+                <td>Yes on first deployment</td>
+                <td>Initial admin sign-in email.</td>
+              </tr>
+              <tr>
+                <td><code>BOOTSTRAP_ADMIN_PASSWORD</code></td>
+                <td>Yes on first deployment</td>
+                <td>Initial admin password; 12-1024 characters.</td>
+              </tr>
+              <tr>
+                <td><code>SESSION_TTL_DAYS</code></td>
+                <td>No</td>
+                <td>Login lifetime in days; defaults to <code>30</code>.</td>
+              </tr>
+              <tr>
+                <td><code>TRUST_PROXY_HOPS</code></td>
+                <td>No</td>
+                <td>Exact reverse-proxy hop count; defaults to <code>0</code>.</td>
+              </tr>
+              <tr>
+                <td><code>AUTO_MIGRATE</code></td>
+                <td>No</td>
+                <td>Apply pending migrations at startup; defaults to <code>true</code>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <pre><code class="language-yml"># Open Tabletop ; app + stock Postgres (Portainer/Dockhand stack)
+configs:
+  app_role_init:                     # runs once on first DB init ; creates the app role
+    content: |
+      CREATE ROLE tabletop_app LOGIN PASSWORD '${APP_DB_PASSWORD}';
+      GRANT CONNECT ON DATABASE tabletop TO tabletop_app;
+      GRANT USAGE ON SCHEMA public TO tabletop_app;
+      GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO tabletop_app;
+      GRANT USAGE, SELECT               ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
+      ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
+        GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES    TO tabletop_app;
+      ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
+        GRANT USAGE, SELECT               ON SEQUENCES TO tabletop_app;
+  bootstrap_admin_password:          # mounted read-only; read during first-user bootstrap
+    content: |
+      ${BOOTSTRAP_ADMIN_PASSWORD:?set BOOTSTRAP_ADMIN_PASSWORD in the stack environment}
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    container_name: open-tabletop-db
+    environment:
+      POSTGRES_USER: tabletop         # owner role ; the app migrates the schema as this
+      POSTGRES_DB: tabletop
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    configs:
+      - source: app_role_init
+        target: /docker-entrypoint-initdb.d/02-app-role.sql
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: [&quot;CMD-SHELL&quot;, &quot;pg_isready -U tabletop -d tabletop&quot;]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: [&quot;redis-server&quot;, &quot;--save&quot;, &quot;&quot;, &quot;--appendonly&quot;, &quot;no&quot;]
+    healthcheck:
+      test: [&quot;CMD&quot;, &quot;redis-cli&quot;, &quot;ping&quot;]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  app:
+    image: optimuspryne/open-tabletop:0.20.0
+    user: appuser                         # matches the image's non-root runtime user
+    restart: unless-stopped
+    container_name: open-tabletop-app
+    depends_on:
+      db:
+        condition: service_healthy           # wait until the role is in place
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://tabletop_app:${APP_DB_PASSWORD}@db:5432/tabletop
+      # Owner (DDL) role ; the app builds &amp; migrates the schema on boot (migrate.js).
+      MIGRATE_DATABASE_URL: postgresql://tabletop:${DB_PASSWORD}@db:5432/tabletop
+      AUTO_MIGRATE: &quot;${AUTO_MIGRATE:-true}&quot;
+      REDIS_URL: redis://redis:6379
+      RATE_LIMIT_STORE: redis
+      BOOTSTRAP_ADMIN_USERNAME: &quot;${BOOTSTRAP_ADMIN_USERNAME:?set BOOTSTRAP_ADMIN_USERNAME in the stack environment}&quot;
+      BOOTSTRAP_ADMIN_EMAIL: &quot;${BOOTSTRAP_ADMIN_EMAIL:?set BOOTSTRAP_ADMIN_EMAIL in the stack environment}&quot;
+      BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/bootstrap_admin_password
+      ASSETS_DIR: /data/assets
+      SESSION_TTL_DAYS: &quot;${SESSION_TTL_DAYS:-30}&quot;
+      # Set this to the exact number of reverse proxies in front of the app.
+      TRUST_PROXY_HOPS: &quot;${TRUST_PROXY_HOPS:-0}&quot;
+      PORT: &quot;2567&quot;
+    ports:
+      - &quot;2567:2567&quot;
+    volumes:
+      - assets:/data/assets                    # uploaded decks/boards/props/skyboxes
+    configs:
+      - source: bootstrap_admin_password
+        target: /run/secrets/bootstrap_admin_password
+
+volumes:
+  db-data:
+  assets:
+</code></pre>
+        <p>
+          Open <strong>http://localhost:2567</strong> and sign in with the bootstrap administrator
+          configured in the stack environment. Bootstrap provisioning runs only when the users table
+          is empty; later stack deployments and container restarts never reset that account or its
+          password.
+        </p>
+        <p>
+          You do not create <code>bootstrap_admin_password</code> on the Docker host. The top-level
+          Compose <code>config</code> renders <code>BOOTSTRAP_ADMIN_PASSWORD</code> into a read-only
+          file, mounts it inside the app container at
+          <code>/run/secrets/bootstrap_admin_password</code>, and sets
+          <code>BOOTSTRAP_ADMIN_PASSWORD_FILE</code> to that path. The app reads the file, removes
+          trailing line endings, validates the password length, and hashes the password before
+          storing it. The <code>/run/secrets</code> path is only the mount location here; this
+          particular value is supplied by an inline Compose config.
+        </p>
+        <p>
+          After changing a stack variable, use <strong>Deploy</strong>, <strong>Update</strong>, or
+          <strong>Recreate</strong> in the stack manager so Compose regenerates the config and
+          container. A plain container restart keeps the previously rendered config. When editing a
+          masked Dockhand variable, retain the saved secret or enter the real value again, do not
+          replace it with the displayed mask.
+        </p>
+        <p>
+          The startup message <code>.env not found. Continuing without it.</code> is expected in
+          this deployment: the stack manager supplies the environment instead. If startup reports
+          that the bootstrap password is too short, check the mounted value's length without
+          displaying the secret:
+        </p>
+        <pre><code class="language-bash">docker exec open-tabletop-app node -e &quot;const fs=require('fs'); const p=fs.readFileSync(process.env.BOOTSTRAP_ADMIN_PASSWORD_FILE,'utf8').replace(/[\\r\\n]+$/,''); console.log(p.length)&quot;
+</code></pre>
+        <p>
+          The result must be at least <code>12</code>. A result of <code>0</code> means the stack
+          variable was empty; a result such as <code>3</code> usually means a UI mask like
+          <code>***</code> was saved literally. Correct the variable in the stack manager and
+          redeploy/recreate the stack.
+        </p>
+        <p>
+          On first boot the db creates <code>tabletop_app</code> from the inline config, and the app
+          builds the full schema via <code>MIGRATE_DATABASE_URL</code> (adopting an existing schema
+          if you're pointing at an old volume), then provisions the bootstrap administrator. The
+          <code>assets</code> volume holds uploaded <strong>files</strong>; library
+          <strong>metadata</strong> lives in Postgres.
+        </p>
+        <p>
+          The official image pins <code>appuser</code> to UID <strong>100</strong> and
+          <code>appgroup</code> to GID <strong>101</strong>. To store uploads on NFS, provision the
+          exported assets directory with that numeric ownership and writable directory permissions
+          on the NFS server (for example, <code>chown 100:101</code> and <code>chmod 2770</code>).
+          Then replace the empty <code>assets:</code> definition at the bottom of the stack with an
+          NFS-backed named volume:
+        </p>
+        <pre><code class="language-yml">  assets:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: &quot;addr=${NFS_SERVER},rw,nfsvers=4&quot;
+      device: &quot;:${NFS_ASSETS_PATH}&quot;
+</code></pre>
+        <p>
+          Set <code>NFS_SERVER</code> to the server address and <code>NFS_ASSETS_PATH</code> to its
+          exported path. Ownership must be prepared server-side, especially when the export uses
+          root squashing; the non-root app container cannot repair NFS ownership itself.
+        </p>
+        <p>
+          <strong
+            >Older Portainer, Dockhand, or Compose without inline-<code>config</code>
+            support?</strong
+          >
+          Drop the top-level <code>configs:</code> block, both service-level
+          <code>configs:</code> entries, and the three <code>BOOTSTRAP_ADMIN_*</code> entries. Bring
+          the stack up, then create the role once by hand:
+        </p>
+        <pre><code class="language-bash">docker exec -i open-tabletop-db psql -U tabletop -d tabletop &lt;&lt;'SQL'
+CREATE ROLE tabletop_app LOGIN PASSWORD 'your-APP_DB_PASSWORD';
+GRANT CONNECT ON DATABASE tabletop TO tabletop_app;
+GRANT USAGE ON SCHEMA public TO tabletop_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES    IN SCHEMA public TO tabletop_app;
+GRANT USAGE, SELECT               ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tabletop_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO tabletop_app;
+SQL
+docker restart open-tabletop-app
+</code></pre>
+        <p>After the app starts, create an account and promote it explicitly:</p>
+        <pre><code class="language-bash">docker exec open-tabletop-app npm run admin:grant -- your@email.example
+</code></pre>
+        <h2 id="password-characters-and-optional-settings">
+          Password characters and optional settings
+        </h2>
+        <p>
+          The stack example inserts the database passwords into both SQL and connection URLs. Use a
+          separate generated hexadecimal password for each database role, for example the output of
+          <code>openssl rand -hex 24</code>. This avoids quote, dollar-sign, and URL-encoding
+          problems in this particular example. Keep existing database passwords on upgrades.
+        </p>
+        <p>
+          The stack does not pass SMTP settings to the app as written. To enable recovery email in a
+          source version that includes it, add <code>PUBLIC_ORIGIN</code>, <code>SMTP_HOST</code>,
+          <code>SMTP_PORT</code>, <code>SMTP_FROM</code>, and any authentication settings to
+          <strong>services.app.environment</strong>, and mount the password file at the path
+          specified by <code>SMTP_PASSWORD_FILE</code>. Merely adding stack variables does not
+          inject them into the container. Follow <a href="email.html">Email recovery</a> and deploy
+          the updated stack. The pinned 0.20.0 image predates account recovery.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/README.md">README.md</a>,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/Dockerfile">Dockerfile</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/server/database-config.js"
+            >server/database-config.js</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="proxmox.html">Previous: Install on Proxmox</a
+          ><a href="configuration.html">Next: Server configuration</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

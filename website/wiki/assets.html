@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Create and manage decks, boards, props, and reusable setups."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Assets and scenes | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html" aria-current="page">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html" aria-current="page">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Playing and creating</div>
+        <div class="eyebrow">Playing and creating</div>
+        <h1>Assets and scenes</h1>
+        <p class="lead">Create and manage decks, boards, props, and reusable setups.</p>
+        <figure class="screenshot-hero">
+          <img
+            src="../assets/showcase/library.png"
+            width="1086"
+            height="912"
+            alt="The built-in dice and object library in Open Tabletop"
+          />
+          <figcaption>The Library's Objects &amp; Dispensers category.</figcaption>
+        </figure>
+        <h2 id="the-asset-library">Open the library</h2>
+        <p>
+          At a table, choose <strong>Library</strong>. On a narrow screen, open
+          <strong>Menu</strong>, then choose <strong>Library</strong> in the
+          <strong>Open</strong> section. The same library contains built-in pieces and saved custom
+          assets.
+        </p>
+        <p>
+          Library access requires Helper, GM, Owner, or site administrator permissions. Helpers can
+          use the permitted deck, object, mat, and notecard sections. Boards, game setups, scenes,
+          and skyboxes require GM access. Creating, editing, publishing, and deleting uploaded
+          assets and scenes requires a <strong>site administrator</strong>, not just a GM. Notecard
+          templates are a separate account-owned feature; see
+          <a href="pieces.html#save-and-reuse-notecard-templates">notecard templates</a>.
+        </p>
+        <ol>
+          <li>
+            Choose a category: <strong>Decks &amp; Tiles</strong>,
+            <strong>Objects &amp; Dispensers</strong>,
+            <strong>Boards, Mats &amp; Notecards</strong>, <strong>Games &amp; Scenes</strong>,
+            <strong>Skyboxes</strong>, or <strong>Collections</strong>.
+          </li>
+          <li>
+            Expand the section you need, such as <strong>Decks</strong>, <strong>Objects</strong>,
+            or <strong>Scenes</strong>.
+          </li>
+          <li>
+            Use the search field to find an asset by name. Open <strong>Filters</strong> and choose
+            <strong>All</strong>, <strong>Custom</strong>, or <strong>Built-In</strong> to narrow
+            the results.
+          </li>
+          <li>
+            Use <strong>Spawn</strong> to place a deck, object, board, or mat,
+            <strong>Set up</strong> for a built-in game, <strong>Load</strong> for a scene, or
+            <strong>Apply</strong> for a skybox.
+          </li>
+        </ol>
+        <p>
+          If a custom asset is missing, check its publication status and the
+          <strong>By Collection</strong> filters. A hidden collection or disabled
+          <strong>Uncollected</strong> filter can hide it from your results.
+        </p>
+        <h2 id="open-add-to-library">Open Add to Library</h2>
+        <p>
+          As a site administrator, open <strong>GM Controls</strong>, then
+          <strong>Add to Library</strong>. On narrow screens, open <strong>Menu</strong> and find
+          <strong>Add to Library</strong> in the <strong>Room</strong> section. These controls are
+          available on the regular game table.
+        </p>
+        <p>
+          For a separate workspace, open <strong>Admin</strong> from the lobby, then
+          <strong>Library Editor</strong>. This opens a workshop table with the same library tools.
+          You do not have to use the workshop to create assets.
+        </p>
+        <p>
+          <strong>Save</strong> stores the asset in the library. <strong>Save + Spawn</strong> also
+          places it on the current table. New library assets are private until an administrator
+          publishes them. Skyboxes use <strong>Save + Apply</strong> instead of Save + Spawn.
+        </p>
+        <h2 id="create-an-image-deck">Create an image deck</h2>
+        <ol>
+          <li>
+            Open <strong>Add to Library</strong> and choose <strong>Image Based Decks</strong>.
+          </li>
+          <li>
+            Click or tap the front-image upload area and select one or more images. You can also
+            drop files onto the upload area with a mouse.
+          </li>
+          <li>
+            Choose a back image if you want a custom back. Otherwise the deck uses the default back.
+          </li>
+          <li>Enter a <strong>Deck name</strong>.</li>
+          <li>
+            Enable <strong>Fit to image</strong> to use the first front image's aspect ratio. This
+            also exposes the card thickness and shape controls. Keep the front images at a
+            consistent aspect ratio.
+          </li>
+          <li>Choose <strong>Save</strong> or <strong>Save + Spawn</strong>.</li>
+        </ol>
+        <p>
+          Find it afterward in <strong>Library &gt; Decks &amp; Tiles &gt; Decks</strong>. Choose
+          <strong>Filters &gt; Custom</strong> if you want to hide built-in decks.
+        </p>
+        <h2 id="create-a-text-deck-or-tile-set">Create a text deck</h2>
+        <p>
+          For a text deck, choose <strong>Text Based Decks</strong> in Add to Library. Enter a
+          <strong>Deck name</strong>, optional <strong>Back Text</strong>, and
+          <strong>Front Text(s)</strong>. Fronts can be one per line, comma-separated, JSON, or
+          loaded from a <code>.csv</code> or <code>.txt</code> file. Choose the back and front
+          colors, then <strong>Save</strong> or <strong>Save + Spawn</strong>.
+        </p>
+        <p>
+          For a standard playing-card deck, use the built-in entries in
+          <strong>Library &gt; Decks &amp; Tiles &gt; Decks</strong> instead of creating an image or
+          text deck.
+        </p>
+        <h2 id="create-double-sided-tiles">Create double-sided tiles</h2>
+        <p>Each tile can have its own front and back image.</p>
+        <ol>
+          <li>Open <strong>Add to Library &gt; Double-Sided Tiles</strong>.</li>
+          <li>
+            Under <strong>Front images (face 1)</strong>, select the front images for the set.
+          </li>
+          <li>
+            Under <strong>Back images (face 2, optional)</strong>, select one back for each front,
+            in the same order. If you provide backs, their count must match the fronts. You can also
+            leave the backs empty.
+          </li>
+          <li>
+            Enter a <strong>Tile set name</strong>. Optionally upload a
+            <strong>Stack cover</strong> for the stacked set.
+          </li>
+          <li>
+            Set <strong>Size</strong>, <strong>Thickness</strong>, and <strong>Shape</strong>.
+            Choose <strong>Rounded</strong>, <strong>Square</strong>, or <strong>Hexagon</strong>.
+            Use images with a consistent aspect ratio; the first front determines the tile
+            proportions.
+          </li>
+          <li>
+            Set <strong>Concealment</strong> to <strong>Open</strong> or <strong>Pouch</strong>. For
+            a pouch, choose its sack and string colors.
+          </li>
+          <li>
+            Choose <strong>Save</strong> to keep the set in the library, or
+            <strong>Save + Spawn</strong> to place it on the table too.
+          </li>
+        </ol>
+        <p>
+          Find the set under <strong>Library &gt; Decks &amp; Tiles &gt; Tiles</strong>, with
+          <strong>Filters &gt; Custom</strong>. Flip an individual tile to reveal its other side.
+        </p>
+        <h2 id="upload-a-skybox">Upload a skybox</h2>
+        <p>
+          Open <strong>Add to Library &gt; Skyboxes</strong> and choose the form that matches your
+          images:
+        </p>
+        <ul>
+          <li>
+            <strong>Equirectangular (360° panorama):</strong> upload one panorama with a 2:1
+            width-to-height ratio, then enter a <strong>Skybox name</strong>.
+          </li>
+          <li>
+            <strong>Cubemap (6 faces):</strong> upload six square images into their labeled slots:
+            <strong>Top +Y</strong>, <strong>Left -X</strong>, <strong>Front +Z</strong>,
+            <strong>Right +X</strong>, <strong>Back -Z</strong>, and <strong>Bottom -Y</strong>. All
+            six are required. Enter a <strong>Skybox name</strong> in this form.
+          </li>
+        </ul>
+        <p>
+          Choose <strong>Save</strong> to store the skybox, or <strong>Save + Apply</strong> to also
+          change the current room's background. To use a saved skybox later, open
+          <strong>Library &gt; Skyboxes</strong>, choose <strong>Filters &gt; Custom</strong>, and
+          select <strong>Apply</strong> on its entry.
+        </p>
+        <h2 id="upload-a-dice-texture">Upload a dice texture</h2>
+        <ol>
+          <li>Open <strong>Add to Library &gt; Dice Textures</strong>.</li>
+          <li>
+            Choose a <strong>Texture image</strong>. A seamless square image works best across the
+            die's surface.
+          </li>
+          <li>Enter a <strong>Texture name</strong>, then choose <strong>Save</strong>.</li>
+          <li>
+            Open the <strong>Custom</strong> menu in the dice box and choose the texture thumbnail
+            to apply it to your dice. You can also inspect an individual die and use its
+            <strong>Custom</strong> menu.
+          </li>
+        </ol>
+        <p>
+          Saved textures are listed under
+          <strong>Library &gt; Objects &amp; Dispensers &gt; Dice</strong>, with
+          <strong>Filters &gt; Custom</strong>. The texture changes the die's surface finish. Saving
+          a texture does not spawn a die or replace its numbered faces. The
+          <strong>Custom</strong> menu appears when textures are available.
+        </p>
+        <h2 id="custom-models">Add a board, mat, or model</h2>
+        <p>
+          Start from <strong>GM Controls &gt; Add to Library</strong> and choose the tab matching
+          the asset:
+        </p>
+        <ul>
+          <li>
+            <strong>2D Game Boards:</strong> upload the board image, enter a
+            <strong>Board name</strong>, and configure its dimensions and outline. Choose
+            <strong>Save</strong> or <strong>Save + Spawn</strong>.
+          </li>
+          <li>
+            <strong>3D Game Boards:</strong> choose a <code>.glb</code> file and enter a
+            <strong>Board name</strong>. Set <strong>Longest side</strong> and configure
+            <strong>Collision</strong> as <strong>Board outline</strong> or
+            <strong>Custom 3D collider</strong>. If you choose a custom collider, create it with
+            <strong>Edit custom collider</strong> before saving.
+          </li>
+          <li>
+            <strong>Player Mats:</strong> upload an image, enter a <strong>Mat name</strong>,
+            configure the mat, and save it.
+          </li>
+          <li>
+            <strong>3D Objects:</strong> choose a <code>.glb</code> file and an
+            <strong>Object name</strong>. Set the scale, orientation, and collider.
+            <strong>Default material</strong> and <strong>Recolor material</strong> control how the
+            model's materials are used. Choose <strong>Preserve model colors</strong> if you do not
+            want the model recolored. Save it, with or without spawning a copy.
+          </li>
+        </ul>
+        <p>
+          Find boards and mats under <strong>Library &gt; Boards, Mats &amp; Notecards</strong>.
+          Find custom objects under
+          <strong>Library &gt; Objects &amp; Dispensers &gt; Objects</strong>. A custom object's
+          dispenser setup also appears in <strong>Dispensers</strong>.
+        </p>
+        <p>
+          Board outlines affect collision; they do not redraw the artwork. Custom colliders must be
+          created before saving when that option is selected.
+        </p>
+        <h2 id="edit-and-publish-an-asset">Edit and publish an asset</h2>
+        <ol>
+          <li>Find the saved asset in <strong>Library</strong>.</li>
+          <li>
+            For decks, boards, mats, and objects, choose <strong>Edit</strong> to change its saved
+            settings. Use the asset's overflow menu and choose <strong>Clone</strong> if you want a
+            separate copy with a new name.
+          </li>
+          <li>
+            Open the asset's overflow menu and choose <strong>Publish</strong> to make it available
+            to other users with the required room permissions. <strong>Unpublish</strong> makes it
+            private again.
+          </li>
+          <li>
+            Use <strong>Rename</strong> or <strong>Delete</strong> from that same menu when needed.
+          </li>
+        </ol>
+        <p>
+          These management actions require site administrator access. Publishing an asset does not
+          give a player permission to spawn it; room roles still apply. Asset licenses vary. See the
+          project's
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/ASSET_CREDITS.md"
+            >asset credits</a
+          >
+          before redistributing bundled art.
+        </p>
+        <h2 id="save-a-scene">Save a scene</h2>
+        <p>
+          A scene is a reusable table setup. It omits player hands, turn ownership, the scoreboard,
+          Room Notes, felt color, and skybox. To checkpoint a game with its players, use
+          <strong>Save Table</strong>; see <a href="saving.html">Saving and resuming</a>.
+        </p>
+        <ol>
+          <li>As a site administrator, arrange the table, pieces, and decks.</li>
+          <li>
+            Choose <strong>GM Controls &gt; Save Scene</strong>, or
+            <strong>Menu &gt; Room &gt; Save Scene</strong> on a narrow screen.
+          </li>
+          <li>Enter a <strong>Scene name</strong>.</li>
+          <li>
+            Enable <strong>Include current lighting</strong> if loading this scene should also apply
+            the current lighting settings. Leave it unchecked to preserve the destination table's
+            lighting.
+          </li>
+          <li>Choose <strong>Save scene</strong>.</li>
+        </ol>
+        <p>
+          Find the result under <strong>Library &gt; Games &amp; Scenes &gt; Scenes</strong>.
+          Publish the saved scene from its overflow menu if other GMs should be able to load it.
+        </p>
+        <h2 id="load-a-scene">Load a scene</h2>
+        <ol>
+          <li>
+            As a GM, owner, or site administrator, open <strong>GM Controls &gt; Scenes</strong>, or
+            <strong>Menu &gt; Room &gt; Scenes</strong>. You can also open
+            <strong>Library &gt; Games &amp; Scenes &gt; Scenes</strong> directly.
+          </li>
+          <li>Find the scene and choose <strong>Load</strong>.</li>
+          <li>
+            Confirm only when you are ready to replace the current table. Loading clears its pieces,
+            current and unclaimed hands, and turn state, and replaces its saved checkpoint. Use a
+            separate room to preserve a game in progress.
+          </li>
+        </ol>
+        <p>
+          An administrator can load private scenes. Other GMs can load published scenes. A scene
+          does not restore the players' private hands or turn ownership from a previous session.
+        </p>
+        <h2 id="collections-and-portable-assets">Collections and portable assets</h2>
+        <p>
+          Use <strong>Library &gt; Collections</strong> to organize saved assets. Site
+          administrators manage the collection contents. Publishing a collection does not publish
+          its assets, and deleting a collection keeps the assets themselves. Personal collection
+          visibility filters affect which custom assets you see in the library.
+        </p>
+        <p>
+          To import a package as an administrator, choose
+          <strong>Library &gt; Import Assets</strong>, select the ZIP or supported older JSON
+          package, review its contents, enter <strong>Name for the new copy</strong>, and choose
+          <strong>Import private copy</strong>. Existing assets are not replaced. Publish imported
+          assets separately when ready.
+        </p>
+        <p>
+          Custom dice textures, decks and tile sets, boards, mats, skyboxes, and 3D objects have
+          <strong>Export</strong> in their overflow menu. Saved collections of supported assets have
+          a package-export action in Collections. Exports use <code>.ott.zip</code>; import the ZIP
+          directly without extracting it. Saved model dispenser definitions are included. Notecard
+          templates and scenes are outside this package format. Scene/game snapshots are separate
+          from this asset-package workflow; do not assume exporting a collection backs up a running
+          game.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/public/table.html"
+            >public/table.html</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/public/editor/editor-panel.js"
+            >public/editor/editor-panel.js</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/server/game/handlers/library.js"
+            >server/game/handlers/library.js</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="pieces.html">Previous: Cards, dice, and pieces</a
+          ><a href="saving.html">Next: Saving and resuming</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

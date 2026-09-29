@@ -9,6 +9,19 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Audited all 17 website wiki pages against current documentation, release history and source.
+  Corrected Node setup order and grants, Compose environment forwarding and secret permissions,
+  native administrator commands, role restrictions, scene/reset consequences and transient state.
+  Expanded current deck, notecard, fog and table-tool instructions; distinguish Unreleased
+  features from 0.20.0. Added per-page source links and a review record in `website/WIKI_AUDIT.md`.
+  Updated supporting README, gesture, architecture and reference notes. Documentation only.
+- Added step-by-step website instructions for double-sided tile uploads, panorama and cubemap
+  skyboxes, and saving and applying custom dice textures. No application behavior changed.
+- Corrected the website's Assets and Scenes guide against the current table controls and
+  handlers: combined Library categories, admin creation on regular tables, Save/Save + Spawn,
+  publication, scene save/load, collections, and portable assets. Updated the first-game,
+  controls, pieces, saving, and Node.js guides, plus the source README and architecture/reference
+  descriptions. This is a documentation correction; application behavior is unchanged.
 - Made SMTP setup documentation and configuration examples provider-neutral.
 - Landing account header overlap: moved Account security beside Admin in the page header,
   and allowed identity/actions to wrap without overlap on narrow screens.
@@ -25,6 +38,17 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 
 ### Added
+- Replaced the website header and footer text branding with the existing Open Tabletop
+  logo on the landing page and all 17 wiki guides, with accessible names and responsive sizing.
+- Captured four gameplay/library screenshots from two dedicated, saved showcase rooms.
+  Applied the approved chess hero, responsive cards/dice gallery, and library image in the
+  Assets and scenes guide. Recorded capture provenance and chess-model attribution.
+- A standalone static website in `website/`, with the approved landing page, GitHub link,
+  inactive public demo label, and 17 linked wiki guides for installation, configuration,
+  gameplay, assets, recovery, and maintenance. The wiki has desktop and mobile navigation
+  and works without JavaScript. Existing project artwork is reused. Local link/content and
+  browser layout tests are provided; see `website/README.md` for preview and maintenance.
+  The game server is unchanged. Publishing and user acceptance remain pending.
 - Account security with masked password confirmation at signup and password setting, a dedicated
   in-app password form replacing the native hosting prompt, and current-password verification for
   changes. Password setting remains independent of host approval. Verified-email recovery and ten

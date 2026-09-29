@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Configure SMTP for email verification and account recovery."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Email recovery | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html" aria-current="page">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html" aria-current="page">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Configuration</div>
+        <div class="eyebrow">Configuration</div>
+        <h1>Email recovery</h1>
+        <p class="lead">Configure SMTP for email verification and account recovery.</p>
+        <p>
+          Email is optional; recovery codes and password changes work without it. Install
+          dependencies with <code>npm ci</code>, apply migration
+          <code>023_account_recovery.sql</code>, restart the server and refresh clients. The
+          application supports the existing owner/runtime role separation and default table
+          privileges. Fresh installs include migration 023 in <code>postgres/schema.sql</code>;
+          existing snapshots remain compatible.
+        </p>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Variable</th>
+                <th>Meaning</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>PUBLIC_ORIGIN</code></td>
+                <td>
+                  Canonical origin used in email links, e.g.
+                  <code>https://tabletop.example.com</code>. No path, credentials, query or
+                  fragment. HTTPS required except localhost development. Never derived from request
+                  headers.
+                </td>
+              </tr>
+              <tr>
+                <td><code>SMTP_HOST</code></td>
+                <td>SMTP hostname. Omit to disable email recovery.</td>
+              </tr>
+              <tr>
+                <td><code>SMTP_PORT</code></td>
+                <td>
+                  Defaults to 587. Port 465 uses implicit TLS; all other ports require STARTTLS.
+                  Certificate verification remains enabled.
+                </td>
+              </tr>
+              <tr>
+                <td><code>SMTP_FROM</code></td>
+                <td>
+                  Sender email address authorized by your provider; a bare address, not a
+                  display-name string.
+                </td>
+              </tr>
+              <tr>
+                <td><code>SMTP_USER</code></td>
+                <td>Optional SMTP authentication username; must be supplied with a password.</td>
+              </tr>
+              <tr>
+                <td><code>SMTP_PASSWORD_FILE</code></td>
+                <td>
+                  Preferred secret file. Takes precedence over <code>SMTP_PASSWORD</code>; trailing
+                  newlines are removed.
+                </td>
+              </tr>
+              <tr>
+                <td><code>SMTP_PASSWORD</code></td>
+                <td>
+                  Optional environment fallback for the SMTP password. Never commit a real value.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          When <code>SMTP_HOST</code> is supplied, invalid/incomplete settings fail startup. An
+          unreachable provider is reported as a generic server-side delivery failure; the
+          application does not log recipient addresses, link tokens, message bodies or SMTP
+          credentials. Outbound network access to the chosen SMTP port is required. No inbound SMTP
+          listener, local mail server or new web port is introduced.
+        </p>
+        <h3 id="bare-metal-nodejs-installation">Bare-metal Node.js installation</h3>
+        <p>
+          Set these values in the project <code>.env</code> when launching with
+          <code>npm start</code>, which loads that file. Alternatively, supply them through the
+          service manager; a direct <code>node server.js</code> invocation must explicitly load the
+          environment. Replace the example origin, SMTP host, sender and login with your own, and
+          use the port specified by your provider:
+        </p>
+        <pre><code class="language-dotenv">PUBLIC_ORIGIN=https://tabletop.example.com
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_FROM=tabletop@example.com
+SMTP_USER=your-smtp-username
+SMTP_PASSWORD_FILE=/etc/open-tabletop/smtp_password
+</code></pre>
+        <p>
+          Create the password file using a local editor. It contains
+          <strong>only the SMTP/app password as plain text</strong>, for example the dummy value
+          below (replace it with the generated password):
+        </p>
+        <pre><code class="language-text">abcdefghijklmnop
+</code></pre>
+        <p>
+          Do not include quotes, <code>SMTP_PASSWORD=</code>, JSON or other configuration. A
+          trailing newline is fine. Use an absolute path, make the file readable by the account
+          running the application, and restrict access (for example, mode <code>600</code> with that
+          account as owner). Parent directories must also allow that account to reach the file. Do
+          not commit the file or paste its contents into logs or support requests.
+          <code>SMTP_PASSWORD</code> can be supplied as an environment alternative; a configured
+          password file takes precedence. No Docker secret mount is needed on bare metal.
+        </p>
+        <p>
+          Restart the application through its existing service/process manager after changing these
+          settings. For a foreground <code>npm start</code> process, stop and start it again. No new
+          inbound port is required; allow outbound connections to the provider's SMTP port.
+        </p>
+        <h3 id="docker-compose-installation">Docker Compose installation</h3>
+        <p>
+          Compose forwards the settings from <code>.env</code>. Use the same provider settings as
+          above, but the password path must be inside the container. To use a file-backed password,
+          create <code>secrets/smtp_password.txt</code> with only the password, as described above,
+          and use a <code>docker-compose.override.yml</code> such as:
+        </p>
+        <pre><code class="language-yaml">services:
+  app:
+    environment:
+      SMTP_PASSWORD_FILE: /run/secrets/smtp_password
+    secrets:
+      - smtp_password
+secrets:
+  smtp_password:
+    file: ./secrets/smtp_password.txt
+</code></pre>
+        <p>
+          Keep that file outside version control and readable only by the appropriate
+          operator/runtime user. Recreate the application container so it receives the updated
+          environment and secret mount:
+        </p>
+        <pre><code class="language-bash">docker compose up -d --force-recreate app
+</code></pre>
+        <p>
+          An ordinary container restart does not load changed Compose environment values. If this is
+          also a code upgrade, rebuild/deploy the updated application image using the normal upgrade
+          procedure.
+        </p>
+        <h3 id="smtp-provider-setup">SMTP provider setup</h3>
+        <p>
+          Use your provider's documented SMTP hostname, port and authentication username. The
+          application uses implicit TLS on port <code>465</code> and requires STARTTLS on other
+          ports, commonly <code>587</code>. Set <code>SMTP_FROM</code> to an address your provider
+          authorizes for sending. The public website origin and sender address need not have
+          identical hostnames. For example, a site at <code>https://tabletop.example.com</code> can
+          send from <code>tabletop@example.com</code>.
+        </p>
+        <p>
+          Check your provider's documentation for SMTP access requirements. It may require a
+          dedicated app password or SMTP credential instead of your normal account password, and
+          SMTP access may depend on your account plan. Where supported, create a dedicated
+          credential for Open Tabletop with only the access needed to send mail, and store its
+          password in the configured password file.
+        </p>
+        <p>
+          Configure the provider's sender/domain verification and DNS requirements with that
+          provider. Test actual delivery, spam-folder placement and expired links before relying on
+          email recovery.
+        </p>
+        <h3 id="delivery-and-recovery-smoke-test">Delivery and recovery smoke test</h3>
+        <ol>
+          <li>
+            Sign in and open <strong>Account security</strong>, then request verification for the
+            displayed email address.
+          </li>
+          <li>
+            Open the received link in the same signed-in browser and select
+            <strong>Continue</strong>. The account should now show a verified recovery email.
+            Existing addresses are not automatically verified.
+          </li>
+          <li>
+            In a signed-out browser, select <strong>Recover account / reset password</strong>, enter
+            that verified email, and follow the emailed link. Existing password accounts must choose
+            and confirm a new password; passwordless accounts may remain passwordless. Both retain
+            the same account identity.
+          </li>
+          <li>
+            Confirm the old sessions no longer work and save a new set of recovery codes after
+            recovery.
+          </li>
+        </ol>
+        <p>
+          Email links expire after 30 minutes and work once. Allow at least 60 seconds between email
+          requests. The public recovery form deliberately returns the same response for
+          unknown/unverified addresses; a success message alone does not confirm delivery. If email
+          is unavailable, check that <code>SMTP_HOST</code> reached the app process. For failed
+          delivery, check outbound network access, the sender address, the app-password permissions
+          and spam folders. Server logs show a generic
+          <code>[recovery-mail] delivery failed</code> message; provider delivery logs may offer
+          more detail. Never disable TLS certificate checks.
+        </p>
+        <h2 id="native-services-and-release-versions">Native services and release versions</h2>
+        <p>
+          For the Linux or Proxmox installer, edit
+          <code>/etc/open-tabletop/open-tabletop.env</code>, place the SMTP password in a file
+          readable by <code>open-tabletop</code>, then run
+          <code>sudo systemctl restart open-tabletop</code>. The systemd service does not load a
+          project <code>.env</code>.
+        </p>
+        <p>
+          The account-recovery code and migration 023 are under <strong>Unreleased</strong> in this
+          checkout. The pinned <strong>0.20.0</strong> image does not gain recovery from environment
+          variables alone; deploy an application revision that includes the feature. Normal
+          automatic migration applies 023 when the owner connection is configured.
+        </p>
+        <p>
+          For Linux Compose file secrets, ensure the app's UID 100/GID 101 can read the SMTP file
+          too; see <a href="docker.html#secret-file-permissions">secret-file permissions</a>. Merge
+          the SMTP override with any existing override instead of duplicating
+          <code>services</code> or <code>environment</code> keys.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/ACCOUNT_SECURITY.md"
+            >docs/ACCOUNT_SECURITY.md</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/server/recovery-mail.js"
+            >server/recovery-mail.js</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docker-compose.yml"
+            >docker-compose.yml</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="accounts.html">Previous: Accounts and permissions</a
+          ><a href="networking.html">Next: Networking and HTTPS</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

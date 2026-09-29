@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Play tabletop games with friends in your browser. Open Tabletop is an open-source, self-hosted 3D tabletop with dice, cards, boards, and shared rooms."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Open Tabletop | Play tabletop games with friends</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="wiki/index.html">Wiki</a>
+          <a href="https://github.com/optimuspryne/open-tabletop">GitHub</a>
+          <span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <div class="eyebrow">An open-source virtual tabletop</div>
+          <h1 id="hero-title">Play tabletop games<br /><em>with friends.</em></h1>
+          <p>
+            Roll dice, deal cards, and move pieces on a shared 3D table in your browser. Host it on
+            your own server and play by your group's rules.
+          </p>
+          <div class="actions">
+            <a href="wiki/docker.html" class="btn btn-primary">Set up your table</a>
+            <a href="https://github.com/optimuspryne/open-tabletop" class="btn">View on GitHub</a>
+          </div>
+          <span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </div>
+        <figure class="hero-art screenshot-hero">
+          <img
+            src="assets/showcase/chess.png"
+            alt="A staged chess game on a blue felt table in Open Tabletop"
+            width="1086"
+            height="912"
+            fetchpriority="high"
+          />
+          <figcaption>
+            Chess on your own table.
+            <a href="https://opengameart.org/content/low-poly-chess-set"
+              >Chess models by JustinARay</a
+            >, CC BY 4.0.
+          </figcaption>
+        </figure>
+      </section>
+      <div class="feature-strip">
+        <ul aria-label="About Open Tabletop">
+          <li>Play in your browser</li>
+          <li>Host it yourself</li>
+          <li>Your group decides the rules</li>
+        </ul>
+      </div>
+      <section class="overview" aria-labelledby="overview-title">
+        <h2 id="overview-title">What you can do</h2>
+        <div class="features">
+          <div>
+            <div class="eyebrow">Play</div>
+            <h3>Move and use game pieces</h3>
+            <p>
+              Roll dice, stack objects, and deal cards. Pieces respond to physics, and players
+              handle the game rules.
+            </p>
+          </div>
+          <div>
+            <div class="eyebrow">Customize</div>
+            <h3>Add your own game assets</h3>
+            <p>
+              Upload decks, boards, and props to your library. Save a scene to reuse the same setup.
+            </p>
+          </div>
+          <div>
+            <div class="eyebrow">Save</div>
+            <h3>Save your game</h3>
+            <p>
+              Save the table and players' hands between sessions. Returning players can rejoin the
+              room and reclaim their hands.
+            </p>
+          </div>
+        </div>
+      </section>
+      <section class="overview gallery" aria-labelledby="screenshots-title">
+        <h2 id="screenshots-title">A closer look</h2>
+        <div class="shot-grid">
+          <figure>
+            <img
+              src="assets/showcase/cards.png"
+              alt="Cards, chip stacks and a private hand in a staged room"
+              width="1086"
+              height="912"
+            />
+            <figcaption>Deal cards, keep a private hand, and play at your own pace.</figcaption>
+          </figure>
+          <figure>
+            <img
+              src="assets/showcase/dice.png"
+              alt="Amber marbled dice in a wooden dice tray"
+              width="1086"
+              height="912"
+            />
+            <figcaption>Roll a set of dice with your choice of color and finish.</figcaption>
+          </figure>
+        </div>
+      </section>
+      <section class="closing" aria-labelledby="install-title">
+        <div class="closing-inner">
+          <div>
+            <h2 id="install-title">Install Open Tabletop</h2>
+            <p>The wiki covers hosting, configuration, and how to play.</p>
+          </div>
+          <a href="wiki/index.html" class="btn btn-primary">Read the wiki</a>
+        </div>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

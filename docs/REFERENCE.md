@@ -12,6 +12,30 @@ modules and schemas are not current API contracts.
 For release 0.19.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0190)
 (migrations 018–021, client refresh, source dependencies and ZIP transfer limits).
 
+### Public website
+
+- `website/index.html`, `website/styles.css`, and `website/assets/` provide the standalone
+  landing page, approved shared website tokens, and existing logo artwork. Header/footer
+  branding uses an unchanged copy of `public/logo-wordmark.svg`.
+- `website/assets/showcase/` holds four original browser screenshots and a capture/placement
+  record. The landing hero/gallery and Assets and scenes guide reference these images.
+- `website/wiki/*.html` are 17 independently addressable guides. Each includes desktop and
+  mobile navigation, a skip link, metadata, source-document links, and adjacent-guide links.
+  The mobile contents list is native `details`/`summary`; no production JavaScript is added.
+- `test/website.js` checks links, fragments, assets, metadata, and the inactive demo in
+  `npm run check`. `scripts/website-test.mjs` is the `npm run test:website` entry point and
+  reuses `serveDir`, `launch`, and `newPage` from the existing browser harness for responsive
+  and keyboard checks. No application helpers or routes were added or changed.
+- [Website maintenance](../website/README.md) lists every page, source documentation,
+  local preview instructions, hosting boundary, and manual acceptance checks.
+
+The [wiki audit](../website/WIKI_AUDIT.md) maps all 17 guides to documentation and current
+source. Key operator contracts: the bundled Compose file needs explicit overrides for
+`TRUST_PROXY_HOPS`, `SESSION_TTL_DAYS`, and `AUTO_MIGRATE`; native CLI administration
+must load `/etc/open-tabletop/open-tabletop.env`. Scene serialization does not copy felt,
+skybox, scoreboard or Room Notes, while notebooks, chat, whiteboard drawings and the timer
+are transient. Template ownership remains distinct from administrator-only uploaded assets.
+
 ### Native host deployment
 
 - `linux/open-tabletop.sh`: `main` accepts `install` / `update`; `prepare_source` fetches
@@ -3204,7 +3228,7 @@ that reintroduce the retired `.actions`, `.btn`, `.primary`, `.icon-only`, or `.
   kick from all live rooms, delete). Its Storage controls preview/trash orphaned uploads and start/poll
   the WebP texture-cache prebuild with live counts and byte totals. Admins host implicitly, so they're
   kept out of the host queue and the header's pending badge.
-- **`public/editor/editor-panel.js`** (`table.html?workshop=1`; `editor.html` redirects there) — the library-management panel. Rides
+- **`public/editor/editor-panel.js`** (regular tables and `table.html?workshop=1`; `editor.html` redirects to the workshop) — the library-management panel. Rides
   on the game client's room via `window.onOttRoom`, and gets listings through
   `window.onLibraryList` (client.js fans `deckList`/`boardList`/`propList` to it).
   Each asset row shows a public/private badge with **Spawn · Publish/Unpublish ·
@@ -3284,6 +3308,24 @@ metadata and discard management drafts before refetching. Saved collection expor
 
 
 ## Library navigation
+
+Current action paths: **Library** opens the combined browser; **GM Controls > Add to
+Library** and **GM Controls > Save Scene** are site-admin actions on regular tables
+and the optional workshop. The narrow-screen drawer exposes them under **Menu > Room**.
+`saveImg`/`saveText` and the board/object builders distinguish **Save** from **Save + Spawn**.
+`saveTiles` pairs optional back images with fronts in selection order and requires matching
+counts. The **Double-Sided Tiles** form includes shape, size, thickness, stack cover, and
+Open/Pouch concealment. **Skyboxes** accepts a 2:1 panorama or all six cubemap faces;
+`saveEq`/`saveCube` distinguish **Save** from **Save + Apply**. **Dice Textures** saves
+a square surface texture through `wireAddDice`; the dice box or die inspector **Custom**
+menu applies it. These upload workflows are documented in `website/wiki/assets.html`.
+`renderList` exposes **Edit** for supported types and places Clone/Publish/Rename/Delete
+in the asset overflow menu. Scenes use **Load**, skyboxes use **Apply**.
+`roomScene` opens **Games & Scenes > Scenes**; `sceneSaveConfirm` sends `sceneSave`
+with the name and optional lighting flag. `roomSaveState` sends `stateSave` for a
+persistent game room and is labeled **Save Table**. No runtime changes accompany
+these documentation corrections.
+
 
 `wireTabs` and `wireControls` in `public/editor/editor-panel.js` use six `.libGroup` tab panels.
 Each asset category is a native `details.libPane` with a keyboard/touch-accessible summary.

@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Install the app, set up a room, and learn the controls." />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Open Tabletop wiki | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html" aria-current="page">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html" aria-current="page">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Getting started</div>
+        <div class="eyebrow">Getting started</div>
+        <h1>Open Tabletop wiki</h1>
+        <p class="lead">Install the app, set up a room, and learn the controls.</p>
+        <h2 id="choose-where-to-start">Choose where to start</h2>
+        <ul>
+          <li>
+            <strong>Hosting a server:</strong> start with <a href="docker.html">Docker Compose</a>,
+            or use the <a href="node.html">Node.js</a>, <a href="linux.html">Linux</a>,
+            <a href="proxmox.html">Proxmox</a>, or
+            <a href="portainer.html">Portainer and Dockhand</a> guides.
+          </li>
+          <li>
+            <strong>Joining a game:</strong> read <a href="first-game.html">Your first game</a>. You
+            need the address of your group's server and a room code.
+          </li>
+          <li>
+            <strong>Learning to play:</strong> see
+            <a href="controls.html">Mouse, keyboard, and touch</a>,
+            <a href="pieces.html">Cards, dice, and pieces</a>, and
+            <a href="saving.html">Saving and resuming</a>.
+          </li>
+          <li>
+            <strong>Running an existing server:</strong> see
+            <a href="configuration.html">Configuration</a>,
+            <a href="accounts.html">Accounts and permissions</a>,
+            <a href="maintenance.html">Backups and upgrades</a>, and
+            <a href="troubleshooting.html">Troubleshooting</a>.
+          </li>
+        </ul>
+        <h2 id="what-open-tabletop-does">What Open Tabletop does</h2>
+        <p>
+          Open Tabletop gives your group a shared 3D table. Players move objects, roll dice, deal
+          cards, and manage their own game rules. The app does not enforce legal moves or calculate
+          scores automatically.
+        </p>
+        <p>
+          The server runs the physics and stores shared game state. Players connect in a browser.
+          Site administrators manage uploaded decks, boards, props, and scenes in the asset library.
+        </p>
+        <h2 id="source-and-versions">Source and versions</h2>
+        <p>
+          These guides describe the repository's current source. Published releases may differ.
+          Check the
+          <a href="https://github.com/optimuspryne/open-tabletop/releases">release notes</a> and
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for the version you install. In this checkout, account recovery, object hiding, map fog
+          and auras, and the regular Linux installer are under Unreleased. Do not expect them in the
+          pinned 0.20.0 image. These guides were reviewed against source on September 29, 2026.
+        </p>
+        <p>
+          The public demo is not available yet. To try the app, install it or join a server run by
+          someone in your group.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/README.md">README.md</a>,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >CHANGELOG.md</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/ROADMAP.md"
+            >docs/ROADMAP.md</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="first-game.html">Next: Your first game</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

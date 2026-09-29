@@ -13,6 +13,8 @@ every client over Colyseus; clients render and send intent, never physics.
 
 ## Documentation
 
+- **Public website:** [local preview and website maintenance](website/README.md), with a
+  standalone landing page and wiki in `website/`.
 - **Getting running:** [Docker quick start](#quick-start-docker),
   [direct Node.js setup](#run-via-npm), and the deployment options below.
 - **Contributing:** [contributor guide](CONTRIBUTING.md) for development setup,
@@ -66,16 +68,20 @@ paths are below.
 
 ## Run via NPM
 
-Direct installs require **Node.js 20.9 or newer**. The production container uses Node.js 24.
+The package declares Node.js 20.9 or newer for the runtime. Use **Node.js 24** for the
+current npm launch commands and locked development tools, matching the production container.
+See the [ordered Node.js setup](website/wiki/node.html) for database grants and bootstrap setup
+before the first start.
 
 ```bash
 # Set up Postgres and Redis first — see "Database" and "Redis" below
 git clone "https://github.com/optimuspryne/open-tabletop.git"
 cd open-tabletop/
-npm install
+npm ci --omit=dev
 # Copy the .env.example file
 cp .env.example .env
-# Then set `DATABASE_URL` and `REDIS_URL` in .env.
+# Complete the Database setup below, including MIGRATE_DATABASE_URL and all three
+# BOOTSTRAP_ADMIN_* settings, and set REDIS_URL before starting.
 # `npm start` auto-loads `.env`.
 npm start
 ```
@@ -90,7 +96,7 @@ skybox metadata), **user accounts**, **rooms + membership**, and each room's
 durable settings — scoreboard, notes, table size, skybox, felt color, and a
 saved **game snapshot**. Live piece state and private hands are held in memory
 *during a session*; they're persisted only through a snapshot — the GM's **Save
-Table State**, or an auto-save when the room empties — written into the room's
+Table**, or an auto-save when the room empties — written into the room's
 `scene` column and rebuilt from it on load (see "Saving & resuming games"). One-time setup:
 
 1. **Database + owner role** (as a superuser):
@@ -136,6 +142,16 @@ use the same names with a `MIGRATE_` prefix. There's no hardcoded credential fal
 so missing or partial config fails loudly at startup. For a remote DB, append `?sslmode=no-verify`
 (encrypt only) or `?sslmode=verify-full` (verified — needs the CA) to the URL, and
 turn on `ssl` server-side.
+
+### Optional Compose settings
+
+The bundled Compose file does not forward every `.env` key. `TRUST_PROXY_HOPS`,
+`SESSION_TTL_DAYS`, and `AUTO_MIGRATE` need explicit `services.app.environment`
+entries, for example in `docker-compose.override.yml`. See the
+[Compose configuration example](website/wiki/configuration.html#forward-optional-settings-through-compose).
+Recreate the container after changes. Linux file secrets retain host access permissions;
+the default app UID/GID is 100:101. See [secret-file permissions](website/wiki/docker.html#secret-file-permissions)
+if files created with mode 600 are unreadable by the container.
 
 ## Redis
 
@@ -808,8 +824,8 @@ shrink with that public count, but clients cannot inspect the remaining order.
 
 - **Deck actions:** left-click draws the top card directly to your private hand;
   left-drag deals it face-down and adopts it into the drag; right-drag moves the
-  deck; right-click shuffles; double-click draws privately into inspect. The touch
-  menu exposes draw, shuffle, split, move, inspect, and save actions. A loose card
+  deck; right-click opens its action menu; double-click draws privately into inspect.
+  The menu exposes draw, shuffle, split, move, peek and permission-gated browsing actions. A loose card
   released onto a deck is absorbed into that deck.
 - **Table cards:** a face-down card publishes only its back and geometry. Its front
   stays in `cardData` until the card is flipped or taken. Left-click takes a card
@@ -850,7 +866,7 @@ There are two distinct kinds of "save," on purpose:
   library and loads onto *any* table (see "The asset library").
 - A **game snapshot** is a scene *plus* the live private layer — each player's
   **hand** and whose **turn** it is — saved **per room** so a game in progress can
-  be put down and picked back up. A **GM** writes one with **Save Table State**,
+  be put down and picked back up. A **GM** writes one with **GM Controls > Save Table**,
   and the server also **auto-saves** as the last player leaves and the room is
   about to dispose, so progress survives an empty room even if nobody clicked save.
   The snapshot lives in that room's `scene` column and is rebuilt on the next load.
@@ -873,42 +889,46 @@ owner, exactly as in a live session.
 
 ## Custom decks & card art
 
-Card faces are texture *references*: `rank:A:♠:#000` (procedural), `text:…`
-(procedural text card), `tback:…` (colored back), a `data:`/URL image, or a
-procedural tile face (`domino:a:b`, `letter:A:1`, or a bundled mahjong image). The
-**+ Deck** dialog builds a deck from text (one per line / comma / JSON) or
-uploaded images, with a **"Save this deck as…"** field to persist it on creation.
-There's also a "Spawn Built-in Deck" for a standard 52.
+Site administrators open **GM Controls > Add to Library** at a game table, or
+**Menu > Room > Add to Library** on a narrow screen. Choose **Image Based Decks**
+for uploaded fronts and an optional back image, or **Text Based Decks** for a named
+deck with front text entered one per line, comma-separated, as JSON, or from a
+`.csv`/`.txt` file. **Double-Sided Tiles** has its own tab.
 
-An image deck can turn on **Fit to image** to size its cards to the uploaded art's
-aspect (no crop/stretch), and then set the card **thickness** and **shape**
-(rounded / square / hexagon). All of this is a single `props.geom` on the deck —
-the same variable-geometry system tiles use — read by both the mesh and the
-collider (see [ARCHITECTURE.md](docs/ARCHITECTURE.md)). A deck can also carry a
-`deckModel` skin (a bag/box `.glb`) via the `DECK_MODELS` registry.
+**Save** stores the asset; **Save + Spawn** also places it on the current table.
+Image decks can enable **Fit to image** to use the first front image's aspect ratio,
+with thickness and rounded/square/hex shape controls. Find saved decks and tiles
+in **Library > Decks & Tiles**; **Filters > Custom** hides built-in entries.
+For the standard playing-card deck, spawn its built-in Library entry.
 
 ## The asset library (admin-curated)
 
-The saved library (decks, boards, props, scenes, skyboxes) is **global** (every
-room sees it) and **admin-curated**. Site admins create assets through an
-**Add to Library** builder in a dedicated **editor** (`/editor.html`) — an
-admin-only room that reuses the table engine, so an asset can be spawned and
-tested live as it's built — and manage them (**publish/unpublish, rename, delete**)
-from the shared **View Library**. Every asset carries a **public/private** flag:
+The combined **Library** contains built-in and saved custom assets. Its tabs are
+**Decks & Tiles**, **Objects & Dispensers**, **Boards, Mats & Notecards**,
+**Games & Scenes**, **Skyboxes**, and **Collections**. Search finds assets by name;
+**Filters** exposes **All / Custom / Built-In** and **By Collection**.
 
-- **private** (a new asset's default) — only admins can spawn it;
-- **public** — admins still own curation, but GMs and helpers can now spawn it
-  into their games too.
+The library is shared across rooms. Helpers can use permitted decks, objects, mats,
+and notecards; boards, game setups, scenes, and skyboxes require GM access.
+Creation, editing, cloning, publishing, renaming, deleting, and portable asset
+import/export require a site administrator. New custom assets are private.
+Use the asset's overflow menu to **Publish** it for users with the required room
+role. Publishing a collection does not publish its assets.
 
-Both the editor and the game table share the same asset UI — a **View Library**
-(browse + spawn/apply saved assets) and a **Built-Ins** picker (bundled shapes,
-dice, boards, skyboxes) — plus a Room Controls **Skybox** picker (built-in +
-custom, applied to the room). At a game table, helpers see only the decks/objects
-they can spawn; boards, skyboxes and scenes are GM+. **Add to Library** (creation)
-is editor-only, and the publish/rename/delete controls only appear for admins —
-non-admin curation is server-refused as well. Admins can spawn *private* assets
-anywhere (handy for prepping a campaign); the public flag widens *spawn* rights,
-never *curation* rights.
+Admin creation tools are available at regular tables. **Admin > Library Editor**
+opens an optional separate workshop at `/table.html?workshop=1`; `/editor.html`
+redirects there. The workshop uses the same table engine and library controls.
+
+**GM Controls > Save Scene** saves a named reusable setup, with an optional
+**Include current lighting** setting. Find it under **Library > Games & Scenes >
+Scenes**. A GM can use **Load** on a published scene, or use **GM Controls > Scenes**
+as a shortcut to that section. Loading clears the current table. Administrators
+can also load private scenes. **Save Table** checkpoints a persistent game room
+with player hands and turn ownership; **Save Scene** does not. The workshop is not
+a persistent game room and cannot use Save Table.
+
+See the [assets and scenes guide](website/wiki/assets.html) for the form-by-form
+steps, narrow-screen menu paths, collections, and package import/export.
 
 **Metadata lives in Postgres** (`custom_decks` / `custom_boards` /
 `custom_objects`), keyed by a row **id**, with `owner_id` (the creating admin)
@@ -936,13 +956,20 @@ from the originals and does not need to be included in backups.
 
 ## Custom `.glb` models
 
-Upload a model as a prop (**+ Object → Custom model…**) or a board
-(**↷ Board → Upload**). Models are normalized (props to a target size, boards to
-fit the table), given a box collider from their measured bounds, and can be
-**tinted**. Built-in model pieces (chess, checkers, go, coin, chip, token) use a
-fixed per-piece scale and precomputed colliders so a set keeps its real
-proportions. `modelScale`, `modelRot`, and the tint mode all live in
-`shared/pieces.js`. See `docs/ASSET_CREDITS.md` for bundled-asset licensing (all CC0).
+As a site administrator, open **GM Controls > Add to Library** and choose
+**3D Objects** or **3D Game Boards**. Upload a `.glb`, name it, configure its
+size and collision settings, then choose **Save** or **Save + Spawn**.
+Objects provide scale, orientation, collider, default-material, and material-recolor
+controls. Boards provide **Longest side**, **Board outline**, and **Custom 3D collider**
+options. A selected custom collider must be created before saving. Board outlines
+change collision only; they do not redraw the artwork.
+
+Saved objects appear in **Library > Objects & Dispensers > Objects**; boards appear
+in **Library > Boards, Mats & Notecards > Boards**. Use **Filters > Custom** to narrow
+the results. **Edit** reopens supported saved assets in the builder; **Clone** in the
+asset overflow menu creates a separate named copy. Built-in model pieces retain their
+shared definitions and authored materials. Bundled asset licenses vary; see
+[asset credits](docs/ASSET_CREDITS.md).
 
 ## Sound effects
 
@@ -985,10 +1012,10 @@ attribution burden; the music (Kevin MacLeod, CC BY 4.0) is credited in-app in t
 
 ## Accounts, rooms & roles
 
-Two kinds of account: a **player** (passwordless — a display name and an email (a unique id, not necessarily valid) plus a device
-token kept in the browser, created by quick-join) and a **host** (has a
-password). Anyone can join a room by code; only an **approved host** (or an
-admin) can create one.
+Quick join creates a passwordless player with a username/email identity and a device
+session in the browser. A password can be added independently through Account security.
+Anyone with an account can request to join a room by code; only an **approved host**
+(or site administrator) can create one. Password ownership alone is not host approval.
 
 **Rooms** have a join code, an owner, and an optional **require-approval** gate.
 With approval on, a joiner waits as *pending* until a GM admits them (the landing
@@ -1011,7 +1038,8 @@ can spawn private library assets anywhere, and curate the library.
 
 **Host approval:** creating rooms requires approved host access. Signing up with
 a password lands an account in a **pending** state (they can still play, just not
-host); a passwordless player can **request host access** (which sets a password).
+host); a passwordless player can **request host access**, complete the Account security
+password form, then continue the approval request.
 An admin approves / rejects / revokes from the console — revoking keeps the
 password, so they can re-request. Admins host regardless and stay out of the queue.
 

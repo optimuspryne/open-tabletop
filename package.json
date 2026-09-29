@@ -14,6 +14,7 @@
     "test:input": "node scripts/input-test.mjs",
     "test:components": "node scripts/component-parity.mjs && node scripts/notecard-test.mjs",
     "test:devices": "node scripts/device-matrix.mjs",
+    "test:website": "node scripts/website-test.mjs",
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write \"**/*.{js,mjs}\" package.json",
     "format:check": "prettier --check \"**/*.{js,mjs}\" package.json",

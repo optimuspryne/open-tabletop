@@ -1,0 +1,496 @@
+:root {
+  color-scheme: dark;
+  --bg: #141817;
+  --panel: #1d2421;
+  --text: #f3f0e7;
+  --muted: #b6bfb7;
+  --accent: #f0c477;
+  --border: #354039;
+  --font: system-ui, sans-serif;
+  --r-sm: 4px;
+}
+* {
+  box-sizing: border-box;
+}
+html {
+  scroll-padding-top: 24px;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 16px/1.65 var(--font);
+}
+a {
+  color: var(--accent);
+  text-underline-offset: 4px;
+}
+a:hover {
+  text-decoration-thickness: 2px;
+}
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 5px;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+.skip-link {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  transform: translateY(-200%);
+  padding: 10px 16px;
+  background: var(--text);
+  color: var(--bg);
+  z-index: 2;
+}
+.skip-link:focus {
+  transform: none;
+}
+.site-header,
+.site-footer {
+  max-width: 1320px;
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 6%;
+  flex-wrap: wrap;
+}
+.header-wrap {
+  border-bottom: 1px solid var(--border);
+}
+.brand {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+}
+.brand-logo {
+  display: block;
+  width: 156px;
+  height: auto;
+}
+.footer-logo {
+  display: block;
+  width: 130px;
+  height: auto;
+}
+.site-header nav {
+  display: flex;
+  gap: 26px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.site-header nav a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+  padding: 10px 0;
+  min-height: 44px;
+}
+.site-header nav a:hover,
+.site-header nav a[aria-current] {
+  text-decoration: underline;
+}
+.demo {
+  color: var(--muted);
+  font-size: 13px;
+}
+.hero {
+  max-width: 1320px;
+  margin: auto;
+  padding: 84px 6% 60px;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  align-items: center;
+  gap: 60px;
+}
+.eyebrow {
+  color: var(--accent);
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin: 0 0 24px;
+}
+h1 {
+  font-size: clamp(44px, 5.4vw, 76px);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -3px;
+  margin: 0 0 26px;
+}
+h1 em {
+  font-family: Georgia, serif;
+  color: var(--accent);
+  font-weight: 400;
+}
+p {
+  color: var(--muted);
+  margin: 0 0 24px;
+}
+.hero p {
+  max-width: 540px;
+  font-size: 18px;
+}
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 48px;
+  padding: 12px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 14px;
+}
+.btn:hover {
+  border-color: var(--accent);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.hero .demo {
+  display: block;
+  margin-top: 20px;
+}
+.hero-art {
+  margin: 0;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 42px 20px;
+}
+.hero-art img {
+  display: block;
+  width: 100%;
+}
+.feature-strip {
+  border-block: 1px solid var(--border);
+}
+.feature-strip ul {
+  max-width: 1320px;
+  margin: auto;
+  padding: 22px 6%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 36px;
+  list-style: none;
+  color: var(--muted);
+  font-size: 14px;
+}
+.overview {
+  max-width: 1320px;
+  padding: 58px 6%;
+  margin: auto;
+}
+h2 {
+  font-size: 34px;
+  font-weight: 500;
+  letter-spacing: -1px;
+  line-height: 1.2;
+  margin: 0 0 32px;
+}
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 40px;
+}
+h3 {
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.3;
+  margin: 0 0 14px;
+}
+.features p {
+  font-size: 15px;
+  margin: 0;
+}
+.features .eyebrow {
+  margin-bottom: 18px;
+}
+.closing {
+  background: var(--panel);
+}
+.closing-inner {
+  max-width: 1320px;
+  margin: auto;
+  padding: 36px 6%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+.closing h2 {
+  font-size: 24px;
+  margin: 0 0 6px;
+}
+.closing p {
+  margin: 0;
+  font-size: 14px;
+}
+.site-footer {
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 13px;
+  padding-block: 28px;
+}
+.site-footer a {
+  color: var(--muted);
+}
+.wiki-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  max-width: 1320px;
+  margin: auto;
+}
+.wiki-sidebar {
+  padding: 36px 26px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+}
+.wiki-nav h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1.4px;
+  color: var(--muted);
+  margin: 28px 0 8px;
+}
+.wiki-nav h2:first-child {
+  margin-top: 0;
+}
+.wiki-nav a {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+  text-decoration: none;
+  padding: 9px 0;
+  min-height: 42px;
+}
+.wiki-nav a:hover {
+  text-decoration: underline;
+}
+.wiki-nav a[aria-current] {
+  color: var(--accent);
+  text-decoration: underline;
+  font-weight: 600;
+}
+.wiki-mobile {
+  display: none;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 6%;
+}
+summary {
+  cursor: pointer;
+  min-height: 44px;
+  padding: 8px 0;
+}
+.article {
+  min-width: 0;
+  padding: 46px 7% 64px;
+  overflow-wrap: anywhere;
+}
+.breadcrumb {
+  font-size: 12px;
+  color: var(--muted);
+  margin-bottom: 32px;
+}
+.breadcrumb a {
+  color: inherit;
+}
+.article h1 {
+  font-size: clamp(34px, 4vw, 49px);
+  letter-spacing: -1.8px;
+}
+.article .lead {
+  font-size: 18px;
+}
+.article h2 {
+  font-size: 25px;
+  letter-spacing: -0.5px;
+  margin: 36px 0 16px;
+}
+.article h3 {
+  margin: 26px 0 14px;
+}
+.article h4 {
+  font-size: 16px;
+}
+.article li {
+  margin-bottom: 8px;
+  color: var(--muted);
+}
+.article strong {
+  color: var(--text);
+}
+.article :is(ul, ol) {
+  padding-left: 24px;
+}
+.article pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 20px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+code {
+  font-family: ui-monospace, monospace;
+  font-size: 0.9em;
+}
+pre code {
+  font-size: inherit;
+}
+.article blockquote {
+  margin: 24px 0;
+  padding: 16px 20px;
+  border-left: 3px solid var(--accent);
+  background: var(--panel);
+}
+.article blockquote p:last-child {
+  margin-bottom: 0;
+}
+.table-scroll {
+  overflow-x: auto;
+  margin: 24px 0;
+}
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: top;
+}
+th {
+  color: var(--text);
+}
+td {
+  color: var(--muted);
+}
+.article-source {
+  border-top: 1px solid var(--border);
+  padding-top: 22px;
+  margin-top: 40px;
+  font-size: 13px;
+}
+.page-next {
+  margin-top: 28px;
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.page-next a {
+  padding-block: 10px;
+}
+@media (pointer: coarse) {
+  .wiki-nav a,
+  .site-footer a {
+    min-height: 44px;
+    padding-block: 10px;
+  }
+}
+@media (max-width: 760px) {
+  .site-header {
+    gap: 8px;
+    padding-block: 16px;
+  }
+  .site-header nav {
+    width: 100%;
+    gap: 14px 24px;
+  }
+  .hero {
+    grid-template-columns: 1fr;
+    padding-block: 44px 32px;
+    gap: 32px;
+  }
+  h1 {
+    font-size: clamp(42px, 8vw, 60px);
+    letter-spacing: -2px;
+  }
+  .hero p {
+    font-size: 16px;
+  }
+  .hero-art {
+    padding: 24px;
+  }
+  .hero-art img {
+    max-height: 310px;
+    object-fit: contain;
+  }
+  .features {
+    grid-template-columns: 1fr;
+    gap: 32px;
+  }
+  .overview {
+    padding-block: 38px;
+  }
+  .wiki-layout {
+    display: block;
+  }
+  .wiki-sidebar {
+    display: none;
+  }
+  .wiki-mobile {
+    display: block;
+  }
+  .article {
+    padding: 32px 6% 44px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .btn {
+    transition: border-color 150ms;
+  }
+}
+
+/* Gameplay screenshots. */
+.screenshot-hero {
+  padding: 0;
+}
+.screenshot-hero img,
+.shot-grid img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.screenshot-hero figcaption,
+.shot-grid figcaption {
+  padding: 14px 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+.shot-grid figure {
+  margin: 0;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+@media (max-width: 760px) {
+  .shot-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Keep database records and uploaded files together when backing up."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Backups and upgrades | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html" aria-current="page">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html" aria-current="page">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Maintenance</div>
+        <div class="eyebrow">Maintenance</div>
+        <h1>Backups and upgrades</h1>
+        <p class="lead">Keep database records and uploaded files together when backing up.</p>
+        <h2 id="before-an-upgrade">Before an upgrade</h2>
+        <ol>
+          <li>Read the release notes for the version you plan to install.</li>
+          <li>Ask GMs to save active games and have players leave their rooms.</li>
+          <li>Back up PostgreSQL and the uploaded asset directory or volume.</li>
+          <li>Keep the existing configuration and password files securely.</li>
+        </ol>
+        <p>
+          Database records refer to uploaded files, so restoring only one side can leave an
+          incomplete installation. Stop application writes while taking a matching database and
+          asset backup. Test restoration on a separate instance.
+        </p>
+        <h2 id="what-to-back-up">What to back up</h2>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Installation</th>
+                <th>Database</th>
+                <th>Uploaded files</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Docker Compose</td>
+                <td>PostgreSQL in <code>db-data</code></td>
+                <td>The <code>assets</code> volume</td>
+              </tr>
+              <tr>
+                <td>Direct Node.js</td>
+                <td>Your configured PostgreSQL database</td>
+                <td><code>ASSETS_DIR</code>, default <code>./saved-assets</code></td>
+              </tr>
+              <tr>
+                <td>Native Linux or Proxmox</td>
+                <td>PostgreSQL on the host or container</td>
+                <td><code>/var/lib/open-tabletop/assets</code> or its mounted storage</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Use PostgreSQL backup tools or your database provider's supported backup method. Copying a
+          live database data directory is not a substitute for a consistent database backup. Native
+          installer updates create dumps under <code>/var/backups/open-tabletop/</code>, but
+          uploaded assets still need a separate backup.
+        </p>
+        <p>
+          The generated <code>.texture-cache/v1</code> directory can be rebuilt from originals.
+          Preserve the original uploads. Redis stores temporary rate-limit state, not game saves.
+        </p>
+        <h2 id="upgrading-an-older-secret-based-configuration">
+          Upgrading an older secret-based configuration
+        </h2>
+        <p>
+          When moving from a pre-0.10 Compose configuration, create the database secret files from
+          the existing <code>DB_PASSWORD</code> and <code>APP_DB_PASSWORD</code> values, not new
+          random passwords. <code>npm run secrets:migrate</code> copies them without printing them
+          and refuses to overwrite existing files. Create the administrator password file separately
+          and keep all mounted secrets readable by the container account. Existing PostgreSQL
+          volumes retain their current role passwords.
+        </p>
+        <h2 id="update-docker-compose">Update Docker Compose</h2>
+        <p>
+          For installations using a published image, set the intended version in the Compose file
+          and run:
+        </p>
+        <pre><code class="language-bash">docker compose pull
+docker compose up -d
+</code></pre>
+        <p>For installations building from source, select the intended source revision and run:</p>
+        <pre><code class="language-bash">docker compose up -d --build
+</code></pre>
+        <p>
+          Keep the existing database and asset volumes. Do not replace password files with newly
+          generated values: the database keeps its existing role passwords.
+        </p>
+        <h2 id="update-a-direct-nodejs-installation">Update a direct Node.js installation</h2>
+        <p>
+          Stop the app, select the intended source revision, run <code>npm ci</code>, and restart
+          using your normal service manager or <code>npm start</code>. Keep <code>.env</code> and
+          uploaded assets. Apply the release's migrations manually if automatic migration is
+          disabled.
+        </p>
+        <h2 id="update-native-installs">Update native installs</h2>
+        <p>
+          The <a href="linux.html">Linux</a> and <a href="proxmox.html">Proxmox</a> guides document
+          their update commands, release directories, and backup locations. Their installers do not
+          upgrade PostgreSQL major versions.
+        </p>
+        <h2 id="migrations-and-rollback">Migrations and rollback</h2>
+        <p>
+          With automatic migration enabled, the app applies pending numbered SQL migrations at
+          startup using its separate owner connection. The runtime connection remains restricted. If
+          you manage migrations yourself, apply every pending migration in order for the target
+          version.
+        </p>
+        <p>
+          Database migrations may not be reversible. Roll back using the matching database backup,
+          uploaded assets, and application revision.
+        </p>
+        <h2 id="after-an-upgrade">After an upgrade</h2>
+        <p>
+          Refresh browser clients. Verify administrator login, an asset upload, two-player room
+          access, and a saved game's hands and turn. Account recovery in current source requires
+          migration 023; published 0.20.0 upgrade notes cover migration 022. Match the instructions
+          to the source or release you deploy.
+        </p>
+        <p>
+          See the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/RELEASING.md"
+            >release guide</a
+          >
+          for version-specific details.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/RELEASING.md"
+            >docs/RELEASING.md</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >CHANGELOG.md</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/proxmox/install.sh"
+            >proxmox/install.sh</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="saving.html">Previous: Saving and resuming</a
+          ><a href="troubleshooting.html">Next: Troubleshooting</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

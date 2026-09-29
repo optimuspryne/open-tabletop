@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Save a game in progress or a reusable scene." />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Saving and resuming | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html" aria-current="page">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html" aria-current="page">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Playing and creating</div>
+        <div class="eyebrow">Playing and creating</div>
+        <h1>Saving and resuming</h1>
+        <p class="lead">Save a game in progress or a reusable scene.</p>
+        <h2 id="save-a-game-in-progress">Save a game in progress</h2>
+        <p>
+          An active GM or room owner chooses <strong>GM Controls &gt; Save Table</strong>. On a
+          narrow screen, use <strong>Menu &gt; Room &gt; Save Table</strong>. Wait for the saved
+          confirmation; a failed database write is not a successful checkpoint.
+        </p>
+        <p>
+          The server also saves when the live room closes after its last connection leaves. Save
+          explicitly before planned maintenance. Piece movement and private hands are not
+          continuously written to PostgreSQL, so an unexpected shutdown can lose changes since the
+          last snapshot.
+        </p>
+        <p>
+          Save Table applies to persistent game rooms. The separate Library Editor workshop cannot
+          save a game this way.
+        </p>
+        <h2 id="return-to-the-game">Return to the game</h2>
+        <p>
+          Join the same room using the same account. Saved hands and turn ownership are matched by
+          account, not by seat, display name, or browser session. Use separate accounts for
+          different players. Multiple live tabs can have separate hands, but saved cards are
+          collected by account when reclaimed.
+        </p>
+        <p>
+          A GM can open <strong>Room info &gt; Members &gt; Unclaimed hands</strong> and use
+          <strong>Give to…</strong> to assign an absent player's hand to a present player. An absent
+          player's turn waits until they return or a GM chooses <strong>Next Turn</strong>.
+        </p>
+        <h2 id="what-is-saved">What is saved</h2>
+        <p>
+          A game snapshot stores pieces, decks and their order, ordinary concealed card fronts,
+          notecard content, private hands, turn ownership, table geometry, grid/measurement
+          settings, overlays, fog, aura settings, and current lighting.
+        </p>
+        <p>
+          Room settings such as the scoreboard, Room Notes, felt color, and skybox are stored
+          separately in PostgreSQL. They are not private notebooks.
+        </p>
+        <p>
+          Private notebooks, chat history, the running timer, whiteboard drawings, and fog undo
+          history do not survive disposal of the live room. A browser reconnect while the room
+          remains live is different from reopening an empty room. Finish notecard edits before
+          saving; an uncommitted editor draft is not saved artwork.
+        </p>
+        <h2 id="save-a-scene">Save a scene</h2>
+        <p>
+          A scene is a reusable setup in the administrator-curated library. As a site administrator,
+          choose <strong>GM Controls &gt; Save Scene</strong>, enter a name, choose whether to
+          <strong>Include current lighting</strong>, and press <strong>Save scene</strong>. Find it
+          under <strong>Library &gt; Games &amp; Scenes &gt; Scenes</strong>.
+        </p>
+        <p>
+          Scenes contain table dimensions, shape and rim, pieces, decks, notecards on the table,
+          grid/measurement settings, overlays, fog and auras, and optional lighting. They omit
+          player hands and turn ownership. They also do not copy the source room's scoreboard, Room
+          Notes, felt color, or skybox. Apply a skybox separately if the new room needs it.
+        </p>
+        <p>
+          A GM can load a published scene; site administrators can also load private scenes. A scene
+          without lighting keeps the destination room's current lighting.
+        </p>
+        <h2 id="replacing-a-setup">Replacing a setup</h2>
+        <p>
+          <strong>Load</strong> on a scene, <strong>Set up</strong> on a starter game, and
+          <strong>Reset</strong> clear the current pieces, hands, unclaimed hands, and turn state. A
+          scene installs a replacement checkpoint; Reset invalidates the old one. Save Table is a
+          checkpoint for the same room, not a version history or undo for these actions.
+        </p>
+        <p>
+          Use a separate room when you want to keep an existing game and try a new setup. A scene is
+          not a backup of a game with its players.
+        </p>
+        <h2 id="back-up-the-server">Back up the server</h2>
+        <p>
+          Room snapshots live in PostgreSQL. Uploaded images and models live in the asset directory.
+          A full backup needs both; see <a href="maintenance.html">Backups and upgrades</a>.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/server/game/scene-persistence.js"
+            >server/game/scene-persistence.js</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/server/game/handlers/room-state.js"
+            >server/game/handlers/room-state.js</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/ARCHITECTURE.md"
+            >docs/ARCHITECTURE.md</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="assets.html">Previous: Assets and scenes</a
+          ><a href="maintenance.html">Next: Backups and upgrades</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

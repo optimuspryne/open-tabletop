@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Player accounts, room roles, host approval, and account recovery."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Accounts and permissions | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html" aria-current="page">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html" aria-current="page">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Configuration</div>
+        <div class="eyebrow">Configuration</div>
+        <h1>Accounts and permissions</h1>
+        <p class="lead">Player accounts, room roles, host approval, and account recovery.</p>
+        <h2 id="players-and-hosts">Players and hosts</h2>
+        <p>
+          A player can use quick join without a password, providing a username and email identity.
+          The browser keeps a device session; using the same display name in a new account does not
+          reclaim an old hand. An approved host or site administrator can create rooms. An account
+          with a password can request host access, but an administrator must approve it.
+        </p>
+        <p>
+          Room codes let people request access. With room approval enabled, a GM must admit each
+          joining player. Without it, players are admitted immediately.
+        </p>
+        <h2 id="room-roles">Room roles</h2>
+        <div class="table-scroll" role="region" aria-label="Reference table" tabindex="0">
+          <table>
+            <thead>
+              <tr>
+                <th>Role</th>
+                <th>Access</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Player</td>
+                <td>Move pieces and play their own hand.</td>
+              </tr>
+              <tr>
+                <td>Helper</td>
+                <td>
+                  Player actions plus Library access for permitted decks, dice, objects, dispensers,
+                  mats, and notecards, scoreboard editing, and private notecard passing.
+                </td>
+              </tr>
+              <tr>
+                <td>GM</td>
+                <td>
+                  Helper actions plus table settings, boards, scenes, skyboxes, concealment, and
+                  game snapshots. Manage Helpers and Players; only the Owner can promote or demote
+                  GMs.
+                </td>
+              </tr>
+              <tr>
+                <td>Owner</td>
+                <td>
+                  The room creator, with GM access and protection from management by other GMs.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Site administrator is a separate, server-wide permission. Administrators manage users,
+          host approval, rooms, and the asset library. They can join rooms as GMs and use private
+          library assets.
+        </p>
+        <p>
+          GMs can use <strong>Room info > Members > Time-out / End time-out</strong> for members
+          they can manage. Players choose <strong>More > Spectate / Return to play</strong>, or
+          <strong>Watch</strong> beside an admitted lobby room. These modes block gameplay while
+          retaining permitted chat, camera, and inspection. Existing hands and reserved seats
+          remain; a new spectator starts without a seat. Returning to play requires a free seat when
+          needed and does not end a GM time-out.
+        </p>
+        <h2 id="passwords-and-recovery">Passwords and recovery</h2>
+        <p>
+          Use <strong>Account security</strong> in the lobby to set or change your password. Setting
+          a password does not automatically request or grant host access. Changing an existing
+          password requires the current password.
+        </p>
+        <p>Enroll recovery before you lose access:</p>
+        <ul>
+          <li>
+            <strong>Recovery email:</strong> request verification and open the link in the signed-in
+            browser that requested it. Press <strong>Continue</strong> to finish.
+          </li>
+          <li>
+            <strong>Recovery codes:</strong> generate and save the ten single-use codes outside your
+            browser. They are displayed once. A new set replaces the old one.
+          </li>
+        </ul>
+        <p>
+          Use <strong>Recover account / reset password</strong> to recover with a verified email or
+          a saved recovery code. Recovery preserves the account's rooms, roles, hands, and library
+          ownership. It does not grant host or administrator access.
+        </p>
+        <p>
+          A successful password change or recovery ends previous device sessions and invalidates
+          existing recovery codes. Save a new set afterward. An unverified email address alone
+          cannot recover a passwordless account.
+        </p>
+        <h2 id="password-lengths-and-host-requests">Password lengths and host requests</h2>
+        <p>
+          Signup and account-security forms require matching passwords of
+          <strong>8-128 characters</strong>. The separate initial administrator bootstrap password
+          accepts <strong>12-1024 characters</strong>. A password signup requests host approval;
+          setting a password later through Account security does not. Choose
+          <strong>Request host access</strong> to enter the approval queue.
+        </p>
+        <h2 id="administrator-recovery">Administrator recovery</h2>
+        <p>On the server, promote an existing account with:</p>
+        <pre><code class="language-bash">npm run admin:grant -- user@example.com
+</code></pre>
+        <p>
+          For Compose, prefix the command with <code>docker compose exec app</code>. Run the command
+          where the application's database environment is available. Native Linux/Proxmox services
+          use a systemd environment file, so run this as root on the installed host or inside the
+          LXC:
+        </p>
+        <pre><code>runuser -u open-tabletop -- /usr/bin/node \
+  --env-file=/etc/open-tabletop/open-tabletop.env \
+  /opt/open-tabletop/current/scripts/admin-role.mjs grant user@example.com</code></pre>
+        <p>
+          Promotion changes permissions; it does not reset a password or sign you in. Bootstrap
+          settings create the first administrator only on an empty users table; they do not reset
+          existing accounts.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/docs/ACCOUNT_SECURITY.md"
+            >docs/ACCOUNT_SECURITY.md</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/server/permissions.js"
+            >server/permissions.js</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/public/landing.js"
+            >public/landing.js</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="configuration.html">Previous: Server configuration</a
+          ><a href="email.html">Next: Email recovery</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

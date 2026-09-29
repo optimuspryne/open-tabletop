@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Run the app directly with your own PostgreSQL and Redis services."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'"
+    />
+    <title>Install with Node.js | Open Tabletop wiki</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png" />
+    <link rel="stylesheet" href="../styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <div class="header-wrap">
+      <header class="site-header">
+        <a class="brand" href="../index.html" aria-label="Open Tabletop home"
+          ><img
+            class="brand-logo"
+            src="../assets/logo-wordmark.svg"
+            alt="Open Tabletop"
+            width="258"
+            height="99"
+        /></a>
+        <nav aria-label="Main navigation">
+          <a href="index.html" aria-current="true">Wiki</a
+          ><a href="https://github.com/optimuspryne/open-tabletop">GitHub</a
+          ><span class="demo" aria-disabled="true">Public demo (coming soon)</span>
+        </nav>
+      </header>
+    </div>
+    <details class="wiki-mobile">
+      <summary>Wiki contents</summary>
+      <nav class="wiki-nav" aria-label="Wiki topics, mobile">
+        <h2>Getting started</h2>
+        <a href="index.html">Welcome</a>
+        <a href="first-game.html">Your first game</a>
+        <h2>Installing and hosting</h2>
+        <a href="docker.html">Docker Compose</a>
+        <a href="node.html" aria-current="page">Node.js</a>
+        <a href="linux.html">Linux</a>
+        <a href="proxmox.html">Proxmox</a>
+        <a href="portainer.html">Portainer and Dockhand</a>
+        <h2>Configuration</h2>
+        <a href="configuration.html">Server configuration</a>
+        <a href="accounts.html">Accounts and permissions</a>
+        <a href="email.html">Email recovery</a>
+        <a href="networking.html">Networking and HTTPS</a>
+        <h2>Playing and creating</h2>
+        <a href="controls.html">Mouse, keyboard, and touch</a>
+        <a href="pieces.html">Cards, dice, and pieces</a>
+        <a href="assets.html">Assets and scenes</a>
+        <a href="saving.html">Saving and resuming</a>
+        <h2>Maintenance</h2>
+        <a href="maintenance.html">Backups and upgrades</a>
+        <a href="troubleshooting.html">Troubleshooting</a>
+      </nav>
+    </details>
+    <div class="wiki-layout">
+      <aside class="wiki-sidebar">
+        <nav class="wiki-nav" aria-label="Wiki topics">
+          <h2>Getting started</h2>
+          <a href="index.html">Welcome</a>
+          <a href="first-game.html">Your first game</a>
+          <h2>Installing and hosting</h2>
+          <a href="docker.html">Docker Compose</a>
+          <a href="node.html" aria-current="page">Node.js</a>
+          <a href="linux.html">Linux</a>
+          <a href="proxmox.html">Proxmox</a>
+          <a href="portainer.html">Portainer and Dockhand</a>
+          <h2>Configuration</h2>
+          <a href="configuration.html">Server configuration</a>
+          <a href="accounts.html">Accounts and permissions</a>
+          <a href="email.html">Email recovery</a>
+          <a href="networking.html">Networking and HTTPS</a>
+          <h2>Playing and creating</h2>
+          <a href="controls.html">Mouse, keyboard, and touch</a>
+          <a href="pieces.html">Cards, dice, and pieces</a>
+          <a href="assets.html">Assets and scenes</a>
+          <a href="saving.html">Saving and resuming</a>
+          <h2>Maintenance</h2>
+          <a href="maintenance.html">Backups and upgrades</a>
+          <a href="troubleshooting.html">Troubleshooting</a>
+        </nav>
+      </aside>
+      <main id="main" class="article">
+        <div class="breadcrumb"><a href="index.html">Wiki</a> / Installing and hosting</div>
+        <div class="eyebrow">Installing and hosting</div>
+        <h1>Install with Node.js</h1>
+        <p class="lead">Run the app directly with your own PostgreSQL and Redis services.</p>
+        <h2 id="prepare-the-services">Prepare the services</h2>
+        <p>
+          These instructions use <strong>Node.js 24</strong>, the runtime used by the production
+          Dockerfile, plus npm, Git, OpenSSL, PostgreSQL, and Redis. Install and start PostgreSQL
+          and Redis before starting the app. The app has no browser build step.
+        </p>
+        <h2 id="download-the-source">Download the source</h2>
+        <pre><code class="language-bash">git clone https://github.com/optimuspryne/open-tabletop.git
+cd open-tabletop
+npm ci --omit=dev
+cp .env.example .env
+</code></pre>
+        <p>
+          Complete the database and administrator setup below before running <code>npm start</code>.
+          Use the configuration and migration files from the same revision as the application.
+        </p>
+        <h2 id="postgresql">PostgreSQL</h2>
+        <p>
+          Use separate database logins for migrations and normal application traffic. For a new
+          local database, open an administrator psql session, for example
+          <code>sudo -u postgres psql</code>, and run the following. Each
+          <code>\password</code> command prompts for a new password; keep the two passwords
+          separately.
+        </p>
+        <pre><code class="language-sql">CREATE ROLE tabletop LOGIN;
+\password tabletop
+CREATE DATABASE tabletop OWNER tabletop;
+CREATE ROLE tabletop_app LOGIN;
+\password tabletop_app
+\connect tabletop
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT CREATE, USAGE ON SCHEMA public TO tabletop;
+GRANT CONNECT ON DATABASE tabletop TO tabletop_app;
+GRANT USAGE ON SCHEMA public TO tabletop_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO tabletop_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO tabletop_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
+  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO tabletop_app;
+ALTER DEFAULT PRIVILEGES FOR ROLE tabletop IN SCHEMA public
+  GRANT USAGE, SELECT ON SEQUENCES TO tabletop_app;
+\quit
+</code></pre>
+        <p>
+          For a managed database, use its administrator connection and equivalent role/database
+          setup. Configure PostgreSQL to accept password-authenticated connections from the app. Do
+          not run these fresh-install commands over existing roles or databases.
+        </p>
+        <p>
+          In <code>.env</code>, replace the example passwords with the ones you chose.
+          Percent-encode special characters in URL usernames and passwords.
+        </p>
+        <pre><code class="language-dotenv">DATABASE_URL=postgresql://tabletop_app:APP_PASSWORD@127.0.0.1:5432/tabletop
+MIGRATE_DATABASE_URL=postgresql://tabletop:OWNER_PASSWORD@127.0.0.1:5432/tabletop
+REDIS_URL=redis://127.0.0.1:6379
+ASSETS_DIR=./saved-assets
+NODE_ENV=production
+</code></pre>
+        <p>
+          The owner connection applies pending numbered migrations at startup. Default privileges
+          above also cover tables created by future migrations. The runtime connection uses
+          <code>tabletop_app</code>.
+        </p>
+        <p>
+          If you manage migrations yourself, set <code>AUTO_MIGRATE=false</code>. Apply
+          <code>postgres/schema.sql</code> only to a fresh database; for an existing database, apply
+          pending numbered migrations in order. Current source includes migration
+          <strong>023</strong> for account recovery; release <strong>0.20.0</strong> ends at
+          <strong>022</strong>. See <a href="maintenance.html">Backups and upgrades</a>.
+        </p>
+        <p>
+          <code>DATABASE_URL_FILE</code> and <code>MIGRATE_DATABASE_URL_FILE</code> can hold the
+          corresponding connection URLs instead. Keep configuration and secret files readable only
+          by the operator and application account.
+        </p>
+        <h2 id="configure-the-initial-administrator">Configure the initial administrator</h2>
+        <p>Create a password file as the account that will run the app:</p>
+        <pre><code class="language-bash">mkdir -p secrets
+(umask 077; openssl rand -hex 24 &gt; secrets/admin_password.txt)
+</code></pre>
+        <p>Set all three bootstrap values in <code>.env</code>:</p>
+        <pre><code class="language-dotenv">BOOTSTRAP_ADMIN_USERNAME=admin
+BOOTSTRAP_ADMIN_EMAIL=you@example.com
+BOOTSTRAP_ADMIN_PASSWORD_FILE=./secrets/admin_password.txt
+</code></pre>
+        <p>
+          The generated password is the file's content. Bootstrap creates an administrator only when
+          the users table is empty. It never resets an existing account. The copied
+          <code>.env.example</code> already contains a username and email, so leaving out the
+          password-file setting causes a partial-configuration startup error.
+        </p>
+        <p>
+          For an existing account,
+          <a href="accounts.html#administrator-recovery">administrator recovery</a> explains the
+          promotion command. Promotion does not reset its password.
+        </p>
+        <h2 id="start-and-connect">Start and connect</h2>
+        <pre><code class="language-bash">npm start
+</code></pre>
+        <p>
+          <code>npm start</code> loads the project <code>.env</code>. A direct
+          <code>node server.js</code> launch needs its environment supplied separately. Open
+          <code>http://localhost:2567</code>, or use the server's LAN address from another device.
+          Sign in with the configured administrator. Use separate accounts to test multiplayer play.
+        </p>
+        <p>
+          The process runs in the foreground. For an installed systemd service with generated
+          credentials and update commands, use the <a href="linux.html">Linux installer</a>. See
+          <a href="networking.html">Networking and HTTPS</a> before exposing the app beyond your
+          LAN.
+        </p>
+        <h2 id="redis-and-storage">Redis and storage</h2>
+        <p>
+          Production uses Redis for shared authentication and upload rate limits. Configure
+          <code>REDIS_URL</code> or <code>REDIS_URL_FILE</code>; requests protected by Redis return
+          503 when it is unavailable. <code>RATE_LIMIT_STORE=memory</code> explicitly selects an
+          in-process store and is intended for local development.
+        </p>
+        <p>
+          Back up PostgreSQL and <code>ASSETS_DIR</code> together. Uploaded files live on disk;
+          accounts, asset metadata, room settings, and saved games live in PostgreSQL.
+          <a href="saving.html">Save Table</a> checkpoints a game's pieces and hands.
+        </p>
+        <p class="article-source">
+          Sources checked:
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/package.json"
+            >package.json</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/postgres/grants_app_role.sql"
+            >postgres/grants_app_role.sql</a
+          >,
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/migrate.js">migrate.js</a
+          >,
+          <a
+            href="https://github.com/optimuspryne/open-tabletop/blob/main/server/bootstrap-admin.js"
+            >server/bootstrap-admin.js</a
+          >. Reviewed September 29, 2026 against the working source. Published releases may differ;
+          check the
+          <a href="https://github.com/optimuspryne/open-tabletop/blob/main/CHANGELOG.md"
+            >changelog</a
+          >
+          for your version.
+        </p>
+        <nav class="page-next" aria-label="Adjacent guides">
+          <a href="docker.html">Previous: Install with Docker Compose</a
+          ><a href="linux.html">Next: Install on Linux</a>
+        </nav>
+      </main>
+    </div>
+    <footer class="site-footer">
+      <img
+        class="footer-logo"
+        src="../assets/logo-wordmark.svg"
+        alt="Open Tabletop"
+        width="258"
+        height="99"
+      />
+      <a href="https://github.com/optimuspryne/open-tabletop">Open source on GitHub</a>
+    </footer>
+  </body>
+</html>

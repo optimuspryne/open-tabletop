@@ -9,6 +9,24 @@ deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_ba
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
+## Public website and wiki
+
+The public marketing website and wiki are a separate static surface in `website/`.
+They use plain HTML, one shared stylesheet, the existing app logo for header/footer branding,
+and derivatives of existing project artwork.
+They do not connect to the room server, authentication, database, or asset-upload endpoints.
+The website can be served from its own document root or subdirectory without changing the
+game application's routes, CSP, build-free client, or deployment requirements. Wiki content
+is maintained alongside its linked repository documentation; there is no runtime Markdown
+renderer or automatic synchronization. See [website maintenance](../website/README.md) and the
+[2026-09-29 wiki audit](../website/WIKI_AUDIT.md) for page-level evidence and limits.
+The audit separates room snapshots, scene templates, durable room settings and transient
+notebooks/chat/whiteboard state, without changing those persistence boundaries.
+Original gameplay captures in `website/assets/showcase/` are static assets from dedicated
+local rooms. The approved landing layout uses a chess hero and responsive cards/dice gallery;
+the Assets and scenes guide includes the library capture. These images do not connect the
+website to the app. See the capture README for provenance and attribution.
+
 ## Two worlds, kept apart
 
 The single most important idea: there are two parallel representations of the
@@ -1502,8 +1520,14 @@ spawn them into any game room). Admins build and test assets in a dedicated
 **editor room** (`EditorRoom`, with an admin-only `onAuth`) that reuses the whole
 table engine. The game table and workshop share one combined **Library** modal
 (built-ins, custom assets, games, and skyboxes), driven by `editor-panel.js` over
-`window.onOttRoom`; **Add to Library** (creation)
-is editor-only and the asset handlers refuse non-admin creation/curation.
+`window.onOttRoom`. **GM Controls > Add to Library** and **Save Scene** are
+admin-gated on ordinary game tables as well as the workshop. Narrow-screen drawer
+proxies expose the same actions under **Menu > Room**. Asset handlers refuse
+non-admin creation/curation. **Admin > Library Editor** opens the optional workshop,
+not a required creation step. The combined Library uses **Filters** for built-in/custom
+sources and collection visibility. **GM Controls > Scenes** opens its Games & Scenes
+section; loading a scene replaces the table. **Save Table** instead checkpoints a
+persistent game room, including hands and turn ownership.
 Custom objects with an authored dispenser also appear in the Dispensers section. Deleting that
 dispenser card invokes the targeted metadata removal rather than generic asset deletion, so the
 object and its primary model remain in the Objects section.
@@ -1762,7 +1786,7 @@ cards. The first returning tab claims the combined hand once. Restoration assign
 fresh hand-card IDs to avoid collisions with newly drawn cards. These operations
 share `server/game/hand-state.js` helpers.
 
-The GM's **`stateSave`** ("Save Table State") captures a checkpoint; **`onDispose`**
+The GM's **`stateSave`** ("GM Controls > Save Table") captures a checkpoint; **`onDispose`**
 captures the latest game through `saveFinalRoomState`, including hands-only and
 completely empty games. An empty snapshot replaces a previously populated one so
 old pieces cannot return on reopening. The final save cancels the pending debounce
