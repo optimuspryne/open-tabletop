@@ -2,6 +2,22 @@
 
 How versions work here, and the steps to cut a release.
 
+## Unreleased demo storage migration 024
+
+This branch requires `024_demo_sessions.sql` before the updated server starts: ordinary session
+lookup now checks temporary-demo metadata as well as normal sessions. Use the existing startup
+migrator with the owner-role `MIGRATE_DATABASE_URL`, or apply the numbered migration and record
+it through your existing manual migration procedure. The runtime retains the least-privilege
+application role; existing default table grants cover the new tables. Fresh installations use
+the updated `schema.sql` baseline with 024 already recorded.
+
+Back up the database before upgrading. Migration 024 preserves existing identities, rooms and
+assets; it adds explicit temporary-user constraints and demo metadata tables. It introduces no
+new ports, external services or dependency packages. Restart the application after migrating.
+There is no public demo-mode switch, guest endpoint or automatic purge scheduler in this storage
+slice, and no production UI change. Do not expose a guest-creation route until the remaining
+server-side demo policy in [DEMO_MODE_PLAN.md](DEMO_MODE_PLAN.md) is implemented and tested.
+
 ## Versioning
 
 Open Tabletop follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).

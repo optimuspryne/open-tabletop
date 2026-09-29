@@ -12,6 +12,68 @@ modules and schemas are not current API contracts.
 For release 0.19.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0190)
 (migrations 018–021, client refresh, source dependencies and ZIP transfer limits).
 
+### Room resource budgets (public-demo foundation)
+
+`server/room-resource-limits.js` exports `readRoomResourceLimits(env)`. The returned frozen
+configuration maps `ROOM_MAX_LIVE`, `ROOM_MAX_CONNECTIONS`, `ROOM_MAX_CONNECTIONS_PER_USER`,
+`ROOM_MAX_PENDING_AUTH`, and `ROOM_MAX_MESSAGES_PER_SECOND` to `maxLiveRooms`, `maxConnections`,
+`maxConnectionsPerUser`, `maxPendingAuth`, and `maxMessagesPerSecond`. Unset or `0` means
+`Infinity`; malformed, negative, fractional or unsafe integer values fail startup.
+
+`createRoomAccess({db, hashToken, limits})` retains the existing authentication contract.
+`reserveRoom(room)` / `releaseRoom(room)` own process-local live-room slots, independently
+of connection disposal so final checkpoint writes retain their slot. `checkedAccess` bounds
+admission reads before database work; background revalidation is not denied by that budget.
+`authorize` checks total/account capacity and registers the connection in one synchronous
+continuation after authentication. Full instance/pending capacity returns `503`; per-account
+capacity returns `429`. Existing per-table capacity retains `403`. Reconnects reuse their slot;
+revoked or dropped connections remain counted until normal cleanup releases their entries.
+
+`server.js` supplies configuration to room access, reserves before room-state/physics allocation,
+releases in disposal `finally` blocks, and sets Colyseus `maxMessagesPerSecond` for tables,
+inherited editors and waiting lobbies. Colyseus enforces its native per-client window before
+payload decoding, including protocol pings/unknown messages; excess traffic disconnects the
+client and follows the existing bounded reconnect cleanup. This is not a byte/CPU budget.
+
+Native installs set these variables in `/etc/open-tabletop/open-tabletop.env`; local `npm start`
+uses `.env`; Compose forwards all five explicitly. Restart the app after changing limits.
+See [demo plan and smoke tests](DEMO_MODE_PLAN.md). No guest endpoints or demo flag exist yet.
+
+### Temporary-demo storage (not publicly exposed yet)
+
+`server/demo-queries.js` provides `createDemoQueries(pool, limits)` and `DemoError`; the production
+facade exports the composed API as `db.demo`. `DEMO_STORAGE_LIMITS` sets default room/guest
+quotas and absolute/idle lifetimes. These are internal configuration values, not a demo-mode flag.
+
+| Operation | Contract |
+| --- | --- |
+| `createTable({displayName,sessionHash,inviteHash,starter})` | Atomically allocate a host, existing session/room/member rows and demo markers; starter is empty/dice/cards/chess metadata only. |
+| `joinInvite({displayName,sessionHash,inviteHash})` | Exchange a live invite hash for a distinct temporary player, subject to global/table guest quotas. |
+| `resume(sessionHash)` | Return live table/user/role/deadlines, or null; never extend expiry or return credential hashes. |
+| `rotateInvite({sessionHash,inviteHash})` | Lock live host authority and replace the hash; prior links stop admitting new guests. |
+| `setOccupied(roomId,occupied)` | Trusted runtime-only update of idle deadline; repeated empty updates cannot extend it. |
+| `closeExpired()` | Close expired/soft-deleted demo tables, revoke guest sessions and return all unpurged closed table IDs/codes for disposal/retry. |
+| `purgeClosed(roomId,{canPurge})` | Default-deny purge, requiring a synchronous trusted no-live-writer check before deletion and before commit. |
+| `purgeOrphans()` | Remove marked guests detached by administrative room deletion, while preserving ordinary accounts and shared assets. |
+
+Mutation failures propagate after rollback/release. Invalid inputs use `DemoError` codes
+`invalid`, `capacity`, `expired`, `forbidden`, or `busy`; HTTP status mapping is not implemented.
+Storage quotas count all unpurged demo records. Raw secrets never enter these APIs; accepted
+hashes are lowercase SHA-256 hex. PostgreSQL time is authoritative for expiry.
+
+Migration `024_demo_sessions.sql` adds `is_demo` with an identity constraint, `demo_rooms` with
+hashes/deadlines/closure, and `demo_guests` with display name/table binding. `publicUserRow`
+adds `isDemo`/`demoRoomId` only for temporary identities; `findUserByToken` resolves their display
+name and denies expired/closed/detached guests. Room access rejects cross-table demo admission.
+The other ordinary user projections retain their existing fields; guest-specific UI reads remain
+future work. Apply migration 024 before server restart; the token query depends on it even on
+normal deployments. See [upgrade notes](RELEASING.md#unreleased-demo-storage-migration-024).
+
+No public route, background scheduler, starter application or client entry flow uses this API yet.
+`test/integration/demo-sessions.js` exercises it through the production database factory with the
+least-privilege app role. `scripts/test-database.mjs` also verifies the numbered upgrade against
+populated pre-demo data. [Implementation plan](DEMO_MODE_PLAN.md) records remaining work.
+
 ### Public website
 
 - `website/index.html`, `website/styles.css`, and `website/assets/` provide the standalone

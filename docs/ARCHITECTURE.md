@@ -9,6 +9,56 @@ deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_ba
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
+## Public-demo foundation and staged design
+
+The [demo plan](DEMO_MODE_PLAN.md) separates implemented admission controls from proposed
+temporary guests, expiry and UI. This remains one application: normal deployments retain
+their existing capacity behavior unless an operator sets the optional `ROOM_MAX_*` budgets.
+
+The room-access service owns both authorization tracking and process-local capacity because
+it already owns the admitted connection/reconnect lifecycle. It bounds concurrent admission
+reads before database work and checks account/instance connection capacity synchronously
+after reads, before registration. Periodic access revalidation remains independent of admission
+saturation. Counts include administrators and waiting lobbies; reconnect grace periods retain
+their slots. These are admitted-connection budgets, not limits on unauthenticated raw sockets
+or matchmaking reservations. External connection/rate controls remain necessary.
+
+`server.js` reserves each live room before physics/checkpoint allocation and releases the slot
+only after disposal, including final saves and failed initialization. Waiting rooms and the editor
+also reserve slots. Disposal `finally` blocks release capacity and writer ownership even if cleanup
+throws. The existing Colyseus pre-decode message-rate guard is configured rather than replaced.
+It is a per-client count window, not a byte budget or an expensive-operation concurrency guard.
+
+All these budgets are local to the single Colyseus process, just like current room/writer ownership;
+Redis-backed HTTP rate limits do not turn them into distributed quotas. They do not bound stored
+accounts/rooms, static downloads, HTTP requests or uploaded bytes. The default-disabled foundation
+is not a complete public-demo security mode and does not introduce automatic data deletion.
+
+## Temporary-demo persistence foundation
+
+Demo storage reuses existing user IDs, sessions, rooms and memberships so private inventory and
+permissions retain one identity model. Migration 024 explicitly marks demo users, prohibits their
+password/admin/host elevation, and keeps table-specific deadlines and invite hashes outside
+synchronized state. Ordinary accounts retain their required email addresses. Demo display names
+are separate from unique internal login names; bearer lookup supplies them to room admission.
+
+The composed `db.demo` query module serializes mutation transactions with a shared PostgreSQL
+advisory lock. It checks quotas before allocating rows, including closed-but-unpurged data, so
+failed cleanup cannot grow storage indefinitely. Resume never renews expiry. Invite rotation
+locks its session/membership authority and checks current table ownership. Database failures
+propagate; neither failed allocation nor purge reports success.
+
+Expiry and cleanup are separate. Bearer lookup rejects closed, expired or detached guests even
+before cleanup. Closing revokes guest credentials durably; the future runtime must stop new
+admissions and finish live-room disposal/final writes before invoking guarded purge. Cleanup
+only collects marked temporary users/tables and retains shared library assets. Administrative
+room deletion leaves orphan markers for retryable cleanup.
+
+The storage APIs are not registered as public guest routes and have no running sweeper yet.
+This intentionally avoids exposing guest credentials before HTTP/socket write restrictions,
+expiry timers, restart occupancy recovery and the approved entry UI are implemented. Existing
+active sockets do not yet have immediate demo-deadline enforcement. See [the staged plan](DEMO_MODE_PLAN.md).
+
 ## Public website and wiki
 
 The public marketing website and wiki are a separate static surface in `website/`.

@@ -11,6 +11,7 @@ const database = createDatabase(pool);
 
 export { createDatabase };
 export const {
+  demo,
   accountSecurity,
   collections,
   colliderPresets,

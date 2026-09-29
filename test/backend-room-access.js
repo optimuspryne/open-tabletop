@@ -11,7 +11,7 @@ function deferred() {
   return pending;
 }
 
-function harness() {
+function harness(limits = {}) {
   const users = new Map([
     ['hash:one', { id: '1', username: 'one', isAdmin: false }],
     ['hash:other-device', { id: '1', username: 'one', isAdmin: false }],
@@ -34,7 +34,7 @@ function harness() {
       return memberships.get(`${roomId}:${userId}`) || null;
     },
   };
-  const access = createRoomAccess({ db, hashToken: (raw) => `hash:${raw}` });
+  const access = createRoomAccess({ db, hashToken: (raw) => `hash:${raw}`, limits });
   const room = (roomCode) => ({
     roomCode,
     state: { players: new Map() },
@@ -68,6 +68,95 @@ function harness() {
   }
   return { access, db, users, memberships, room, client, join };
 }
+
+test('global connection admission is atomic across rooms and releases on departure/disposal', async () => {
+  const h = harness({ maxConnections: 1 });
+  const a = h.room('A');
+  const b = h.room('B');
+  const results = await Promise.allSettled([h.join(a), h.join(b)]);
+  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 1);
+  assert.equal(results.find((result) => result.status === 'rejected').reason.code, 503);
+  const index = results.findIndex((result) => result.status === 'fulfilled');
+  h.access.forget([a, b][index], results[index].value);
+  await h.join(a);
+  h.access.dispose(a);
+  await h.join(b);
+});
+
+test('per-account limits cover devices, rooms, lobbies and admins without blocking other accounts', async () => {
+  const h = harness({ maxConnectionsPerUser: 1 });
+  const a = h.room('A');
+  const first = await h.join(a);
+  await assert.rejects(h.join(h.room('B'), 'other-device'), { code: 429 });
+  h.memberships.set('B:1', { status: 'pending', role: 'player' });
+  await assert.rejects(h.join(h.room('B'), 'other-device', 'lobby'), { code: 429 });
+  await h.join(a, 'two');
+  await h.join(h.room(null), 'admin', 'editor');
+  await assert.rejects(h.join(a, 'admin'), { code: 429 });
+  h.access.forget(a, first);
+  await h.join(h.room('B'), 'other-device', 'lobby');
+});
+
+test('reconnect retains one capacity slot and does not charge an existing reservation again', async () => {
+  const h = harness({ maxConnections: 1, maxConnectionsPerUser: 1 });
+  const room = h.room('A');
+  const client = await h.join(room);
+  const waiting = h.access.waitForReconnect(room, client, 30);
+  await assert.rejects(h.join(room, 'two'), { code: 503 });
+  const next = { ...h.client(), sessionId: client.sessionId };
+  room.pending.resolve(next);
+  await waiting;
+  await h.access.reconnect(room, next);
+  h.access.assertActive(room, next);
+  h.access.forget(room, next);
+  await h.join(room, 'two');
+});
+
+test('pending authorization budget rejects excess work before DB reads and recovers after failures', async () => {
+  const h = harness({ maxPendingAuth: 1 });
+  const read = h.db.findUserByToken;
+  const pending = deferred();
+  let reads = 0;
+  h.db.findUserByToken = () => {
+    reads++;
+    return pending.promise;
+  };
+  const first = h.access.preflight({ code: 'A', token: 'one' });
+  await assert.rejects(h.join(h.room('A')), { code: 503 });
+  assert.equal(reads, 1);
+  const rejected = assert.rejects(first, /database unavailable/);
+  pending.reject(new Error('database unavailable'));
+  await rejected;
+  h.db.findUserByToken = read;
+  await h.join(h.room('A'));
+});
+
+test('admission saturation does not revoke established sessions during periodic checks', async () => {
+  const h = harness({ maxPendingAuth: 1 });
+  const client = await h.join(h.room('A'));
+  const read = h.db.findUserByToken;
+  const pending = deferred();
+  h.db.findUserByToken = (hash) => (hash === 'hash:two' ? pending.promise : read(hash));
+  const joining = h.join(h.room('A'), 'two');
+  await h.access.revalidate();
+  assert.deepEqual(client.exits, []);
+  pending.resolve(h.users.get('hash:two'));
+  await joining;
+});
+
+test('live room slots are idempotent and separate from connection cleanup', () => {
+  const h = harness({ maxLiveRooms: 1 });
+  const a = h.room('A');
+  const b = h.room('B');
+  h.access.reserveRoom(a);
+  h.access.reserveRoom(a);
+  assert.throws(() => h.access.reserveRoom(b), { code: 503 });
+  h.access.dispose(a); // final save may still be running
+  assert.throws(() => h.access.reserveRoom(b), { code: 503 });
+  h.access.releaseRoom(a);
+  h.access.releaseRoom(a);
+  h.access.reserveRoom(b);
+});
 
 test('direct room-ID joins cannot borrow authorization from another room code', async () => {
   const h = harness();

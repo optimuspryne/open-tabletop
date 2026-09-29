@@ -84,7 +84,7 @@ function transport(sessionId) {
 
 // Exercise the production classes and registration through real Colyseus HTTP.
 // Replace only the database/storage and omit application startup (migrations/listen).
-async function isolatedServer(dir, db) {
+async function isolatedServer(dir, db, resourceEnv = {}) {
   const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
   const lobbyStart = source.indexOf('class LobbyRoom extends Room');
   let fixture =
@@ -96,6 +96,10 @@ async function isolatedServer(dir, db) {
     'const db = globalThis.__securityTestDb;',
   );
   fixture = fixture.replace("process.env.ASSETS_DIR || './saved-assets'", JSON.stringify(dir));
+  fixture = fixture.replace(
+    'readRoomResourceLimits()',
+    `readRoomResourceLimits(${JSON.stringify(resourceEnv)})`,
+  );
   fixture = fixture.replace(
     'const gameServer = new Server({',
     'const httpServer = createServer();\nconst gameServer = new Server({ greet: false,',
@@ -308,4 +312,91 @@ test('production HTTP matchmaking authenticates before allocation and preserves 
   assert.equal(restored.state.notes, 'final checkpoint');
   assert.notEqual(restored.roomId, room.roomId);
   await restored.disconnect();
+});
+
+test('production room budgets cover allocation failures, lobbies, editors, joins and raw message floods', async (t) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'ott-room-limits-'));
+  let failLoad = true;
+  let stateReads = 0;
+  let pending = false;
+  const db = {
+    async findUserByToken(token) {
+      return { id: token, username: 'test', isAdmin: token === hashToken('admin') };
+    },
+    async findRoomByCode(code) {
+      return { id: `db-${code}`, code, name: 'Test' };
+    },
+    async getMembership() {
+      return { status: pending ? 'pending' : 'admitted', role: 'owner', participation: 'player' };
+    },
+    async getRoomState() {
+      stateReads++;
+      if (failLoad) throw new Error('fixture failed load');
+      return structuredClone(DEFAULT_ROOM_STATE);
+    },
+    async listMembers() {
+      return [];
+    },
+    async saveRoomState() {
+      return { rowCount: 1 };
+    },
+  };
+  const { gameServer, roomAccess, ROOM_WRITERS } = await isolatedServer(dir, db, {
+    ROOM_MAX_LIVE: '1',
+    ROOM_MAX_CONNECTIONS: '1',
+    ROOM_MAX_CONNECTIONS_PER_USER: '1',
+    ROOM_MAX_PENDING_AUTH: '2',
+    ROOM_MAX_MESSAGES_PER_SECOND: '4',
+  });
+  t.after(async () => {
+    await gameServer.gracefullyShutdown(false);
+    await rm(dir, { recursive: true, force: true });
+  });
+  await gameServer.listen(0, '127.0.0.1');
+  await assert.rejects(
+    matchMaker.createRoom('table', { code: 'A', token: 'one' }),
+    /fixture failed load/,
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(ROOM_WRITERS.size, 0);
+  failLoad = false;
+  const listing = await matchMaker.createRoom('table', { code: 'A', token: 'one' });
+  const room = matchMaker.getLocalRoomById(listing.roomId);
+  for (const [type, options] of [
+    ['table', { code: 'B', token: 'one' }],
+    ['editor', { token: 'admin' }],
+    ['lobby', { code: 'B', token: 'one' }],
+  ]) {
+    pending = type === 'lobby';
+    await assert.rejects(matchMaker.createRoom(type, options), { code: 503 });
+  }
+  pending = false;
+  assert.equal(stateReads, 2, 'rejected rooms must not read checkpoints or allocate physics');
+  const seat = await matchMaker.joinById(room.roomId, { code: 'A', token: 'one' }, {});
+  const client = transport(seat.sessionId);
+  await room._onJoin(client, {});
+  client.state = ClientState.JOINED;
+  delete client._enqueuedMessages;
+  const extra = await matchMaker.joinById(room.roomId, { code: 'A', token: 'two' }, {});
+  await assert.rejects(room._onJoin(transport(extra.sessionId), {}), { code: 503 });
+  // Real Colyseus dispatch counts even protocol-level pings before decoding payloads.
+  client._lastMessageTime = room.clock.currentTime;
+  client._numMessagesLastSecond = 0;
+  for (let i = 0; i < 4; i++) room._onMessage(client, Buffer.from([Protocol.PING]));
+  assert.equal(client.state, ClientState.JOINED);
+  room._onMessage(client, Buffer.from([Protocol.PING]));
+  assert.equal(client.state, ClientState.LEAVING);
+  roomAccess.revokeUser(hashToken('one')); // release the bounded reconnect grace period
+  await new Promise((resolve) => setImmediate(resolve));
+  await room.disconnect();
+  pending = true;
+  const lobbyListing = await matchMaker.createRoom('lobby', { code: 'B', token: 'one' });
+  const lobby = matchMaker.getLocalRoomById(lobbyListing.roomId);
+  assert.equal(lobby.maxMessagesPerSecond, 4);
+  await lobby.disconnect();
+  pending = false;
+  const editorListing = await matchMaker.createRoom('editor', { token: 'admin' });
+  const editor = matchMaker.getLocalRoomById(editorListing.roomId);
+  assert.equal(editor.maxMessagesPerSecond, 4);
+  await editor.disconnect();
 });

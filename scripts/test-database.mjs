@@ -117,6 +117,37 @@ async function prepareDatabase(ownerUrl) {
   try {
     const schema = await fs.readFile(path.join(root, 'postgres/schema.sql'), 'utf8');
     await client.query(schema);
+    // Upgrade a populated pre-demo schema with the same numbered migration used
+    // by deployment; permanent users and room state must remain unchanged.
+    const demoMigration = await fs.readFile(
+      path.join(root, 'postgres/024_demo_sessions.sql'),
+      'utf8',
+    );
+    await client.query('CREATE SCHEMA demo_upgrade_test');
+    try {
+      await client.query('SET search_path TO demo_upgrade_test');
+      await client.query(
+        schema.replace(demoMigration + '\n', '').replace(", ('024_demo_sessions.sql')", ''),
+      );
+      const user = (
+        await client.query(
+          "INSERT INTO users(username,email) VALUES ('survivor','survivor@example.test') RETURNING id",
+        )
+      ).rows[0];
+      await client.query(
+        "INSERT INTO rooms(owner_id,code,name,notes) VALUES ($1,'SURVIVOR','Saved table','keep me')",
+        [user.id],
+      );
+      await client.query(demoMigration);
+      const existing = (await client.query('SELECT email,is_demo FROM users')).rows[0];
+      assert.equal(existing.email, 'survivor@example.test');
+      assert.equal(existing.is_demo, false);
+      assert.equal((await client.query('SELECT notes FROM rooms')).rows[0].notes, 'keep me');
+      assert.equal((await client.query('SELECT count(*)::int AS n FROM demo_rooms')).rows[0].n, 0);
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA demo_upgrade_test CASCADE');
+    }
     // Exercise migration 021 independently against an existing account, preserving its avatar.
     const placardMigration = await fs.readFile(
       path.join(root, 'postgres/021_user_placards.sql'),
@@ -275,6 +306,9 @@ try {
 
   await prepareDatabase(ownerUrl);
   await run(process.execPath, ['--test', 'test/integration/database.js'], {
+    env: { TEST_DATABASE_URL: appUrl },
+  });
+  await run(process.execPath, ['--test', 'test/integration/demo-sessions.js'], {
     env: { TEST_DATABASE_URL: appUrl },
   });
 } finally {

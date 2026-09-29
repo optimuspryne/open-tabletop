@@ -23,7 +23,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 23); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 24); // Includes temporary demo identities and rooms.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',

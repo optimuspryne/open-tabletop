@@ -5,8 +5,10 @@ const sameUser = (auth, userId) => String(auth.userId) === String(userId);
 
 // Process-local, like the current Colyseus room registry. Entries survive network
 // drops until the reconnect window ends; token hashes never enter synced state.
-export function createRoomAccess({ db, hashToken }) {
+export function createRoomAccess({ db, hashToken, limits = {} }) {
   const rooms = new Map();
+  const allocatedRooms = new Set();
+  let pendingAdmissions = 0;
   const pendingChecks = new Set();
   const placardWrites = new Map();
   const changingParticipation = new WeakMap();
@@ -25,7 +27,12 @@ export function createRoomAccess({ db, hashToken }) {
     }
   }
 
-  async function checkedAccess(room, kind, tokenHash, apply) {
+  async function checkedAccess(room, kind, tokenHash, apply, admission = false) {
+    if (admission) {
+      if (pendingAdmissions >= (limits.maxPendingAuth ?? Infinity))
+        throw new ServerError(503, 'Too many joins in progress. Please try again shortly.');
+      pendingAdmissions++;
+    }
     const check = {
       room,
       tokenHash,
@@ -53,6 +60,7 @@ export function createRoomAccess({ db, hashToken }) {
       return apply(auth);
     } finally {
       pendingChecks.delete(check);
+      if (admission) pendingAdmissions--;
     }
   }
 
@@ -72,6 +80,8 @@ export function createRoomAccess({ db, hashToken }) {
       if (room.persistentRoomId && String(room.persistentRoomId) !== String(record.id))
         throw new ServerError(403, 'The room identity changed. Please join again.');
       persistentRoomId = record.id;
+      if (user.isDemo && String(user.demoRoomId) !== String(record.id))
+        throw new ServerError(403, 'Demo guests can only enter their own table.');
       roomName = record.name;
       const member = await db.getMembership(record.id, user.id);
       if (kind === 'lobby') {
@@ -168,6 +178,19 @@ export function createRoomAccess({ db, hashToken }) {
   }
 
   return {
+    // Called synchronously before physics/state allocation, including editors and
+    // waiting lobbies. Retain the slot through the final save on disposal.
+    reserveRoom(room) {
+      if (allocatedRooms.has(room)) return;
+      if (allocatedRooms.size >= (limits.maxLiveRooms ?? Infinity))
+        throw new ServerError(503, 'This server has reached its live room limit. Try again later.');
+      allocatedRooms.add(room);
+    },
+
+    releaseRoom(room) {
+      allocatedRooms.delete(room);
+    },
+
     // Matchmaking preflight performs no allocation and installs no client admission.
     // onJoin must authorize again against the actual room and register revocation tracking.
     async preflight(options, kind = 'table') {
@@ -183,6 +206,7 @@ export function createRoomAccess({ db, hashToken }) {
         kind,
         hashToken(options.token),
         (auth) => auth,
+        true,
       );
     },
 
@@ -202,16 +226,47 @@ export function createRoomAccess({ db, hashToken }) {
       if (typeof options?.token !== 'string' || !options.token)
         throw new ServerError(401, 'Please sign in first.');
       const tokenHash = hashToken(options.token);
-      return checkedAccess(room, kind, tokenHash, (auth) => {
-        if (rooms.get(room)?.size >= room.connectionLimit)
-          throw new ServerError(
-            403,
-            'This room has reached its participant limit. Try again later.',
-          );
-        if (!rooms.has(room)) rooms.set(room, new Map());
-        rooms.get(room).set(client.sessionId, { client, auth, tokenHash, kind });
-        return auth;
-      });
+      return checkedAccess(
+        room,
+        kind,
+        tokenHash,
+        (auth) => {
+          if (rooms.get(room)?.size >= room.connectionLimit)
+            throw new ServerError(
+              403,
+              'This room has reached its participant limit. Try again later.',
+            );
+          if (rooms.get(room)?.has(client.sessionId))
+            throw new ServerError(409, 'This connection is already admitted.');
+          // Check and install in one synchronous continuation: concurrent DB reads
+          // cannot oversubscribe the budget. Reconnect reservations still count.
+          if (
+            Number.isFinite(limits.maxConnections) ||
+            Number.isFinite(limits.maxConnectionsPerUser)
+          ) {
+            let total = 0;
+            let own = 0;
+            for (const clients of rooms.values()) {
+              total += clients.size;
+              for (const entry of clients.values()) if (sameUser(entry.auth, auth.userId)) own++;
+            }
+            if (total >= (limits.maxConnections ?? Infinity))
+              throw new ServerError(
+                503,
+                'This server has reached its connection limit. Try again later.',
+              );
+            if (own >= (limits.maxConnectionsPerUser ?? Infinity))
+              throw new ServerError(
+                429,
+                'You have too many table connections. Close another tab first.',
+              );
+          }
+          if (!rooms.has(room)) rooms.set(room, new Map());
+          rooms.get(room).set(client.sessionId, { client, auth, tokenHash, kind });
+          return auth;
+        },
+        true,
+      );
     },
 
     // Serialize account writes across tabs/rooms so database and live state agree.
@@ -267,19 +322,26 @@ export function createRoomAccess({ db, hashToken }) {
       entry.client = client;
       entry.auth.participationReady = false;
       try {
-        await checkedAccess(room, entry.kind, entry.tokenHash, (auth) => {
-          if (entry.auth.revoked) throw new ServerError(403, 'Access changed. Please join again.');
-          Object.assign(entry.auth, auth);
-          client.auth = entry.auth;
-          const player = room.state?.players?.get(client.sessionId);
-          if (player) {
-            player.placard = JSON.stringify(readPlacard(auth.placard));
-            player.role = auth.role;
-            player.timedOut = auth.timedOut;
-            player.participation = auth.participation;
-          }
-          room.onParticipationChanged?.(client);
-        });
+        await checkedAccess(
+          room,
+          entry.kind,
+          entry.tokenHash,
+          (auth) => {
+            if (entry.auth.revoked)
+              throw new ServerError(403, 'Access changed. Please join again.');
+            Object.assign(entry.auth, auth);
+            client.auth = entry.auth;
+            const player = room.state?.players?.get(client.sessionId);
+            if (player) {
+              player.placard = JSON.stringify(readPlacard(auth.placard));
+              player.role = auth.role;
+              player.timedOut = auth.timedOut;
+              player.participation = auth.participation;
+            }
+            room.onParticipationChanged?.(client);
+          },
+          true,
+        );
       } catch (error) {
         entry.auth.revoked = true; // failed rechecks must not start another reconnect window
         throw error;

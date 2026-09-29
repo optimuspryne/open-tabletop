@@ -97,6 +97,7 @@ import { hashPassword, verifyPassword, makeToken, hashToken } from './auth.js';
 import { runMigrations } from './migrate.js'; // startup schema migrator (owner-role DDL)
 import { RANK, rankOf, canManageMember, canSetMemberRole } from './server/permissions.js';
 import { createRoomAccess } from './server/room-access.js';
+import { readRoomResourceLimits } from './server/room-resource-limits.js';
 import { createAssetCleanup } from './server/asset-cleanup.js';
 import { httpErrorHandler } from './server/http/async-route.js';
 import { createRequireUser, createRequireAdmin } from './server/http/auth-context.js';
@@ -258,7 +259,8 @@ const {
 const LIVE_ROOMS = new Set();
 // Single-process writer ownership lasts through the final queued save.
 const ROOM_WRITERS = new Map();
-const roomAccess = createRoomAccess({ db, hashToken });
+const roomResourceLimits = readRoomResourceLimits();
+const roomAccess = createRoomAccess({ db, hashToken, limits: roomResourceLimits });
 const participation = createParticipationService({ db, roomAccess });
 setInterval(() => void roomAccess.revalidate(), 30_000).unref();
 const { findOrphanAssets, trashOrphans } = createAssetCleanup({
@@ -369,6 +371,8 @@ class TableRoom extends Room {
 
   async onCreate(options) {
     const admission = await roomAccess.preflight(options, this.constructor.accessKind);
+    roomAccess.reserveRoom(this);
+    this.maxMessagesPerSecond = roomResourceLimits.maxMessagesPerSecond;
     this.roomCode = this.constructor.accessKind === 'editor' ? null : options.code;
     this.persistentRoomId = admission.persistentRoomId;
     if (this.persistentRoomId) {
@@ -918,24 +922,29 @@ class TableRoom extends Room {
     await saveRoomStateNow(this, { db });
   }
   async onDispose() {
-    this.disposeCollections?.();
-    for (const client of this.clients) this.notecards?.cancelClient(client.sessionId);
-    this.deckBrowsing?.clear();
-    // safety net: snapshot the live table so progress survives an empty room even without a manual Save
-    roomAccess.dispose(this);
-    await safeRoomTask(
-      this,
-      'disposeSave',
-      null,
-      () =>
-        this._admitted && ROOM_WRITERS.get(this.persistentRoomId) === this
-          ? saveFinalRoomState(this, { sceneMaxBytes: SCENE_MAX_BYTES })
-          : undefined,
-      { notify: false },
-    );
-    LIVE_ROOMS.delete(this);
-    if (ROOM_WRITERS.get(this.persistentRoomId) === this)
-      ROOM_WRITERS.delete(this.persistentRoomId);
+    try {
+      this.disposeCollections?.();
+      for (const client of this.clients) this.notecards?.cancelClient(client.sessionId);
+      this.deckBrowsing?.clear();
+      // safety net: snapshot the live table so progress survives an empty room even without a manual Save
+      roomAccess.dispose(this);
+      await safeRoomTask(
+        this,
+        'disposeSave',
+        null,
+        () =>
+          this._admitted && ROOM_WRITERS.get(this.persistentRoomId) === this
+            ? saveFinalRoomState(this, { sceneMaxBytes: SCENE_MAX_BYTES })
+            : undefined,
+        { notify: false },
+      );
+    } finally {
+      roomAccess.dispose(this);
+      LIVE_ROOMS.delete(this);
+      if (ROOM_WRITERS.get(this.persistentRoomId) === this)
+        ROOM_WRITERS.delete(this.persistentRoomId);
+      roomAccess.releaseRoom(this);
+    }
   }
 
   // Send a client the library list for one asset kind. Admins get everything
@@ -1409,6 +1418,8 @@ class LobbyRoom extends Room {
     return true;
   }
   onCreate(options) {
+    roomAccess.reserveRoom(this);
+    this.maxMessagesPerSecond = roomResourceLimits.maxMessagesPerSecond;
     this.roomCode = options?.code || null;
   }
   async onJoin(client, options) {
@@ -1419,7 +1430,11 @@ class LobbyRoom extends Room {
     await roomAccess.reconnect(this, client);
   }
   onDispose() {
-    roomAccess.dispose(this);
+    try {
+      roomAccess.dispose(this);
+    } finally {
+      roomAccess.releaseRoom(this);
+    }
   }
   async onLeave(client, consented) {
     // A pending joiner who dropped (tab close / flaky net): hold their spot briefly so a

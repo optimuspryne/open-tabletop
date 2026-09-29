@@ -1,6 +1,6 @@
 -- schema.sql — the complete Open Tabletop schema in one file.
 --
--- This is the flattened end state of migrations 001–023, meant for a FRESH
+-- This is the flattened end state of migrations 001–024, meant for a FRESH
 -- install (a new Docker volume, a clean dev DB) — run it once instead of applying
 -- the four numbered migrations in sequence. Run as the OWNER role (tabletop):
 --   psql -U tabletop -d tabletop -f schema.sql
@@ -260,8 +260,37 @@ CREATE TABLE account_recovery_codes (
 );
 CREATE INDEX account_recovery_codes_user_idx ON account_recovery_codes(user_id);
 
+-- Explicit temporary identities; ordinary accounts still require an email address.
+ALTER TABLE users ADD COLUMN is_demo boolean NOT NULL DEFAULT false;
+ALTER TABLE users ALTER COLUMN email DROP NOT NULL;
+ALTER TABLE users ADD CONSTRAINT users_demo_identity CHECK (
+  (NOT is_demo AND email IS NOT NULL) OR
+  (is_demo AND email IS NULL AND password_hash IS NULL AND NOT is_admin AND host_status = 'none')
+);
+
+-- Only marked rooms are eligible for automatic expiry/purge. Secrets are hash-only.
+CREATE TABLE demo_rooms (
+  room_id bigint PRIMARY KEY REFERENCES rooms(id) ON DELETE CASCADE,
+  invite_hash text NOT NULL UNIQUE CHECK (invite_hash ~ '^[a-f0-9]{64}$'),
+  starter text NOT NULL CHECK (starter IN ('empty', 'dice', 'cards', 'chess')),
+  expires_at timestamptz NOT NULL,
+  idle_expires_at timestamptz,
+  closed_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+CREATE INDEX demo_rooms_expiry_idx ON demo_rooms(expires_at);
+
+-- Keep the marker after an administrator purges a room, so its orphan guests can
+-- still be collected without touching ordinary accounts or shared library assets.
+CREATE TABLE demo_guests (
+  user_id bigint PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  room_id bigint REFERENCES rooms(id) ON DELETE SET NULL,
+  display_name text NOT NULL CHECK (length(btrim(display_name)) BETWEEN 1 AND 20)
+);
+CREATE INDEX demo_guests_room_idx ON demo_guests(room_id);
+
 -- ===== Migration bookkeeping ================================================
--- This baseline IS the flattened result of migrations 001–023, so record them as
+-- This baseline IS the flattened result of migrations 001–024, so record them as
 -- already applied. The app's startup migrator (migrate.js) reads this table and
 -- runs only the numbered files NOT listed here — so a fresh install skips them all,
 -- and a later upgrade applies just the new ones. (A blank DB with no baseline has
@@ -278,6 +307,6 @@ INSERT INTO schema_migrations (version) VALUES
   ('012_custom_dice.sql'), ('013_player_mats.sql'),
   ('014_room_table_shape.sql'), ('015_room_rim_wood.sql'),
   ('016_room_lighting.sql'), ('017_collider_presets.sql'),
-  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql'), ('023_account_recovery.sql');
+  ('018_room_participation.sql'), ('019_spectator_mode.sql'), ('020_asset_collections.sql'), ('021_user_placards.sql'), ('022_notecard_templates.sql'), ('023_account_recovery.sql'), ('024_demo_sessions.sql');
 
 COMMIT;

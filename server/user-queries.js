@@ -3,7 +3,7 @@ import { readPlacard } from '../shared/placards.js';
 export const publicUserRow = (row) =>
   row && {
     id: String(row.id),
-    username: row.username,
+    username: row.demo_name ?? row.username,
     email: row.email,
     avatar: row.avatar,
     placard: readPlacard(row.placard),
@@ -11,6 +11,9 @@ export const publicUserRow = (row) =>
     hostStatus: row.host_status,
     hasPassword: !!row.password_hash,
     canOwnRooms: row.host_status === 'approved' || row.is_admin,
+    ...(row.is_demo
+      ? { isDemo: true, demoRoomId: row.demo_room_id == null ? null : String(row.demo_room_id) }
+      : {}),
   };
 export const authUserRow = (row) =>
   row && { ...publicUserRow(row), passwordHash: row.password_hash };
@@ -30,9 +33,15 @@ export function createUserQueries(query) {
     async findUserByToken(tokenHash) {
       if (!tokenHash) return null;
       const { rows } = await query(
-        `SELECT u.* FROM user_sessions s
+        `SELECT u.*, g.display_name AS demo_name, g.room_id AS demo_room_id FROM user_sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = $1 AND s.expires_at > now()`,
+         LEFT JOIN demo_guests g ON g.user_id=u.id
+         LEFT JOIN demo_rooms d ON d.room_id=g.room_id
+         LEFT JOIN rooms r ON r.id=d.room_id
+         WHERE s.token_hash = $1 AND s.expires_at > clock_timestamp()
+         AND (NOT u.is_demo OR (d.closed_at IS NULL AND r.deleted_at IS NULL
+           AND d.expires_at>clock_timestamp()
+           AND (d.idle_expires_at IS NULL OR d.idle_expires_at>clock_timestamp())))`,
         [tokenHash],
       );
       return publicUserRow(rows[0]) || null;

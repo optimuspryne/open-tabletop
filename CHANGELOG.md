@@ -38,6 +38,20 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 
 ### Added
+- Temporary-demo storage foundation (migration 024): atomic guest/table allocation with
+  serialized storage quotas, separate hashed invites and sessions, host-only invite rotation,
+  durable absolute/idle deadlines, and guarded cleanup preserving shared library assets.
+  Expired/closed guest credentials fail ordinary authentication; guests remain bound to their
+  table. No public guest route or automatic cleanup scheduler is exposed yet. Apply migration
+  024 before running this branch, including when demo features are unused. Entry mock-up and
+  icon choices are approved; production demo UI/runtime wiring remain pending.
+- First public-demo backend slice: opt-in process-local live-room, admitted-connection,
+  per-account connection and in-flight authorization budgets, plus Colyseus's existing
+  pre-decode message-rate limiter. Tables, editors, waiting lobbies and reconnect reservations
+  share the applicable budgets; room slots survive final checkpoint saves and release after
+  failed initialization. Defaults preserve existing capacity behavior. Configure the new
+  `ROOM_MAX_*` variables and restart the server. No migration or UI change. Temporary guests,
+  expiring tables and the proposed demo UI remain planned in `docs/DEMO_MODE_PLAN.md`.
 - Replaced the website header and footer text branding with the existing Open Tabletop
   logo on the landing page and all 17 wiki guides, with accessible names and responsive sizing.
 - Captured four gameplay/library screenshots from two dedicated, saved showcase rooms.
