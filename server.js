@@ -467,7 +467,7 @@ class TableRoom extends Room {
         const deck = deckBuilders.buildSimpleDeck(false);
         this.spawn('deck', [0, 2, 0], { back: deck.back, cards: deck.cards, ...geoOf(deck) });
       } else if (admission.demoStarter === 'dice') {
-        for (let i = 0; i < 5; i++) this.spawn('d6', [(i - 2) * 1.5, 2, 0]);
+        for (let i = 0; i < 5; i++) this.spawn('die', [(i - 2) * 1.5, 2, 0], { sides: 6 });
       }
     }
     if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)

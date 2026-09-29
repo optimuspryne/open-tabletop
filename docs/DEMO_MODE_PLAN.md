@@ -7,6 +7,11 @@ icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact t
 
 ## Current runtime (2026-09-29)
 
+Dice starter repair: `TableRoom.onCreate` now spawns five `die` pieces with
+`sides: 6`. The live smoke test accepts `DEMO_TEST_STARTER` and asserts the
+synchronized dice state. Dice matchmaking, invites and expiry passed locally;
+Hetzner requires an app rebuild/restart and subsequent user verification.
+
 Guest entry, private table allocation, curated starters, resume, invite exchange/rotation,
 active/idle expiry and cleanup are implemented. The user also approved the exact in-table
 placement: replace the top-right copyable room code with expiry status and Invite friends;

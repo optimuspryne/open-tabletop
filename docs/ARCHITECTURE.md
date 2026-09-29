@@ -2380,3 +2380,6 @@ last occupied time so a restart cannot restart the idle clock. Shared capability
 room timer enforce absolute expiry; startup sweeps before listening. Failures retain data for
 retry. Raw tokens remain outside SQL/synchronized state, and guest browser credentials remain
 separate from administrator login. The deployment must remain single-process.
+
+Demo dice starters use the canonical `die` piece type with `sides: 6`, through
+the existing piece/physics lifecycle; `d6` is not a piece type.

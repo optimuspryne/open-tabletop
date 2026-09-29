@@ -23,6 +23,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   ordinary deployments retain their entry flow.
 
 ### Fixed
+- Fixed demo dice starter matchmaking: spawn five canonical `die` pieces with
+  `sides: 6` instead of the unsupported `d6` piece type that crashed room creation.
+  The live demo smoke test now accepts `DEMO_TEST_STARTER` and verifies synchronized
+  dice state. Rebuild/restart the app container to apply; no database migration.
 - Fixed Docker first-run role initialization: pass the database owner as a safely quoted
   psql identifier, so default grants no longer target the literal "$POSTGRES_USER".
   Added a disposable PostgreSQL regression test for initialization, password quoting,

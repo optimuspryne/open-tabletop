@@ -6,6 +6,8 @@ import { launch, newPage } from './lib/headless.mjs';
 const origin = process.env.DEMO_TEST_ORIGIN;
 if (origin !== 'http://127.0.0.1:2568')
   throw new Error('Set DEMO_TEST_ORIGIN=http://127.0.0.1:2568 for the isolated local stack.');
+const starter = process.env.DEMO_TEST_STARTER || 'chess';
+assert.ok(['empty', 'dice', 'cards', 'chess'].includes(starter));
 const browser = await launch({ webgl: true });
 try {
   const page = await newPage(browser, { url: origin, settle: 1000 });
@@ -13,8 +15,25 @@ try {
     await page.evaluate(`document.querySelector('#demo-heading')?.textContent`),
     'Your own table, ready to play',
   );
+  await browser.send(
+    'Page.addScriptToEvaluateOnNewDocument',
+    {
+      source: `(() => {
+        let handler;
+        Object.defineProperty(window, 'onOttRoom', {
+          configurable: true,
+          get: () => (room, ...args) => {
+            window.__demoTestRoom = room;
+            return handler?.(room, ...args);
+          },
+          set: value => { handler = value; },
+        });
+      })();`,
+    },
+    page.sessionId,
+  );
   await page.evaluate(
-    `document.querySelector('#demo-name').value='UI smoke'; document.querySelector('[value="chess"]').checked=true; document.querySelector('form').requestSubmit()`,
+    `document.querySelector('#demo-name').value='UI smoke'; document.querySelector('[value="${starter}"]').checked=true; document.querySelector('form').requestSubmit()`,
   );
   await new Promise((resolve) => setTimeout(resolve, 3500));
   assert.match(await page.evaluate('location.href'), /table.html/);
@@ -26,6 +45,17 @@ try {
     await page.evaluate(`document.querySelector('.demo-table-status')?.textContent`),
     /Public demo/,
   );
+  if (starter === 'dice') {
+    assert.deepEqual(
+      await page.evaluate(
+        `Array.from(window.__demoTestRoom.state.pieces.values(), piece => ({
+          type: piece.type, sides: JSON.parse(piece.props).sides,
+        }))`,
+      ),
+      Array.from({ length: 5 }, () => ({ type: 'die', sides: 6 })),
+      'dice starter joins with five synchronized six-sided dice',
+    );
+  }
   await page.evaluate(`document.querySelector('.demo-invite').click()`);
   const state = await page.evaluate(`JSON.parse(localStorage.getItem('tabletop.demo.session'))`);
   const link = await page.evaluate(`document.querySelector('#demo-invite-link').value`);
@@ -151,7 +181,7 @@ try {
   assert.equal(remaining.trim(), '0', 'expired live table reclaimed after disposal');
   await page.close();
   console.log(
-    'Live demo passed: entry → chess table, invite dialog, guest exchange, host-only rotation, stale invite rejection, existing guest resume, account/signup denial, active expiry redirect and safe reclamation.',
+    `Live demo passed: entry → ${starter} table, invite dialog, guest exchange, host-only rotation, stale invite rejection, existing guest resume, account/signup denial, active expiry redirect and safe reclamation.`,
   );
 } finally {
   await browser.close();

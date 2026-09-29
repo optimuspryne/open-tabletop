@@ -3633,3 +3633,11 @@ single-flight `sweep()`; start returns a timer stopper after recovery succeeds.
 `public/demo/session.js` exports read/write/clear guest storage and the HTTP adapter.
 `mountDemoTable(room,table)` owns status, invite UI and timer cleanup. Template GETs are the
 explicit exception to ordinary HTTP guest denial, with existing visibility checks; writes fail.
+
+Demo dice starters use the canonical `die` piece type with `sides: 6`, through
+the existing piece/physics lifecycle; `d6` is not a piece type.
+
+The local live regression can select a starter with `DEMO_TEST_STARTER=dice`
+(default: chess; also empty/cards) alongside
+`DEMO_TEST_ORIGIN=http://127.0.0.1:2568 node scripts/demo-live-test.mjs`.
+Dice mode asserts five synchronized six-sided dice after real matchmaking.
