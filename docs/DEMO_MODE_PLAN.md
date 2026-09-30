@@ -5,12 +5,22 @@ The demo is an opt-in deployment of the same application, not a permanent fork.
 User selected a fresh table per visitor/group and approved the entry mock-up and recommended
 icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact table placement and invite dialog were subsequently approved before implementation.
 
+## Capacity adjustment (2026-09-30)
+
+Current demo limits are **four stored tables and four live rooms**, with 20 connections,
+15 dice per table and a 1,000 ms per-die cooldown. Five fully loaded tables saturated CPU;
+the operator observed average ticks fall to about 30 late in the three-minute run. Close/expire
+old temporary tables before rebuilding/restarting. Existing records are not automatically
+removed. The four-table/20-connection sustained retest remains pending. Historical trial
+values below are retained as history, not current demo settings.
+
 ## Dice safeguards (2026-09-30)
 
 Implemented: room-wide 15-dice cap and shared 1,000 ms cooldown per die, including custom and
 tray dice. Creation/restoration seeds the cooldown; over-cap scenes reject before mutation.
 Approved existing notifications provide capacity, cooldown and restore feedback. See
-[implementation, verification and rollout](PLAN_DEMO_DICE_LIMITS.md). Public deployment and
+[implementation, verification and rollout](PLAN_DEMO_DICE_LIMITS.md). The user deployed the dice
+safeguards and monitored public load tests. The four-table capacity reduction and further
 load/real-device acceptance are pending; close old temporary tables before updating the app.
 
 ## Current runtime (2026-09-29)
@@ -58,7 +68,7 @@ Existing gameplay controls retain their positions. Only `users-plus` was added t
 existing symbols are unchanged.
 
 `DEMO_MODE=true` serves the entry at `/` and `/index.html`, mounts `/demo-api`, disables normal
-signup and room-code admission, and uses finite process limits: 5 live rooms, 20 connections,
+signup and room-code admission, and uses finite process limits: 4 live rooms, 20 connections,
 2 per identity, 16 pending admissions and 240 messages/second. These are trial values, not
 measured production capacity. Ordinary deployments retain optional `ROOM_MAX_*` settings.
 `/demo-config` reports whether the deployment is enabled. This mode is single-process only.
@@ -191,7 +201,7 @@ limits cannot replace reverse-proxy and OS limits.
 The storage API is implemented in `server/demo-queries.js` and exported as `db.demo` through
 the existing production facade. All mutation transactions take one database advisory lock;
 capacity includes expired-but-unpurged rows so cleanup failures cannot allow unbounded growth.
-Defaults are five stored demo tables, forty identities, eight identities per table, a two-hour
+Current defaults are four stored demo tables (reduced from the original five), forty identities, eight identities per table, a two-hour
 absolute lifetime and fifteen-minute idle expiry. These internal limits are not deployment flags
 yet. Runtime connection limits are independent.
 

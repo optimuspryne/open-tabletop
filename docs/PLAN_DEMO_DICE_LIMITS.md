@@ -1,8 +1,33 @@
 # Demo dice safeguards
 
-Implemented on `codex/public-demo-mode`, 2026-09-30. Public deployment and target-host
-performance/manual acceptance remain pending. The user approved the three feedback messages
-and authorized a local commit; no push or deployment is part of this change.
+Implemented on `codex/public-demo-mode`, 2026-09-30. The user deployed the dice safeguards
+and monitored the public stress tests below. The subsequent four-table cap change still needs
+deployment and a sustained retest. Real-device acceptance remains pending. The user approved
+the three feedback messages and authorized local commits; no push or deployment is performed here.
+
+## Public stress results and four-table adjustment
+
+On 2026-09-30, a 45-second four-table run used 60 d20s and ten connections. All HTTP probes
+returned 200 in 86–172 ms with no reported socket/server errors. The operator reported roughly
+60 average ticks/second throughout the round and peak CPU of 80%.
+
+The next run used five tables, 75 d20s and all 20 connections for three minutes (10:01:59–10:04:59
+America/Phoenix). It sent 17,280 roll requests; HTTP probes returned 200 in 89–236 ms and no
+socket/server errors or unexpected disconnects were reported. Every table rejected a 16th die.
+The operator observed average ticks drop to about 30 near the end and CPU reach 100%. These are
+operator observations, not captured tick percentiles; recovery of simulation ticks was not reported.
+
+The user therefore selected **four stored tables and four live rooms**. Only the existing
+`DEMO_STORAGE_LIMITS.rooms` constant (`server/demo-queries.js`) and demo-only
+`ROOM_MAX_LIVE` value (`server.js`) change. No functions/helpers are added or removed.
+The 20 connections, 15 dice per table and 1,000 ms cooldown remain unchanged. Verification
+after this adjustment: `npm run check` passed all 944 tests, lint, formatting and CSS checks;
+`git diff --check` passed. No functions or UI were changed. A three-minute
+four-table/20-connection retest is pending: the earlier four-table run was shorter and lighter.
+
+This adjustment also updates `CHANGELOG.md` (Unreleased), `docs/REFERENCE.md` (current contracts),
+`docs/ARCHITECTURE.md` (capacity rationale), `docs/DEMO_MODE_PLAN.md` (runtime status), and this
+plan (observations, implementation inventory and acceptance status).
 
 ## Policy and reuse
 
@@ -57,7 +82,8 @@ Automated verification completed on 2026-09-30:
   existing eight bundled texture-fixture 404 warnings remain.
 - `git diff --check` and the new documentation links/file inventory: passed.
 
-No real-device feel, multiplayer performance, or production deployment is claimed. No schema,
+Those automated checks do not establish real-device feel or sustained capacity; subsequent
+public observations are recorded above. No schema,
 query or responsive-layout change required the database/device suites. The first sandboxed
 full run was interrupted; the completed full run used local test socket permissions.
 
@@ -65,7 +91,8 @@ Before updating the demo, close/expire the existing temporary tables using the a
 and allow their final writers/cleanup to finish. Do not wipe database or asset volumes. Rebuild
 and recreate/restart the app, then refresh clients. No migration or environment change is needed.
 Old over-cap saves are refused with recovery feedback and preserved until admin cleanup.
-Rollback uses the previous app image; the dice safeguards will then be absent.
+Rollback of this capacity adjustment restores the previous five-table budget. Rolling back
+the original dice-safeguard implementation also removes the dice cap and cooldown.
 
 Manual smoke tests after deployment:
 
@@ -77,7 +104,7 @@ Manual smoke tests after deployment:
    early; recreated dice start on cooldown. Check approved feedback on desktop/compact/touch.
 4. Try an over-cap saved scene: current table/private inventory must survive. Exercise an old
    over-cap checkpoint in an isolated fixture and confirm failed joins do not overwrite it.
-5. Measure one through five tables within the 20-connection budget, each with 15 rolling dice.
+5. Retest four tables at the 20-connection budget, each with 15 rolling dice, for at least three minutes.
    Record tick/step percentiles, event-loop delay, CPU, HTTP/join latency, and creation/removal
    churn. Proposed targets remain p95 callback interval ≤20 ms and p99 ≤33 ms, not achieved results.
 

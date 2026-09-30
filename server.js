@@ -265,7 +265,7 @@ const ROOM_WRITERS = new Map();
 const demoMode = process.env.DEMO_MODE === 'true';
 const roomResourceLimits = demoMode
   ? readRoomResourceLimits({
-      ROOM_MAX_LIVE: '5',
+      ROOM_MAX_LIVE: '4',
       ROOM_MAX_CONNECTIONS: '20',
       ROOM_MAX_CONNECTIONS_PER_USER: '2',
       ROOM_MAX_PENDING_AUTH: '16',

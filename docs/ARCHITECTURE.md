@@ -24,6 +24,15 @@ reset and disposal. It is never synchronized or persisted. Scoop settles/sleeps 
 rather than consumes cooldowns. Ordinary rooms have no policy. See the
 [dice safeguard implementation and rollout](PLAN_DEMO_DICE_LIMITS.md) for tests and limitations.
 
+## Demo capacity after public load testing
+
+Both stored demo tables and process-local live rooms are capped at four. This reuses existing
+transactional allocation and room-access admission boundaries. The operator observed CPU
+saturation and approximately 30 average ticks/second late in the three-minute five-table,
+75-d20, 20-connection test. Healthy HTTP responses did not establish simulation health.
+Four-table sustained performance at 20 connections remains unverified; the earlier four-table
+run used ten connections for 45 seconds. See [test evidence](PLAN_DEMO_DICE_LIMITS.md).
+
 ## Public-demo foundation and staged design
 
 The [demo plan](DEMO_MODE_PLAN.md) separates implemented admission controls from proposed

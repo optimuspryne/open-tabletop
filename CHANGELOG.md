@@ -8,13 +8,20 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Changed
+- Reduced the public demo to four stored tables and four live rooms after the five-table,
+  75-d20, 20-connection stress test reached 100% CPU and about 30 average ticks/second
+  (operator observations). The 15-dice cap, one-second cooldown and 20-connection budget
+  remain unchanged. Close/expire old temporary tables before rebuilding/restarting; no
+  migration. A sustained four-table/20-connection retest remains pending.
+
 ### Added
 - Demo rooms now enforce 15 dice across the table and all trays, and a shared one-second
   cooldown per die for single/group/tray rolls. New/restored dice start on cooldown;
   over-cap scenes/checkpoints reject before mutation. Approved, coalesced feedback uses
   existing notifications. Ordinary rooms retain their existing behavior. Close existing
   temporary tables before rebuilding/restarting the demo and refresh clients; no migration.
-  See [implementation and rollout](docs/PLAN_DEMO_DICE_LIMITS.md). Public load testing is pending.
+  See [implementation and rollout](docs/PLAN_DEMO_DICE_LIMITS.md). Initial public load tests are recorded in the implementation plan; sustained four-table validation remains pending.
 - Public demo landing branding now uses the existing full wordmark (180px desktop,
   144px phone) and small-logo SVG favicon, matching the table/admin favicon.
   The wordmark links to `https://open-tabletop.com` with visible keyboard focus.

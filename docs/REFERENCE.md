@@ -29,6 +29,14 @@ dice before mutation; failed startup restores cannot overwrite checkpoints. Know
 errors use existing notices, coalesced per connection/kind for two seconds. See
 [implementation, function inventory and rollout](PLAN_DEMO_DICE_LIMITS.md).
 
+### Current demo table capacity
+
+Demo mode selects `ROOM_MAX_LIVE: '4'` in `server.js`, and `DEMO_STORAGE_LIMITS.rooms`
+in `server/demo-queries.js` is 4. The existing admission and transactional storage checks
+consume these values; no helpers or query shapes changed. Stored quota includes expired rows
+until purged, and live quota includes rooms through final disposal. Existing records are not
+deleted by lowering the cap. The 20-connection, 15-dice and 1,000 ms roll limits are unchanged.
+
 ### Room resource budgets (public-demo foundation)
 
 `server/room-resource-limits.js` exports `readRoomResourceLimits(env)`. The returned frozen

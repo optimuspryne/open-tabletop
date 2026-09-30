@@ -2,7 +2,7 @@ import crypto from 'node:crypto';
 import { ASSET_TABLES } from './library-queries.js';
 
 export const DEMO_STORAGE_LIMITS = Object.freeze({
-  rooms: 5,
+  rooms: 4,
   guests: 40,
   guestsPerRoom: 8,
   lifetimeMs: 2 * 60 * 60 * 1000,
