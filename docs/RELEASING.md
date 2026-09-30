@@ -82,6 +82,44 @@ No manual `psql -f`, and **no db-image rebuild required** — existing deploymen
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
+## Upgrading to 0.21.0
+
+From 0.20.0, startup applies one additive migration:
+
+| Migration | Purpose | Existing data |
+| --- | --- | --- |
+| `023_account_recovery.sql` | Email verification, expiring recovery tokens and single-use recovery codes | Adds account fields and recovery tables; existing accounts, assets and saved games are preserved. Existing email addresses remain unverified until explicitly verified. |
+
+Back up the database and uploaded assets before upgrading. Keep the existing separate
+migration-role connection configured, restart the server, then refresh all browsers.
+If automatic migration is disabled, apply pending numbered migrations with the schema-owner
+connection before starting 0.21.0. Fresh installs use the updated schema baseline.
+Source installs should run `npm ci` before restart for the locked dependencies, including
+Nodemailer; Docker images include them. No snapshot conversion, required new service,
+required environment variable or exposed port is introduced.
+
+Email verification and recovery are optional. Existing deployments can continue without SMTP;
+users can generate and save recovery codes through Account security. To enable email, configure
+`PUBLIC_ORIGIN` and the SMTP settings described in [Account security](ACCOUNT_SECURITY.md).
+Docker deployments enabling SMTP must forward these optional variables and mount the password
+file via a Compose override. Merely adding variables to `.env` does not forward them through an
+older Compose file. Invalid or incomplete configured SMTP settings fail startup.
+
+This release includes GM object concealment, manual map fog with adjustable thickness,
+piece reveal auras, account security/recovery, native Linux installation and recovery tools,
+and the standalone public website. It also fixes room admission/save ownership, unsafe asset
+serving and HTML injection in action menus. Restarting and refreshing clients loads both the
+server protections and browser fixes. The website is deployed separately from the game server.
+
+User-reported gameplay and account/SMTP checks are recorded in the feature documentation.
+Live native Linux distro installation, reboot, uninstall/purge and recovery acceptance remains
+pending; automated installer fixtures do not establish live-host behavior. Public website
+publishing and user acceptance remain pending. Demo dice safeguards and room worker isolation
+are future plans, not functionality in this release.
+
+When upgrading from before 0.20.0, also follow the earlier upgrade notes below and apply all
+pending migrations in order.
+
 ## Upgrading to 0.20.0
 
 From 0.19.0, startup applies one additive migration:

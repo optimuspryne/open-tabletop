@@ -8,34 +8,20 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
-### Fixed
-- Audited all 17 website wiki pages against current documentation, release history and source.
-  Corrected Node setup order and grants, Compose environment forwarding and secret permissions,
-  native administrator commands, role restrictions, scene/reset consequences and transient state.
-  Expanded current deck, notecard, fog and table-tool instructions; distinguish Unreleased
-  features from 0.20.0. Added per-page source links and a review record in `website/WIKI_AUDIT.md`.
-  Updated supporting README, gesture, architecture and reference notes. Documentation only.
-- Added step-by-step website instructions for double-sided tile uploads, panorama and cubemap
-  skyboxes, and saving and applying custom dice textures. No application behavior changed.
-- Corrected the website's Assets and Scenes guide against the current table controls and
-  handlers: combined Library categories, admin creation on regular tables, Save/Save + Spawn,
-  publication, scene save/load, collections, and portable assets. Updated the first-game,
-  controls, pieces, saving, and Node.js guides, plus the source README and architecture/reference
-  descriptions. This is a documentation correction; application behavior is unchanged.
-- Made SMTP setup documentation and configuration examples provider-neutral.
-- Landing account header overlap: moved Account security beside Admin in the page header,
-  and allowed identity/actions to wrap without overlap on narrow screens.
-- README migration and tuning references, test commands and database-test prerequisites;
-  added documentation navigation, notecard/concealment/fog summaries, and scoped security guidance.
-- Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
-  room creation, retain unique transport IDs, and use a separate persistent room ID. One local
-  writer holds ownership through its final save; failed/unadmitted instances cannot overwrite
-  checkpoints. Connection admission rechecks access and preserves revocation/spectator handling.
-- Security audit SEC-02/SEC-03: remove the obsolete `saveDeck`/inline-image writer and serve only
-  approved generated raster/GLB asset paths with explicit safe MIME types and response headers.
-  Encoded metadata paths, scripts, HTML and malformed URLs are blocked, including existing files.
-  Current editor deck/tile saves and normal uploads are retained. Restart the server; no migration
-  or dependency change is required. Manual tests reported green by the user on 2026-09-28.
+## [0.21.0] — 2026-09-29
+
+### Upgrade notes
+- From 0.20.0, startup applies additive migration `023_account_recovery.sql` using the existing
+  migration-role connection. Existing accounts, assets and saved games are preserved; existing
+  email addresses are not automatically verified. With automatic migration disabled, apply
+  pending numbered migrations using the schema-owner connection before starting this version.
+- Back up the database and uploads, restart the server and refresh all browsers. Source installs
+  should run `npm ci` first. SMTP is optional; email recovery requires additional configuration,
+  while saved recovery codes work without SMTP. No new service or exposed port is required.
+  See [0.21.0 upgrade instructions](docs/RELEASING.md#upgrading-to-0210).
+- Includes security fixes for room admission/save ownership, asset serving and action-menu HTML
+  injection. Native installer live-distro/reboot acceptance and website publishing/user acceptance
+  remain pending; feature-specific user-reported testing is recorded below.
 
 ### Added
 - Native Linux `uninstall` and confirmed `purge` modes with offline execution and `--dry-run`,
@@ -69,7 +55,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   instructions in `SECURITY.md`, using `admin@open-tabletop.com`.
 - A source security audit with isolated reproductions of unauthenticated duplicate-room
   creation/save overwrite, admin-only legacy inline-image script hosting, and an encoded-URL
-  bypass of the asset JSON guard. See `docs/SECURITY_AUDIT_2026-09-28.md`; remediation is recorded above and in the audit.
+  bypass of the asset JSON guard. See `docs/SECURITY_AUDIT_2026-09-28.md`; remediation is recorded under Fixed and in the audit.
 - A regular Linux host installer for systemd Debian 12/13, Ubuntu 22.04/24.04/26.04 LTS,
   Fedora and Arch. It shares the Proxmox native deployment flow, adds distro package/cache
   selection and PostgreSQL initialization, and allocates a system account without claiming
@@ -99,7 +85,40 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Private hands retain their separate privacy and explicit sharing/play behavior; personal tray
   dice stay visible. Restart the server and refresh all clients; no database migration is needed.
 
+### Changed
+- Consolidate browser session-token access, lobby/admin JSON requests, and shared button DOM
+  creation. Preserve authentication defaults, request errors, icons, button types, accessible
+  labels and room-action guards; specialized upload/package/template request behavior remains
+  local. Refresh browsers to load the updated modules; no server restart or migration is needed.
+
 ### Fixed
+- Audited all 17 website wiki pages against current documentation, release history and source.
+  Corrected Node setup order and grants, Compose environment forwarding and secret permissions,
+  native administrator commands, role restrictions, scene/reset consequences and transient state.
+  Expanded current deck, notecard, fog and table-tool instructions; distinguish the new
+  features from 0.20.0. Added per-page source links and a review record in `website/WIKI_AUDIT.md`.
+  Updated supporting README, gesture, architecture and reference notes. Documentation only.
+- Added step-by-step website instructions for double-sided tile uploads, panorama and cubemap
+  skyboxes, and saving and applying custom dice textures. No application behavior changed.
+- Corrected the website's Assets and Scenes guide against the current table controls and
+  handlers: combined Library categories, admin creation on regular tables, Save/Save + Spawn,
+  publication, scene save/load, collections, and portable assets. Updated the first-game,
+  controls, pieces, saving, and Node.js guides, plus the source README and architecture/reference
+  descriptions. This is a documentation correction; application behavior is unchanged.
+- Made SMTP setup documentation and configuration examples provider-neutral.
+- Landing account header overlap: moved Account security beside Admin in the page header,
+  and allowed identity/actions to wrap without overlap on narrow screens.
+- README migration and tuning references, test commands and database-test prerequisites;
+  added documentation navigation, notecard/concealment/fog summaries, and scoped security guidance.
+- Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
+  room creation, retain unique transport IDs, and use a separate persistent room ID. One local
+  writer holds ownership through its final save; failed/unadmitted instances cannot overwrite
+  checkpoints. Connection admission rechecks access and preserves revocation/spectator handling.
+- Security audit SEC-02/SEC-03: remove the obsolete `saveDeck`/inline-image writer and serve only
+  approved generated raster/GLB asset paths with explicit safe MIME types and response headers.
+  Encoded metadata paths, scripts, HTML and malformed URLs are blocked, including existing files.
+  Current editor deck/tile saves and normal uploads are retained. Restart the server; no migration
+  or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 - Render overflow action labels/notes and touch action-sheet names/metadata as plain text,
   preventing stored room or asset names from injecting HTML. Existing classes, icons, accessible
   labels, confirmation and close behavior are retained. Browser regressions cover desktop/touch
@@ -114,12 +133,6 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   The shared stepper supports `step="any"` with bounded increments (0.25 displayed units for
   aura radii), preserves typed decimals, and ignores disabled/read-only fields. Refresh clients.
 
-### Changed
-- Consolidate browser session-token access, lobby/admin JSON requests, and shared button DOM
-  creation. Preserve authentication defaults, request errors, icons, button types, accessible
-  labels and room-action guards; specialized upload/package/template request behavior remains
-  local. Refresh browsers to load the updated modules; no server restart or migration is needed.
-
 ### Documentation
 - Record the approved and implemented object-concealment slice, its protocol/physics boundaries
   and user-reported manual test pass. Record the manual map-fog user test pass and the implemented volume/thickness follow-up and subsequent user approval separately;
@@ -129,6 +142,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   the deliberate scene-package deferral. Refresh the shared browser-helper cleanup scope against
   current code and remove its stale backlog-file reference; record its subsequent implementation
   and user-reported manual functional pass.
+
+- Prepared 0.21.0 release notes, upgrade guidance and aligned package/Docker version references.
 
 ## [0.20.0] — 2026-09-27
 
@@ -1632,7 +1647,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.18.0

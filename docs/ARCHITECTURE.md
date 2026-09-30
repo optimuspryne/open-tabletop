@@ -9,6 +9,14 @@ deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_ba
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
+## Release 0.21.0 deployment boundary
+
+Account recovery adds migration `023_account_recovery.sql` and optional outbound TLS SMTP;
+existing deployments need no new service or inbound port. The static website remains separately
+hosted. Server restart and browser refresh load the concealment, fog, recovery and security
+changes; saved scenes/games remain compatible. See [upgrade guidance](RELEASING.md#upgrading-to-0210)
+for migration roles, source dependencies, SMTP forwarding and outstanding acceptance checks.
+
 ## Public website and wiki
 
 The public marketing website and wiki are a separate static surface in `website/`.
