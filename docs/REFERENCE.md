@@ -13,6 +13,10 @@ For release 0.21.0 deployment requirements, see the [upgrade guide](RELEASING.md
 (migration 023, server restart/client refresh, source dependencies and optional SMTP setup).
 Earlier migration and ZIP transfer requirements remain in the preceding release upgrade notes.
 
+Planned performance work: [demo dice limits and roll cooldown](PLAN_DEMO_DICE_LIMITS.md)
+(demo branch only) and [room worker processes](PLAN_ROOM_WORKERS.md) (full app, then port
+to demo). These documents define future work, not current settings, helpers or API contracts.
+
 ### Public website
 
 - `website/index.html`, `website/styles.css`, and `website/assets/` provide the standalone

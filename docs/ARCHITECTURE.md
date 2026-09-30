@@ -9,6 +9,11 @@ deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_ba
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
+Future performance work is tracked in [room worker isolation](PLAN_ROOM_WORKERS.md)
+for the full app and [demo dice safeguards](PLAN_DEMO_DICE_LIMITS.md) for the separate
+demo branch. Both are plans only: process ownership, routing and limits described there
+are not changes to the running architecture.
+
 ## Release 0.21.0 deployment boundary
 
 Account recovery adds migration `023_account_recovery.sql` and optional outbound TLS SMTP;

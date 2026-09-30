@@ -8,6 +8,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Documentation
+- Added separate implementation plans for demo-only 15-dice limits and shared roll
+  cooldowns, and full-app room worker process isolation. Plans include regression and
+  performance gates, ownership/routing safeguards, deployment and rollback. No runtime
+  behavior changed; architecture and reference navigation distinguish plans from contracts.
+
 ## [0.21.0] — 2026-09-29
 
 ### Upgrade notes
