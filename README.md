@@ -342,7 +342,10 @@ volumes:
 ```
 Open **http://localhost:2567** and sign in with the bootstrap administrator configured in the
 stack environment. Bootstrap provisioning runs only when the users table is empty; later stack
-deployments and container restarts never reset that account or its password.
+deployments and container restarts never reset that account or its password. Once any user
+exists, startup skips all bootstrap settings and password-file access. The bootstrap variables
+can remain configured even if the first-boot file is no longer available. If users exist but
+none is an administrator, use `npm run admin:grant -- <username-or-email>` for recovery.
 
 You do not create `bootstrap_admin_password` on the Docker host. The top-level Compose `config`
 renders `BOOTSTRAP_ADMIN_PASSWORD` into a read-only file, mounts it inside the app container at

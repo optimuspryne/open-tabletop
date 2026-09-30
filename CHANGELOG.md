@@ -8,6 +8,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Fixed
+- Startup skips all bootstrap administrator settings and password-file access when any user
+  exists, so Docker updates that lose the first-boot file no longer block established installs.
+  Empty databases retain credential validation and transactional provisioning protection.
+
 ### Documentation
 - Added separate implementation plans for demo-only 15-dice limits and shared roll
   cooldowns, and full-app room worker process isolation. Plans include regression and

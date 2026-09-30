@@ -1,6 +1,7 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
 import pg from 'pg';
+import { bootstrapAdminFromEnvironment } from '../../server/bootstrap-admin.js';
 import { createDatabase } from '../../server/database.js';
 
 const connectionString = process.env.TEST_DATABASE_URL;
@@ -28,6 +29,29 @@ test('application role can use the real schema but cannot create tables', async 
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
   );
+});
+
+test('bootstrap ignores stale credentials when an ordinary user exists', async () => {
+  assert.equal(await database.hasUsers(), false);
+  const user = await database.createUser({
+    username: 'bootstrap-existing',
+    email: 'bootstrap-existing@example.test',
+  });
+  try {
+    assert.equal(user.isAdmin, false);
+    assert.equal(await database.hasUsers(), true);
+    const result = await bootstrapAdminFromEnvironment({
+      db: database,
+      env: { BOOTSTRAP_ADMIN_PASSWORD_FILE: '/missing/bootstrap-password' },
+      readFile: () => assert.fail('must not read bootstrap file'),
+      hashPassword: () => assert.fail('must not hash bootstrap password'),
+    });
+    assert.deepEqual(result, { status: 'already-configured' });
+    assert.equal((await database.findUserById(user.id)).isAdmin, false);
+  } finally {
+    await database.purgeUser(user.id);
+  }
+  assert.equal(await database.hasUsers(), false);
 });
 
 test('users, rooms, membership, and durable state round-trip through PostgreSQL', async () => {

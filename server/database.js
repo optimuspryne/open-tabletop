@@ -459,6 +459,12 @@ export function createDatabase(pool) {
     }
   }
 
+  // Check existence without loading account records or counting the whole table.
+  async function hasUsers() {
+    const { rows } = await pool.query('SELECT EXISTS (SELECT 1 FROM users) AS "hasUsers"');
+    return rows[0].hasUsers;
+  }
+
   // First-boot provisioning. The transaction-level advisory lock serializes multiple
   // app replicas; provisioning is allowed only on an empty users table. An existing
   // admin makes subsequent restarts a no-op, and existing non-admin users fail closed.
@@ -800,6 +806,7 @@ export function createDatabase(pool) {
     renameAsset,
     deleteAsset,
     createUser,
+    hasUsers,
     bootstrapAdmin,
     changeAdminByLogin,
     findUserByLogin,

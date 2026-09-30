@@ -2181,12 +2181,17 @@ hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admi
   password ⇒ `host_status='pending'`; throws with `err.conflict = 'username' |
 'email'` on a taken field; normal signup never infers admin), `bootstrapAdmin`
   (advisory-locked, empty-table-only first-boot provisioning),
+  `hasUsers() → boolean` (existence query; database errors propagate),
   `changeAdminByLogin` (CLI recovery with final-admin protection), `findUserByLogin`, `findUserByToken`,
   `findUserById`, `createSession`, `revokeSession`, `revokeUserSessions`,
   `setPassword`, `setUserAvatar`, `listUsers`,
   `setAdmin`, `setHostStatus`, `countPendingHosts` (excludes admins),
   `roomsOwnedBy`, `purgeUser` (one transaction: null-out the user's asset
   ownership, delete their owned rooms, delete the user — cascades memberships).
+
+`bootstrapAdminFromEnvironment` checks `hasUsers` before reading bootstrap configuration
+  or credentials and returns `already-configured` for any populated users table.
+  Empty-table provisioning still rechecks inside the existing transaction.
 
 `purgeUser(userId)` uses the internal `ASSET_TABLE` registry for ownership release:
 decks, boards, objects, scenes, skyboxes, dice, and mats. Only `owner_id` becomes

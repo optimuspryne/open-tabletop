@@ -12,6 +12,7 @@ test('admin bootstrap is disabled when no provisioning variables are present', a
   let called = false;
   const result = await bootstrapAdminFromEnvironment({
     db: {
+      hasUsers: async () => false,
       bootstrapAdmin: async () => {
         called = true;
       },
@@ -27,7 +28,7 @@ test('partial bootstrap configuration fails closed', async () => {
   await assert.rejects(
     () =>
       bootstrapAdminFromEnvironment({
-        db: {},
+        db: { hasUsers: async () => false },
         hashPassword: async () => 'hash',
         env: { BOOTSTRAP_ADMIN_USERNAME: 'admin' },
       }),
@@ -39,7 +40,7 @@ test('bootstrap validates identity and requires a strong password', async () => 
   await assert.rejects(
     () =>
       bootstrapAdminFromEnvironment({
-        db: {},
+        db: { hasUsers: async () => false },
         hashPassword: async () => 'hash',
         env: { ...validEnv, BOOTSTRAP_ADMIN_USERNAME: 'bad name' },
         readFile: () => 'long-enough-password',
@@ -49,7 +50,7 @@ test('bootstrap validates identity and requires a strong password', async () => 
   await assert.rejects(
     () =>
       bootstrapAdminFromEnvironment({
-        db: {},
+        db: { hasUsers: async () => false },
         hashPassword: async () => 'hash',
         env: { ...validEnv, BOOTSTRAP_ADMIN_EMAIL: 'invalid' },
         readFile: () => 'long-enough-password',
@@ -59,7 +60,7 @@ test('bootstrap validates identity and requires a strong password', async () => 
   await assert.rejects(
     () =>
       bootstrapAdminFromEnvironment({
-        db: {},
+        db: { hasUsers: async () => false },
         hashPassword: async () => 'hash',
         env: validEnv,
         readFile: () => 'too-short',
@@ -73,6 +74,7 @@ test('bootstrap reads the secret file, hashes it, and passes no plaintext to the
   let provisioned;
   const result = await bootstrapAdminFromEnvironment({
     db: {
+      hasUsers: async () => false,
       bootstrapAdmin: async (record) => {
         provisioned = record;
         return { status: 'created' };
@@ -96,4 +98,58 @@ test('bootstrap reads the secret file, hashes it, and passes no plaintext to the
     passwordHash: 'password-hash',
   });
   assert.deepEqual(result, { status: 'created' });
+});
+
+test('existing users bypass all bootstrap configuration and credential access', async () => {
+  const unexpected = () => assert.fail('bootstrap credentials must not be accessed');
+  const result = await bootstrapAdminFromEnvironment({
+    db: { hasUsers: async () => true, bootstrapAdmin: unexpected },
+    env: new Proxy({}, { get: unexpected }),
+    readFile: unexpected,
+    hashPassword: unexpected,
+  });
+  assert.deepEqual(result, { status: 'already-configured' });
+});
+
+test('user lookup failure stops startup before accessing bootstrap credentials', async () => {
+  const failure = new Error('database unavailable');
+  await assert.rejects(
+    bootstrapAdminFromEnvironment({
+      db: {
+        hasUsers: async () => {
+          throw failure;
+        },
+      },
+      env: new Proxy({}, { get: () => assert.fail('credentials accessed') }),
+    }),
+    (error) => error === failure,
+  );
+});
+
+test('empty database still rejects a missing bootstrap password file', async () => {
+  const failure = Object.assign(new Error('missing password file'), { code: 'ENOENT' });
+  await assert.rejects(
+    bootstrapAdminFromEnvironment({
+      db: { hasUsers: async () => false },
+      env: validEnv,
+      readFile: () => {
+        throw failure;
+      },
+      hashPassword: () => assert.fail('must not hash a missing password'),
+    }),
+    (error) => error === failure,
+  );
+});
+
+test('provisioning retains the database race check after an empty preflight', async () => {
+  const result = await bootstrapAdminFromEnvironment({
+    db: {
+      hasUsers: async () => false,
+      bootstrapAdmin: async () => ({ status: 'already-configured' }),
+    },
+    env: validEnv,
+    readFile: () => 'long-enough-password',
+    hashPassword: async () => 'hash',
+  });
+  assert.deepEqual(result, { status: 'already-configured' });
 });

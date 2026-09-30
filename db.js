@@ -51,6 +51,7 @@ export const {
   renameAsset,
   deleteAsset,
   createUser,
+  hasUsers,
   bootstrapAdmin,
   changeAdminByLogin,
   findUserByLogin,

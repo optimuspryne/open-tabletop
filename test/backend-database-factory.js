@@ -72,7 +72,7 @@ test('production database facade exports the custom-object lookup', async () => 
     [
       '--input-type=module',
       '-e',
-      "const db = await import('./db.js'); if (typeof db.notecardTemplates?.create !== 'function' || typeof db.notecardTemplates?.get !== 'function' || typeof db.collections?.list !== 'function' || typeof db.collections?.mutate !== 'function' || typeof db.getCollectionForPackage !== 'function' || typeof db.importAssetPackage !== 'function' || typeof db.getSkybox !== 'function' || typeof db.setUserPlacard !== 'function' || typeof db.getProp !== 'function' || typeof db.removePropDispenser !== 'function') process.exit(2); await db.close();",
+      "const db = await import('./db.js'); if (typeof db.hasUsers !== 'function' || typeof db.notecardTemplates?.create !== 'function' || typeof db.notecardTemplates?.get !== 'function' || typeof db.collections?.list !== 'function' || typeof db.collections?.mutate !== 'function' || typeof db.getCollectionForPackage !== 'function' || typeof db.importAssetPackage !== 'function' || typeof db.getSkybox !== 'function' || typeof db.setUserPlacard !== 'function' || typeof db.getProp !== 'function' || typeof db.removePropDispenser !== 'function') process.exit(2); await db.close();",
     ],
     {
       cwd: new URL('..', import.meta.url),
@@ -142,4 +142,18 @@ test('transactional operations acquire and release from the injected pool', asyn
     ],
   );
   assert.deepEqual(pool.calls.at(-1), { target: 'client', operation: 'release' });
+});
+
+test('user existence check returns database booleans and propagates failures', async () => {
+  for (const hasUsers of [false, true]) {
+    const database = createDatabase(fakePool([{ rows: [{ hasUsers }] }]));
+    assert.equal(await database.hasUsers(), hasUsers);
+  }
+  const failure = new Error('offline');
+  const database = createDatabase({
+    query: async () => {
+      throw failure;
+    },
+  });
+  await assert.rejects(database.hasUsers(), (error) => error === failure);
 });

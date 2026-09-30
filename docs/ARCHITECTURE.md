@@ -2149,7 +2149,10 @@ revoke host, delete-with-cascade). Its Storage section also previews and trashes
 starts/polls the non-destructive uploaded-image WebP prebuild. A fresh installation provisions its first
 administrator before the listener opens from `BOOTSTRAP_ADMIN_USERNAME`,
 `BOOTSTRAP_ADMIN_EMAIL`, and a password file. The transaction is advisory-locked
-and only permits an empty users table; normal signup never grants admin. Local
+and only permits an empty users table; normal signup never grants admin. Before reading any
+bootstrap settings or password file, startup checks for any existing user with an existence
+query. A populated database skips bootstrap, including when no administrator exists; database
+lookup failures stop startup rather than being treated as an empty database. Local
 `admin:grant` / `admin:revoke` commands provide recovery without an HTTP bootstrap.
 
 **Hardening.** The upload endpoints (`/upload`, `/upload-model`) are now gated by
