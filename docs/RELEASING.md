@@ -82,6 +82,26 @@ No manual `psql -f`, and **no db-image rebuild required** — existing deploymen
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
+## Upgrading to 0.21.1
+
+From 0.21.0, pull the updated image and recreate the app container. No new migration,
+dependency, environment variable, port or Compose change is required. This server-only fix
+does not require a browser refresh.
+
+Startup now checks whether any user exists before reading bootstrap settings or the password
+file. Existing installations can retain those settings even when the first-boot file is missing.
+Empty databases still validate configured bootstrap credentials; database lookup failures still
+stop startup. If users exist but none is an administrator, recover access through
+`npm run admin:grant -- <username-or-email>`.
+
+For Compose stacks containing inline configs, prefer stack deployment with image pulling over
+individual container updates so Compose recreates all generated config files. This patch
+removes the bootstrap-file dependency for existing users; it does not restore other lost files.
+
+Validation: `npm run check` passed 933 tests and `npm run test:integration` passed 25 tests,
+including an ordinary existing user with a missing bootstrap password file. Live Dockhand
+update verification remains pending. Upgrades from before 0.21.0 must also follow its notes below.
+
 ## Upgrading to 0.21.0
 
 From 0.20.0, startup applies one additive migration:

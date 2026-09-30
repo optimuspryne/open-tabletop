@@ -14,6 +14,13 @@ for the full app and [demo dice safeguards](PLAN_DEMO_DICE_LIMITS.md) for the se
 demo branch. Both are plans only: process ownership, routing and limits described there
 are not changes to the running architecture.
 
+## Release 0.21.1 deployment boundary
+
+The patch skips bootstrap credential access when any user exists. It reuses the existing
+provisioning transaction after an empty-table preflight and adds no schema or deployment
+requirements. Restart the app with the updated image; see
+[0.21.1 upgrade guidance](RELEASING.md#upgrading-to-0211). Live Dockhand verification is pending.
+
 ## Release 0.21.0 deployment boundary
 
 Account recovery adds migration `023_account_recovery.sql` and optional outbound TLS SMTP;

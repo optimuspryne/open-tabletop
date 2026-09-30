@@ -9,6 +9,9 @@ For staged implementation status and **remaining proposed** work, see [DESIGN_ne
 The participation foundation, durable GM time-outs, self-service spectators and private deck browsing are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
+For release 0.21.1, see the [patch upgrade guide](RELEASING.md#upgrading-to-0211):
+server restart only, with no new migration or configuration requirement.
+
 For release 0.21.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0210)
 (migration 023, server restart/client refresh, source dependencies and optional SMTP setup).
 Earlier migration and ZIP transfer requirements remain in the preceding release upgrade notes.

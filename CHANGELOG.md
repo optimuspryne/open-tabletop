@@ -8,6 +8,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+## [0.21.1] — 2026-09-30
+
+### Upgrade notes
+- From 0.21.0, pull the updated image and recreate the app container. No new migration,
+  dependency, environment variable or Compose change is required. Existing accounts and
+  passwords are unchanged. Earlier versions must also follow the 0.21.0 upgrade instructions.
+- Automated checks passed: 933 tests in `npm run check` and 25 PostgreSQL integration tests.
+  Live Dockhand update verification remains pending.
+
+
 ### Fixed
 - Startup skips all bootstrap administrator settings and password-file access when any user
   exists, so Docker updates that lose the first-boot file no longer block established installs.
@@ -1658,7 +1668,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...HEAD
+[0.21.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.18.0...v0.19.0
