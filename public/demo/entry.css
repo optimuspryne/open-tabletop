@@ -25,7 +25,7 @@
   padding: 20px 28px;
   border-bottom: 1px solid var(--border);
 }
-.demo-entry__brand { font-size: 19px; font-weight: 750; }
+.demo-entry__brand { display: block; width: 180px; max-width: 100%; height: auto; }
 .demo-entry__badge {
   font-size: var(--fs-sm);
   padding: 4px 10px;
@@ -70,7 +70,7 @@
 .demo-entry input[type='radio'] { accent-color: var(--accent); flex-shrink: 0; width: 18px; height: 18px; margin: 0; }
 .demo-entry .button { min-height: 48px; font-size: 16px; display: inline-flex; align-items: center; gap: 10px; }
 body .demo-entry :is(button, .button):has(.ico) .lbl { display: inline; }
-.demo-entry :is(button, input, [tabindex]):focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.demo-entry :is(a, button, input, [tabindex]):focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 .demo-entry__choices label:focus-within { outline: 3px solid var(--accent); outline-offset: 3px; }
 .demo-entry__aside { grid-area: aside; padding-left: 28px; border-left: 1px solid var(--border); }
 .demo-entry .demo-entry__notice { grid-area: notice; font-size: var(--fs-sm); margin: 0; }
@@ -78,6 +78,7 @@ body .demo-entry :is(button, .button):has(.ico) .lbl { display: inline; }
 .demo-entry [data-demo='status']:empty { margin: 0; }
 .demo-entry [data-demo='status']:not(:empty) { margin-top: 16px; }
 @media (max-width: 650px) {
+  .demo-entry__brand { width: 144px; }
   .demo-entry__header, .demo-entry__content { padding: 20px; }
   .demo-entry__columns { grid-template-columns: 1fr; grid-template-areas: 'form' 'notice' 'aside'; gap: 24px; }
   .demo-entry__aside { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--border); }

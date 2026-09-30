@@ -2389,3 +2389,6 @@ landing page. It reuses the account auth endpoints and token store, retaining th
 separate demo guest identity. UI gating does not grant authority: management routes
 continue to require server-side administrator/owner checks. Sign-out revokes the
 account session before clearing browser state; rejected non-admin logins are revoked.
+
+The demo entry reuses the application's existing small logo for its favicon and
+full wordmark for its header. Branding adds no asset pipeline or dependency.

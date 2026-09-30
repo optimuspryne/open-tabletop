@@ -37,7 +37,7 @@ export function mountDemoEntry(
   root.innerHTML = `
     <section class="demo-entry__card panel" aria-labelledby="demo-heading">
       <header class="demo-entry__header">
-        <span class="demo-entry__brand">Open Tabletop</span>
+        <a href="https://open-tabletop.com" aria-label="Open Tabletop home"><img class="demo-entry__brand" src="/logo-wordmark.svg" alt="Open Tabletop" width="258" height="99"></a>
         <span class="demo-entry__badge">Public demo</span>
       </header>
       <div class="demo-entry__content">

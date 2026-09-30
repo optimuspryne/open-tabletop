@@ -3654,3 +3654,8 @@ issued non-admin session; `signOut` calls POST `/auth/logout` before clearing
 `public/admin-login.css` scopes responsive entry/header styling using shared tokens
 and controls. `npm run test:admin-login` exercises the actual page in a browser
 against controlled auth responses, including rejected/expired sessions and layouts.
+
+Demo entry branding: `public/demo.html` sets `/logo-mark.svg` as its favicon;
+`mountDemoEntry` in `public/demo/entry.js` renders `/logo-wordmark.svg` with
+an accessible Open Tabletop name and a same-tab link to `https://open-tabletop.com`. `public/demo/entry.css` sizes it to 180px,
+or 144px below 650px; the existing wrapping header retains the Public demo badge.

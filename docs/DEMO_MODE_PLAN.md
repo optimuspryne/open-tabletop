@@ -7,6 +7,16 @@ icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact t
 
 ## Current runtime (2026-09-29)
 
+Approved branding update: `public/demo.html` adds the small-logo favicon;
+`public/demo/entry.js` (`mountDemoEntry`) replaces header text with the full
+wordmark linking to `https://open-tabletop.com`; `public/demo/entry.css` uses 180px desktop / 144px phone widths.
+Existing table/admin favicons and logo assets are reused. Changelog, reference
+and architecture documentation record the change. Verification passed: `npm run check`
+(933 tests), demo UI (16 combinations), device matrix (7 profiles), and component
+suite (existing eight missing texture-fixture warnings). Desktop/phone screenshots
+were visually checked; a live browser verified the image, home link, keyboard focus
+and favicon. The local Docker app is rebuilt; public deployment remains manual.
+
 Admin access: the user approved the `/admin.html` sign-in form, wrapped mobile
 header, persistent labels and existing logout icon. Implemented in `public/admin.html`,
 `public/admin.js` (`showSignIn/openConsole/signIn/signOut`, boot, polling and null-safe `cell` updates),

@@ -9,6 +9,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Public demo landing branding now uses the existing full wordmark (180px desktop,
+  144px phone) and small-logo SVG favicon, matching the table/admin favicon.
+  The wordmark links to `https://open-tabletop.com` with visible keyboard focus.
+  Refresh after rebuilding the app image; no new assets or gameplay changes.
 - Admin sign-in at `/admin.html` for demo and regular installations, using existing account
   authentication and server-side authorization. The approved responsive form rejects
   non-admin accounts, restores valid admin sessions, and offers server-revoking sign-out.
