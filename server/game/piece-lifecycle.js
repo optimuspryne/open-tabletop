@@ -35,7 +35,7 @@ export function createPieceLifecycle({
   const spawn = (room, type, pos, props = {}, quat = null, hidden) => {
     hidden = room.visibility?.spawnHidden(hidden) ?? hidden === true;
     if (hidden && props.traySeat != null) throw new Error('Personal tray dice cannot be hidden.');
-    assertPieceCapacity(room, sim.maxPieces);
+    assertPieceCapacity(room, sim.maxPieces, type);
     if (type === 'notecard' && !room.notecards.hasCapacity())
       throw new Error('The notecard limit was reached.');
     if (type === 'notecard') {
@@ -165,6 +165,7 @@ export function createPieceLifecycle({
     room.writeTransform(piece, body);
     room.state.pieces.set(id, piece);
     room.bodies.set(id, body);
+    if (type === 'die') room.dicePolicy?.seed(id);
     if (type === 'notecard') room.notecards.restore(id, props);
     if (type === 'notecardStack') room.notecards.restoreStack(id, props.cards);
     body.addEventListener('collide', (event) => {
@@ -185,6 +186,7 @@ export function createPieceLifecycle({
   };
 
   const removePiece = (room, id) => {
+    room.dicePolicy?.remove(id);
     room.notecards?.remove(id);
     room.deckBrowsing?.cancelDeck(id, 'The deck was removed.');
     const body = room.bodies.get(id);

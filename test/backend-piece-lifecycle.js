@@ -1,3 +1,4 @@
+import { createDemoDicePolicy, DemoDiceLimitError } from '../server/game/demo-dice-policy.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
@@ -205,4 +206,53 @@ test('deck label and stock metadata survive snapshot encoding and real piece res
   assert.deepEqual(props.lowStock, settings.lowStock);
   assert.equal(room.state.pieces.get(restored).count, 2);
   assert.equal(props.cards, undefined);
+});
+
+test('demo lifecycle counts ordinary/custom/hidden dice across all trays and frees capacity', () => {
+  const { lifecycle, room } = harness();
+  let time = 0;
+  room.dicePolicy = createDemoDicePolicy({ now: () => time });
+  for (let i = 0; i < 15; i++)
+    lifecycle.spawn(
+      room,
+      'die',
+      [0, 2, 0],
+      { sides: 6, ...(i < 7 ? { traySeat: i } : {}) },
+      null,
+      i === 14,
+    );
+  assert.equal(room.state.pieces.size, 15);
+  const beforeBodies = room.world.bodies.length;
+  assert.throws(
+    () =>
+      lifecycle.spawn(room, 'die', [0, 2, 0], {
+        sides: 6,
+        finish: 'custom',
+        finishImg: '/assets/dice/test.png',
+      }),
+    DemoDiceLimitError,
+  );
+  assert.equal(room.world.bodies.length, beforeBodies);
+  assert.equal(room.nextId, 16);
+  assert.equal(room.dicePolicy.acceptRoll('1'), false);
+  time = 999;
+  assert.equal(room.dicePolicy.acceptRoll('1'), false);
+  time = 1000;
+  assert.equal(room.dicePolicy.acceptRoll('1'), true);
+  lifecycle.spawn(room, 'prop', [0, 2, 0], { shape: 'pawn' });
+  lifecycle.removePiece(room, '1');
+  assert.equal(room.dicePolicy.acceptRoll('1'), true); // removal released the old deadline
+  const id = lifecycle.spawn(room, 'die', [0, 2, 0], {
+    sides: 6,
+    finish: 'custom',
+    finishImg: '/assets/dice/test.png',
+  });
+  assert.equal(room.dicePolicy.acceptRoll(id), false); // delete/recreate cannot roll immediately
+  assert.equal([...room.state.pieces.values()].filter((p) => p.type === 'die').length, 15);
+});
+
+test('ordinary room creation retains the existing piece budget', () => {
+  const { lifecycle, room } = harness();
+  for (let i = 0; i < 16; i++) lifecycle.spawn(room, 'die', [0, 2, 0], { sides: 6 });
+  assert.equal(room.state.pieces.size, 16);
 });

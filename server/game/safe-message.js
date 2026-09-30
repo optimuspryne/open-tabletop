@@ -1,3 +1,5 @@
+import { DemoDiceLimitError } from './demo-dice-policy.js';
+
 const safeContext = (room, client, type) => ({
   type,
   roomId: room.roomId || room.roomId === 0 ? String(room.roomId) : room.roomName || 'unknown',
@@ -7,11 +9,14 @@ const safeContext = (room, client, type) => ({
 });
 
 const report = (room, type, client, error, { errorType, publicMessage, logger, notify }) => {
+  const expected = error instanceof DemoDiceLimitError && room.dicePolicy;
   const context = safeContext(room, client, type);
-  logger.error('[colyseus]', context, error && error.message ? error.message : error);
+  if (!expected)
+    logger.error('[colyseus]', context, error && error.message ? error.message : error);
   if (!notify || !client) return;
   try {
-    client.send(errorType, { operation: type, message: publicMessage });
+    if (expected) room.dicePolicy.notify(client, error.kind);
+    else client.send(errorType, { operation: type, message: publicMessage });
   } catch (sendError) {
     logger.error('[colyseus:error-send]', context, sendError.message);
   }

@@ -1,3 +1,4 @@
+import { createDemoDicePolicy } from '../server/game/demo-dice-policy.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
@@ -238,4 +239,29 @@ test('object highlights validate live IDs, attribute the sender, throttle, and d
   room.state.pieces.delete('42');
   await highlight(clients.get('client-2'), { id: '42' });
   assert.equal(events.length, 3);
+});
+
+test('demo scoop and tray toggles do not reset roll cooldowns', async () => {
+  const { room, handlers, events, clients } = harness();
+  let time = 0;
+  room.dicePolicy = createDemoDicePolicy({ now: () => time });
+  const alice = clients.get('client-1');
+  const die = dieBody(0);
+  room.state.pieces.set('1', { type: 'die' });
+  room.bodies.set('1', die);
+  room.state.trays.set('0', true);
+  await handlers.get('roll')(alice);
+  await handlers.get('trayScoop')(alice);
+  for (let i = 0; i < 5; i++) {
+    await handlers.get('trayShow')(alice, { on: false });
+    await handlers.get('trayShow')(alice, { on: true });
+  }
+  await handlers.get('roll')(alice);
+  assert.equal(die.wakeCount, 1);
+  assert.equal(die.sleepCount, 1);
+  assert.equal(die.velocity.y, 0);
+  time = 1000;
+  await handlers.get('roll')(alice);
+  assert.equal(die.wakeCount, 2);
+  assert.equal(events.filter((e) => e.name === 'sfx').length, 3); // two rolls and scoop
 });

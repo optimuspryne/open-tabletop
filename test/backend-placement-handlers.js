@@ -1,3 +1,4 @@
+import { createDemoDicePolicy } from '../server/game/demo-dice-policy.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerPlacementHandlers } from '../server/game/handlers/placement.js';
@@ -107,4 +108,18 @@ test('oversized placement/drag coordinates are rejected before inventory changes
   assert.equal(dispenser.count, 10);
   assert.equal(hand.length, 1);
   assert.equal(h.room.state.pieces.size, 1);
+});
+
+test('demo dispenser dice fail before consuming stock or assigning a drag', async () => {
+  const h = harness(15);
+  h.room.dicePolicy = createDemoDicePolicy();
+  const dispenser = { type: 'dispenser', count: 3 };
+  h.room.state.pieces.set('100', dispenser);
+  h.room.dispenserItem = () => ({ type: 'die', props: { sides: 6 } });
+  await h.handlers.get('dispense')(h.client, { id: '100' });
+  await h.handlers.get('dispenseDrag')(h.client, { id: '100', x: 1, y: 2, z: 3 });
+  assert.equal(dispenser.count, 3);
+  assert.equal(h.room.state.pieces.size, 16);
+  assert.equal(h.room.targets.size, 0);
+  assert.equal(h.events.includes('dealt'), false);
 });

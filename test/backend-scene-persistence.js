@@ -1,3 +1,4 @@
+import { createDemoDicePolicy, DemoDiceLimitError } from '../server/game/demo-dice-policy.js';
 import { recoverPendingInspections } from '../server/game/inspection-recovery.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -588,4 +589,37 @@ test('orphaned inspections survive a full snapshot and recover privately after l
   const spawn = calls.filter(([type]) => type === 'spawn').at(-1);
   assert.deepEqual(spawn[3], { tile: 'domino', back: 'blue' });
   assert.ok([...room.cardData.values()].some((card) => card.front === 'orphan'));
+});
+
+test('over-cap demo scenes reject before clearing live pieces, private hands, or checkpoints', () => {
+  const { room, calls } = restorationRoom();
+  room.dicePolicy = createDemoDicePolicy();
+  room.state.pieces.set('existing', { type: 'die' });
+  const checkpoint = { pieces: [{ type: 'die' }] };
+  room.savedScene = checkpoint;
+  const scene = {
+    pieces: Array.from({ length: 16 }, (_, i) => ({
+      type: 'die',
+      hidden: i === 15,
+      props: { sides: 6, traySeat: i % 7 },
+    })),
+  };
+  assert.throws(() => applyScene(room, scene, restoreOptions), DemoDiceLimitError);
+  assert.equal(room.savedScene, checkpoint);
+  assert.equal(room.state.pieces.has('existing'), true);
+  assert.equal(room.pendingHands.has('old'), true);
+  assert.deepEqual(calls, []);
+  scene.pieces.pop();
+  applyScene(room, scene, restoreOptions);
+  assert.equal(room.state.pieces.size, 15);
+});
+
+test('ordinary scene restore retains support for more than fifteen dice', () => {
+  const { room } = restorationRoom();
+  applyScene(
+    room,
+    { pieces: Array.from({ length: 16 }, () => ({ type: 'die', props: { sides: 6 } })) },
+    restoreOptions,
+  );
+  assert.equal(room.state.pieces.size, 16);
 });

@@ -117,6 +117,7 @@ import { createAdminRouter } from './server/http/routes/admin.js';
 import { cardBackRef, cardFrontRef } from './server/deck-state.js';
 import { parkHand, claimHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
+import { createDemoDicePolicy, DemoDiceLimitError } from './server/game/demo-dice-policy.js';
 import { MAX_PIECES } from './server/game/piece-capacity.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
 import { registerMovementHandlers } from './server/game/handlers/movement.js';
@@ -388,6 +389,9 @@ class TableRoom extends Room {
     this.roomCode = this.constructor.accessKind === 'editor' ? null : options.code;
     this.persistentRoomId = admission.persistentRoomId;
     this.demoAdmission = admission.isDemo ? admission : null;
+    Object.defineProperty(this, 'dicePolicy', {
+      value: admission.isDemo ? createDemoDicePolicy() : null,
+    });
     if (this.persistentRoomId) {
       if (ROOM_WRITERS.has(this.persistentRoomId))
         throw new ServerError(409, 'This table is already active. Please join again.');
@@ -470,7 +474,15 @@ class TableRoom extends Room {
         for (let i = 0; i < 5; i++) this.spawn('die', [(i - 2) * 1.5, 2, 0], { sides: 6 });
       }
     }
-    if (this.savedScene) this.applyScene(this.savedScene); // rebuild the saved table state (pieces persist across an empty room)
+    if (this.savedScene) {
+      try {
+        this.applyScene(this.savedScene);
+      } catch (error) {
+        // No client has been admitted: disposal must not replace this checkpoint.
+        if (error instanceof DemoDiceLimitError) throw new ServerError(403, error.message);
+        throw error;
+      }
+    }
 
     // Contain unexpected failures in every inline table message. Specialized
     // library handlers below override the public message while sharing the same
@@ -970,6 +982,7 @@ class TableRoom extends Room {
         { notify: false },
       );
     } finally {
+      this.dicePolicy?.clear();
       roomAccess.dispose(this);
       LIVE_ROOMS.delete(this);
       if (ROOM_WRITERS.get(this.persistentRoomId) === this)

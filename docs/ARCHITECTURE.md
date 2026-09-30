@@ -9,6 +9,21 @@ deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_ba
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
+## Demo dice ownership
+
+Server admission selects a frozen room-owned dice policy for demo rooms. A bounded scan of
+actual synchronized pieces counts ordinary/custom/hidden dice across all trays; no client
+counter or per-player allowance is trusted. Existing capacity checks preflight requests, the
+final lifecycle prevents internal creation bypasses, and scene replacement checks all dice
+before clearing inventory. Failed initial restore remains unadmitted, retaining the existing
+save guard so disposal cannot replace the checkpoint.
+
+A room-owned monotonic deadline map controls the shared impulse operation for single/group/tray
+rolls. It survives connection changes, is seeded at spawn/restore, and is cleaned at piece removal,
+reset and disposal. It is never synchronized or persisted. Scoop settles/sleeps dice and retains
+rather than consumes cooldowns. Ordinary rooms have no policy. See the
+[dice safeguard implementation and rollout](PLAN_DEMO_DICE_LIMITS.md) for tests and limitations.
+
 ## Public-demo foundation and staged design
 
 The [demo plan](DEMO_MODE_PLAN.md) separates implemented admission controls from proposed

@@ -21,7 +21,7 @@ export function registerPlacementHandlers(
     if (!disp || disp.type !== 'dispenser') return;
     const item = room.dispenserItem(disp);
     if (!item) return;
-    if (!ensurePieceCapacity(room, client, maxPieces)) return;
+    if (!ensurePieceCapacity(room, client, maxPieces, item.type)) return;
     const body = room.bodies.get(id);
     room.spawn(item.type, body ? room.besideDeck(body) : randomPosition(), item.props);
     room.afterDispense(disp, id);
@@ -34,7 +34,7 @@ export function registerPlacementHandlers(
     if (!disp || disp.type !== 'dispenser') return;
     const item = room.dispenserItem(disp);
     if (!item) return;
-    if (!ensurePieceCapacity(room, client, maxPieces)) return;
+    if (!ensurePieceCapacity(room, client, maxPieces, item.type)) return;
     const body = room.bodies.get(msg.id);
     const newId = room.spawn(
       item.type,

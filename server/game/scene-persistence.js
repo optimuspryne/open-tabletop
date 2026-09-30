@@ -18,6 +18,7 @@ const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 // Reset game contents, including private state that may have no visible piece.
 // Room configuration, timer, notes, chat, whiteboard and personal notebooks survive.
 export function clearGameTable(room) {
+  room.dicePolicy?.clear();
   room.notecards?.clear();
   room.deckBrowsing?.clear();
   for (const id of [...room.state.pieces.keys()]) room.removePiece(id);
@@ -183,6 +184,7 @@ export function applyScene(
   { createOverlay, maxPieces, overlayKinds, overlayMax, tableLimits },
 ) {
   if (!scene || typeof scene !== 'object') return;
+  room.dicePolicy?.assertScene(scene);
   for (const entry of Array.isArray(scene.pieces) ? scene.pieces : []) {
     if (
       entry?.fog !== undefined &&

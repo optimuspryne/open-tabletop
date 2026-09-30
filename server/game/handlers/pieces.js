@@ -1,3 +1,4 @@
+import { rollDie } from '../dice-roll.js';
 import { broadcastPieceEvent } from '../piece-visibility.js';
 import { takeTableCard } from '../card-transfer.js';
 import * as CANNON from 'cannon-es';
@@ -110,8 +111,7 @@ export function registerPieceHandlers(
       const piece = room.state.pieces.get(id);
       const body = room.bodies.get(id);
       if (!piece || piece.type !== 'die' || !body) continue;
-      rollBody(body, body.__traySeat != null ? trayRoll : roll, random);
-      count++;
+      if (rollDie(room, id, body.__traySeat != null ? trayRoll : roll, random, client)) count++;
     }
     if (count) broadcastPieceEvent(room, 'sfx', { type: count > 1 ? 'dice-roll' : 'die-roll' });
   });
@@ -250,7 +250,7 @@ export function registerPieceHandlers(
       room.swapBoard(msg.props || {});
       return;
     }
-    if (!ensurePieceCapacity(room, client, maxPieces)) return;
+    if (!ensurePieceCapacity(room, client, maxPieces, msg.type)) return;
     if (msg.props?.tray) {
       const seat = room.seatOf(client);
       if (msg.type !== 'die' || seat == null || !room.state.trays.get(String(seat))) return;
@@ -279,8 +279,8 @@ export function registerPieceHandlers(
     const piece = room.state.pieces.get(msg.id);
     const body = room.bodies.get(msg.id);
     if (!piece || piece.type !== 'die' || !body) return;
-    rollBody(body, body.__traySeat != null ? trayRoll : roll, random);
-    broadcastPieceEvent(room, 'sfx', { type: 'die-roll' });
+    if (rollDie(room, msg.id, body.__traySeat != null ? trayRoll : roll, random, client))
+      broadcastPieceEvent(room, 'sfx', { type: 'die-roll' });
   });
 
   pieceMessage('setStand', (client, message) => {
@@ -494,14 +494,4 @@ function applySnap(room, id, enabled) {
     room.unpinPiece(id);
   }
   body.wakeUp();
-}
-
-function rollBody(body, config, random) {
-  body.wakeUp();
-  body.velocity.set((random() - 0.5) * config.spread, config.up, (random() - 0.5) * config.spread);
-  body.angularVelocity.set(
-    (random() - 0.5) * config.spin,
-    (random() - 0.5) * config.spin,
-    (random() - 0.5) * config.spin,
-  );
 }

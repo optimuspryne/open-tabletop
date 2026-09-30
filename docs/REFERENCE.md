@@ -12,6 +12,23 @@ modules and schemas are not current API contracts.
 For release 0.19.0 deployment requirements, see the [upgrade guide](RELEASING.md#upgrading-to-0190)
 (migrations 018–021, client refresh, source dependencies and ZIP transfer limits).
 
+### Demo dice policy
+
+`server/game/demo-dice-policy.js` exports frozen `DEMO_DICE_LIMITS` (15 dice, 1000 ms),
+`DemoDiceLimitError` and `createDemoDicePolicy({now})`. `TableRoom.onCreate` attaches a
+non-replaceable policy only to server-admitted demo rooms. The frozen API exposes
+`assertCapacity(pieces,type)`, `assertScene(scene)`, `acceptRoll(id)`, `seed(id)`, `remove(id)`,
+`clear()` and `notify(client,kind)`. The default clock is monotonic `performance.now()`.
+
+`ensurePieceCapacity(room,client,maxPieces,type)` preflights typed placement;
+`assertPieceCapacity(room,maxPieces,type)` is the final creation assertion. The optional type
+preserves existing non-dice callers. `rollDie(room,id,config,random,client)` shares roll admission
+and impulse application across all three handlers. Accepted rolls alone advance deadlines;
+spawn/restore seeds a deadline, and removal/reset/disposal clears it. `applyScene` counts all
+dice before mutation; failed startup restores cannot overwrite checkpoints. Known policy
+errors use existing notices, coalesced per connection/kind for two seconds. See
+[implementation, function inventory and rollout](PLAN_DEMO_DICE_LIMITS.md).
+
 ### Room resource budgets (public-demo foundation)
 
 `server/room-resource-limits.js` exports `readRoomResourceLimits(env)`. The returned frozen

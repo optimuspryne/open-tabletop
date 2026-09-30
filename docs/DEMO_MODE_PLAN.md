@@ -5,6 +5,14 @@ The demo is an opt-in deployment of the same application, not a permanent fork.
 User selected a fresh table per visitor/group and approved the entry mock-up and recommended
 icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact table placement and invite dialog were subsequently approved before implementation.
 
+## Dice safeguards (2026-09-30)
+
+Implemented: room-wide 15-dice cap and shared 1,000 ms cooldown per die, including custom and
+tray dice. Creation/restoration seeds the cooldown; over-cap scenes reject before mutation.
+Approved existing notifications provide capacity, cooldown and restore feedback. See
+[implementation, verification and rollout](PLAN_DEMO_DICE_LIMITS.md). Public deployment and
+load/real-device acceptance are pending; close old temporary tables before updating the app.
+
 ## Current runtime (2026-09-29)
 
 Approved branding update: `public/demo.html` adds the small-logo favicon;

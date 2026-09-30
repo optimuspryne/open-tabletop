@@ -1,3 +1,5 @@
+import { createDemoDicePolicy } from '../server/game/demo-dice-policy.js';
+import { registerRoomFeatureHandlers } from '../server/game/handlers/room-features.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerPieceHandlers } from '../server/game/handlers/pieces.js';
@@ -576,4 +578,65 @@ test('a mixed card/tile group emits at most one flip cue for each material', () 
       .sort(),
     ['card-flip', 'tile-flip'],
   );
+});
+
+test('demo roll handlers share per-die deadlines across players, groups, and trays', async () => {
+  const { room, handlers, events } = harness();
+  let time = 0;
+  room.dicePolicy = createDemoDicePolicy({ now: () => time });
+  registerRoomFeatureHandlers(room, {
+    trayRoll: { up: 8, spread: 13, spin: 30 },
+    random: () => 0.5,
+  });
+  const notices = [];
+  const first = { sessionId: 'first', send: (...args) => notices.push(args) };
+  const second = { sessionId: 'second', send: (...args) => notices.push(args) };
+  for (const id of ['1', '2']) {
+    room.state.pieces.set(id, { type: 'die' });
+    room.bodies.set(id, body());
+    room.bodies.get(id).__traySeat = 0;
+  }
+  room.state.pieces.set('3', { type: 'prop' });
+  room.bodies.set('3', body());
+  await handlers.get('rollOne')(first, { id: '1' });
+  await handlers.get('rollGroup')(second, { ids: ['2', '2'] });
+  assert.equal(room.bodies.get('2').wakeCount, 0); // duplicate payloads retain strict rejection
+  time = 500;
+  await handlers.get('rollGroup')(second, { ids: ['1', '2', '3', '99'] });
+  assert.equal(room.bodies.get('1').wakeCount, 1);
+  assert.equal(room.bodies.get('2').wakeCount, 1);
+  assert.equal(room.bodies.get('3').wakeCount, 0);
+  assert.equal(events.length, 2);
+  time = 999;
+  for (let i = 0; i < 20; i++) await handlers.get('roll')(second);
+  assert.equal(events.length, 2); // rejected batches emit no sound and never queue a roll
+  assert.equal(notices.length, 1);
+  time = 1000;
+  const reconnected = { sessionId: 'new-session', send() {} };
+  await handlers.get('rollOne')(reconnected, { id: '1' });
+  assert.equal(room.bodies.get('1').wakeCount, 2); // rejected attempts did not extend deadline
+  assert.equal(room.bodies.get('2').wakeCount, 1);
+  time = 1500;
+  await handlers.get('roll')(first);
+  assert.equal(room.bodies.get('1').wakeCount, 2);
+  assert.equal(room.bodies.get('2').wakeCount, 2);
+  assert.equal(room.bodies.get('2').velocity.y, 8);
+});
+
+test('demo spawn rejects tray and custom dice at capacity and still permits non-dice', async () => {
+  const { room, handlers, events } = harness();
+  room.dicePolicy = createDemoDicePolicy({ now: () => 0 });
+  room.state.trays.set('0', true);
+  for (let i = 0; i < 15; i++) room.state.pieces.set(String(i), { type: 'die' });
+  const notices = [];
+  const player = { sessionId: 'player', send: (...args) => notices.push(args) };
+  await handlers.get('spawn')(player, { type: 'die', props: { sides: 6, tray: true } });
+  await handlers.get('spawn')(player, {
+    type: 'die',
+    props: { sides: 6, finish: 'custom', finishImg: '/assets/dice/test.png' },
+  });
+  assert.equal(events.length, 0);
+  assert.equal(notices.length, 1);
+  await handlers.get('spawn')(player, { type: 'prop', props: { shape: 'pawn' } });
+  assert.equal(events[0].payload.type, 'prop');
 });

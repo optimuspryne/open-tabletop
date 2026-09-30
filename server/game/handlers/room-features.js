@@ -1,3 +1,4 @@
+import { rollDie } from '../dice-roll.js';
 import { broadcastPieceEvent } from '../piece-visibility.js';
 import { RANK } from '../../permissions.js';
 import {
@@ -35,8 +36,7 @@ export function registerRoomFeatureHandlers(
     room.state.pieces.forEach((piece, id) => {
       const body = room.bodies.get(id);
       if (piece.type !== 'die' || !body || body.__traySeat !== seat) return;
-      rollBody(body, trayRoll, random);
-      count++;
+      if (rollDie(room, id, trayRoll, random, client)) count++;
     });
     if (count) broadcastPieceEvent(room, 'sfx', { type: count > 1 ? 'dice-roll' : 'die-roll' });
   });
@@ -148,14 +148,4 @@ export function registerRoomFeatureHandlers(
       z: Math.max(-room.state.tableZ, Math.min(room.state.tableZ, point.z)),
     });
   });
-}
-
-function rollBody(body, config, random) {
-  body.wakeUp();
-  body.velocity.set((random() - 0.5) * config.spread, config.up, (random() - 0.5) * config.spread);
-  body.angularVelocity.set(
-    (random() - 0.5) * config.spin,
-    (random() - 0.5) * config.spin,
-    (random() - 0.5) * config.spin,
-  );
 }
