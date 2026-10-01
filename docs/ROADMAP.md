@@ -289,7 +289,7 @@ implementation sequence without making the entire backlog a fixed priority queue
     on switch). **Higher-resolution custom sources are supported:** Ultra keeps the uploaded
     source's native resolution. The 25 bundled skies are 2048×1024, so High and Ultra match on
     those assets. Replacing bundled artwork is optional content work, not unfinished resolution support.
-12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
+12. **Graphics/Video Settings.** ✅ **Shipped** — four fill-rate tiers (low/medium/high/ultra-high;
     pixel ratio + shadow-map size + AA), device-defaulted (phone → Low, tablet → Medium,
     desktop → High) with an in-app control (Settings → UI → Graphics), a persisted per-device
     preference, and `?q=` /

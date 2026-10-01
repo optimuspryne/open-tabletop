@@ -1160,7 +1160,7 @@ This contract is also summarized in `docs/ARCHITECTURE.md` and `CHANGELOG.md`.
 ### Dice rendering memory and sky display derivatives
 
 `public/rendering/core.js` resolves `CONFIG.tex.die` once at boot: Low/Medium 256px,
-High 512px. Like card detail, changing the texture tier requires a page reload.
+High/Ultra-high 512px. Like card detail, changing the texture tier requires a page reload.
 `public/rendering/graphics.js` uses a shared white `digitTexture` mask per number;
 `numberLabel` applies ink through material tint. Default d6 faces stay shared, while colored,
 marbled and custom d6 face canvases belong to their mesh. `customFaceTexture` no longer retains
@@ -2290,15 +2290,21 @@ quiet for a full frame), and
   `needsUpdate` only on frames where a caster's transform changed, so a static table (even while
   the camera orbits) doesn't repay the 4096² soft-shadow pass every frame.
 - **Graphics quality tiers** (docs/ROADMAP.md §1/§12): the tablet frame is fill-rate bound, so
-  quality is three presets — `low` (px 1, soft shadows @1024, no AA), `medium` (px ≤1.5, soft @2048,
-  AA), `high` (px ≤2, soft PCF @4096, AA). Active tier = `?q=` › `localStorage 'tabletop.quality'`
+  quality is four presets — `low` (px 1, soft shadows @1024, no AA), `medium` (px ≤1.5, soft @2048,
+  AA), `high` (px 2, soft PCF @4096, AA), `ultra-high` (px 4, soft PCF @4096, AA).
+  Ultra-high uses four render pixels per CSS pixel on each axis (16× the pixels at DPR 1,
+  four times High's workload), retaining High's card, dice and placard texture detail.
+  High uses two render pixels per CSS pixel on
+  each axis: supersampling at DPR 1 (four times the pixels), with the existing cap of 2
+  retained on denser displays. Low and Medium do not gain supersampling.
+  Active tier = `?q=` › `localStorage 'tabletop.quality'`
   › device default (phone → `low`, tablet → `medium`, desktop → `high`; by pointer + viewport).
   This automatic default is device-based; there is no continuous FPS-driven tier adjustment.
   `setQuality(tier)` applies pixel ratio + shadows live and persists; AA re-applies on reload.
   The UI control is Settings → UI → Graphics, with an **Apply & reload** button (shown once the tier changes) that commits AA and the
   pixel-ratio change, which iOS Safari only picks up on a fresh context. Per-axis dev knobs override on top for A/B: `?px=<ratio>`,
   `?shadow=off|512|1024|2048|4096`, `?shadowtype=pcf|soft`, `?aa=0`, plus live
-  `window.ottPixelRatio(v)` / `window.ottShadow(v)`. High also renders procedural card canvases at
+  `window.ottPixelRatio(v)` / `window.ottShadow(v)`. High and Ultra-high render procedural card canvases at
   1.5× their standard dimensions and requests the 1536px uploaded-card derivative; Low and Medium
   retain the standard card detail path.
 - **Skybox resolution** (separate per-viewer control beside the tier; `public/table/skybox.js`): `off` / `low`
@@ -2705,6 +2711,10 @@ native tooltip and focus status, with no separate hex input. Text toggles its pa
 controls, reports `aria-expanded`, and restores the previous drawing tool on closing; ink/text
 history remains intact. The chosen Tabler controls retain accessible names and native tooltips above the dialog layer. `paintNotecard`/`notecardMesh` build surfaces with individually disposable
 textures; `drawCanvasStroke` is shared with whiteboard replay.
+`graphics.js` supplies its cached maximum supported anisotropy to
+`notecardMesh(props, anisotropy?)` and `notecardStackMesh(props, anisotropy?)` for both
+face and back textures, including stack backs, without increasing canvas resolution.
+The standalone builders default to 1 so canvas-only painting remains independent of WebGL.
 `paintNotecard(context,drawing,{paper,textBoxes,orientation,back,name,count})` uses one weakly held scratch ink canvas
 per live destination. Destination-out erasing affects only ink; paper/pattern is painted behind
 it; editable text is painted above the ink. Hidden/back painting clears the scratch pixels and

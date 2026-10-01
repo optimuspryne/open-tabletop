@@ -98,7 +98,7 @@ export function paintNotecard(
   }
 }
 
-export function notecardMesh(props = {}) {
+export function notecardMesh(props = {}, anisotropy = 1) {
   const dimensions = notecardDimensions(props.orientation);
   const texture = (back) => {
     const canvas = document.createElement('canvas');
@@ -114,6 +114,8 @@ export function notecardMesh(props = {}) {
     });
     const map = releaseCanvasOnDispose(new THREE.CanvasTexture(canvas), canvas);
     map.colorSpace = THREE.SRGBColorSpace;
+    // Match card filtering so writing stays readable when viewed across the table.
+    map.anisotropy = anisotropy;
     return map;
   };
   const edge = new THREE.MeshStandardMaterial({ color: 0xd4cebb, roughness: 0.8 });
@@ -134,14 +136,17 @@ export function notecardMesh(props = {}) {
   return mesh;
 }
 
-export function notecardStackMesh(props = {}) {
+export function notecardStackMesh(props = {}, anisotropy = 1) {
   const dimensions = notecardDimensions(props.orientation);
-  const mesh = notecardMesh({
-    ...props,
-    drawing: [],
-    faceDown: true,
-    stackCount: props.count || 1,
-  });
+  const mesh = notecardMesh(
+    {
+      ...props,
+      drawing: [],
+      faceDown: true,
+      stackCount: props.count || 1,
+    },
+    anisotropy,
+  );
   const count = Math.max(1, Math.min(NOTECARD.maxCards, props.count || 1));
   // Thin seams make the physical stack legible without allocating a texture per card.
   const positions = [];

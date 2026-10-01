@@ -90,7 +90,7 @@ async function waitForVisualAssets() {
 
 // --- Graphics quality tiers (docs/ROADMAP.md §1/§12) -----------------------
 // The tablet frame is fill-rate bound (pixel ratio × per-fragment shading, incl. soft-shadow
-// sampling), not draw bound, so quality is three fill-rate presets. Active tier resolves as:
+// sampling), not draw bound, so quality is four fill-rate presets. Active tier resolves as:
 //   ?q=<tier>  >  localStorage 'tabletop.quality'  >  device default (coarse pointer → medium).
 // Per-axis dev knobs (?px, ?shadow, ?shadowtype, ?aa) override individual settings on top, for
 // A/B. setQuality() (exported, and window.setQuality) switches live; antialias is fixed at context
@@ -101,10 +101,13 @@ const QUALITY_KEY = 'tabletop.quality';
 // All tiers use soft shadows (PCFSoftShadowMap): hard PCFShadowMap black-screened an Android
 // phone's GPU, and soft-vs-hard is a minor cost lever next to pixel ratio, shadow size, and AA.
 // Tiers differ by pixel ratio, shadow-map size, and antialiasing.
+// High uses 2 render pixels per CSS pixel even on standard-density displays: 2× per
+// axis supersampling at DPR 1, while retaining the existing DPR 2 cap on dense screens.
 const QUALITY_TIERS = {
   low: { px: 1, shadowType: 'soft', shadowSize: 1024, aa: false },
   medium: { px: Math.min(devicePixelRatio, 1.5), shadowType: 'soft', shadowSize: 2048, aa: true },
-  high: { px: Math.min(devicePixelRatio, 2), shadowType: 'soft', shadowSize: 4096, aa: true },
+  high: { px: 2, shadowType: 'soft', shadowSize: 4096, aa: true },
+  'ultra-high': { px: 4, shadowType: 'soft', shadowSize: 4096, aa: true },
 };
 const _qp = (() => {
   try {
@@ -165,7 +168,7 @@ function qualitySettings(tier) {
 }
 let activeQuality = resolveQuality();
 // Dice carry many face maps. Resolve once at boot, like card texture detail.
-const DIE_TEXTURE_SIZE = { low: 256, medium: 256, high: 512 };
+const DIE_TEXTURE_SIZE = { low: 256, medium: 256, high: 512, 'ultra-high': 512 };
 CONFIG.tex.die = DIE_TEXTURE_SIZE[activeQuality];
 const _q0 = qualitySettings(activeQuality);
 

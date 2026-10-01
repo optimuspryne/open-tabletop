@@ -1750,6 +1750,18 @@ const SCENES = [
       assert(quality === 'low' && !byId('qualityApply').hidden, 'Quality change did not show Apply');
       byId('qualityApply').click(); assert(reloaded, 'Quality Apply did not reload');
       document.querySelector('#qualityRow [data-quality="high"]').click(); assert(byId('qualityApply').hidden, 'Original quality should hide Apply');
+      const beforeQuality = sent.length;
+      const ultra = document.querySelector('#qualityRow [data-quality="ultra-high"]');
+      ultra.click();
+      assert(quality === 'ultra-high' && !byId('qualityApply').hidden, 'Ultra-high did not select or show Apply');
+      assert(ultra.getAttribute('aria-pressed') === 'true' && document.querySelectorAll('#qualityRow [aria-pressed="true"]').length === 1, 'Quality selection is not exposed accessibly');
+      const qualityFullMode = document.body.classList.contains('ui-full');
+      document.body.classList.remove('ui-full');
+      assert([...document.querySelectorAll('#qualityRow .lbl, #qualityApply .lbl')].every(label => getComputedStyle(label).display !== 'none'), 'Text-only graphics controls disappeared in compact mode');
+      document.body.classList.toggle('ui-full', qualityFullMode);
+      assert(sent.length === beforeQuality, 'Graphics quality must stay local');
+      document.querySelector('#qualityRow [data-quality="high"]').click();
+      assert(ultra.getAttribute('aria-pressed') === 'false' && byId('qualityApply').hidden, 'Returning to High did not reset Ultra-high state');
       const loads = []; let resolution = 'high';
       class Loader { load(ref, done) { loads.push(done); } }
       const sky = createSkybox({ THREE: { ...THREE, TextureLoader: Loader }, scene,

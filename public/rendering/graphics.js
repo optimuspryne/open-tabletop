@@ -1,5 +1,9 @@
 import { getAuthToken } from '../auth.js';
-import { notecardMesh, notecardStackMesh, paintNotecard } from './notecards.js';
+import {
+  notecardMesh as buildNotecardMesh,
+  notecardStackMesh as buildNotecardStackMesh,
+  paintNotecard,
+} from './notecards.js';
 import { drawPlacard } from './placards.js';
 import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
@@ -59,10 +63,14 @@ function maxAnisotropy() {
   return _maxAniso || (_maxAniso = renderer.capabilities.getMaxAnisotropy());
 }
 
+// Keep canvas-only notecard painting independent of the live WebGL renderer.
+const notecardMesh = (props) => buildNotecardMesh(props, maxAnisotropy());
+const notecardStackMesh = (props) => buildNotecardStackMesh(props, maxAnisotropy());
+
 // Quality selection is finalized by a reload (the same boundary used for antialiasing). Keep the
 // current low/medium card cost, but render procedural art at 1.5x and request the larger uploaded
-// derivative when the page boots in High.
-const HIGH_CARD_DETAIL = getQuality() === 'high';
+// derivative when the page boots in High or Ultra-high.
+const HIGH_CARD_DETAIL = ['high', 'ultra-high'].includes(getQuality());
 const cardDetailScale = (base = 1) => base * (HIGH_CARD_DETAIL ? 1.5 : 1);
 function makeCardCanvas(w, h, baseScale = 1) {
   const scale = cardDetailScale(baseScale);
@@ -2928,7 +2936,7 @@ function roundRect(ctx, x, y, w, h, r) {
 // A standing seat-marker texture: a colored card with the player's avatar (or a
 // default silhouette) clipped to a circle, their name, and a "SHOWING n" badge
 // while they're revealing cards. Redrawn once the avatar image loads.
-const PLACARD_TEXTURE_SCALE = { low: 2, medium: 2, high: 3 };
+const PLACARD_TEXTURE_SCALE = { low: 2, medium: 2, high: 3, 'ultra-high': 3 };
 function makePlayerTexture(player) {
   const width = 320,
     height = 448;

@@ -669,10 +669,15 @@ frame **fill-rate bound, not draw bound** (FPS flat as draw calls rose), so the 
 redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false`, driven from the
 render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
 tuning on the target device.
-That tuning is now a shipped, client-local **quality tier** (low/med/high, persisted per device,
+That tuning is now a shipped, client-local **quality tier** (low/medium/high/ultra-high, persisted per device,
 defaulting to Low on phones, Medium on tablets, and High on desktops) in Settings → UI.
 This selects a preset by device class, not a continuous FPS-driven adjustment. It is a per-viewer
-render preference, never room state, so it stays out of the scene save. High also raises card detail:
+render preference, never room state, so it stays out of the scene save. High fixes the render
+pixel ratio at 2: standard-density displays get 2× supersampling per axis (four times the
+pixels), while denser displays retain the existing cap of 2. Low/Medium keep their existing
+pixel ratios. Ultra-high is an explicit choice with a fixed pixel ratio of 4 (16× the
+pixels at DPR 1, four times High's pixel workload), retaining High's shadows, AA and
+card/dice/placard texture detail. High and Ultra-high also raise card detail:
 procedural playing/text card canvases render at 1.5× the low/medium dimensions, and local uploaded faces select a larger
 server derivative after the tier's required reload.
 
@@ -853,6 +858,8 @@ card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
 are bundled `.glb` files under `public/static_assets/models/` (see `ASSET_CREDITS.md`); the current coin, Go-bowl,
 and human-token models are original project assets.
+Notecard face/back canvases also use the renderer's maximum supported anisotropic
+filtering; their existing canvas dimensions and individual disposal remain unchanged.
 
 ### Models: scale, orientation, color, and material
 

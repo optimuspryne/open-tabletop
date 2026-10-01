@@ -1207,6 +1207,11 @@ a {
   flex-wrap: wrap;
   gap: 6px;
 }
+/* Graphics presets and Apply are text-only controls, including in compact mode. */
+#qualityRow .lbl,
+#qualityApply .lbl {
+  display: inline;
+}
 .chip {
   padding: 5px 10px;
   font-size: var(--fs-sm);

@@ -707,7 +707,11 @@ export function createRoomSettings({
         const bootedTier = getQuality();
         const chips = [...qrow.querySelectorAll('[data-quality]')];
         const sync = () => {
-          chips.forEach((c) => c.classList.toggle('on', c.dataset.quality === getQuality()));
+          chips.forEach((c) => {
+            const selected = c.dataset.quality === getQuality();
+            c.classList.toggle('on', selected);
+            c.setAttribute('aria-pressed', String(selected));
+          });
           if (applyBtn) applyBtn.hidden = getQuality() === bootedTier;
         };
         chips.forEach(

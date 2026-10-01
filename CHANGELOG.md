@@ -8,6 +8,21 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Added
+- Ultra-high graphics preset with 4× rendering per axis (16× the pixels at DPR 1),
+  retaining High's textures, shadows and antialiasing. It is an explicit per-device
+  choice in Settings → UI → Graphics; device defaults remain unchanged. Text-only
+  graphics controls stay labeled in compact mode, and selection exposes its pressed state.
+
+### Changed
+- High graphics now renders at a fixed 2× pixel ratio, supersampling standard-density
+  displays for sharper tabletop detail. Low/Medium and the existing high-density cap
+  are unchanged; a DPR-1 display renders four times as many pixels on High.
+
+### Fixed
+- Notecard faces and backs now use the GPU's maximum supported anisotropic filtering,
+  matching regular cards to reduce texture blur when viewed across the table.
+
 ## [0.21.1] — 2026-09-30
 
 ### Upgrade notes
