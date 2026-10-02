@@ -20,6 +20,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   are unchanged; a DPR-1 display renders four times as many pixels on High.
 
 ### Fixed
+- Website checks now expect the enabled public-demo link instead of the retired
+  coming-soon placeholder. The hand-scroll browser check verifies the production
+  smooth-scroll request and native movement without depending on compositor animation timing.
 - Notecard faces and backs now use the GPU's maximum supported anisotropic filtering,
   matching regular cards to reduce texture blur when viewed across the table.
 

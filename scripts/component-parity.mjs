@@ -1216,8 +1216,22 @@ const SCENES = [
       assert(!byId('hand').classList.contains('reordering'), 'Hand scrolling enabled Rearrange');
       for (const id of ['selectBtn','seatBtn','fabBtn'])
         assert((getComputedStyle(byId(id)).display==='none')===sheet, id+' visibility does not follow the hand tray');
-      chevrons[1].click();
-      for (let i=0; i<150 && scroll.scrollLeft===0; i++) await new Promise(resolve=>setTimeout(resolve,20));
+      // Verify the real button's smooth-scroll request and native scrolling separately:
+      // compositor animation progress is unreliable under software-rendered CI load.
+      assert(scroll.clientWidth>0 && scroll.scrollWidth>scroll.clientWidth, 'Hand fixture has no scrollable viewport');
+      const nativeScrollBy = scroll.scrollBy;
+      let scrollRequest;
+      scroll.scrollBy = function(options) {
+        scrollRequest = options;
+        nativeScrollBy.call(this, { ...options, behavior: 'instant' });
+      };
+      try {
+        chevrons[1].click();
+        assert(scrollRequest?.left>0 && scrollRequest.behavior==='smooth', 'Hand scroll-right button did not request smooth movement');
+      } finally {
+        delete scroll.scrollBy;
+      }
+      await frame();
       assert(scroll.scrollLeft>0, 'Hand scroll-right button does not move cards');
       scroll.scrollTo({left:scroll.scrollWidth,behavior:'instant'}); await frame();
       assert(!chevrons[0].disabled && chevrons[1].disabled, 'Hand scroll end state is wrong');
