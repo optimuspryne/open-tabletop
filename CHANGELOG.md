@@ -22,6 +22,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   are unchanged; a DPR-1 display renders four times as many pixels on High.
 
 ### Fixed
+- Component tests follow current piece-menu accessible names and retain GM permission, action-target
+  and hide/show checks without requiring retired labels or icons. Label actions are clicked while live.
 - Website checks now expect the enabled public-demo link instead of the retired
   coming-soon placeholder. The hand-scroll browser check verifies the production
   smooth-scroll request and native movement without depending on compositor animation timing.

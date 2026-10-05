@@ -318,9 +318,7 @@ export function createPieceUi({
         items.push(['Browse deck', () => browseDeck(id)]);
       if (getRank() >= 2)
         items.push([
-          deckProps.browseAccess === 'players'
-            ? 'Disable browsing'
-            : 'Allow browsing',
+          deckProps.browseAccess === 'players' ? 'Disable browsing' : 'Allow browsing',
           () =>
             getRoom().send('setDeckBrowseAccess', {
               deckId: id,
