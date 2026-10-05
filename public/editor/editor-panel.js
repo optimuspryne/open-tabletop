@@ -548,17 +548,17 @@ function spawnCard({
     getTeam = () => null;
   // The swatch run is wrapped in a pop-group: inline on desktop, behind a trigger on
   // small/touch screens (CSS decides which). Before this it was display:none in short
-  // landscape, so colour choice was simply unavailable there.
+  // landscape, so color choice was simply unavailable there.
   const popWrap = (row) => {
     const group = document.createElement('div');
     group.className = 'pop-group swatchPop';
-    group.setAttribute('data-close', ''); // picking a colour closes the menu
+    group.setAttribute('data-close', ''); // picking a color closes the menu
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'pop-trigger chip';
     trigger.dataset.icon = 'color-swatch';
-    trigger.title = 'Colour';
-    trigger.setAttribute('aria-label', 'Colour');
+    trigger.title = 'Color';
+    trigger.setAttribute('aria-label', 'Color');
     const menu = document.createElement('div');
     menu.className = 'pop-menu';
     menu.hidden = true;

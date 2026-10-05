@@ -1988,7 +1988,7 @@ function drawStar(ctx, cx, cy, outer, inner, points) {
   ctx.closePath();
   ctx.fill();
 }
-// Wordy McWordface board: a cells×cells grid with coloured premium squares (from WORDY_PREMIUM /
+// Wordy McWordface board: a cells×cells grid with colored premium squares (from WORDY_PREMIUM /
 // WORDY_COLORS via the board's `paint`). The texture is divided into equal cells, so its squares line
 // up 1:1 with the snap grid (calibrateGrid derives cell = board width ÷ cells).
 function wordGridTex(paint = {}) {
@@ -2357,7 +2357,7 @@ const KIND = {
 // ---- Table grid: a flat line grid on the felt (snap-to-grid, Phase 2) --------
 // Lines on cell multiples through the world origin (matching snapToCell, whose cell
 // CENTRES sit half a cell between them), spanning the whole table. Built flat at y=0;
-// the client lifts it just above the felt. Colour is GM-set (`scale.gridColor`) so it
+// the client lifts it just above the felt. Color is GM-set (`scale.gridColor`) so it
 // reads on any felt. Returns null when there's no grid to draw.
 
 // Clip a segment to the table rectangle [-hx,hx]x[-hz,hz] (Liang-Barsky), so hex

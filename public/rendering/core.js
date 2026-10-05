@@ -368,7 +368,7 @@ if (typeof window !== 'undefined') {
 }
 
 // ===== Table ================================================================
-// Felt: a desaturated fabric texture tinted by the GM's felt colour, so the colour picker still
+// Felt: a desaturated fabric texture tinted by the GM's felt color, so the color picker still
 // works — it now tints the fabric instead of a flat fill. World-unit UVs (the felt is always an
 // extruded outline), so the tiling density stays consistent across shapes and sizes.
 const feltTex = new THREE.TextureLoader().load('/textures/felt.jpg');

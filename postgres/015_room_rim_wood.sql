@@ -5,7 +5,7 @@
 BEGIN;
 
 -- The wooden rim's texture: 'mahogany' (default), 'walnut', 'birch' or 'green'. GM-set, durable,
--- Reset-exempt, like the table shape and felt colour.
+-- Reset-exempt, like the table shape and felt color.
 ALTER TABLE rooms ADD COLUMN table_rim_wood text NOT NULL DEFAULT 'mahogany';
 
 COMMIT;

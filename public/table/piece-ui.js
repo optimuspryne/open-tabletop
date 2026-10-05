@@ -315,12 +315,12 @@ export function createPieceUi({
     if (type === 'deck') {
       const deckProps = JSON.parse(getRoom().state.pieces.get(id)?.props || '{}');
       if (getRank() >= 2 || deckProps.browseAccess === 'players')
-        items.push(['Browse deck…', () => browseDeck(id)]);
+        items.push(['Browse deck', () => browseDeck(id)]);
       if (getRank() >= 2)
         items.push([
           deckProps.browseAccess === 'players'
-            ? 'Restrict browsing to GMs'
-            : 'Allow player browsing',
+            ? 'Disable browsing'
+            : 'Allow browsing',
           () =>
             getRoom().send('setDeckBrowseAccess', {
               deckId: id,
@@ -360,16 +360,15 @@ export function createPieceUi({
     }
     items.push(['Highlight', () => highlightPiece(id)]);
     if (getRank() >= 2) {
-      items.push(['Labels…', () => editLabels(id)]);
+      items.push(['Labels', () => editLabels(id)]);
       if (editFogAura && canHaveFogAura(type, piecePropsOf(getRoom().state.pieces.get(id))))
-        items.push(['Fog aura…', () => editFogAura(id), null, null, 'circle']);
+        items.push(['Light Radius', () => editFogAura(id), null, null]);
       const hidden = !!getRoom().state.pieces.get(id)?.hidden;
       items.push([
-        hidden ? 'Reveal to players' : 'Hide from players',
+        hidden ? 'Show to players' : 'Hide from players',
         () => getRoom().send('setPieceVisibility', { ids: [id], hidden: !hidden }),
         null,
         null,
-        hidden ? 'eye' : 'eye-off',
       ]);
     }
     if (type !== 'mat') items.push(['Stand / lay flat', () => getRoom().send('setStand', { id })]); // a mat is always flat

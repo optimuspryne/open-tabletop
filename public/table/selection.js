@@ -166,7 +166,7 @@ export function createSelection({
   let selGesture = false; // a shift/select pointer gesture is in progress (so pointerup finalizes it)
   const selRings = new Map(); // id -> highlight ring mesh (pooled)
   const SEL_COLOR = '#c9a25a'; // fallback if the accent var isn't a valid hex
-  // MY UI accent colour (the one chosen in the lobby, stored as the `--accent` CSS var). The
+  // MY UI accent color (the one chosen in the lobby, stored as the `--accent` CSS var). The
   // selection is private to me, so it's tinted with my own accent.
   const selColor = () => {
     const v = getStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -372,7 +372,7 @@ export function createSelection({
     if (!el) return;
     const c = selColor();
     el.style.borderColor = c;
-    el.style.background = c + '24'; // my colour + ~14% alpha (8-digit hex)
+    el.style.background = c + '24'; // my color + ~14% alpha (8-digit hex)
     el.style.left = Math.min(x0, x1) + 'px';
     el.style.top = Math.min(y0, y1) + 'px';
     el.style.width = Math.abs(x1 - x0) + 'px';

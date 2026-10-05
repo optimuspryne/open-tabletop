@@ -4,7 +4,7 @@
  *
  * css-parity.mjs stubs page JavaScript so its snapshots are deterministic. The cost is a
  * blind spot: every component assembled at runtime — library cards, their controls, the
- * colour swatches — is invisible to it. Three changes shipped in one day needed a human
+ * color swatches — is invisible to it. Three changes shipped in one day needed a human
  * to look at them for exactly this reason.
  *
  * This runs the real modules. public/editor/editor-panel.js does not depend on client.js: it

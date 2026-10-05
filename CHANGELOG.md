@@ -15,6 +15,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Standardized color spelling across project comments, documentation, help text and swatch labels;
+  npm dependency names and bundled vendor files remain unchanged.
 - High graphics now renders at a fixed 2× pixel ratio, supersampling standard-density
   displays for sharper tabletop detail. Low/Medium and the existing high-density cap
   are unchanged; a DPR-1 display renders four times as many pixels on High.
@@ -805,12 +807,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   along in saved scenes. Seats, hand-fans and personal dice trays all carry over to the new shapes
   as-is. Every table also gets a **wooden rim** around the edge that follows the shape, in five
   woods (Mahogany/Walnut/Birch/Green/Oak) the GM picks in *Customize Table* and saves with the
-  room; and the felt is now a subtle fabric texture that still takes your felt colour.
+  room; and the felt is now a subtle fabric texture that still takes your felt color.
 - **Hex grids.** The table grid can now be **hexagonal**, not just square. In *Customize
   Table → Grid*, set the cell shape to **Hex**, pick **pointy-top or flat-top**, and choose a
   hex size — or place a board and use **Fit to board** to size the hexes to how many go across
   it. Pieces with snap turned on (**G**) snap to hex **centres**, and the drawn grid matches;
-  switching pointy↔flat reorients both at once. Offset, line colour, height and hide-the-lines
+  switching pointy↔flat reorients both at once. Offset, line color, height and hide-the-lines
   all work exactly as they do for the square grid. Snapping and the rendered grid run the same
   hex math on client and server, so a piece lands where the grid shows it.
 - **Multi-select composition — build one thing out of many.** With a clump selected, two new
@@ -899,9 +901,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   as your per-die default.
 - **Pipped d6 dice.** Two built-in dice join the numbered set — **Rounded Pips** and **Square
   Pips** — real 3D models with recessed dots instead of printed numbers. Add them from the dice
-  box's Add menu or the library's built-in Dice tab. They colour exactly like the other dice: the
-  body takes your die colour and the pips take your number colour, so a dice set or the inspector
-  recolours both at once. Under the hood they are a normal d6 — same size, same physics, read by
+  box's Add menu or the library's built-in Dice tab. They color exactly like the other dice: the
+  body takes your die color and the pips take your number color, so a dice set or the inspector
+  recolors both at once. Under the hood they are a normal d6 — same size, same physics, read by
   eye like any die — just a different mesh, so they roll in the tray and tumble on the table like
   the rest.
 
@@ -943,8 +945,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   selection toolbar and the one-finger/two-finger hand rule were all shipped and all
   undocumented. The developer gesture ledger
   (`docs/GESTURES.md`) has been reconciled to match the rebuilt panel.
-- **Colour swatches on library cards at every size.** The swatch run was `display: none` in short
-  landscape, so colour choice was simply unavailable there. It sits behind a trigger now, reusing
+- **Color swatches on library cards at every size.** The swatch run was `display: none` in short
+  landscape, so color choice was simply unavailable there. It sits behind a trigger now, reusing
   the existing pop-group pattern.
 - **A train dispenser and train pieces** join the built-in props, alongside new lighting and
   texture-resolution knobs.
@@ -1034,7 +1036,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   were handled above the guard that ignores keystrokes aimed at a text field.
 - **Mobile and landscape modal overrides never applied.** A media query adds no specificity, so a
   later top-level `:is(#a,#b,#c)` block outweighed them at every viewport.
-- **Toast and body text inherited the browser's default colour**, which was near-black on the
+- **Toast and body text inherited the browser's default color**, which was near-black on the
   dark theme.
 
 ### Removed

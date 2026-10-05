@@ -346,7 +346,7 @@ export const standMode = (shape) => {
 // and the snap anchor.
 // The 15×15 premium-square layout for Wordy McWordface (one char per cell, row-major, top row first):
 //   T = triple word · D = double word · t = triple letter · d = double letter · * = centre (double word) · . = plain
-// The classic symmetric layout — a game mechanic, drawn in our own colours (see WORDY_COLORS). Defined
+// The classic symmetric layout — a game mechanic, drawn in our own colors (see WORDY_COLORS). Defined
 // above BOARDS because the wordy board entry references it.
 export const WORDY_PREMIUM = [
   'T..d...T...d..T',

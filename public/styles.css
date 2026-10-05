@@ -529,7 +529,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  /* Without this every element that never sets a colour inherits the UA default —
+  /* Without this every element that never sets a color inherits the UA default —
      black — regardless of the dark surface it sits on. That is how the toast, and the
      region close button's ✕, ended up unreadable. */
   color: var(--text);
@@ -1251,7 +1251,7 @@ a {
 }
 
 /* Select variants share the field primitive. The arrow is built from gradients
-   so it follows --accent instead of embedding a fixed colour in an SVG URL. */
+   so it follows --accent instead of embedding a fixed color in an SVG URL. */
 :where(select, .control--select) {
   padding-right: calc(25px * var(--ui-elements-scale));
   cursor: pointer;
@@ -3269,7 +3269,7 @@ body.admin {
   }
 }
 /* Tabler SVG icons via an inline <symbol> sprite, referenced by <use>. Stroke inherits currentColor,
-   so an icon takes the button's text colour — .danger red, hover accent, disabled, etc. — for free. */
+   so an icon takes the button's text color — .danger red, hover accent, disabled, etc. — for free. */
 .icon-sprite {
   position: absolute;
   width: 0;
@@ -3627,7 +3627,7 @@ label:has(.ico) {
   border-radius: var(--r);
   padding: calc(7px * var(--ui-elements-scale)) calc(11px * var(--ui-elements-scale));
 }
-/* Hover becomes a tint rather than a border colour change — a border that only
+/* Hover becomes a tint rather than a border color change — a border that only
    appears on hover makes the whole row twitch. */
 #ui > button:hover,
 #ui > .button:hover,
@@ -3675,7 +3675,7 @@ label:has(.ico) {
 }
 
 /* ---- 3 · Icons carry the accent, labels stay neutral --------------------
-   .ico sets stroke: currentColor, so giving .ico its own colour tints the glyph
+   .ico sets stroke: currentColor, so giving .ico its own color tints the glyph
    without touching the label. This is the accent rule: accent = interactive and
    state, neutral = text and surface. */
 .ico {
@@ -4595,7 +4595,7 @@ body.not-gm .gm-only {
   outline-width: 1px;
   outline-offset: 1px;
 }
-/* Library card colour swatches — inline where there is room, behind a trigger where
+/* Library card color swatches — inline where there is room, behind a trigger where
    there is not. The menu stays in normal flow rather than floating: .libPane scrolls,
    and an absolutely positioned popover would be clipped at the pane edge. */
 #libraryModal .cardCtrls .swatchPop > .pop-menu {
@@ -6437,8 +6437,8 @@ canvas.fog-painting {
   #libraryModal .libCard .cardCtrls {
     gap: 4px;
   }
-  /* colour choice now lives behind the .swatchPop trigger here — see the
-     "Library card colour swatches" block. It used to be display:none. */
+  /* color choice now lives behind the .swatchPop trigger here — see the
+     "Library card color swatches" block. It used to be display:none. */
 }
 
 /* ============================================================================
@@ -6906,7 +6906,7 @@ canvas.fog-painting {
   background: var(--border);
 }
 /* The live #players node is borrowed while the popover is open — it arrives with the
-   dock's rules and nothing else, so state the roster's own colour here. */
+   dock's rules and nothing else, so state the roster's own color here. */
 .seatPop #players {
   display: flex;
   flex-direction: column;
