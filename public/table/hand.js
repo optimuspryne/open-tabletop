@@ -1,3 +1,5 @@
+import { PLAYING_CARD_GEOM } from '../../shared/playing-cards.js';
+
 // Private hand state, rendering, Show controls, and hand-only pointer gestures.
 export function createHand({
   scene,
@@ -397,13 +399,26 @@ export function createHand({
       div.className = 'handcard';
       div.dataset.hid = card.hid;
       const cf = card.kind === 'notecard' ? { kind: 'notecard' } : parseCardFront(card.front);
+      const playingFace = cf.ref && (cf.kind === 'rank' || cf.kind === 'joker');
+      const cardName = playingFace
+        ? cf.kind === 'rank'
+          ? `${cf.rank} ${cf.suit}`
+          : `${cf.color === '#bd2500' ? 'Red' : 'Black'} joker`
+        : null;
+      if (playingFace) {
+        div.classList.add('playingFace');
+        div.style.aspectRatio = `${PLAYING_CARD_GEOM.w} / ${PLAYING_CARD_GEOM.h}`;
+        div.setAttribute('role', 'group');
+        div.setAttribute('aria-label', cardName);
+      }
       if (card.kind === 'notecard') {
         div.classList.add('img', 'notecard');
         div.style.backgroundImage = `url("${notecardPreviewURL(card.drawing, card.paper, card.textBoxes, card.orientation)}")`;
-      } else if (cf.kind === 'rank') {
+      } else if (cf.kind === 'rank' && !cf.ref) {
         div.textContent = cf.rank + cf.suit;
         div.style.color = cf.color || '#111';
       } else if (
+        cf.kind === 'rank' ||
         cf.kind === 'text' ||
         cf.kind === 'joker' ||
         cf.kind === 'domino' ||
@@ -481,7 +496,14 @@ export function createHand({
       }; // desktop: double-click to inspect
       const eye = document.createElement('button');
       eye.className = 'cardEye';
-      eye.setAttribute('aria-label', card.kind === 'notecard' ? 'Open notecard' : 'Inspect card');
+      eye.setAttribute(
+        'aria-label',
+        card.kind === 'notecard'
+          ? 'Open notecard'
+          : cardName
+            ? `Inspect ${cardName}`
+            : 'Inspect card',
+      );
       setIcon(eye, 'eye');
       eye.addEventListener('pointerdown', (ev) => ev.stopPropagation()); // tapping the eye must not arm a drag
       eye.onclick = (ev) => {

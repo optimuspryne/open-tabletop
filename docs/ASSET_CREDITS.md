@@ -90,6 +90,20 @@ All CC0 (public domain).
 
 ---
 
+## Playing-card art - `public/static_assets/cards/bridge/`
+
+- **Bridge-Sized Playing Card Deck (PNG, CC0)** — Mesmedir, derived from
+  Dmitry Fomin's 2017 Wikimedia Commons playing-card collection.
+- **Source:** https://opengameart.org/content/bridge-sized-playing-card-deck-png-cc0
+- **License:** CC0 (public domain).
+- The 56 PNG originals from `playingcards_bridgesize_png.zip` are unchanged:
+  52 faces (`C`, `D`, `H`, `S`, ranks 1–13), red/black jokers (`X-R`, `X-B`),
+  and blue/red backs (`Back-B`, `Back-R`). Browser thumbnails use the existing
+  on-demand WebP derivative service; originals retain their alpha corners.
+- Courtesy credit is also shown in the in-app Credits panel.
+
+---
+
 ## Table rim texture - `public/static_assets/textures/`
 
 - **5 Wood Textures** - by **Luke.RUSTLTD**, https://opengameart.org/content/5-wood-textures

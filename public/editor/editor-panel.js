@@ -5,6 +5,11 @@ import { createCollectionController } from './collections.js';
 import { openColliderEditor } from './compound-collider-editor.js';
 import { wireBoardOutline } from './board-outline-editor.js';
 import { assetThumbnailURL } from '../rendering/asset-texture-url.js';
+import {
+  PLAYING_CARD_BACKS,
+  PLAYING_CARD_FACES,
+  PLAYING_CARD_JOKERS,
+} from '/shared/playing-cards.js';
 // editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
 // on the table engine's room connection, handed over by client.js via
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
@@ -516,6 +521,8 @@ function spawnCard({
   stand = null,
   standOn = false,
   extraActs = [],
+  backChoices = null,
+  onBackChoice = () => {},
 }) {
   const li = document.createElement('li');
   li.className = 'libCard';
@@ -530,6 +537,38 @@ function spawnCard({
 
   const ctrls = document.createElement('div');
   ctrls.className = 'cardCtrls';
+  let backDesign = backChoices?.[0]?.id;
+  const backPicker = backChoices ? document.createElement('fieldset') : null;
+  if (backPicker) {
+    li.classList.add('hasBackChoices');
+    backPicker.className = 'deckBackPicker';
+    const legend = document.createElement('legend');
+    legend.className = 'field-label';
+    legend.textContent = 'Card back';
+    backPicker.append(legend);
+    for (const back of backChoices) {
+      const label = document.createElement('label');
+      label.className = 'chip deckBackChoice' + (back.id === backDesign ? ' on' : '');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'deck-back-' + title;
+      radio.value = back.id;
+      radio.checked = back.id === backDesign;
+      const image = thumbImg(cardPreviewURL(back.ref));
+      image.alt = '';
+      const name = document.createElement('span');
+      name.textContent = back.name;
+      label.append(radio, image, name);
+      radio.onchange = () => {
+        if (!radio.checked) return;
+        backDesign = back.id;
+        for (const choice of backPicker.querySelectorAll('.deckBackChoice'))
+          choice.classList.toggle('on', choice.querySelector('input').checked);
+        onBackChoice(back);
+      };
+      backPicker.append(label);
+    }
+  }
   const qty = qtyStepper();
   ctrls.append(qty);
   const stack = count ? countStepper(count.def, count.max, count.min, count.label) : null;
@@ -653,6 +692,7 @@ function spawnCard({
   li._spawn = () => {
     const n = qty.get();
     const cp = {};
+    if (backDesign) cp.backDesign = backDesign;
     const color = getColor();
     if (color != null) {
       cp.color = color;
@@ -672,7 +712,9 @@ function spawnCard({
     btn('Spawn', () => li._spawn()),
     ...extraActs,
   );
-  li.append(preview, meta, ctrls, acts);
+  li.append(preview, meta);
+  if (backPicker) li.append(backPicker);
+  li.append(ctrls, acts);
   wirePopGroups(li); // the swatch pop-group is built per card, so wire this subtree
   return li;
 }
@@ -1097,30 +1139,26 @@ function renderBuiltin(sink) {
       }),
     );
   }
-  {
+  for (const jokers of [false, true]) {
     const box = previewBox('deckPreview');
-    box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
+    const backPreview = thumbImg(cardPreviewURL(PLAYING_CARD_BACKS[0].ref));
+    backPreview.alt = 'Blue card back';
+    const facePreview = thumbImg(
+      cardPreviewURL(jokers ? PLAYING_CARD_JOKERS[1].ref : PLAYING_CARD_FACES[0].ref),
+    );
+    facePreview.alt = jokers ? 'Black joker' : 'Ace of spades';
+    box.append(backPreview, facePreview);
     decks.append(
       spawnCard({
         preview: box,
-        title: 'Standard 52-card',
+        title: jokers ? 'Standard 54 (with Jokers)' : 'Standard 52-card',
         color: 'none',
-        send: () => sendPlacement('spawn', { type: 'deck', props: {} }),
-      }),
-    );
-  }
-  {
-    const box = previewBox('deckPreview');
-    box.append(
-      thumbImg(cardPreviewURL('joker:#bd2500')),
-      thumbImg(cardPreviewURL('rank:A:\u2660:#000')),
-    );
-    decks.append(
-      spawnCard({
-        preview: box,
-        title: 'Standard 54 (with Jokers)',
-        color: 'none',
-        send: () => sendPlacement('spawn', { type: 'deck', props: { jokers: true } }),
+        backChoices: PLAYING_CARD_BACKS,
+        onBackChoice: (back) => {
+          backPreview.src = cardPreviewURL(back.ref);
+          backPreview.alt = back.name + ' card back';
+        },
+        send: (props) => sendPlacement('spawn', { type: 'deck', props: { ...props, jokers } }),
       }),
     );
   }
@@ -1201,8 +1239,8 @@ function renderBuiltin(sink) {
         );
       else
         box.append(
-          thumbImg(cardPreviewURL('rank:A:\u2660:#000')),
-          thumbImg(cardPreviewURL('joker:#bd2500')),
+          thumbImg(cardPreviewURL(PLAYING_CARD_FACES[0].ref)),
+          thumbImg(cardPreviewURL(PLAYING_CARD_JOKERS[0].ref)),
         ); // poker
       games.append(
         builtinCard(box, g.name, 'Set up', () => {

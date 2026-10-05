@@ -21,6 +21,10 @@ test('all saved image categories and bundled rasters use WebP thumbnail derivati
     assetThumbnailURL('/mahjong/faces/dragR.png'),
     '/asset-textures/v1/bundled/mahjong%2Ffaces%2FdragR.png.webp?quality=thumbnail',
   );
+  assert.equal(
+    assetThumbnailURL('/cards/bridge/Back-R.png'),
+    '/asset-textures/v1/bundled/cards%2Fbridge%2FBack-R.png.webp?quality=thumbnail',
+  );
 });
 
 test('unsupported thumbnail refs never fall back to raw source images', () => {

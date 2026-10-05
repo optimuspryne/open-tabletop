@@ -113,10 +113,11 @@ export function createPieceLifecycle({
                     ...geoOf(props),
                     deckModel: props.deckModel,
                   }
-                : deckBuilders.buildSimpleDeck(!!props.jokers);
+                : deckBuilders.buildSimpleDeck(!!props.jokers, props.backDesign);
       room.deckCards.set(id, deckData.cards.slice());
       piece.count = deckData.cards.length;
       const deckProps = { back: deckData.back, ...geoOf(deckData) };
+      if (props.snap !== undefined) deckProps.snap = !!props.snap;
       if (props.browseAccess === 'players') deckProps.browseAccess = 'players';
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
         deckProps.model = deckData.deckModel;

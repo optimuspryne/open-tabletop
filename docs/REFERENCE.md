@@ -1259,8 +1259,22 @@ existing Fisher–Yates shuffle once, uses the returned functions in `spawn`, an
 the complete builder collection into `createStarterSetup`. Each call creates a fresh
 card array and shuffles it once.
 
-- **`buildSimpleDeck(jokers = false)`** — 52 standard rank/suit references, or 54
-  with one red and one black joker; uses the procedural `back` reference.
+- **`buildSimpleDeck(jokers = false, backDesign = 'blue')`** — 52 bundled image
+  references, or 54 with one red and one black joker. `shared/playing-cards.js`
+  owns the face identity catalog, blue/red backs, and `PLAYING_CARD_GEOM` from
+  `geomFromImage(486, 758, 0.045)`. Unknown internal back IDs fall back to blue;
+  `spawnPayload` rejects unknown IDs and back selection on tile sets. The Library
+  keeps both labeled thumbnail choices visible in full/compact and touch layouts.
+  The cards starter uses blue. Face refs remain private until revealed; the back
+  and bridge geometry follow the existing transfer/snapshot contracts.
+- **`playingCardFace(ref)`** — exact bundled-face lookup used by `parseCardFront`.
+  Rank faces retain `kind: 'rank'`, rank/suit/color and their image `ref`; jokers
+  retain their kind/color/ref. Table and hand renderers load images while hand
+  sorting retains playing-card semantics. Legacy `rank:`, `joker:` and `back` refs
+  still use their procedural renderer.
+- **`bundledPlayingCardReference(ref)`** — exact membership gate for the 56
+  bundled card images. Asset packages preserve these references without copying
+  image files; the receiving installation must include this card catalog.
 - **`buildDominoSet()`** — 28 double-six tiles, `domback`, `tile: 'domino'`, and
   the low-poly `bag` deck model.
 - **`buildScrabbleBag()`** — 100 letter tiles with counts and scores from shared
@@ -2238,12 +2252,12 @@ lifetime (30 days by default, bounded to 1–365).
 
 - **`STATIC_ASSETS_DIR`** in `server/static-assets.js`: the one location setting, defaulting to
   `public/static_assets`. Set a project-relative or absolute filesystem path after moving the
-  six category directories together, then restart the server.
+  seven category directories together, then restart the server.
 - **`staticAssetPath(assetPath, assetsDir?)`**: resolves a trusted catalog path such as
   `/models/pieces/chess/rook.glb` beneath that directory. Accepts paths with or without a leading
   slash. This is for catalog/configuration input; request containment is handled by Express.
 - **`staticAssetMounts(assetsDir?)`**: returns the `/mahjong/`, `/sky/`, `/textures/`, `/models/`,
-  `/music/`, and `/sounds/` URL-to-directory mapping used by production and browser fixtures.
+  `/music/`, `/sounds/`, and `/cards/` URL-to-directory mapping used by production and browser fixtures.
 - **`createStaticAssetRouter({assetsDir?})`** in `server/http/routes/static-assets.js`: mounts
   bundled files with a one-day cache for `/mahjong/faces`, default revalidation for other files,
   and Express's usual HEAD, conditional, range, and missing-file handling. `server.js` registers
@@ -2513,6 +2527,11 @@ room singleton or the client runtime.
   handles partial/stale `dropUndone` feedback through injected `toast`.
 - **`setCards(cards)`** receives the private `hand` message and calls the controller's
   `renderHand` helper. **`render()`** restores the bar after closing a hand-card inspection.
+  Bundled playing cards/jokers use `cardPreviewURL`'s bounded thumbnails, shared
+  `PLAYING_CARD_GEOM` aspect, and `contain` sizing so corner indices are not cropped.
+  Image cards have accessible rank/suit or joker names, also used by their Inspect
+  buttons. Legacy procedural rank cards retain text labels. Sorting and hand gestures
+  continue to use the existing face metadata and private delivery path.
   `scheduleHandScroll` batches overflow measurements after render, viewport resize, and the
   strip's `ResizeObserver` notification, including the hidden-to-visible mobile tray transition.
   `renderHand` disconnects the old strip and cancels its pending frame before replacing nodes.

@@ -1,26 +1,23 @@
 import { LETTER_DIST, MAHJONG } from '../../shared/pieces.js';
+import {
+  PLAYING_CARD_BACKS,
+  PLAYING_CARD_DEFAULT_BACK,
+  PLAYING_CARD_FACES,
+  PLAYING_CARD_JOKERS,
+  PLAYING_CARD_GEOM,
+} from '../../shared/playing-cards.js';
 
 // Build private game inventory, not textures. Share the room's shuffle routine
 // through injection so deck creation and later shuffles use the same behavior.
 export function createDeckBuilders({ shuffle }) {
-  // A card is identified by texture REFERENCES: 'rank:A:#111' (procedural face),
-  // 'back' (procedural back), or a data-URL / URL for an uploaded/file image.
-  // A deck = a shared back + an ordered list of front refs.
-  // A standard, shuffled 52-card deck as a list of face "refs" (see deckRefOk).
-  // A ref like "rank:A:♠:#000000" tells the client how to draw that face itself,
-  // so we never ship 52 images — just 52 short strings.
-  function buildSimpleDeck(jokers = false) {
-    const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
-    const suits = [
-      { symbols: ['♠', '♣'], color: '#000000' }, // black
-      { symbols: ['♥', '♦'], color: '#bd2500' }, // red
-    ];
-    const cards = [];
-    for (const { symbols, color } of suits)
-      for (const symbol of symbols)
-        for (const rank of ranks) cards.push(`rank:${rank}:${symbol}:${color}`);
-    if (jokers) cards.push('joker:#bd2500', 'joker:#1a1a1a'); // one red, one black — a complete 54-card deck
-    return { back: 'back', cards: shuffle(cards) };
+  // The server retains the shuffled image refs privately; browsers load only
+  // revealed faces. Existing procedural refs still render in older snapshots.
+  function buildSimpleDeck(jokers = false, backDesign = PLAYING_CARD_DEFAULT_BACK) {
+    const back =
+      PLAYING_CARD_BACKS.find((entry) => entry.id === backDesign) || PLAYING_CARD_BACKS[0];
+    const cards = PLAYING_CARD_FACES.map((face) => face.ref);
+    if (jokers) cards.push(...PLAYING_CARD_JOKERS.map((face) => face.ref));
+    return { back: back.ref, cards: shuffle(cards), geom: { ...PLAYING_CARD_GEOM } };
   }
 
   // A shuffled double-six domino set as a "deck" of 28 tiles. `tile: 'domino'` rides to every card

@@ -28,6 +28,14 @@
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import sharp from 'sharp';
+import { staticAssetPath } from '../server/static-assets.js';
+import {
+  PLAYING_CARD_BACKS,
+  PLAYING_CARD_FACES,
+  PLAYING_CARD_JOKERS,
+} from '../shared/playing-cards.js';
+import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
 import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
@@ -529,7 +537,9 @@ const SCENES = [
         window.onOttRoom(${STUB_ROOM});
         document.getElementById('lib2Btn').click();
         const modal = document.getElementById('libraryModal');
-        for (const [kind, count] of [['dice', 8], ['decks', 2], ['notecards', 2], ['tiles', 2], ['boards', 2], ['objects', 3]]) {
+        // Standard decks now use bundled rasters; the remaining entries still
+        // exercise canvas export. Check legacy playing-card refs directly below.
+        for (const [kind, count] of [['dice', 8], ['notecards', 2], ['tiles', 2], ['boards', 2], ['objects', 3]]) {
           const list = document.getElementById('nlb_'+kind);
           modal.querySelector('[data-tab="'+list.closest('.libGroup').dataset.group+'"]').click();
           const boxes = [...list.querySelectorAll('.libPreview')].slice(0, count);
@@ -548,6 +558,14 @@ const SCENES = [
               assert(im.naturalWidth<=320 && im.naturalHeight<=320, kind+' exceeded thumbnail bounds');
             }
           }
+        }
+        const { cardPreviewURL } = await import('/rendering/graphics.js');
+        for (const ref of ['back', 'rank:A:♠:#000', 'joker:#bd2500']) {
+          const image = new Image();
+          image.src = cardPreviewURL(ref);
+          await image.decode();
+          assert(image.src.startsWith('data:image/png;'), 'Legacy card did not exercise PNG fallback');
+          assert(image.naturalWidth <= 320 && image.naturalHeight <= 320, 'Legacy card exceeded thumbnail bounds');
         }
       } finally {
         HTMLCanvasElement.prototype.toDataURL = encode;
@@ -1204,13 +1222,19 @@ const SCENES = [
       byId('fabBtn').click();
       const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const sheet = matchMedia('(max-width: 900px), (pointer: coarse)').matches;
-      const cards = Array.from({length:20}, (_,i)=>({hid:String(i),front:'rank:A:♠:#000',back:'back'}));
+      const { PLAYING_CARD_FACES, PLAYING_CARD_GEOM, PLAYING_CARD_BACKS } = await import('/shared/playing-cards.js');
+      const { cardPreviewURL } = await import('/rendering/graphics.js');
+      const cards = PLAYING_CARD_FACES.slice(0,20).map((face,i)=>({hid:String(i),front:face.ref,back:PLAYING_CARD_BACKS[0].ref,geom:PLAYING_CARD_GEOM}));
       messages.get('hand')(cards);
       await frame();
       if (sheet) byId('handTab').click();
       await frame(); await frame();
       const chevrons = [...byId('hand').querySelectorAll('.handScrollBtn')];
       const scroll = byId('hand').querySelector('.handScroll');
+      assert(scroll.querySelectorAll('.handcard.playingFace.img').length===20, 'Private hand delivery did not render image faces');
+      const image = new Image();image.src = cardPreviewURL(cards[0].front);await image.decode();
+      assert(image.naturalHeight<=320, 'Private hand loaded an unbounded original');
+      assert(scroll.firstElementChild.style.backgroundImage.includes('S-1.png'), 'Private hand displayed the wrong face');
       assert(chevrons.length===2 && chevrons.every(button=>!button.hidden), 'Hand scroll arrows require Rearrange before appearing');
       assert(chevrons[0].disabled && !chevrons[1].disabled, 'Initial hand scroll direction state is wrong');
       assert(!byId('hand').classList.contains('reordering'), 'Hand scrolling enabled Rearrange');
@@ -2529,6 +2553,102 @@ const SCENES = [
       (await import('/ui/icons.js')).applyIcons();
       document.querySelector('.swatchPop > .pop-trigger').click();`,
   },
+  ...['full', 'compact'].map((mode) => ({
+    name: 'hand-playing-faces-' + mode,
+    root: '#handRow',
+    expect: { selector: '#hand .handcard.playingFace', min: 54 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      document.getElementById('tableLoading').remove();
+      const { createHand } = await import('/table/hand.js');
+      const { parseCardFront, cardPreviewURL } = await import('/rendering/graphics.js');
+      const { applyIcons, setIcon } = await import('/ui/icons.js');
+      const { PLAYING_CARD_FACES, PLAYING_CARD_JOKERS, PLAYING_CARD_GEOM, PLAYING_CARD_BACKS } = await import('/shared/playing-cards.js');
+      const messages=new Map(), sent=[];
+      const room={state:{players:new Map()},send:(...args)=>sent.push(args),onMessage:(type,callback)=>messages.set(type,callback)};
+      const hand=createHand({ parseCardFront, cardPreviewURL, applyIcons, setIcon,
+        getRoom:()=>room, getSessionId:()=> 'hand-fixture', scene:{remove(){}},
+        renderer:{domElement:document.createElement('canvas')},inspectMesh(){},syncControlGuide(){},toast(){},
+        byId:id=>document.getElementById(id),dragThreshold:5 });
+      hand.bindRoom(room);
+      assert(sent[0][0]==='handSync', 'Hand did not request private reconnect state');
+      const faces=[...PLAYING_CARD_FACES,...PLAYING_CARD_JOKERS];
+      messages.get('hand')(faces.map((face,index)=>({hid:String(index),front:face.ref,back:PLAYING_CARD_BACKS[0].ref,geom:PLAYING_CARD_GEOM})));
+      if(matchMedia('(max-width:900px), (pointer:coarse)').matches) document.getElementById('handRow').classList.add('trayOpen');
+      applyIcons(document);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const cards=[...document.querySelectorAll('#hand .handcard')];
+      assert(cards.length===54,'Private hand omitted faces or jokers');
+      for(const [index,card] of cards.entries()) {
+        assert(card.style.backgroundImage.includes(encodeURIComponent(faces[index].ref.slice(1))), 'Private face reference changed');
+        const style=getComputedStyle(card), box=card.getBoundingClientRect();
+        assert(style.backgroundSize==='contain' && style.backgroundRepeat==='no-repeat', 'Private face may crop corner indices');
+        assert(Math.abs(box.width/box.height - PLAYING_CARD_GEOM.w/PLAYING_CARD_GEOM.h)<0.01,'Private card stretched bridge art');
+        assert(card.getAttribute('role')==='group' && card.getAttribute('aria-label'), 'Image card lacks its accessible identity');
+        assert(card.querySelector('.cardEye').getAttribute('aria-label')==='Inspect '+card.getAttribute('aria-label'),'Inspect lost card identity');
+      }
+      for(const face of faces) {const image=new Image();image.src=cardPreviewURL(face.ref);await image.decode();assert(image.naturalHeight<=320,'Hand face exceeded thumbnail bounds');}
+      const eye=cards[0].querySelector('.cardEye');eye.focus();
+      assert(document.activeElement===eye,'Inspect control is not keyboard focusable');
+      if(matchMedia('(pointer:coarse)').matches) {const box=eye.getBoundingClientRect();assert(box.width>=30 && box.height>=30,'Touch Inspect target shrank');}
+      assert(cards[52].getAttribute('aria-label')==='Red joker' && cards[53].getAttribute('aria-label')==='Black joker','Joker names changed');`,
+  })),
+  ...['full', 'compact'].map((mode) => ({
+    name: 'library-playing-decks-' + mode,
+    root: '#libraryModal',
+    expect: { selector: '.deckBackPicker', min: 2 },
+    drive: `
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      const sent = [];
+      const fixtureRoom = ${STUB_ROOM};
+      window.onOttRoom(new Proxy(fixtureRoom, { get: (room, key) => key === 'send'
+        ? (type, data) => { sent.push({ type, data }); fixtureRoom.send(type, data); }
+        : room[key] }));
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="decks"]').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const { parseCardFront, cardMesh } = await import('/rendering/graphics.js');
+      const { PLAYING_CARD_FACES, PLAYING_CARD_JOKERS, PLAYING_CARD_GEOM, PLAYING_CARD_BACKS } = await import('/shared/playing-cards.js');
+      for (const face of [...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS])
+        assert(JSON.stringify(parseCardFront(face.ref)) === JSON.stringify(face), 'Image face lost its identity');
+      assert(parseCardFront('rank:A:♠:#000').kind === 'rank', 'Legacy face no longer parses');
+      assert(parseCardFront('back').kind === 'back', 'Legacy back no longer parses');
+      const mesh = cardMesh({ front: PLAYING_CARD_FACES[0].ref, back: PLAYING_CARD_BACKS[1].ref, faceDown: false, geom: PLAYING_CARD_GEOM });
+      const maps = [...new Set(mesh.material.map(material => material.map).filter(Boolean))];
+      for (let attempt = 0; attempt < 100 && maps.some(map => !map.image?.naturalWidth); attempt++)
+        await new Promise(resolve => setTimeout(resolve, 30));
+      assert(maps.length === 2 && maps.every(map => map.image?.naturalWidth > 0), 'Table card did not load both image faces');
+      assert(maps.some(map => map.image.src.includes('S-1.png')), 'Table face still uses procedural art');
+      assert(maps.some(map => map.image.src.includes('Back-R.png')), 'Table back did not use the selected image');
+      mesh.geometry.computeBoundingBox();
+      const bounds = mesh.geometry.boundingBox;
+      assert(Math.abs((bounds.max.x - bounds.min.x) / (bounds.max.z - bounds.min.z) - 486 / 758) < 0.001, 'Table mesh stretched bridge artwork');
+      mesh.material.forEach(material => material.dispose());
+      const cards = [...document.querySelectorAll('.libCard.hasBackChoices')];
+      assert(cards.length === 2, 'Standard deck entries are missing');
+      for (const [index, card] of cards.entries()) {
+        const radios = [...card.querySelectorAll('input[type=radio]')];
+        assert(radios.length === 2 && radios[0].checked, 'Blue is not the initial back');
+        radios[1].click();
+        assert(radios[1].checked && !radios[0].checked, 'Back choice is not exclusive');
+        assert(card.querySelector('.libPreview img').src.includes('Back-R.png'), 'Back preview did not update');
+        for (const image of card.querySelectorAll('img')) await image.decode();
+        assert(radios[1].labels[0].textContent === 'Red', 'Back lacks an accessible label');
+        const target = radios[1].labels[0].getBoundingClientRect();
+        assert(target.width >= 44 && target.height >= 44, 'Back choice is too small for touch');
+        const picker = card.querySelector('.deckBackPicker');
+        assert(picker.scrollWidth <= picker.clientWidth + 1, 'Back choices overflow their layout');
+        card._spawn();
+        const request = sent.filter(message => message.type === 'spawn').at(-1);
+        assert(request.data.props.backDesign === 'red', 'Spawn omitted selected back');
+        assert(request.data.props.jokers === (index === 1), 'Spawn changed deck size');
+      }
+      assert(cards[0].querySelector('input[value=red]').checked, 'Second deck changed the first choice');`,
+  })),
 ];
 
 const VIEWPORTS = [
@@ -2537,11 +2657,28 @@ const VIEWPORTS = [
 ];
 
 const out = {};
+// Raster previews use the same bounded image format as production. serveDir
+// serves static fixtures, so provide the bundled derivative responses explicitly.
+const playingCardThumbnails = Object.fromEntries(
+  await Promise.all(
+    [...PLAYING_CARD_BACKS, ...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS].map(async ({ ref }) => [
+      decodeURIComponent(assetThumbnailURL(ref).split('?')[0]),
+      {
+        body: await sharp(staticAssetPath(ref))
+          .resize({ width: 320, height: 320, fit: 'inside' })
+          .webp()
+          .toBuffer(),
+        type: 'image/webp',
+      },
+    ]),
+  ),
+);
 const server = await serveDir({
   root: ROOT,
   stubOnly: ['/client.js', '/landing.js', '/admin.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
+    ...playingCardThumbnails,
     '/__admin-live.js': {
       body: await readFile(resolve(ROOT, 'admin.js'), 'utf8'),
       type: 'text/javascript',

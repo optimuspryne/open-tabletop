@@ -1076,6 +1076,11 @@ a {
   background-size: cover;
   background-position: center;
 }
+/* Bundled playing faces use shared bridge aspect and retain all corner indices. */
+.handcard.playingFace {
+  background-size: contain;
+  background-repeat: no-repeat;
+}
 /* A tile (domino) hand slot: 1:2 and a touch narrower, so the tile fills it (same height as a card). */
 .handcard.tile {
   width: calc(var(--card-w) * 0.705);
@@ -4559,6 +4564,43 @@ body.not-gm .gm-only {
   padding: 4px 8px;
   border-radius: var(--r-sm);
   line-height: 1.2;
+}
+/* Playing decks keep named, keyboard-operable back choices in every UI mode. */
+#libraryModal .libCard.hasBackChoices {
+  grid-template-areas:
+    'prev meta'
+    'backs backs'
+    'ctrls ctrls'
+    'acts acts';
+}
+#libraryModal .deckBackPicker {
+  grid-area: backs;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#libraryModal .deckBackPicker legend {
+  margin-bottom: 4px;
+}
+#libraryModal .deckBackChoice {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-min-height);
+  gap: 6px;
+  padding: 5px 8px;
+}
+#libraryModal .deckBackChoice .libThumb {
+  width: 26px;
+  height: 41px;
+  object-fit: contain;
+}
+#libraryModal .deckBackChoice:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 #libraryModal .cardCtrls .chip .ico,
 #libraryModal .libCard .button-row--compact .ico {

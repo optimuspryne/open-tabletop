@@ -12,6 +12,7 @@ import { createAssetPackages, inspectAssetPackage } from '../server/assets/packa
 import { createAssetPackagesRouter } from '../server/http/routes/asset-packages.js';
 import { createDatabase } from '../server/database.js';
 import { ASSET_PACKAGE } from '../shared/asset-package.js';
+import { createDeckBuilders } from '../server/game/deck-builders.js';
 
 const yes = async () => true;
 async function fixture(t) {
@@ -350,6 +351,30 @@ async function deckFixture(t) {
   f.decks.set('1', deck);
   return { ...f, deck, urls, package: await f.service.exportAsset('deck', '1', yes) };
 }
+test('bundled playing decks round-trip through packages without arbitrary static references', async (t) => {
+  const f = await fixture(t);
+  const built = createDeckBuilders({ shuffle: (cards) => cards }).buildSimpleDeck(true, 'red');
+  f.decks.set('1', {
+    name: 'Bridge cards',
+    back: built.back,
+    fronts: built.cards,
+    geom: built.geom,
+    open: false,
+    deckModel: null,
+    color: null,
+    textColor: null,
+  });
+  const value = await f.service.exportAsset('deck', '1', yes);
+  assert.equal(value.files.length, 0);
+  const copy = await f.service.importAsset(value, 'Copied bridge cards', 'new-admin', yes);
+  const saved = f.decks.get(copy.id);
+  assert.equal(saved.back, built.back);
+  assert.deepEqual(saved.fronts, built.cards);
+  assert.deepEqual(saved.geom, built.geom);
+  value.assets[0].fronts[0] = { generated: '/cards/bridge/unknown.png' };
+  await assert.rejects(() => f.service.inspect(value), /unsupported image dependency/i);
+});
+
 test('deck packages preserve ordered paired faces, shape, skin, text and original images across stores', async (t) => {
   const f = await deckFixture(t),
     value = f.package;

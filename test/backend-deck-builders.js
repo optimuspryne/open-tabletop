@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDeckBuilders } from '../server/game/deck-builders.js';
 import { LETTER_DIST, MAHJONG } from '../shared/pieces.js';
+import { PLAYING_CARD_BACKS, PLAYING_CARD_GEOM, playingCardFace } from '../shared/playing-cards.js';
 
 const builders = createDeckBuilders({ shuffle: (cards) => cards });
 const counts = (cards) =>
@@ -12,7 +13,9 @@ const counts = (cards) =>
 
 test('standard decks contain every rank/suit once, with optional red and black jokers', () => {
   const deck = builders.buildSimpleDeck();
-  assert.equal(deck.back, 'back');
+  assert.equal(deck.back, PLAYING_CARD_BACKS[0].ref);
+  assert.deepEqual(deck.geom, PLAYING_CARD_GEOM);
+  assert.ok(Math.abs(deck.geom.w / deck.geom.h - 486 / 758) < 0.0001);
   assert.equal(deck.cards.length, 52);
   assert.equal(new Set(deck.cards).size, 52);
   for (const [suit, color] of [
@@ -22,14 +25,36 @@ test('standard decks contain every rank/suit once, with optional red and black j
     ['♦', '#bd2500'],
   ]) {
     for (const rank of ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']) {
-      assert.ok(deck.cards.includes(`rank:${rank}:${suit}:${color}`));
+      assert.ok(
+        deck.cards.some((ref) => {
+          const face = playingCardFace(ref);
+          return face.rank === rank && face.suit === suit && face.color === color;
+        }),
+      );
     }
   }
-  assert.deepEqual(builders.buildSimpleDeck(true).cards, [
-    ...deck.cards,
-    'joker:#bd2500',
-    'joker:#1a1a1a',
-  ]);
+  const withJokers = builders.buildSimpleDeck(true);
+  assert.deepEqual(withJokers.cards.slice(0, 52), deck.cards);
+  assert.deepEqual(
+    withJokers.cards.slice(52).map((ref) => playingCardFace(ref).kind),
+    ['joker', 'joker'],
+  );
+  assert.deepEqual(
+    withJokers.cards.slice(52).map((ref) => playingCardFace(ref).color),
+    ['#bd2500', '#1a1a1a'],
+  );
+});
+
+test('back selection changes only the shared back, with a safe default and fresh geometry', () => {
+  for (const jokers of [false, true]) {
+    const blue = builders.buildSimpleDeck(jokers, 'blue');
+    const red = builders.buildSimpleDeck(jokers, 'red');
+    assert.equal(red.back, PLAYING_CARD_BACKS[1].ref);
+    assert.deepEqual(red.cards, blue.cards);
+    red.geom.w = 9;
+    assert.deepEqual(builders.buildSimpleDeck(jokers).geom, PLAYING_CARD_GEOM);
+  }
+  assert.equal(builders.buildSimpleDeck(false, '__proto__').back, PLAYING_CARD_BACKS[0].ref);
 });
 
 test('domino inventory includes all 28 unordered double-six pairs and its skin', () => {

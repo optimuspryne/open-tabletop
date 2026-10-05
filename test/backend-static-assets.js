@@ -11,6 +11,11 @@ import { serveDir } from '../scripts/lib/headless.mjs';
 import { BOARDS, PROPS, DECK_MODELS, DISPENSERS, DICE_MODELS, MAHJONG } from '../shared/pieces.js';
 import { BUILTIN_SKIES } from '../public/table/skybox.js';
 import { MUSIC } from '../public/credits.js';
+import {
+  PLAYING_CARD_FACES,
+  PLAYING_CARD_JOKERS,
+  PLAYING_CARD_BACKS,
+} from '../shared/playing-cards.js';
 
 async function start(t, options) {
   const app = express();
@@ -24,6 +29,9 @@ async function start(t, options) {
 test('bundled catalog URLs still serve their assets after the directory move', async (t) => {
   const origin = await start(t);
   const urls = new Set([
+    ...[...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS, ...PLAYING_CARD_BACKS].map(
+      (entry) => entry.ref,
+    ),
     ...[BOARDS, PROPS, DECK_MODELS, DISPENSERS, DICE_MODELS].flatMap((catalog) =>
       Object.values(catalog).flatMap((entry) => (entry.model ? [entry.model] : [])),
     ),

@@ -9,6 +9,14 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Standard 52/54-card decks use bundled CC0 bridge-sized playing-card images, with
+  blue/red back thumbnails at spawn (blue by default). Bridge geometry and selected
+  backs survive card transfers and saves; rank/suit sorting remains.
+  Legacy procedural references remain supported. Bundled card references also
+  round-trip in asset packages without uploaded dependencies.
+- Private hands show the new playing-card face images and jokers at bridge
+  proportions, with accessible card names and the existing Inspect controls.
+  Full/compact desktop and touch modes retain sorting and play/reorder gestures.
 - Ultra-high graphics preset with 4× rendering per axis (16× the pixels at DPR 1),
   retaining High's textures, shadows and antialiasing. It is an explicit per-device
   choice in Settings → UI → Graphics; device defaults remain unchanged. Text-only

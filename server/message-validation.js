@@ -1,4 +1,5 @@
 import { NOTECARD } from '../shared/notecards.js';
+import { PLAYING_CARD_BACKS } from '../shared/playing-cards.js';
 import { normalizeCompoundCollider } from '../shared/compound-collider.js';
 import { normalizeBoardOutline } from '../shared/board-geometry.js';
 // Normalizers for values arriving across the WebSocket trust boundary. A
@@ -829,7 +830,7 @@ export function spawnPayload(
     return { type, props: out };
   }
   if (type === 'deck') {
-    if (!hasOnlyKeys(props, new Set(['jokers', 'set', 'snap']))) return null;
+    if (!hasOnlyKeys(props, new Set(['jokers', 'set', 'snap', 'backDesign']))) return null;
     const out = {};
     if (props.jokers !== undefined) {
       if (typeof props.jokers !== 'boolean') return null;
@@ -838,6 +839,14 @@ export function spawnPayload(
     if (props.set !== undefined) {
       if (!['domino', 'letter', 'mahjong'].includes(props.set)) return null;
       out.set = props.set;
+    }
+    if (props.backDesign !== undefined) {
+      if (
+        props.set !== undefined ||
+        !PLAYING_CARD_BACKS.some((back) => back.id === props.backDesign)
+      )
+        return null;
+      out.backDesign = props.backDesign;
     }
     if (props.snap !== undefined) {
       if (typeof props.snap !== 'boolean') return null;

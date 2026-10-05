@@ -13,6 +13,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { CONFIG, renderer, deviceClass, getQuality, tableMesh, rimMat } from './core.js';
 import { assetTextureURL, assetThumbnailURL } from './asset-texture-url.js';
 import { THUMBNAIL_MAX_DIMENSION } from '../../shared/image-thumbnails.js';
+import { playingCardFace } from '../../shared/playing-cards.js';
 import {
   PROPS,
   COLORS,
@@ -80,8 +81,8 @@ function makeCardCanvas(w, h, baseScale = 1) {
 }
 
 // ===== Texture builders (procedural canvas textures) ========================
-// Each returns a THREE texture via cTex(). Cards, dice, boards, and deck edges
-// are all drawn onto a 2D canvas rather than shipped as image files.
+// Each returns a THREE texture via cTex(). Legacy cards, procedural dice/boards,
+// and deck edges use canvases; standard playing decks load bundled images.
 
 // The face of a standard playing card: rank + suit small in two opposite corners
 // and large in the middle. `color` is the suit color (black or red).
@@ -957,11 +958,14 @@ function cardTextureURL(ref) {
 }
 
 // Decode a card "front" ref into a structured descriptor. The tagged-string
-// encoding (rank: / text: / tback: / back / image) is defined HERE ONLY — both
+// encoding (rank: / text: / tback: / back / image) is decoded here; bundled
+// playing-card identities come from the shared catalog. Both
 // the 3D texture path (below) and the DOM hand-card path (client.js) decode via
 // this helper, so the format has a single source of truth.
 export function parseCardFront(ref) {
   if (!ref || ref === 'back') return { kind: 'back' };
+  const face = playingCardFace(ref);
+  if (face) return { ...face };
   if (ref.startsWith('rank:')) {
     const [, rank, suit, color] = ref.split(':');
     return { kind: 'rank', rank, suit, color };
@@ -999,7 +1003,8 @@ function resolveTexture(ref) {
 
   const parsed = parseCardFront(ref);
   let texture;
-  if (parsed.kind === 'back') texture = cardBack();
+  if (parsed.ref) texture = loadImageTexture(cardTextureURL(parsed.ref));
+  else if (parsed.kind === 'back') texture = cardBack();
   else if (parsed.kind === 'rank') texture = cardFront(parsed.rank, parsed.suit, parsed.color);
   else if (parsed.kind === 'joker') texture = jokerFace(parsed.color);
   else if (parsed.kind === 'domino') texture = dominoFace(parsed.a, parsed.b);
@@ -1514,7 +1519,7 @@ function cardMesh(props = {}) {
     const capMask = roundMask(hw, hh, round);
     const capMat = (ref) => {
       const m = { map: resolveTexture(ref), roughness: 0.6 };
-      if (parseCardFront(ref || 'back').kind === 'image') {
+      if (parseCardFront(ref || 'back').ref) {
         m.alphaMap = capMask;
         m.alphaTest = 0.5;
       }

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHand } from '../public/table/hand.js';
+import { playingCardFace, PLAYING_CARD_GEOM } from '../shared/playing-cards.js';
+import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
 
 class Element {
   constructor(tag = 'div') {
@@ -205,8 +207,9 @@ function fixture() {
       rotation: { x: 0 },
       position: { set() {} },
     }),
-    parseCardFront: (front) => ({ kind: 'rank', rank: front.slice(0, -1), suit: front.at(-1) }),
-    cardPreviewURL: () => null,
+    parseCardFront: (front) =>
+      playingCardFace(front) || { kind: 'rank', rank: front.slice(0, -1), suit: front.at(-1) },
+    cardPreviewURL: assetThumbnailURL,
     notecardPreviewURL: () => 'data:image/png;base64,test',
     openHandNotecard: (card) => inspected.push({ notecard: card.hid }),
     notecardMesh: () => ({
@@ -341,6 +344,55 @@ test('Show selection and Rearrange sorting retain their room messages', () => {
     f.cards().map((card) => card.dataset.hid),
     ['ace', 'king'],
   );
+});
+
+test('bundled playing-card images show full faces with accessible names and numeric rank/suit sorting', () => {
+  const f = fixture();
+  f.hand.setCards([
+    { hid: 'ten', front: '/cards/bridge/S-10.png', back: '/cards/bridge/Back-R.png' },
+    { hid: 'two', front: '/cards/bridge/H-2.png', back: '/cards/bridge/Back-R.png' },
+    { hid: 'ace', front: '/cards/bridge/S-1.png', back: '/cards/bridge/Back-R.png' },
+  ]);
+  assert.deepEqual(
+    f.cards().map((card) => card.getAttribute('aria-label')),
+    ['10 ♠', '2 ♥', 'A ♠'],
+  );
+  for (const card of f.cards()) {
+    assert.equal(card.classList.contains('img'), true);
+    assert.equal(card.classList.contains('playingFace'), true);
+    assert.equal(card.style.aspectRatio, `${PLAYING_CARD_GEOM.w} / ${PLAYING_CARD_GEOM.h}`);
+    assert.match(card.style.backgroundImage, /asset-textures\/v1\/bundled\/cards%2Fbridge%2F/);
+    assert.equal(card.getAttribute('role'), 'group');
+    assert.equal(
+      card.children[0].getAttribute('aria-label'),
+      `Inspect ${card.getAttribute('aria-label')}`,
+    );
+  }
+  f.hand.bindShowControls();
+  f.ids.get('rearrangeBtn').onclick();
+  f.sortButton.onclick();
+  assert.deepEqual(f.sent.at(-1), { type: 'reorderHand', data: { order: ['ace', 'two', 'ten'] } });
+  f.sortButton.dataset.sort = 'suit';
+  f.sortButton.onclick();
+  assert.deepEqual(f.sent.at(-1), { type: 'reorderHand', data: { order: ['ace', 'ten', 'two'] } });
+});
+
+test('image jokers retain their faces, names, and Inspect action while legacy rank labels remain', () => {
+  const f = fixture();
+  f.hand.setCards([
+    { hid: 'red', front: '/cards/bridge/X-R.png', back: '/cards/bridge/Back-B.png' },
+    { hid: 'black', front: '/cards/bridge/X-B.png', back: '/cards/bridge/Back-B.png' },
+    { hid: 'legacy', front: 'A♠', back: 'back' },
+  ]);
+  const [red, black, legacy] = f.cards();
+  assert.equal(red.getAttribute('aria-label'), 'Red joker');
+  assert.equal(black.getAttribute('aria-label'), 'Black joker');
+  assert.match(red.style.backgroundImage, /X-R\.png/);
+  assert.match(black.style.backgroundImage, /X-B\.png/);
+  red.children[0].onclick({ stopPropagation() {} });
+  assert.equal(f.inspected.at(-1).hid, 'red');
+  assert.equal(legacy.textContent, 'A♠');
+  assert.equal(legacy.classList.contains('playingFace'), false);
 });
 
 test('hand clicks play, double-click inspects, and touch drags preview and drop face-up', () => {

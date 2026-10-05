@@ -678,6 +678,17 @@ test('reorderHandPayload: a valid hid permutation passes; malformed input is rej
   assert.equal(reorderHandPayload({ order: ['h1', 3] }), null); // non-string element
 });
 
+test('standard deck spawning permits only catalog back designs', () => {
+  for (const backDesign of ['blue', 'red']) {
+    const request = { type: 'deck', props: { backDesign, jokers: true, snap: false } };
+    assert.deepEqual(spawnPayload(request), request);
+  }
+  for (const backDesign of ['green', '/cards/bridge/Back-R.png', '__proto__', null, {}, 1])
+    assert.equal(spawnPayload({ type: 'deck', props: { backDesign } }), null);
+  assert.equal(spawnPayload({ type: 'deck', props: { set: 'domino', backDesign: 'red' } }), null);
+  assert.deepEqual(spawnPayload({ type: 'deck', props: {} }), { type: 'deck', props: {} });
+});
+
 test('spawnPayload accepts a die finish (regression: non-matte finish blocked spawns)', () => {
   const ok = spawnPayload({ type: 'die', props: { sides: 20, finish: 'metallic' } });
   assert.equal(ok && ok.props && ok.props.finish, 'metallic');

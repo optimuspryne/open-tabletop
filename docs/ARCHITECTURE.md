@@ -1430,8 +1430,8 @@ decoration.
 
 ## Bundled static assets
 
-`public/static_assets/` contains the six shipped asset trees: `mahjong/`, `sky/`, `textures/`,
-`models/`, `music/`, and `sounds/`. Their filesystem location is controlled only by
+`public/static_assets/` contains the seven shipped asset trees: `mahjong/`, `sky/`, `textures/`,
+`models/`, `music/`, `sounds/`, and `cards/`. Their filesystem location is controlled only by
 `STATIC_ASSETS_DIR` in `server/static-assets.js`; relative values resolve from the project root,
 independently of the process working directory, and absolute paths are supported.
 
@@ -1585,6 +1585,23 @@ and Mahjong face definitions come from `shared/pieces.js`; rendering their refer
 stays in the browser. The injected shuffle keeps initial deck creation and later
 gameplay shuffles on the same Fisher–Yates implementation while allowing deterministic
 inventory and layout tests.
+
+New standard playing decks use the shared `shared/playing-cards.js` catalog of
+52 faces, two jokers, and blue/red backs under `/cards/bridge/`. Its explicit
+bridge geometry reuses `geomFromImage`; it travels through existing public
+geometry/back props while ordered faces stay in server-only inventory. The
+Library's native radio choices select `backDesign`, validated against catalog
+IDs before spawning. Blue is the default for standalone decks and the cards
+starter. `parseCardFront` recognizes exact bundled faces as playing cards with
+an image reference, so the existing renderer loads artwork and the private hand
+displays bounded image thumbnails at bridge proportions. Hand sorting retains
+rank/suit metadata; image cards and their Inspect controls expose accessible names.
+Legacy procedural rank cards retain text labels and existing faces/backs still work.
+Exact bundled card references are allowed as dependency-free package references;
+arbitrary static paths remain unsupported by package import/export. Receiving
+installations need the bundled catalog. No schema or environment change is needed.
+See [PLAN_PLAYING_CARD_IMAGES.md](PLAN_PLAYING_CARD_IMAGES.md) for the file/function
+summary, automated verification, and pending in-app smoke tests.
 
 ## Starter-game layout boundary
 
