@@ -3,16 +3,87 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
+The [living hardening plan](../HARDENING_PLAN.md) records the account/host-approval walkthrough
+and proposed session-cookie, CSRF and multiplayer authentication changes. It distinguishes
+observed behavior from conditional risks and pending designs; current authentication behavior
+remains unchanged until implementation and verification are recorded.
+The lobby-controls follow-up also records recovery-credential, logout, admission-policy and
+input-validation concerns; mocked reproductions are distinguished from live verification.
+The table-entry follow-up covers admission, restored private state, spectator policy and
+reconnects, recording a conditional account-switch/reconnect mismatch and unbounded loading
+recovery. These remain proposed hardening work, not changes to the current architecture.
+The first-interaction follow-up traces selection, dragging and physics, recording stranded
+group ownership and cancelled gestures committing actions (HARD-17/18); fixes remain proposed.
+The card-lifecycle review adds empty picked-scope disclosure, ordinary transfer rollback gaps
+and pending-inspection reconnect recovery (HARD-19/20/21). Browser verification remains separate
+from source review and isolated reproductions; no runtime fixes are recorded by this review.
+Library loading extends the replacement-failure concern (HARD-20) and records that catalog
+privacy does not authorize original-media requests: allowlisted `/assets` URLs are publicly
+served when known (HARD-22). Media confidentiality changes remain a policy/design decision.
+Asset authoring/package coverage adds upload buffering before authentication, incomplete media
+validation and deck-save recovery findings (HARD-23/24/25). Package validation and transactional
+import protections already exist; the new safeguards remain proposed, with bounded reproductions
+separate from live resource-load and browser testing.
+The persistence review records that background writes retain the last captured game snapshot,
+and identifies final-save recovery and duplicated-setting restoration concerns (HARD-26/27/28).
+Manual saves acknowledge database completion; graceful disposal attempts a fresh snapshot.
+Forced termination, failed writes and oversize snapshots need the separate recovery safeguards
+proposed in the plan. No persistence behavior changed during this review.
+The communication/writing review records silent note rejection, ambiguous chat identity,
+unbounded chat delivery/client history and whiteboard eviction/repaint mismatch (HARD-29–32).
+Plain-text rendering, private notecard leases and template access/revision checks remain current
+protections; synthetic checks are separate from real-browser/load verification and proposed fixes.
+The in-room administration review identifies a stale-target authorization race in kick/role
+writes (HARD-33). Participation writes already use row-locking transactions and update live
+account connections after commit; extending that pattern to membership mutations is proposed
+hardening. Kick removes membership and reconnect access but does not create a durable ban.
+The table/spatial review records visual fog's existing delivery limitation (HARD-34), alongside
+cancelled measurement commits and server preview-budget gaps (extensions to HARD-18/31).
+Fog coverage does not filter underlying board/piece data; explicit hidden-object schema views
+remain the delivery boundary. The review changes documentation only, not those contracts.
+The local-browser review records unbounded pixel-ratio overrides, uncontained optional storage
+errors and incomplete modal keyboard gating (HARD-35–37). Camera and media preferences remain
+local; exit teardown/resource profiling is pending. No runtime behavior changed in this review.
+The account-security/site-admin review identifies two remaining serialization boundaries:
+login session issuance can outlive its verified password, and HTTP admin mutations can outlive
+the actor's authority or concurrently remove the last admins (HARD-38/39). Credential changes
+already lock/recheck the account and rotate access transactionally; CLI role changes already
+serialize a final-admin check. Extending those invariants across the other entry points is
+proposed work. Account deletion's database transaction does not include live-room disposal.
+The administrator-maintenance review records incomplete cache-variant cleanup and partial
+move reporting (HARD-40), plus unbounded application-level admission of distinct public texture
+conversions (HARD-41). Existing reference scanning, recoverable trash, path validation and
+two-worker prebuild remain protections; shared scheduling and fuller cleanup remain proposed.
+The failure-handling review distinguishes sanitized client errors from raw exception/URL/CSP
+logging (HARD-42), and records parser errors being flattened to 500 (HARD-43). CSP reporting
+also competes with login for the same IP bucket (HARD-05). Existing failure containment and
+enforced headers remain current; redaction, error classification and budget separation are
+proposed. Fixture results do not establish deployed proxy or log-retention behavior.
+The deployment/recovery review records retained owner-credential access in the running service,
+incomplete exclusions for local Docker build material and upgrade dumps that do not constitute
+complete recovery checkpoints (HARD-44–46). Separate database connections, non-root execution,
+transactional migrations and guarded installer recovery remain protections. Runtime credential
+isolation, image-canary checks and coordinated restore drills remain proposed work.
+The [consolidated implementation sequence](../HARDENING_PLAN.md#consolidated-implementation-sequence)
+orders the 46 findings into bounded fixes, authority/data preservation, coordinated sessions
+and resource controls, then remaining reliability work. Privacy/identity policies are a separate
+decision track. It preserves the HTTP/multiplayer authentication boundary and the distinction
+between in-memory recovery, durable saves and restorable backups; no architecture change is
+implemented by that prioritization.
+
 Staged feature plans are separate from this description of the running system:
 [DESIGN_next_features.md](DESIGN_next_features.md) plans time-out/spectator permissions, private
 deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_backlog.md) records
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
 
-Future performance work is tracked in [room worker isolation](PLAN_ROOM_WORKERS.md)
-for the full app and [demo dice safeguards](PLAN_DEMO_DICE_LIMITS.md) for the separate
-demo branch. Both are plans only: process ownership, routing and limits described there
-are not changes to the running architecture.
+Future scaling is [deferred until measured usage warrants it](ROADMAP.md#future-scaling--deferred-until-usage-warrants-it).
+The [room-scaling plan](PLAN_ROOM_WORKERS.md) starts with two fixed app instances using
+standard Colyseus Redis adapters and reverse-proxy routing, before considering custom
+per-table process management. Single-instance operation remains the current architecture;
+shared matchmaking would not replace database writer fencing or cross-instance access and
+asset coordination. [Demo dice safeguards](PLAN_DEMO_DICE_LIMITS.md) are a separate demo-branch
+workstream; this full-app document does not establish that branch's rollout status.
 
 ## Release 0.21.1 deployment boundary
 
@@ -284,6 +355,11 @@ importing a room singleton:
   as a privileged owner role (`MIGRATE_DATABASE_URL` or its password-file component
   form) kept **separate** from the app's least-privilege connection. Upgrades need no manual `psql` step, and it targets
   any Postgres (stock or managed — there's no custom db image). `AUTO_MIGRATE=false` opts out.
+  Each pending migration and its tracking row share a transaction; startup awaits migrations
+  before listening. This connection separation does not isolate its credentials: default
+  Compose/native services retain access to the owner password after startup (HARD-44).
+  Disabling the runner does not revoke that access. A deployment-only migration identity is
+  proposed hardening, not the current runtime secret boundary.
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **Browser module folders** — `public/editor/` owns library and board/collider authoring;
@@ -579,8 +655,10 @@ available; table mutations (including peeks, reveals and hand reassignment) requ
 Lifecycle physics/recovery/persistence are independent of this client-request gate.
 
 The guard runs inside the existing `safeMessage` error boundary: synchronous throws and rejected
-promises are logged with payload-free room/user/session context and converted to a
-sanitized `serverError` (or the narrower asset/member error) for that client. The
+promises are logged with room/user/session context that omits the request payload and converted to a
+sanitized `serverError` (or the narrower asset/member error) for that client. Exception text
+is still logged verbatim and can contain private values (HARD-42); context selection alone
+does not sanitize it. The
 browser throttles generic notices to prevent alert storms. `safeRoomTask` applies the
 same policy to join-time and detached lifecycle work; authorization failures and
 reconnection timeouts remain normal Colyseus control flow. Persistence, lobby calls,
@@ -1171,7 +1249,7 @@ round and hex are single-size (depth follows width). Seats, personal trays and c
 as they were — trays already ride a circular track — so the first cut keeps seating unchanged on
 the new shapes. The rim is a GM-selectable **wood** (`state.rimWood`, five textures, durable + in
 scenes) swapped on the shared material; the felt is a desaturated fabric texture tinted by the felt
-colour (mirrored-wrapped + gradient-flattened for seamless tiling).
+color (mirrored-wrapped + gradient-flattened for seamless tiling).
 
 ## Live table tools
 
@@ -1547,6 +1625,14 @@ a fresh scan and moves candidates to `saved-assets/.trash/` (recoverable, never 
 delete). Recent files, directories, and symlinks are excluded. Database or live-state
 reference failures abort the scan. Live reference tracking is process-local, matching
 the current single-server deployment.
+
+Trash movement preserves originals on disk and does not itself reclaim their bytes. Current
+cleanup removes only standard `v1` derivatives; other quality caches remain, and cache-removal
+failure can hide an already-completed move from the reported count (HARD-40). Derivative HTTP
+requests still require an existing original, so retained cache files alone do not bypass that
+gate. Admin prebuild runs one in-memory job with two workers for standard JPG/PNG derivatives;
+public cache misses deduplicate by destination but use no shared bounded scheduler with it
+(HARD-41). Full reference-write/cleanup and conversion/cleanup concurrency remain unverified.
 
 Each asset now carries an `owner_id` (the admin who created it) and an `is_public`
 flag, and the library is **admin-curated**: creation and curation (publish/rename/
@@ -2196,7 +2282,8 @@ uploads while still letting a whole deck's images through at once. Auth and uplo
 limits use an atomic Redis token bucket, namespaced by purpose and IP, so every app
 replica consumes the same allowance. Redis assigns each bucket a full-refill TTL;
 inactive IPs disappear automatically. Store failures fail closed with `503`, while a
-documented memory adapter remains available only for local development/tests.
+memory adapter is intended for local development/tests, although explicitly setting
+`RATE_LIMIT_STORE=memory` permits it in production. It does not share limits across processes.
 `TRUST_PROXY_HOPS` must match the exact reverse-proxy depth before forwarded client
 addresses are trusted. Redis establishes shared infrastructure but does not alone
 provide clustered Colyseus presence, room discovery, or socket routing.
@@ -2208,6 +2295,12 @@ also shapes the client: a _new_ inline `<script>` would fail the hash allowlist,
 labels preference is applied from **`equalize.js`** — a small external file loaded `defer` on every
 page — which reads `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts
 run (an inline version was silently blocked).
+The report endpoint uses the same auth token bucket and logs submitted report JSON verbatim;
+schema/redaction and an independent telemetry budget remain proposed (HARD-42/05). The stale
+report-only comment in `server.js` does not describe the configured enforced policy. HTTP
+failures use generic client messages but log raw URLs/exceptions, and parser rejections currently
+receive 500 rather than specific 4xx responses (HARD-42/43). Header verification in a local
+fixture is separate from actual browser enforcement, HTTPS termination and trusted-proxy setup.
 Remaining optional hardening: post-parse model complexity limits, per-user storage
 caps. Defense in depth, not provably safe.
 

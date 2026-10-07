@@ -3,6 +3,9 @@
 _Last reconciled 2026-09-23 against v0.18.0 source and documentation. Completed implementation
 does not imply that the manual device or large-scene checks have been signed off._
 
+_Targeted update 2026-10-01: added deferred multi-instance scaling; other backlog statuses
+have not been re-audited._
+
 ## North star
 
 A self-hosted, physics-driven virtual tabletop that recreates **sitting at a real table with
@@ -276,7 +279,7 @@ implementation sequence without making the entire backlog a fixed priority queue
    - *Pipped d6: ✅ shipped 2026-09-02.* Two built-in dice — Rounded Pips + Square Pips — as
      bundled `.glb` models (`DICE_MODELS`, `public/static_assets/models/pieces/dice/`), carried in `props.model`.
      A normal d6 for physics/value/collider; only the mesh differs. Body (`Ivory`) + pips (`Dots`)
-     materials tinted by `color`/`textColor`, so they recolour like any die. Spawn from the dice
+     materials tinted by `color`/`textColor`, so they recolor like any die. Spawn from the dice
      box Add menu + the library built-in Dice tab (`dieModelPreviewURL`).
 10. **Multi-select composition.** ✅ **shipped 2026-09-02** The selection tools support:
     1. Combine loose like cards into a **new deck** (discard pile → deck).
@@ -385,6 +388,30 @@ implementation sequence without making the entire backlog a fixed priority queue
     action with its visibility/permission policy; those modes are not implemented yet.
 
 ---
+
+## Future scaling — deferred until usage warrants it
+
+Keep the single-instance deployment as the default and retain the demo safeguards. Revisit
+scaling when measurements show ordinary concurrent play approaching capacity or one busy
+table repeatedly delaying unrelated games. Popularity alone is not the acceptance metric;
+measure simulation intervals, CPU/event-loop delay, memory, and join/HTTP latency.
+
+The preferred first experiment is **two fixed app instances behind a reverse proxy**, using
+Colyseus `RedisPresence` and `RedisDriver` for shared matchmaking and communication, with
+PostgreSQL and shared uploaded-asset storage. Let Docker or the native service manager own
+process lifecycle. Route each room's WebSocket connections to its owning instance.
+
+- Benchmark busy and normal tables both on separate instances and on the same instance.
+  Clustering isolates instances; tables sharing an instance can still interfere. Consider
+  one table per process only if measurements justify the extra placement/lifecycle work.
+- Before production use, implement database-enforced writer ownership, cross-instance
+  revocation/admin controls, coordinated asset cleanup and quotas, bounded resource use,
+  safe recovery, and draining/rollback. Redis matchmaking alone does not supply these.
+- Keep scaling opt-in. Test the full app first, then port selected commits to the separate
+  demo branch after review; never merge demo-only restrictions into main.
+
+See the [deferred room-scaling plan](PLAN_ROOM_WORKERS.md) for stages and release gates.
+No prototype, runtime change, migration, or deployment is implemented by this roadmap entry.
 
 ## Parked threads (finish-what-we-started)
 

@@ -38,6 +38,79 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 - Notecard faces and backs now use the GPU's maximum supported anisotropic filtering,
   matching regular cards to reduce texture blur when viewed across the table.
 
+### Documentation
+- Consolidated all 46 walkthrough findings into prioritized delivery batches with security,
+  data-preservation and reliability tracks, explicit policy decisions/dependencies, concrete
+  first implementation handoffs and separate verification gates. Updated the hardening register
+  and architecture/reference pointers; no runtime fixes or accepted-risk decisions recorded.
+- Traced deployment secrets/roles, startup migrations, installer updates and backup/recovery
+  boundaries. Added HARD-44–46 for retained migration credentials, Docker context exclusions
+  and incomplete upgrade checkpoints. Recorded 63 passing targeted tests with mocked installer
+  operations; no runtime changes, secret inspection, image build or live restore claims.
+- Traced HTTP/room failure boundaries, browser error feedback, security headers and rate limits.
+  Added HARD-42/43 for raw diagnostic logging and parser errors returning 500; extended HARD-05
+  to CSP/auth budget interference. Recorded 40 passing targeted tests and a synthetic HTTP
+  fixture; corrected logging and production-memory-mode contracts. No runtime changes.
+- Traced administrator orphan scanning/trash and texture-cache prebuild/on-demand generation.
+  Added HARD-40/41 for retained cache variants, partial-move reporting and missing shared
+  conversion admission bounds. Recorded isolated fixtures and 30 passing targeted tests;
+  corrected reference contracts for cache variants and prebuild scope. No runtime changes.
+- Traced account passwords/recovery, session revocation and site-admin account controls/removal.
+  Added HARD-38/39 for stale-password login issuance and stale admin-authority/final-admin races,
+  with three isolated route reproductions and 37 passing targeted tests. Updated reference and
+  architecture pointers; no runtime changes or live SQL concurrency verification claims.
+- Traced local camera/input, graphics/audio preferences and browser exit/resource handling.
+  Added HARD-35–37 for unbounded pixel-ratio overrides, preference-storage failures and modal
+  shortcut routing, with isolated reproductions and 39 passing targeted tests. Updated reference
+  and architecture pointers; no runtime changes or browser/GPU verification claims.
+- Traced table/lighting/grid settings, measurement overlays, fog and hidden-object delivery.
+  Added HARD-34 for fog's documented visual-only privacy boundary and extended HARD-18/31
+  with cancelled ruler creation and unthrottled preview broadcasts. Recorded isolated checks,
+  73 passing targeted tests and architecture/reference pointers; no runtime changes.
+- Traced in-room membership, participation restrictions and session controls. Added HARD-33
+  for kick/role writes using stale target privileges, with two isolated handler reproductions
+  and 102 passing targeted tests. Updated architecture/reference pointers; runtime behavior
+  is unchanged and live database concurrency verification remains pending.
+- Traced chat, notes, whiteboard and notecard/template boundaries. Added HARD-29–32 for note
+  acceptance feedback, chat attribution/rate/history limits and whiteboard replay consistency,
+  with isolated reproductions and 105 passing targeted tests. Updated architecture/reference
+  pointers; no runtime fixes or browser/load-test claims.
+- Traced background/manual/final room saves, reset, departure and restart restoration. Added
+  HARD-26/27/28 for snapshot freshness, final-save recovery and duplicated-setting precedence,
+  with isolated reproductions and 34 passing targeted tests. Updated architecture/reference
+  pointers; no runtime changes or live crash-recovery claims.
+- Traced asset uploads, authoring/publication and package import/export. Added HARD-23/24/25
+  for pre-authentication upload buffering, incomplete media validation and deck-save recovery,
+  with bounded reproductions and 109 passing targeted tests. Updated architecture/reference
+  pointers; runtime behavior unchanged.
+- Traced library listing and loading, built-in spawning, and scene/board replacement. Extended
+  HARD-20 with reproduced destructive-replacement failures and added HARD-22 for private catalog
+  versus direct-media access, recording 130 passing targeted tests plus one HTTP media test.
+  Updated architecture/reference pointers; no runtime changes.
+- Extended the card-lifecycle hardening walkthrough through hands, inspections, selective
+  reveals and deck browsing. Recorded empty picked-scope disclosure, transfer-failure inventory
+  loss and pending-inspection reconnect recovery, with 91 passing existing tests and explicit
+  reproduction limits. Updated architecture/reference pointers; runtime unchanged.
+- Extended the hardening walkthrough through selection, grabs, movement, physics and release.
+  Recorded reproduced group-replacement ownership and pointer-cancellation issues, proposed
+  fixes, 77 passing targeted tests and outstanding browser/device verification. Runtime unchanged.
+- Extended the living hardening plan through table entry and reconnect: recorded conditional
+  account-switch identity confusion and unbounded initial-loading recovery, with source and
+  isolated reproduction evidence. Updated architecture/reference pointers; runtime unchanged.
+- Expanded the living hardening plan during the lobby-controls walkthrough: logout revocation
+  failures, recovery-code authentication, admission-policy timing, room abuse limits, avatar
+  validation and pending-room lifecycle state. Recorded 28 passing related tests and bounded
+  synthetic checks, with live/browser verification still pending. No runtime fixes implemented.
+- Added `HARDENING_PLAN.md` as a living record of the landing/account/host-approval review
+  and proposed session-cookie migration. Separates observed behavior, conditional risks,
+  design safeguards and pending verification; linked from architecture and reference docs.
+  Documentation only; no security fixes or authentication behavior changes are implemented.
+- Added deferred multi-instance scaling to the roadmap and revised the room-scaling plan
+  to prototype two fixed app instances with Colyseus Redis adapters and a reverse proxy.
+  Retained ownership, security, storage, performance and recovery gates; custom per-table
+  process management is conditional on measurements. Updated architecture/reference links.
+  Documentation only; single-instance behavior and deployment requirements are unchanged.
+
 ## [0.21.1] — 2026-09-30
 
 ### Upgrade notes

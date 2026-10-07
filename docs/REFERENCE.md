@@ -3,6 +3,61 @@
 A map of every module, data structure, and key function. For the _why_, see
 `ARCHITECTURE.md`; this is the _what_ — the API surface.
 
+The [living hardening plan](../HARDENING_PLAN.md) tracks security findings and proposed fixes
+from the user-journey walkthrough, beginning with accounts, host approval and browser sessions.
+Coverage now includes Quick Join, room management/admission, avatars, recovery and logout.
+It also traces table entry, private-state hydration and reconnects, with open findings for
+reconnect identity consistency and loading recovery (HARD-15/16).
+The movement walkthrough adds group-replacement cleanup and pointer-cancellation findings
+(HARD-17/18), with isolated reproductions and pending browser/device verification.
+Card/hand/inspection/browsing coverage adds reveal-scope, transfer-failure and reconnect
+hydration findings (HARD-19/20/21); the plan distinguishes implemented contracts from proposed fixes.
+Its cookie/CSRF/multiplayer proposals are not current API contracts or implemented fixes.
+The library-loading review extends HARD-20 to failed scene/board replacement and records the
+public direct-media URL boundary separately from private catalog access (HARD-22).
+The authoring/package review records pre-authentication upload buffering, incomplete media
+validation and deck-save acknowledgment/recovery gaps (HARD-23/24/25), alongside existing package
+validation, transaction and cleanup protections. Proposed fixes are not current contracts.
+Persistence coverage distinguishes background settings writes from fresh manual/final game
+snapshots, recording crash-window freshness, failed/oversize final saves and conflicting
+restored settings (HARD-26/27/28). Tests and synthetic failure checks do not establish deployed
+crash recovery; fixes remain proposed.
+Communication/writing coverage adds note acceptance/retention feedback, display-name chat
+attribution, chat resource limits and whiteboard history/render consistency (HARD-29–32).
+The plan also records existing notecard lease/privacy and template ownership/revision checks;
+those protections are distinct from the proposed fixes.
+In-room administration coverage records stale target-role checks in kick/role mutations
+(HARD-33), while preserving transactional time-out/spectator policy, account-wide live updates
+and existing turn/timer/score permissions. Synthetic race checks do not establish live database
+concurrency behavior; the proposed atomic membership-write fix is not implemented.
+Table/spatial coverage distinguishes local lighting preview from shared settings and explicit
+hidden-object delivery from visual map fog (HARD-34, an existing design boundary). It extends
+HARD-18 to cancelled measurement creation and HARD-31 to preview traffic. Proposed cancellation,
+rate-budget and privacy-wording changes remain unimplemented.
+Local-browser coverage adds pixel-ratio override bounds, optional preference-storage failure
+containment and modal keyboard ownership (HARD-35–37). Source/isolated checks are separate from
+real-device input, GPU and exit-lifecycle testing; proposed safeguards are not current behavior.
+Account-security/site-admin coverage adds stale-password login issuance and stale admin-authority/
+final-admin races (HARD-38/39). `createAuthRouter` currently inserts a login session after password
+verification without the locked expected-hash check used by `accountSecurity.setPassword`.
+HTTP admin mutations use an entry-time admin check; the CLI's serialized final-admin guard is
+not shared by those writes. Synthetic reproductions and 37 passing targeted tests are recorded
+in the plan; live SQL concurrency and the proposed fixes remain pending.
+Administrator-maintenance coverage adds incomplete derivative cleanup/partial-result accounting
+and the public converter's missing shared work budget (HARD-40/41). Temporary-file and deferred
+encoder checks are separate from the 30 passing targeted tests and pending load/concurrency work.
+Failure-handling coverage adds raw diagnostic/telemetry logging and parser-error status findings
+(HARD-42/43), plus CSP reports consuming the auth bucket (HARD-05). Forty targeted tests and a
+synthetic local HTTP fixture passed; deployed proxy/logging behavior remains unverified.
+Deployment/recovery coverage adds retained migration credentials, Docker context exclusions
+and incomplete upgrade recovery checkpoints (HARD-44–46). Sixty-three targeted tests passed
+with mocked installer/database dependencies; real images, secrets and restore drills were not
+tested. These proposed safeguards do not change current deployment contracts.
+The [consolidated implementation sequence](../HARDENING_PLAN.md#consolidated-implementation-sequence)
+now assigns all 46 findings to primary batches, with separate policy decisions, dependencies
+and completion gates. A1/A2/A3 are the first recommended handoffs: reveal scope, locked login
+issuance and upload admission. Batch assignments are planning status, not implemented API changes.
+
 For staged implementation status and **remaining proposed** work, see [DESIGN_next_features.md](DESIGN_next_features.md)
 (participation restrictions, deck browsing, collections) and
 [DESIGN_future_backlog.md](DESIGN_future_backlog.md) (discovery briefs for other open items).
@@ -16,9 +71,12 @@ For release 0.21.0 deployment requirements, see the [upgrade guide](RELEASING.md
 (migration 023, server restart/client refresh, source dependencies and optional SMTP setup).
 Earlier migration and ZIP transfer requirements remain in the preceding release upgrade notes.
 
-Planned performance work: [demo dice limits and roll cooldown](PLAN_DEMO_DICE_LIMITS.md)
-(demo branch only) and [room worker processes](PLAN_ROOM_WORKERS.md) (full app, then port
-to demo). These documents define future work, not current settings, helpers or API contracts.
+Deferred performance work: [multi-instance room scaling](PLAN_ROOM_WORKERS.md), tracked in
+the [roadmap](ROADMAP.md#future-scaling--deferred-until-usage-warrants-it), starts with standard
+Colyseus Redis adapters and two fixed app instances when measured demand warrants it.
+The proposed routing, ownership and configuration are not current API contracts.
+[Demo dice limits and roll cooldown](PLAN_DEMO_DICE_LIMITS.md) remain a separate demo-branch
+workstream; consult that branch for current implementation and rollout status.
 
 ### Public website
 
@@ -83,6 +141,12 @@ are transient. Template ownership remains distinct from administrator-only uploa
   Fresh databases explicitly revoke public schema creation from PUBLIC and grant it to the
   migration role, preserving the runtime boundary on PostgreSQL 14 as well as newer versions.
   Updates leave host packages and configuration alone. No new database migration is introduced.
+- Role separation applies to database connections, but the service can still read the owner
+  password file (HARD-44). Upgrade `backup_database` runs before restart without first flushing
+  or stopping live tables and captures only PostgreSQL, not uploaded files/configuration or
+  unsaved state. A nonempty dump and a successful `/` readiness request are not a restore
+  verification (HARD-46). The README requires separate original-asset backup and a matching
+  release/database pair for rollback.
 - `test/linux-installer.js` checks distro selection, package commands, account allocation,
   existing cluster preservation, source preparation, real lifecycle orchestration with
   mocked system commands, recovery without secret rotation, offline removal dispatch, confirmation,
@@ -1097,12 +1161,13 @@ The image/model **files** stay on disk; their **metadata** moved to Postgres (se
 `GET /asset-textures/v1/<kind>/<random-image-name>.webp`. It accepts only an allowlisted
 asset category and the random image filename shape produced by `saveAsset`; traversal,
 metadata, models, and arbitrary filenames return 404. A strict `?quality=high` request uses
-the High-quality derivative; `?quality=thumbnail` selects the library thumbnail. Every other
-value uses the standard derivative.
+the High-quality derivative; `?quality=thumbnail` selects the library thumbnail. The closed
+`sky-low`, `sky-medium`, `sky-high` choices select 512/1024/2048px sky derivatives for saved
+sky assets or eligible bundled skies. Other values use the standard derivative.
 
 Bundled thumbnails use the same route with kind `bundled` and a URL-encoded relative image path
 in the filename parameter, for example `sky%2Fequirect%2Fcloudy_noon.png.webp?quality=thumbnail`.
-Only raster images below `sky/`, `mahjong/`, and `textures/` are accepted, with strict path-segment
+Only raster images below `sky/`, `mahjong/`, `textures/`, and `cards/` are accepted, with strict path-segment
 validation and no traversal or remote proxying. Sources resolve through the existing static-assets
 configuration (`bundledAssetsDir` defaults to `STATIC_ASSETS_DIR`). Cached bundled thumbnails
 are rebuilt when their source mtime advances and use `public, no-cache` HTTP revalidation, since
@@ -1123,6 +1188,11 @@ bundled filenames may be updated in place. Uploaded random-name image caches rem
 - **`createTexturePrebuilder(options)`** wraps that scan as one process-local background job. Repeated
   starts while it is running coalesce onto the existing job; `status()` exposes its scan/build/complete
   state for the admin console without holding an HTTP request open.
+- The prebuild covers only standard JPG/JPEG/PNG upload derivatives, not every quality,
+  thumbnail, bundled image or supported on-demand format. Per-file failures increment `failed`
+  while the job can still reach `complete`; a top-level scan failure sets `failed` state.
+  Public cache misses coalesce per destination but do not share the prebuilder's worker bound
+  or an application-wide queue (HARD-41). Job status is in memory and resets on restart.
 - Successful uploaded-image responses are `image/webp` with a one-year immutable cache policy. Originals stay
   untouched for library editing, backups, and future derivative versions. `cardTextureURL` in
   `public/rendering/graphics.js` redirects only local random-name `/assets/...` card/tile references and
@@ -1214,9 +1284,11 @@ after the PNG fallback fix. Completion of every individual smoke-test step is no
   24 hours qualify; recent files, directories, and symlinks are excluded. Reference
   collection failures reject the scan.
 - **`trashOrphans(orphans)`** — validate category/filename boundaries and move
-  candidates to `.trash/<kind>/<name>`, returning successfully moved URLs. The admin
-  purge route invokes a fresh scan before calling it. A reproducible cached texture derivative
-  is removed when its original is moved.
+  candidates to `.trash/<kind>/<name>`. The admin purge route invokes a fresh scan before
+  calling it. Only the standard `v1` derivative is removed; High, thumbnail and sky variants
+  remain. URLs enter the result after cache removal, so a cache-removal error can omit an
+  already-moved original. The route's byte total counts scan candidates, not confirmed moves
+  (HARD-40). Trash retains originals' disk usage until deliberately removed by the operator.
 
 Internal **`roomAssetValues(room)`** selects synchronized state, saved snapshots,
 private decks/cards/hands, pending hands/inspections, drafts, reveals, notebooks,
@@ -1899,8 +1971,9 @@ type, handler, options)`** in `server/game/interaction-policy.js`. Registration 
 unclassified request names. Its `ROOM_MESSAGE_CAPABILITIES` inventory covers gameplay, observation,
 communication, administration, personal state and cleanup. It calls the existing
 **`safeMessage(room,type,handler,options)`** boundary, which contains synchronous throws and promise rejections,
-logs only operation/room/user/session context (never the payload), and sends a
-sanitized `serverError` by default. Library and membership handlers select narrower
+logs operation/room/user/session context without directly including the payload, and sends a
+sanitized `serverError` by default. Raw exception text is still appended to the log and can
+itself contain sensitive data (HARD-42). Library and membership handlers select narrower
 public messages/error types. **`safeRoomTask(room,type,client,task,options)`** extends
 the same boundary to join-time and detached lifecycle work; `notify:false` keeps
 clientless saves log-only. The browser displays generic `serverError` messages at
@@ -2119,8 +2192,19 @@ checks production dependencies and fails only at high severity or above.
 - **Rate limiting:** auth and upload middleware use atomic Redis token buckets
   namespaced by purpose and resolved IP. TTL is the time to refill a bucket, so
   inactive IP keys expire. Redis errors fail closed with `503` and `Retry-After`;
-  the memory store is for local development/tests only. `TRUST_PROXY_HOPS` must
-  equal the deployment's proxy depth before forwarded addresses are accepted.
+  memory mode is intended for local development/tests but can be explicitly enabled in
+  production with `RATE_LIMIT_STORE=memory` and remains process-local. `TRUST_PROXY_HOPS`
+  must equal the deployment's proxy depth before forwarded addresses are accepted.
+  `/csp-report` currently shares the auth namespace/budget (HARD-05).
+- **HTTP failures:** `asyncRoute` forwards rejected route promises to `httpErrorHandler`.
+  Before headers are sent, the handler returns generic JSON with status 500, including for
+  malformed/oversized JSON parser errors (HARD-43); otherwise it delegates to Express.
+  It logs the full original URL and exception text (HARD-42). Route-authored validation,
+  authorization and limiter responses retain their explicit statuses.
+- **Browser HTTP helper:** `public/http.js`'s `requestJSON` throws on non-2xx status or network
+  rejection. JSON decode failure becomes `{}`, including on successful non-JSON responses;
+  it does not add an application timeout, retry, or `Retry-After` handling. Callers determine
+  the visible feedback and must validate required response fields.
 
 ---
 
