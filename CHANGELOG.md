@@ -9,6 +9,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Double-six dominoes use 28 authored GLB tiles and a common concealed model. Inspector
+  and selection Recolor controls independently set Base/Inset colors and one shared
+  material finish; appearance survives hands, returns, deck browsing and game saves.
+  Models are fitted to existing physics dimensions, with cached geometry, isolated
+  materials, and procedural fallbacks while loading or on failure.
 - Standard 52/54-card decks use bundled CC0 bridge-sized playing-card images, with
   blue/red back thumbnails at spawn (blue by default). Bridge geometry and selected
   backs survive card transfers and saves; rank/suit sorting remains.
@@ -23,6 +28,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Regression coverage follows pouch Recolor messages through the real piece/card handlers
+  into hand, table and inspection draws, including individually styled inventory entries.
+- Authored model loading, fitting, previews and appearance controls now share a tile-family
+  registry. Domino is the first registered family; Mahjong and future sets can supply
+  model mappings, a concealed model, material slots and defaults without another renderer.
+  Existing domino saves remain compatible; owner-tuned domino dimensions are preserved.
 - Standardized color spelling across project comments, documentation, help text and swatch labels;
   npm dependency names and bundled vendor files remain unchanged.
 - High graphics now renders at a fixed 2× pixel ratio, supersampling standard-density

@@ -2499,6 +2499,40 @@ quiet for a full frame), and
   from `boardGeometry`, with top artwork mapped across the full width/depth and solid side walls. Shared
   extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**
   (true circular-arc corners; the hex matches its 6-gon collider).
+- **`TILE_MODELS` / `tileModelFamily` / `tileModel`** (`shared/tile-models.js`) — immutable
+  authored tile-family registry. Each family provides a name, appearance storage key,
+  Base/Inset defaults, material-slot names, a neutral concealed GLB and exact face-ref
+  mappings to GLBs/orientation. Only an authorized public front selects an identifying
+  model; unregistered families/faces use procedural rendering. Domino is the first
+  registered family; Mahjong remains image-based until its assets are supplied.
+- **`createTileRenderer`** (`public/rendering/tiles.js`) — shared authored-tile branch
+  of `cardMesh`. Deduplicates the registered model loads, owns per-instance materials,
+  retains loading/failure fallback and ignores late loads for disposed instances.
+  `userData.tileModelReady` resolves when fitting/painting completes; `tileModelLoaded`
+  announces success. `fitModel({size})` centers and fits each axis to `cardGeom`.
+  `KIND.card.dispose` releases owned resources while retaining shared geometry and face
+  textures. Private browse previews additionally free their independent face textures.
+- **`normalizeTileAppearance` / `tileAppearanceOf` / `tileAppearanceProps`** — strict
+  Base/Inset/finish partial-patch validation, family defaults and appearance-only transfer
+  metadata. `tileAppearanceProps(props, entry?, {includeDefaults})` captures an unstyled
+  tile's default appearance when it joins a styled deck. `tileAppearance` patches in
+  `colorProps`, `recolor` and `recolorGroup` work on registered tile cards/decks and cannot
+  mix with object/dice color fields. Each family chooses its persisted property; Domino
+  retains `dominoAppearance` for save compatibility, and its legacy message/API aliases
+  remain supported. New families use `tileAppearance`.
+  **`cardPublicProps(props, entry?)`** carries tile/geom/snap and validated appearance;
+  private entry overrides win over deck defaults. `absorbedEntry` takes appearance metadata
+  as its fourth argument; `inspectedEntry`, `takeTopCard` and `deckSpawnProps` retain both
+  generic and legacy style fields. Bag patches change only requested fields on remaining
+  stock; other individual fields, bag colors and already drawn tiles remain independent.
+- **`tilePreviewURL(props)`** — bounded async GLB thumbnail for private hands and library
+  callers. Uses table materials, family identity and `cardGeom` aspect, and waits for
+  model/marble readiness. **`createTileAppearanceControls`** (`public/ui/tile-appearance.js`)
+  shares Base, Inset and Material controls between inspector and selection Recolor.
+  Family names supply accessible labels. Native color inputs emit independent patches;
+  compact labels remain visible and touch targets reach 44px. Material supports Original
+  (GLB) and existing object finishes with phone fallbacks; dice-only Custom is excluded.
+  See [tile model extension contract](TILE_MODELS.md).
 - **`finishMaterial`** — constructs the shared standard/physical material used by dice and
   objects, including image-backed marble, brushed roughness, glow, translucency, and pearl
   clearcoat. **`itemSurface`** combines it with `objectFinish` and phone fallbacks for props.

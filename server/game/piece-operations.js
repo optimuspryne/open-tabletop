@@ -1,4 +1,11 @@
-import { PROPS, colorProps, dispenserDefinition } from '../../shared/pieces.js';
+import {
+  PROPS,
+  colorProps,
+  dispenserDefinition,
+  tileAppearanceOf,
+  tileAppearanceProps,
+  tileModelFamily,
+} from '../../shared/pieces.js';
 import { readProps, writeProps } from './props-codec.js';
 
 // Own the server-authoritative piece appearance and self-righting policy. The room keeps small
@@ -40,6 +47,27 @@ export function recolorPiece(room, id, opts = {}) {
   const dispDef = piece.type === 'dispenser' ? dispenserDefinition(props) : null;
   const next = colorProps(piece.type, props, opts, dispDef);
   if (!next) return false;
+  const patch = opts.tileAppearance ?? opts.dominoAppearance;
+  const family = tileModelFamily(props);
+  if (piece.type === 'deck' && patch && family) {
+    const cards = room.deckCards?.get(id);
+    if (cards)
+      for (let i = 0; i < cards.length; i++) {
+        const entry = cards[i];
+        const appearance = tileAppearanceProps(props, entry);
+        // Bare entries inherit the new deck style. Explicit overrides retain their
+        // other fields while the same validated patch changes the requested field.
+        if (entry && typeof entry === 'object' && entry[family.appearanceKey]) {
+          cards[i] = {
+            ...entry,
+            [family.appearanceKey]: {
+              ...tileAppearanceOf({ ...props, ...appearance }),
+              ...patch,
+            },
+          };
+        }
+      }
+  }
   writeProps(piece, next);
   return true;
 }

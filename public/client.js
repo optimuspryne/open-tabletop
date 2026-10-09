@@ -33,6 +33,7 @@ import {
   resizeToCanvas,
   parseCardFront,
   cardPreviewURL,
+  tilePreviewURL,
   notecardPreviewURL,
   makePlayerTexture,
   nameTag,
@@ -590,6 +591,8 @@ shell.bindInteractionControls({
 });
 
 const hand = createHand({
+  disposeCard: KIND.card.dispose,
+  tilePreviewURL,
   notecardMesh: KIND.notecard.mesh,
   disposeNotecard: KIND.notecard.dispose,
   notecardPreviewURL,
@@ -678,6 +681,7 @@ const presence = createPresence({
   camera,
   controls,
   cardMesh: KIND.card.mesh,
+  disposeCard: KIND.card.dispose,
   notecardMesh: KIND.notecard.mesh,
   disposeNotecard: KIND.notecard.dispose,
   makePlayerTexture,
@@ -865,6 +869,7 @@ const DELAY = CONFIG.render.delay; // render this far behind live state (interpo
 let boardTopY = 0; // legacy board-wide plane for measurements and pings (0 = bare table)
 
 const selection = createSelection({
+  deviceClass,
   THREE,
   scene,
   camera,

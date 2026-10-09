@@ -233,8 +233,8 @@ export function registerPieceHandlers(
   pieceMessage('recolorGroup', (client, message) => {
     const parsed = groupRecolor(message, { max: maxPieces });
     if (!parsed) return;
-    const { ids, color, textColor, team, finish, finishImg } = parsed;
-    for (const id of ids) room.recolorPiece(id, { color, textColor, team, finish, finishImg });
+    const { ids, ...appearance } = parsed;
+    for (const id of ids) room.recolorPiece(id, appearance);
   });
 
   pieceMessage('spawn', (client, message) => {

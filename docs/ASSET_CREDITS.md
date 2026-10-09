@@ -40,6 +40,15 @@ requirement is actually met.
 
 ### Open Tabletop original models
 
+`pieces/dominoes/Domino_0_0.glb` through `Domino_6_6.glb` (28 double-six pairs),
+and `pieces/dominoes/Domino_Concealed.glb`:
+
+- **Author/source:** Project owner's original domino models, supplied from
+  `Open-Tabletop_Asset_Builders/3d_models/original/GLB/domino_glb/`.
+- **License:** Distributed under the repository license, with the other Open Tabletop originals.
+- Original GLB bytes and `base`/`inset` materials are preserved. Runtime fitting centers
+  each model and matches the shared domino dimensions; color/finish overrides are per instance.
+
 `boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`,
 `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, `pieces/checkers/checker.glb`, 
 `pieces/checkers/crowned_checker.glb`, and `pieces/misc/token.glb`

@@ -14,26 +14,40 @@ export function takeTopCard(deck, cards) {
   if (!deck || deck.type !== 'deck' || !Array.isArray(cards) || cards.length === 0) return null;
   const entry = cards.pop();
   deck.count = cards.length;
-  return { front: cardFrontRef(entry), back: cardBackRef(entry), empty: cards.length === 0 };
+  return {
+    front: cardFrontRef(entry),
+    back: cardBackRef(entry),
+    empty: cards.length === 0,
+    ...(entry?.tileAppearance ? { tileAppearance: entry.tileAppearance } : {}),
+    ...(entry?.dominoAppearance ? { dominoAppearance: entry.dominoAppearance } : {}),
+  };
 }
 
 // The deck entry a dropped/absorbed card should rejoin as. A per-tile back that DIFFERS from the
 // deck's shared back (a double-sided tile's own face, or a mixed-back stack) is preserved as a
 // { front, back } pair so re-drawing shows the same face; otherwise a bare front (it shares the
 // deck's back anyway). `sharedBack` is the deck's own `back` prop.
-export function absorbedEntry(front, cardBack, sharedBack) {
-  return cardBack && cardBack !== sharedBack ? { front, back: cardBack } : front;
+export function absorbedEntry(front, cardBack, sharedBack, appearanceProps = {}) {
+  const back = cardBack && cardBack !== sharedBack ? cardBack : undefined;
+  const appearance = {};
+  for (const key of ['tileAppearance', 'dominoAppearance'])
+    if (appearanceProps?.[key]) appearance[key] = appearanceProps[key];
+  return back || Object.keys(appearance).length
+    ? { front, ...(back ? { back } : {}), ...appearance }
+    : front;
 }
 
 // Snapshot and live inspection returns share the same deck-entry representation.
 export const inspectedEntry = (pending) =>
-  pending.cardBack != null ? { front: pending.front, back: pending.cardBack } : pending.front;
+  absorbedEntry(pending.front, pending.cardBack, undefined, pending.geo);
 
 // Translate public deck properties to spawn input without copying derived cover/count.
 export function deckSpawnProps(props, cards) {
   const result = { back: props.back || 'back', cards };
   for (const key of [
     'tile',
+    'tileAppearance',
+    'dominoAppearance',
     'geom',
     'snap',
     'open',

@@ -98,6 +98,19 @@ test('selection palette agrees across free colors, separates metals/teams, and s
   );
 });
 
+test('domino appearance selection tolerates malformed props and separates other recolor families', () => {
+  assert.equal(selectionPalette([{ type: 'card', props: 'null' }]), null);
+  assert.equal(
+    selectionPalette([{ type: 'card', props: '{bad' }, card({ tile: 'domino' })]).sig,
+    'tile:domino',
+  );
+  assert.equal(
+    selectionPalette([card({ tile: 'domino' }), piece('deck', { tile: 'domino' })]).sig,
+    'tile:domino',
+  );
+  assert.deepEqual(selectionPalette([card({ tile: 'domino' }), piece('die')]), { mixed: true });
+});
+
 function fixture() {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);

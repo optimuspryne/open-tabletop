@@ -132,6 +132,7 @@
         <span class="lbl">Reset</span>
       </button>
     </div>
+    <div id="inspectDominoAppearance" data-room-mutation class="panel" hidden></div>
     <section id="deckBrowseActions" class="panel" role="region" aria-label="Browse deck" tabindex="-1" hidden>
       <span id="deckBrowsePosition" class="da-note" aria-live="polite"></span>
       <button id="deckBrowsePrevious" data-icon="chevron-left"><span class="lbl">Previous</span></button>
@@ -241,6 +242,7 @@
           </button>
           <div class="pop-menu" hidden>
             <div id="selSwatches" class="swatchRow"></div>
+            <div id="selDominoAppearance" hidden></div>
           </div>
         </div>
         <button id="selStand" data-icon="arrow-big-up-line"><span class="lbl">Stand</span></button>
@@ -1246,6 +1248,9 @@
                 Every piece also offers <b>Inspect</b>, <b>Stand / lay flat</b>,
                 <b>Snap to grid</b>, <b>Highlight</b> and <b>Delete</b>.
                 Highlight briefly pulses around the piece for everyone, without moving it.
+                Domino Inspect controls offer independent Base and Inset colors and one Material
+                finish. Select several dominoes or a domino bag and open Recolor to change them
+                together; native color controls and the material selector work with touch and keyboard.
               </li>
               <li>
                 Decks and dispensers offer <b>Move</b> — press it and keep dragging, and the whole

@@ -1,3 +1,4 @@
+import { tileAppearanceProps } from '../../../shared/pieces.js';
 import { broadcastPieceEvent } from '../piece-visibility.js';
 import { syncOpenCover } from '../deck-sync.js';
 import { returnInspectedCard } from '../inspection-recovery.js';
@@ -68,7 +69,7 @@ export function registerCardHandlers(
       front: draw.front,
       back: draw.back || props.back || 'back',
       open: props.open,
-      geo: geoOf(props),
+      geo: geoOf(props, draw),
     });
     finishDraw(room, deckId, draw.empty);
     broadcastPieceEvent(room, 'sfx', { type: dropSfx('card', props) });
@@ -83,7 +84,13 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    room.addToHand(client, draw.front, draw.back || props.back || 'back', geoOf(props), props.open);
+    room.addToHand(
+      client,
+      draw.front,
+      draw.back || props.back || 'back',
+      geoOf(props, draw),
+      props.open,
+    );
     finishDraw(room, deckId, draw.empty);
     broadcastPieceEvent(room, 'sfx', { type: dropSfx('card', props) });
   });
@@ -105,7 +112,7 @@ export function registerCardHandlers(
       front: draw.front,
       back: draw.back || props.back || 'back',
       open: props.open,
-      geo: geoOf(props),
+      geo: geoOf(props, draw),
     });
     finishDraw(room, deckId, draw.empty);
     room.state.pieces.get(id).owner = client.sessionId;
@@ -130,7 +137,7 @@ export function registerCardHandlers(
     const draw = takeTopCard(deck, room.deckCards.get(deckId));
     if (!draw) return;
     const props = readProps(deck);
-    const geo = geoOf(props);
+    const geo = geoOf(props, draw);
     room.updateDeckCollider(deckId);
     const back = draw.back || props.back || 'back';
     room.pendingInspect.set(client.sessionId, {
@@ -240,6 +247,7 @@ export function registerCardHandlers(
       props.browseAccess = 'players';
     else delete props.browseAccess;
     const cards = [];
+    const includeDefaults = Object.keys(tileAppearanceProps(props)).length > 0;
     let cx = 0;
     let cz = 0;
     for (const m of members) {
@@ -252,13 +260,21 @@ export function registerCardHandlers(
               cardFrontRef(entry),
               cardBackRef(entry) ?? m.props.back ?? 'back',
               props.back || 'back',
+              tileAppearanceProps(m.props, entry, { includeDefaults }),
             ),
           ),
         ); // bottom-first, matching pop()
       } else {
         const front = room.cardData.get(m.id)?.front ?? m.props.front;
         if (front != null)
-          cards.push(absorbedEntry(front, m.props.back || 'back', props.back || 'back'));
+          cards.push(
+            absorbedEntry(
+              front,
+              m.props.back || 'back',
+              props.back || 'back',
+              tileAppearanceProps(m.props, undefined, { includeDefaults }),
+            ),
+          );
       }
     }
     if (cards.length < 2) return; // e.g. only empty decks were selected

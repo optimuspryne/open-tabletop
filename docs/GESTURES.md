@@ -29,6 +29,24 @@ keyboard and password-manager paste. Recovery codes support Copy, Download and n
 Compact mode keeps action labels visible; touch action rows stack with 44px-minimum buttons. These
 account forms do not add tabletop gestures or bypass the gameplay intent layer.
 
+## Domino appearance
+
+These approved controls are now built by the shared tile appearance module. Future
+registered model families use the same desktop, keyboard and touch paths; Mahjong is
+still image-based pending its GLBs. No new gesture or layout is introduced.
+
+Double-click a table domino on desktop, or use the existing touch long-press **Inspect**
+action. The inspector exposes **Base**, **Inset**, and **Material**. For several tiles or
+the remaining stock in a domino bag, select them and open the existing **Recolor** menu.
+Tap the native color controls to choose each color independently; the material selector
+applies one finish to both slots. **Original (GLB)** restores the authored material response
+without resetting the chosen colors. Labels stay visible in compact mode. Keyboard uses
+Tab and the native input/select keys; no new tabletop gesture is introduced. Inspector
+controls dock below the preview on narrow or coarse-pointer layouts, with 44px touch targets.
+Mixed selections of dominoes show which fields differ; non-domino colorable objects cannot
+share the domino appearance picker. Private hand previews reflect saved appearance; recolor
+the tile on the table before taking it into a hand. Manual real-device testing remains pending.
+
 ## GM object Hide/Reveal
 
 Open a piece menu by right-click (except cards, which still flip), touch long-press, or

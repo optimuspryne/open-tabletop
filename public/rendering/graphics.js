@@ -5,6 +5,7 @@ import {
   paintNotecard,
 } from './notecards.js';
 import { drawPlacard } from './placards.js';
+import { createTileRenderer } from './tiles.js';
 import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
@@ -37,6 +38,8 @@ import {
   gridActive,
   tableOutline,
   trayParts,
+  tileAppearanceOf,
+  tileModelFamily,
 } from '/shared/pieces.js';
 import { MEASURE, OVERLAY_KINDS } from '/shared/overlays.js';
 
@@ -1298,6 +1301,11 @@ function fitModel(obj, opts) {
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
+  if (opts.size) {
+    obj.scale.set(...opts.size.map((target, i) => target / (size.getComponent(i) || 1)));
+    obj.position.copy(center).multiply(obj.scale).negate();
+    return obj.scale;
+  }
   const scale =
     opts.scale != null ? opts.scale : opts.target / (Math.max(size.x, size.y, size.z) || 1);
   obj.scale.setScalar(scale);
@@ -1485,6 +1493,9 @@ function thinCardGeo(hw, hh, th) {
 }
 
 function cardMesh(props = {}) {
+  return tileRenderer.mesh(props, () => proceduralCardMesh(props));
+}
+function proceduralCardMesh(props = {}) {
   const { hw, hh, th, round, shape } = cardGeom(props); // footprint/thickness/shape (standard card, a tile, or explicit geom)
   // Which face renders up vs down. A double-sided (open) tile shows its BACK when face-down (`down`);
   // otherwise the top is the front and the bottom is the back. A secret face-down card has no
@@ -1577,12 +1588,7 @@ export function createCardBrowsePreview(props) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      const materials = new Set();
-      mesh.traverse((node) => {
-        if (node.material) for (const material of [node.material].flat()) materials.add(material);
-        if (node.customDepthMaterial) materials.add(node.customDepthMaterial);
-      });
-      materials.forEach((material) => material.dispose());
+      disposeCardMesh(mesh);
       textures.forEach((texture) => texture.dispose());
     },
   };
@@ -1606,6 +1612,49 @@ function propColor(props) {
 }
 
 const gltfLoader = new GLTFLoader();
+function disposeCardMesh(root) {
+  if (!root || root.userData.ottDisposed) return;
+  root.userData.ottDisposed = true;
+  const materials = new Set();
+  const geometries = new Set();
+  root.traverse((node) => {
+    if (node.geometry && !node.geometry.userData.sharedCardGeometry) geometries.add(node.geometry);
+    for (const material of [node.material].flat()) if (material) materials.add(material);
+    if (node.customDepthMaterial) materials.add(node.customDepthMaterial);
+  });
+  materials.forEach((material) => material.dispose());
+  geometries.forEach((geometry) => geometry.dispose());
+}
+const tileRenderer = createTileRenderer({
+  THREE,
+  loader: gltfLoader,
+  fitModel,
+  dispose: disposeCardMesh,
+  paintMesh(node, props) {
+    const appearance = tileAppearanceOf(props);
+    const finish =
+      deviceClass() === 'phone'
+        ? DICE_FINISH_FALLBACK[appearance.finish] || appearance.finish
+        : appearance.finish;
+    if (finish === 'marbled' || finish === 'brushed') {
+      node.geometry = node.geometry.clone();
+      delete node.geometry.userData.sharedCardGeometry;
+      addModelFinishUV(node.geometry);
+    }
+    const paint = (source) => {
+      const slots = tileModelFamily(props).materialSlots;
+      const color = isTintSlot(source.name, slots.base)
+        ? appearance.base
+        : isTintSlot(source.name, slots.inset)
+          ? appearance.inset
+          : source.color;
+      return finish === 'original'
+        ? tintModelMaterial(source, color)
+        : modelFinishMaterial(source, finish, color);
+    };
+    node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+  },
+});
 const MODEL_SIZE = CONFIG.model.size; // custom-model normalization target
 
 // Load a .glb into a fresh group and return the group immediately; the model
@@ -2351,7 +2400,7 @@ const KIND = {
   notecardStack: { mesh: notecardStackMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   notecard: { mesh: notecardMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   die: { mesh: dieMesh, dispose: disposeHierarchy, grab: 0, rclick: 'roll' },
-  card: { mesh: cardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
+  card: { mesh: cardMesh, dispose: disposeCardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
   prop: { mesh: propMesh, grab: 0 },
   deck: { mesh: deckMesh, grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
   board: { mesh: boardMesh },
@@ -2768,6 +2817,46 @@ export function cardPreviewURL(ref, { thumbnail = true } = {}) {
   }
   if (url) rememberPreview(key, url);
   return url;
+}
+// A portrait, face-on preview of the same model and material used on the table. Only the
+// owning hand / authorized library or browse caller supplies a visible face identity.
+export async function tilePreviewURL(props = {}) {
+  const appearance = tileAppearanceOf(props);
+  if (!appearance) return null;
+  const key =
+    'tile:' +
+    JSON.stringify([props.tile, props.front, props.geom, props.open, props.down, appearance]);
+  if (_prevCache.has(key)) return _prevCache.get(key);
+  if (appearance.finish === 'marbled') {
+    marbleTexture();
+    await _marbleReady;
+  }
+  const mesh = cardMesh(props);
+  if (!mesh.userData.tileModel || !(await mesh.userData.tileModelReady)) {
+    disposeCardMesh(mesh);
+    return null;
+  }
+  const { renderer, scene } = thumbRig();
+  const { hw, hh } = cardGeom(props);
+  const cam = new THREE.OrthographicCamera(-hw * 1.04, hw * 1.04, hh * 1.04, -hh * 1.04, 0.01, 10);
+  cam.position.set(0, 3, 0);
+  cam.up.set(0, 0, 1);
+  cam.lookAt(0, 0, 0);
+  renderer.setSize(
+    Math.max(1, Math.round((220 * hw) / Math.max(hw, hh))),
+    Math.max(1, Math.round((220 * hh) / Math.max(hw, hh))),
+  );
+  scene.add(mesh);
+  try {
+    renderer.render(scene, cam);
+    const url = canvasThumbnailURL(renderer.domElement);
+    rememberPreview(key, url);
+    return url;
+  } finally {
+    scene.remove(mesh);
+    renderer.setSize(220, 220);
+    disposeCardMesh(mesh);
+  }
 }
 // A prop (a .glb in the library, or a built-in shape) → a rendered thumbnail data-URL.
 export async function propPreviewURL(props = {}) {

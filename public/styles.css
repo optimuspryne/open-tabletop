@@ -885,6 +885,47 @@ a {
   align-items: center;
   gap: 6px;
 }
+.domino-appearance {
+  display: grid;
+  gap: var(--gap);
+  min-width: 230px;
+}
+.domino-appearance__colors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+}
+.domino-appearance label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+.domino-appearance input[type='color'] {
+  width: 44px;
+  min-height: 32px;
+  padding: 2px;
+}
+.domino-appearance select {
+  flex: 1;
+  min-width: 0;
+}
+#inspectDominoAppearance {
+  position: fixed;
+  top: calc(var(--inset) + 40px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: var(--gap);
+  width: min(360px, calc(100vw - 2 * var(--inset)));
+  box-sizing: border-box;
+}
+@media (pointer: coarse) {
+  .domino-appearance input[type='color'],
+  .domino-appearance select {
+    min-height: 44px;
+  }
+}
 #inspectColorRow input[type='color'] {
   width: 40px;
   height: 26px;
@@ -3418,6 +3459,10 @@ label:has(.ico) {
     top: auto !important;
     bottom: var(--inset) !important;
     max-width: 96vw;
+  }
+  #inspectDominoAppearance {
+    top: auto;
+    bottom: var(--inset);
   }
   #drawActions {
     flex-wrap: nowrap;

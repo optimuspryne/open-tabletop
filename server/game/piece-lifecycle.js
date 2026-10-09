@@ -7,6 +7,7 @@ import {
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
+  tileAppearanceProps,
   KINDS,
   PROPS,
   gridActive,
@@ -117,6 +118,7 @@ export function createPieceLifecycle({
       room.deckCards.set(id, deckData.cards.slice());
       piece.count = deckData.cards.length;
       const deckProps = { back: deckData.back, ...geoOf(deckData) };
+      Object.assign(deckProps, tileAppearanceProps({ ...props, tile: deckProps.tile }));
       if (props.snap !== undefined) deckProps.snap = !!props.snap;
       if (props.browseAccess === 'players') deckProps.browseAccess = 'players';
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
@@ -248,7 +250,16 @@ export function createPieceLifecycle({
         if (cardCompatibilityKey(cardProps) !== cardCompatibilityKey(deckProps)) continue;
         const front = (room.cardData.get(id) || {}).front || cardProps.front;
         if (!front) continue;
-        cards.push(absorbedEntry(front, cardProps.back, deckProps.back));
+        cards.push(
+          absorbedEntry(
+            front,
+            cardProps.back,
+            deckProps.back,
+            tileAppearanceProps(cardProps, undefined, {
+              includeDefaults: Object.keys(tileAppearanceProps(deckProps)).length > 0,
+            }),
+          ),
+        );
         deckPiece.count = cards.length;
         if (deckProps.open) {
           const topBack = cardBackRef(cards[cards.length - 1]);

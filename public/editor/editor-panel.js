@@ -17,6 +17,7 @@ import {
 // keep working too). In the editor the admin sees private assets as well as public.
 import {
   cardPreviewURL,
+  tilePreviewURL,
   imageFilePreviewURL,
   propPreviewURL,
   boardPreviewURL,
@@ -1164,7 +1165,15 @@ function renderBuiltin(sink) {
   }
   {
     const box = previewBox('deckPreview');
-    box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
+    for (const front of ['domino:6:3', 'domino:5:5']) {
+      const image = thumbImg(cardPreviewURL(front));
+      box.append(image);
+      tilePreviewURL({ tile: 'domino', front })
+        .then((url) => {
+          if (url && image.isConnected) image.src = url;
+        })
+        .catch(() => {});
+    }
     tiles.append(
       spawnCard({
         preview: box,

@@ -62,6 +62,7 @@ export function createPresence({
   camera,
   controls,
   cardMesh,
+  disposeCard,
   notecardMesh,
   disposeNotecard,
   makePlayerTexture,
@@ -157,6 +158,7 @@ export function createPresence({
     while (group.children.length) {
       const child = group.children[0];
       if (child.userData?.notecard) disposeNotecard(child);
+      else disposeCard?.(child);
       group.remove(child);
     }
 
@@ -177,7 +179,7 @@ export function createPresence({
                 textBoxes: shown[i].textBoxes,
                 orientation: shown[i].orientation,
               })
-            : cardMesh({ front: shown[i].front, back: shown[i].back })
+            : cardMesh(shown[i])
           : cardMesh({ back: player.handBack || undefined });
       card.castShadow = card.receiveShadow = false;
       const offset = i - (count - 1) / 2;
@@ -197,7 +199,10 @@ export function createPresence({
   function removeFan(sid) {
     const group = handGroups.get(sid);
     if (group) {
-      for (const child of group.children) if (child.userData?.notecard) disposeNotecard(child);
+      for (const child of group.children) {
+        if (child.userData?.notecard) disposeNotecard(child);
+        else disposeCard?.(child);
+      }
       scene.remove(group);
       handGroups.delete(sid);
     }

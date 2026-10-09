@@ -5,7 +5,11 @@ import { normalizeBoardOutline } from '../shared/board-geometry.js';
 // Normalizers for values arriving across the WebSocket trust boundary. A
 // normalizer returns a fresh, trusted value or null; handlers must not continue
 // using the original message after validation.
-import { GRID_FOOTPRINT_MAX, OBJECT_FINISH_KEYS } from '../shared/pieces.js';
+import {
+  GRID_FOOTPRINT_MAX,
+  OBJECT_FINISH_KEYS,
+  normalizeTileAppearance,
+} from '../shared/pieces.js';
 import { LIGHTING_PRESETS } from '../shared/lighting.js';
 import { WHITEBOARD_LIMITS } from '../shared/overlays.js';
 import { isWorldCoordinate } from './game/physics-safety.js';
@@ -1075,11 +1079,36 @@ export function groupRotation(message, { max = 80 } = {}) {
 export function groupRecolor(message, { max = 80 } = {}) {
   if (
     !isPlainObject(message) ||
-    !hasOnlyKeys(message, new Set(['ids', 'color', 'textColor', 'team', 'finish', 'finishImg']))
+    !hasOnlyKeys(
+      message,
+      new Set([
+        'ids',
+        'color',
+        'textColor',
+        'team',
+        'finish',
+        'finishImg',
+        'tileAppearance',
+        'dominoAppearance',
+      ]),
+    )
   )
     return null;
   const ids = boundedUniqueIds(message.ids, { max });
   if (!ids) return null;
+  if (message.tileAppearance !== undefined || message.dominoAppearance !== undefined) {
+    if (message.tileAppearance !== undefined && message.dominoAppearance !== undefined) return null;
+    const key = message.tileAppearance !== undefined ? 'tileAppearance' : 'dominoAppearance';
+    if (
+      ['color', 'textColor', 'team', 'finish', 'finishImg'].some(
+        (key) => message[key] !== undefined,
+      )
+    )
+      return null;
+    const appearance = normalizeTileAppearance(message[key]);
+    if (!appearance || !Object.keys(appearance).length) return null;
+    return { ids, [key]: appearance };
+  }
   if (message.team !== undefined) {
     if (
       (message.team !== 0 && message.team !== 1) ||

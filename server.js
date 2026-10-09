@@ -90,6 +90,7 @@ import {
   sanitizeMatGeom,
   SEAT_ANGLES,
   DECK_MODELS,
+  cardPublicProps,
 } from './shared/pieces.js';
 import { MEASURE, OVERLAY_KINDS, OVERLAY_LIMITS, WHITEBOARD_LIMITS } from './shared/overlays.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
@@ -323,13 +324,7 @@ const deckBuilders = createDeckBuilders({ shuffle });
 // playing cards carry none, so this returns {} and nothing extra is stored — normal cards are
 // untouched. Threaded wherever a card is dealt, drawn, held, or played, so a face-down tile still
 // shows its true shape (and snap behavior) while its face is private.
-const geoOf = (o) => {
-  const g = {};
-  if (o && o.tile) g.tile = o.tile;
-  if (o && o.geom) g.geom = o.geom;
-  if (o && o.snap) g.snap = true;
-  return g;
-};
+const geoOf = cardPublicProps;
 const {
   releasePiece: releaseRoomPiece,
   removePiece: removeRoomPiece,
@@ -726,7 +721,13 @@ class TableRoom extends Room {
         continue; // active seated players only
       for (let i = 0; i < n && cards.length; i++) {
         const entry = cards.pop();
-        this.addToHand(client, cardFrontRef(entry), cardBackRef(entry) || back, geo, dp.open);
+        this.addToHand(
+          client,
+          cardFrontRef(entry),
+          cardBackRef(entry) || back,
+          { ...geo, ...geoOf(dp, entry) },
+          dp.open,
+        );
       }
     }
     deck.count = cards.length;

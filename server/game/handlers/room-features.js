@@ -9,6 +9,7 @@ import {
 } from '../../message-validation.js';
 import { guardedMessage } from '../interaction-policy.js';
 import { scoopTrayDice } from '../trays.js';
+import { cardPublicProps } from '../../../shared/pieces.js';
 
 const HIGHLIGHT_INTERVAL_MS = 250;
 
@@ -131,7 +132,7 @@ export function registerRoomFeatureHandlers(
             textBoxes: card.textBoxes,
             orientation: card.orientation,
           }
-        : { front: card.front, back: card.back },
+        : { front: card.front, back: card.back, ...cardPublicProps(card) },
     );
     for (const viewer of audience) {
       room.clientBy(viewer)?.send('showFan', { sid, cards: payload });

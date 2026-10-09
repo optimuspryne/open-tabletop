@@ -1185,6 +1185,40 @@ The board and deck sides generalize the same way. A `proc` board paints its top 
 can swap its _visual_ for a `.glb` skin (`DECK_MODELS`) with no change to draw / deal /
 shuffle / hidden order. Building the tile games meant adding data and faces, not a new engine.
 
+Authored tile models retain that card/deck protocol. `shared/tile-models.js` owns the
+immutable `TILE_MODELS` registry: face-to-model mappings, common concealed model,
+material slots, default colors/finish, and appearance storage key. Domino is the first
+registered family. Mahjong continues to use its existing images until its GLBs are ready;
+additional families share the same rendering/appearance path after registration. Model
+URLs come from the registry, never synchronized payloads. Only an authorized public front
+selects an identifying model; missing fronts select the neutral concealed model. Open
+face-down tiles rotate their known model. Unsupported faces/shapes use procedural fallback.
+
+The browser's `createTileRenderer` owns async loads and immutable template caching, bounded
+by registered assets (29 GLBs for Domino). Roots are centered and fitted on all three axes
+to `cardGeom`; no server GLB loading is needed. Instances own materials and finish UV geometry,
+while sharing template geometry. Disposed instances ignore late loads. `tilePreviewURL`
+uses the same renderer/materials and derives aspect from shared geometry. Dimensions remain
+in `TILES`/`props.geom`; Domino now uses the owner's half-extents 0.25 × 0.5 × 0.05
+(full width × length × thickness 0.5 × 1 × 0.1), shared by rendering and colliders.
+
+Generic `tileAppearance: {base,inset,finish}` patches are server-authorized and validated
+separately from container `color`/`textColor`. The registry chooses a family's storage key;
+Domino retains `dominoAppearance` so existing saves and clients remain compatible. New
+families use `tileAppearance`. `cardPublicProps` (the injected `geoOf`) carries only public
+shape and appearance through draws, hands, placements and authorized reveals. Face/order
+remain private. Absorption and combining capture individual styles, including original
+unstyled defaults before joining a styled deck. Bag patches change only requested fields
+on remaining stock; other individual fields and already drawn tiles retain theirs.
+Snapshots and account-owned hands use existing JSON storage, without migrations.
+
+Inspector and selection use `createTileAppearanceControls` and registry capability checks,
+with the already approved Base/Inset/Material layout, object finishes and phone fallbacks.
+A selection can share the picker only within one registered family. Existing DOM IDs/CSS
+classes are retained to avoid unrelated layout changes. No gameplay rules or automatic
+scoring are introduced. See [extension contract and verification](TILE_MODELS.md) and
+[original domino integration](DOMINO_MODELS.md).
+
 ## The dice family
 
 A die is **one kind** parameterized by `props.sides`.

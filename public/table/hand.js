@@ -1,3 +1,4 @@
+import { tileAppearanceProps, tileModelFamily } from '../../shared/pieces.js';
 import { PLAYING_CARD_GEOM } from '../../shared/playing-cards.js';
 
 // Private hand state, rendering, Show controls, and hand-only pointer gestures.
@@ -11,6 +12,8 @@ export function createHand({
   hit,
   setPointer,
   cardMesh,
+  disposeCard,
+  tilePreviewURL,
   notecardMesh,
   disposeNotecard,
   notecardPreviewURL,
@@ -51,6 +54,10 @@ export function createHand({
       disposeNotecard(m);
       return;
     }
+    if (disposeCard) {
+      disposeCard(m);
+      return;
+    }
     // Placed cards and drag previews share immutable geometry; keep the cached GPU buffer alive.
     if (m.geometry && !m.geometry.userData.sharedCardGeometry) m.geometry.dispose();
     (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x && x.dispose());
@@ -65,11 +72,18 @@ export function createHand({
       return;
     }
     inspectMesh(
-      cardMesh({ front: card.front, back: card.back, geom: card.geom, tile: card.tile }),
+      cardMesh({
+        front: card.front,
+        back: card.back,
+        geom: card.geom,
+        tile: card.tile,
+        ...tileAppearanceProps(card),
+      }),
       {
         drawn: true,
         type: 'card',
         hid: card.hid,
+        ...(tileModelFamily(card) ? { ownsMesh: true } : {}),
       },
     );
     byId('hand').style.display = 'none';
@@ -142,7 +156,13 @@ export function createHand({
               textBoxes: d.textBoxes,
               orientation: d.orientation,
             })
-          : cardMesh({ front: d.front, back: d.back, geom: d.geom, tile: d.tile });
+          : cardMesh({
+              front: d.front,
+              back: d.back,
+              geom: d.geom,
+              tile: d.tile,
+              ...tileAppearanceProps(d),
+            });
       mesh.renderOrder = 6;
       scene.add(mesh);
       handDrag.mesh = mesh;
@@ -437,6 +457,13 @@ export function createHand({
         const u = cardPreviewURL(cf.ref, { thumbnail: true });
         if (u) div.style.backgroundImage = `url("${u}")`;
       }
+      if (tileModelFamily(card) && tilePreviewURL) {
+        tilePreviewURL(card)
+          .then((url) => {
+            if (url && div.isConnected) div.style.backgroundImage = `url("${url}")`;
+          })
+          .catch(() => {});
+      }
       div.title = 'Left drag/click: face-down · Right drag/click: face-up';
       div.oncontextmenu = (ev) => ev.preventDefault(); // right-click is handled by the pointer events
       div.addEventListener('pointerenter', (ev) => {
@@ -482,6 +509,7 @@ export function createHand({
             back: card.back,
             geom: card.geom,
             tile: card.tile,
+            ...tileAppearanceProps(card),
             sx: ev.clientX,
             sy: ev.clientY,
             dragging: false,

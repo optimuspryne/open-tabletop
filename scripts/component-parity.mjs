@@ -218,6 +218,86 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
+    name: 'domino-models-and-appearance',
+    root: '#inspectDominoAppearance',
+    expect: {
+      selector:
+        '#inspectDominoAppearance:not([hidden]) input, #inspectDominoAppearance:not([hidden]) select',
+      min: 3,
+    },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const THREE = await import('three');
+      const { KIND, cardMesh, tilePreviewURL } = await import('/rendering/graphics.js');
+      const { CONFIG, deviceClass } = await import('/rendering/core.js');
+      const { cardGeom } = await import('/shared/pieces.js');
+      const { createInspection } = await import('/table/inspection.js');
+      const { createSelection } = await import('/table/selection.js');
+      const { meshPropsOf } = await import('/table/piece-view.js');
+      const byId = id => document.getElementById(id);
+      const measured = [];
+      for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) {
+        const model = cardMesh({tile:'domino', front:'domino:'+a+':'+b});
+        assert(await model.userData.tileModelReady, 'Domino GLB did not load');
+        const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+        const {hw,hh,th}=cardGeom({tile:'domino'});
+        assert(Math.abs(size.x-hw*2)<0.0001 && Math.abs(size.y-th*2)<0.0001 && Math.abs(size.z-hh*2)<0.0001,
+          'Model and collider dimensions diverged');
+        measured.push(model);
+      }
+      const hidden = cardMesh({tile:'domino'});
+      assert(await hidden.userData.tileModelReady, 'Concealed GLB did not load');
+      const names = []; hidden.traverse(node => names.push(node.name));
+      assert(names.some(name => name.toLowerCase().includes('concealed')) &&
+        !names.some(name => /Domino_[0-6]_[0-6]/.test(name)), 'Concealed model contains a face identity');
+      const styled = cardMesh({tile:'domino',front:'domino:3:6',dominoAppearance:{base:0x285599,inset:0xff3344,finish:'metallic'}});
+      assert(await styled.userData.tileModelReady, 'Styled GLB did not load');
+      const materials=[];styled.traverse(node=> { if(node.material) materials.push(...[node.material].flat()); });
+      assert(materials.filter(m=>m.name==='base').every(m=>m.color.getHex()===0x285599 && m.metalness>0),
+        'Base color or finish missing');
+      assert(materials.filter(m=>m.name==='inset').every(m=>m.color.getHex()===0xff3344 && m.metalness>0),
+        'Inset color or shared finish missing');
+      const thumb = await tilePreviewURL({tile:'domino',front:'domino:3:6',dominoAppearance:{base:0x285599,inset:0xff3344}});
+      assert(thumb && thumb.startsWith('data:image/'), 'Hand/library preview missing');
+      measured.forEach(mesh=>KIND.card.dispose(mesh));KIND.card.dispose(hidden);KIND.card.dispose(styled);
+      const scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(), controls={enabled:true};
+      const piece={type:'card',props:JSON.stringify({tile:'domino',front:'domino:3:6',back:'domback'})};
+      const mesh=cardMesh(JSON.parse(piece.props)); await mesh.userData.tileModelReady;
+      const pieces=new Map([['1',piece]]), meshes=new Map([['1',{type:'card',mesh}]]), sent=[];
+      const room={state:{pieces},send:(...args)=>sent.push(args)};
+      const inspection=createInspection({
+        THREE,scene,camera,controls,canvas:document.createElement('canvas'),kinds:KIND,
+        config:CONFIG,deviceClass,getRoom:()=>room,getPieceVisual:id=>meshes.get(id),
+        setOriginalVisible:(id,visible)=>{meshes.get(id).mesh.visible=visible;},meshPropsOf,byId,
+        queryAll:selector=>document.querySelectorAll(selector),setBtnLabel:()=>{},
+        buildTextureChips:()=>{},saveDiceDefault:()=>{},clearDiceDefault:()=>{},
+        onReleaseHand:()=>{},onSingleClick:()=>{},
+      });
+      inspection.enterInspect('1');
+      assert(!byId('inspectDominoAppearance').hidden, 'Domino inspector controls hidden');
+      const base=byId('inspectDominoAppearance-base'),inset=byId('inspectDominoAppearance-inset'),finish=byId('inspectDominoAppearance-finish');
+      base.value='#285599';base.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolor' && sent.at(-1)[1].tileAppearance.base===0x285599 &&
+        !('inset' in sent.at(-1)[1].tileAppearance) && inset.value==='#000000', 'Base change coupled the inset');
+      inset.value='#ff3344';inset.dispatchEvent(new Event('change'));
+      finish.value='glossy';finish.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[1].tileAppearance.finish==='glossy', 'Whole-tile finish not sent');
+      inspection.releaseInspect();
+      const selection=createSelection({THREE,scene,camera,canvas:document.createElement('canvas'),meshes,
+        marker:{inner:.8,outer:1,lift:.01},getRoom:()=>room,getBoardTopY:()=>0,byId,deviceClass});
+      selection.beginPointer({primary:true,additive:true},'1');selection.endPointer({});selection.update();
+      assert(!byId('selDominoAppearance').hidden, 'Selection Recolor does not support dominoes');
+      const groupBase=byId('selDominoAppearance-base');groupBase.value='#445566';groupBase.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolorGroup' && sent.at(-1)[1].tileAppearance.base===0x445566,
+        'Selection appearance did not use the real caller');
+      selection.clear();inspection.enterInspect('1');
+      const panel=byId('inspectDominoAppearance'), bounds=panel.getBoundingClientRect();
+      assert(bounds.left>=0 && bounds.right<=innerWidth && bounds.bottom<=innerHeight,
+        'Domino controls overflow the viewport');
+      assert(!document.body.classList.contains('ui-compact') ||
+        [...panel.querySelectorAll('label')].every(label=>label.textContent.trim()), 'Compact slot labels missing');`,
+  },
+  {
     name: 'piece-fog-aura',
     root: '#fogAuraModal',
     expect: { selector: '#fogAuraModal:not([hidden]) input', min: 2 },

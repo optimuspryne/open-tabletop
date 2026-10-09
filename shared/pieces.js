@@ -1,4 +1,6 @@
 import { NOTECARD } from './notecards.js';
+import { TILE_MODELS, tileModel, tileModelFamily } from './tile-models.js';
+export { TILE_MODELS, tileModel, tileModelFamily } from './tile-models.js';
 // =============================================================================
 // SINGLE SOURCE OF TRUTH  —  every piece dimension, mass, color and proportion.
 // Imported by BOTH the server (to build cannon-es colliders) and the client (to
@@ -65,7 +67,7 @@ export const TILES = {
     t: KINDS.card.shape.box[1],
     round: CARD_ROUND,
   }, // the standard playing card
-  domino: { w: 0.5, h: 1.0, t: 0.09, round: 0.08 }, // a chunky 2:1 tile (1.0 × 2.0 full, pips on top)
+  domino: { w: 0.25, h: 0.5, t: 0.05, round: 0.08 }, // a chunky 2:1 tile (0.5 × 1.0 × 0.1 full, pips on top)
   letter: { w: 0.3, h: 0.3, t: 0.06, round: 0.16 }, // a chunky square word-tile (0.6 × 0.6, fits a Wordy board cell)
   mahjong: { w: 0.34, h: 0.473, t: 0.14, round: 0.06 }, // a chunky mahjong tile (~0.68 × 0.95, image face at the art's 0.72 aspect)
 };
@@ -822,6 +824,61 @@ export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
 // `translucent: true`, etc.); the legacy `metal: true` spelling remains an alias for `metallic`.
 export const OBJECT_FINISHES = DICE_FINISHES.filter((f) => f.key !== 'custom');
 export const OBJECT_FINISH_KEYS = new Set(OBJECT_FINISHES.map((f) => f.key));
+// Appearance is separate from a deck container's color/textColor. Each registered
+// family defines its material slots and defaults; all families share patch validation.
+export function normalizeTileAppearance(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) return null;
+  const out = {};
+  for (const key of Object.keys(value)) {
+    if (key === 'base' || key === 'inset') {
+      const color = clampColor(value[key]);
+      if (color === null) return null;
+      out[key] = color;
+    } else if (key === 'finish') {
+      if (value[key] !== 'original' && !OBJECT_FINISH_KEYS.has(value[key])) return null;
+      out.finish = value[key];
+    } else return null;
+  }
+  return out;
+}
+export function tileAppearanceOf(props = {}, families = TILE_MODELS) {
+  const family = tileModelFamily(props, families);
+  return family
+    ? { ...family.defaults, ...normalizeTileAppearance(props[family.appearanceKey]) }
+    : null;
+}
+// Transfer only appearance, never a face or order. includeDefaults captures an unstyled
+// tile's original appearance before it joins a differently styled deck.
+export function tileAppearanceProps(
+  props = {},
+  entry,
+  { includeDefaults = false, families = TILE_MODELS } = {},
+) {
+  const family = tileModelFamily(props, families);
+  if (!family) return {};
+  const value = entry?.[family.appearanceKey] ?? props[family.appearanceKey];
+  if (value === undefined && !includeDefaults) return {};
+  const normalized = value === undefined ? {} : normalizeTileAppearance(value);
+  return normalized ? { [family.appearanceKey]: { ...family.defaults, ...normalized } } : {};
+}
+// Compatibility exports for the original domino API; production paths use tile helpers.
+export const DOMINO_APPEARANCE = TILE_MODELS.domino.defaults;
+export const DOMINO_MODEL_BASE = '/models/pieces/dominoes/';
+export const normalizeDominoAppearance = normalizeTileAppearance;
+export const dominoAppearanceOf = (props = {}) => tileAppearanceOf({ ...props, tile: 'domino' });
+export const dominoModel = (props = {}) => (props.tile === 'domino' ? tileModel(props) : null);
+
+// Public shape and appearance are inherited through deck -> hand -> table. A private
+// entry overrides deck appearance without exposing its face or other entries' order.
+export function cardPublicProps(props = {}, entry) {
+  props ||= {};
+  const out = { ...tileAppearanceProps(props, entry) };
+  if (props.tile) out.tile = props.tile;
+  if (props.geom) out.geom = props.geom;
+  if (props.snap) out.snap = true;
+  return out;
+}
 export function objectFinish(spec = {}, override) {
   spec ||= {}; // callers may deliberately use null for a non-object/dispenser definition
   if (OBJECT_FINISH_KEYS.has(override)) return override;
@@ -881,10 +938,22 @@ export function dieSpawnProps(raw = {}) {
 export function colorProps(
   type,
   props,
-  { color, textColor, team, finish, finishImg } = {},
+  { color, textColor, team, finish, finishImg, tileAppearance, dominoAppearance } = {},
   dispDef = null,
 ) {
   const out = { ...props };
+  if (tileAppearance !== undefined || dominoAppearance !== undefined) {
+    const family = tileModelFamily(props);
+    if (!['card', 'deck'].includes(type) || !family) return null;
+    if (dominoAppearance !== undefined && (props.tile !== 'domino' || tileAppearance !== undefined))
+      return null;
+    if ([color, textColor, team, finish, finishImg].some((value) => value !== undefined))
+      return null;
+    const appearance = normalizeTileAppearance(tileAppearance ?? dominoAppearance);
+    if (!appearance || !Object.keys(appearance).length) return null;
+    out[family.appearanceKey] = { ...tileAppearanceOf(props), ...appearance };
+    return out;
+  }
   if (type === 'die') {
     // dice are unconstrained (any color)
     if (color != null) {
