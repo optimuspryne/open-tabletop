@@ -194,7 +194,7 @@ export const PROPS = {
   },
   checker: {
     mass: 0.6,
-    collider: { box: [0.3376, 0.039, 0.3376], type: 'cylinder' },
+    collider: { box: [0.3415, 0.0391, 0.3416], type: 'cylinder' },
     model: '/models/pieces/checkers/checker.glb',
     modelScale: 0.45,
     team: 'checker',
@@ -203,9 +203,9 @@ export const PROPS = {
   },
   crowned_checker: {
     mass: 0.6,
-    collider: { box: [0.3376, 0.039, 0.3376], type: 'cylinder' },
+    collider: { box: [0.369, 0.0705, 0.369], type: 'cylinder' },
     model: '/models/pieces/checkers/crowned_checker.glb',
-    modelScale: 0.62,
+    modelScale: 0.45,
     team: 'checker',
     stand: 'flat',
     pearl: true,
@@ -213,17 +213,17 @@ export const PROPS = {
   // Bundled .glb models (/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.4033, 0.0285, 0.4033], type: 'cylinder' },
+    collider: { box: [0.4005, 0.0302, 0.4005], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
     modelScale: 0.4,
     ownMaterial: false,
     metal: true,
     // Independent from dice metallic finish; applies to coins and coin stacks.
-    finishTuning: { metallic: { metalness: 1.0, roughness: 0.15 } },
+    finishTuning: { metallic: { metalness: 1.0, roughness: 0.3 } },
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.64, 0.0751, 0.64], type: 'cylinder' },
+    collider: { box: [0.6, 0.0451, 0.6], type: 'cylinder' },
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.6,
     tintMaterial: 'accent',
