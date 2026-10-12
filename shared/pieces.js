@@ -434,6 +434,14 @@ export const DECK_MODELS = {
     color: 0x7a5a3a, // sack: warm leather brown
     textColor: 0xc8b06a, // drawstring: tan
   },
+  dominoes_box: {
+    name: 'Dominoes Box',
+    model: '/models/decks/dominoes_box.glb',
+    modelScale: 0.75,
+    box: [1.2675, 0.6932, 0.866],
+    // Interior domino material follows tile appearance rather than container colors.
+    tileTints: { dominoBase: 'base' },
+  },
 };
 
 // --- Word tiles (Wordy McWordface — a legally-distinct Scrabble) -------------

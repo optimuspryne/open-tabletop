@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDeckBuilders } from '../server/game/deck-builders.js';
-import { LETTER_DIST, MAHJONG } from '../shared/pieces.js';
+import { DECK_MODELS, LETTER_DIST, MAHJONG } from '../shared/pieces.js';
 import { PLAYING_CARD_BACKS, PLAYING_CARD_GEOM, playingCardFace } from '../shared/playing-cards.js';
 
 const builders = createDeckBuilders({ shuffle: (cards) => cards });
@@ -59,7 +59,8 @@ test('back selection changes only the shared back, with a safe default and fresh
 
 test('domino inventory includes all 28 unordered double-six pairs and its skin', () => {
   const { cards, ...props } = builders.buildDominoSet();
-  assert.deepEqual(props, { back: 'domback', tile: 'domino', deckModel: 'bag' });
+  assert.deepEqual(props, { back: 'domback', tile: 'domino', deckModel: 'dominoes_box' });
+  assert.deepEqual(DECK_MODELS[props.deckModel].tileTints, { dominoBase: 'base' });
   assert.equal(cards.length, 28);
   assert.equal(new Set(cards).size, 28);
   for (let a = 0; a <= 6; a++)

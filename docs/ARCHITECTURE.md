@@ -1212,6 +1212,12 @@ unstyled defaults before joining a styled deck. Bag patches change only requeste
 on remaining stock; other individual fields and already drawn tiles retain theirs.
 Snapshots and account-owned hands use existing JSON storage, without migrations.
 
+Deck skins may opt named materials into public tile appearance with `DECK_MODELS.tileTints`
+(`dominoes_box`: `dominoBase → base`). `paintTileModelMesh` shares color/finish painting,
+procedural finish UVs and phone fallbacks with authored tiles. Unmapped skin materials keep
+their existing appearance; container `tints` remain independent. The interior represents
+the deck's public default style, without inspecting private per-tile styles or card order.
+
 Inspector and selection use `createTileAppearanceControls` and registry capability checks,
 with the already approved Base/Inset/Material layout, object finishes and phone fallbacks.
 A selection can share the picker only within one registered family. Existing DOM IDs/CSS

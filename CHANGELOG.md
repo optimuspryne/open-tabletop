@@ -28,6 +28,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Domino box interior material slots follow the contained tile family's Base color and
+  material finish through the existing appearance controls. Tile and box painting share
+  finish handling, procedural texture UVs and phone fallbacks; other box materials retain
+  their authored appearance.
 - Regression coverage follows pouch Recolor messages through the real piece/card handlers
   into hand, table and inspection draws, including individually styled inventory entries.
 - Authored model loading, fitting, previews and appearance controls now share a tile-family
@@ -41,6 +45,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   are unchanged; a DPR-1 display renders four times as many pixels on High.
 
 ### Fixed
+- Poker-stack collider regression expectations match the revised poker chip radius
+  (0.6) and four-chip stack height (0.3608).
 - Component tests follow current piece-menu accessible names and retain GM permission, action-target
   and hide/show checks without requiring retired labels or icons. Label actions are clicked while live.
 - Website checks now expect the enabled public-demo link instead of the retired

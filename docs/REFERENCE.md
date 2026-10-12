@@ -788,13 +788,17 @@ chess}` each `[color0, color1]`.
 - **`LETTER_DIST`** `{ letter → [count, value] }` — the 100-tile word-game bag (blank = `''`).
 - **`MAHJONG`** `{ base, suits, honors, bonus }` — the 144-tile wall's face lists (faces are
   bundled images under `base`).
-- **`DECK_MODELS`** `{ key → { name, model, modelScale, box, modelRot?, tints?, color?, textColor? } }`
+- **`DECK_MODELS`** `{ key → { name, model, modelScale, box, modelRot?, tints?, tileTints?, color?, textColor? } }`
   — 3D deck _skins_ (a bag/box/pouch `.glb` a deck wears instead of the card stack); a deck opts in
   via `props.model`. Optional `modelRot` `[x,y,z]` reorients the raw model before it is fit/centred;
   `tints` `{ slot → propKey }` maps a named material slot to a
   deck prop (the pouch: `bag → color`, `string → textColor`), each falling back to the skin's own
-  `color`/`textColor` default, so the sack and drawstring recolor independently. The bundled domino,
-  letter, and Mahjong inventories use the scaled low-poly `bag` skin and its matching authored collider.
+  `color`/`textColor` default, so the sack and drawstring recolor independently.
+  `tileTints` `{ slot → 'base' | 'inset' }` instead follows `tileAppearanceOf(props)` colors
+  and its shared finish, including original materials, procedural texture UVs and phone
+  fallbacks. Tile mappings take precedence over container tints for the same slot and are
+  ignored without a registered tile family. The Domino starter uses `dominoes_box`, whose
+  `dominoBase` slot follows Base; letter and Mahjong inventories retain the `bag` skin.
 - **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
 - **`DICE_MODELS`** / **`DICE_MODEL_KEYS`** — built-in pipped d6 GLB visuals. They retain normal d6
   physics/value behavior, color the `Ivory` body and `Dots` pips independently, and accept every
@@ -2494,7 +2498,12 @@ quiet for a full frame), and
   **hexagon** (a regular pointy-top hex prism), or a **thick tile** (a rounded solid with
   real sides, e.g. dominoes). **`deckMesh`** — the matching stack (rounded/hex extrude, top cap textured from
   `props.cover ?? props.back`), **or a `DECK_MODELS` skin** (a `.glb` bag/box/pouch, `modelRot`-
-  reoriented and its `tints` slots painted from the deck's props) when `props.model` is set. **`boardMesh`** — a
+  reoriented and its `tints` slots painted from the deck's props) when `props.model` is set.
+  **`paintTileModelMesh`** shares tile/skin color and finish handling: skin `tileTints` slots
+  follow public tile appearance, while unmapped box materials keep their existing look.
+  `node scripts/tile-skin-test.mjs` exercises the production box/tile builders on desktop
+  and phone, including finish parity, unchanged shell/pouch materials and fallback cases.
+  **`boardMesh`** — a
   loaded model, a **procedural** painter (`BOARDS[·].proc`), or an outlined textured slab built
   from `boardGeometry`, with top artwork mapped across the full width/depth and solid side walls. Shared
   extrude helpers: **`extrudeShape` / `tileGeo` / `roundedRectShape` / `hexShape` / `hexGeo`**

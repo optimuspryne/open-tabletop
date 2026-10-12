@@ -49,7 +49,7 @@ and `pieces/dominoes/Domino_Concealed.glb`:
 - Original GLB bytes and `base`/`inset` materials are preserved. Runtime fitting centers
   each model and matches the shared domino dimensions; color/finish overrides are per instance.
 
-`boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`,
+`boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`, `decks/dominoes_box.glb`,
 `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, `pieces/checkers/checker.glb`, 
 `pieces/checkers/crowned_checker.glb`, and `pieces/misc/token.glb`
 

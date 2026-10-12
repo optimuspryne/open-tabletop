@@ -1625,34 +1625,49 @@ function disposeCardMesh(root) {
   materials.forEach((material) => material.dispose());
   geometries.forEach((geometry) => geometry.dispose());
 }
+// Tile models paint every material; deck skins opt only their named interior slots in.
+// Both use the public deck/tile appearance, never private inventory entries.
+function paintTileModelMesh(node, props, tints, { paintUnmapped = false } = {}) {
+  const appearance = tileAppearanceOf(props);
+  if (!appearance || !node.material) return;
+  const finish =
+    deviceClass() === 'phone'
+      ? DICE_FINISH_FALLBACK[appearance.finish] || appearance.finish
+      : appearance.finish;
+  let painted = false;
+  const paint = (source) => {
+    if (!source) return source;
+    const slot = Object.keys(tints).find((slot) => isTintSlot(source.name, slot));
+    if (!slot && !paintUnmapped) return source;
+    painted = true;
+    const color = slot ? appearance[tints[slot]] : source.color;
+    return finish === 'original'
+      ? tintModelMaterial(source, color)
+      : modelFinishMaterial(source, finish, color);
+  };
+  node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+  if (painted && node.geometry && (finish === 'marbled' || finish === 'brushed')) {
+    // Cached tile geometry is shared; freshly loaded deck geometry is already owned.
+    if (node.geometry.userData.sharedCardGeometry) {
+      node.geometry = node.geometry.clone();
+      delete node.geometry.userData.sharedCardGeometry;
+    }
+    addModelFinishUV(node.geometry);
+  }
+}
 const tileRenderer = createTileRenderer({
   THREE,
   loader: gltfLoader,
   fitModel,
   dispose: disposeCardMesh,
   paintMesh(node, props) {
-    const appearance = tileAppearanceOf(props);
-    const finish =
-      deviceClass() === 'phone'
-        ? DICE_FINISH_FALLBACK[appearance.finish] || appearance.finish
-        : appearance.finish;
-    if (finish === 'marbled' || finish === 'brushed') {
-      node.geometry = node.geometry.clone();
-      delete node.geometry.userData.sharedCardGeometry;
-      addModelFinishUV(node.geometry);
-    }
-    const paint = (source) => {
-      const slots = tileModelFamily(props).materialSlots;
-      const color = isTintSlot(source.name, slots.base)
-        ? appearance.base
-        : isTintSlot(source.name, slots.inset)
-          ? appearance.inset
-          : source.color;
-      return finish === 'original'
-        ? tintModelMaterial(source, color)
-        : modelFinishMaterial(source, finish, color);
-    };
-    node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+    const slots = tileModelFamily(props).materialSlots;
+    paintTileModelMesh(
+      node,
+      props,
+      { [slots.base]: 'base', [slots.inset]: 'inset' },
+      { paintUnmapped: true },
+    );
   },
 });
 const MODEL_SIZE = CONFIG.model.size; // custom-model normalization target
@@ -1958,6 +1973,7 @@ function deckMesh(props = {}) {
         node.material = Array.isArray(node.material)
           ? node.material.map(paint)
           : paint(node.material);
+        if (skin.tileTints) paintTileModelMesh(node, props, skin.tileTints);
       },
       reorient,
     );

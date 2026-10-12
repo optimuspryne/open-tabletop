@@ -25,7 +25,7 @@ export function createDeckBuilders({ shuffle }) {
   function buildDominoSet() {
     const cards = [];
     for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) cards.push(`domino:${a}:${b}`);
-    return { back: 'domback', cards: shuffle(cards), tile: 'domino', deckModel: 'bag' };
+    return { back: 'domback', cards: shuffle(cards), tile: 'domino', deckModel: 'dominoes_box' };
   }
 
   // A shuffled 100-tile letter bag for Wordy McWordface, built from LETTER_DIST (edit the bag there).
