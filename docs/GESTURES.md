@@ -245,6 +245,21 @@ touch uses the same buttons and wrapped layout. Template name editing retains na
 
 ## Pieces
 
+Gentle single-piece drops use server-authoritative stacking assistance. Flat tiles align to
+the support's center and facing; ordinary cards keep the chosen sideways, lengthwise or
+diagonal offset. Pause briefly before release to place rather than throw. Raise the held
+piece with the existing wheel/keys or touch pinch/▲ control to clear taller piles. Finger
+dragging and keyboard height/rotation intents use the same release path; no modifier or new
+control is required. On an active grid, the existing snap flag still quantizes the chosen
+position; disable grid snapping for freely offset cards. Centered drops onto a compatible
+deck return the card to inventory; deliberate offset placement leaves it individually movable.
+Multi-piece group drops preserve their existing arrangement instead of aligning each member.
+Hidden GM pieces retain the established board/mat settlement behavior. Boxes and cylinders
+with `stackable: true` also participate; spheres, compound colliders and inventory bags do not.
+The user reports stacking working after the tilt/private-hand and collider-thickness fixes.
+Specific devices and multiplayer scenarios were not itemized; broader device/multiplayer QA
+remains pending.
+
 | Gesture | What it does | Touch | Status |
 |---|---|---|---|
 | Left-hold + drag | Pick up, move, release to drop/throw | Finger drag | ✅ |

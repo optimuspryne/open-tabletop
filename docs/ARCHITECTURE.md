@@ -142,6 +142,41 @@ disagree and no client can cheat the physics — they aren't running any.
 cannon-es was chosen specifically because it is pure JavaScript, so the exact
 same physics code runs unchanged on Node.
 
+## Independent piece stacking
+
+`server/game/stacking.js` provides placement assistance at the existing authoritative release
+boundary. It reads the actual Cannon box/cylinder collider (already derived from shared geometry),
+public `stackable`/`stackMode` properties and the last validated movement target. Cards/tiles
+participate by default; generic props opt in through an instance property or a built-in `PROPS`
+default, with instance overrides. Aligned mode adopts the support's center/facing.
+Overlapping sideways/diagonal tile drops are captured before recentering, while offset cards
+retain their position within the support footprint. Offset mode retains the player's horizontal
+position and facing. Both preserve the up/down face while leveling moving pieces tilted up to
+60 degrees; supports still require the stricter five-degree flatness check. Held single pieces
+are leveled over an eligible support before physics contact can tip the pile.
+The highest stationary, flat support under the intended position determines height. Fast throws,
+held/flipping/hidden supports, obstructed landings and multi-piece group drops retain existing
+behavior. A centered compatible deck drop still absorbs; an assisted offset drop stays independent.
+The single-card `playCard` hand path calls the same helper after `spawnHandCard` initializes
+public/private faces and before consuming the hand entry. Its internal `fromInventory` option
+resolves XZ to a stack surface independently of the arbitrary three-unit spawn height; clients
+cannot send that option. Bulk hand scatter, deck adoption and other spawn paths remain distinct.
+
+Stacks have no joints or persisted attachment graph. Bodies remain dynamic; grid pinning excludes
+pieces resting on stackable supports. Grabbing, turning, flipping, removing or resizing a support
+wakes contacting pieces above it, including after restoring a snapshot. Existing card metadata
+and private-face storage are untouched. The browser flushes the final drag target before release
+and clears stale throw estimates after a pause. Physics still decides subsequent settling,
+sliding and falling; the assist does not enforce game rules or build a Mahjong wall automatically.
+
+Card/tile colliders now use their authored `cardGeom` thickness by default, including thin
+standard cards and thick/custom/hex tiles. `SIM.cards.colliderThick = 0` and the shared default
+keep physics and browser collider diagnostics consistent with visible dimensions; a positive
+override remains available for minimum padding. Mat collider padding remains independently
+0.04 half-thickness. Surface-height comparisons use a smaller tolerance than contact/wake queries
+so adjacent thin cards are still distinct layers. Free-fall/throw tunneling requires manual testing;
+assisted placement and solver/contact settings remain separate concerns.
+
 ## GM object concealment
 
 `server/game/piece-visibility.js` owns per-client Colyseus `StateView`s over the single authoritative

@@ -562,9 +562,33 @@ test('group drag preserves snapping, touch lift, transforms and release messages
   f.router.snapHeld();
   assert.deepEqual(f.sent.at(-1), ['snap', { id: 'die' }]);
   f.router.release(pointer());
+  assert.deepEqual(f.sent.at(-2), ['moveGroup', { x: 3, y: 3.5, z: 0 }]);
   assert.equal(f.sent.at(-1)[0], 'releaseGroup');
   assert.equal(f.pieces.hasHeld(), false);
   assert.equal(f.controls.enabled, true);
+});
+
+test('release sends the latest drag point and raised height before placement; a pause clears the throw', () => {
+  for (const touch of [false, true]) {
+    const f = fixture();
+    drag(f, 'card', { touch });
+    f.router.raiseAxis(1);
+    const raised = f.sent.at(-1)[1];
+    f.advance(200);
+    f.router.release(pointer({ touch }));
+    assert.deepEqual(f.sent.at(-2), ['move', raised]);
+    assert.deepEqual(f.sent.at(-1), ['release', { id: 'card', v: [0, 0, 0] }]);
+  }
+});
+
+test('an immediate moving release still throws', () => {
+  const f = fixture();
+  drag(f, 'card');
+  f.advance();
+  f.router.move(pointer({ clientX: 30 }));
+  f.router.release(pointer());
+  assert.equal(f.sent.at(-1)[0], 'release');
+  assert.ok(f.sent.at(-1)[1].v[0] > 0);
 });
 
 test('dealing and dispensing adopt replies only while the originating gesture remains active', () => {

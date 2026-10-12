@@ -50,6 +50,8 @@ export function deckSpawnProps(props, cards) {
     'dominoAppearance',
     'geom',
     'snap',
+    'stackable',
+    'stackMode',
     'open',
     'color',
     'textColor',
@@ -71,5 +73,7 @@ export function cardCompatibilityKey(props) {
     props.geom ?? null,
     !!props.open,
     !!props.snap,
+    props.stackable !== false,
+    props.stackMode ?? (props.tile ? 'aligned' : 'offset'),
   ]);
 }

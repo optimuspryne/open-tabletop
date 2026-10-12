@@ -885,6 +885,14 @@ export function cardPublicProps(props = {}, entry) {
   if (props.tile) out.tile = props.tile;
   if (props.geom) out.geom = props.geom;
   if (props.snap) out.snap = true;
+  for (const key of ['stackable', 'stackMode']) {
+    const value = props[key];
+    if (
+      (key === 'stackable' && typeof value === 'boolean') ||
+      (key === 'stackMode' && ['aligned', 'offset'].includes(value))
+    )
+      out[key] = value;
+  }
   return out;
 }
 export function objectFinish(spec = {}, override) {

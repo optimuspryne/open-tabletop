@@ -172,10 +172,9 @@ const SIM = {
   solverIterations: 12, // contact solver passes: more = firmer stacks, more CPU
   contact: { stiffness: 1e7, relaxation: 3 }, // contact-equation firmness / relaxation
   step: { fixed: 1 / 120, maxSub: 4 }, // physics timestep: smaller fixed + more substeps = less tunneling, more CPU
-  // --- CARDS: the thin-stack problem is tuned here ---------------------------
+  // --- CARDS: collider override and settling/throw tuning --------------------
   cards: {
-    colliderThick: 0.04, // HALF-thickness of the INVISIBLE card collider (the mesh stays thin). Bigger = far more
-    //   stable stacks & less clip-through, but stacked cards show a small air-gap. Try 0.03–0.08.
+    colliderThick: 0, // optional minimum HALF-thickness; zero follows each card/tile's visible geometry
     linDamp: 0.25, // linear damping — cards settle sooner
     angDamp: 0.7, // angular damping for cards (overrides damp.flat)
     maxThrow: 14, // clamp a card's release speed so a flung card can't tunnel through another

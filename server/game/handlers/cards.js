@@ -21,6 +21,7 @@ import {
 import { readProps, writeProps } from '../props-codec.js';
 import { guardedMessage } from '../interaction-policy.js';
 import { ensurePieceCapacity } from '../piece-capacity.js';
+import { wakeStackAbove } from '../stacking.js';
 
 // Register the card/deck message family against a TableRoom-compatible object.
 // Rendering/physics policy stays injected so this module owns orchestration only.
@@ -37,6 +38,7 @@ export function registerCardHandlers(
     const piece = room.state.pieces.get(id);
     const body = room.bodies.get(id);
     if (!piece || !body || piece.type !== 'card') return;
+    wakeStackAbove(room, id);
     const props = readProps(piece);
     if (props.open) {
       if (props.down)

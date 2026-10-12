@@ -6,6 +6,7 @@ import {
 } from '../../message-validation.js';
 import { guardedMessage } from '../interaction-policy.js';
 import { MAX_PIECES, ensurePieceCapacity, hasPieceCapacity } from '../piece-capacity.js';
+import { assistStackPlacement } from '../stacking.js';
 
 // Capacity must be checked before consuming inventory, with no intervening await.
 export function registerPlacementHandlers(
@@ -67,7 +68,10 @@ export function registerPlacementHandlers(
       typeof x === 'number' && typeof z === 'number'
         ? [x, 3, z] // where the client dropped it
         : [(Math.random() - 0.5) * 4, 3, (Math.random() - 0.5) * 3]; // or scattered
-    room.spawnHandCard(pos, card, faceDown);
+    const id = room.spawnHandCard(pos, card, faceDown);
+    // A private-hand drop specifies XZ, not an altitude. Resolve the stack surface before
+    // its three-unit spawn fall can disturb the pile; bulk hand scatter retains its layout.
+    assistStackPlacement(room, id, null, [0, 0, 0], { fromInventory: true });
     hand.splice(index, 1);
     room.sendHand(client);
     broadcastPieceEvent(room, 'sfx', { type: dropSfx('card', card) }); // played tile clacks

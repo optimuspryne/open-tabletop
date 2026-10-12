@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { colliderSpec, primitiveColliderSpec } from '../shared/collider-spec.js';
+import { cardGeom } from '../shared/pieces.js';
 
 test('collider debug primitives preserve server dimensions and flat offsets', () => {
   assert.deepEqual(primitiveColliderSpec('sphere', 1, 2, 1), { type: 'sphere', radius: 2 });
@@ -42,6 +43,23 @@ test('collider debug specs track live boards, decks, dice, and dispensers', () =
     height: 0.8718,
     sides: 16,
   });
+});
+
+test('default debug geometry uses visible card thickness and independent mat padding', () => {
+  for (const props of [
+    {},
+    { tile: 'domino' },
+    { tile: 'letter' },
+    { tile: 'mahjong' },
+    { geom: { w: 0.35, h: 0.5, t: 0.005 } },
+    { geom: { w: 0.35, h: 0.5, t: 0.1 } },
+    { geom: { w: 0.35, h: 0.5, t: 0.005, shape: 'hex' } },
+  ]) {
+    const geometry = cardGeom(props),
+      spec = colliderSpec('card', props);
+    assert.equal(geometry.shape === 'hex' ? spec.height / 2 : spec.halfExtents[1], geometry.th);
+  }
+  assert.equal(colliderSpec('mat', { geom: { w: 2, h: 3, t: 0.005 } }).halfExtents[1], 0.04);
 });
 
 test('uploaded object collider specs apply the same clamps and primitive choices as physics', () => {

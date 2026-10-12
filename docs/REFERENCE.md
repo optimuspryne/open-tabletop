@@ -1089,10 +1089,13 @@ measurements retain their existing board-wide plane.
   `flat`) re-exported by `server/physics.js` for the existing room/upload boundary.
 - **`primitiveColliderSpec(type, hx, hy, hz, options?)`** returns a renderer-neutral box, sphere,
   cylinder/cone, or flat-offset descriptor.
-- **`colliderSpec(type, props, {cardColliderThickness,count}?)`** resolves the current authoritative
+- **`colliderSpec(type, props, {cardColliderThickness,matColliderThickness,count}?)`** resolves the current authoritative
   descriptor for every piece family, including compound layouts, convex dice, shaped board prisms
   with authored faces, and count-derived deck/dispenser heights. Browser diagnostics and server
   physics consume the same descriptions without sharing Three.js or Cannon objects.
+  `cardColliderThickness` defaults to zero: card/tile half-thickness follows `cardGeom(props).th`,
+  including authored thin/thick and hex geometry. A positive value is an explicit minimum padding
+  override. `matColliderThickness` independently defaults to 0.04, retaining the existing mat floor.
 
 ---
 
@@ -1118,8 +1121,8 @@ measurements retain their existing board-wide plane.
 
 - **`SIM`** — all physics tuning in one object: gravity, friction/restitution,
   damping, self-righting, `throwCap`, `solverIterations`, `contact`, `step`
-  (`fixed`/`maxSub`), and **`cards`** (`colliderThick` — the invisible thicker
-  card collider that stabilizes stacks — plus `linDamp`/`angDamp`/`maxThrow`/
+  (`fixed`/`maxSub`), and **`cards`** (`colliderThick` — optional minimum half-thickness,
+  zero by default to match visible card/tile geometry — plus `linDamp`/`angDamp`/`maxThrow`/
   sleep).
 
 ### Piece capacity and movement safety
@@ -1798,12 +1801,48 @@ Piece lifecycle methods forward to the operations returned by
 - **`removePiece(room,id)`** removes the Cannon body plus synchronized, target, flip, deck-card,
   and private-card records.
 - **`releasePiece(room,id,velocity)`** clears ownership, snaps or caps throw velocity, then applies
+  **`assistStackPlacement`** for gentle single-piece drops. Successful placement publishes the
+  collider-derived height and skips deck absorption. Other releases apply
   **`visibility.settleReleasedPiece(id)`** before compatible card-to-deck and item-to-dispenser
   absorption. The visibility service settles hidden movable bodies onto the board/mat collider
   surface below their center (or the tabletop), accounting for body orientation and collider
   offsets and publishing the corrected transform. Queries include hidden supports without
   changing collision masks; visible releases keep normal physics. It delegates collider rebuilding,
   dispenser item resolution, removal, and broadcast through the stable room API.
+
+Independent stacking lives in `server/game/stacking.js`:
+
+- **`assistStackPlacement(room,id,target,velocity,{fromInventory?}) → boolean`** places enabled box/cylinder
+  pieces over the highest eligible support. Tiles default to aligned centers/facing; ordinary
+  cards default to offset placement, preserving horizontal position and facing. `stackable: false`
+  disables assistance; generic props opt in with `stackable: true`; `stackMode: 'aligned' | 'offset'`
+  overrides the default. Built-in/custom prop and deck payload normalizers validate these fields.
+  Built-in props also inherit `stackable`/`stackMode` defaults from their `PROPS` entry in
+  `shared/pieces.js`; explicit instance values win, including `stackable: false`. Aligned
+  capture accepts offsets up to 1.25 support half-extents and recenters the tile; offset
+  capture keeps the card center within 0.95 support half-extents and preserves its position.
+  A gently placed mover may be tilted up to 60 degrees and is leveled without changing the
+  up/down face; candidate supports must still be flat within five degrees. Vertical lookup
+  uses the mover's leveled collider bottom, so a tilted corner cannot disqualify a valid landing.
+  `playCard` uses the internal `fromInventory: true` option after `spawnHandCard`: the clicked XZ
+  selects the surface regardless of its three-unit spawn altitude. It does not absorb cards or
+  expose private fronts, and `stackable: false` retains ordinary dropping.
+  `cardPublicProps` carries deck settings through draws, hands and table placement;
+  `deckSpawnProps` preserves them through snapshots/splits. Deck compatibility includes effective
+  stacking settings, so merging cannot silently discard a card's different placement behavior.
+  Geometry uses actual shared-specification Cannon shapes and offsets; compound/spherical colliders,
+  hidden pieces and modeled deck containers do not participate. Offset centers must remain inside
+  the support's conservative footprint; throws and blocked landings use ordinary physics.
+- **`hasStackSupport(room,id)`** detects a resting contact from live geometry, so snap maintenance
+  leaves supported pieces dynamic. No support IDs or constraints are synchronized/persisted.
+- **`prepareStackDrag(room,id,target)`** levels an eligible held single piece over a support,
+  preserving its facing and up/down face. It leaves center/height placement for release. Shared
+  internal `levelBody` supplies the same orientation correction to release placement.
+- **`wakeStackAbove(room,id)`** wakes contacting layers before a support is grabbed, turned,
+  flipped, removed or its deck collider changes. This prevents sleeping pieces floating after
+  support removal and works with restored scenes. `STACKING` holds placement/contact tolerances.
+  `surfaceTolerance` compares candidate surface heights independently of the wider contact/wake
+  tolerance, so thin layers are recognized as distinct and placement chooses the top layer.
 
 Collider methods forward to `server/game/collider-maintenance.js`:
 
@@ -1834,7 +1873,8 @@ Placement methods forward to `server/game/placement-operations.js`:
 - **`selfRightPieces(room, sim)`** nudges eligible awake, unheld bodies toward world-up using the
   existing stand-mode cutoffs and skips offset flat colliders.
 - **`maintainSnapPins(room, sim)`** gives snap-enabled pieces the fast card sleep thresholds, pins
-  fully settled bodies on their exact grid cell, and removes stale pins.
+  fully settled bodies on their exact grid cell, and removes stale pins. Pieces resting on a
+  stackable support stay dynamic so they can fall when that support moves.
 - **`advanceFlips(room, dt, sim)`** interpolates active flip quaternions and arcs, deletes orphaned
   flips, and restores completed bodies to awake dynamic simulation.
 - **`preparePieceMotion(room, dt, sim)`** invokes the four passes in that established order.

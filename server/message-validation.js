@@ -512,6 +512,8 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
     'tintMaterial',
     'dispenser',
     'cells',
+    'stackable',
+    'stackMode',
   ];
   if (allowSpawnOptions) allowed.push('snap');
   if (!hasOnlyKeys(value, new Set(allowed))) return null;
@@ -520,6 +522,14 @@ export function propRecordPayload(value, { colliders = [], allowSpawnOptions = f
   const scale = finiteNumber(value.scale, { min: 1e-3, max: 100 });
   if (!model || !box || scale === null || typeof value.stand !== 'boolean') return null;
   const out = { model, box, stand: value.stand, scale };
+  if (value.stackable !== undefined) {
+    if (typeof value.stackable !== 'boolean') return null;
+    out.stackable = value.stackable;
+  }
+  if (value.stackMode !== undefined) {
+    if (!['aligned', 'offset'].includes(value.stackMode)) return null;
+    out.stackMode = value.stackMode;
+  }
   if (value.cells !== undefined) {
     const cells = finiteNumber(value.cells, { min: 1, max: GRID_FOOTPRINT_MAX });
     if (cells === null || !Number.isInteger(cells)) return null;
@@ -834,7 +844,13 @@ export function spawnPayload(
     return { type, props: out };
   }
   if (type === 'deck') {
-    if (!hasOnlyKeys(props, new Set(['jokers', 'set', 'snap', 'backDesign']))) return null;
+    if (
+      !hasOnlyKeys(
+        props,
+        new Set(['jokers', 'set', 'snap', 'backDesign', 'stackable', 'stackMode']),
+      )
+    )
+      return null;
     const out = {};
     if (props.jokers !== undefined) {
       if (typeof props.jokers !== 'boolean') return null;
@@ -852,9 +868,14 @@ export function spawnPayload(
         return null;
       out.backDesign = props.backDesign;
     }
-    if (props.snap !== undefined) {
-      if (typeof props.snap !== 'boolean') return null;
-      out.snap = props.snap;
+    for (const key of ['snap', 'stackable']) {
+      if (props[key] === undefined) continue;
+      if (typeof props[key] !== 'boolean') return null;
+      out[key] = props[key];
+    }
+    if (props.stackMode !== undefined) {
+      if (!['aligned', 'offset'].includes(props.stackMode)) return null;
+      out.stackMode = props.stackMode;
     }
     return { type, props: out };
   }
@@ -868,11 +889,22 @@ export function spawnPayload(
       return prop ? { type, props: prop } : null;
     }
     if (
-      !hasOnlyKeys(props, new Set(['shape', 'color', 'team', 'snap', 'stand', 'finish'])) ||
+      !hasOnlyKeys(
+        props,
+        new Set(['shape', 'color', 'team', 'snap', 'stand', 'finish', 'stackable', 'stackMode']),
+      ) ||
       !propKeys.includes(props.shape)
     )
       return null;
     const out = { shape: props.shape };
+    if (props.stackable !== undefined) {
+      if (typeof props.stackable !== 'boolean') return null;
+      out.stackable = props.stackable;
+    }
+    if (props.stackMode !== undefined) {
+      if (!['aligned', 'offset'].includes(props.stackMode)) return null;
+      out.stackMode = props.stackMode;
+    }
     if (props.color !== undefined) {
       const color = finiteNumber(props.color, { min: 0, max: 0xffffff });
       if (color === null || !Number.isInteger(color)) return null;

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
+import { cardGeom } from '../shared/pieces.js';
 import {
   COLLIDER_TYPES,
   buildCollider,
@@ -51,7 +52,7 @@ test('die colliders use a cube for d6 and convex hulls for polyhedra', () => {
   assert.ok(dieShape(999) instanceof CANNON.Box);
 });
 
-test('card colliders preserve footprint while enforcing stability thickness', () => {
+test('card colliders support an explicit optional stability-thickness override', () => {
   const rectangle = buildCollider(
     'card',
     {
@@ -76,6 +77,38 @@ test('card colliders preserve footprint while enforcing stability thickness', ()
   assert.equal(hexagon.height, 0.08);
 });
 
+test('default card physics follows authored thickness for thin, thick, tile and hex cards', () => {
+  for (const props of [
+    {},
+    { tile: 'domino' },
+    { tile: 'mahjong' },
+    { geom: { w: 0.35, h: 0.5, t: 0.005 } },
+    { geom: { w: 0.35, h: 0.5, t: 0.1 } },
+    { geom: { w: 0.35, h: 0.5, t: 0.005, shape: 'hex' } },
+  ]) {
+    const geometry = cardGeom(props),
+      shape = buildCollider('card', props);
+    if (geometry.shape === 'hex') {
+      assert.equal(shape.height, geometry.th * 2);
+      assert.equal(shape.radiusTop, geometry.hh);
+    } else {
+      assert.deepEqual(
+        [shape.halfExtents.x, shape.halfExtents.y, shape.halfExtents.z],
+        [geometry.hw, geometry.th, geometry.hh],
+      );
+    }
+  }
+});
+
+test('thin mat surfaces retain their collider floor when card padding is zero', () => {
+  const shape = buildCollider(
+    'mat',
+    { geom: { w: 2, h: 3, t: 0.005 } },
+    { cardColliderThickness: 0 },
+  );
+  assert.equal(shape.halfExtents.y, 0.04);
+});
+
 test('mat colliders are a large solid box sized from geom (a real resting surface)', () => {
   const shape = buildCollider(
     'mat',
@@ -85,7 +118,7 @@ test('mat colliders are a large solid box sized from geom (a real resting surfac
   assert.ok(shape instanceof CANNON.Box);
   assert.deepEqual(
     [shape.halfExtents.x, shape.halfExtents.y, shape.halfExtents.z],
-    [5, 0.06, 3.2], // its own 0.06 slab thickness exceeds the card collider floor → a real top face
+    [5, 0.06, 3.2], // its own 0.06 half-thickness exceeds the mat floor → a real top face
   );
 });
 

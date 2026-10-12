@@ -9,6 +9,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Assisted stacking through the existing drag gesture: gentle tile drops align to a flat
+  support, while ordinary cards retain sideways, lengthwise or diagonal offsets. Offset
+  cards remain separate from decks; centered deck drops still return to inventory. Flat
+  box/cylinder props can opt in with `stackable`; `stackMode` selects aligned or offset placement.
+  Each piece keeps its own physics body and private face. Moving/removing a support wakes
+  the pieces above it; stacked grid pieces remain dynamic. Save/reload preserves placement.
 - Double-six dominoes use 28 authored GLB tiles and a common concealed model. Inspector
   and selection Recolor controls independently set Base/Inset colors and one shared
   material finish; appearance survives hands, returns, deck browsing and game saves.
@@ -28,6 +34,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Card/tile colliders follow each card's visible authored thickness by default instead of
+  imposing a 0.04 half-thickness floor (ordinary cards now use 0.015). Optional card padding
+  remains a simulation override; mat surfaces retain their independent 0.04 minimum.
+  Stack surface selection distinguishes thin adjacent layers using its own smaller tolerance.
 - Domino box interior material slots follow the contained tile family's Base color and
   material finish through the existing appearance controls. Tile and box painting share
   finish handling, procedural texture UVs and phone fallbacks; other box materials retain
@@ -45,6 +55,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   are unchanged; a DPR-1 display renders four times as many pixels on High.
 
 ### Fixed
+- Gentle stack placement levels tilted moving cards/tiles while keeping their facing and up/down
+  face; held pieces are leveled over a valid support before a corner can disturb the pile.
+  Private-hand single-card plays use the same stacking helper before the spawn fall, with
+  inventory-only surface lookup for piles above/below the default spawn altitude. Concealed
+  faces and explicit stacking settings are preserved; bulk hand scatter retains its layout.
+- Stacking captures overlapping tiles even when shifted sideways or diagonally, and accepts
+  near-edge card offsets without recentering them. Built-in `PROPS` entries can supply
+  `stackable`/`stackMode` defaults; explicit instance settings override those defaults.
+- Drag release sends the final position and raised height before dropping; pausing before
+  release clears stale throw velocity so deliberate stacking does not become an accidental throw.
 - Poker-stack collider regression expectations match the revised poker chip radius
   (0.6) and four-chip stack height (0.3608).
 - Component tests follow current piece-menu accessible names and retain GM permission, action-target
