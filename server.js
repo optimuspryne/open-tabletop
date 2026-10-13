@@ -18,6 +18,7 @@ import {
 import { stopPlayerInteraction } from './server/game/interaction-cleanup.js';
 import { createParticipationService } from './server/game/participation.js';
 import { createDeckBuilders } from './server/game/deck-builders.js';
+import { createMahjongWall } from './server/game/mahjong-wall.js';
 import { isBoundedImageDataURL } from './shared/avatar.js';
 import {
   afterDispense as consumeDispensedItem,
@@ -317,6 +318,10 @@ const shuffle = (array) => {
   return array;
 };
 const deckBuilders = createDeckBuilders({ shuffle });
+const spawnMahjongWall = createMahjongWall({
+  buildInventory: deckBuilders.buildMahjongWall,
+  maxPieces: SIM.maxPieces,
+});
 
 // The PUBLIC geometry/behavior a card/tile inherits from its deck: a named tile kind (`tile`), an
 // explicit `geom` (custom-aspect image decks), and a `snap` flag (word tiles snap to the grid). Plain
@@ -331,6 +336,7 @@ const {
 } = createPieceLifecycle({ deckBuilders, dropSfx, geoOf, sim: SIM });
 const setupStarterGame = createStarterSetup({
   deckBuilders,
+  spawnMahjongWall,
   geoOf,
   maxPieces: SIM.maxPieces,
   spawnY: SIM.spawnY,
@@ -456,6 +462,7 @@ class TableRoom extends Room {
     });
 
     registerPieceHandlers(this, {
+      spawnMahjongWall,
       maxPieces: SIM.maxPieces,
       flipHop: SIM.flipHop,
       roll: SIM.roll,
@@ -565,10 +572,12 @@ class TableRoom extends Room {
     tableMessage('loadStarter', (client, message) => {
       if (this.rank(client) < RANK.gm) return; // replacing the whole table is GM+ (like scene load / reset)
       const parsed = oneField(message, 'game', (game) =>
-        typeof game === 'string' && STARTERS[game] ? game : null,
+        typeof game === 'string' && Object.hasOwn(STARTERS, game) ? game : null,
       );
       if (!parsed) return;
-      this.setupStarter(parsed.game);
+      const result = this.setupStarter(parsed.game);
+      if (result?.ok === false)
+        client.send('serverError', { operation: 'loadStarter', message: result.message });
     });
 
     // --- Member management (DB-backed; all mutations authorized server-side) ---

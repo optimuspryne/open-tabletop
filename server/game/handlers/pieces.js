@@ -48,6 +48,7 @@ export function registerPieceHandlers(
     geoOf,
     randomPosition,
     spawnY,
+    spawnMahjongWall,
     random = Math.random,
     logger = console,
   },
@@ -263,6 +264,12 @@ export function registerPieceHandlers(
       return;
     }
     if (room.rank(client) < RANK.helper) return;
+    if (msg.type === 'deck' && msg.props.layout === 'wall') {
+      const result = spawnMahjongWall(room, msg.props.bonusTiles);
+      if (!result.ok) client.send('serverError', { operation: 'spawn', message: result.message });
+      else broadcastPieceEvent(room, 'sfx', { type: 'tile-shuffle' }, result.ids);
+      return;
+    }
     if (
       ['notecard', 'notecardStack'].includes(msg.type) &&
       !room.notecards.hasCapacity(msg.type === 'notecardStack' ? msg.props.count : 1)

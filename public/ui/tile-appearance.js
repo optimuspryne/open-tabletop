@@ -54,14 +54,16 @@ export function createTileAppearanceControls(
       if (!family) return;
       const appearance = tileAppearanceOf(props);
       for (const [key, { input, text }] of Object.entries(controls)) {
+        const name =
+          key === 'finish'
+            ? 'Material'
+            : family.colorLabels?.[key] || (key === 'base' ? 'Base' : 'Inset');
         input.setAttribute(
           'aria-label',
-          family.name + ' ' + (key === 'finish' ? 'material' : key + ' color'),
+          family.name + ' ' + name.toLowerCase() + (key === 'finish' ? '' : ' color'),
         );
         const mixed = others.some((p) => tileAppearanceOf(p)?.[key] !== appearance[key]);
-        text.textContent =
-          (key === 'finish' ? 'Material' : key === 'base' ? 'Base' : 'Inset') +
-          (mixed ? ' (mixed)' : '');
+        text.textContent = name + (mixed ? ' (mixed)' : '');
         if (doc.activeElement === input) continue;
         input.value =
           key === 'finish'

@@ -107,7 +107,7 @@ export function createPieceLifecycle({
           : props.set === 'letter'
             ? deckBuilders.buildScrabbleBag()
             : props.set === 'mahjong'
-              ? deckBuilders.buildMahjongWall()
+              ? deckBuilders.buildMahjongWall(props.bonusTiles === true)
               : props.cards && props.cards.length
                 ? {
                     back: props.back || 'back',

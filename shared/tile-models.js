@@ -2,6 +2,35 @@
 // neutral concealed model, material slots and appearance defaults together. Dimensions
 // remain in TILES/cardGeom so rendering and physics use the same source of truth.
 const dominoRoot = '/models/pieces/dominoes/';
+const mahjongRoot = '/models/pieces/mahjong/';
+const mahjongFaces = {};
+for (const [ref, model] of Object.entries({ char: 'Man', bam: 'Sou', cir: 'Pin' }))
+  for (let rank = 1; rank <= 9; rank++)
+    mahjongFaces[`/mahjong/faces/${ref}${rank}.png`] = Object.freeze({
+      url: mahjongRoot + model + rank + '.glb',
+      turn: false,
+    });
+for (const [ref, model] of Object.entries({
+  windE: 'Ton',
+  windS: 'Nan',
+  windW: 'Shaa',
+  windN: 'Pei',
+  dragR: 'Chun',
+  dragG: 'Hatsu',
+  dragW: 'Haku',
+  flowPlum: 'Flower1_Plum',
+  flowOrchid: 'Flower2_Orchid',
+  flowChrys: 'Flower3_Chrysanthemum',
+  flowBamboo: 'Flower4_Bamboo',
+  seasSpring: 'Season1_Spring',
+  seasSummer: 'Season2_Summer',
+  seasFall: 'Season3_Autumn',
+  seasWinter: 'Season4_Winter',
+}))
+  mahjongFaces[`/mahjong/faces/${ref}.png`] = Object.freeze({
+    url: mahjongRoot + model + '.glb',
+    turn: false,
+  });
 const dominoFaces = {};
 for (let a = 0; a <= 6; a++)
   for (let b = 0; b <= 6; b++)
@@ -11,6 +40,17 @@ for (let a = 0; a <= 6; a++)
     });
 
 export const TILE_MODELS = Object.freeze({
+  mahjong: Object.freeze({
+    name: 'Mahjong',
+    appearanceKey: 'tileAppearance',
+    // sRGB equivalents of the authored linear ivory/green materials. The inset
+    // storage slot colors the back; multicolored engraved symbols retain their colors.
+    defaults: Object.freeze({ base: 0xefead8, inset: 0x166f55, finish: 'original' }),
+    materialSlots: Object.freeze({ base: 'base', inset: 'back' }),
+    colorLabels: Object.freeze({ base: 'Base', inset: 'Back' }),
+    concealed: mahjongRoot + 'concealed.glb',
+    faces: Object.freeze(mahjongFaces),
+  }),
   domino: Object.freeze({
     name: 'Domino',
     // Retain this saved property for existing dominoes; new families use tileAppearance.

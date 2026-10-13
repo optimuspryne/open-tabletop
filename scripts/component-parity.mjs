@@ -218,7 +218,7 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
   {
-    name: 'domino-models-and-appearance',
+    name: 'tile-models-and-appearance',
     root: '#inspectDominoAppearance',
     expect: {
       selector:
@@ -295,7 +295,76 @@ const SCENES = [
       assert(bounds.left>=0 && bounds.right<=innerWidth && bounds.bottom<=innerHeight,
         'Domino controls overflow the viewport');
       assert(!document.body.classList.contains('ui-compact') ||
-        [...panel.querySelectorAll('label')].every(label=>label.textContent.trim()), 'Compact slot labels missing');`,
+        [...panel.querySelectorAll('label')].every(label=>label.textContent.trim()), 'Compact slot labels missing');
+      inspection.releaseInspect();
+      const {TILE_MODELS} = await import('/shared/pieces.js');
+      for (const front of Object.keys(TILE_MODELS.mahjong.faces)) {
+        const tile=cardMesh({tile:'mahjong',front});
+        assert(await tile.userData.tileModelReady, 'Mahjong GLB missing: '+front);
+        const size=new THREE.Box3().setFromObject(tile).getSize(new THREE.Vector3());
+        const {hw,hh,th}=cardGeom({tile:'mahjong'});
+        assert(Math.abs(size.x-hw*2)<.0001 && Math.abs(size.y-th*2)<.0001 && Math.abs(size.z-hh*2)<.0001,
+          'Mahjong GLB dimensions differ from its collider');
+        KIND.card.dispose(tile);
+      }
+      const concealed=cardMesh({tile:'mahjong'});
+      assert(await concealed.userData.tileModelReady, 'Mahjong concealed GLB missing');
+      let backTop=false;
+      concealed.traverse(node=>{
+        if(node.isMesh && [node.material].flat().some(m=>m.name==='back')) {
+          const groups=node.geometry.groups.length?node.geometry.groups:[{
+            start:0,count:node.geometry.index?.count||node.geometry.attributes.position.count,materialIndex:0
+          }];
+          groups.forEach(group=>{
+            if([node.material].flat()[group.materialIndex]?.name!=='back') return;
+            const positions=node.geometry.attributes.position, indices=node.geometry.index;
+            let y=0;
+            for(let i=group.start;i<group.start+group.count;i++) {
+              const p=new THREE.Vector3().fromBufferAttribute(positions,indices?indices.getX(i):i);
+              node.localToWorld(p);y+=p.y;
+            }
+            backTop=y/group.count>0;
+          });
+        }
+      });
+      assert(backTop, 'Concealed Mahjong shows the ivory face instead of the green back');
+      KIND.card.dispose(concealed);
+      const mjProps={tile:'mahjong',front:'/mahjong/faces/bam1.png',back:'mjback'};
+      const original=cardMesh(mjProps);
+      const painted=cardMesh({...mjProps,tileAppearance:{base:0x285599,inset:0xff3344,finish:'metallic'}});
+      assert(await original.userData.tileModelReady && await painted.userData.tileModelReady,'Styled Mahjong missing');
+      const originals=new Map();original.traverse(node=>[node.material].flat().filter(Boolean).forEach(m=>originals.set(m.name,m.color.getHex())));
+      painted.traverse(node=>[node.material].flat().filter(Boolean).forEach(m=>{
+        if(m.name==='base'||m.name==='back')
+          assert(m.color.getHex()===(m.name==='base'?0x285599:0xff3344)&&m.metalness>0,'Mahjong body/back override missing');
+        else assert(m.color.getHex()===originals.get(m.name),'Mahjong engraving colors changed');
+      }));
+      const preview=await tilePreviewURL(mjProps);
+      assert(preview?.startsWith('data:image/'),'Mahjong hand preview missing');
+      for(const id of ['flowPlum','flowBamboo']) {
+        const image=new Image();image.src='/mahjong/faces/'+id+'.png';await image.decode();
+        assert(image.naturalWidth===360&&image.naturalHeight===480,'New flower image fallback is missing');
+      }
+      KIND.card.dispose(painted);KIND.card.dispose(mesh);
+      piece.props=JSON.stringify(mjProps);meshes.set('1',{type:'card',mesh:original});
+      inspection.enterInspect('1');
+      assert(byId('inspectDominoAppearance-inset').getAttribute('aria-label')==='Mahjong back color',
+        'Mahjong Back label/accessibility missing');
+      assert([...panel.querySelectorAll('label')].map(l=>l.textContent.trim()).slice(0,2).join(',')==='Base,Back',
+        'Mahjong controls still describe an inset');
+      const back=byId('inspectDominoAppearance-inset');back.value='#334455';back.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolor'&&sent.at(-1)[1].tileAppearance.inset===0x334455,
+        'Mahjong inspector does not send the back patch');
+      inspection.releaseInspect();
+      selection.beginPointer({primary:true,additive:true},'1');selection.endPointer({});selection.update();
+      assert(!byId('selDominoAppearance').hidden,'Mahjong selection controls hidden');
+      const selBack=byId('selDominoAppearance-inset');selBack.value='#556677';selBack.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolorGroup'&&sent.at(-1)[1].tileAppearance.inset===0x556677,
+        'Mahjong selection does not send the back patch');
+      selection.clear();inspection.enterInspect('1');
+      const mjBounds=panel.getBoundingClientRect();
+      assert(mjBounds.left>=0 && mjBounds.right<=innerWidth && mjBounds.bottom<=innerHeight,
+        'Mahjong controls overflow the viewport');`,
   },
   {
     name: 'piece-fog-aura',
@@ -2728,6 +2797,97 @@ const SCENES = [
         assert(request.data.props.jokers === (index === 1), 'Spawn changed deck size');
       }
       assert(cards[0].querySelector('input[value=red]').checked, 'Second deck changed the first choice');`,
+  })),
+  ...['full', 'compact'].map((mode) => ({
+    name: 'library-mahjong-starters-' + mode,
+    root: '#libraryModal',
+    expect: { selector: '.libName', min: 2 },
+    drive: `
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      const sent=[], confirmations=[];
+      const fixtureRoom=${STUB_ROOM};
+      window.onOttRoom(new Proxy(fixtureRoom,{get:(room,key)=>key==='send'
+        ? (type,data)=>{sent.push({type,data});fixtureRoom.send(type,data);}:room[key]}));
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="games"]').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const assert=(ok,message)=>{if(!ok)throw Error(message);};
+      const cards=[...document.querySelectorAll('#nlb_games .libCard')]
+        .filter(card=>card.querySelector('.libName')?.textContent.startsWith('Mahjong'));
+      assert(cards.length===2,'Expected two Mahjong starter entries');
+      for(const [index,card] of cards.entries()) {
+        const count=index===0?136:144, id=index===0?'mahjong':'mahjong-bonus';
+        assert(card.querySelector('.libName').textContent==='Mahjong ('+count+' tiles)',
+          'Starter title does not identify its tile count');
+        const button=card.querySelector('button');
+        assert(button.getAttribute('aria-label')==='Set up'&&
+          button.querySelector('use')?.getAttribute('href')==='#i-go-game','Existing Set up action changed');
+        button.focus();assert(document.activeElement===button,'Starter is not keyboard focusable');
+        window.confirm=message=>{confirmations.push(message);return false;};
+        button.click();assert(!sent.some(message=>message.type==='loadStarter'),
+          'Cancelled setup sent a request');
+        window.confirm=message=>{confirmations.push(message);return true;};
+        button.click();
+        assert(sent.at(-1)?.type==='loadStarter'&&sent.at(-1)?.data.game===id,
+          'Starter did not request the selected variant');
+        sent.length=0;
+        assert(confirmations.at(-1).includes('clears the current table'),'Clear confirmation missing');
+        const bounds=card.getBoundingClientRect();
+        assert(bounds.width>0&&bounds.right<=innerWidth+.5&&card.scrollWidth<=card.clientWidth+1,
+          'Mahjong starter overflows its layout');
+        if(matchMedia('(pointer:coarse)').matches) {
+          const target=button.getBoundingClientRect();
+          assert(target.height>=44&&target.width>=44,'Set up touch target is too small');
+        }
+      }`,
+  })),
+  ...['full', 'compact'].map((mode) => ({
+    name: 'library-mahjong-sets-' + mode,
+    root: '#libraryModal',
+    expect: { selector: 'select[aria-label="Mahjong set"]', min: 1 },
+    drive: `
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      const sent=[];
+      const fixtureRoom=${STUB_ROOM};
+      window.onOttRoom(new Proxy(fixtureRoom,{get:(room,key)=>key==='send'
+        ? (type,data)=>{sent.push({type,data});fixtureRoom.send(type,data);}:room[key]}));
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="tiles"]').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const assert=(ok,message)=>{if(!ok)throw Error(message);};
+      const picker=document.querySelector('select[aria-label="Mahjong set"]');
+      const card=picker.closest('.libCard');
+      const wall=card.querySelector('button[aria-label="Build wall"]');
+      assert(wall&&wall.dataset.roomMutation!==undefined&&wall.querySelector('use')?.getAttribute('href')==='#i-wall',
+        'Wall action, permission tag or approved icon missing');
+      assert(getComputedStyle(wall.querySelector('.lbl')).display!=='none','Build wall label hidden in compact mode');
+      wall.focus();assert(document.activeElement===wall,'Build wall is not keyboard focusable');
+      assert(picker.value==='standard'&&picker.options.length===2,'Mahjong standard default or bonus option missing');
+      assert(picker.closest('label').querySelector('.field-label').textContent==='Set','Set label missing in compact/full mode');
+      picker.focus();assert(document.activeElement===picker,'Set picker is not keyboard focusable');
+      for(const [value,bonusTiles] of [['standard',false],['bonus',true]]) {
+        picker.value=value;picker.dispatchEvent(new Event('change'));
+        card.querySelector('.button-row button').click();
+        const spawn=sent.filter(message=>message.type==='spawn').at(-1);
+        assert(spawn?.data.props.set==='mahjong'&&spawn.data.props.bonusTiles===bonusTiles,
+          'Mahjong spawn lost the selected set');
+        wall.click();
+        const build=sent.filter(message=>message.type==='spawn').at(-1);
+        assert(build?.data.props.layout==='wall'&&build.data.props.bonusTiles===bonusTiles,
+          'Build wall did not use the selected set');
+      }
+      const bounds=picker.getBoundingClientRect(),parent=card.getBoundingClientRect();
+      assert(bounds.width>0&&bounds.left>=parent.left&&bounds.right<=parent.right+.5,'Set picker overflows its card');
+      const field=picker.closest('label').getBoundingClientRect();
+      assert(field.top>=card.querySelector('.libMeta').getBoundingClientRect().bottom&&
+        field.bottom<=card.querySelector('.cardCtrls').getBoundingClientRect().top,
+        'Set picker does not sit between the title and spawn controls');
+      if(matchMedia('(pointer:coarse)').matches) {
+        assert(bounds.height>=44,'Set picker touch target is too small');
+        assert(wall.getBoundingClientRect().height>=44,'Build wall touch target is too small');
+      }`,
   })),
 ];
 

@@ -847,7 +847,16 @@ export function spawnPayload(
     if (
       !hasOnlyKeys(
         props,
-        new Set(['jokers', 'set', 'snap', 'backDesign', 'stackable', 'stackMode']),
+        new Set([
+          'jokers',
+          'set',
+          'snap',
+          'backDesign',
+          'stackable',
+          'stackMode',
+          'bonusTiles',
+          'layout',
+        ]),
       )
     )
       return null;
@@ -859,6 +868,14 @@ export function spawnPayload(
     if (props.set !== undefined) {
       if (!['domino', 'letter', 'mahjong'].includes(props.set)) return null;
       out.set = props.set;
+    }
+    if (props.bonusTiles !== undefined) {
+      if (props.set !== 'mahjong' || typeof props.bonusTiles !== 'boolean') return null;
+      out.bonusTiles = props.bonusTiles;
+    }
+    if (props.layout !== undefined) {
+      if (props.set !== 'mahjong' || props.layout !== 'wall') return null;
+      out.layout = props.layout;
     }
     if (props.backDesign !== undefined) {
       if (

@@ -20,27 +20,27 @@ import {
 import { groupRecolor, recolorPayload } from '../server/message-validation.js';
 import { recolorPiece } from '../server/game/piece-operations.js';
 
-// A second family exercises the extension contract without shipping unfinished Mahjong assets.
+// An unregistered fixture exercises the extension contract independently of bundled families.
 const families = {
   ...TILE_MODELS,
-  mahjong: {
-    name: 'Mahjong',
+  fixture: {
+    name: 'Fixture',
     appearanceKey: 'tileAppearance',
     defaults: { base: 0xffffff, inset: 0x123456, finish: 'original' },
     materialSlots: { base: 'body', inset: 'engraving' },
     concealed: '/fixture/Mahjong_Concealed.glb',
-    faces: { 'mahjong:bam1': { url: '/fixture/Mahjong_Bam1.glb', turn: false } },
+    faces: { 'fixture:bam1': { url: '/fixture/Mahjong_Bam1.glb', turn: false } },
   },
 };
 
 test('tile registry selects a second family using only an authorized, allowlisted front', () => {
-  const props = { tile: 'mahjong', model: '/secret.glb', back: 'mahjong:bam1' };
-  assert.equal(tileModel(props), null); // not enabled in production yet
-  assert.equal(tileModelFamily(props, families).name, 'Mahjong');
-  assert.equal(tileModel(props, families).url, families.mahjong.concealed);
+  const props = { tile: 'fixture', model: '/secret.glb', back: 'fixture:bam1' };
+  assert.equal(tileModel(props), null); // fixture is not registered
+  assert.equal(tileModelFamily(props, families).name, 'Fixture');
+  assert.equal(tileModel(props, families).url, families.fixture.concealed);
   assert.equal(
-    tileModel({ ...props, front: 'mahjong:bam1' }, families).url,
-    families.mahjong.faces['mahjong:bam1'].url,
+    tileModel({ ...props, front: 'fixture:bam1' }, families).url,
+    families.fixture.faces['fixture:bam1'].url,
   );
   assert.equal(tileModel({ ...props, front: '/secret.glb' }, families), null);
   assert.equal(tileModel({ ...props, front: '__proto__' }, families), null);
@@ -51,7 +51,7 @@ test('tile registry selects a second family using only an authorized, allowliste
 });
 
 test('generic appearance respects family defaults, private overrides and neutral default capture', () => {
-  const props = { tile: 'mahjong', tileAppearance: { base: 7, finish: 'glossy' } };
+  const props = { tile: 'fixture', tileAppearance: { base: 7, finish: 'glossy' } };
   assert.deepEqual(tileAppearanceOf(props, families), {
     base: 7,
     inset: 0x123456,
@@ -61,10 +61,10 @@ test('generic appearance respects family defaults, private overrides and neutral
   assert.deepEqual(appearance, {
     tileAppearance: { base: 0xffffff, inset: 9, finish: 'original' },
   });
-  assert.deepEqual(tileAppearanceProps({ tile: 'mahjong' }, undefined, { families }), {});
+  assert.deepEqual(tileAppearanceProps({ tile: 'fixture' }, undefined, { families }), {});
   assert.deepEqual(
-    tileAppearanceProps({ tile: 'mahjong' }, undefined, { families, includeDefaults: true }),
-    { tileAppearance: families.mahjong.defaults },
+    tileAppearanceProps({ tile: 'fixture' }, undefined, { families, includeDefaults: true }),
+    { tileAppearance: families.fixture.defaults },
   );
   assert.deepEqual(
     tileAppearanceProps({ ...props, tileAppearance: { url: '/secret.glb' } }, undefined, {
@@ -94,15 +94,15 @@ test('generic recolor messages preserve legacy domino storage and reject ambiguo
     assert.equal(colorProps('card', props, bad), null);
     assert.equal(groupRecolor({ ids: ['1'], ...bad }), null);
   }
-  assert.equal(colorProps('card', { tile: 'mahjong' }, patch), null); // wait for real registration
+  assert.equal(colorProps('card', { tile: 'fixture' }, patch), null); // an unregistered family cannot be recolored
 });
 
 test('generic private entry metadata survives draw, inspection return and snapshots', () => {
   const tileAppearance = { base: 4, inset: 8, finish: 'satin' };
-  const entry = absorbedEntry('mahjong:bam1', 'mahjong:back', 'mahjong:back', { tileAppearance });
+  const entry = absorbedEntry('fixture:bam1', 'fixture:back', 'fixture:back', { tileAppearance });
   const draw = takeTopCard({ type: 'deck' }, [entry]);
   assert.deepEqual(draw.tileAppearance, tileAppearance);
-  const geo = { tile: 'mahjong', tileAppearance };
+  const geo = { tile: 'fixture', tileAppearance };
   assert.deepEqual(inspectedEntry({ front: draw.front, geo }), entry);
   assert.deepEqual(deckSpawnProps(geo, [entry]).tileAppearance, tileAppearance);
   assert.deepEqual(JSON.parse(JSON.stringify(entry)), entry);
@@ -157,7 +157,7 @@ test('the shared renderer loads and fits a second family, deduplicates and owns 
     },
   });
   const fallback = () => new THREE.Group();
-  const props = { tile: 'mahjong', front: 'mahjong:bam1' };
+  const props = { tile: 'fixture', front: 'fixture:bam1' };
   const a = renderer.mesh({ ...props, tileAppearance: { base: 2 } }, fallback);
   const b = renderer.mesh({ ...props, tileAppearance: { base: 3 } }, fallback);
   a.castShadow = true;

@@ -478,20 +478,19 @@ export const LETTER_DIST = {
 };
 
 // --- Mahjong -----------------------------------------------------------------
-// The standard 144-tile wall, built from bundled CC0 face art (/mahjong/faces/*.png, composited
-// onto ivory tiles). Each face id → its image URL; buildMahjongWall() (server) stamps the counts:
-//   3 suits × ranks 1-9 × 4  +  4 winds × 4  +  3 dragons × 4  +  4 flowers  +  4 seasons  = 144.
-// The white dragon (dragW) is a generated blue-frame blank (its art wasn't in the set). Edit the lists
-// to change the wall.
+// Stable face identities for authored Mahjong GLBs and legacy image fallbacks.
+// buildMahjongWall() creates 136 tiles: 3 suits × 9 ranks × 4 + 7 honors × 4.
+// Optional bonus tiles add eight singles for 144; old lotus/peony refs remain supported.
+// Legacy images are CC BY 3.0; engraved artwork is CC0 (see docs/ASSET_CREDITS.md).
 export const MAHJONG = {
   base: '/mahjong/faces/',
   suits: ['char', 'bam', 'cir'], // each rank 1..9, ×4
   honors: ['windE', 'windS', 'windW', 'windN', 'dragR', 'dragG', 'dragW'], // ×4
   bonus: [
-    'flowChrys',
-    'flowLotus',
+    'flowPlum',
     'flowOrchid',
-    'flowPeony', // ×1 (flowers + seasons)
+    'flowChrys',
+    'flowBamboo', // ×1 (flowers + seasons); old lotus/peony refs retain their image fallback
     'seasSpring',
     'seasSummer',
     'seasFall',
@@ -635,6 +634,10 @@ const _chessBack = [
   'chess-knight',
   'chess-rook',
 ];
+const MAHJONG_STARTER_DICE = [
+  { x: -0.75, z: 0, sides: 6, model: 'pip-round' },
+  { x: 0.75, z: 0, sides: 6, model: 'pip-round' },
+];
 export const STARTERS = {
   chess: {
     name: 'Chess',
@@ -687,8 +690,14 @@ export const STARTERS = {
     deckZ: 6.6, // the 100-tile bag sits just past the board's near edge; deal a 7-tile rack
   },
   mahjong: {
-    name: 'Mahjong',
-    deck: { set: 'mahjong', deal: 13 }, // the 144-tile wall; deal a 13-tile starting hand to each seated player
+    name: 'Mahjong (136 tiles)',
+    mahjongWall: { bonusTiles: false },
+    dice: MAHJONG_STARTER_DICE,
+  },
+  'mahjong-bonus': {
+    name: 'Mahjong (144 tiles)',
+    mahjongWall: { bonusTiles: true },
+    dice: MAHJONG_STARTER_DICE,
   },
   poker: {
     name: 'Poker night',
@@ -706,7 +715,8 @@ export const STARTER_LIST = [
   { id: 'go', name: 'Go' },
   { id: 'dominoes', name: 'Dominoes' },
   { id: 'wordy', name: 'Wordy McWordface' },
-  { id: 'mahjong', name: 'Mahjong' },
+  { id: 'mahjong', name: STARTERS.mahjong.name },
+  { id: 'mahjong-bonus', name: STARTERS['mahjong-bonus'].name },
   { id: 'poker', name: 'Poker night' },
 ];
 // Per-disc height + capped visible count for a stack — used by BOTH the client mesh

@@ -134,6 +134,7 @@ const ICON_FOR = {
   Filters: 'filter',
   'Import Assets': 'package-import',
   Spawn: 'square-rounded-plus',
+  'Build wall': 'wall',
   Apply: 'checks',
   'Set up': 'go-game',
   Edit: 'edit',
@@ -146,7 +147,8 @@ const ICON_FOR = {
 const btn = (label, fn, cls) => {
   const button = makeButton(label, fn, cls, ICON_FOR[label], { type: 'button' });
   button.setAttribute('aria-label', label);
-  if (['Spawn', 'Apply', 'Load', 'Set up'].includes(label)) button.dataset.roomMutation = '';
+  if (['Spawn', 'Build wall', 'Apply', 'Load', 'Set up'].includes(label))
+    button.dataset.roomMutation = '';
   return button;
 };
 
@@ -1197,19 +1199,58 @@ function renderBuiltin(sink) {
   } // the 100-tile bag on its own
   {
     const box = previewBox('deckPreview');
-    box.append(
-      thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')),
-      thumbImg(cardPreviewURL('/mahjong/faces/cir5.png')),
-    );
-    tiles.append(
-      spawnCard({
-        preview: box,
-        title: 'Mahjong wall (144)',
-        color: 'none',
-        send: () => sendPlacement('spawn', { type: 'deck', props: { set: 'mahjong' } }),
-      }),
-    );
-  } // the full wall on its own
+    for (const front of ['/mahjong/faces/dragR.png', '/mahjong/faces/cir5.png']) {
+      const image = thumbImg(cardPreviewURL(front));
+      box.append(image);
+      tilePreviewURL({ tile: 'mahjong', front })
+        .then((url) => {
+          if (url && image.isConnected) image.src = url;
+        })
+        .catch(() => {});
+    }
+    const setLabel = document.createElement('label');
+    setLabel.className = 'field-group librarySetPicker';
+    const caption = document.createElement('span');
+    caption.className = 'field-label';
+    caption.textContent = 'Set';
+    const setPicker = document.createElement('select');
+    setPicker.className = 'control control--select';
+    setPicker.setAttribute('aria-label', 'Mahjong set');
+    for (const [value, name] of [
+      ['standard', '136 tiles — standard'],
+      ['bonus', '144 tiles — flowers & seasons'],
+    ]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = name;
+      setPicker.append(option);
+    }
+    setLabel.append(caption, setPicker);
+    const card = spawnCard({
+      preview: box,
+      title: 'Mahjong wall',
+      color: 'none',
+      extraActs: [
+        btn(
+          'Build wall',
+          () =>
+            sendPlacement('spawn', {
+              type: 'deck',
+              props: { set: 'mahjong', bonusTiles: setPicker.value === 'bonus', layout: 'wall' },
+            }),
+          'mahjongWallBuild',
+        ),
+      ],
+      send: () =>
+        sendPlacement('spawn', {
+          type: 'deck',
+          props: { set: 'mahjong', bonusTiles: setPicker.value === 'bonus' },
+        }),
+    });
+    card.classList.add('hasSetChoices');
+    card.insertBefore(setLabel, card.querySelector('.cardCtrls'));
+    tiles.append(card);
+  } // the tile inventory on its own
 
   const boards = sink('boards');
   clearPreviewList(boards);
@@ -1246,17 +1287,23 @@ function renderBuiltin(sink) {
           thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')),
           thumbImg(cardPreviewURL('/mahjong/faces/bam1.png')),
         );
+      else if (g.id === 'mahjong-bonus')
+        box.append(
+          thumbImg(cardPreviewURL('/mahjong/faces/flowPlum.png')),
+          thumbImg(cardPreviewURL('/mahjong/faces/seasSpring.png')),
+        );
       else
         box.append(
           thumbImg(cardPreviewURL(PLAYING_CARD_FACES[0].ref)),
           thumbImg(cardPreviewURL(PLAYING_CARD_JOKERS[0].ref)),
         ); // poker
-      games.append(
-        builtinCard(box, g.name, 'Set up', () => {
-          if (confirm(`Set up ${g.name}? This clears the current table.`))
-            ROOM.send('loadStarter', { game: g.id });
-        }),
-      );
+      const card = builtinCard(box, g.name, 'Set up', () => {
+        if (confirm(`Set up ${g.name}? This clears the current table.`))
+          ROOM.send('loadStarter', { game: g.id });
+      });
+      if (g.id === 'mahjong' || g.id === 'mahjong-bonus')
+        card.querySelector('button').classList.add('mahjongStarterSetup');
+      games.append(card);
     }
   }
 

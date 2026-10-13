@@ -82,16 +82,16 @@ test('letter inventory preserves configured counts, scores, blanks, and grid beh
   assert.equal(actual['letter::0'], 2);
 });
 
-test('Mahjong inventory contains 144 tiles with four copies of ordinary faces and single bonuses', () => {
+test('Mahjong inventory contains 136 tiles with four copies of ordinary faces and no bonuses', () => {
   const { cards, ...props } = builders.buildMahjongWall();
   assert.deepEqual(props, { back: 'mjback', tile: 'mahjong', deckModel: 'bag' });
-  assert.equal(cards.length, 144);
+  assert.equal(cards.length, 136);
   const actual = counts(cards);
   const expected = {};
   for (const suit of MAHJONG.suits)
     for (let rank = 1; rank <= 9; rank++) expected[`${MAHJONG.base}${suit}${rank}.png`] = 4;
   for (const honor of MAHJONG.honors) expected[`${MAHJONG.base}${honor}.png`] = 4;
-  for (const bonus of MAHJONG.bonus) expected[`${MAHJONG.base}${bonus}.png`] = 1;
+  for (const bonus of MAHJONG.bonus) assert.equal(actual[`${MAHJONG.base}${bonus}.png`], undefined);
   assert.deepEqual(actual, expected);
 });
 
@@ -112,4 +112,16 @@ test('each builder shuffles a fresh inventory exactly once and uses the returned
     const second = shuffled[name]();
     assert.deepEqual(second.cards, [...builders[name]().cards].reverse());
   }
+});
+
+test('optional Mahjong bonuses add one of each authored flower and season without changing base counts', () => {
+  const standard = counts(builders.buildMahjongWall().cards);
+  const { cards } = builders.buildMahjongWall(true);
+  const bonus = counts(cards);
+  assert.equal(cards.length, 144);
+  for (const [ref, count] of Object.entries(standard)) assert.equal(bonus[ref], count);
+  for (const id of MAHJONG.bonus) assert.equal(bonus[MAHJONG.base + id + '.png'], 1);
+  assert.equal(bonus[MAHJONG.base + 'flowLotus.png'], undefined);
+  assert.equal(bonus[MAHJONG.base + 'flowPeony.png'], undefined);
+  assert.equal(builders.buildMahjongWall('true').cards.length, 136);
 });

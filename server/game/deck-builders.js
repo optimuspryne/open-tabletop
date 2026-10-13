@@ -44,16 +44,16 @@ export function createDeckBuilders({ shuffle }) {
     };
   }
 
-  // The standard 144-tile Mahjong wall as a shuffled "deck", from the MAHJONG face lists. `tile:'mahjong'`
-  // gives each tile its chunky geometry; the face refs are bundled image URLs (composited ivory tiles).
-  function buildMahjongWall() {
+  // A 136-tile Mahjong set (144 with optional bonuses) as private shuffled inventory.
+  // Existing image refs select authored GLBs without changing saved tile identities.
+  function buildMahjongWall(bonusTiles = false) {
     const cards = [];
     const push = (id, n) => {
       for (let i = 0; i < n; i++) cards.push(MAHJONG.base + id + '.png');
     };
     for (const suit of MAHJONG.suits) for (let r = 1; r <= 9; r++) push(suit + r, 4); // 3 suits × 1-9 × 4 = 108
     for (const h of MAHJONG.honors) push(h, 4); // winds + dragons × 4 = 28
-    for (const b of MAHJONG.bonus) push(b, 1); // flowers + seasons × 1 = 8
+    if (bonusTiles === true) for (const b of MAHJONG.bonus) push(b, 1);
     return { back: 'mjback', cards: shuffle(cards), tile: 'mahjong', deckModel: 'bag' };
   }
 

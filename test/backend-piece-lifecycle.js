@@ -141,6 +141,43 @@ test('validated standard spawns preserve selected backs and bridge geometry with
   }
 });
 
+test('validated Mahjong spawns carry the bonus selection into private inventory and retain it on restore', () => {
+  const { lifecycle, room } = harness(createDeckBuilders({ shuffle: (cards) => cards }));
+  for (const bonusTiles of [false, true]) {
+    const request = spawnPayload({ type: 'deck', props: { set: 'mahjong', bonusTiles } });
+    const id = lifecycle.spawn(room, request.type, [0, 1, 0], request.props);
+    const piece = room.state.pieces.get(id);
+    const props = readProps(piece);
+    assert.equal(piece.count, bonusTiles ? 144 : 136);
+    assert.equal(room.deckCards.get(id).length, piece.count);
+    assert.equal(props.tile, 'mahjong');
+    assert.equal(props.front, undefined);
+    assert.equal(props.cards, undefined);
+    const restored = lifecycle.spawn(
+      room,
+      'deck',
+      [0, 1, 0],
+      deckSpawnProps(props, room.deckCards.get(id)),
+    );
+    assert.deepEqual(room.deckCards.get(restored), room.deckCards.get(id));
+    assert.equal(room.state.pieces.get(restored).count, piece.count);
+  }
+});
+
+test('Mahjong bonus spawn option rejects malformed values and other inventory families', () => {
+  for (const bonusTiles of [1, 'true', null, {}, []])
+    assert.equal(spawnPayload({ type: 'deck', props: { set: 'mahjong', bonusTiles } }), null);
+  for (const set of [undefined, 'domino', 'letter'])
+    assert.equal(
+      spawnPayload({ type: 'deck', props: { ...(set ? { set } : {}), bonusTiles: true } }),
+      null,
+    );
+  assert.deepEqual(spawnPayload({ type: 'deck', props: { set: 'mahjong' } }), {
+    type: 'deck',
+    props: { set: 'mahjong' },
+  });
+});
+
 test('removePiece clears the body, synchronized state, and every private piece map', () => {
   const { lifecycle, room } = harness();
   const id = lifecycle.spawn(room, 'card', [0, 1, 0], { back: 'blue' });

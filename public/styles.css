@@ -2086,6 +2086,10 @@ input[type='range']::-moz-range-thumb {
   justify-content: space-between;
   gap: 6px;
 }
+.librarySetPicker select {
+  width: 100%;
+  min-width: 0;
+}
 .libName {
   font-weight: 600;
 }
@@ -4617,6 +4621,19 @@ body.not-gm .gm-only {
     'backs backs'
     'ctrls ctrls'
     'acts acts';
+}
+#libraryModal .libCard.hasSetChoices {
+  grid-template-areas:
+    'prev meta'
+    'set set'
+    'ctrls ctrls'
+    'acts acts';
+}
+#libraryModal .librarySetPicker {
+  grid-area: set;
+}
+#libraryModal .mahjongWallBuild .lbl {
+  display: inline;
 }
 #libraryModal .deckBackPicker {
   grid-area: backs;
@@ -7552,6 +7569,11 @@ canvas.fog-painting {
 @media (pointer: coarse) {
   #libraryModal .libraryCategory > summary, .libraryCollectionPicker > summary,
   #libraryFilters button, #libraryModal .libControls button { min-height: 44px; }
+  .librarySetPicker select, .mahjongWallBuild { min-height: 44px; }
+  #libraryModal .libCard .button-row--compact .mahjongStarterSetup {
+    min-width: 44px;
+    min-height: max(44px, var(--control-min-height));
+  }
   .libraryCollectionPicker .collectionChoice { min-height: 44px; }
 }
 

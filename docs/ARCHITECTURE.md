@@ -326,7 +326,7 @@ importing a room singleton:
 - **`server/game/starters.js`** — one-click starter-game orchestration. It reads
   shared `STARTERS`/board/piece definitions and coordinates room-owned clearing,
   board calibration, authoritative spawning, initial dealing, and persistence.
-  Deck construction, geometry projection, capacity, and spawn height are injected
+  Deck construction, the physical Mahjong wall operation, geometry projection, capacity, and spawn height are injected
   from `server.js`, keeping the module deterministic and independently testable.
 - **`server/game/table-bounds.js`** — physical table floor and containment-ring
   construction. `server.js` injects the `SIM` table/wall dimensions, while the
@@ -1222,15 +1222,15 @@ shuffle / hidden order. Building the tile games meant adding data and faces, not
 
 Authored tile models retain that card/deck protocol. `shared/tile-models.js` owns the
 immutable `TILE_MODELS` registry: face-to-model mappings, common concealed model,
-material slots, default colors/finish, and appearance storage key. Domino is the first
-registered family. Mahjong continues to use its existing images until its GLBs are ready;
+material slots, default colors/finish, and appearance storage key. Domino and Mahjong are
+registered families. Mahjong maps 34 standard and eight bonus image refs to engraved GLBs;
 additional families share the same rendering/appearance path after registration. Model
 URLs come from the registry, never synchronized payloads. Only an authorized public front
 selects an identifying model; missing fronts select the neutral concealed model. Open
 face-down tiles rotate their known model. Unsupported faces/shapes use procedural fallback.
 
 The browser's `createTileRenderer` owns async loads and immutable template caching, bounded
-by registered assets (29 GLBs for Domino). Roots are centered and fitted on all three axes
+by registered assets (29 GLBs for Domino, 43 active GLBs for Mahjong). Roots are centered and fitted on all three axes
 to `cardGeom`; no server GLB loading is needed. Instances own materials and finish UV geometry,
 while sharing template geometry. Disposed instances ignore late loads. `tilePreviewURL`
 uses the same renderer/materials and derives aspect from shared geometry. Dimensions remain
@@ -1254,11 +1254,39 @@ their existing appearance; container `tints` remain independent. The interior re
 the deck's public default style, without inspecting private per-tile styles or card order.
 
 Inspector and selection use `createTileAppearanceControls` and registry capability checks,
-with the already approved Base/Inset/Material layout, object finishes and phone fallbacks.
+with the approved Base/Inset/Material layout, object finishes and phone fallbacks. Mahjong
+labels its second color Back, mapping the existing `inset` storage field to the authored
+`back` material; multicolored engraved symbols retain their authored colors. Mahjong's
+half-extents remain 0.34 × 0.473 × 0.14. New sets default to 136 standard tiles; an approved
+library Set selector adds one of each bonus for 144. The spawn-only `bonusTiles` flag is
+strictly boolean and accepted only for `set: 'mahjong'`; `spawnPayload` normalizes it and
+`createPieceLifecycle.spawn` passes it to `buildMahjongWall`. Private inventory persists
+the actual refs/count through existing save/restore, without needing a variant flag.
+Plum/bamboo have new refs and image fallbacks; old peony/lotus refs retain their original
+image fallback rather than being reassigned to different flowers. Three red-five GLBs are reserved and
+do not alter the default inventory or model allowlist. Mahjong's Build wall action uses a
+separate server operation and shared layout; see [Mahjong wall](MAHJONG_WALL.md).
 A selection can share the picker only within one registered family. Existing DOM IDs/CSS
 classes are retained to avoid unrelated layout changes. No gameplay rules or automatic
 scoring are introduced. See [extension contract and verification](TILE_MODELS.md) and
 [original domino integration](DOMINO_MODELS.md).
+
+Mahjong physical walls reuse independent cards rather than adding a synchronized wall
+object. `shared/mahjong-wall.js` derives four traditionally staggered two-high rows from
+`cardGeom`: each row projects past its neighbor by roughly one stack, with tight gaps.
+The named `cornerOverhangStacks` setting shifts row centers and brings the walls inward
+together, preserving corner clearance without intersections. The layout reports its
+actual outer span and checks every footprint corner, including projecting ends, for
+shape-aware table fit. `server/game/mahjong-wall.js` owns synchronous preflight,
+fresh shuffled inventory, private placement through `spawnTableCard`, row orientation,
+initial sleeping dynamic bodies and rollback. The existing helper-level spawn handler
+receives normalized `layout:'wall'` only for Mahjong; it preserves the existing hidden
+spawn scope and capability checks. No board/table is resized or cleared.
+Public obstruction checks exclude parked GM-hidden objects, matching collision policy
+and avoiding a hidden-object presence leak; GM-hidden requests can check the whole scene.
+Grid snapping is off on wall tiles; ordinary stacking, movement, flip, hand and persistence paths remain
+the owners of subsequent behavior. Wall breaks, dealing, dead-wall placement and game
+rules remain manual. See [Mahjong wall](MAHJONG_WALL.md).
 
 ## The dice family
 
@@ -1767,8 +1795,11 @@ summary, automated verification, and pending in-app smoke tests.
 ## Starter-game layout boundary
 
 `createStarterSetup` builds one `setupStarter(room, game)` function from the existing
-deck builders, card-geometry projection, piece limit, and spawn height. Unknown starter
-IDs return before changing the room. A valid starter first calls the same `clearTable`
+deck builders, physical Mahjong wall operation, card-geometry projection, piece limit,
+and spawn height. Unknown or inherited starter IDs return before changing the room.
+Mahjong checks the shared wall footprint and the complete kit's capacity before clearing;
+an expected failure returns an actionable error to the GM without mutation.
+A valid fitting starter calls the same `clearTable`
 path as Reset and scene replacement, so visible pieces, private hands, deck contents,
 inspections, recovery state, turn ownership, overlays, and the previous checkpoint are
 removed together before anything new is created.
@@ -1781,6 +1812,13 @@ builder, retain tile geometry, snapping, and their selected deck skin, and optio
 configured starting hand to each seated player. Bowls and chip stacks use the ordinary
 authoritative `spawn` boundary. `TableRoom.setupStarter` remains as a small forwarding
 method so its caller-facing contract stays recognizable.
+
+The approved Mahjong (136 tiles) and Mahjong (144 tiles) entries reuse `spawnMahjongWall`
+for private shuffled individual tiles, then ordinary authoritative spawning for two
+upright Rounded Pips D6 dice in the center. They create no pouch and do not deal tiles.
+The wall tiles keep grid snapping disabled; the starter clears stale grids and old hands
+through the existing reset path. Table dimensions remain unchanged, and players handle
+rolling, wall breaking, taking tiles and game rules themselves.
 
 ## Piece lifecycle boundary
 

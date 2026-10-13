@@ -47,6 +47,24 @@ Mixed selections of dominoes show which fields differ; non-domino colorable obje
 share the domino appearance picker. Private hand previews reflect saved appearance; recolor
 the tile on the table before taking it into a hand. Manual real-device testing remains pending.
 
+## Mahjong walls
+
+For Mahjong wall setup, open **Library → Decks & Tiles → Tiles**, choose the **Set**
+(136 standard or 144 with flowers/seasons), and click/tap **Build wall**. Keyboard uses
+Tab to the native set selector and wall button, then Enter/Space. The approved wall icon
+and text label stay visible in compact/full modes; touch targets are at least 44px.
+Helpers and GMs use the normal spawn permissions. This creates one fresh wall at the
+table center, retaining other objects and table size. Capacity, table fit or obstruction
+failures leave the table unchanged. Existing grab, flip, take-to-hand, group selection
+and stacking gestures operate on the independent tiles. Breaking the wall, dealing and
+handling the dead wall remain manual. See [Mahjong wall](MAHJONG_WALL.md).
+
+GMs can instead choose **Mahjong (136 tiles)** or **Mahjong (144 tiles)** in the
+library's Pre-Built Games section and click/tap **Set up**, or focus it and press
+Enter/Space. After the existing table-clear confirmation, the wall and two Rounded
+Pips D6 dice replace the game; hands start empty. Roll and take tiles with the existing
+piece interactions. A fit/capacity error preserves the previous game.
+
 ## GM object Hide/Reveal
 
 Open a piece menu by right-click (except cards, which still flip), touch long-press, or

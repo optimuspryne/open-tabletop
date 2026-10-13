@@ -9,6 +9,17 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Mahjong's Build wall action creates independent concealed tiles in four staggered,
+  two-high rows: 17 stacks per side for 136 tiles, or 18 for 144. It uses the selected
+  library set, retains normal tile physics/privacy and preserves existing pieces.
+  Table fit, occupied wall cells and capacity are checked before spawning; unexpected
+  failures roll back the whole new wall. The labeled button includes the approved wall icon.
+- Mahjong uses authored engraved GLBs for its 34 standard faces, eight flowers/seasons and a common green-backed
+  concealed tile. Base/Back colors and material finish reuse the existing inspector and
+  selection controls; engraved symbol colors are preserved. Models match existing tile
+  dimensions and colliders. Existing hands/saves retain their identities; old peony/lotus
+  tiles keep their image fallback. New plum/bamboo identities have image fallbacks too.
+  The library offers a labeled 136/144 Set selector; red-five assets are bundled for later use.
 - Assisted stacking through the existing drag gesture: gentle tile drops align to a flat
   support, while ordinary cards retain sideways, lengthwise or diagonal offsets. Offset
   cards remain separate from decks; centered deck drops still return to inventory. Flat
@@ -34,6 +45,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Mahjong walls now use traditional projecting corners matching the supplied reference,
+  with tightly spaced rows and about one stack extending past each neighboring wall.
+  Both tile counts still fit the default table at their existing tile size.
+- Pre-Built Games offers Mahjong (136 tiles) and Mahjong (144 tiles). Each replaces the
+  table with a shuffled concealed wall and two Rounded Pips D6 dice in its center,
+  without a pouch or automatic dealing. Fit and complete-kit capacity are checked before
+  clearing the existing game; wall breaking, rolling and taking tiles remain manual.
+- New Mahjong sets default to 136 tiles (four copies of every standard face); the optional
+  144-tile set adds one of each flower/season. Spawn creates private pouch inventory;
+  Build wall lays out the selected fresh set as individual concealed tiles.
 - Card/tile colliders follow each card's visible authored thickness by default instead of
   imposing a 0.04 half-thickness floor (ordinary cards now use 0.015). Optional card padding
   remains a simulation override; mat surfaces retain their independent 0.04 minimum.

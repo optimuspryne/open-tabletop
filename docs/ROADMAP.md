@@ -95,10 +95,12 @@ frame ms, draw calls, triangles, geometry/texture/program counts (`public/render
 body count, and tick health. Real-hardware tools — measure on the low-end target, not headless.
 
 **Piece-model note — what "hundreds of pieces" means here.** A deck is a single body with a
-private `deckCards` list, not N bodies; the 144-tile Mahjong wall spawns as one deck piece, and
-dealt tiles live in `this.hands` (also not physics). Only tiles spread onto the table are bodies,
-and `SIM.maxPieces` (raised 80 → **250** on 2026-09-01) caps `state.pieces.size`. So a full wall
-renders as one stacked mesh, and the many-bodies case is bounded at that cap.
+private `deckCards` list, not N bodies; the 136/144-tile Mahjong pouch spawns as one deck piece,
+and dealt tiles live in `this.hands` (also not physics). Build wall and the Mahjong starters
+place 136/144 independent tile bodies; the starters also place two center dice. Other tiles
+spread onto the table are bodies too, and `SIM.maxPieces` (raised 80 → **250** on 2026-09-01)
+caps `state.pieces.size`. Pouches render as one mesh; physical walls are a many-bodies case
+bounded at that cap.
 
 **Two cap bugs — ✅ fixed 2026-09-01** (cap also raised 80 → 250):
 1. `dealToTable` / `dealDrag` (`server/game/handlers/cards.js`) spawned a table body per draw

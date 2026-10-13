@@ -786,8 +786,11 @@ chess}` each `[color0, color1]`.
 - **`WORDY_PREMIUM`** / **`WORDY_COLORS`** — the 15×15 word-board premium layout (one char per
   cell) + its palette, read by the `wordgrid` painter (`BOARDS.wordy`).
 - **`LETTER_DIST`** `{ letter → [count, value] }` — the 100-tile word-game bag (blank = `''`).
-- **`MAHJONG`** `{ base, suits, honors, bonus }` — the 144-tile wall's face lists (faces are
-  bundled images under `base`).
+- **`MAHJONG`** `{ base, suits, honors, bonus }` — stable Mahjong face lists (faces are
+  image URL references under `base`; 34 ordinary and eight bonus faces map to GLBs).
+  Bonus flowers are plum, orchid, chrysanthemum and bamboo; seasons are spring, summer,
+  fall and winter. Plum/bamboo add refs and PNG fallbacks; old lotus/peony remain image-only.
+  New inventory uses four copies of each ordinary face, optionally one of each bonus.
 - **`DECK_MODELS`** `{ key → { name, model, modelScale, box, modelRot?, tints?, tileTints?, color?, textColor? } }`
   — 3D deck _skins_ (a bag/box/pouch `.glb` a deck wears instead of the card stack); a deck opts in
   via `props.model`. Optional `modelRot` `[x,y,z]` reorients the raw model before it is fit/centred;
@@ -1359,23 +1362,63 @@ card array and shuffles it once.
 - **`buildScrabbleBag()`** — 100 letter tiles with counts and scores from shared
   `LETTER_DIST`, including blanks; `lback`, `tile: 'letter'`, `snap: true`, and
   the low-poly `bag` deck model.
-- **`buildMahjongWall()`** — 144 image references built from shared `MAHJONG`:
-  four copies of each ordinary face and one of each bonus; `mjback`,
+- **`buildMahjongWall(bonusTiles = false)`** — 136 stable face references built from shared `MAHJONG`:
+  four copies of each of the 34 ordinary faces; exact `true` adds eight single bonuses for 144; `mjback`,
   `tile: 'mahjong'`, and the low-poly `bag` deck model.
+  Standard and bonus faces select GLBs in the browser. Legacy lotus/peony references remain
+  playable through image fallback; this builder creates inventory, not a physical wall.
+  The library's labeled Set selector emits `bonusTiles`; `spawnPayload` accepts it only
+  as a boolean for Mahjong decks, and the lifecycle passes it into this builder. The two
+  Mahjong starters use this inventory through the physical wall operation. Save/restore
+  retains actual inventory refs/count.
 
 These functions build private game inventory and spawn properties, not graphics.
 Standalone set spawning and starter layouts use the same builders; browser-side
 rendering interprets their face references. The module does not start a server or
 own the random-number implementation.
 
+### Mahjong physical wall
+
+- **`MAHJONG_WALL` / `mahjongWallLayout(count, props?)` / `mahjongWallFits(layout, state)`**
+  (`shared/mahjong-wall.js`) — shared physical layout for 136/144 tiles, derived from
+  `cardGeom`. Four traditionally staggered rows have 17/18 stacks and two layers. Each
+  projects about one stack past its neighbor, in the direction shown by the supplied
+  reference. `cornerOverhangStacks` controls this arrangement; row gaps are 0.002 and
+  rectangular edge clearance is 0.04 table units; curved shapes retain their 0.1 margin.
+  Actual outer spans are 13.218 / 13.900, so both
+  fit the default rectangle at the existing tile size. Named corner gaps and floor
+  clearance keep bodies separate. Fit checks every tile corner against `inTable`
+  and the actual play-surface shape/half-extents. No tile/table scaling is changed.
+- **`createMahjongWall({buildInventory,maxPieces})`** (`server/game/mahjong-wall.js`)
+  returns **`spawnMahjongWall(room, bonusTiles?)`**. Capacity, fit and existing body AABBs
+  are checked before creating a fresh privately shuffled set. Public obstruction checks
+  ignore parked GM-hidden bodies; hidden GM requests can check the whole scene.
+  `spawnTableCard` creates
+  concealed individual cards with `snap:false`; bodies retain dynamic physics, row yaw
+  and independent movement, initially asleep at rest. Moving a support reuses stacking
+  wake behavior. The existing snapshot path retains positions, orientation and private faces.
+  Expected preflight failures return `{ok:false,message}`; unexpected failures roll back
+  newly added state, private faces and bodies before reaching the message error boundary.
+- **`spawnPayload`** accepts `props.layout:'wall'` only for `type:'deck', set:'mahjong'`.
+  `registerPieceHandlers` invokes the injected wall operation through the existing helper
+  spawn capability and visibility scope. Success returns `{ok:true,ids}` to the handler,
+  which sends the visibility-filtered shuffle cue. Pouch Spawn retains its inventory path;
+  both Mahjong starters reuse the physical wall operation. The approved library button
+  uses the selected `bonusTiles` value.
+
+See [wall implementation and verification](MAHJONG_WALL.md).
+
 ### `server/game/starters.js` — one-click game layouts
 
-**`createStarterSetup({deckBuilders, geoOf, maxPieces, spawnY})`** returns
+**`createStarterSetup({deckBuilders, spawnMahjongWall, geoOf, maxPieces, spawnY})`** returns
 **`setupStarter(room, game)`**. `TableRoom.setupStarter(game)` is a forwarding method
 that preserves the room API used by the GM-only `loadStarter` handler.
 
-`setupStarter` returns `false` without mutation for an unknown shared `STARTERS` key.
-For a valid key it calls `room.clearTable()` before creating anything, then:
+`setupStarter` returns `false` without mutation for an unknown or inherited shared
+`STARTERS` key. Mahjong first checks shared table fit and capacity for the entire wall
+plus both dice; failure returns `{ok:false,message}` without clearing pieces or hands.
+The GM-only handler sends that actionable error. Success returns `true`.
+For a valid fitting kit it calls `room.clearTable()` before creating anything, then:
 
 - replaces/configures a built-in board through `swapBoard` and `calibrateGrid`;
 - places configured board pieces upright at calibrated cell coordinates, stopping at
@@ -1383,7 +1426,16 @@ For a valid key it calls `room.clearTable()` before creating anything, then:
 - disables stale grids for boardless games;
 - creates configured bowls and chip stacks through the normal `spawn` boundary;
 - selects the injected standard/domino/letter/Mahjong builder, carries `geoOf` tile/snap
-  properties and `deckModel`, and deals the configured count to seated players.
+  properties and `deckModel`, and deals the configured count for deck-based starters;
+- `mahjong` / `mahjong-bonus` create 136/144 concealed independent tiles through the
+  injected `spawnMahjongWall`, with no automatic dealing or pouch;
+- both Mahjong entries spawn two `sides:6, model:'pip-round'` dice at x ±0.75, z 0,
+  upright just above the shared D6 collider rest height (`dieR(6) + 0.03`).
+
+`STARTERS` shares the `MAHJONG_STARTER_DICE` configuration between both variants.
+`STARTER_LIST` exposes Mahjong (136 tiles) / Mahjong (144 tiles); `renderBuiltin` gives
+the bonus variant flower/season thumbnails and retains the existing Set up icon and
+table-clear confirmation in full/compact desktop and touch layouts.
 
 Clearing remains delegated to the shared scene-persistence reset path, so old public
 pieces, private hands/decks/inspections, pending turn/recovery data, overlays, and the
@@ -2552,8 +2604,11 @@ quiet for a full frame), and
   authored tile-family registry. Each family provides a name, appearance storage key,
   Base/Inset defaults, material-slot names, a neutral concealed GLB and exact face-ref
   mappings to GLBs/orientation. Only an authorized public front selects an identifying
-  model; unregistered families/faces use procedural rendering. Domino is the first
-  registered family; Mahjong remains image-based until its assets are supplied.
+  model; unregistered families/faces use procedural rendering. Domino and Mahjong are
+  registered: 28 domino faces and 42 Mahjong faces, each family with a concealed model.
+  Mahjong preserves old image identities and lotus/peony image fallback. Its `base`
+  and `back` material slots map to Base and Back colors; engraving colors remain authored.
+  Optional `colorLabels` change visible/accessibility labels without changing saved fields.
 - **`createTileRenderer`** (`public/rendering/tiles.js`) — shared authored-tile branch
   of `cardMesh`. Deduplicates the registered model loads, owns per-instance materials,
   retains loading/failure fallback and ignores late loads for disposed instances.
@@ -2577,8 +2632,8 @@ quiet for a full frame), and
 - **`tilePreviewURL(props)`** — bounded async GLB thumbnail for private hands and library
   callers. Uses table materials, family identity and `cardGeom` aspect, and waits for
   model/marble readiness. **`createTileAppearanceControls`** (`public/ui/tile-appearance.js`)
-  shares Base, Inset and Material controls between inspector and selection Recolor.
-  Family names supply accessible labels. Native color inputs emit independent patches;
+  shares Base, Inset (Back for Mahjong) and Material controls between inspector and selection Recolor.
+  Family names/color labels supply accessible labels. Native color inputs emit independent patches;
   compact labels remain visible and touch targets reach 44px. Material supports Original
   (GLB) and existing object finishes with phone fallbacks; dice-only Custom is excluded.
   See [tile model extension contract](TILE_MODELS.md).

@@ -40,6 +40,34 @@ requirement is actually met.
 
 ### Open Tabletop original models
 
+`pieces/mahjong/` (34 standard faces, three reserved red-five variants and `concealed.glb`):
+
+- **Model author/source:** Engraved models authored for the project owner with Codex,
+  supplied from `Open-Tabletop_Asset_Builders/3d_models/original/GLB/mahjong_glb/`.
+  The authoring kit is `3d_models/original/BLEND/mahjong_engraved_kit.zip`.
+- **Face artwork:** FluffyStuff, [riichi-mahjong-tiles](https://github.com/FluffyStuff/riichi-mahjong-tiles),
+  dedicated to the public domain under [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+- **Model license:** Distributed under the repository license, with the other Open Tabletop originals.
+- Original GLB bytes, colored recessed engravings, ivory `base` and green `back` materials
+  are preserved. Runtime fitting matches shared Mahjong dimensions. Base/Back color and
+  finish overrides are per instance; engraved symbol colors remain authored. The blank
+  white dragon is intentionally unmarked. Red fives are bundled but unused by default.
+
+`pieces/mahjong/Flower1_Plum.glb`, `Flower2_Orchid.glb`, `Flower3_Chrysanthemum.glb`,
+`Flower4_Bamboo.glb` and `Season1_Spring.glb` through `Season4_Winter.glb`:
+
+- **Model/artwork source:** Original botanical designs and matching engraved models created
+  for the project owner with Codex. Supplied from the `mahjong_bonus_kit/mahjong_glb/`
+  folder in the companion tile-authoring chat's outputs; the kit includes editable SVGs,
+  `mahjong_bonus.blend` and `build_engraved_mahjong_bonus.py`.
+- **Artwork license:** CC0, as recorded in the supplied kit's `README.txt`.
+- **Model license:** Distributed under the repository license, with the other Open Tabletop originals.
+- **Lettering:** Outlined Noto Serif CJK, [Noto CJK](https://github.com/notofonts/noto-cjk),
+  SIL Open Font License. No font files are embedded or redistributed. The resulting
+  artwork can retain its own license; see the [OFL FAQ, 1.1–1.1.2](https://openfontlicense.org/ofl-faq/).
+- All eight GLBs are bundled byte for byte, preserving authored materials and 0.45 mm
+  engraved recesses. The original botanical artwork complements FluffyStuff's CC0 set.
+
 `pieces/dominoes/Domino_0_0.glb` through `Domino_6_6.glb` (28 double-six pairs),
 and `pieces/dominoes/Domino_Concealed.glb`:
 
@@ -92,6 +120,14 @@ All CC0 (public domain).
 
 ## Tile art - `public/static_assets/mahjong/faces/`
 
+`flowPlum.png` and `flowBamboo.png` are CC0 derivatives of the bonus kit's original
+`Flower1_Plum.svg` and `Flower4_Bamboo.svg`, rendered with Sharp to 360×480 PNG and
+flattened onto ivory `#efead8`. They provide image fallbacks for the new GLB identities.
+Their botanical artwork/outlined Noto lettering have the same provenance as the bonus
+models above. All pre-existing tile PNGs remain unchanged.
+
+The original tile PNG set (excluding these two new fallbacks):
+
 - **Mahjong Tileset** - CodeInfernoGames
   (https://opengameart.org/users/codeinfernogames)
   - https://opengameart.org/content/mahjong-tileset
@@ -136,7 +172,8 @@ All CC0 (public domain).
 ### Tabler Icons
 - **Author:** Paweł Kuna and contributors - https://github.com/tabler/tabler-icons
 - **Source:** https://tabler.io/icons (outline style)
-- **Usage:** 163 outline SVGs, including `cloud-fog` for the fog tool, embedded as `<symbol>` elements in the inline icon sprite,
+- **Usage:** 167 outline SVGs, including `wall` for Mahjong's approved Build wall action and
+  `cloud-fog` for the fog tool, embedded as `<symbol>` elements in the inline icon sprite,
   regenerated from a single list by `scripts/build-icons.mjs` (`npm run build:icons`).
 - **License:** MIT - Copyright (c) 2020-2026 Paweł Kuna. Full text in
   [`docs/licenses/tabler-icons-LICENSE`](licenses/tabler-icons-LICENSE).
