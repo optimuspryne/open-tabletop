@@ -494,7 +494,10 @@ importing a room singleton:
   transforms through injected piece/mesh/rank lookups. It never mutates room state or physics.
 - **`public/table/hand.js`** — the private-hand controller. It owns local cards, Show selection
   and audience, reveal data used by public fans, sorting/rearrangement, collapse preference, and
-  hand-specific pointer gestures. `client.js` injects room access, card builders, scene/raycast
+  hand-specific pointer gestures. It also owns the desktop Hand actions disclosure and
+  responsive DOM order for the existing controls, preserving the touch tray layout.
+  Hiding the hand closes the disclosure and exits Rearrange; Show audience remains independent
+  of this local visibility preference. `client.js` injects room access, card builders, scene/raycast
   helpers, inspection entry, and control-guide updates instead of sharing mutable hand globals.
 - **`public/table/inspection.js`** — enlarged table-piece and private-card inspection. It owns
   the preview, color/team/finish controls, deferred click timing, drawn-card placement, and pointer

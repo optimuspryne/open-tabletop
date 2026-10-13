@@ -1046,6 +1046,45 @@ a {
 .handFlank[hidden] {
   display: none;
 }
+#handActions {
+  position: relative;
+  flex: 0 0 auto;
+}
+#handActionsPanel {
+  display: none;
+  position: absolute;
+  z-index: 9; /* Drop choices extend over the hand's backdrop-filter stacking context. */
+  bottom: calc(100% + 6px);
+  left: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 100%;
+}
+#handRow.handActionsOpen #handActionsPanel {
+  display: flex;
+}
+#handActionsPanel > button,
+#handActionsPanel #dropBtn {
+  width: 100%;
+  white-space: nowrap;
+}
+#handActionsBtn[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+@media (min-width: 901px) and (pointer: fine) {
+  #handRow:not(.handActionsOpen) #showStrip,
+  #handRow:not(.handActionsOpen) #rearrangeBar {
+    display: none;
+  }
+  #handActionsPanel .dropSplit {
+    left: calc(100% + 6px);
+    right: auto;
+    bottom: 0;
+  }
+}
 #handFlankStack {
   display: flex;
   flex-direction: column; /* Show Hand above Rearrange, stacked on the left flank */
@@ -6136,6 +6175,13 @@ canvas.fog-painting {
   display: none;
 }
 @media (max-width: 900px), (pointer: coarse) {
+  #handActions,
+  #handActionsPanel {
+    display: contents;
+  }
+  #handActionsBtn {
+    display: none;
+  }
   #handRow {
     left: 0;
     right: 0;

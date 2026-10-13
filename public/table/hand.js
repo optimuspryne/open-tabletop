@@ -129,12 +129,68 @@ export function createHand({
   try {
     handCollapsed = localStorage.getItem('ott.handHidden') === '1';
   } catch {} // personal view preference, remembered across refreshes
+  let handActionsOpen = false;
+  function setHandActionsOpen(open) {
+    handActionsOpen = !!open;
+    byId('handRow')?.classList.toggle('handActionsOpen', handActionsOpen);
+    byId('handActionsBtn')?.setAttribute('aria-expanded', handActionsOpen ? 'true' : 'false');
+    if (!open) {
+      const choices = byId('dropChoices');
+      if (choices) choices.hidden = true;
+      byId('dropBtn')?.setAttribute('aria-expanded', 'false');
+    }
+  }
+  byId('handActionsBtn')?.addEventListener('click', () => setHandActionsOpen(!handActionsOpen));
+  byId('handRow')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !handActionsOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setHandActionsOpen(false);
+    byId('handActionsBtn')?.focus();
+  });
+  // Keep the actual DOM/focus order aligned with each layout. Touch retains its
+  // Show/Rearrange stack above the cards and Drop below; desktop uses the approved menu.
+  const handSheet = win.matchMedia?.('(max-width: 900px), (pointer: coarse)');
+  function syncHandActionsLayout() {
+    const panel = byId('handActionsPanel'),
+      stack = byId('handFlankStack'),
+      show = byId('showBtn'),
+      rearrange = byId('rearrangeBtn'),
+      drop = byId('dropFlank');
+    if (!panel || !stack || !show || !rearrange || !drop) return;
+    const focused = document.activeElement;
+    if (handSheet?.matches) {
+      stack.hidden = false;
+      stack.append(show, rearrange);
+      panel.append(stack, drop);
+    } else {
+      stack.hidden = true;
+      panel.append(rearrange, drop, show, stack);
+    }
+    setHandActionsOpen(false);
+    if (focused && panel.contains(focused)) {
+      if (handSheet?.matches) focused.focus();
+      else byId('handActionsBtn')?.focus();
+    } else if (handSheet?.matches && focused === byId('handActionsBtn')) show.focus();
+  }
+  handSheet?.addEventListener('change', syncHandActionsLayout);
+  syncHandActionsLayout();
   function setHandCollapsed(v) {
     handCollapsed = v;
+    if (v) {
+      setHandActionsOpen(false);
+      // Hiding while Rearrange is active must actually collapse the cards.
+      reorderMode = false;
+      const bar = byId('rearrangeBar');
+      if (bar) bar.hidden = true;
+      byId('rearrangeBtn')?.setAttribute('aria-pressed', 'false');
+    }
     try {
       localStorage.setItem('ott.handHidden', v ? '1' : '0');
     } catch {}
     renderHand(myHand);
+    if (v) byId('hand').firstElementChild?.focus();
+    else if (!handSheet?.matches) byId('handActionsBtn')?.focus();
   }
   addEventListener('pointermove', (e) => {
     if (!handDrag) return;
@@ -377,12 +433,16 @@ export function createHand({
     el.classList.toggle('reordering', reorderMode); // grab-cursor + touch-action while rearranging
     {
       const has = cards.length > 0;
+      const collapsed = handCollapsed && !selectMode && !reorderMode;
+      const actions = byId('handActions');
+      if (actions) actions.hidden = !has || collapsed;
+      if (!has || collapsed) setHandActionsOpen(false);
       const sb = byId('showBtn'),
         db = byId('dropFlank');
-      if (sb) sb.hidden = !has;
-      if (db) db.hidden = !has;
+      if (sb) sb.hidden = !has || collapsed;
+      if (db) db.hidden = !has || collapsed;
       const rb = byId('rearrangeBtn');
-      if (rb) rb.hidden = !has;
+      if (rb) rb.hidden = !has || collapsed;
       if (!has && reorderMode) {
         reorderMode = false; // no cards left to rearrange (inline; we're mid-render)
         const bar = byId('rearrangeBar');
@@ -398,7 +458,7 @@ export function createHand({
         const dropBtn = byId('dropBtn');
         if (dropBtn) dropBtn.setAttribute('aria-expanded', 'false');
       }
-    } // Show/Drop flank the hand, only when you hold cards
+    } // Actions belong to the visible hand, only when you hold cards.
     if (handCollapsed && cards.length && !selectMode && !reorderMode) {
       // hidden: show only a peek tab (never while picking cards to show)
       el.classList.add('collapsed');

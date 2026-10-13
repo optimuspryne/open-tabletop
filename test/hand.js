@@ -40,6 +40,15 @@ class Element {
   get lastElementChild() {
     return this.children.at(-1);
   }
+  get firstElementChild() {
+    return this.children[0];
+  }
+  contains(node) {
+    return node === this || this.children.some((child) => child.contains(node));
+  }
+  focus() {
+    this.focused = true;
+  }
   get nextSibling() {
     if (!this.parentNode) return null;
     return this.parentNode.children[this.parentNode.children.indexOf(this) + 1] || null;
@@ -101,10 +110,15 @@ class Element {
   setPointerCapture() {}
 }
 
-function fixture() {
+function fixture({ sheet = false, hidden = false } = {}) {
   const ids = new Map(
     [
       'hand',
+      'handRow',
+      'handActions',
+      'handActionsBtn',
+      'handActionsPanel',
+      'handFlankStack',
       'showBtn',
       'dropFlank',
       'rearrangeBtn',
@@ -117,6 +131,11 @@ function fixture() {
     ].map((id) => [id, new Element()]),
   );
   ids.get('showStrip').hidden = true;
+  ids.get('handFlankStack').append(ids.get('showBtn'), ids.get('rearrangeBtn'));
+  ids.get('handActionsPanel').append(ids.get('handFlankStack'), ids.get('dropFlank'));
+  ids.get('handActions').append(ids.get('handActionsBtn'), ids.get('handActionsPanel'));
+  const handSheet = new Element();
+  handSheet.matches = sheet;
   const sortButton = new Element('button');
   sortButton.dataset.sort = 'rank';
   ids.get('rearrangeBar').append(sortButton);
@@ -131,6 +150,7 @@ function fixture() {
     observers = [];
   let nextFrame = 1;
   const win = {
+    matchMedia: () => handSheet,
     ResizeObserver: class {
       constructor(callback) {
         this.callback = callback;
@@ -163,6 +183,7 @@ function fixture() {
     getSelection: () => ({ removeAllRanges() {} }),
   };
   const storage = new Map();
+  if (hidden) storage.set('ott.handHidden', '1');
   const timers = new Map();
   let nextTimer = 1;
   const sent = [],
@@ -258,6 +279,7 @@ function fixture() {
     feedback,
     frames,
     observers,
+    handSheet,
     flushFrames() {
       const callbacks = [...frames.values()];
       frames.clear();
@@ -270,6 +292,102 @@ const sample = [
   { hid: 'king', front: 'K♠', back: 'red' },
   { hid: 'ace', front: 'A♠', back: 'red' },
 ];
+
+test('desktop hand actions close on Escape, collapse, empty hand and layout changes', () => {
+  const f = fixture();
+  const button = f.ids.get('handActionsBtn');
+  const panel = f.ids.get('handActionsPanel');
+  assert.deepEqual(panel.children.slice(0, 3), [
+    f.ids.get('rearrangeBtn'),
+    f.ids.get('dropFlank'),
+    f.ids.get('showBtn'),
+  ]);
+  f.hand.setCards(sample);
+  assert.equal(f.ids.get('handActions').hidden, false);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  button.emit('click');
+  assert.equal(f.ids.get('handRow').classes.has('handActionsOpen'), true);
+  f.ids.get('dropChoices').hidden = false;
+  f.ids.get('handRow').emit('keydown', {
+    key: 'Escape',
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(button.focused, true);
+  assert.equal(f.ids.get('dropChoices').hidden, true);
+
+  button.emit('click');
+  f.ids.get('rearrangeBtn').onclick();
+  f.ids
+    .get('hand')
+    .children.find((node) => node.classes.has('hide'))
+    .onclick();
+  for (const id of ['handActions', 'showBtn', 'rearrangeBtn', 'dropFlank', 'rearrangeBar'])
+    assert.equal(f.ids.get(id).hidden, true, id);
+  assert.equal(f.cards().length, 0);
+  f.ids.get('hand').firstElementChild.onclick();
+  assert.equal(f.cards().length, sample.length);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(f.ids.get('rearrangeBtn').getAttribute('aria-pressed'), 'false');
+
+  button.emit('click');
+  f.hand.setCards([]);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  f.hand.setCards(sample);
+  f.handSheet.matches = true;
+  f.handSheet.emit('change');
+  assert.deepEqual(f.ids.get('handFlankStack').children, [
+    f.ids.get('showBtn'),
+    f.ids.get('rearrangeBtn'),
+  ]);
+  assert.equal(f.ids.get('handFlankStack').hidden, false);
+  f.handSheet.matches = false;
+  f.handSheet.emit('change');
+  assert.equal(f.ids.get('handFlankStack').hidden, true);
+  assert.equal(panel.children[1], f.ids.get('dropFlank'));
+});
+
+test('a persisted hidden hand keeps actions hidden on refresh and private message updates', () => {
+  const f = fixture({ hidden: true });
+  f.hand.setCards(sample);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  assert.equal(f.ids.get('showBtn').hidden, true);
+  f.hand.setCards([...sample, { hid: 'queen', front: 'Q♠', back: 'red' }]);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  f.ids.get('hand').firstElementChild.onclick();
+  assert.equal(f.ids.get('handActions').hidden, false);
+  assert.equal(f.ids.get('handActionsBtn').getAttribute('aria-expanded'), 'false');
+});
+
+test('hiding the local hand preserves an active Show audience', () => {
+  const f = fixture();
+  f.hand.setCards(sample);
+  f.hand.bindShowControls();
+  f.ids.get('handActionsBtn').emit('click');
+  f.ids.get('showBtn').onclick();
+  f.ids
+    .get('showStripChips')
+    .children.find((node) => node.dataset.sid === 'other')
+    .onclick();
+  const messagesBeforeHide = f.sent.length;
+  f.ids
+    .get('hand')
+    .children.find((node) => node.classes.has('hide'))
+    .onclick();
+  assert.equal(f.sent.length, messagesBeforeHide);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  f.ids.get('hand').firstElementChild.onclick();
+  f.ids.get('handActionsBtn').emit('click');
+  assert.equal(
+    f.ids
+      .get('showStripChips')
+      .children.find((node) => node.dataset.sid === 'other')
+      .getAttribute('aria-pressed'),
+    'true',
+  );
+});
 
 test('hand arrows remeasure after hidden layout opens and stop watching replaced strips', () => {
   const f = fixture();

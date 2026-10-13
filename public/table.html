@@ -283,43 +283,52 @@
         </button>
         <button type="button" class="chip" data-sort="suit"><span class="lbl">Suit</span></button>
       </div>
-      <div id="handFlankStack">
-        <button
-          id="showBtn" data-room-mutation
-          class="handFlank"
-          data-icon="cards"
-          title="Show cards to others"
-          aria-expanded="false"
-          aria-controls="showStrip"
-          hidden
-        >
-          <span class="lbl">Show Hand</span>
+      <div id="handActions" hidden>
+        <button id="handActionsBtn" type="button" data-icon="cards"
+          title="Hand actions" aria-label="Hand actions" aria-expanded="false"
+          aria-controls="handActionsPanel">
+          <span class="lbl">Hand actions</span>
         </button>
-        <button
-          id="rearrangeBtn" data-room-mutation
-          class="handFlank"
-          data-icon="arrows-sort"
-          title="Rearrange your hand"
-          aria-pressed="false"
-          hidden
-        >
-          <span class="lbl">Rearrange</span>
-        </button>
-      </div>
-      <div id="hand" class="panel"></div>
-      <div id="dropFlank" class="handFlank handAction" hidden>
-        <button id="dropBtn" data-room-mutation data-icon="cards" aria-expanded="false" aria-controls="dropChoices">
-          <span class="lbl">Drop Hand</span>
-        </button>
-        <div id="dropChoices" data-room-mutation class="dropSplit" hidden>
-          <button id="dropDown" data-icon="arrow-bar-down" title="Lay your hand face-down">
-            <span class="lbl">Face-down</span>
-          </button>
-          <button id="dropUp" data-icon="arrow-bar-up" title="Lay your hand face-up">
-            <span class="lbl">Face-up</span>
-          </button>
+        <div id="handActionsPanel" role="group" aria-label="Hand actions">
+          <div id="handFlankStack">
+            <button
+              id="showBtn" data-room-mutation
+              class="handFlank"
+              data-icon="cards"
+              title="Show cards to others"
+              aria-expanded="false"
+              aria-controls="showStrip"
+              hidden
+            >
+              <span class="lbl">Show Hand</span>
+            </button>
+            <button
+              id="rearrangeBtn" data-room-mutation
+              class="handFlank"
+              data-icon="arrows-sort"
+              title="Rearrange your hand"
+              aria-pressed="false"
+              hidden
+            >
+              <span class="lbl">Rearrange</span>
+            </button>
+          </div>
+          <div id="dropFlank" class="handFlank handAction" hidden>
+            <button id="dropBtn" data-room-mutation data-icon="cards" aria-expanded="false" aria-controls="dropChoices">
+              <span class="lbl">Drop Hand</span>
+            </button>
+            <div id="dropChoices" data-room-mutation class="dropSplit" hidden>
+              <button id="dropDown" data-icon="arrow-bar-down" title="Lay your hand face-down">
+                <span class="lbl">Face-down</span>
+              </button>
+              <button id="dropUp" data-icon="arrow-bar-up" title="Lay your hand face-up">
+                <span class="lbl">Face-up</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
+      <div id="hand" class="panel"></div>
     </div>
     <div id="toast" hidden></div>
     <div id="drawer" class="sheet" role="dialog" aria-label="Table menu" hidden></div>
@@ -1163,6 +1172,11 @@
               <li>
                 <b>Left-drag</b> (or left-click) a card out onto the table and it lands face-down;
                 <b>right-drag</b> (or right-click) and it lands face-up.
+              </li>
+              <li>
+                On desktop, <b data-icon="cards">Hand actions</b> opens Rearrange, Drop Hand
+                and Show Hand on the left. Click it again or press Esc to close the controls.
+                Hiding your hand closes these actions too. On touch, use the existing hand tray.
               </li>
               <li>
                 <b data-icon="eye-off">Hide Hand</b> tucks it away;

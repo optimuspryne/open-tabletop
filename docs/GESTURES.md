@@ -351,6 +351,11 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 
 ## Your private hand
 
+On desktop, **Hand actions** (Cards icon) opens Rearrange, Drop Hand and Show Hand on
+the left. Click it again or press Escape to close; Escape returns focus to the button.
+Hide Hand also closes actions and exits Rearrange, and revealing the hand starts with
+actions closed. Touch/narrow layouts retain the existing hand tray and its action controls.
+
 | Gesture | What it does | Touch | Status |
 |---|---|---|---|
 | Left-drag (or click) a hand card out (not in Rearrange) | Lands face-down | One-finger drag | ✅ |

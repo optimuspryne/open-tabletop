@@ -1341,9 +1341,39 @@ const SCENES = [
       byId('roomInfoBtn').click();
       assert(byId('seatPop').hidden && byId('roomSheet').contains(dock) && dock.contains(roster), 'Room sheet did not return then borrow live nodes');
       byId('roomSheet')._close(); assert(byId('roomInfo').contains(dock), 'Room sheet failed to return dock');
-      byId('dropBtn').click(); byId('dropDown').click();
-      assert(sent.at(-1)[0] === 'handToTable' && sent.at(-1)[1].faceDown, 'Drop orientation lost');
+      messages.get('hand')([{hid:'drop-fixture',front:'rank:A:♠:#000',back:'back'}]);
+      const handSheet=matchMedia('(max-width:900px), (pointer:coarse)').matches;
+      if(handSheet) byId('handTab').click();
+      else byId('handActionsBtn').click();
+      assert(byId('dropBtn').getBoundingClientRect().height>0, 'Production Drop is unreachable');
+      byId('tableLoading')?.remove();
+      const dropFull=document.body.classList.contains('ui-full');
+      const dropCompact=document.body.classList.contains('ui-compact');
+      for(const expanded of [true,false]) {
+        document.body.classList.toggle('ui-full',expanded);
+        document.body.classList.toggle('ui-compact',!expanded);
+        byId('dropBtn').click();
+        assert(!byId('dropChoices').hidden && byId('dropBtn').getAttribute('aria-expanded')==='true',
+          'Drop choices did not open');
+        for(const id of ['dropDown','dropUp']) {
+          const button=byId(id), box=button.getBoundingClientRect();
+          assert(box.width>0 && box.height>0 && box.left>=0 && box.right<=innerWidth &&
+            box.top>=0 && box.bottom<=innerHeight, 'Drop choice is not visible: '+id);
+          const target=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
+          assert(button.contains(target), 'Drop choice is covered: '+id);
+          button.focus();
+          assert(document.activeElement===button, 'Drop choice is not keyboard reachable: '+id);
+        }
+        byId(expanded?'dropDown':'dropUp').click();
+        assert(sent.at(-1)[0] === 'handToTable' && sent.at(-1)[1].faceDown===expanded, 'Drop orientation lost');
+        assert(byId('dropChoices').hidden && byId('dropBtn').getAttribute('aria-expanded')==='false',
+          'Drop choices did not close after placement');
+      }
+      document.body.classList.toggle('ui-full',dropFull);
+      document.body.classList.toggle('ui-compact',dropCompact);
       byId('toast').querySelector('button').click(); assert(sent.at(-1)[0] === 'handFromTable', 'Drop Undo lost');
+      messages.get('hand')([]);
+      if(handSheet) byId('handTab').click();
       messages.get('diceList')([{ id: 'tex', name: 'Custom finish', url: '/fixture.png' }]);
       assert(byId('trayTextures').querySelectorAll('button').length === 1 && !byId('trayCustomGroup').hidden, 'Uploaded finish chips did not hydrate');
       byId('trayTextures').querySelector('button').click();
@@ -2742,7 +2772,49 @@ const SCENES = [
       const eye=cards[0].querySelector('.cardEye');eye.focus();
       assert(document.activeElement===eye,'Inspect control is not keyboard focusable');
       if(matchMedia('(pointer:coarse)').matches) {const box=eye.getBoundingClientRect();assert(box.width>=30 && box.height>=30,'Touch Inspect target shrank');}
-      assert(cards[52].getAttribute('aria-label')==='Red joker' && cards[53].getAttribute('aria-label')==='Black joker','Joker names changed');`,
+      assert(cards[52].getAttribute('aria-label')==='Red joker' && cards[53].getAttribute('aria-label')==='Black joker','Joker names changed');
+      const byId=id=>document.getElementById(id);
+      const visible=id=>byId(id).getBoundingClientRect().height>0;
+      const sheet=matchMedia('(max-width:900px), (pointer:coarse)').matches;
+      hand.bindShowControls();
+      if(sheet) {
+        assert(!visible('handActionsBtn') && visible('showBtn') && visible('rearrangeBtn') && visible('dropBtn'),
+          'Touch tray lost its existing actions or gained the desktop disclosure');
+        assert(byId('showBtn').getBoundingClientRect().bottom<=byId('rearrangeBtn').getBoundingClientRect().top &&
+          byId('rearrangeBtn').getBoundingClientRect().bottom<=byId('hand').getBoundingClientRect().top &&
+          byId('hand').getBoundingClientRect().bottom<=byId('dropBtn').getBoundingClientRect().top,
+          'Touch action order changed');
+      } else {
+        assert(visible('handActionsBtn') && !visible('rearrangeBtn') && !visible('dropBtn') && !visible('showBtn'),
+          'Desktop actions must start behind Hand actions');
+        byId('handActionsBtn').click();
+        assert(visible('rearrangeBtn') && visible('dropBtn') && visible('showBtn'), 'Hand actions did not reveal controls');
+        const actionBoxes=['rearrangeBtn','dropBtn','showBtn'].map(id=>byId(id).getBoundingClientRect());
+        assert(actionBoxes.every(box=>box.right<=byId('hand').getBoundingClientRect().left) &&
+          actionBoxes[0].bottom<=actionBoxes[1].top && actionBoxes[1].bottom<=actionBoxes[2].top,
+          'Desktop menu does not match the approved left-side order');
+        byId('showBtn').click();
+        assert(visible('showStrip'), 'Show strip is unreachable from Hand actions');
+        byId('showBtn').focus();
+        byId('showBtn').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        assert(!visible('showBtn') && !visible('showStrip') && document.activeElement===byId('handActionsBtn'),
+          'Escape did not dismiss actions and return keyboard focus');
+        byId('handActionsBtn').click();
+        byId('rearrangeBtn').click();
+        assert(visible('rearrangeBar'), 'Sort controls are unreachable from Hand actions');
+        byId('hand').querySelector('.handToggle.hide').click();
+        assert(!visible('handActionsBtn') && !visible('rearrangeBar') && !visible('showStrip') &&
+          byId('hand').classList.contains('collapsed'), 'Hide Hand left actions or Rearrange visible');
+        assert(document.activeElement===byId('hand').firstElementChild, 'Hide Hand did not focus the reveal control');
+        byId('hand').firstElementChild.click();
+        assert(visible('handActionsBtn') && !visible('rearrangeBtn') && !visible('showStrip'),
+          'Revealing a hand reopened its actions');
+        assert(document.activeElement===byId('handActionsBtn'), 'Revealing a hand lost keyboard focus');
+        hand.setCards([]);
+        assert(!visible('handActionsBtn'), 'An empty hand kept its actions');
+        messages.get('hand')(faces.map((face,index)=>({hid:String(index),front:face.ref,back:PLAYING_CARD_BACKS[0].ref,geom:PLAYING_CARD_GEOM})));
+        byId('handActionsBtn').click();
+      }`,
   })),
   ...['full', 'compact'].map((mode) => ({
     name: 'library-playing-decks-' + mode,

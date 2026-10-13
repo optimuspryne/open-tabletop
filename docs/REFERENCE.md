@@ -2752,6 +2752,18 @@ The browser composition root injects room/session access, scene and card builder
 helpers, inspection entry, and the control-guide refresh callback; the module does not import a
 room singleton or the client runtime.
 
+Desktop `handActionsBtn` discloses Rearrange, Drop Hand and Show Hand in a left-side
+`handActionsPanel`. `setHandActionsOpen` synchronizes the expanded state and closes Drop
+choices on dismissal; Escape returns focus to the disclosure button. `syncHandActionsLayout`
+uses `(max-width: 900px), (pointer: coarse)` to retain the touch Show/Rearrange stack above
+the cards and Drop below, moving the existing nodes so keyboard order follows the layout.
+The desktop Show/Sort strips are visible only with Hand actions open. Hiding the hand exits
+Rearrange and closes actions; revealing it starts with actions closed. This local preference
+does not send Show-stop messages or alter shared hand contents/audience.
+The action panel paints above the hand's backdrop-filter stacking context so its right-side
+Drop choices remain visible and clickable over the cards. Component checks hit-test both
+orientations and verify keyboard focus in full/compact desktop and touch layouts.
+
 - **`bindRoom(room)`** installs the private `hand` handler before requesting `handSync`, and
   handles partial/stale `dropUndone` feedback through injected `toast`.
 - **`setCards(cards)`** receives the private `hand` message and calls the controller's

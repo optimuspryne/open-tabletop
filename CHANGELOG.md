@@ -54,6 +54,13 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Fixed desktop Drop Hand choices being covered by the private hand. The Hand actions
+  panel now paints above the cards; browser tests check visible pointer targets and keyboard
+  focus for both orientations in full/compact desktop and touch layouts. Refresh the browser.
+- Desktop private-hand controls sit on the left behind the approved Cards-icon
+  Hand actions button, in Rearrange / Drop Hand / Show Hand order. Hide Hand closes
+  the actions and Rearrange mode; reopening starts with actions closed. Touch retains
+  its Show/Rearrange stack and Drop controls. Refresh the browser; no server restart is needed.
 - Updated the pouch with the project owner's replacement bag GLB, retaining its authored
   materials and independent bag/string tint slots. The shared registration uses the owner's
   tuned scale, measured collider bounds and default colors. Restart the server and refresh
