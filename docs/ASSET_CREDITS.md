@@ -89,6 +89,18 @@ and `pieces/dominoes/Domino_Concealed.glb`:
 ## Sound effects - `public/static_assets/sounds/`
 All CC0 (public domain).
 
+- **Ceramic tile cues** — `ceramic-tile-pickup-{1,2,3}.ogg`,
+  `ceramic-tile-drop-{1,2,3,4}.ogg`, `ceramic-tile-flip-{1,2,3}.ogg` and
+  `ceramic-tile-shuffle-{1,2,3}.ogg` are original procedural synthesis created with
+  Codex for Open Tabletop (2026-10-12), with no recordings or third-party samples.
+  CC0. `scripts/generate-tile-sounds.py` reproduces the waveforms using Python stdlib
+  and ffmpeg/libvorbis. Its default command authors this set; `--legacy` authors the
+  earlier flip/shuffle placeholders. These new files are the active tile cue pools;
+  the older files below are preserved, and tile-box cues retain their original sounds.
+  Timbre and timing were tuned against the project owner's supplied
+  `mahjong_tile_{1,2,3,4}.ogg` and `Shuffle_the_mahjong_tiles.ogg` examples from
+  `Mahjong_Sound_Pack_2026_02_24`. Those recordings are references only: no recording
+  samples or waveform data are copied into the bundled cues, and the pack is not redistributed.
 - **Synthesized tile flip/shuffle cues** — `tile-flip-{1,2,3}.ogg` and
   `tile-shuffle-{1,2,3}.ogg` were procedurally synthesized with Codex for Open Tabletop
   (2026-09-24), using no recordings or third-party samples. CC0. The reproducible authoring

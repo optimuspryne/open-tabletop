@@ -1584,6 +1584,15 @@ the app runs fine before any audio is added. Everything funnels through one mast
 gain (the SFX volume, or 0 when muted). Browsers block audio until a gesture, so
 the first `pointerdown` calls `resumeAudio()`.
 
+Tile pickup/drop/flip/shuffle pools now select the original ceramic synthesis in
+`ceramic-tile-*.ogg`, authored offline by `scripts/generate-tile-sounds.py`.
+The script shares its PCM/OGG encoder with the retained legacy generator and combines
+short shock/noise-excited bandpass responses and handling friction. Broad high-frequency
+texture, secondary contacts and a continuous shuffle tumble were tuned against supplied
+Mahjong references; no reference samples are bundled or required by the generator. The browser
+still only decodes bundled OGG files; randomized variants, volume/mute, event dispatch and
+the local/shared cue boundary are unchanged. Original tile files and box/bag cues are retained.
+
 The important architectural split is **who hears a cue**, and it mirrors the
 authority model:
 

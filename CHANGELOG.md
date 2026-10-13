@@ -9,6 +9,15 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Ceramic-style tile sounds: three pickup, four drop, three flip and three shuffle
+  variations with short, high pitched clinks, heavily damped inharmonic resonance and irregular
+  clattering. The existing tile cue pools use new `ceramic-tile-*.ogg` files; original
+  clips are retained. Python/ffmpeg synthesis is offline only. Refresh the browser
+  to load the new sounds; no server restart or migration is needed.
+  Tuned against user-supplied Mahjong references: broad noise-excited responses around
+  5–9 kHz replace isolated sine tones, drops have irregular secondary contacts, and
+  shuffles tumble continuously. Reference recordings are not sampled or bundled.
+  Hard-refresh if cached.
 - Mahjong's Build wall action creates independent concealed tiles in four staggered,
   two-high rows: 17 stacks per side for 136 tiles, or 18 for 144. It uses the selected
   library set, retains normal tile physics/privacy and preserves existing pieces.

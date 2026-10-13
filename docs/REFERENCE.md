@@ -3415,6 +3415,20 @@ per-player in `localStorage` (`tabletop.sfxVolume`, `tabletop.sfxMuted`,
   **`tiledeck-*`** — tiles (domino/word/mahjong) and their wooden decks get their
   own cues; the server's `dropSfx(type, props)` and the client's pickup path pick
   the tile variant when a piece carries a `tile` kind.
+  Active `tile-pickup`, `tile-drop`, `tile-flip` and `tile-shuffle` pools use
+  `ceramic-tile-{action}-{variant}.ogg` (3/4/3/3 variants respectively). Original
+  tile clips remain bundled; `tiledeck-*` still uses the original box/bag cues.
+  `python3 scripts/generate-tile-sounds.py` authors the ceramic set offline;
+  `--legacy` reproduces the earlier flip/shuffle waveforms, and `--output-dir PATH`
+  supports auditioning or verification without touching bundled assets. The generator
+  adds `ceramic_contact`, `ceramic_rub` and `ceramic_samples`; `write_cue` shares PCM/OGG
+  encoding with the legacy `generate` path. Neither Python nor ffmpeg is needed at runtime.
+  `ceramic_contact` uses a short shock/noise excitation through constant-peak bandpass
+  biquads (`CERAMIC_BANDS`), emphasizing a broad 5–9 kHz texture rather than isolated
+  sine partials. `CONTACT_EXCITATION_DECAY` is 2.2 ms before per-contact damping.
+  `ceramic_samples` adds irregular secondary contacts and a continuous overlapping
+  shuffle tumble. Timbre/timing were tuned against user-supplied Mahjong reference
+  recordings; no reference sample data is included or required for regeneration.
 - **`ensureCtx()`** — lazily builds the `AudioContext` + a `master` gain
   (SFX volume, or 0 when muted) and kicks off the tolerant preload.
 - **`resumeAudio()`** — resumes a suspended context; armed on the first
