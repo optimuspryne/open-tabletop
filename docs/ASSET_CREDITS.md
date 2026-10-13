@@ -40,6 +40,16 @@ requirement is actually met.
 
 ### Open Tabletop original models
 
+`boards/wordy_board.glb`:
+
+- **Author/source:** Project owner's original Wordy board, edited with Codex and supplied from
+  `Open-Tabletop_Asset_Builders/3d_models/original/GLB/wordy_board.glb`.
+  The editable source is `3d_models/original/BLEND/wordy_board_uv_fixed.blend` in that asset workspace.
+- **License:** Distributed under the repository license, with the other Open Tabletop originals.
+- The supplied GLB is bundled byte for byte. Authored wood/normal textures, raised squares,
+  premium-square colors, star and DL/DW/TL/TW lettering are preserved. Runtime centering/scaling
+  retains Wordy's 11-unit width; measured grid spacing and offsets align tile snapping.
+
 `pieces/mahjong/` (34 standard faces, three reserved red-five variants and `concealed.glb`):
 
 - **Model author/source:** Engraved models authored for the project owner with Codex,

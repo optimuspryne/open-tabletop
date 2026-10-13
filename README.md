@@ -692,7 +692,7 @@ audit, and integration tests against its own PostgreSQL 16 service.
   system powers dominoes, letter tiles, mahjong, custom card geometry, and modeled
   deck skins such as the recolorable pouch. See the detailed section below.
 - **Boards, grids, and measurement.** Built-in modeled Chess/Checkers and Go
-  boards plus the procedural Wordy board can calibrate the room grid. GMs control
+  boards plus the authored Wordy board can calibrate the room grid. GMs control
   cell size, offsets, snap anchor, square/hex style, visibility, color, height,
   measurement units, and rounding. Players can place durable rulers, lines,
   circles, and cones; a live preview is shown while positioning them.

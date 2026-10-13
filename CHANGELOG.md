@@ -54,6 +54,24 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Updated the pouch with the project owner's replacement bag GLB, retaining its authored
+  materials and independent bag/string tint slots. The shared registration uses the owner's
+  tuned scale, measured collider bounds and default colors. Restart the server and refresh
+  the browser to load the updated model and physics definition.
+- Collider/grid regression tests follow current shared registrations instead of freezing
+  model dimensions, printed spacing or Wordy export coordinates. Synthetic retuning cases
+  verify diagnostics, real physics, grid anchors/offsets and save/reload behavior. GLB-to-collider
+  fit is separate, opt-in asset QA through `assets:colliders`, with an explicit tolerance when
+  bounds matching is intended; deliberately inset/padded colliders can use its report-only mode.
+- Removed the retired procedural Wordy painter, premium-layout/palette data and unused
+  painter-registry/preview branches. Built-in boards use their authored GLB previews;
+  plain/image-backed board rendering and letter-tile faces retain their existing behavior.
+- Wordy McWordface uses the project owner's authored board GLB, with its wood grain,
+  raised squares, premium colors and lettering. The existing model-board loader preserves
+  its materials; measured bounds retain the 11-unit width and match the board collider.
+  Grid calibration pins the 15×15 square spacing and slight offset inside the decorative rim.
+  Restart the server and refresh the browser. Reselect the board and recalibrate existing rooms
+  to update their height/grid, or load the Wordy starter in a fresh game.
 - Mahjong walls now use traditional projecting corners matching the supplied reference,
   with tightly spaced rows and about one stack extending past each neighboring wall.
   Both tile counts still fit the default table at their existing tile size.

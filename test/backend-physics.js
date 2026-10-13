@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as CANNON from 'cannon-es';
-import { cardGeom } from '../shared/pieces.js';
+import { cardGeom, DISPENSERS } from '../shared/pieces.js';
+import { primitiveColliderSpec } from '../shared/collider-spec.js';
 import {
   COLLIDER_TYPES,
   buildCollider,
@@ -160,9 +161,15 @@ test('custom dispenser colliders follow automatic, generic, and custom appearanc
 });
 
 test('built-in modeled dispensers honor their authored collider primitive', () => {
+  const classes = { box: CANNON.Box, sphere: CANNON.Sphere, cylinder: CANNON.Cylinder };
   for (const disp of ['goBowl']) {
+    const { type, box, sides, top } = DISPENSERS[disp].collider;
+    const expected = primitiveColliderSpec(type, ...box, { sides, top });
     const shape = buildCollider('dispenser', { disp }, colliderOptions);
-    assert.ok(shape instanceof CANNON.Cylinder, `${disp} should use its configured cylinder`);
+    assert.ok(
+      (shape.shape || shape) instanceof classes[expected.type],
+      `${disp} should use its configured primitive`,
+    );
   }
 });
 

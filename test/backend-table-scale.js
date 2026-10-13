@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createTableScale } from '../server/game/table-scale.js';
+import { BOARDS, snapToCell } from '../shared/pieces.js';
 
 const operations = createTableScale({ gridLiftMax: 3 });
 
@@ -129,21 +130,60 @@ test('custom square grids derive center and crossing spacing from the board coll
 });
 
 test('built-in boards retain authored grid rules and pinned printed-line spacing', () => {
-  const chess = makeRoom({ props: { board: 'chess' }, halfExtents: { x: 4, z: 4 } });
-  assert.deepEqual(operations.calibrateGrid(chess), {
-    cellX: 0.8741,
-    cellZ: 0.8741,
-    gaps: 8,
-    anchor: 'center',
-  });
+  for (const [key, { grid, box }] of Object.entries(BOARDS)) {
+    if (!grid) continue;
+    const room = makeRoom({ props: { board: key }, halfExtents: null });
+    const cellX = grid.cellX > 0 ? grid.cellX : (box[0] * 2) / grid.cells;
+    const cellZ = grid.cellX > 0 ? grid.cellZ || cellX : (box[2] * 2) / grid.cells;
+    assert.deepEqual(operations.calibrateGrid(room), {
+      cellX,
+      cellZ,
+      gaps: grid.cells,
+      anchor: grid.anchor,
+    });
+    assert.equal(room.state.scale.gridX, grid.offsetX || 0);
+    assert.equal(room.state.scale.gridZ, grid.offsetZ || 0);
+  }
+});
 
-  const go = makeRoom({ props: { board: 'go' }, halfExtents: null });
-  assert.deepEqual(operations.calibrateGrid(go), {
-    cellX: 0.41,
-    cellZ: 0.41,
-    gaps: 18,
-    anchor: 'cross',
-  });
+test('retuned board grids preserve rectangular spacing, anchor, offsets and saved snapping', () => {
+  const originalGrid = BOARDS.wordy.grid;
+  try {
+    for (const grid of [
+      { cells: 5, anchor: 'cross', cellX: 0.83, cellZ: 0.57, offsetX: 1.25, offsetZ: -0.42 },
+      { cells: 4, anchor: 'center', cellX: 1.13, cellZ: 1.37, offsetX: -0.9, offsetZ: 1.4 },
+    ]) {
+      BOARDS.wordy.grid = grid;
+      const room = makeRoom({ props: { board: 'wordy' }, halfExtents: null });
+      assert.deepEqual(operations.calibrateGrid(room), {
+        cellX: grid.cellX,
+        cellZ: grid.cellZ,
+        gaps: grid.cells,
+        anchor: grid.anchor,
+      });
+      const restored = makeRoom();
+      operations.applyScale(restored, operations.scaleSnapshot(room));
+      assert.deepEqual(operations.scaleSnapshot(restored), operations.scaleSnapshot(room));
+      assert.deepEqual(room.saves, ['save']);
+      assert.deepEqual(restored.saves, []);
+      const phase = grid.anchor === 'center' ? 0.5 : 0;
+      for (let row = 0; row < grid.cells; row++) {
+        for (let col = 0; col < grid.cells; col++) {
+          const x = (col - Math.floor(grid.cells / 2) + phase) * grid.cellX + grid.offsetX;
+          const z = (row - Math.floor(grid.cells / 2) + phase) * grid.cellZ + grid.offsetZ;
+          const snapped = snapToCell(
+            x + grid.cellX * 0.2,
+            z - grid.cellZ * 0.2,
+            restored.state.scale,
+          );
+          assert.ok(Math.abs(snapped.x - x) < 1e-10, `column ${col}: ${grid.anchor}`);
+          assert.ok(Math.abs(snapped.z - z) < 1e-10, `row ${row}: ${grid.anchor}`);
+        }
+      }
+    }
+  } finally {
+    BOARDS.wordy.grid = originalGrid;
+  }
 });
 
 test('hex calibration preserves orientation and rejects unusable requests without saving', () => {

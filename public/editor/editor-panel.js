@@ -21,7 +21,6 @@ import {
   imageFilePreviewURL,
   propPreviewURL,
   boardPreviewURL,
-  procBoardTexURL,
   diePreviewURL,
   dieModelPreviewURL,
   uploadImage,
@@ -1256,9 +1255,7 @@ function renderBuiltin(sink) {
   clearPreviewList(boards);
   for (const key of Object.keys(BOARDS)) {
     const box = previewBox();
-    fillAsync(box, () =>
-      BOARDS[key].proc ? Promise.resolve(procBoardTexURL(key)) : boardPreviewURL(BOARDS[key].model),
-    ); // proc boards paint their own preview
+    fillAsync(box, () => boardPreviewURL(BOARDS[key].model));
     boards.append(
       builtinCard(box, BOARDS[key].name, 'Spawn', () =>
         sendPlacement('spawn', { type: 'board', props: { board: key } }),

@@ -103,8 +103,9 @@ export function createTableScale({ gridLiftMax }) {
       scale.cellWorld = clamp(width / gaps, 1e-3, 1e3);
       scale.cellZ = clamp(depth / gaps, 1e-3, 1e3);
     }
-    scale.gridX = 0;
-    scale.gridZ = 0;
+    // Authored grids may be slightly off-center inside the model's bounding box.
+    scale.gridX = clamp(+spec?.grid?.offsetX || 0, -1e3, 1e3);
+    scale.gridZ = clamp(+spec?.grid?.offsetZ || 0, -1e3, 1e3);
     scale.gridStyle = 'square';
     scale.snapAnchor = anchor === 'cross' ? 'cross' : 'center';
     room.scheduleSave();

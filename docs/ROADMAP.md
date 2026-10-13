@@ -157,13 +157,15 @@ Lowers the cold-start for a host who isn't going to model their own assets.
   the mesh and the collider), custom image-deck **shapes** (rounded/square/**hexagon**, hex with a
   matching 6-gon collider) and **thickness**, a **procedural board framework** (`BOARD_PAINTERS`,
   first used by the word grid), and **deck skins** (`DECK_MODELS`, e.g. the pouch). Tiles and
-  their boxes also get their own sound cues. See `DESIGN_tiles.md`.
+  their boxes also get their own sound cues. Wordy now uses an authored GLB; its old painter and
+  unused painter framework have been retired. Plain/image-backed boards remain supported.
+  See `DESIGN_tiles.md`.
 - ✅ **Dice colors** — named dice sets (`DICE_SETS`).
 - ✅ **Model dispensers** — built-in and uploaded-model dispensers are supported. The train
   dispenser was an early example; its bundled assets were removed in v0.17.0. The Go bowl and
   custom-dispenser workflow remain available.
-- Still open: more **tokens/markers**; **RPG battlemaps** (the procedural-board framework is the
-  seam — add a `BOARD_PAINTERS` painter); a **user upload path for deck skins** (only the built-in
+- Still open: more **tokens/markers**; **RPG battlemaps** (existing image/model board uploads
+  provide the asset path); a **user upload path for deck skins** (only the built-in
   pouch exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
   starter games and tile art.
 

@@ -335,7 +335,11 @@ importing a room singleton:
 - **`server/game/table-scale.js`** — measurement-scale persistence and board-grid calibration.
   `server.js` injects the grid-lift ceiling; the module snapshots and validates synchronized scale
   state, reads board metadata/collider dimensions, and schedules saves after successful square or
-  hex calibration while the room keeps stable forwarding methods.
+  hex calibration while the room keeps stable forwarding methods. Built-in square grids can pin
+  both cell spacing and optional `offsetX`/`offsetZ`, copied into durable `gridX`/`gridZ`. Wordy's
+  authored GLB reuses the existing model-board loader and collider definition; its measured square
+  centers sit inside the decorative rim and slightly off the centered model's origin. The same
+  calibrated state drives server snapping, browser previews and persistence; no new schema is needed.
 - **`server/game/piece-operations.js`** — authoritative recoloring and self-righting policy.
   It resolves effective and natural stand modes from synchronized props and shared piece
   definitions, and applies validated color/team/material `colorProps` results through the
@@ -956,8 +960,7 @@ The kinds:
   `stand` flag self-rights standing pieces. Bundled definitions also select a default material
   finish, and `props.finish` carries a synchronized Inspect override. Universal `props.scale`.
 - **board** — static (mass 0) but removable. A built-in model (`BOARDS`
-  registry), an uploaded `.glb`, a **procedural** board drawn from data (a
-  `BOARD_PAINTERS` painter, e.g. the word grid), or an outlined slab with an optional
+  registry), an uploaded `.glb`, or an outlined slab with an optional
   image and configurable thickness. One board at a time; it's sat on the table by its half-height.
 - **mat** — a player mat: a large, single-faced, **movable** SURFACE that tiles and pieces rest on
   (per-player profession boards). Unlike the singleton `board`, every seat can have one. It reuses
@@ -984,6 +987,12 @@ filtering; their existing canvas dimensions and individual disposal remain uncha
   measurement directly from each registered GLB's accessor bounds and node transforms, applies
   the registry scaling/rotation rules, and reports copyable collider/scale suggestions. This keeps
   replacing a bundled model deterministic without pulling a 3D renderer into the server.
+  Normal regression tests check that diagnostics and Cannon honor the current registry values,
+  plus synthetic math/retuning fixtures; they do not pin a particular GLB export's measurements.
+  GLB bounds agreement is opt-in asset QA through this command's `--check --tolerance=n` mode.
+  Intentionally inset, padded or simplified colliders use report-only measurement and manual
+  fit verification. Grid-artwork alignment is also verified after authoring, separately from the
+  calibration/snapping/persistence contract tests.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to a user-selected
   longest X/Z side, defaulting to `BOARD_SIZE`). The client measures the model and stores its
   uniform `modelScale` and collider half-extents `box` with the library record. Changing board
@@ -1214,9 +1223,10 @@ regular pointy-top hex prism and the collider a matching 6-gon (cannon's default
 already points the same way), so it drops cleanly onto the hex grid (`gridStyle: 'hex'`,
 pointy- or flat-top; snap + render share the axial math in `snapToCell` / `gridMesh`).
 
-The board and deck sides generalize the same way. A `proc` board paints its top from data
-(`BOARD_PAINTERS`), so a premium word grid — or a later battlemap — is a painter plus a
-`BOARDS` entry riding the existing swapBoard / collider / grid-calibration paths. And a deck
+The board and deck sides generalize the same way. A built-in board is an authored `.glb` plus a
+`BOARDS` entry riding the existing swapBoard / collider / grid-calibration paths. Plain and
+image-backed outlined slabs use the same board lifecycle. Wordy's retired procedural painter
+and its unused registry/preview branches have been removed. A deck
 can swap its _visual_ for a `.glb` skin (`DECK_MODELS`) with no change to draw / deal /
 shuffle / hidden order. Building the tile games meant adding data and faces, not a new engine.
 

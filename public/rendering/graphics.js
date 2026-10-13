@@ -233,7 +233,7 @@ function letterTileFace(letter, value) {
   const { canvas, ctx } = makeCanvas(S, S);
   ctx.fillStyle = '#f2e8cf'; // warm wood; the mesh's mask rounds the corners
   ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = '#2c2115'; // ink (matches WORDY_COLORS.ink)
+  ctx.fillStyle = '#2c2115'; // dark tile ink
   const L = String(letter || '').toUpperCase();
   if (L) {
     ctx.textAlign = 'center';
@@ -2044,87 +2044,7 @@ function measureBoard(url, targetSize = BOARD_SIZE) {
   });
 }
 
-// --- Procedural boards: a top texture drawn from data ------------------------
-// The reusable procedural-board framework. A BOARDS entry with `proc: <name>` is painted by the
-// matching function here from its `paint` spec — no art file. Add a painter + a BOARDS entry and a
-// new grid / premium / battlemap board travels the same swapBoard/collider/calibrateGrid plumbing.
-function drawStar(ctx, cx, cy, outer, inner, points) {
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 ? inner : outer,
-      a = (Math.PI * i) / points - Math.PI / 2;
-    ctx[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-  }
-  ctx.closePath();
-  ctx.fill();
-}
-// Wordy McWordface board: a cells×cells grid with colored premium squares (from WORDY_PREMIUM /
-// WORDY_COLORS via the board's `paint`). The texture is divided into equal cells, so its squares line
-// up 1:1 with the snap grid (calibrateGrid derives cell = board width ÷ cells).
-function wordGridTex(paint = {}) {
-  const cells = paint.cells || 15,
-    prem = paint.premium || [],
-    col = paint.colors || {};
-  const px = 900,
-    cell = px / cells;
-  const { canvas, ctx } = makeCanvas(px, px);
-  ctx.fillStyle = col.base || '#e9ddc2';
-  ctx.fillRect(0, 0, px, px);
-  const fillFor = { T: col.T, D: col.D, t: col.t, d: col.d, '*': col.star || col.D };
-  const label = { T: 'TW', D: 'DW', t: 'TL', d: 'DL' };
-  for (let r = 0; r < cells; r++) {
-    const row = prem[r] || '';
-    for (let c = 0; c < cells; c++) {
-      const ch = row[c] || '.',
-        x = c * cell,
-        y = r * cell;
-      if (fillFor[ch]) {
-        ctx.fillStyle = fillFor[ch];
-        ctx.fillRect(x, y, cell, cell);
-      }
-      if (ch === '*') {
-        ctx.fillStyle = col.ink || '#2c2115';
-        drawStar(ctx, x + cell / 2, y + cell / 2, cell * 0.3, cell * 0.14, 5);
-      } else if (label[ch]) {
-        ctx.fillStyle = 'rgba(44,33,21,0.72)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `700 ${Math.round(cell * 0.24)}px system-ui, sans-serif`;
-        ctx.fillText(label[ch], x + cell / 2, y + cell / 2);
-      }
-    }
-  }
-  ctx.strokeStyle = col.line || '#c3b184';
-  ctx.lineWidth = Math.max(1, px / 600);
-  for (let i = 0; i <= cells; i++) {
-    const p = Math.round(i * cell) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(p, 0);
-    ctx.lineTo(p, px);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, p);
-    ctx.lineTo(px, p);
-    ctx.stroke();
-  }
-  return cTex(canvas);
-}
-const BOARD_PAINTERS = { wordgrid: wordGridTex };
-// A data-URL preview of a procedural board's top, for the library (proc boards have no .glb to snapshot).
-export function procBoardTexURL(key) {
-  const b = BOARDS[key];
-  if (!b || !b.proc) return null;
-  const ck = 'proc:' + key;
-  if (_prevCache.has(ck)) return _prevCache.get(ck);
-  const painter = BOARD_PAINTERS[b.proc];
-  if (!painter) return null;
-  const tex = painter(b.paint || {});
-  const url = tex && tex.image && tex.image.toDataURL ? canvasThumbnailURL(tex.image) : null;
-  if (url) rememberPreview(ck, url);
-  return url;
-}
-
-// The board mesh: a built-in/uploaded .glb model, a procedural board, or a plain textured slab.
+// The board mesh: a built-in/uploaded .glb model or a plain/image-backed textured slab.
 function boardMesh(props = {}) {
   const builtin = props.board && BOARDS[props.board]; // a built-in model board
   const modelUrl = builtin ? builtin.model : props.model; // or an uploaded .glb board
@@ -2143,25 +2063,6 @@ function boardMesh(props = {}) {
         }); // de-metal so the board's own colors read
       },
     );
-  }
-
-  if (builtin && builtin.proc) {
-    // a procedural board: a slab sized by its box, top painted from data
-    const [hx, hy, hz] = builtin.box;
-    const painter = BOARD_PAINTERS[builtin.proc];
-    const map = painter ? painter(builtin.paint || {}) : boardTex();
-    const top = new THREE.MeshStandardMaterial({ map, roughness: 0.85 });
-    const edge = new THREE.MeshStandardMaterial({ color: COLORS.boardEdge });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), [
-      edge,
-      edge,
-      top,
-      edge,
-      edge,
-      edge,
-    ]);
-    mesh.receiveShadow = true;
-    return mesh;
   }
 
   // A plain procedural board: a textured slab.

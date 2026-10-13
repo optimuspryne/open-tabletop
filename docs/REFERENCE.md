@@ -772,19 +772,20 @@ chess}` each `[color0, color1]`.
   `{appearance:'automatic'|'generic'|'custom',infinite,defaultCount?,model?,box?,scale?,modelRot?,collider?,tintMaterial?}`.
   `automatic` repeats the object model, `generic` uses the procedural container, and `custom` loads
   the second authored GLB.
-- **`BOARDS`** `{ key → … }` — built-in boards, either a **model** board
-  (`{ name, model, modelScale, box, grid? }`, collider precomputed from
-  `worldSize·scale/2`) or a **procedural** board (`{ name, proc, box, grid, paint }`)
-  whose top a `BOARD_PAINTERS` painter draws from data (no `.glb`). Model-board grids may pin
+- **`BOARDS`** `{ key → { name, model, modelScale, box, grid? } }` — built-in model boards,
+  with collider bounds precomputed from `worldSize·scale/2`. Model-board grids may pin
   measured `cellX`/`cellZ` spacing when decorative borders make the printed area smaller than the
-  collider footprint.
+  collider footprint. Optional `grid.offsetX`/`offsetZ` set the square grid's phase relative to
+  the centered model through synchronized `scale.gridX`/`gridZ`; omitted offsets reset to zero.
+  `BOARDS.wordy` uses `/models/boards/wordy_board.glb`, scaled by `4.665029` to retain its 11-unit
+  width, with collider half-extents `[5.5, 0.1271, 5.4969]`. Its 15×15 raised-square centers use
+  `0.693264` spacing on both axes and offsets `[-0.006337, -0.003197]` after model centering.
+  The Wordy starter and existing `board:'wordy'` identities use this same registration.
 - **`BOARD_SIZE`** — default longest horizontal side (8) for uploaded `.glb` boards; the editor can choose a different target size.
 - **`TILES`** `{ key → { w, h, t, round } }` — named tile geometries (half-extents,
   thickness, corner radius): the standard `card`, plus `domino`, `letter`, `mahjong`.
   A card resolves to one of these (or an explicit `props.geom`) via `cardGeom`.
 - **`HEX_HH`** — √3/2; a regular pointy-top hexagon's half-width ÷ half-height (circumradius).
-- **`WORDY_PREMIUM`** / **`WORDY_COLORS`** — the 15×15 word-board premium layout (one char per
-  cell) + its palette, read by the `wordgrid` painter (`BOARDS.wordy`).
 - **`LETTER_DIST`** `{ letter → [count, value] }` — the 100-tile word-game bag (blank = `''`).
 - **`MAHJONG`** `{ base, suits, honors, bonus }` — stable Mahjong face lists (faces are
   image URL references under `base`; 34 ordinary and eight bonus faces map to GLBs).
@@ -797,6 +798,8 @@ chess}` each `[color0, color1]`.
   `tints` `{ slot → propKey }` maps a named material slot to a
   deck prop (the pouch: `bag → color`, `string → textColor`), each falling back to the skin's own
   `color`/`textColor` default, so the sack and drawstring recolor independently.
+  The owner's updated pouch uses `modelScale:6`, collider half-extents
+  `[0.8432, 1.2943, 1.1478]`, and default bag/string colors `0xa79d8a` / `0x381903`.
   `tileTints` `{ slot → 'base' | 'inset' }` instead follows `tileAppearanceOf(props)` colors
   and its shared finish, including original materials, procedural texture UVs and phone
   fallbacks. Tile mappings take precedence over container tints for the same slot and are
@@ -2526,8 +2529,7 @@ quiet for a full frame), and
   **`boardTex()`** (procedural checkerboard).
 - **`jokerFace(color)`**, **`dominoFace(a,b)` / `dominoBack()` / `drawPips`**,
   **`letterTileFace(letter,value)` / `letterBack()`**, **`mahjongBack()`** — the procedural
-  tile/joker faces. **`wordGridTex(paint)`** paints a procedural board (registered in
-  **`BOARD_PAINTERS`**; **`procBoardTexURL(key)`** makes its library preview).
+  tile/joker faces. Built-in board thumbnails use **`boardPreviewURL(model)`** to snapshot their GLBs.
 - **`drawNumber` / `digitTexture` / `numberFaceTexture` / `numberLabel`** — die
   numbering (resolution `CONFIG.tex.die`).
 - **`splitColorText` / `wrapLines` / `drawWrapped` / `textFaceTexture` /
@@ -2561,7 +2563,12 @@ quiet for a full frame), and
   `scripts/measure-colliders.mjs`, a dependency-free GLB v2 scanner. It applies node hierarchy,
   matrix/TRS transforms, configured `modelRot`, and each registry's scaling rule, then reports
   measured/suggested half-extents and board scale. `--check` exits nonzero when an authored axis
-  differs beyond the tolerance.
+  differs beyond the tolerance (default `0.03` world units per half-extent). This is opt-in asset QA,
+  separate from `npm test`/`npm run check`. For a bounds-matching asset, run e.g.
+  `npm run assets:colliders -- wordy --check --tolerance=0.0001`. For deliberately inset, padded or
+  simplified colliders, omit `--check` and inspect the reported differences against that design.
+  Ordinary collider/grid tests read current shared registrations; synthetic fixtures retain exact
+  mathematical expectations and exercise retuning through diagnostics/physics, snapping and saves.
 - The two model-mesh builders (`propMesh`, `boardMesh`) share a single
   **`loadModelGroup`** loader, and image-backed textures a **`loadImageTexture`**.
 

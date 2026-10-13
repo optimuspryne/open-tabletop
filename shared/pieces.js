@@ -343,47 +343,10 @@ export const standMode = (shape) => {
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
 // `grid` drives "calibrate grid to this board": `cells` across the playing area, and
 // whether pieces sit in cell `center`s (chess/checkers squares) or on `cross`ings (go
-// stones). Boards spawn centred at the world origin, which is where our grid is anchored,
-// so no offset is needed — only the cell size (estimated from the footprint, GM-tunable)
-// and the snap anchor.
-// The 15×15 premium-square layout for Wordy McWordface (one char per cell, row-major, top row first):
-//   T = triple word · D = double word · t = triple letter · d = double letter · * = centre (double word) · . = plain
-// The classic symmetric layout — a game mechanic, drawn in our own colors (see WORDY_COLORS). Defined
-// above BOARDS because the wordy board entry references it.
-export const WORDY_PREMIUM = [
-  'T..d...T...d..T',
-  '.D...t...t...D.',
-  '..D...d.d...D..',
-  'd..D...d...D..d',
-  '....D.....D....',
-  '.t...t...t...t.',
-  '..d...d.d...d..',
-  'T..d...*...d..T',
-  '..d...d.d...d..',
-  '.t...t...t...t.',
-  '....D.....D....',
-  'd..D...d...D..d',
-  '..D...d.d...D..',
-  '.D...t...t...D.',
-  'T..d...T...d..T',
-];
-// Our own premium-square palette (legally distinct), plus the board base + grid line + tile ink.
-export const WORDY_COLORS = {
-  base: '#e9ddc2',
-  line: '#c3b184',
-  ink: '#2c2115',
-  T: '#c65d4b',
-  D: '#e6a2a0',
-  t: '#3f74b8',
-  d: '#a9c8e6',
-  star: '#e6a2a0',
-};
-
-// A board is a built-in .glb model (`model`), an uploaded .glb, a plain slab, or a PROCEDURAL board
-// (`proc`) whose top is drawn from data by a client painter (see BOARD_PAINTERS in graphics.js). A
-// proc board needs no art file: it carries its world `box`, a `grid` for calibration, and a `paint`
-// spec the painter reads. This is the reusable procedural-board framework — add a painter + an entry
-// here and any new grid/premium/battlemap board travels the same swapBoard/calibrateGrid plumbing.
+// stones). Boards spawn centred at the world origin; authored playing areas can pin their
+// measured cell spacing and an offset inside the model's bounds, plus the snap anchor.
+// Built-in boards use .glb models with measured collider bounds and grid calibration metadata.
+// Uploaded models and plain/image-backed slabs share the same board lifecycle.
 export const BOARDS = {
   chess: {
     name: 'Chess / Checkers',
@@ -404,13 +367,19 @@ export const BOARDS = {
   },
   wordy: {
     name: 'Wordy McWordface',
-    proc: 'wordgrid',
-    box: [5.5, 0.1, 5.5],
-    // 15 cells across an 11-unit board → cell = 11/15. `anchor:'cross'` puts a cell CENTRE at
-    // every k·cell (k=-7..7), i.e. the odd (15×15) grid's centre cell sits on the origin, so a
-    // played tile snaps into a painted square. cells=15 → calibrateGrid derives cell = width/15.
-    grid: { cells: 15, anchor: 'cross' },
-    paint: { cells: 15, premium: WORDY_PREMIUM, colors: WORDY_COLORS },
+    model: '/models/boards/wordy_board.glb',
+    modelScale: 4.665029,
+    box: [5.5, 0.1271, 5.4969],
+    // Keep the 11-unit footprint. Raised square centers are inside the rim and slightly offset
+    // from the GLB bounds' center; pin their measured spacing/phase after runtime centering.
+    grid: {
+      cells: 15,
+      anchor: 'cross',
+      cellX: 0.693264,
+      cellZ: 0.693264,
+      offsetX: -0.006337,
+      offsetZ: -0.003197,
+    },
   },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
@@ -427,12 +396,12 @@ export const DECK_MODELS = {
   bag: {
     name: 'Pouch',
     model: '/models/decks/bag.glb',
-    modelScale: 2,
-    box: [0.9786, 0.2273, 0.8828],
+    modelScale: 6,
+    box: [0.8432, 1.2943, 1.1478],
     tints: { bag: 'color', string: 'textColor' },
     matte: true,
-    color: 0x7a5a3a, // sack: warm leather brown
-    textColor: 0xc8b06a, // drawstring: tan
+    color: 0xa79d8a,
+    textColor: 0x381903,
   },
   dominoes_box: {
     name: 'Dominoes Box',
@@ -685,7 +654,7 @@ export const STARTERS = {
   },
   wordy: {
     name: 'Wordy McWordface',
-    board: 'wordy', // 15×15 procedural board; snap-to-cell on
+    board: 'wordy', // 15×15 authored board; snap-to-cell on
     deck: { set: 'letter', deal: 7 },
     deckZ: 6.6, // the 100-tile bag sits just past the board's near edge; deal a 7-tile rack
   },
