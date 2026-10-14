@@ -2,6 +2,9 @@ import { recoverPendingInspections } from '../server/game/inspection-recovery.js
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerCardHandlers } from '../server/game/handlers/cards.js';
+import { registerPieceHandlers } from '../server/game/handlers/pieces.js';
+import { recolorPiece } from '../server/game/piece-operations.js';
+import { cardPublicProps } from '../shared/pieces.js';
 
 function harness() {
   const handlers = new Map();
@@ -53,7 +56,7 @@ function harness() {
     flipHop: 1.6,
     maxPieces: 80,
     spawnY: 4,
-    geoOf: (props) => (props.tile ? { tile: props.tile } : {}),
+    geoOf: cardPublicProps,
     dropSfx: () => 'card-drop',
     randomPosition: () => [0, 4, 0],
     shuffle: (cards) => cards.reverse(),
@@ -70,6 +73,104 @@ const makeClient = () => ({
   },
 });
 const client = makeClient();
+
+test('pouch Recolor messages reach private stock and every subsequent draw destination', () => {
+  for (const action of ['drawToHand', 'dealToTable', 'drawInspect']) {
+    const { room, handlers, events } = harness();
+    const viewer = makeClient();
+    room.recolorPiece = (id, opts) => recolorPiece(room, id, opts);
+    registerPieceHandlers(room, { maxPieces: 80, geoOf: cardPublicProps });
+    room.state.pieces.set('1', {
+      type: 'deck',
+      count: 3,
+      props: JSON.stringify({ tile: 'domino', back: 'domback', model: 'bag' }),
+    });
+    room.bodies.set('1', { position: { x: 0, y: 0, z: 0 } });
+    room.deckCards.set('1', [
+      'domino:0:0',
+      { front: 'domino:1:2', dominoAppearance: { base: 9, inset: 8, finish: 'satin' } },
+      { front: 'domino:3:6', dominoAppearance: { base: 2 } },
+    ]);
+    const expected = { base: 0x285599, inset: 0xff3344, finish: 'glossy' };
+    for (const [key, value] of Object.entries(expected))
+      handlers.get('recolorGroup')(viewer, { ids: ['1'], tileAppearance: { [key]: value } });
+    for (let i = 0; i < 3; i++) {
+      handlers.get(action)(viewer, { deckId: '1' });
+      if (action === 'drawToHand') {
+        assert.deepEqual(
+          events.filter((event) => event.name === 'hand').at(-1).payload.geo.dominoAppearance,
+          expected,
+        );
+      } else if (action === 'drawInspect') {
+        assert.deepEqual(viewer.sent.at(-1).payload.dominoAppearance, expected);
+        handlers.get('inspectPlace')(viewer, { where: 'field-down' });
+      } else {
+        const placed = [...room.state.pieces.values()]
+          .filter((piece) => piece.type === 'card')
+          .at(-1);
+        const props = JSON.parse(placed.props);
+        assert.deepEqual(props.dominoAppearance, expected);
+        assert.equal(props.front, undefined);
+      }
+    }
+  }
+});
+
+test('combining modeled tiles captures default appearance and retains each deck entry override', () => {
+  const { room, handlers, events } = harness();
+  const deckAppearance = { base: 7, inset: 8, finish: 'glossy' };
+  const entryAppearance = { base: 9, inset: 10, finish: 'satin' };
+  for (const [id, type, props, y] of [
+    ['1', 'deck', { tile: 'domino', back: 'domback', dominoAppearance: deckAppearance }, 0],
+    ['2', 'card', { tile: 'domino', back: 'domback', front: 'domino:0:0' }, 1],
+  ]) {
+    room.state.pieces.set(id, { type, props: JSON.stringify(props) });
+    room.bodies.set(id, { position: { x: 0, y, z: 0 } });
+  }
+  room.deckCards.set('1', [
+    'domino:1:1',
+    { front: 'domino:2:2', dominoAppearance: entryAppearance },
+  ]);
+  handlers.get('combineIntoDeck')(client, { ids: ['1', '2'] });
+  const cards = events.find((event) => event.name === 'spawn').payload.props.cards;
+  assert.deepEqual(cards[0].dominoAppearance, deckAppearance);
+  assert.deepEqual(cards[1].dominoAppearance, entryAppearance);
+  assert.deepEqual(cards[2].dominoAppearance, { base: 0xe7e2cc, inset: 0, finish: 'original' });
+  assert.equal(cards[2].front, 'domino:0:0');
+});
+
+test('drawing and inspecting a returned domino preserve its style without revealing it to the table', () => {
+  for (const action of ['drawToHand', 'dealToTable', 'drawInspect']) {
+    const { room, handlers, events } = harness();
+    const viewer = makeClient();
+    const appearance = { base: 0x123456, inset: 0xabcdef, finish: 'glossy' };
+    room.state.pieces.set('1', {
+      type: 'deck',
+      count: 2,
+      props: JSON.stringify({ tile: 'domino', back: 'domback' }),
+    });
+    room.deckCards.set('1', ['domino:0:0', { front: 'domino:3:6', dominoAppearance: appearance }]);
+    room.bodies.set('1', { position: { x: 0, y: 0, z: 0 } });
+    handlers.get(action)(viewer, { deckId: '1' });
+    assert.equal(room.state.pieces.get('1').count, 1);
+    if (action === 'drawToHand') {
+      assert.deepEqual(
+        events.find((event) => event.name === 'hand').payload.geo.dominoAppearance,
+        appearance,
+      );
+    } else if (action === 'drawInspect') {
+      assert.deepEqual(viewer.sent.at(-1).payload.dominoAppearance, appearance);
+      handlers.get('inspectPlace')(viewer, { where: 'deck' });
+      assert.deepEqual(room.deckCards.get('1').at(-1).dominoAppearance, appearance);
+    } else {
+      const placed = [...room.state.pieces.values()].find((piece) => piece.type === 'card');
+      const props = JSON.parse(placed.props);
+      assert.equal(props.front, undefined);
+      assert.deepEqual(props.dominoAppearance, appearance);
+      assert.equal([...room.cardData.values()][0].front, 'domino:3:6');
+    }
+  }
+});
 
 test('a full table retains inspected cards until they can be placed or returned to a hand', () => {
   const { room, handlers, events } = harness();

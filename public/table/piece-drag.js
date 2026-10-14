@@ -38,6 +38,7 @@ export function createPieceDrag({
   const DRAG_ROTATE_RAD_PER_PX = 0.01,
     DRAG_ROTATE_SNAP = Math.PI / 12; // Alt-drag: ~0.57°/px, snapped to 15° unless Shift is held
   const ROT_STEP = Math.PI / 24; // ~7.5° per tick for the held ⟲ / ⟳ buttons and the A/D keys
+  const THROW_IDLE_MS = 120; // pausing over a landing point makes the release a placement
 
   // Turn the held piece (or the whole selection) by `raw` radians. Shared by the mouse's Alt-drag
   // dial and the touch two-finger twist, so both snap identically and neither loses sub-step
@@ -322,9 +323,17 @@ export function createPieceDrag({
     if (!down) return false;
     if (down.grabbed) {
       const throwVector =
-        down.kind.grab === 2 || down.kind.heavy ? [0, 0, 0] : [throwVel.x, throwVel.y, throwVel.z]; // decks & mats don't fly
-      if (down.group) room.send('releaseGroup', { v: throwVector });
-      else room.send('release', { id: down.id, v: throwVector });
+        down.kind.grab === 2 || down.kind.heavy || clock() - prevThrowTime >= THROW_IDLE_MS
+          ? [0, 0, 0]
+          : [throwVel.x, throwVel.y, throwVel.z]; // decks & mats don't fly
+      const point = snapXZ(heldTarget.x, heldTarget.z);
+      if (down.group) {
+        room.send('moveGroup', { x: point.x, y: heldTarget.y, z: point.z });
+        room.send('releaseGroup', { v: throwVector });
+      } else {
+        room.send('move', { id: down.id, x: point.x, y: heldTarget.y, z: point.z });
+        room.send('release', { id: down.id, v: throwVector });
+      }
     } else if (!down.dragging) {
       // a click / tap
       handleClick(down);
@@ -396,6 +405,7 @@ export function createPieceDrag({
     if (getInspection().isActive()) return; // ...and must not also nudge a piece behind it
     if (!(down && down.grabbed)) return;
     dragHeight = clamp(dragHeight + dir * DRAG_STEP, DRAG_MIN, DRAG_MAX); // up = raise
+    heldTarget.y = dragHeight;
     // Raise the piece where it already is, rather than re-deriving XZ from the pointer. Identical
     // for the wheel (the cursor is still while scrolling), and necessary for the two-finger pinch,
     // where the fingers travel but the piece is meant to stay put and only change height.

@@ -29,6 +29,42 @@ keyboard and password-manager paste. Recovery codes support Copy, Download and n
 Compact mode keeps action labels visible; touch action rows stack with 44px-minimum buttons. These
 account forms do not add tabletop gestures or bypass the gameplay intent layer.
 
+## Domino appearance
+
+These approved controls are now built by the shared tile appearance module. Future
+registered model families use the same desktop, keyboard and touch paths; Mahjong is
+still image-based pending its GLBs. No new gesture or layout is introduced.
+
+Double-click a table domino on desktop, or use the existing touch long-press **Inspect**
+action. The inspector exposes **Base**, **Inset**, and **Material**. For several tiles or
+the remaining stock in a domino bag, select them and open the existing **Recolor** menu.
+Tap the native color controls to choose each color independently; the material selector
+applies one finish to both slots. **Original (GLB)** restores the authored material response
+without resetting the chosen colors. Labels stay visible in compact mode. Keyboard uses
+Tab and the native input/select keys; no new tabletop gesture is introduced. Inspector
+controls dock below the preview on narrow or coarse-pointer layouts, with 44px touch targets.
+Mixed selections of dominoes show which fields differ; non-domino colorable objects cannot
+share the domino appearance picker. Private hand previews reflect saved appearance; recolor
+the tile on the table before taking it into a hand. Manual real-device testing remains pending.
+
+## Mahjong walls
+
+For Mahjong wall setup, open **Library → Decks & Tiles → Tiles**, choose the **Set**
+(136 standard or 144 with flowers/seasons), and click/tap **Build wall**. Keyboard uses
+Tab to the native set selector and wall button, then Enter/Space. The approved wall icon
+and text label stay visible in compact/full modes; touch targets are at least 44px.
+Helpers and GMs use the normal spawn permissions. This creates one fresh wall at the
+table center, retaining other objects and table size. Capacity, table fit or obstruction
+failures leave the table unchanged. Existing grab, flip, take-to-hand, group selection
+and stacking gestures operate on the independent tiles. Breaking the wall, dealing and
+handling the dead wall remain manual. See [Mahjong wall](MAHJONG_WALL.md).
+
+GMs can instead choose **Mahjong (136 tiles)** or **Mahjong (144 tiles)** in the
+library's Pre-Built Games section and click/tap **Set up**, or focus it and press
+Enter/Space. After the existing table-clear confirmation, the wall and two Rounded
+Pips D6 dice replace the game; hands start empty. Roll and take tiles with the existing
+piece interactions. A fit/capacity error preserves the previous game.
+
 ## GM object Hide/Reveal
 
 Open a piece menu by right-click (except cards, which still flip), touch long-press, or
@@ -227,6 +263,21 @@ touch uses the same buttons and wrapped layout. Template name editing retains na
 
 ## Pieces
 
+Gentle single-piece drops use server-authoritative stacking assistance. Flat tiles align to
+the support's center and facing; ordinary cards keep the chosen sideways, lengthwise or
+diagonal offset. Pause briefly before release to place rather than throw. Raise the held
+piece with the existing wheel/keys or touch pinch/▲ control to clear taller piles. Finger
+dragging and keyboard height/rotation intents use the same release path; no modifier or new
+control is required. On an active grid, the existing snap flag still quantizes the chosen
+position; disable grid snapping for freely offset cards. Centered drops onto a compatible
+deck return the card to inventory; deliberate offset placement leaves it individually movable.
+Multi-piece group drops preserve their existing arrangement instead of aligning each member.
+Hidden GM pieces retain the established board/mat settlement behavior. Boxes and cylinders
+with `stackable: true` also participate; spheres, compound colliders and inventory bags do not.
+The user reports stacking working after the tilt/private-hand and collider-thickness fixes.
+Specific devices and multiplayer scenarios were not itemized; broader device/multiplayer QA
+remains pending.
+
 | Gesture | What it does | Touch | Status |
 |---|---|---|---|
 | Left-hold + drag | Pick up, move, release to drop/throw | Finger drag | ✅ |
@@ -299,6 +350,11 @@ auto-repeat's delay and rate are per-machine settings and cannot be used as a cl
 | `F` / `D` / `H` / `R` in the peek | Place face-up / face-down / to hand / return | The four `[data-place]` buttons in the peek overlay (`table.html:954`) | ✅     |
 
 ## Your private hand
+
+On desktop, **Hand actions** (Cards icon) opens Rearrange, Drop Hand and Show Hand on
+the left. Click it again or press Escape to close; Escape returns focus to the button.
+Hide Hand also closes actions and exits Rearrange, and revealing the hand starts with
+actions closed. Touch/narrow layouts retain the existing hand tray and its action controls.
 
 | Gesture | What it does | Touch | Status |
 |---|---|---|---|

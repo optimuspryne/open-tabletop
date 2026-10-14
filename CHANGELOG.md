@@ -9,6 +9,10 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Changed
+- Synchronized the demo branch with main through release 0.22.0, preserving guest/admin
+  flows, four-table capacity, 15-dice limits and shared roll cooldowns. Restart the server
+  and refresh clients; see [demo synchronization notes](docs/DEMO_MODE_PLAN.md#main-synchronization-2026-10-14)
+  for upgrade and verification status.
 - Reduced the public demo to four stored tables and four live rooms after the five-table,
   75-d20, 20-connection stress test reached 100% CPU and about 30 average ticks/second
   (operator observations). The 15-dice cap, one-second cooldown and 20-connection budget
@@ -44,47 +48,6 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   exercises the real component. The runtime slice connects it only when demo mode is enabled;
   ordinary deployments retain their entry flow.
 
-### Fixed
-- Admin user rows now display an em dash for missing email addresses, allowing temporary
-  demo guests to appear without breaking console initialization.
-- Fixed demo dice starter matchmaking: spawn five canonical `die` pieces with
-  `sides: 6` instead of the unsupported `d6` piece type that crashed room creation.
-  The live demo smoke test now accepts `DEMO_TEST_STARTER` and verifies synchronized
-  dice state. Rebuild/restart the app container to apply; no database migration.
-- Fixed Docker first-run role initialization: pass the database owner as a safely quoted
-  psql identifier, so default grants no longer target the literal "$POSTGRES_USER".
-  Added a disposable PostgreSQL regression test for initialization, password quoting,
-  current/future table and sequence access, and denied schema creation. Existing partially
-  initialized databases still require the two default-privilege grants to be applied manually.
-- Audited all 17 website wiki pages against current documentation, release history and source.
-  Corrected Node setup order and grants, Compose environment forwarding and secret permissions,
-  native administrator commands, role restrictions, scene/reset consequences and transient state.
-  Expanded current deck, notecard, fog and table-tool instructions; distinguish Unreleased
-  features from 0.20.0. Added per-page source links and a review record in `website/WIKI_AUDIT.md`.
-  Updated supporting README, gesture, architecture and reference notes. Documentation only.
-- Added step-by-step website instructions for double-sided tile uploads, panorama and cubemap
-  skyboxes, and saving and applying custom dice textures. No application behavior changed.
-- Corrected the website's Assets and Scenes guide against the current table controls and
-  handlers: combined Library categories, admin creation on regular tables, Save/Save + Spawn,
-  publication, scene save/load, collections, and portable assets. Updated the first-game,
-  controls, pieces, saving, and Node.js guides, plus the source README and architecture/reference
-  descriptions. This is a documentation correction; application behavior is unchanged.
-- Made SMTP setup documentation and configuration examples provider-neutral.
-- Landing account header overlap: moved Account security beside Admin in the page header,
-  and allowed identity/actions to wrap without overlap on narrow screens.
-- README migration and tuning references, test commands and database-test prerequisites;
-  added documentation navigation, notecard/concealment/fog summaries, and scoped security guidance.
-- Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
-  room creation, retain unique transport IDs, and use a separate persistent room ID. One local
-  writer holds ownership through its final save; failed/unadmitted instances cannot overwrite
-  checkpoints. Connection admission rechecks access and preserves revocation/spectator handling.
-- Security audit SEC-02/SEC-03: remove the obsolete `saveDeck`/inline-image writer and serve only
-  approved generated raster/GLB asset paths with explicit safe MIME types and response headers.
-  Encoded metadata paths, scripts, HTML and malformed URLs are blocked, including existing files.
-  Current editor deck/tile saves and normal uploads are retained. Restart the server; no migration
-  or dependency change is required. Manual tests reported green by the user on 2026-09-28.
-
-### Added
 - Temporary-demo storage foundation (migration 024): atomic guest/table allocation with
   serialized storage quotas, separate hashed invites and sessions, host-only invite rotation,
   durable absolute/idle deadlines, and guarded cleanup preserving shared library assets.
@@ -99,6 +62,275 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   failed initialization. Defaults preserve existing capacity behavior. Configure the new
   `ROOM_MAX_*` variables and restart the server. No migration or UI change. Temporary guests,
   expiring tables and the proposed demo UI remain planned in `docs/DEMO_MODE_PLAN.md`.
+
+### Fixed
+- Admin user rows now display an em dash for missing email addresses, allowing temporary
+  demo guests to appear without breaking console initialization.
+- Fixed demo dice starter matchmaking: spawn five canonical `die` pieces with
+  `sides: 6` instead of the unsupported `d6` piece type that crashed room creation.
+  The live demo smoke test now accepts `DEMO_TEST_STARTER` and verifies synchronized
+  dice state. Rebuild/restart the app container to apply; no database migration.
+- Fixed Docker first-run role initialization: pass the database owner as a safely quoted
+  psql identifier, so default grants no longer target the literal "$POSTGRES_USER".
+  Added a disposable PostgreSQL regression test for initialization, password quoting,
+  current/future table and sequence access, and denied schema creation. Existing partially
+  initialized databases still require the two default-privilege grants to be applied manually.
+
+## [0.22.0] — 2026-10-14
+
+### Added
+- Ceramic-style tile sounds: three pickup, four drop, three flip and three shuffle
+  variations with short, high pitched clinks, heavily damped inharmonic resonance and irregular
+  clattering. The existing tile cue pools use new `ceramic-tile-*.ogg` files; original
+  clips are retained. Python/ffmpeg synthesis is offline only. Refresh the browser
+  to load the new sounds; no server restart or migration is needed.
+  Tuned against user-supplied Mahjong references: broad noise-excited responses around
+  5–9 kHz replace isolated sine tones, drops have irregular secondary contacts, and
+  shuffles tumble continuously. Reference recordings are not sampled or bundled.
+  Hard-refresh if cached.
+- Mahjong's Build wall action creates independent concealed tiles in four staggered,
+  two-high rows: 17 stacks per side for 136 tiles, or 18 for 144. It uses the selected
+  library set, retains normal tile physics/privacy and preserves existing pieces.
+  Table fit, occupied wall cells and capacity are checked before spawning; unexpected
+  failures roll back the whole new wall. The labeled button includes the approved wall icon.
+- Mahjong uses authored engraved GLBs for its 34 standard faces, eight flowers/seasons and a common green-backed
+  concealed tile. Base/Back colors and material finish reuse the existing inspector and
+  selection controls; engraved symbol colors are preserved. Models match existing tile
+  dimensions and colliders. Existing hands/saves retain their identities; old peony/lotus
+  tiles keep their image fallback. New plum/bamboo identities have image fallbacks too.
+  The library offers a labeled 136/144 Set selector; red-five assets are bundled for later use.
+- Assisted stacking through the existing drag gesture: gentle tile drops align to a flat
+  support, while ordinary cards retain sideways, lengthwise or diagonal offsets. Offset
+  cards remain separate from decks; centered deck drops still return to inventory. Flat
+  box/cylinder props can opt in with `stackable`; `stackMode` selects aligned or offset placement.
+  Each piece keeps its own physics body and private face. Moving/removing a support wakes
+  the pieces above it; stacked grid pieces remain dynamic. Save/reload preserves placement.
+- Double-six dominoes use 28 authored GLB tiles and a common concealed model. Inspector
+  and selection Recolor controls independently set Base/Inset colors and one shared
+  material finish; appearance survives hands, returns, deck browsing and game saves.
+  Models are fitted to existing physics dimensions, with cached geometry, isolated
+  materials, and procedural fallbacks while loading or on failure.
+- Standard 52/54-card decks use bundled CC0 bridge-sized playing-card images, with
+  blue/red back thumbnails at spawn (blue by default). Bridge geometry and selected
+  backs survive card transfers and saves; rank/suit sorting remains.
+  Legacy procedural references remain supported. Bundled card references also
+  round-trip in asset packages without uploaded dependencies.
+- Private hands show the new playing-card face images and jokers at bridge
+  proportions, with accessible card names and the existing Inspect controls.
+  Full/compact desktop and touch modes retain sorting and play/reorder gestures.
+- Ultra-high graphics preset with 4× rendering per axis (16× the pixels at DPR 1),
+  retaining High's textures, shadows and antialiasing. It is an explicit per-device
+  choice in Settings → UI → Graphics; device defaults remain unchanged. Text-only
+  graphics controls stay labeled in compact mode, and selection exposes its pressed state.
+
+### Changed
+- Refreshed the authored poker chip, coin, checker and crowned-checker models.
+- Refreshed locked dependencies within the existing package ranges. Source installs
+  should run `npm ci`; Docker images include the locked dependencies.
+- Player card fans show the actual backs of ordinary cards, including mixed custom decks.
+  Hands of up to twelve cards show every back; larger hands use a proportional twelve-slot
+  sample, rounded to whole cards. Authorized Show removes revealed cards from their matching
+  back groups before sampling the concealed remainder. Public groups preserve no faces,
+  double-sided reverse artwork, identities or private hand order.
+  Restart the server and refresh clients; no database migration is needed.
+- Tabletop player fans use concealed Domino/Mahjong models and uploaded-tile geometry,
+  with a shallow arc and tile-width spacing. Public fan metadata contains unordered
+  shape/material counts, never faces, double-sided artwork or private hand order;
+  restricted Show continues to reveal only to its audience. Private hands use cached
+  12-degree 3D tile thumbnails and fit complete images without clipping their sides.
+  Restart the server and refresh clients; no database migration is needed.
+- Fixed desktop Drop Hand choices being covered by the private hand. The Hand actions
+  panel now paints above the cards; browser tests check visible pointer targets and keyboard
+  focus for both orientations in full/compact desktop and touch layouts. Refresh the browser.
+- Desktop private-hand controls sit on the left behind the approved Cards-icon
+  Hand actions button, in Rearrange / Drop Hand / Show Hand order. Hide Hand closes
+  the actions and Rearrange mode; reopening starts with actions closed. Touch retains
+  its Show/Rearrange stack and Drop controls. Refresh the browser; no server restart is needed.
+- Updated the pouch with the project owner's replacement bag GLB, retaining its authored
+  materials and independent bag/string tint slots. The shared registration uses the owner's
+  tuned scale, measured collider bounds and default colors. Restart the server and refresh
+  the browser to load the updated model and physics definition.
+- Collider/grid regression tests follow current shared registrations instead of freezing
+  model dimensions, printed spacing or Wordy export coordinates. Synthetic retuning cases
+  verify diagnostics, real physics, grid anchors/offsets and save/reload behavior. GLB-to-collider
+  fit is separate, opt-in asset QA through `assets:colliders`, with an explicit tolerance when
+  bounds matching is intended; deliberately inset/padded colliders can use its report-only mode.
+- Removed the retired procedural Wordy painter, premium-layout/palette data and unused
+  painter-registry/preview branches. Built-in boards use their authored GLB previews;
+  plain/image-backed board rendering and letter-tile faces retain their existing behavior.
+- Wordy McWordface uses the project owner's authored board GLB, with its wood grain,
+  raised squares, premium colors and lettering. The existing model-board loader preserves
+  its materials; measured bounds retain the 11-unit width and match the board collider.
+  Grid calibration pins the 15×15 square spacing and slight offset inside the decorative rim.
+  Restart the server and refresh the browser. Reselect the board and recalibrate existing rooms
+  to update their height/grid, or load the Wordy starter in a fresh game.
+- Mahjong walls now use traditional projecting corners matching the supplied reference,
+  with tightly spaced rows and about one stack extending past each neighboring wall.
+  Both tile counts still fit the default table at their existing tile size.
+- Pre-Built Games offers Mahjong (136 tiles) and Mahjong (144 tiles). Each replaces the
+  table with a shuffled concealed wall and two Rounded Pips D6 dice in its center,
+  without a pouch or automatic dealing. Fit and complete-kit capacity are checked before
+  clearing the existing game; wall breaking, rolling and taking tiles remain manual.
+- New Mahjong sets default to 136 tiles (four copies of every standard face); the optional
+  144-tile set adds one of each flower/season. Spawn creates private pouch inventory;
+  Build wall lays out the selected fresh set as individual concealed tiles.
+- Card/tile colliders follow each card's visible authored thickness by default instead of
+  imposing a 0.04 half-thickness floor (ordinary cards now use 0.015). Optional card padding
+  remains a simulation override; mat surfaces retain their independent 0.04 minimum.
+  Stack surface selection distinguishes thin adjacent layers using its own smaller tolerance.
+- Domino box interior material slots follow the contained tile family's Base color and
+  material finish through the existing appearance controls. Tile and box painting share
+  finish handling, procedural texture UVs and phone fallbacks; other box materials retain
+  their authored appearance.
+- Regression coverage follows pouch Recolor messages through the real piece/card handlers
+  into hand, table and inspection draws, including individually styled inventory entries.
+- Authored model loading, fitting, previews and appearance controls now share a tile-family
+  registry. Domino is the first registered family; Mahjong and future sets can supply
+  model mappings, a concealed model, material slots and defaults without another renderer.
+  Existing domino saves remain compatible; owner-tuned domino dimensions are preserved.
+- Standardized color spelling across project comments, documentation, help text and swatch labels;
+  npm dependency names and bundled vendor files remain unchanged.
+- High graphics now renders at a fixed 2× pixel ratio, supersampling standard-density
+  displays for sharper tabletop detail. Low/Medium and the existing high-density cap
+  are unchanged; a DPR-1 display renders four times as many pixels on High.
+
+### Fixed
+- Gentle stack placement levels tilted moving cards/tiles while keeping their facing and up/down
+  face; held pieces are leveled over a valid support before a corner can disturb the pile.
+  Private-hand single-card plays use the same stacking helper before the spawn fall, with
+  inventory-only surface lookup for piles above/below the default spawn altitude. Concealed
+  faces and explicit stacking settings are preserved; bulk hand scatter retains its layout.
+- Stacking captures overlapping tiles even when shifted sideways or diagonally, and accepts
+  near-edge card offsets without recentering them. Built-in `PROPS` entries can supply
+  `stackable`/`stackMode` defaults; explicit instance settings override those defaults.
+- Drag release sends the final position and raised height before dropping; pausing before
+  release clears stale throw velocity so deliberate stacking does not become an accidental throw.
+- Poker-stack collider regression expectations match the revised poker chip radius
+  (0.6) and four-chip stack height (0.3608).
+- Component tests follow current piece-menu accessible names and retain GM permission, action-target
+  and hide/show checks without requiring retired labels or icons. Label actions are clicked while live.
+- Website checks now expect the enabled public-demo link instead of the retired
+  coming-soon placeholder. The hand-scroll browser check verifies the production
+  smooth-scroll request and native movement without depending on compositor animation timing.
+- Notecard faces and backs now use the GPU's maximum supported anisotropic filtering,
+  matching regular cards to reduce texture blur when viewed across the table.
+
+### Documentation
+- Consolidated all 46 walkthrough findings into prioritized delivery batches with security,
+  data-preservation and reliability tracks, explicit policy decisions/dependencies, concrete
+  first implementation handoffs and separate verification gates. Updated the hardening register
+  and architecture/reference pointers; no runtime fixes or accepted-risk decisions recorded.
+- Traced deployment secrets/roles, startup migrations, installer updates and backup/recovery
+  boundaries. Added HARD-44–46 for retained migration credentials, Docker context exclusions
+  and incomplete upgrade checkpoints. Recorded 63 passing targeted tests with mocked installer
+  operations; no runtime changes, secret inspection, image build or live restore claims.
+- Traced HTTP/room failure boundaries, browser error feedback, security headers and rate limits.
+  Added HARD-42/43 for raw diagnostic logging and parser errors returning 500; extended HARD-05
+  to CSP/auth budget interference. Recorded 40 passing targeted tests and a synthetic HTTP
+  fixture; corrected logging and production-memory-mode contracts. No runtime changes.
+- Traced administrator orphan scanning/trash and texture-cache prebuild/on-demand generation.
+  Added HARD-40/41 for retained cache variants, partial-move reporting and missing shared
+  conversion admission bounds. Recorded isolated fixtures and 30 passing targeted tests;
+  corrected reference contracts for cache variants and prebuild scope. No runtime changes.
+- Traced account passwords/recovery, session revocation and site-admin account controls/removal.
+  Added HARD-38/39 for stale-password login issuance and stale admin-authority/final-admin races,
+  with three isolated route reproductions and 37 passing targeted tests. Updated reference and
+  architecture pointers; no runtime changes or live SQL concurrency verification claims.
+- Traced local camera/input, graphics/audio preferences and browser exit/resource handling.
+  Added HARD-35–37 for unbounded pixel-ratio overrides, preference-storage failures and modal
+  shortcut routing, with isolated reproductions and 39 passing targeted tests. Updated reference
+  and architecture pointers; no runtime changes or browser/GPU verification claims.
+- Traced table/lighting/grid settings, measurement overlays, fog and hidden-object delivery.
+  Added HARD-34 for fog's documented visual-only privacy boundary and extended HARD-18/31
+  with cancelled ruler creation and unthrottled preview broadcasts. Recorded isolated checks,
+  73 passing targeted tests and architecture/reference pointers; no runtime changes.
+- Traced in-room membership, participation restrictions and session controls. Added HARD-33
+  for kick/role writes using stale target privileges, with two isolated handler reproductions
+  and 102 passing targeted tests. Updated architecture/reference pointers; runtime behavior
+  is unchanged and live database concurrency verification remains pending.
+- Traced chat, notes, whiteboard and notecard/template boundaries. Added HARD-29–32 for note
+  acceptance feedback, chat attribution/rate/history limits and whiteboard replay consistency,
+  with isolated reproductions and 105 passing targeted tests. Updated architecture/reference
+  pointers; no runtime fixes or browser/load-test claims.
+- Traced background/manual/final room saves, reset, departure and restart restoration. Added
+  HARD-26/27/28 for snapshot freshness, final-save recovery and duplicated-setting precedence,
+  with isolated reproductions and 34 passing targeted tests. Updated architecture/reference
+  pointers; no runtime changes or live crash-recovery claims.
+- Traced asset uploads, authoring/publication and package import/export. Added HARD-23/24/25
+  for pre-authentication upload buffering, incomplete media validation and deck-save recovery,
+  with bounded reproductions and 109 passing targeted tests. Updated architecture/reference
+  pointers; runtime behavior unchanged.
+- Traced library listing and loading, built-in spawning, and scene/board replacement. Extended
+  HARD-20 with reproduced destructive-replacement failures and added HARD-22 for private catalog
+  versus direct-media access, recording 130 passing targeted tests plus one HTTP media test.
+  Updated architecture/reference pointers; no runtime changes.
+- Extended the card-lifecycle hardening walkthrough through hands, inspections, selective
+  reveals and deck browsing. Recorded empty picked-scope disclosure, transfer-failure inventory
+  loss and pending-inspection reconnect recovery, with 91 passing existing tests and explicit
+  reproduction limits. Updated architecture/reference pointers; runtime unchanged.
+- Extended the hardening walkthrough through selection, grabs, movement, physics and release.
+  Recorded reproduced group-replacement ownership and pointer-cancellation issues, proposed
+  fixes, 77 passing targeted tests and outstanding browser/device verification. Runtime unchanged.
+- Extended the living hardening plan through table entry and reconnect: recorded conditional
+  account-switch identity confusion and unbounded initial-loading recovery, with source and
+  isolated reproduction evidence. Updated architecture/reference pointers; runtime unchanged.
+- Expanded the living hardening plan during the lobby-controls walkthrough: logout revocation
+  failures, recovery-code authentication, admission-policy timing, room abuse limits, avatar
+  validation and pending-room lifecycle state. Recorded 28 passing related tests and bounded
+  synthetic checks, with live/browser verification still pending. No runtime fixes implemented.
+- Added `HARDENING_PLAN.md` as a living record of the landing/account/host-approval review
+  and proposed session-cookie migration. Separates observed behavior, conditional risks,
+  design safeguards and pending verification; linked from architecture and reference docs.
+  Documentation only; no security fixes or authentication behavior changes are implemented.
+- Added deferred multi-instance scaling to the roadmap and revised the room-scaling plan
+  to prototype two fixed app instances with Colyseus Redis adapters and a reverse proxy.
+  Retained ownership, security, storage, performance and recovery gates; custom per-table
+  process management is conditional on measurements. Updated architecture/reference links.
+  Documentation only; single-instance behavior and deployment requirements are unchanged.
+
+## [0.21.1] — 2026-09-30
+
+### Upgrade notes
+- From 0.21.0, pull the updated image and recreate the app container. No new migration,
+  dependency, environment variable or Compose change is required. Existing accounts and
+  passwords are unchanged. Earlier versions must also follow the 0.21.0 upgrade instructions.
+- Automated checks passed: 933 tests in `npm run check` and 25 PostgreSQL integration tests.
+  Live Dockhand update verification remains pending.
+
+
+### Fixed
+- Startup skips all bootstrap administrator settings and password-file access when any user
+  exists, so Docker updates that lose the first-boot file no longer block established installs.
+  Empty databases retain credential validation and transactional provisioning protection.
+
+### Documentation
+- Added separate implementation plans for demo-only 15-dice limits and shared roll
+  cooldowns, and full-app room worker process isolation. Plans include regression and
+  performance gates, ownership/routing safeguards, deployment and rollback. No runtime
+  behavior changed; architecture and reference navigation distinguish plans from contracts.
+
+## [0.21.0] — 2026-09-29
+
+### Upgrade notes
+- From 0.20.0, startup applies additive migration `023_account_recovery.sql` using the existing
+  migration-role connection. Existing accounts, assets and saved games are preserved; existing
+  email addresses are not automatically verified. With automatic migration disabled, apply
+  pending numbered migrations using the schema-owner connection before starting this version.
+- Back up the database and uploads, restart the server and refresh all browsers. Source installs
+  should run `npm ci` first. SMTP is optional; email recovery requires additional configuration,
+  while saved recovery codes work without SMTP. No new service or exposed port is required.
+  See [0.21.0 upgrade instructions](docs/RELEASING.md#upgrading-to-0210).
+- Includes security fixes for room admission/save ownership, asset serving and action-menu HTML
+  injection. Native installer live-distro/reboot acceptance and website publishing/user acceptance
+  remain pending; feature-specific user-reported testing is recorded below.
+
+### Added
+- Native Linux `uninstall` and confirmed `purge` modes with offline execution and `--dry-run`,
+  plus `reinstall`/`resume` for retained or interrupted installations. Recovery preserves stored
+  credentials, uploads and configuration; purge retains database backups and shared dependencies,
+  refuses mounted/redirected storage, and removes only the app's PostgreSQL authentication rule.
+  Shared installer tests cover both Linux and Proxmox profiles. Live distro/reboot acceptance
+  remains pending; no application migration or browser UI change is required.
 - Replaced the website header and footer text branding with the existing Open Tabletop
   logo on the landing page and all 17 wiki guides, with accessible names and responsive sizing.
 - Captured four gameplay/library screenshots from two dedicated, saved showcase rooms.
@@ -124,7 +356,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   instructions in `SECURITY.md`, using `admin@open-tabletop.com`.
 - A source security audit with isolated reproductions of unauthenticated duplicate-room
   creation/save overwrite, admin-only legacy inline-image script hosting, and an encoded-URL
-  bypass of the asset JSON guard. See `docs/SECURITY_AUDIT_2026-09-28.md`; remediation is recorded above and in the audit.
+  bypass of the asset JSON guard. See `docs/SECURITY_AUDIT_2026-09-28.md`; remediation is recorded under Fixed and in the audit.
 - A regular Linux host installer for systemd Debian 12/13, Ubuntu 22.04/24.04/26.04 LTS,
   Fedora and Arch. It shares the Proxmox native deployment flow, adds distro package/cache
   selection and PostgreSQL initialization, and allocates a system account without claiming
@@ -154,7 +386,40 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Private hands retain their separate privacy and explicit sharing/play behavior; personal tray
   dice stay visible. Restart the server and refresh all clients; no database migration is needed.
 
+### Changed
+- Consolidate browser session-token access, lobby/admin JSON requests, and shared button DOM
+  creation. Preserve authentication defaults, request errors, icons, button types, accessible
+  labels and room-action guards; specialized upload/package/template request behavior remains
+  local. Refresh browsers to load the updated modules; no server restart or migration is needed.
+
 ### Fixed
+- Audited all 17 website wiki pages against current documentation, release history and source.
+  Corrected Node setup order and grants, Compose environment forwarding and secret permissions,
+  native administrator commands, role restrictions, scene/reset consequences and transient state.
+  Expanded current deck, notecard, fog and table-tool instructions; distinguish the new
+  features from 0.20.0. Added per-page source links and a review record in `website/WIKI_AUDIT.md`.
+  Updated supporting README, gesture, architecture and reference notes. Documentation only.
+- Added step-by-step website instructions for double-sided tile uploads, panorama and cubemap
+  skyboxes, and saving and applying custom dice textures. No application behavior changed.
+- Corrected the website's Assets and Scenes guide against the current table controls and
+  handlers: combined Library categories, admin creation on regular tables, Save/Save + Spawn,
+  publication, scene save/load, collections, and portable assets. Updated the first-game,
+  controls, pieces, saving, and Node.js guides, plus the source README and architecture/reference
+  descriptions. This is a documentation correction; application behavior is unchanged.
+- Made SMTP setup documentation and configuration examples provider-neutral.
+- Landing account header overlap: moved Account security beside Admin in the page header,
+  and allowed identity/actions to wrap without overlap on narrow screens.
+- README migration and tuning references, test commands and database-test prerequisites;
+  added documentation navigation, notecard/concealment/fog summaries, and scoped security guidance.
+- Security audit SEC-01: authenticate matchmaking before room allocation, disable public explicit
+  room creation, retain unique transport IDs, and use a separate persistent room ID. One local
+  writer holds ownership through its final save; failed/unadmitted instances cannot overwrite
+  checkpoints. Connection admission rechecks access and preserves revocation/spectator handling.
+- Security audit SEC-02/SEC-03: remove the obsolete `saveDeck`/inline-image writer and serve only
+  approved generated raster/GLB asset paths with explicit safe MIME types and response headers.
+  Encoded metadata paths, scripts, HTML and malformed URLs are blocked, including existing files.
+  Current editor deck/tile saves and normal uploads are retained. Restart the server; no migration
+  or dependency change is required. Manual tests reported green by the user on 2026-09-28.
 - Render overflow action labels/notes and touch action-sheet names/metadata as plain text,
   preventing stored room or asset names from injecting HTML. Existing classes, icons, accessible
   labels, confirmation and close behavior are retained. Browser regressions cover desktop/touch
@@ -169,12 +434,6 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   The shared stepper supports `step="any"` with bounded increments (0.25 displayed units for
   aura radii), preserves typed decimals, and ignores disabled/read-only fields. Refresh clients.
 
-### Changed
-- Consolidate browser session-token access, lobby/admin JSON requests, and shared button DOM
-  creation. Preserve authentication defaults, request errors, icons, button types, accessible
-  labels and room-action guards; specialized upload/package/template request behavior remains
-  local. Refresh browsers to load the updated modules; no server restart or migration is needed.
-
 ### Documentation
 - Record the approved and implemented object-concealment slice, its protocol/physics boundaries
   and user-reported manual test pass. Record the manual map-fog user test pass and the implemented volume/thickness follow-up and subsequent user approval separately;
@@ -184,6 +443,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   the deliberate scene-package deferral. Refresh the shared browser-helper cleanup scope against
   current code and remove its stale backlog-file reference; record its subsequent implementation
   and user-reported manual functional pass.
+
+- Prepared 0.21.0 release notes, upgrade guidance and aligned package/Docker version references.
 
 ## [0.20.0] — 2026-09-27
 
@@ -806,12 +1067,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   along in saved scenes. Seats, hand-fans and personal dice trays all carry over to the new shapes
   as-is. Every table also gets a **wooden rim** around the edge that follows the shape, in five
   woods (Mahogany/Walnut/Birch/Green/Oak) the GM picks in *Customize Table* and saves with the
-  room; and the felt is now a subtle fabric texture that still takes your felt colour.
+  room; and the felt is now a subtle fabric texture that still takes your felt color.
 - **Hex grids.** The table grid can now be **hexagonal**, not just square. In *Customize
   Table → Grid*, set the cell shape to **Hex**, pick **pointy-top or flat-top**, and choose a
   hex size — or place a board and use **Fit to board** to size the hexes to how many go across
   it. Pieces with snap turned on (**G**) snap to hex **centres**, and the drawn grid matches;
-  switching pointy↔flat reorients both at once. Offset, line colour, height and hide-the-lines
+  switching pointy↔flat reorients both at once. Offset, line color, height and hide-the-lines
   all work exactly as they do for the square grid. Snapping and the rendered grid run the same
   hex math on client and server, so a piece lands where the grid shows it.
 - **Multi-select composition — build one thing out of many.** With a clump selected, two new
@@ -900,9 +1161,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   as your per-die default.
 - **Pipped d6 dice.** Two built-in dice join the numbered set — **Rounded Pips** and **Square
   Pips** — real 3D models with recessed dots instead of printed numbers. Add them from the dice
-  box's Add menu or the library's built-in Dice tab. They colour exactly like the other dice: the
-  body takes your die colour and the pips take your number colour, so a dice set or the inspector
-  recolours both at once. Under the hood they are a normal d6 — same size, same physics, read by
+  box's Add menu or the library's built-in Dice tab. They color exactly like the other dice: the
+  body takes your die color and the pips take your number color, so a dice set or the inspector
+  recolors both at once. Under the hood they are a normal d6 — same size, same physics, read by
   eye like any die — just a different mesh, so they roll in the tray and tumble on the table like
   the rest.
 
@@ -944,8 +1205,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   selection toolbar and the one-finger/two-finger hand rule were all shipped and all
   undocumented. The developer gesture ledger
   (`docs/GESTURES.md`) has been reconciled to match the rebuilt panel.
-- **Colour swatches on library cards at every size.** The swatch run was `display: none` in short
-  landscape, so colour choice was simply unavailable there. It sits behind a trigger now, reusing
+- **Color swatches on library cards at every size.** The swatch run was `display: none` in short
+  landscape, so color choice was simply unavailable there. It sits behind a trigger now, reusing
   the existing pop-group pattern.
 - **A train dispenser and train pieces** join the built-in props, alongside new lighting and
   texture-resolution knobs.
@@ -1035,7 +1296,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   were handled above the guard that ignores keystrokes aimed at a text field.
 - **Mobile and landscape modal overrides never applied.** A media query adds no specificity, so a
   later top-level `:is(#a,#b,#c)` block outweighed them at every viewport.
-- **Toast and body text inherited the browser's default colour**, which was near-black on the
+- **Toast and body text inherited the browser's default color**, which was near-black on the
   dark theme.
 
 ### Removed
@@ -1687,7 +1948,10 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...v0.22.0
+[0.21.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...v0.21.1
+[0.21.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/optimuspryne/open-tabletop/releases/tag/v0.18.0

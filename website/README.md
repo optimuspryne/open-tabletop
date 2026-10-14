@@ -22,7 +22,7 @@ All 18 pages reuse `assets/logo-wordmark.svg`, an unchanged copy of the app logo
 header and footer. The shared `.brand-logo` and `.footer-logo` classes size it for both
 desktop and phone layouts. Header home links and logo images retain accessible names.
 
-- `index.html`: the approved landing page, GitHub link, and inactive public demo label.
+- `index.html`: the approved landing page, GitHub link, and live public demo links.
 - `styles.css`: the website's shared tokens, button styles, desktop sidebar, and responsive layout.
   It uses the application's token naming conventions with the approved website palette.
   Game CSS stays separate so either surface can change without affecting the other.
@@ -57,8 +57,7 @@ a subdirectory. Page titles and descriptions are part of each page's head.
 
 The copy uses plain language without em dashes. Documentation distinguishes current source
 from published images. Keep those version qualifications when updating installation examples.
-The demo is a non-interactive text label, not an empty link. Add a destination only when the
-user authorizes enabling the demo.
+The public demo links are enabled with user approval and open the demo in the same tab.
 
 ## Accessibility and device behavior
 
@@ -79,7 +78,7 @@ npm run test:website
 ```
 
 `test/website.js` is included in the normal test suite. It checks local routes, assets,
-fragment targets, duplicate IDs, page metadata, script-free content, and the inactive demo.
+fragment targets, duplicate IDs, page metadata, script-free content, and the active demo destination.
 `scripts/website-test.mjs` checks the landing page and welcome, Docker, Portainer, and Assets
 and scenes guides. It reuses `scripts/lib/headless.mjs` to check page overflow, image
 loading, desktop/mobile navigation, and keyboard expansion at 320, 390, 760, 1024, and 1440px.
@@ -87,7 +86,7 @@ Set `WEBSITE_SCREENSHOTS` to an output directory to save selected desktop/mobile
 
 Manual acceptance: follow the landing-page buttons; navigate and reload wiki articles;
 use the mobile contents list; tab through links; read a long command example on a phone;
-confirm the demo cannot be activated. Automated touch emulation does not establish physical
+confirm the demo opens the guest entry at play.open-tabletop.com. Automated touch emulation does not establish physical
 device behavior. Installation commands are documentation, not executed by website tests.
 
 ## Hosting
@@ -153,3 +152,26 @@ role and participation restrictions, notecard-template ownership, scene replacem
 session-only data. It also added concrete paths for browsing, notecards, fog and table tools.
 No production functions or helpers changed. Both static website checks and 90 page/device
 browser checks passed; installation examples received syntax checks, not live provisioning.
+
+## Public demo links
+
+Every page header links to `https://play.open-tabletop.com`; the homepage also
+features the primary Try public demo action, with self-hosting and GitHub secondary.
+Phones stack the hero actions with full labels. The homepage and wiki introduction
+explain account-free entry, inviting friends and the two-hour temporary table limit.
+This is a static website change based on main. The demo application remains on
+its separate long-lived `codex/public-demo-mode` branch; no demo runtime is merged here.
+Deploy only the `website/` directory through the existing website publishing process.
+
+Changed files: `index.html` (hero and navigation), all 17 `wiki/*.html` headers
+(and wiki index introduction), `styles.css` (stacked phone actions), `README.md`;
+`test/website.js` (live-link checks), `scripts/website-test.mjs` (responsive links/actions);
+`CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` (current website contract).
+No application functions, routes, dependencies or database behavior changed.
+
+Verification for demo-link activation: `npm run check` passed (928 tests);
+`npm run test:website` passed 25 page/viewport combinations; `npm run test:devices`
+passed all seven profiles. Desktop and phone homepage screenshots were visually
+reviewed. The broader `test:components` run was interrupted with SIGTERM (143)
+during coarse-pointer scenarios, with no failures reported before interruption;
+it is not recorded as a completed pass. Public deployment remains manual.

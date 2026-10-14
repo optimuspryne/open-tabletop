@@ -3,6 +3,9 @@
 _Last reconciled 2026-09-23 against v0.18.0 source and documentation. Completed implementation
 does not imply that the manual device or large-scene checks have been signed off._
 
+_Targeted update 2026-10-01: added deferred multi-instance scaling; other backlog statuses
+have not been re-audited._
+
 ## North star
 
 A self-hosted, physics-driven virtual tabletop that recreates **sitting at a real table with
@@ -92,10 +95,12 @@ frame ms, draw calls, triangles, geometry/texture/program counts (`public/render
 body count, and tick health. Real-hardware tools — measure on the low-end target, not headless.
 
 **Piece-model note — what "hundreds of pieces" means here.** A deck is a single body with a
-private `deckCards` list, not N bodies; the 144-tile Mahjong wall spawns as one deck piece, and
-dealt tiles live in `this.hands` (also not physics). Only tiles spread onto the table are bodies,
-and `SIM.maxPieces` (raised 80 → **250** on 2026-09-01) caps `state.pieces.size`. So a full wall
-renders as one stacked mesh, and the many-bodies case is bounded at that cap.
+private `deckCards` list, not N bodies; the 136/144-tile Mahjong pouch spawns as one deck piece,
+and dealt tiles live in `this.hands` (also not physics). Build wall and the Mahjong starters
+place 136/144 independent tile bodies; the starters also place two center dice. Other tiles
+spread onto the table are bodies too, and `SIM.maxPieces` (raised 80 → **250** on 2026-09-01)
+caps `state.pieces.size`. Pouches render as one mesh; physical walls are a many-bodies case
+bounded at that cap.
 
 **Two cap bugs — ✅ fixed 2026-09-01** (cap also raised 80 → 250):
 1. `dealToTable` / `dealDrag` (`server/game/handlers/cards.js`) spawned a table body per draw
@@ -152,13 +157,15 @@ Lowers the cold-start for a host who isn't going to model their own assets.
   the mesh and the collider), custom image-deck **shapes** (rounded/square/**hexagon**, hex with a
   matching 6-gon collider) and **thickness**, a **procedural board framework** (`BOARD_PAINTERS`,
   first used by the word grid), and **deck skins** (`DECK_MODELS`, e.g. the pouch). Tiles and
-  their boxes also get their own sound cues. See `DESIGN_tiles.md`.
+  their boxes also get their own sound cues. Wordy now uses an authored GLB; its old painter and
+  unused painter framework have been retired. Plain/image-backed boards remain supported.
+  See `DESIGN_tiles.md`.
 - ✅ **Dice colors** — named dice sets (`DICE_SETS`).
 - ✅ **Model dispensers** — built-in and uploaded-model dispensers are supported. The train
   dispenser was an early example; its bundled assets were removed in v0.17.0. The Go bowl and
   custom-dispenser workflow remain available.
-- Still open: more **tokens/markers**; **RPG battlemaps** (the procedural-board framework is the
-  seam — add a `BOARD_PAINTERS` painter); a **user upload path for deck skins** (only the built-in
+- Still open: more **tokens/markers**; **RPG battlemaps** (existing image/model board uploads
+  provide the asset path); a **user upload path for deck skins** (only the built-in
   pouch exists today — the `DECK_MODELS` plumbing is there, the editor UI isn't); more
   starter games and tile art.
 
@@ -276,7 +283,7 @@ implementation sequence without making the entire backlog a fixed priority queue
    - *Pipped d6: ✅ shipped 2026-09-02.* Two built-in dice — Rounded Pips + Square Pips — as
      bundled `.glb` models (`DICE_MODELS`, `public/static_assets/models/pieces/dice/`), carried in `props.model`.
      A normal d6 for physics/value/collider; only the mesh differs. Body (`Ivory`) + pips (`Dots`)
-     materials tinted by `color`/`textColor`, so they recolour like any die. Spawn from the dice
+     materials tinted by `color`/`textColor`, so they recolor like any die. Spawn from the dice
      box Add menu + the library built-in Dice tab (`dieModelPreviewURL`).
 10. **Multi-select composition.** ✅ **shipped 2026-09-02** The selection tools support:
     1. Combine loose like cards into a **new deck** (discard pile → deck).
@@ -289,7 +296,7 @@ implementation sequence without making the entire backlog a fixed priority queue
     on switch). **Higher-resolution custom sources are supported:** Ultra keeps the uploaded
     source's native resolution. The 25 bundled skies are 2048×1024, so High and Ultra match on
     those assets. Replacing bundled artwork is optional content work, not unfinished resolution support.
-12. **Graphics/Video Settings.** ✅ **Shipped** — three fill-rate tiers (low/medium/high;
+12. **Graphics/Video Settings.** ✅ **Shipped** — four fill-rate tiers (low/medium/high/ultra-high;
     pixel ratio + shadow-map size + AA), device-defaulted (phone → Low, tablet → Medium,
     desktop → High) with an in-app control (Settings → UI → Graphics), a persisted per-device
     preference, and `?q=` /
@@ -385,6 +392,30 @@ implementation sequence without making the entire backlog a fixed priority queue
     action with its visibility/permission policy; those modes are not implemented yet.
 
 ---
+
+## Future scaling — deferred until usage warrants it
+
+Keep the single-instance deployment as the default and retain the demo safeguards. Revisit
+scaling when measurements show ordinary concurrent play approaching capacity or one busy
+table repeatedly delaying unrelated games. Popularity alone is not the acceptance metric;
+measure simulation intervals, CPU/event-loop delay, memory, and join/HTTP latency.
+
+The preferred first experiment is **two fixed app instances behind a reverse proxy**, using
+Colyseus `RedisPresence` and `RedisDriver` for shared matchmaking and communication, with
+PostgreSQL and shared uploaded-asset storage. Let Docker or the native service manager own
+process lifecycle. Route each room's WebSocket connections to its owning instance.
+
+- Benchmark busy and normal tables both on separate instances and on the same instance.
+  Clustering isolates instances; tables sharing an instance can still interfere. Consider
+  one table per process only if measurements justify the extra placement/lifecycle work.
+- Before production use, implement database-enforced writer ownership, cross-instance
+  revocation/admin controls, coordinated asset cleanup and quotas, bounded resource use,
+  safe recovery, and draining/rollback. Redis matchmaking alone does not supply these.
+- Keep scaling opt-in. Test the full app first, then port selected commits to the separate
+  demo branch after review; never merge demo-only restrictions into main.
+
+See the [deferred room-scaling plan](PLAN_ROOM_WORKERS.md) for stages and release gates.
+No prototype, runtime change, migration, or deployment is implemented by this roadmap entry.
 
 ## Parked threads (finish-what-we-started)
 

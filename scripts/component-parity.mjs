@@ -4,7 +4,7 @@
  *
  * css-parity.mjs stubs page JavaScript so its snapshots are deterministic. The cost is a
  * blind spot: every component assembled at runtime — library cards, their controls, the
- * colour swatches — is invisible to it. Three changes shipped in one day needed a human
+ * color swatches — is invisible to it. Three changes shipped in one day needed a human
  * to look at them for exactly this reason.
  *
  * This runs the real modules. public/editor/editor-panel.js does not depend on client.js: it
@@ -28,6 +28,14 @@
  */
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import sharp from 'sharp';
+import { staticAssetPath } from '../server/static-assets.js';
+import {
+  PLAYING_CARD_BACKS,
+  PLAYING_CARD_FACES,
+  PLAYING_CARD_JOKERS,
+} from '../shared/playing-cards.js';
+import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
 import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
@@ -209,6 +217,155 @@ const UI_SURFACES_FIXTURE = `<!doctype html><meta charset="utf-8">
 
 // Each scene: drive the real UI, then snapshot a subtree.
 const SCENES = [
+  {
+    name: 'tile-models-and-appearance',
+    root: '#inspectDominoAppearance',
+    expect: {
+      selector:
+        '#inspectDominoAppearance:not([hidden]) input, #inspectDominoAppearance:not([hidden]) select',
+      min: 3,
+    },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw Error(message); };
+      const THREE = await import('three');
+      const { KIND, cardMesh, tilePreviewURL } = await import('/rendering/graphics.js');
+      const { CONFIG, deviceClass } = await import('/rendering/core.js');
+      const { cardGeom } = await import('/shared/pieces.js');
+      const { createInspection } = await import('/table/inspection.js');
+      const { createSelection } = await import('/table/selection.js');
+      const { meshPropsOf } = await import('/table/piece-view.js');
+      const byId = id => document.getElementById(id);
+      const measured = [];
+      for (let a = 0; a <= 6; a++) for (let b = a; b <= 6; b++) {
+        const model = cardMesh({tile:'domino', front:'domino:'+a+':'+b});
+        assert(await model.userData.tileModelReady, 'Domino GLB did not load');
+        const size = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3());
+        const {hw,hh,th}=cardGeom({tile:'domino'});
+        assert(Math.abs(size.x-hw*2)<0.0001 && Math.abs(size.y-th*2)<0.0001 && Math.abs(size.z-hh*2)<0.0001,
+          'Model and collider dimensions diverged');
+        measured.push(model);
+      }
+      const hidden = cardMesh({tile:'domino'});
+      assert(await hidden.userData.tileModelReady, 'Concealed GLB did not load');
+      const names = []; hidden.traverse(node => names.push(node.name));
+      assert(names.some(name => name.toLowerCase().includes('concealed')) &&
+        !names.some(name => /Domino_[0-6]_[0-6]/.test(name)), 'Concealed model contains a face identity');
+      const styled = cardMesh({tile:'domino',front:'domino:3:6',dominoAppearance:{base:0x285599,inset:0xff3344,finish:'metallic'}});
+      assert(await styled.userData.tileModelReady, 'Styled GLB did not load');
+      const materials=[];styled.traverse(node=> { if(node.material) materials.push(...[node.material].flat()); });
+      assert(materials.filter(m=>m.name==='base').every(m=>m.color.getHex()===0x285599 && m.metalness>0),
+        'Base color or finish missing');
+      assert(materials.filter(m=>m.name==='inset').every(m=>m.color.getHex()===0xff3344 && m.metalness>0),
+        'Inset color or shared finish missing');
+      const thumb = await tilePreviewURL({tile:'domino',front:'domino:3:6',dominoAppearance:{base:0x285599,inset:0xff3344}});
+      assert(thumb && thumb.startsWith('data:image/'), 'Hand/library preview missing');
+      measured.forEach(mesh=>KIND.card.dispose(mesh));KIND.card.dispose(hidden);KIND.card.dispose(styled);
+      const scene=new THREE.Scene(), camera=new THREE.PerspectiveCamera(), controls={enabled:true};
+      const piece={type:'card',props:JSON.stringify({tile:'domino',front:'domino:3:6',back:'domback'})};
+      const mesh=cardMesh(JSON.parse(piece.props)); await mesh.userData.tileModelReady;
+      const pieces=new Map([['1',piece]]), meshes=new Map([['1',{type:'card',mesh}]]), sent=[];
+      const room={state:{pieces},send:(...args)=>sent.push(args)};
+      const inspection=createInspection({
+        THREE,scene,camera,controls,canvas:document.createElement('canvas'),kinds:KIND,
+        config:CONFIG,deviceClass,getRoom:()=>room,getPieceVisual:id=>meshes.get(id),
+        setOriginalVisible:(id,visible)=>{meshes.get(id).mesh.visible=visible;},meshPropsOf,byId,
+        queryAll:selector=>document.querySelectorAll(selector),setBtnLabel:()=>{},
+        buildTextureChips:()=>{},saveDiceDefault:()=>{},clearDiceDefault:()=>{},
+        onReleaseHand:()=>{},onSingleClick:()=>{},
+      });
+      inspection.enterInspect('1');
+      assert(!byId('inspectDominoAppearance').hidden, 'Domino inspector controls hidden');
+      const base=byId('inspectDominoAppearance-base'),inset=byId('inspectDominoAppearance-inset'),finish=byId('inspectDominoAppearance-finish');
+      base.value='#285599';base.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolor' && sent.at(-1)[1].tileAppearance.base===0x285599 &&
+        !('inset' in sent.at(-1)[1].tileAppearance) && inset.value==='#000000', 'Base change coupled the inset');
+      inset.value='#ff3344';inset.dispatchEvent(new Event('change'));
+      finish.value='glossy';finish.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[1].tileAppearance.finish==='glossy', 'Whole-tile finish not sent');
+      inspection.releaseInspect();
+      const selection=createSelection({THREE,scene,camera,canvas:document.createElement('canvas'),meshes,
+        marker:{inner:.8,outer:1,lift:.01},getRoom:()=>room,getBoardTopY:()=>0,byId,deviceClass});
+      selection.beginPointer({primary:true,additive:true},'1');selection.endPointer({});selection.update();
+      assert(!byId('selDominoAppearance').hidden, 'Selection Recolor does not support dominoes');
+      const groupBase=byId('selDominoAppearance-base');groupBase.value='#445566';groupBase.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolorGroup' && sent.at(-1)[1].tileAppearance.base===0x445566,
+        'Selection appearance did not use the real caller');
+      selection.clear();inspection.enterInspect('1');
+      const panel=byId('inspectDominoAppearance'), bounds=panel.getBoundingClientRect();
+      assert(bounds.left>=0 && bounds.right<=innerWidth && bounds.bottom<=innerHeight,
+        'Domino controls overflow the viewport');
+      assert(!document.body.classList.contains('ui-compact') ||
+        [...panel.querySelectorAll('label')].every(label=>label.textContent.trim()), 'Compact slot labels missing');
+      inspection.releaseInspect();
+      const {TILE_MODELS} = await import('/shared/pieces.js');
+      for (const front of Object.keys(TILE_MODELS.mahjong.faces)) {
+        const tile=cardMesh({tile:'mahjong',front});
+        assert(await tile.userData.tileModelReady, 'Mahjong GLB missing: '+front);
+        const size=new THREE.Box3().setFromObject(tile).getSize(new THREE.Vector3());
+        const {hw,hh,th}=cardGeom({tile:'mahjong'});
+        assert(Math.abs(size.x-hw*2)<.0001 && Math.abs(size.y-th*2)<.0001 && Math.abs(size.z-hh*2)<.0001,
+          'Mahjong GLB dimensions differ from its collider');
+        KIND.card.dispose(tile);
+      }
+      const concealed=cardMesh({tile:'mahjong'});
+      assert(await concealed.userData.tileModelReady, 'Mahjong concealed GLB missing');
+      let backTop=false;
+      concealed.traverse(node=>{
+        if(node.isMesh && [node.material].flat().some(m=>m.name==='back')) {
+          const groups=node.geometry.groups.length?node.geometry.groups:[{
+            start:0,count:node.geometry.index?.count||node.geometry.attributes.position.count,materialIndex:0
+          }];
+          groups.forEach(group=>{
+            if([node.material].flat()[group.materialIndex]?.name!=='back') return;
+            const positions=node.geometry.attributes.position, indices=node.geometry.index;
+            let y=0;
+            for(let i=group.start;i<group.start+group.count;i++) {
+              const p=new THREE.Vector3().fromBufferAttribute(positions,indices?indices.getX(i):i);
+              node.localToWorld(p);y+=p.y;
+            }
+            backTop=y/group.count>0;
+          });
+        }
+      });
+      assert(backTop, 'Concealed Mahjong shows the ivory face instead of the green back');
+      KIND.card.dispose(concealed);
+      const mjProps={tile:'mahjong',front:'/mahjong/faces/bam1.png',back:'mjback'};
+      const original=cardMesh(mjProps);
+      const painted=cardMesh({...mjProps,tileAppearance:{base:0x285599,inset:0xff3344,finish:'metallic'}});
+      assert(await original.userData.tileModelReady && await painted.userData.tileModelReady,'Styled Mahjong missing');
+      const originals=new Map();original.traverse(node=>[node.material].flat().filter(Boolean).forEach(m=>originals.set(m.name,m.color.getHex())));
+      painted.traverse(node=>[node.material].flat().filter(Boolean).forEach(m=>{
+        if(m.name==='base'||m.name==='back')
+          assert(m.color.getHex()===(m.name==='base'?0x285599:0xff3344)&&m.metalness>0,'Mahjong body/back override missing');
+        else assert(m.color.getHex()===originals.get(m.name),'Mahjong engraving colors changed');
+      }));
+      const preview=await tilePreviewURL(mjProps);
+      assert(preview?.startsWith('data:image/'),'Mahjong hand preview missing');
+      for(const id of ['flowPlum','flowBamboo']) {
+        const image=new Image();image.src='/mahjong/faces/'+id+'.png';await image.decode();
+        assert(image.naturalWidth===360&&image.naturalHeight===480,'New flower image fallback is missing');
+      }
+      KIND.card.dispose(painted);KIND.card.dispose(mesh);
+      piece.props=JSON.stringify(mjProps);meshes.set('1',{type:'card',mesh:original});
+      inspection.enterInspect('1');
+      assert(byId('inspectDominoAppearance-inset').getAttribute('aria-label')==='Mahjong back color',
+        'Mahjong Back label/accessibility missing');
+      assert([...panel.querySelectorAll('label')].map(l=>l.textContent.trim()).slice(0,2).join(',')==='Base,Back',
+        'Mahjong controls still describe an inset');
+      const back=byId('inspectDominoAppearance-inset');back.value='#334455';back.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolor'&&sent.at(-1)[1].tileAppearance.inset===0x334455,
+        'Mahjong inspector does not send the back patch');
+      inspection.releaseInspect();
+      selection.beginPointer({primary:true,additive:true},'1');selection.endPointer({});selection.update();
+      assert(!byId('selDominoAppearance').hidden,'Mahjong selection controls hidden');
+      const selBack=byId('selDominoAppearance-inset');selBack.value='#556677';selBack.dispatchEvent(new Event('change'));
+      assert(sent.at(-1)[0]==='recolorGroup'&&sent.at(-1)[1].tileAppearance.inset===0x556677,
+        'Mahjong selection does not send the back patch');
+      selection.clear();inspection.enterInspect('1');
+      const mjBounds=panel.getBoundingClientRect();
+      assert(mjBounds.left>=0 && mjBounds.right<=innerWidth && mjBounds.bottom<=innerHeight,
+        'Mahjong controls overflow the viewport');`,
+  },
   {
     name: 'piece-fog-aura',
     root: '#fogAuraModal',
@@ -529,7 +686,9 @@ const SCENES = [
         window.onOttRoom(${STUB_ROOM});
         document.getElementById('lib2Btn').click();
         const modal = document.getElementById('libraryModal');
-        for (const [kind, count] of [['dice', 8], ['decks', 2], ['notecards', 2], ['tiles', 2], ['boards', 2], ['objects', 3]]) {
+        // Standard decks now use bundled rasters; the remaining entries still
+        // exercise canvas export. Check legacy playing-card refs directly below.
+        for (const [kind, count] of [['dice', 8], ['notecards', 2], ['tiles', 2], ['boards', 2], ['objects', 3]]) {
           const list = document.getElementById('nlb_'+kind);
           modal.querySelector('[data-tab="'+list.closest('.libGroup').dataset.group+'"]').click();
           const boxes = [...list.querySelectorAll('.libPreview')].slice(0, count);
@@ -548,6 +707,14 @@ const SCENES = [
               assert(im.naturalWidth<=320 && im.naturalHeight<=320, kind+' exceeded thumbnail bounds');
             }
           }
+        }
+        const { cardPreviewURL } = await import('/rendering/graphics.js');
+        for (const ref of ['back', 'rank:A:♠:#000', 'joker:#bd2500']) {
+          const image = new Image();
+          image.src = cardPreviewURL(ref);
+          await image.decode();
+          assert(image.src.startsWith('data:image/png;'), 'Legacy card did not exercise PNG fallback');
+          assert(image.naturalWidth <= 320 && image.naturalHeight <= 320, 'Legacy card exceeded thumbnail bounds');
         }
       } finally {
         HTMLCanvasElement.prototype.toDataURL = encode;
@@ -1175,9 +1342,39 @@ const SCENES = [
       byId('roomInfoBtn').click();
       assert(byId('seatPop').hidden && byId('roomSheet').contains(dock) && dock.contains(roster), 'Room sheet did not return then borrow live nodes');
       byId('roomSheet')._close(); assert(byId('roomInfo').contains(dock), 'Room sheet failed to return dock');
-      byId('dropBtn').click(); byId('dropDown').click();
-      assert(sent.at(-1)[0] === 'handToTable' && sent.at(-1)[1].faceDown, 'Drop orientation lost');
+      messages.get('hand')([{hid:'drop-fixture',front:'rank:A:♠:#000',back:'back'}]);
+      const handSheet=matchMedia('(max-width:900px), (pointer:coarse)').matches;
+      if(handSheet) byId('handTab').click();
+      else byId('handActionsBtn').click();
+      assert(byId('dropBtn').getBoundingClientRect().height>0, 'Production Drop is unreachable');
+      byId('tableLoading')?.remove();
+      const dropFull=document.body.classList.contains('ui-full');
+      const dropCompact=document.body.classList.contains('ui-compact');
+      for(const expanded of [true,false]) {
+        document.body.classList.toggle('ui-full',expanded);
+        document.body.classList.toggle('ui-compact',!expanded);
+        byId('dropBtn').click();
+        assert(!byId('dropChoices').hidden && byId('dropBtn').getAttribute('aria-expanded')==='true',
+          'Drop choices did not open');
+        for(const id of ['dropDown','dropUp']) {
+          const button=byId(id), box=button.getBoundingClientRect();
+          assert(box.width>0 && box.height>0 && box.left>=0 && box.right<=innerWidth &&
+            box.top>=0 && box.bottom<=innerHeight, 'Drop choice is not visible: '+id);
+          const target=document.elementFromPoint(box.x+box.width/2,box.y+box.height/2);
+          assert(button.contains(target), 'Drop choice is covered: '+id);
+          button.focus();
+          assert(document.activeElement===button, 'Drop choice is not keyboard reachable: '+id);
+        }
+        byId(expanded?'dropDown':'dropUp').click();
+        assert(sent.at(-1)[0] === 'handToTable' && sent.at(-1)[1].faceDown===expanded, 'Drop orientation lost');
+        assert(byId('dropChoices').hidden && byId('dropBtn').getAttribute('aria-expanded')==='false',
+          'Drop choices did not close after placement');
+      }
+      document.body.classList.toggle('ui-full',dropFull);
+      document.body.classList.toggle('ui-compact',dropCompact);
       byId('toast').querySelector('button').click(); assert(sent.at(-1)[0] === 'handFromTable', 'Drop Undo lost');
+      messages.get('hand')([]);
+      if(handSheet) byId('handTab').click();
       messages.get('diceList')([{ id: 'tex', name: 'Custom finish', url: '/fixture.png' }]);
       assert(byId('trayTextures').querySelectorAll('button').length === 1 && !byId('trayCustomGroup').hidden, 'Uploaded finish chips did not hydrate');
       byId('trayTextures').querySelector('button').click();
@@ -1205,20 +1402,40 @@ const SCENES = [
       byId('fabBtn').click();
       const frame = () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const sheet = matchMedia('(max-width: 900px), (pointer: coarse)').matches;
-      const cards = Array.from({length:20}, (_,i)=>({hid:String(i),front:'rank:A:♠:#000',back:'back'}));
+      const { PLAYING_CARD_FACES, PLAYING_CARD_GEOM, PLAYING_CARD_BACKS } = await import('/shared/playing-cards.js');
+      const { cardPreviewURL } = await import('/rendering/graphics.js');
+      const cards = PLAYING_CARD_FACES.slice(0,20).map((face,i)=>({hid:String(i),front:face.ref,back:PLAYING_CARD_BACKS[0].ref,geom:PLAYING_CARD_GEOM}));
       messages.get('hand')(cards);
       await frame();
       if (sheet) byId('handTab').click();
       await frame(); await frame();
       const chevrons = [...byId('hand').querySelectorAll('.handScrollBtn')];
       const scroll = byId('hand').querySelector('.handScroll');
+      assert(scroll.querySelectorAll('.handcard.playingFace.img').length===20, 'Private hand delivery did not render image faces');
+      const image = new Image();image.src = cardPreviewURL(cards[0].front);await image.decode();
+      assert(image.naturalHeight<=320, 'Private hand loaded an unbounded original');
+      assert(scroll.firstElementChild.style.backgroundImage.includes('S-1.png'), 'Private hand displayed the wrong face');
       assert(chevrons.length===2 && chevrons.every(button=>!button.hidden), 'Hand scroll arrows require Rearrange before appearing');
       assert(chevrons[0].disabled && !chevrons[1].disabled, 'Initial hand scroll direction state is wrong');
       assert(!byId('hand').classList.contains('reordering'), 'Hand scrolling enabled Rearrange');
       for (const id of ['selectBtn','seatBtn','fabBtn'])
         assert((getComputedStyle(byId(id)).display==='none')===sheet, id+' visibility does not follow the hand tray');
-      chevrons[1].click();
-      for (let i=0; i<150 && scroll.scrollLeft===0; i++) await new Promise(resolve=>setTimeout(resolve,20));
+      // Verify the real button's smooth-scroll request and native scrolling separately:
+      // compositor animation progress is unreliable under software-rendered CI load.
+      assert(scroll.clientWidth>0 && scroll.scrollWidth>scroll.clientWidth, 'Hand fixture has no scrollable viewport');
+      const nativeScrollBy = scroll.scrollBy;
+      let scrollRequest;
+      scroll.scrollBy = function(options) {
+        scrollRequest = options;
+        nativeScrollBy.call(this, { ...options, behavior: 'instant' });
+      };
+      try {
+        chevrons[1].click();
+        assert(scrollRequest?.left>0 && scrollRequest.behavior==='smooth', 'Hand scroll-right button did not request smooth movement');
+      } finally {
+        delete scroll.scrollBy;
+      }
+      await frame();
       assert(scroll.scrollLeft>0, 'Hand scroll-right button does not move cards');
       scroll.scrollTo({left:scroll.scrollWidth,behavior:'instant'}); await frame();
       assert(!chevrons[0].disabled && chevrons[1].disabled, 'Hand scroll end state is wrong');
@@ -1517,39 +1734,40 @@ const SCENES = [
       assert(radial[2].some(item => item.label === 'Roll'), 'Small piece menu did not use radial');
       radial[2].find(item => item.label === 'Highlight').fn();
       assert(sent.at(-1)[0] === 'menuHighlight' && sent.at(-1)[1] === 'die', 'Touch highlight action missing');
-      assert(!radial[2].some(item => item.label === 'Labels…'), 'Player menu offered GM labels');
+      assert(!radial[2].some(item => item.label === 'Labels'), 'Player menu offered GM labels');
       assert(!radial[2].some(item => /players/.test(item.label)), 'Player menu offered concealment');
-      assert(!radial[2].some(item => item.label === 'Fog aura…'), 'Player menu offered aura configuration');
+      assert(!radial[2].some(item => item.label === 'Light Radius'), 'Player menu offered aura configuration');
       rank = 2;
       for (const touch of [false, true]) {
         sheet = touch; ui.openPieceMenu('deck', { x: 80, y: 80 });
-        const labelAction = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.textContent === 'Labels…');
+        const labelAction = [...byId('pieceMenu').querySelectorAll('button')].find(b => b.getAttribute('aria-label') === 'Labels');
         assert(labelAction, 'GM label action missing from desktop/touch menu');
-        const auraAction=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Fog aura…');
-        assert(auraAction?.querySelector('use')?.getAttribute('href')==='#i-circle','Aura entry lost approved circle icon');
+        labelAction.click();
+        assert(sent.at(-1)[0] === 'menuLabels' && sent.at(-1)[1] === 'deck', 'GM label menu target lost');
+        ui.openPieceMenu('deck', { x: 80, y: 80 });
+        const auraAction=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Light Radius');
+        assert(auraAction, 'GM light radius action missing from desktop/touch menu');
         auraAction.click();assert(sent.at(-1)[0]==='menuAura'&&sent.at(-1)[1]==='deck','Aura entry targeted wrong piece');
         ui.openPieceMenu('deck', { x: 80, y: 80 });
         const hide=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Hide from players');
-        assert(hide?.querySelector('use')?.getAttribute('href')==='#i-eye-off','Hide icon missing');
+        assert(hide, 'GM hide action missing from desktop/touch menu');
         hide.click();
         assert(sent.at(-1)[0]==='setPieceVisibility' && sent.at(-1)[1].hidden===true,'Hide request lost');
         state.pieces.get('deck').hidden=true;
         ui.openPieceMenu('deck', {x:80,y:80});
-        const reveal=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Reveal to players');
-        assert(reveal?.querySelector('use')?.getAttribute('href')==='#i-eye','Reveal icon missing');
+        const reveal=[...byId('pieceMenu').querySelectorAll('button')].find(b=>b.getAttribute('aria-label')==='Show to players');
+        assert(reveal, 'GM show action missing from desktop/touch menu');
         reveal.click();
         assert(sent.at(-1)[0]==='setPieceVisibility' && sent.at(-1)[1].hidden===false,'Reveal request lost');
         state.pieces.get('deck').hidden=false;
-        labelAction.click();
-        assert(sent.at(-1)[0] === 'menuLabels' && sent.at(-1)[1] === 'deck', 'GM label menu target lost');
       }
       sheet=true; state.pieces.set('other',{type:'prop',hidden:true});
       ui.openPieceMenu('other',{x:100,y:100});
       assert(!byId('pieceMenu').hidden,'Long GM action list did not use the scrollable touch menu');
       state.pieces.get('other').type='mat';meshes.get('other').type='mat';
       ui.openPieceMenu('other',{x:100,y:100});
-      assert(radial[2].some(item=>item.label==='Reveal to players' && item.icon==='eye'),'Radial lost explicit visibility icon');
-      assert(!radial[2].some(item=>item.label==='Fog aura…'),'Mat offered a fog aura');
+      assert(radial[2].some(item=>item.label==='Show to players'),'Radial lost explicit visibility action');
+      assert(!radial[2].some(item=>item.label==='Light Radius'),'Mat offered a fog aura');
       held = { id: 'deck', type: 'deck', grabbed: true, touch: true }; ui.updateHoldControls();
       assert(!document.querySelector('.heightUp').hidden, 'Touch height controls missing');
       held = null; selection.size = 1; ui.updateHoldControls();
@@ -1751,6 +1969,18 @@ const SCENES = [
       assert(quality === 'low' && !byId('qualityApply').hidden, 'Quality change did not show Apply');
       byId('qualityApply').click(); assert(reloaded, 'Quality Apply did not reload');
       document.querySelector('#qualityRow [data-quality="high"]').click(); assert(byId('qualityApply').hidden, 'Original quality should hide Apply');
+      const beforeQuality = sent.length;
+      const ultra = document.querySelector('#qualityRow [data-quality="ultra-high"]');
+      ultra.click();
+      assert(quality === 'ultra-high' && !byId('qualityApply').hidden, 'Ultra-high did not select or show Apply');
+      assert(ultra.getAttribute('aria-pressed') === 'true' && document.querySelectorAll('#qualityRow [aria-pressed="true"]').length === 1, 'Quality selection is not exposed accessibly');
+      const qualityFullMode = document.body.classList.contains('ui-full');
+      document.body.classList.remove('ui-full');
+      assert([...document.querySelectorAll('#qualityRow .lbl, #qualityApply .lbl')].every(label => getComputedStyle(label).display !== 'none'), 'Text-only graphics controls disappeared in compact mode');
+      document.body.classList.toggle('ui-full', qualityFullMode);
+      assert(sent.length === beforeQuality, 'Graphics quality must stay local');
+      document.querySelector('#qualityRow [data-quality="high"]').click();
+      assert(ultra.getAttribute('aria-pressed') === 'false' && byId('qualityApply').hidden, 'Returning to High did not reset Ultra-high state');
       const loads = []; let resolution = 'high';
       class Loader { load(ref, done) { loads.push(done); } }
       const sky = createSkybox({ THREE: { ...THREE, TextureLoader: Loader }, scene,
@@ -2503,6 +2733,235 @@ const SCENES = [
       (await import('/ui/icons.js')).applyIcons();
       document.querySelector('.swatchPop > .pop-trigger').click();`,
   },
+  ...['full', 'compact'].map((mode) => ({
+    name: 'hand-playing-faces-' + mode,
+    root: '#handRow',
+    expect: { selector: '#hand .handcard.playingFace', min: 54 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      document.getElementById('tableLoading').remove();
+      const { createHand } = await import('/table/hand.js');
+      const { parseCardFront, cardPreviewURL } = await import('/rendering/graphics.js');
+      const { applyIcons, setIcon } = await import('/ui/icons.js');
+      const { PLAYING_CARD_FACES, PLAYING_CARD_JOKERS, PLAYING_CARD_GEOM, PLAYING_CARD_BACKS } = await import('/shared/playing-cards.js');
+      const messages=new Map(), sent=[];
+      const room={state:{players:new Map()},send:(...args)=>sent.push(args),onMessage:(type,callback)=>messages.set(type,callback)};
+      const hand=createHand({ parseCardFront, cardPreviewURL, applyIcons, setIcon,
+        getRoom:()=>room, getSessionId:()=> 'hand-fixture', scene:{remove(){}},
+        renderer:{domElement:document.createElement('canvas')},inspectMesh(){},syncControlGuide(){},toast(){},
+        byId:id=>document.getElementById(id),dragThreshold:5 });
+      hand.bindRoom(room);
+      assert(sent[0][0]==='handSync', 'Hand did not request private reconnect state');
+      const faces=[...PLAYING_CARD_FACES,...PLAYING_CARD_JOKERS];
+      messages.get('hand')(faces.map((face,index)=>({hid:String(index),front:face.ref,back:PLAYING_CARD_BACKS[0].ref,geom:PLAYING_CARD_GEOM})));
+      if(matchMedia('(max-width:900px), (pointer:coarse)').matches) document.getElementById('handRow').classList.add('trayOpen');
+      applyIcons(document);
+      await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+      const cards=[...document.querySelectorAll('#hand .handcard')];
+      assert(cards.length===54,'Private hand omitted faces or jokers');
+      for(const [index,card] of cards.entries()) {
+        assert(card.style.backgroundImage.includes(encodeURIComponent(faces[index].ref.slice(1))), 'Private face reference changed');
+        const style=getComputedStyle(card), box=card.getBoundingClientRect();
+        assert(style.backgroundSize==='contain' && style.backgroundRepeat==='no-repeat', 'Private face may crop corner indices');
+        assert(Math.abs(box.width/box.height - PLAYING_CARD_GEOM.w/PLAYING_CARD_GEOM.h)<0.01,'Private card stretched bridge art');
+        assert(card.getAttribute('role')==='group' && card.getAttribute('aria-label'), 'Image card lacks its accessible identity');
+        assert(card.querySelector('.cardEye').getAttribute('aria-label')==='Inspect '+card.getAttribute('aria-label'),'Inspect lost card identity');
+      }
+      for(const face of faces) {const image=new Image();image.src=cardPreviewURL(face.ref);await image.decode();assert(image.naturalHeight<=320,'Hand face exceeded thumbnail bounds');}
+      const eye=cards[0].querySelector('.cardEye');eye.focus();
+      assert(document.activeElement===eye,'Inspect control is not keyboard focusable');
+      if(matchMedia('(pointer:coarse)').matches) {const box=eye.getBoundingClientRect();assert(box.width>=30 && box.height>=30,'Touch Inspect target shrank');}
+      assert(cards[52].getAttribute('aria-label')==='Red joker' && cards[53].getAttribute('aria-label')==='Black joker','Joker names changed');
+      const byId=id=>document.getElementById(id);
+      const visible=id=>byId(id).getBoundingClientRect().height>0;
+      const sheet=matchMedia('(max-width:900px), (pointer:coarse)').matches;
+      hand.bindShowControls();
+      if(sheet) {
+        assert(!visible('handActionsBtn') && visible('showBtn') && visible('rearrangeBtn') && visible('dropBtn'),
+          'Touch tray lost its existing actions or gained the desktop disclosure');
+        assert(byId('showBtn').getBoundingClientRect().bottom<=byId('rearrangeBtn').getBoundingClientRect().top &&
+          byId('rearrangeBtn').getBoundingClientRect().bottom<=byId('hand').getBoundingClientRect().top &&
+          byId('hand').getBoundingClientRect().bottom<=byId('dropBtn').getBoundingClientRect().top,
+          'Touch action order changed');
+      } else {
+        assert(visible('handActionsBtn') && !visible('rearrangeBtn') && !visible('dropBtn') && !visible('showBtn'),
+          'Desktop actions must start behind Hand actions');
+        byId('handActionsBtn').click();
+        assert(visible('rearrangeBtn') && visible('dropBtn') && visible('showBtn'), 'Hand actions did not reveal controls');
+        const actionBoxes=['rearrangeBtn','dropBtn','showBtn'].map(id=>byId(id).getBoundingClientRect());
+        assert(actionBoxes.every(box=>box.right<=byId('hand').getBoundingClientRect().left) &&
+          actionBoxes[0].bottom<=actionBoxes[1].top && actionBoxes[1].bottom<=actionBoxes[2].top,
+          'Desktop menu does not match the approved left-side order');
+        byId('showBtn').click();
+        assert(visible('showStrip'), 'Show strip is unreachable from Hand actions');
+        byId('showBtn').focus();
+        byId('showBtn').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true}));
+        assert(!visible('showBtn') && !visible('showStrip') && document.activeElement===byId('handActionsBtn'),
+          'Escape did not dismiss actions and return keyboard focus');
+        byId('handActionsBtn').click();
+        byId('rearrangeBtn').click();
+        assert(visible('rearrangeBar'), 'Sort controls are unreachable from Hand actions');
+        byId('hand').querySelector('.handToggle.hide').click();
+        assert(!visible('handActionsBtn') && !visible('rearrangeBar') && !visible('showStrip') &&
+          byId('hand').classList.contains('collapsed'), 'Hide Hand left actions or Rearrange visible');
+        assert(document.activeElement===byId('hand').firstElementChild, 'Hide Hand did not focus the reveal control');
+        byId('hand').firstElementChild.click();
+        assert(visible('handActionsBtn') && !visible('rearrangeBtn') && !visible('showStrip'),
+          'Revealing a hand reopened its actions');
+        assert(document.activeElement===byId('handActionsBtn'), 'Revealing a hand lost keyboard focus');
+        hand.setCards([]);
+        assert(!visible('handActionsBtn'), 'An empty hand kept its actions');
+        messages.get('hand')(faces.map((face,index)=>({hid:String(index),front:face.ref,back:PLAYING_CARD_BACKS[0].ref,geom:PLAYING_CARD_GEOM})));
+        byId('handActionsBtn').click();
+      }`,
+  })),
+  ...['full', 'compact'].map((mode) => ({
+    name: 'library-playing-decks-' + mode,
+    root: '#libraryModal',
+    expect: { selector: '.deckBackPicker', min: 2 },
+    drive: `
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      const sent = [];
+      const fixtureRoom = ${STUB_ROOM};
+      window.onOttRoom(new Proxy(fixtureRoom, { get: (room, key) => key === 'send'
+        ? (type, data) => { sent.push({ type, data }); fixtureRoom.send(type, data); }
+        : room[key] }));
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="decks"]').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const { parseCardFront, cardMesh } = await import('/rendering/graphics.js');
+      const { PLAYING_CARD_FACES, PLAYING_CARD_JOKERS, PLAYING_CARD_GEOM, PLAYING_CARD_BACKS } = await import('/shared/playing-cards.js');
+      for (const face of [...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS])
+        assert(JSON.stringify(parseCardFront(face.ref)) === JSON.stringify(face), 'Image face lost its identity');
+      assert(parseCardFront('rank:A:♠:#000').kind === 'rank', 'Legacy face no longer parses');
+      assert(parseCardFront('back').kind === 'back', 'Legacy back no longer parses');
+      const mesh = cardMesh({ front: PLAYING_CARD_FACES[0].ref, back: PLAYING_CARD_BACKS[1].ref, faceDown: false, geom: PLAYING_CARD_GEOM });
+      const maps = [...new Set(mesh.material.map(material => material.map).filter(Boolean))];
+      for (let attempt = 0; attempt < 100 && maps.some(map => !map.image?.naturalWidth); attempt++)
+        await new Promise(resolve => setTimeout(resolve, 30));
+      assert(maps.length === 2 && maps.every(map => map.image?.naturalWidth > 0), 'Table card did not load both image faces');
+      assert(maps.some(map => map.image.src.includes('S-1.png')), 'Table face still uses procedural art');
+      assert(maps.some(map => map.image.src.includes('Back-R.png')), 'Table back did not use the selected image');
+      mesh.geometry.computeBoundingBox();
+      const bounds = mesh.geometry.boundingBox;
+      assert(Math.abs((bounds.max.x - bounds.min.x) / (bounds.max.z - bounds.min.z) - 486 / 758) < 0.001, 'Table mesh stretched bridge artwork');
+      mesh.material.forEach(material => material.dispose());
+      const cards = [...document.querySelectorAll('.libCard.hasBackChoices')];
+      assert(cards.length === 2, 'Standard deck entries are missing');
+      for (const [index, card] of cards.entries()) {
+        const radios = [...card.querySelectorAll('input[type=radio]')];
+        assert(radios.length === 2 && radios[0].checked, 'Blue is not the initial back');
+        radios[1].click();
+        assert(radios[1].checked && !radios[0].checked, 'Back choice is not exclusive');
+        assert(card.querySelector('.libPreview img').src.includes('Back-R.png'), 'Back preview did not update');
+        for (const image of card.querySelectorAll('img')) await image.decode();
+        assert(radios[1].labels[0].textContent === 'Red', 'Back lacks an accessible label');
+        const target = radios[1].labels[0].getBoundingClientRect();
+        assert(target.width >= 44 && target.height >= 44, 'Back choice is too small for touch');
+        const picker = card.querySelector('.deckBackPicker');
+        assert(picker.scrollWidth <= picker.clientWidth + 1, 'Back choices overflow their layout');
+        card._spawn();
+        const request = sent.filter(message => message.type === 'spawn').at(-1);
+        assert(request.data.props.backDesign === 'red', 'Spawn omitted selected back');
+        assert(request.data.props.jokers === (index === 1), 'Spawn changed deck size');
+      }
+      assert(cards[0].querySelector('input[value=red]').checked, 'Second deck changed the first choice');`,
+  })),
+  ...['full', 'compact'].map((mode) => ({
+    name: 'library-mahjong-starters-' + mode,
+    root: '#libraryModal',
+    expect: { selector: '.libName', min: 2 },
+    drive: `
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      const sent=[], confirmations=[];
+      const fixtureRoom=${STUB_ROOM};
+      window.onOttRoom(new Proxy(fixtureRoom,{get:(room,key)=>key==='send'
+        ? (type,data)=>{sent.push({type,data});fixtureRoom.send(type,data);}:room[key]}));
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="games"]').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const assert=(ok,message)=>{if(!ok)throw Error(message);};
+      const cards=[...document.querySelectorAll('#nlb_games .libCard')]
+        .filter(card=>card.querySelector('.libName')?.textContent.startsWith('Mahjong'));
+      assert(cards.length===2,'Expected two Mahjong starter entries');
+      for(const [index,card] of cards.entries()) {
+        const count=index===0?136:144, id=index===0?'mahjong':'mahjong-bonus';
+        assert(card.querySelector('.libName').textContent==='Mahjong ('+count+' tiles)',
+          'Starter title does not identify its tile count');
+        const button=card.querySelector('button');
+        assert(button.getAttribute('aria-label')==='Set up'&&
+          button.querySelector('use')?.getAttribute('href')==='#i-go-game','Existing Set up action changed');
+        button.focus();assert(document.activeElement===button,'Starter is not keyboard focusable');
+        window.confirm=message=>{confirmations.push(message);return false;};
+        button.click();assert(!sent.some(message=>message.type==='loadStarter'),
+          'Cancelled setup sent a request');
+        window.confirm=message=>{confirmations.push(message);return true;};
+        button.click();
+        assert(sent.at(-1)?.type==='loadStarter'&&sent.at(-1)?.data.game===id,
+          'Starter did not request the selected variant');
+        sent.length=0;
+        assert(confirmations.at(-1).includes('clears the current table'),'Clear confirmation missing');
+        const bounds=card.getBoundingClientRect();
+        assert(bounds.width>0&&bounds.right<=innerWidth+.5&&card.scrollWidth<=card.clientWidth+1,
+          'Mahjong starter overflows its layout');
+        if(matchMedia('(pointer:coarse)').matches) {
+          const target=button.getBoundingClientRect();
+          assert(target.height>=44&&target.width>=44,'Set up touch target is too small');
+        }
+      }`,
+  })),
+  ...['full', 'compact'].map((mode) => ({
+    name: 'library-mahjong-sets-' + mode,
+    root: '#libraryModal',
+    expect: { selector: 'select[aria-label="Mahjong set"]', min: 1 },
+    drive: `
+      document.body.classList.toggle('ui-full', ${mode === 'full'});
+      document.body.classList.toggle('ui-compact', ${mode === 'compact'});
+      const sent=[];
+      const fixtureRoom=${STUB_ROOM};
+      window.onOttRoom(new Proxy(fixtureRoom,{get:(room,key)=>key==='send'
+        ? (type,data)=>{sent.push({type,data});fixtureRoom.send(type,data);}:room[key]}));
+      document.getElementById('lib2Btn').click();
+      document.querySelector('.libTab[data-tab="tiles"]').click();
+      (await import('/ui/icons.js')).applyIcons();
+      const assert=(ok,message)=>{if(!ok)throw Error(message);};
+      const picker=document.querySelector('select[aria-label="Mahjong set"]');
+      const card=picker.closest('.libCard');
+      const wall=card.querySelector('button[aria-label="Build wall"]');
+      assert(wall&&wall.dataset.roomMutation!==undefined&&wall.querySelector('use')?.getAttribute('href')==='#i-wall',
+        'Wall action, permission tag or approved icon missing');
+      assert(getComputedStyle(wall.querySelector('.lbl')).display!=='none','Build wall label hidden in compact mode');
+      wall.focus();assert(document.activeElement===wall,'Build wall is not keyboard focusable');
+      assert(picker.value==='standard'&&picker.options.length===2,'Mahjong standard default or bonus option missing');
+      assert(picker.closest('label').querySelector('.field-label').textContent==='Set','Set label missing in compact/full mode');
+      picker.focus();assert(document.activeElement===picker,'Set picker is not keyboard focusable');
+      for(const [value,bonusTiles] of [['standard',false],['bonus',true]]) {
+        picker.value=value;picker.dispatchEvent(new Event('change'));
+        card.querySelector('.button-row button').click();
+        const spawn=sent.filter(message=>message.type==='spawn').at(-1);
+        assert(spawn?.data.props.set==='mahjong'&&spawn.data.props.bonusTiles===bonusTiles,
+          'Mahjong spawn lost the selected set');
+        wall.click();
+        const build=sent.filter(message=>message.type==='spawn').at(-1);
+        assert(build?.data.props.layout==='wall'&&build.data.props.bonusTiles===bonusTiles,
+          'Build wall did not use the selected set');
+      }
+      const bounds=picker.getBoundingClientRect(),parent=card.getBoundingClientRect();
+      assert(bounds.width>0&&bounds.left>=parent.left&&bounds.right<=parent.right+.5,'Set picker overflows its card');
+      const field=picker.closest('label').getBoundingClientRect();
+      assert(field.top>=card.querySelector('.libMeta').getBoundingClientRect().bottom&&
+        field.bottom<=card.querySelector('.cardCtrls').getBoundingClientRect().top,
+        'Set picker does not sit between the title and spawn controls');
+      if(matchMedia('(pointer:coarse)').matches) {
+        assert(bounds.height>=44,'Set picker touch target is too small');
+        assert(wall.getBoundingClientRect().height>=44,'Build wall touch target is too small');
+      }`,
+  })),
 ];
 
 const VIEWPORTS = [
@@ -2511,11 +2970,28 @@ const VIEWPORTS = [
 ];
 
 const out = {};
+// Raster previews use the same bounded image format as production. serveDir
+// serves static fixtures, so provide the bundled derivative responses explicitly.
+const playingCardThumbnails = Object.fromEntries(
+  await Promise.all(
+    [...PLAYING_CARD_BACKS, ...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS].map(async ({ ref }) => [
+      decodeURIComponent(assetThumbnailURL(ref).split('?')[0]),
+      {
+        body: await sharp(staticAssetPath(ref))
+          .resize({ width: 320, height: 320, fit: 'inside' })
+          .webp()
+          .toBuffer(),
+        type: 'image/webp',
+      },
+    ]),
+  ),
+);
 const server = await serveDir({
   root: ROOT,
   stubOnly: ['/client.js', '/landing.js', '/admin.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
+    ...playingCardThumbnails,
     '/__admin-live.js': {
       body: await readFile(resolve(ROOT, 'admin.js'), 'utf8'),
       type: 'text/javascript',

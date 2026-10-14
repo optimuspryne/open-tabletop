@@ -69,7 +69,7 @@ export function createDeckBrowsing(room, { geoOf, maxPieces, now = Date.now, tok
       count: cards.length,
       front: cardFrontRef(entry),
       back: cardBackRef(entry) || props.back || 'back',
-      ...geoOf(props),
+      ...geoOf(props, entry),
     });
   }
   function start(client, { deckId }) {
@@ -167,7 +167,7 @@ export function createDeckBrowsing(room, { geoOf, maxPieces, now = Date.now, tok
           client,
           cardFrontRef(entry),
           cardBackRef(entry) || props.back || 'back',
-          geoOf(props),
+          geoOf(props, entry),
           props.open,
           { notify: false },
         );
@@ -180,7 +180,7 @@ export function createDeckBrowsing(room, { geoOf, maxPieces, now = Date.now, tok
             front: cardFrontRef(entry),
             back: cardBackRef(entry) || props.back || 'back',
             open: props.open,
-            geo: geoOf(props),
+            geo: geoOf(props, entry),
           },
           message.action === 'field-down',
         );

@@ -1,3 +1,5 @@
+import { handFanGroups } from '../../shared/hand-fan.js';
+
 // Live hands belong to sessions; durable/unclaimed hands belong to accounts.
 // Append every card, including identical-looking cards: these are distinct inventory.
 export function appendAccountHand(byUser, userId, name, cards) {
@@ -32,4 +34,15 @@ export function claimHand(room, userId, sessionId) {
   room.hands.set(sessionId, [...(room.hands.get(sessionId) || []), ...held.cards]);
   room.pendingHands.delete(key);
   room.state.unclaimed.delete(key);
+}
+
+export function sendHand(room, client) {
+  const hand = room.hands.get(client.sessionId) || [];
+  const player = room.state.players.get(client.sessionId);
+  if (player) {
+    player.hand = hand.length;
+    player.handBack = hand.length ? (hand[0].open ? 'back' : hand[0].back || '') : '';
+    player.handFan = hand.length ? JSON.stringify(handFanGroups(hand)) : '';
+  }
+  client.send('hand', hand); // Faces/content are delivered only to the owning client.
 }

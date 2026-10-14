@@ -30,6 +30,7 @@ import {
 import { readProps, writeProps } from '../props-codec.js';
 import { guardedMessage } from '../interaction-policy.js';
 import { ensurePieceCapacity } from '../piece-capacity.js';
+import { wakeStackAbove } from '../stacking.js';
 
 // Register piece and multi-selection operations. The room remains responsible
 // for constructing/removing physics bodies; this module owns message policy and
@@ -48,6 +49,7 @@ export function registerPieceHandlers(
     geoOf,
     randomPosition,
     spawnY,
+    spawnMahjongWall,
     random = Math.random,
     logger = console,
   },
@@ -84,6 +86,7 @@ export function registerPieceHandlers(
       if (!piece) continue;
       const props = readProps(piece);
       props.stand = anyStanding ? false : room.naturalStand(piece);
+      wakeStackAbove(room, id);
       writeProps(piece, props);
       room.bodies.get(id)?.wakeUp();
     }
@@ -128,6 +131,7 @@ export function registerPieceHandlers(
         continue;
       }
       if (!piece || piece.type !== 'card' || !body) continue;
+      wakeStackAbove(room, id);
       const props = readProps(piece);
       if (props.open) {
         if (props.down) delete props.down;
@@ -193,6 +197,7 @@ export function registerPieceHandlers(
     const parsed = groupRotation(message, { max: maxPieces });
     if (!parsed) return;
     const rotation = parsed.angle ?? parsed.dir * (Math.PI / 4);
+    for (const id of parsed.ids) wakeStackAbove(room, id);
     const bodies = parsed.ids.flatMap((id) => {
       const piece = room.state.pieces.get(id);
       const body = room.bodies.get(id);
@@ -233,8 +238,8 @@ export function registerPieceHandlers(
   pieceMessage('recolorGroup', (client, message) => {
     const parsed = groupRecolor(message, { max: maxPieces });
     if (!parsed) return;
-    const { ids, color, textColor, team, finish, finishImg } = parsed;
-    for (const id of ids) room.recolorPiece(id, { color, textColor, team, finish, finishImg });
+    const { ids, ...appearance } = parsed;
+    for (const id of ids) room.recolorPiece(id, appearance);
   });
 
   pieceMessage('spawn', (client, message) => {
@@ -259,6 +264,12 @@ export function registerPieceHandlers(
       return;
     }
     if (room.rank(client) < RANK.helper) return;
+    if (msg.type === 'deck' && msg.props.layout === 'wall') {
+      const result = spawnMahjongWall(room, msg.props.bonusTiles);
+      if (!result.ok) client.send('serverError', { operation: 'spawn', message: result.message });
+      else broadcastPieceEvent(room, 'sfx', { type: 'tile-shuffle' }, result.ids);
+      return;
+    }
     if (
       ['notecard', 'notecardStack'].includes(msg.type) &&
       !room.notecards.hasCapacity(msg.type === 'notecardStack' ? msg.props.count : 1)
@@ -290,6 +301,7 @@ export function registerPieceHandlers(
     if (!piece) return;
     const props = readProps(piece);
     props.stand = room.standOf(piece) ? false : room.naturalStand(piece);
+    wakeStackAbove(room, msg.id);
     writeProps(piece, props);
     room.bodies.get(msg.id)?.wakeUp();
   });
@@ -478,6 +490,7 @@ function applySnap(room, id, enabled) {
   const body = room.bodies.get(id);
   if (!body) return;
   if (enabled && gridActive(room.state.scale)) {
+    wakeStackAbove(room, id);
     const piece = room.state.pieces.get(id);
     const position = snapToCell(
       body.position.x,

@@ -125,6 +125,7 @@ const ICONS = [
   'category-plus',
   'square-rounded-plus',
   'go-game',
+  'wall',
   'checks',
   // Modal internals (chat/score/timer/measure/sound/whiteboard)
   'send-2',

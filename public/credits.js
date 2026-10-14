@@ -112,8 +112,14 @@ export const MODEL_CREDITS = [
   },
 ];
 
-// 2D art — skyboxes (/sky/ URLs) + tile faces (/mahjong/ URLs).
+// 2D art — skyboxes, tile/card faces, and textures.
 export const ART_CREDITS = [
+  {
+    title: 'Bridge-sized playing card deck',
+    by: 'Mesmedir (based on Dmitry Fomin’s Wikimedia Commons cards)',
+    url: 'https://opengameart.org/content/bridge-sized-playing-card-deck-png-cc0',
+    license: 'CC0',
+  },
   {
     title: 'Seamless white marble',
     by: 'Behrtron',

@@ -3,11 +3,96 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
+Release 0.22.0 keeps the existing server/browser ownership and single-instance deployment
+boundaries. Its authored models, card artwork, assisted stacking and hand/fan rendering need
+a server restart and client refresh; no new database migration or required service/configuration
+is introduced. Source dependency and existing Wordy board calibration requirements, automated
+release checks and pending manual acceptance are recorded in the
+[upgrade guide](RELEASING.md#upgrading-to-0220).
+
+The [living hardening plan](../HARDENING_PLAN.md) records the account/host-approval walkthrough
+and proposed session-cookie, CSRF and multiplayer authentication changes. It distinguishes
+observed behavior from conditional risks and pending designs; current authentication behavior
+remains unchanged until implementation and verification are recorded.
+The lobby-controls follow-up also records recovery-credential, logout, admission-policy and
+input-validation concerns; mocked reproductions are distinguished from live verification.
+The table-entry follow-up covers admission, restored private state, spectator policy and
+reconnects, recording a conditional account-switch/reconnect mismatch and unbounded loading
+recovery. These remain proposed hardening work, not changes to the current architecture.
+The first-interaction follow-up traces selection, dragging and physics, recording stranded
+group ownership and cancelled gestures committing actions (HARD-17/18); fixes remain proposed.
+The card-lifecycle review adds empty picked-scope disclosure, ordinary transfer rollback gaps
+and pending-inspection reconnect recovery (HARD-19/20/21). Browser verification remains separate
+from source review and isolated reproductions; no runtime fixes are recorded by this review.
+Library loading extends the replacement-failure concern (HARD-20) and records that catalog
+privacy does not authorize original-media requests: allowlisted `/assets` URLs are publicly
+served when known (HARD-22). Media confidentiality changes remain a policy/design decision.
+Asset authoring/package coverage adds upload buffering before authentication, incomplete media
+validation and deck-save recovery findings (HARD-23/24/25). Package validation and transactional
+import protections already exist; the new safeguards remain proposed, with bounded reproductions
+separate from live resource-load and browser testing.
+The persistence review records that background writes retain the last captured game snapshot,
+and identifies final-save recovery and duplicated-setting restoration concerns (HARD-26/27/28).
+Manual saves acknowledge database completion; graceful disposal attempts a fresh snapshot.
+Forced termination, failed writes and oversize snapshots need the separate recovery safeguards
+proposed in the plan. No persistence behavior changed during this review.
+The communication/writing review records silent note rejection, ambiguous chat identity,
+unbounded chat delivery/client history and whiteboard eviction/repaint mismatch (HARD-29–32).
+Plain-text rendering, private notecard leases and template access/revision checks remain current
+protections; synthetic checks are separate from real-browser/load verification and proposed fixes.
+The in-room administration review identifies a stale-target authorization race in kick/role
+writes (HARD-33). Participation writes already use row-locking transactions and update live
+account connections after commit; extending that pattern to membership mutations is proposed
+hardening. Kick removes membership and reconnect access but does not create a durable ban.
+The table/spatial review records visual fog's existing delivery limitation (HARD-34), alongside
+cancelled measurement commits and server preview-budget gaps (extensions to HARD-18/31).
+Fog coverage does not filter underlying board/piece data; explicit hidden-object schema views
+remain the delivery boundary. The review changes documentation only, not those contracts.
+The local-browser review records unbounded pixel-ratio overrides, uncontained optional storage
+errors and incomplete modal keyboard gating (HARD-35–37). Camera and media preferences remain
+local; exit teardown/resource profiling is pending. No runtime behavior changed in this review.
+The account-security/site-admin review identifies two remaining serialization boundaries:
+login session issuance can outlive its verified password, and HTTP admin mutations can outlive
+the actor's authority or concurrently remove the last admins (HARD-38/39). Credential changes
+already lock/recheck the account and rotate access transactionally; CLI role changes already
+serialize a final-admin check. Extending those invariants across the other entry points is
+proposed work. Account deletion's database transaction does not include live-room disposal.
+The administrator-maintenance review records incomplete cache-variant cleanup and partial
+move reporting (HARD-40), plus unbounded application-level admission of distinct public texture
+conversions (HARD-41). Existing reference scanning, recoverable trash, path validation and
+two-worker prebuild remain protections; shared scheduling and fuller cleanup remain proposed.
+The failure-handling review distinguishes sanitized client errors from raw exception/URL/CSP
+logging (HARD-42), and records parser errors being flattened to 500 (HARD-43). CSP reporting
+also competes with login for the same IP bucket (HARD-05). Existing failure containment and
+enforced headers remain current; redaction, error classification and budget separation are
+proposed. Fixture results do not establish deployed proxy or log-retention behavior.
+The deployment/recovery review records retained owner-credential access in the running service,
+incomplete exclusions for local Docker build material and upgrade dumps that do not constitute
+complete recovery checkpoints (HARD-44–46). Separate database connections, non-root execution,
+transactional migrations and guarded installer recovery remain protections. Runtime credential
+isolation, image-canary checks and coordinated restore drills remain proposed work.
+The [consolidated implementation sequence](../HARDENING_PLAN.md#consolidated-implementation-sequence)
+orders the 46 findings into bounded fixes, authority/data preservation, coordinated sessions
+and resource controls, then remaining reliability work. Privacy/identity policies are a separate
+decision track. It preserves the HTTP/multiplayer authentication boundary and the distinction
+between in-memory recovery, durable saves and restorable backups; no architecture change is
+implemented by that prioritization.
+
 Staged feature plans are separate from this description of the running system:
 [DESIGN_next_features.md](DESIGN_next_features.md) plans time-out/spectator permissions, private
 deck browsing and asset collections; [DESIGN_future_backlog.md](DESIGN_future_backlog.md) records
 lighter discovery briefs for the remaining work. Proposed boundaries and persistence changes
 there remain proposed except for the participation foundation, durable GM time-outs, self-service spectators and private deck browsing recorded below.
+
+## Demo synchronization with 0.22.0
+
+The demo branch is synchronized with main through release 0.22.0 (`14444d9`).
+The new artwork, tile models, stacking and hand/fan rendering reuse main's existing
+modules; demo admission and roll policy remain server-owned. Piece removal retains
+both demo deadline cleanup and supported-stack wake-up. The database facade exposes
+both `hasUsers` and `demo`; generated sprites include both branches' approved icons.
+See [synchronization upgrade notes](RELEASING.md#demo-synchronization-with-0220-2026-10-14)
+and [verification status](DEMO_MODE_PLAN.md#main-synchronization-2026-10-14).
 
 ## Demo dice ownership
 
@@ -83,6 +168,29 @@ This intentionally avoids exposing guest credentials before HTTP/socket write re
 expiry timers, restart occupancy recovery and the approved entry UI are implemented. Existing
 active sockets do not yet have immediate demo-deadline enforcement. See [the staged plan](DEMO_MODE_PLAN.md).
 
+Future scaling is [deferred until measured usage warrants it](ROADMAP.md#future-scaling--deferred-until-usage-warrants-it).
+The [room-scaling plan](PLAN_ROOM_WORKERS.md) starts with two fixed app instances using
+standard Colyseus Redis adapters and reverse-proxy routing, before considering custom
+per-table process management. Single-instance operation remains the current architecture;
+shared matchmaking would not replace database writer fencing or cross-instance access and
+asset coordination. [Demo dice safeguards](PLAN_DEMO_DICE_LIMITS.md) are a separate demo-branch
+workstream; this full-app document does not establish that branch's rollout status.
+
+## Release 0.21.1 deployment boundary
+
+The patch skips bootstrap credential access when any user exists. It reuses the existing
+provisioning transaction after an empty-table preflight and adds no schema or deployment
+requirements. Restart the app with the updated image; see
+[0.21.1 upgrade guidance](RELEASING.md#upgrading-to-0211). Live Dockhand verification is pending.
+
+## Release 0.21.0 deployment boundary
+
+Account recovery adds migration `023_account_recovery.sql` and optional outbound TLS SMTP;
+existing deployments need no new service or inbound port. The static website remains separately
+hosted. Server restart and browser refresh load the concealment, fog, recovery and security
+changes; saved scenes/games remain compatible. See [upgrade guidance](RELEASING.md#upgrading-to-0210)
+for migration roles, source dependencies, SMTP forwarding and outstanding acceptance checks.
+
 ## Public website and wiki
 
 The public marketing website and wiki are a separate static surface in `website/`.
@@ -124,6 +232,41 @@ Because one authoritative simulation owns all physics, no two clients can
 disagree and no client can cheat the physics — they aren't running any.
 cannon-es was chosen specifically because it is pure JavaScript, so the exact
 same physics code runs unchanged on Node.
+
+## Independent piece stacking
+
+`server/game/stacking.js` provides placement assistance at the existing authoritative release
+boundary. It reads the actual Cannon box/cylinder collider (already derived from shared geometry),
+public `stackable`/`stackMode` properties and the last validated movement target. Cards/tiles
+participate by default; generic props opt in through an instance property or a built-in `PROPS`
+default, with instance overrides. Aligned mode adopts the support's center/facing.
+Overlapping sideways/diagonal tile drops are captured before recentering, while offset cards
+retain their position within the support footprint. Offset mode retains the player's horizontal
+position and facing. Both preserve the up/down face while leveling moving pieces tilted up to
+60 degrees; supports still require the stricter five-degree flatness check. Held single pieces
+are leveled over an eligible support before physics contact can tip the pile.
+The highest stationary, flat support under the intended position determines height. Fast throws,
+held/flipping/hidden supports, obstructed landings and multi-piece group drops retain existing
+behavior. A centered compatible deck drop still absorbs; an assisted offset drop stays independent.
+The single-card `playCard` hand path calls the same helper after `spawnHandCard` initializes
+public/private faces and before consuming the hand entry. Its internal `fromInventory` option
+resolves XZ to a stack surface independently of the arbitrary three-unit spawn height; clients
+cannot send that option. Bulk hand scatter, deck adoption and other spawn paths remain distinct.
+
+Stacks have no joints or persisted attachment graph. Bodies remain dynamic; grid pinning excludes
+pieces resting on stackable supports. Grabbing, turning, flipping, removing or resizing a support
+wakes contacting pieces above it, including after restoring a snapshot. Existing card metadata
+and private-face storage are untouched. The browser flushes the final drag target before release
+and clears stale throw estimates after a pause. Physics still decides subsequent settling,
+sliding and falling; the assist does not enforce game rules or build a Mahjong wall automatically.
+
+Card/tile colliders now use their authored `cardGeom` thickness by default, including thin
+standard cards and thick/custom/hex tiles. `SIM.cards.colliderThick = 0` and the shared default
+keep physics and browser collider diagnostics consistent with visible dimensions; a positive
+override remains available for minimum padding. Mat collider padding remains independently
+0.04 half-thickness. Surface-height comparisons use a smaller tolerance than contact/wake queries
+so adjacent thin cards are still distinct layers. Free-fall/throw tunneling requires manual testing;
+assisted placement and solver/contact settings remain separate concerns.
 
 ## GM object concealment
 
@@ -274,7 +417,7 @@ importing a room singleton:
 - **`server/game/starters.js`** — one-click starter-game orchestration. It reads
   shared `STARTERS`/board/piece definitions and coordinates room-owned clearing,
   board calibration, authoritative spawning, initial dealing, and persistence.
-  Deck construction, geometry projection, capacity, and spawn height are injected
+  Deck construction, the physical Mahjong wall operation, geometry projection, capacity, and spawn height are injected
   from `server.js`, keeping the module deterministic and independently testable.
 - **`server/game/table-bounds.js`** — physical table floor and containment-ring
   construction. `server.js` injects the `SIM` table/wall dimensions, while the
@@ -283,7 +426,11 @@ importing a room singleton:
 - **`server/game/table-scale.js`** — measurement-scale persistence and board-grid calibration.
   `server.js` injects the grid-lift ceiling; the module snapshots and validates synchronized scale
   state, reads board metadata/collider dimensions, and schedules saves after successful square or
-  hex calibration while the room keeps stable forwarding methods.
+  hex calibration while the room keeps stable forwarding methods. Built-in square grids can pin
+  both cell spacing and optional `offsetX`/`offsetZ`, copied into durable `gridX`/`gridZ`. Wordy's
+  authored GLB reuses the existing model-board loader and collider definition; its measured square
+  centers sit inside the decorative rim and slightly off the centered model's origin. The same
+  calibrated state drives server snapping, browser previews and persistence; no new schema is needed.
 - **`server/game/piece-operations.js`** — authoritative recoloring and self-righting policy.
   It resolves effective and natural stand modes from synchronized props and shared piece
   definitions, and applies validated color/team/material `colorProps` results through the
@@ -338,6 +485,11 @@ importing a room singleton:
   as a privileged owner role (`MIGRATE_DATABASE_URL` or its password-file component
   form) kept **separate** from the app's least-privilege connection. Upgrades need no manual `psql` step, and it targets
   any Postgres (stock or managed — there's no custom db image). `AUTO_MIGRATE=false` opts out.
+  Each pending migration and its tracking row share a transaction; startup awaits migrations
+  before listening. This connection separation does not isolate its credentials: default
+  Compose/native services retain access to the owner password after startup (HARD-44).
+  Disabling the runner does not revoke that access. A deployment-only migration identity is
+  proposed hardening, not the current runtime secret boundary.
 - **`auth.js`** — password hashing (scrypt) and device-token hashing, built on
   Node's `crypto` alone (no dependencies).
 - **Browser module folders** — `public/editor/` owns library and board/collider authoring;
@@ -433,7 +585,10 @@ importing a room singleton:
   transforms through injected piece/mesh/rank lookups. It never mutates room state or physics.
 - **`public/table/hand.js`** — the private-hand controller. It owns local cards, Show selection
   and audience, reveal data used by public fans, sorting/rearrangement, collapse preference, and
-  hand-specific pointer gestures. `client.js` injects room access, card builders, scene/raycast
+  hand-specific pointer gestures. It also owns the desktop Hand actions disclosure and
+  responsive DOM order for the existing controls, preserving the touch tray layout.
+  Hiding the hand closes the disclosure and exits Rearrange; Show audience remains independent
+  of this local visibility preference. `client.js` injects room access, card builders, scene/raycast
   helpers, inspection entry, and control-guide updates instead of sharing mutable hand globals.
 - **`public/table/inspection.js`** — enlarged table-piece and private-card inspection. It owns
   the preview, color/team/finish controls, deferred click timing, drawn-card placement, and pointer
@@ -537,6 +692,15 @@ importing a room singleton:
   adds only a localhost rule for the app database/roles. OS upgrades, firewall, TLS,
   SELinux policy and external mounts remain operator responsibilities. App updates
   preserve configuration and do not perform PostgreSQL major upgrades.
+  Native lifecycle operations share the installer: Linux `reinstall`/`resume` recover retained
+  state, while `uninstall` removes the service/releases and retains persistent data and identity.
+  Initial secrets are saved before role creation; resume validates existing credentials without
+  rotating them, backs up existing databases, and restores service/release activation. A completed
+  installation with a missing database requires restoration, not implicit empty initialization.
+  Confirmed `purge` removes only local application resources and the exact installer HBA rule,
+  preserving backups and host dependencies. Removal is offline and supports a read-only dry run;
+  mount/redirect checks prevent recursive deletion into external storage. Customized database or
+  asset settings require manual recovery/purge. A host-local lock serializes mutating operations.
 
 ## Trust and failure boundaries
 
@@ -624,8 +788,10 @@ available; table mutations (including peeks, reveals and hand reassignment) requ
 Lifecycle physics/recovery/persistence are independent of this client-request gate.
 
 The guard runs inside the existing `safeMessage` error boundary: synchronous throws and rejected
-promises are logged with payload-free room/user/session context and converted to a
-sanitized `serverError` (or the narrower asset/member error) for that client. The
+promises are logged with room/user/session context that omits the request payload and converted to a
+sanitized `serverError` (or the narrower asset/member error) for that client. Exception text
+is still logged verbatim and can contain private values (HARD-42); context selection alone
+does not sanitize it. The
 browser throttles generic notices to prevent alert storms. `safeRoomTask` applies the
 same policy to join-time and detached lifecycle work; authorization failures and
 reconnection timeouts remain normal Colyseus control flow. Persistence, lobby calls,
@@ -649,7 +815,8 @@ exact `TRUST_PROXY_HOPS` deployment setting; Redis alone does not cluster Colyse
 The **synced state is public** — anything in it is one devtools-peek from being
 read. It holds: each piece's transform/type/owner/props/count; each player's
 seat, hand _count_, name, color, avatar, `showing` count (how many cards they're
-revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
+revealing), `handBack` (their hand's public back image), and `handFan` (a bounded JSON
+description of unordered public shape/material/back counts); the shared `timer` anchor;
 the room dressing (`scores`, `notes`, `tableX/Z`, `tableShape`, `whiteboard`, `trays` — which seats'
 personal dice trays are out, `skybox`,
 `feltColor`, `roomName`); and whose turn it is — including, after a resumed game, the public
@@ -714,10 +881,15 @@ frame **fill-rate bound, not draw bound** (FPS flat as draw calls rose), so the 
 redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false`, driven from the
 render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
 tuning on the target device.
-That tuning is now a shipped, client-local **quality tier** (low/med/high, persisted per device,
+That tuning is now a shipped, client-local **quality tier** (low/medium/high/ultra-high, persisted per device,
 defaulting to Low on phones, Medium on tablets, and High on desktops) in Settings → UI.
 This selects a preset by device class, not a continuous FPS-driven adjustment. It is a per-viewer
-render preference, never room state, so it stays out of the scene save. High also raises card detail:
+render preference, never room state, so it stays out of the scene save. High fixes the render
+pixel ratio at 2: standard-density displays get 2× supersampling per axis (four times the
+pixels), while denser displays retain the existing cap of 2. Low/Medium keep their existing
+pixel ratios. Ultra-high is an explicit choice with a fixed pixel ratio of 4 (16× the
+pixels at DPR 1, four times High's pixel workload), retaining High's shadows, AA and
+card/dice/placard texture detail. High and Ultra-high also raise card detail:
 procedural playing/text card canvases render at 1.5× the low/medium dimensions, and local uploaded faces select a larger
 server derivative after the tier's required reload.
 
@@ -856,7 +1028,7 @@ The kinds:
   `server/deck-state.js`), so one stack can hold tiles with different backs (a tree-back among
   forageable-backs). `props.open` (+ the `down` orientation flag) makes a card/deck's tiles turn over rather than
   conceal, and it rides through hands too (`spawnHandCard`; the public seat-fan shows a generic
-  cover for an open card via `handBack`). Both axes ride the existing draw/deal/inspect/split/
+  neutral cover on the correct shape for an open tile via `handFan`). Both axes ride the existing draw/deal/inspect/split/
   combine/hand and scene-save paths, and both fall back to today's behavior (string entry → shared
   `back`; no `open` → secret flip).
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
@@ -883,8 +1055,7 @@ The kinds:
   `stand` flag self-rights standing pieces. Bundled definitions also select a default material
   finish, and `props.finish` carries a synchronized Inspect override. Universal `props.scale`.
 - **board** — static (mass 0) but removable. A built-in model (`BOARDS`
-  registry), an uploaded `.glb`, a **procedural** board drawn from data (a
-  `BOARD_PAINTERS` painter, e.g. the word grid), or an outlined slab with an optional
+  registry), an uploaded `.glb`, or an outlined slab with an optional
   image and configurable thickness. One board at a time; it's sat on the table by its half-height.
 - **mat** — a player mat: a large, single-faced, **movable** SURFACE that tiles and pieces rest on
   (per-player profession boards). Unlike the singleton `board`, every seat can have one. It reuses
@@ -898,6 +1069,8 @@ card faces, checkerboard, player markers), created through a helper that applies
 **anisotropic filtering** so text/numbers stay crisp at grazing angles. 3D assets
 are bundled `.glb` files under `public/static_assets/models/` (see `ASSET_CREDITS.md`); the current coin, Go-bowl,
 and human-token models are original project assets.
+Notecard face/back canvases also use the renderer's maximum supported anisotropic
+filtering; their existing canvas dimensions and individual disposal remain unchanged.
 
 ### Models: scale, orientation, color, and material
 
@@ -909,6 +1082,12 @@ and human-token models are original project assets.
   measurement directly from each registered GLB's accessor bounds and node transforms, applies
   the registry scaling/rotation rules, and reports copyable collider/scale suggestions. This keeps
   replacing a bundled model deterministic without pulling a 3D renderer into the server.
+  Normal regression tests check that diagnostics and Cannon honor the current registry values,
+  plus synthetic math/retuning fixtures; they do not pin a particular GLB export's measurements.
+  GLB bounds agreement is opt-in asset QA through this command's `--check --tolerance=n` mode.
+  Intentionally inset, padded or simplified colliders use report-only measurement and manual
+  fit verification. Grid-artwork alignment is also verified after authoring, separately from the
+  calibration/snapping/persistence contract tests.
 - **Custom uploads** are normalized (props to `CONFIG.model.size`, boards to a user-selected
   longest X/Z side, defaulting to `BOARD_SIZE`). The client measures the model and stores its
   uniform `modelScale` and collider half-extents `box` with the library record. Changing board
@@ -1139,11 +1318,108 @@ regular pointy-top hex prism and the collider a matching 6-gon (cannon's default
 already points the same way), so it drops cleanly onto the hex grid (`gridStyle: 'hex'`,
 pointy- or flat-top; snap + render share the axial math in `snapToCell` / `gridMesh`).
 
-The board and deck sides generalize the same way. A `proc` board paints its top from data
-(`BOARD_PAINTERS`), so a premium word grid — or a later battlemap — is a painter plus a
-`BOARDS` entry riding the existing swapBoard / collider / grid-calibration paths. And a deck
+The board and deck sides generalize the same way. A built-in board is an authored `.glb` plus a
+`BOARDS` entry riding the existing swapBoard / collider / grid-calibration paths. Plain and
+image-backed outlined slabs use the same board lifecycle. Wordy's retired procedural painter
+and its unused registry/preview branches have been removed. A deck
 can swap its _visual_ for a `.glb` skin (`DECK_MODELS`) with no change to draw / deal /
 shuffle / hidden order. Building the tile games meant adding data and faces, not a new engine.
+
+Authored tile models retain that card/deck protocol. `shared/tile-models.js` owns the
+immutable `TILE_MODELS` registry: face-to-model mappings, common concealed model,
+material slots, default colors/finish, and appearance storage key. Domino and Mahjong are
+registered families. Mahjong maps 34 standard and eight bonus image refs to engraved GLBs;
+additional families share the same rendering/appearance path after registration. Model
+URLs come from the registry, never synchronized payloads. Only an authorized public front
+selects an identifying model; missing fronts select the neutral concealed model. Open
+face-down tiles rotate their known model. Unsupported faces/shapes use procedural fallback.
+
+The browser's `createTileRenderer` owns async loads and immutable template caching, bounded
+by registered assets (29 GLBs for Domino, 43 active GLBs for Mahjong). Roots are centered and fitted on all three axes
+to `cardGeom`; no server GLB loading is needed. Instances own materials and finish UV geometry,
+while sharing template geometry. Disposed instances ignore late loads. `tilePreviewURL`
+uses the same renderer/materials and fits all projected bounds corners, including thickness.
+Private hands request a 12-degree tilt; library callers retain their face-on view. Uploaded
+tiles reuse the procedural card geometry and textures. Concurrent identical requests share a
+pending render, successful snapshots use the bounded preview cache, and temporary meshes
+and owned face textures are disposed through `createCardBrowsePreview`. Its synchronous
+cache detachment prevents concurrent table pieces from borrowing a transient preview texture;
+already-resident shared textures remain untouched. Image slots contain the entire snapshot
+without a card-frame or hex clip.
+Dimensions remain
+in `TILES`/`props.geom`; Domino now uses the owner's half-extents 0.25 × 0.5 × 0.05
+(full width × length × thickness 0.5 × 1 × 0.1), shared by rendering and colliders.
+
+`server/game/hand-state.sendHand` derives the public `handFan` description from the private
+hand whenever it sends an owner update, including reclaim/reconnect and inventory changes.
+`shared/hand-fan.js` projects only known tile families, canonical geometry, normalized tile
+materials, bounded ordinary back references and a neutral-cover flag. It aggregates public
+appearances, retaining the 128 most frequent groups and sorting them independently of private
+hand order. Faces, double-sided reverse artwork, identities, model URLs and notecard content
+are excluded. This is derived state, not a new save format. `handFanCards` removes the matching
+public shape/back/cover group for each authorized revealed slot, then uses largest-remainder
+rounding to proportionally fill the remaining slots of a fan capped at twelve cards. A 20:10
+mix becomes 8:4; a sufficiently rare group can round to zero. Older shape-only descriptions,
+invalid metadata and unrepresented overflow retain the `handBack` fallback. Ordinary back
+references are bounded to 512 characters, and parsed fan metadata to 256 KiB.
+The authorized `showFan` payload includes the card's `open` flag to distinguish an ordinary
+back from a double-sided reverse face when consuming groups; audience routing is unchanged.
+Presence reuses `cardMesh`, so missing fronts choose concealed family models. Double-sided
+custom tiles render plain material covers rather than their identifying reverse artwork.
+Tile fans fit their footprints into a bounded shallow arc; ordinary cards retain their
+overlapping fan. Camera, sorting and interaction remain local; Show audience checks remain
+server-owned.
+
+Generic `tileAppearance: {base,inset,finish}` patches are server-authorized and validated
+separately from container `color`/`textColor`. The registry chooses a family's storage key;
+Domino retains `dominoAppearance` so existing saves and clients remain compatible. New
+families use `tileAppearance`. `cardPublicProps` (the injected `geoOf`) carries only public
+shape and appearance through draws, hands, placements and authorized reveals. Face/order
+remain private. Absorption and combining capture individual styles, including original
+unstyled defaults before joining a styled deck. Bag patches change only requested fields
+on remaining stock; other individual fields and already drawn tiles retain theirs.
+Snapshots and account-owned hands use existing JSON storage, without migrations.
+
+Deck skins may opt named materials into public tile appearance with `DECK_MODELS.tileTints`
+(`dominoes_box`: `dominoBase → base`). `paintTileModelMesh` shares color/finish painting,
+procedural finish UVs and phone fallbacks with authored tiles. Unmapped skin materials keep
+their existing appearance; container `tints` remain independent. The interior represents
+the deck's public default style, without inspecting private per-tile styles or card order.
+
+Inspector and selection use `createTileAppearanceControls` and registry capability checks,
+with the approved Base/Inset/Material layout, object finishes and phone fallbacks. Mahjong
+labels its second color Back, mapping the existing `inset` storage field to the authored
+`back` material; multicolored engraved symbols retain their authored colors. Mahjong's
+half-extents remain 0.34 × 0.473 × 0.14. New sets default to 136 standard tiles; an approved
+library Set selector adds one of each bonus for 144. The spawn-only `bonusTiles` flag is
+strictly boolean and accepted only for `set: 'mahjong'`; `spawnPayload` normalizes it and
+`createPieceLifecycle.spawn` passes it to `buildMahjongWall`. Private inventory persists
+the actual refs/count through existing save/restore, without needing a variant flag.
+Plum/bamboo have new refs and image fallbacks; old peony/lotus refs retain their original
+image fallback rather than being reassigned to different flowers. Three red-five GLBs are reserved and
+do not alter the default inventory or model allowlist. Mahjong's Build wall action uses a
+separate server operation and shared layout; see [Mahjong wall](MAHJONG_WALL.md).
+A selection can share the picker only within one registered family. Existing DOM IDs/CSS
+classes are retained to avoid unrelated layout changes. No gameplay rules or automatic
+scoring are introduced. See [extension contract and verification](TILE_MODELS.md) and
+[original domino integration](DOMINO_MODELS.md).
+
+Mahjong physical walls reuse independent cards rather than adding a synchronized wall
+object. `shared/mahjong-wall.js` derives four traditionally staggered two-high rows from
+`cardGeom`: each row projects past its neighbor by roughly one stack, with tight gaps.
+The named `cornerOverhangStacks` setting shifts row centers and brings the walls inward
+together, preserving corner clearance without intersections. The layout reports its
+actual outer span and checks every footprint corner, including projecting ends, for
+shape-aware table fit. `server/game/mahjong-wall.js` owns synchronous preflight,
+fresh shuffled inventory, private placement through `spawnTableCard`, row orientation,
+initial sleeping dynamic bodies and rollback. The existing helper-level spawn handler
+receives normalized `layout:'wall'` only for Mahjong; it preserves the existing hidden
+spawn scope and capability checks. No board/table is resized or cleared.
+Public obstruction checks exclude parked GM-hidden objects, matching collision policy
+and avoiding a hidden-object presence leak; GM-hidden requests can check the whole scene.
+Grid snapping is off on wall tiles; ordinary stacking, movement, flip, hand and persistence paths remain
+the owners of subsequent behavior. Wall breaks, dealing, dead-wall placement and game
+rules remain manual. See [Mahjong wall](MAHJONG_WALL.md).
 
 ## The dice family
 
@@ -1209,7 +1485,7 @@ round and hex are single-size (depth follows width). Seats, personal trays and c
 as they were — trays already ride a circular track — so the first cut keeps seating unchanged on
 the new shapes. The rim is a GM-selectable **wood** (`state.rimWood`, five textures, durable + in
 scenes) swapped on the shared material; the felt is a desaturated fabric texture tinted by the felt
-colour (mirrored-wrapped + gradient-flattened for seamless tiling).
+color (mirrored-wrapped + gradient-flattened for seamless tiling).
 
 ## Live table tools
 
@@ -1441,6 +1717,15 @@ the app runs fine before any audio is added. Everything funnels through one mast
 gain (the SFX volume, or 0 when muted). Browsers block audio until a gesture, so
 the first `pointerdown` calls `resumeAudio()`.
 
+Tile pickup/drop/flip/shuffle pools now select the original ceramic synthesis in
+`ceramic-tile-*.ogg`, authored offline by `scripts/generate-tile-sounds.py`.
+The script shares its PCM/OGG encoder with the retained legacy generator and combines
+short shock/noise-excited bandpass responses and handling friction. Broad high-frequency
+texture, secondary contacts and a continuous shuffle tumble were tuned against supplied
+Mahjong references; no reference samples are bundled or required by the generator. The browser
+still only decodes bundled OGG files; randomized variants, volume/mute, event dispatch and
+the local/shared cue boundary are unchanged. Original tile files and box/bag cues are retained.
+
 The important architectural split is **who hears a cue**, and it mirrors the
 authority model:
 
@@ -1468,8 +1753,8 @@ decoration.
 
 ## Bundled static assets
 
-`public/static_assets/` contains the six shipped asset trees: `mahjong/`, `sky/`, `textures/`,
-`models/`, `music/`, and `sounds/`. Their filesystem location is controlled only by
+`public/static_assets/` contains the seven shipped asset trees: `mahjong/`, `sky/`, `textures/`,
+`models/`, `music/`, `sounds/`, and `cards/`. Their filesystem location is controlled only by
 `STATIC_ASSETS_DIR` in `server/static-assets.js`; relative values resolve from the project root,
 independently of the process working directory, and absolute paths are supported.
 
@@ -1589,6 +1874,14 @@ delete). Recent files, directories, and symlinks are excluded. Database or live-
 reference failures abort the scan. Live reference tracking is process-local, matching
 the current single-server deployment.
 
+Trash movement preserves originals on disk and does not itself reclaim their bytes. Current
+cleanup removes only standard `v1` derivatives; other quality caches remain, and cache-removal
+failure can hide an already-completed move from the reported count (HARD-40). Derivative HTTP
+requests still require an existing original, so retained cache files alone do not bypass that
+gate. Admin prebuild runs one in-memory job with two workers for standard JPG/PNG derivatives;
+public cache misses deduplicate by destination but use no shared bounded scheduler with it
+(HARD-41). Full reference-write/cleanup and conversion/cleanup concurrency remain unverified.
+
 Each asset now carries an `owner_id` (the admin who created it) and an `is_public`
 flag, and the library is **admin-curated**: creation and curation (publish/rename/
 delete) are admin-only, while listing and spawning are visibility-gated — public
@@ -1627,11 +1920,31 @@ stays in the browser. The injected shuffle keeps initial deck creation and later
 gameplay shuffles on the same Fisher–Yates implementation while allowing deterministic
 inventory and layout tests.
 
+New standard playing decks use the shared `shared/playing-cards.js` catalog of
+52 faces, two jokers, and blue/red backs under `/cards/bridge/`. Its explicit
+bridge geometry reuses `geomFromImage`; it travels through existing public
+geometry/back props while ordered faces stay in server-only inventory. The
+Library's native radio choices select `backDesign`, validated against catalog
+IDs before spawning. Blue is the default for standalone decks and the cards
+starter. `parseCardFront` recognizes exact bundled faces as playing cards with
+an image reference, so the existing renderer loads artwork and the private hand
+displays bounded image thumbnails at bridge proportions. Hand sorting retains
+rank/suit metadata; image cards and their Inspect controls expose accessible names.
+Legacy procedural rank cards retain text labels and existing faces/backs still work.
+Exact bundled card references are allowed as dependency-free package references;
+arbitrary static paths remain unsupported by package import/export. Receiving
+installations need the bundled catalog. No schema or environment change is needed.
+See [PLAN_PLAYING_CARD_IMAGES.md](PLAN_PLAYING_CARD_IMAGES.md) for the file/function
+summary, automated verification, and pending in-app smoke tests.
+
 ## Starter-game layout boundary
 
 `createStarterSetup` builds one `setupStarter(room, game)` function from the existing
-deck builders, card-geometry projection, piece limit, and spawn height. Unknown starter
-IDs return before changing the room. A valid starter first calls the same `clearTable`
+deck builders, physical Mahjong wall operation, card-geometry projection, piece limit,
+and spawn height. Unknown or inherited starter IDs return before changing the room.
+Mahjong checks the shared wall footprint and the complete kit's capacity before clearing;
+an expected failure returns an actionable error to the GM without mutation.
+A valid fitting starter calls the same `clearTable`
 path as Reset and scene replacement, so visible pieces, private hands, deck contents,
 inspections, recovery state, turn ownership, overlays, and the previous checkpoint are
 removed together before anything new is created.
@@ -1644,6 +1957,13 @@ builder, retain tile geometry, snapping, and their selected deck skin, and optio
 configured starting hand to each seated player. Bowls and chip stacks use the ordinary
 authoritative `spawn` boundary. `TableRoom.setupStarter` remains as a small forwarding
 method so its caller-facing contract stays recognizable.
+
+The approved Mahjong (136 tiles) and Mahjong (144 tiles) entries reuse `spawnMahjongWall`
+for private shuffled individual tiles, then ordinary authoritative spawning for two
+upright Rounded Pips D6 dice in the center. They create no pouch and do not deal tiles.
+The wall tiles keep grid snapping disabled; the starter clears stale grids and old hands
+through the existing reset path. Table dimensions remain unchanged, and players handle
+rolling, wall breaking, taking tiles and game rules themselves.
 
 ## Piece lifecycle boundary
 
@@ -2204,7 +2524,10 @@ revoke host, delete-with-cascade). Its Storage section also previews and trashes
 starts/polls the non-destructive uploaded-image WebP prebuild. A fresh installation provisions its first
 administrator before the listener opens from `BOOTSTRAP_ADMIN_USERNAME`,
 `BOOTSTRAP_ADMIN_EMAIL`, and a password file. The transaction is advisory-locked
-and only permits an empty users table; normal signup never grants admin. Local
+and only permits an empty users table; normal signup never grants admin. Before reading any
+bootstrap settings or password file, startup checks for any existing user with an existence
+query. A populated database skips bootstrap, including when no administrator exists; database
+lookup failures stop startup rather than being treated as an empty database. Local
 `admin:grant` / `admin:revoke` commands provide recovery without an HTTP bootstrap.
 
 **Hardening.** The upload endpoints (`/upload`, `/upload-model`) are now gated by
@@ -2217,7 +2540,8 @@ uploads while still letting a whole deck's images through at once. Auth and uplo
 limits use an atomic Redis token bucket, namespaced by purpose and IP, so every app
 replica consumes the same allowance. Redis assigns each bucket a full-refill TTL;
 inactive IPs disappear automatically. Store failures fail closed with `503`, while a
-documented memory adapter remains available only for local development/tests.
+memory adapter is intended for local development/tests, although explicitly setting
+`RATE_LIMIT_STORE=memory` permits it in production. It does not share limits across processes.
 `TRUST_PROXY_HOPS` must match the exact reverse-proxy depth before forwarded client
 addresses are trusted. Redis establishes shared infrastructure but does not alone
 provide clustered Colyseus presence, room discovery, or socket routing.
@@ -2229,6 +2553,12 @@ also shapes the client: a _new_ inline `<script>` would fail the hash allowlist,
 labels preference is applied from **`equalize.js`** — a small external file loaded `defer` on every
 page — which reads `localStorage['ott-ui-full']` and toggles `body.ui-full` before the module scripts
 run (an inline version was silently blocked).
+The report endpoint uses the same auth token bucket and logs submitted report JSON verbatim;
+schema/redaction and an independent telemetry budget remain proposed (HARD-42/05). The stale
+report-only comment in `server.js` does not describe the configured enforced policy. HTTP
+failures use generic client messages but log raw URLs/exceptions, and parser rejections currently
+receive 500 rather than specific 4xx responses (HARD-42/43). Header verification in a local
+fixture is separate from actual browser enforcement, HTTPS termination and trusted-proxy setup.
 Remaining optional hardening: post-parse model complexity limits, per-user storage
 caps. Defense in depth, not provably safe.
 

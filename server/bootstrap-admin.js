@@ -1,14 +1,16 @@
 import fs from 'fs';
 import { validEmail, validUsername } from './auth-validation.js';
 
-// Provision a fresh database before the HTTP listener opens. Partial config and
-// non-empty databases without an admin fail closed; existing admins are untouched.
+// Provision a fresh database before the HTTP listener opens. Existing users bypass
+// bootstrap entirely; empty databases still validate configured credentials.
 export async function bootstrapAdminFromEnvironment({
   db,
   hashPassword,
   env = process.env,
   readFile = fs.readFileSync,
 }) {
+  if (await db.hasUsers()) return { status: 'already-configured' };
+
   const username = String(env.BOOTSTRAP_ADMIN_USERNAME || '').trim();
   const email = String(env.BOOTSTRAP_ADMIN_EMAIL || '').trim();
   const passwordFile = String(env.BOOTSTRAP_ADMIN_PASSWORD_FILE || '').trim();

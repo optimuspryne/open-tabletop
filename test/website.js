@@ -40,7 +40,7 @@ test('website pages have working local routes, assets, and fragment targets', as
   }
 });
 
-test('website remains readable without scripts and keeps the demo inactive', async () => {
+test('website remains readable without scripts and links to the public demo', async () => {
   for (const page of pages) {
     const source = await readFile(resolve(root, page), 'utf8');
     assert.match(source, /<html lang="en">/, page);
@@ -50,10 +50,14 @@ test('website remains readable without scripts and keeps the demo inactive', asy
     assert.doesNotMatch(source, /<script\b|\bonclick=|—|–/, page);
     assert.match(
       source,
-      /<span class="demo" aria-disabled="true">Public demo \(coming soon\)<\/span>/,
+      /<a class="demo" href="https:\/\/play\.open-tabletop\.com">Try public demo<\/a>/,
       page,
     );
-    assert.doesNotMatch(source, /<a\b[^>]*>Public demo/, page);
+    assert.doesNotMatch(
+      source,
+      /Public demo \(coming soon\)|class="demo" aria-disabled="true"/,
+      page,
+    );
     assert.doesNotMatch(source, /href="#"/, page);
     assert.match(source, /<meta\s+name="description"\s+content="[^"]+"/, page);
     if (page.startsWith('wiki/')) {

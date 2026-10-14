@@ -20,6 +20,7 @@ import {
 import { stopPlayerInteraction } from './server/game/interaction-cleanup.js';
 import { createParticipationService } from './server/game/participation.js';
 import { createDeckBuilders } from './server/game/deck-builders.js';
+import { createMahjongWall } from './server/game/mahjong-wall.js';
 import { isBoundedImageDataURL } from './shared/avatar.js';
 import {
   afterDispense as consumeDispensedItem,
@@ -92,6 +93,7 @@ import {
   sanitizeMatGeom,
   SEAT_ANGLES,
   DECK_MODELS,
+  cardPublicProps,
 } from './shared/pieces.js';
 import { MEASURE, OVERLAY_KINDS, OVERLAY_LIMITS, WHITEBOARD_LIMITS } from './shared/overlays.js';
 import * as db from './db.js'; // Postgres-backed saved-asset library (metadata; files stay on disk)
@@ -115,7 +117,7 @@ import {
 } from './server/http/routes/asset-textures.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import { cardBackRef, cardFrontRef } from './server/deck-state.js';
-import { parkHand, claimHand } from './server/game/hand-state.js';
+import { parkHand, claimHand, sendHand as sendPrivateHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { createDemoDicePolicy, DemoDiceLimitError } from './server/game/demo-dice-policy.js';
 import { MAX_PIECES } from './server/game/piece-capacity.js';
@@ -175,10 +177,9 @@ const SIM = {
   solverIterations: 12, // contact solver passes: more = firmer stacks, more CPU
   contact: { stiffness: 1e7, relaxation: 3 }, // contact-equation firmness / relaxation
   step: { fixed: 1 / 120, maxSub: 4 }, // physics timestep: smaller fixed + more substeps = less tunneling, more CPU
-  // --- CARDS: the thin-stack problem is tuned here ---------------------------
+  // --- CARDS: collider override and settling/throw tuning --------------------
   cards: {
-    colliderThick: 0.04, // HALF-thickness of the INVISIBLE card collider (the mesh stays thin). Bigger = far more
-    //   stable stacks & less clip-through, but stacked cards show a small air-gap. Try 0.03–0.08.
+    colliderThick: 0, // optional minimum HALF-thickness; zero follows each card/tile's visible geometry
     linDamp: 0.25, // linear damping — cards settle sooner
     angDamp: 0.7, // angular damping for cards (overrides damp.flat)
     maxThrow: 14, // clamp a card's release speed so a flung card can't tunnel through another
@@ -332,19 +333,17 @@ const shuffle = (array) => {
   return array;
 };
 const deckBuilders = createDeckBuilders({ shuffle });
+const spawnMahjongWall = createMahjongWall({
+  buildInventory: deckBuilders.buildMahjongWall,
+  maxPieces: SIM.maxPieces,
+});
 
 // The PUBLIC geometry/behavior a card/tile inherits from its deck: a named tile kind (`tile`), an
 // explicit `geom` (custom-aspect image decks), and a `snap` flag (word tiles snap to the grid). Plain
 // playing cards carry none, so this returns {} and nothing extra is stored — normal cards are
 // untouched. Threaded wherever a card is dealt, drawn, held, or played, so a face-down tile still
 // shows its true shape (and snap behavior) while its face is private.
-const geoOf = (o) => {
-  const g = {};
-  if (o && o.tile) g.tile = o.tile;
-  if (o && o.geom) g.geom = o.geom;
-  if (o && o.snap) g.snap = true;
-  return g;
-};
+const geoOf = cardPublicProps;
 const {
   releasePiece: releaseRoomPiece,
   removePiece: removeRoomPiece,
@@ -352,6 +351,7 @@ const {
 } = createPieceLifecycle({ deckBuilders, dropSfx, geoOf, sim: SIM });
 const setupStarterGame = createStarterSetup({
   deckBuilders,
+  spawnMahjongWall,
   geoOf,
   maxPieces: SIM.maxPieces,
   spawnY: SIM.spawnY,
@@ -500,6 +500,7 @@ class TableRoom extends Room {
     });
 
     registerPieceHandlers(this, {
+      spawnMahjongWall,
       maxPieces: SIM.maxPieces,
       flipHop: SIM.flipHop,
       roll: SIM.roll,
@@ -609,10 +610,12 @@ class TableRoom extends Room {
     tableMessage('loadStarter', (client, message) => {
       if (this.rank(client) < RANK.gm) return; // replacing the whole table is GM+ (like scene load / reset)
       const parsed = oneField(message, 'game', (game) =>
-        typeof game === 'string' && STARTERS[game] ? game : null,
+        typeof game === 'string' && Object.hasOwn(STARTERS, game) ? game : null,
       );
       if (!parsed) return;
-      this.setupStarter(parsed.game);
+      const result = this.setupStarter(parsed.game);
+      if (result?.ok === false)
+        client.send('serverError', { operation: 'loadStarter', message: result.message });
     });
 
     // --- Member management (DB-backed; all mutations authorized server-side) ---
@@ -773,7 +776,13 @@ class TableRoom extends Room {
         continue; // active seated players only
       for (let i = 0; i < n && cards.length; i++) {
         const entry = cards.pop();
-        this.addToHand(client, cardFrontRef(entry), cardBackRef(entry) || back, geo, dp.open);
+        this.addToHand(
+          client,
+          cardFrontRef(entry),
+          cardBackRef(entry) || back,
+          { ...geo, ...geoOf(dp, entry) },
+          dp.open,
+        );
       }
     }
     deck.count = cards.length;
@@ -838,16 +847,10 @@ class TableRoom extends Room {
     return recolorRoomPiece(this, id, opts); // synced → every client rebuilds the piece
   }
 
-  // Send a player their private hand, and publish only its COUNT to everyone
-  // else (so others can draw the right-sized fan without seeing the cards).
+  // Send content only to its owner; publish count/back and unordered shape/material
+  // groups so everyone can render a concealed fan without seeing private faces.
   sendHand(client) {
-    const hand = this.hands.get(client.sessionId) || [];
-    const player = this.state.players.get(client.sessionId);
-    if (player) {
-      player.hand = hand.length; // public count only
-      player.handBack = hand.length ? (hand[0].open ? 'back' : hand[0].back || '') : ''; // public back image; a double-sided card shows a generic cover (its faces are public elsewhere)
-    }
-    client.send('hand', hand); // private contents, to this client alone
+    sendPrivateHand(this, client);
   }
 
   clientBy(sid) {

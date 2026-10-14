@@ -529,7 +529,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  /* Without this every element that never sets a colour inherits the UA default —
+  /* Without this every element that never sets a color inherits the UA default —
      black — regardless of the dark surface it sits on. That is how the toast, and the
      region close button's ✕, ended up unreadable. */
   color: var(--text);
@@ -885,6 +885,47 @@ a {
   align-items: center;
   gap: 6px;
 }
+.domino-appearance {
+  display: grid;
+  gap: var(--gap);
+  min-width: 230px;
+}
+.domino-appearance__colors {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--gap);
+}
+.domino-appearance label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+}
+.domino-appearance input[type='color'] {
+  width: 44px;
+  min-height: 32px;
+  padding: 2px;
+}
+.domino-appearance select {
+  flex: 1;
+  min-width: 0;
+}
+#inspectDominoAppearance {
+  position: fixed;
+  top: calc(var(--inset) + 40px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  padding: var(--gap);
+  width: min(360px, calc(100vw - 2 * var(--inset)));
+  box-sizing: border-box;
+}
+@media (pointer: coarse) {
+  .domino-appearance input[type='color'],
+  .domino-appearance select {
+    min-height: 44px;
+  }
+}
 #inspectColorRow input[type='color'] {
   width: 40px;
   height: 26px;
@@ -1005,6 +1046,45 @@ a {
 .handFlank[hidden] {
   display: none;
 }
+#handActions {
+  position: relative;
+  flex: 0 0 auto;
+}
+#handActionsPanel {
+  display: none;
+  position: absolute;
+  z-index: 9; /* Drop choices extend over the hand's backdrop-filter stacking context. */
+  bottom: calc(100% + 6px);
+  left: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 100%;
+}
+#handRow.handActionsOpen #handActionsPanel {
+  display: flex;
+}
+#handActionsPanel > button,
+#handActionsPanel #dropBtn {
+  width: 100%;
+  white-space: nowrap;
+}
+#handActionsBtn[aria-expanded='true'] {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+@media (min-width: 901px) and (pointer: fine) {
+  #handRow:not(.handActionsOpen) #showStrip,
+  #handRow:not(.handActionsOpen) #rearrangeBar {
+    display: none;
+  }
+  #handActionsPanel .dropSplit {
+    left: calc(100% + 6px);
+    right: auto;
+    bottom: 0;
+  }
+}
 #handFlankStack {
   display: flex;
   flex-direction: column; /* Show Hand above Rearrange, stacked on the left flank */
@@ -1031,6 +1111,12 @@ a {
 }
 .handScroll::-webkit-scrollbar {
   display: none;
+}
+/* Reserve space inside the scroll viewport for a lifted/selected tile, without
+   changing the tray's resting height or position. */
+.handScroll:has(.tilePreview) {
+  padding-top: 12px;
+  margin-top: -12px;
 }
 .handScrollBtn {
   flex-shrink: 0;
@@ -1073,8 +1159,14 @@ a {
   z-index: 3;
 }
 .handcard.img {
-  background-size: cover;
+  background-size: contain;
   background-position: center;
+  background-repeat: no-repeat;
+}
+/* Bundled playing faces use shared bridge aspect and retain all corner indices. */
+.handcard.playingFace {
+  background-size: contain;
+  background-repeat: no-repeat;
 }
 /* A tile (domino) hand slot: 1:2 and a touch narrower, so the tile fills it (same height as a card). */
 .handcard.tile {
@@ -1096,6 +1188,17 @@ a {
   border-radius: 0;
   align-self: center;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+/* The snapshot supplies the tile silhouette; a card-shaped frame or hex clip would
+   cut off its angled sides. Keep the existing card-height and fit the entire image. */
+.handcard.tilePreview {
+  height: calc(var(--card-w) * 62 / 44);
+  max-width: calc(var(--card-w) * 1.6);
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  clip-path: none;
+  box-shadow: none;
 }
 .handcard.txt {
   font: 600 calc(var(--card-w) * 0.15)/1.1 var(--font);
@@ -1207,6 +1310,11 @@ a {
   flex-wrap: wrap;
   gap: 6px;
 }
+/* Graphics presets and Apply are text-only controls, including in compact mode. */
+#qualityRow .lbl,
+#qualityApply .lbl {
+  display: inline;
+}
 .chip {
   padding: 5px 10px;
   font-size: var(--fs-sm);
@@ -1246,7 +1354,7 @@ a {
 }
 
 /* Select variants share the field primitive. The arrow is built from gradients
-   so it follows --accent instead of embedding a fixed colour in an SVG URL. */
+   so it follows --accent instead of embedding a fixed color in an SVG URL. */
 :where(select, .control--select) {
   padding-right: calc(25px * var(--ui-elements-scale));
   cursor: pointer;
@@ -2034,6 +2142,10 @@ input[type='range']::-moz-range-thumb {
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+}
+.librarySetPicker select {
+  width: 100%;
+  min-width: 0;
 }
 .libName {
   font-weight: 600;
@@ -3264,7 +3376,7 @@ body.admin {
   }
 }
 /* Tabler SVG icons via an inline <symbol> sprite, referenced by <use>. Stroke inherits currentColor,
-   so an icon takes the button's text colour — .danger red, hover accent, disabled, etc. — for free. */
+   so an icon takes the button's text color — .danger red, hover accent, disabled, etc. — for free. */
 .icon-sprite {
   position: absolute;
   width: 0;
@@ -3408,6 +3520,10 @@ label:has(.ico) {
     top: auto !important;
     bottom: var(--inset) !important;
     max-width: 96vw;
+  }
+  #inspectDominoAppearance {
+    top: auto;
+    bottom: var(--inset);
   }
   #drawActions {
     flex-wrap: nowrap;
@@ -3622,7 +3738,7 @@ label:has(.ico) {
   border-radius: var(--r);
   padding: calc(7px * var(--ui-elements-scale)) calc(11px * var(--ui-elements-scale));
 }
-/* Hover becomes a tint rather than a border colour change — a border that only
+/* Hover becomes a tint rather than a border color change — a border that only
    appears on hover makes the whole row twitch. */
 #ui > button:hover,
 #ui > .button:hover,
@@ -3670,7 +3786,7 @@ label:has(.ico) {
 }
 
 /* ---- 3 · Icons carry the accent, labels stay neutral --------------------
-   .ico sets stroke: currentColor, so giving .ico its own colour tints the glyph
+   .ico sets stroke: currentColor, so giving .ico its own color tints the glyph
    without touching the label. This is the accent rule: accent = interactive and
    state, neutral = text and surface. */
 .ico {
@@ -4555,6 +4671,56 @@ body.not-gm .gm-only {
   border-radius: var(--r-sm);
   line-height: 1.2;
 }
+/* Playing decks keep named, keyboard-operable back choices in every UI mode. */
+#libraryModal .libCard.hasBackChoices {
+  grid-template-areas:
+    'prev meta'
+    'backs backs'
+    'ctrls ctrls'
+    'acts acts';
+}
+#libraryModal .libCard.hasSetChoices {
+  grid-template-areas:
+    'prev meta'
+    'set set'
+    'ctrls ctrls'
+    'acts acts';
+}
+#libraryModal .librarySetPicker {
+  grid-area: set;
+}
+#libraryModal .mahjongWallBuild .lbl {
+  display: inline;
+}
+#libraryModal .deckBackPicker {
+  grid-area: backs;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+#libraryModal .deckBackPicker legend {
+  margin-bottom: 4px;
+}
+#libraryModal .deckBackChoice {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--control-min-height);
+  gap: 6px;
+  padding: 5px 8px;
+}
+#libraryModal .deckBackChoice .libThumb {
+  width: 26px;
+  height: 41px;
+  object-fit: contain;
+}
+#libraryModal .deckBackChoice:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 #libraryModal .cardCtrls .chip .ico,
 #libraryModal .libCard .button-row--compact .ico {
   width: var(--ico-size-sm);
@@ -4590,7 +4756,7 @@ body.not-gm .gm-only {
   outline-width: 1px;
   outline-offset: 1px;
 }
-/* Library card colour swatches — inline where there is room, behind a trigger where
+/* Library card color swatches — inline where there is room, behind a trigger where
    there is not. The menu stays in normal flow rather than floating: .libPane scrolls,
    and an absolutely positioned popover would be clipped at the pane edge. */
 #libraryModal .cardCtrls .swatchPop > .pop-menu {
@@ -6027,6 +6193,13 @@ canvas.fog-painting {
   display: none;
 }
 @media (max-width: 900px), (pointer: coarse) {
+  #handActions,
+  #handActionsPanel {
+    display: contents;
+  }
+  #handActionsBtn {
+    display: none;
+  }
   #handRow {
     left: 0;
     right: 0;
@@ -6432,8 +6605,8 @@ canvas.fog-painting {
   #libraryModal .libCard .cardCtrls {
     gap: 4px;
   }
-  /* colour choice now lives behind the .swatchPop trigger here — see the
-     "Library card colour swatches" block. It used to be display:none. */
+  /* color choice now lives behind the .swatchPop trigger here — see the
+     "Library card color swatches" block. It used to be display:none. */
 }
 
 /* ============================================================================
@@ -6901,7 +7074,7 @@ canvas.fog-painting {
   background: var(--border);
 }
 /* The live #players node is borrowed while the popover is open — it arrives with the
-   dock's rules and nothing else, so state the roster's own colour here. */
+   dock's rules and nothing else, so state the roster's own color here. */
 .seatPop #players {
   display: flex;
   flex-direction: column;
@@ -7460,6 +7633,11 @@ canvas.fog-painting {
 @media (pointer: coarse) {
   #libraryModal .libraryCategory > summary, .libraryCollectionPicker > summary,
   #libraryFilters button, #libraryModal .libControls button { min-height: 44px; }
+  .librarySetPicker select, .mahjongWallBuild { min-height: 44px; }
+  #libraryModal .libCard .button-row--compact .mahjongStarterSetup {
+    min-width: 44px;
+    min-height: max(44px, var(--control-min-height));
+  }
   .libraryCollectionPicker .collectionChoice { min-height: 44px; }
 }
 

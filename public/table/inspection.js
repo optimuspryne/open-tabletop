@@ -9,7 +9,10 @@ import {
   objectFinish,
   readableInk,
   recolorPalette,
+  tileAppearanceOf,
+  tileModelFamily,
 } from '../../shared/pieces.js';
+import { createTileAppearanceControls } from '../ui/tile-appearance.js';
 
 // Owns inspection previews, their controls, deferred double-clicks, and pointer rotation.
 export function createInspection({
@@ -43,6 +46,22 @@ export function createInspection({
 }) {
   let diceTextures = [];
   let finishDieRef = null;
+  const tileControls = createTileAppearanceControls(byId('inspectDominoAppearance'), {
+    doc,
+    deviceClass,
+    onChange(patch, commit) {
+      if (!canInteract() || !inspect?.origId || !tileModelFamily(inspect.props)) return;
+      inspect.props = {
+        ...inspect.props,
+        [tileModelFamily(inspect.props).appearanceKey]: {
+          ...tileAppearanceOf(inspect.props),
+          ...patch,
+        },
+      };
+      swapInspect(inspect.props);
+      if (commit) getRoom().send('recolor', { id: inspect.origId, tileAppearance: patch });
+    },
+  });
   const refreshTextureChips = () => {
     if (finishDieRef) buildTextureChips(byId('dieTextures'), (url) => finishDieRef('custom', url));
     const group = byId('dieCustomGroup');
@@ -312,6 +331,15 @@ export function createInspection({
     } // a hand card has no deck to return to
     const piece0 = opts.origId && getRoom().state.pieces.get(opts.origId);
     const props0 = piece0 ? JSON.parse(piece0.props || '{}') : {};
+    const dominoRow = byId('inspectDominoAppearance');
+    const isModelTile = opts.type === 'card' && !!tileModelFamily(props0) && !opts.drawn;
+    if (dominoRow) {
+      dominoRow.hidden = !isModelTile;
+      if (isModelTile) {
+        inspect.props = props0;
+        tileControls?.setProps(props0);
+      }
+    }
     const spec = opts.type === 'dispenser' ? dispenserDefinition(props0) : null;
     const teamMode = !!(spec && spec.team); // go bowl → black/white toggle
     const colorMode =
@@ -400,7 +428,10 @@ export function createInspection({
     if (
       !inspect ||
       !inspect.pivot ||
-      (inspect.type !== 'die' && inspect.type !== 'prop' && inspect.type !== 'dispenser')
+      (inspect.type !== 'die' &&
+        inspect.type !== 'prop' &&
+        inspect.type !== 'dispenser' &&
+        !tileModelFamily(inspect.props))
     )
       return;
     const old = inspect.pivot.children[0];
@@ -449,7 +480,11 @@ export function createInspection({
     }
     const piece = getRoom().state.pieces.get(id);
     const ownsMesh =
-      (entry.type === 'die' || entry.type === 'prop' || entry.type === 'dispenser') && !!piece;
+      (entry.type === 'die' ||
+        entry.type === 'prop' ||
+        entry.type === 'dispenser' ||
+        (entry.type === 'card' && tileModelFamily(meshPropsOf(piece, id)))) &&
+      !!piece;
     const fresh = ownsMesh
       ? kinds[entry.type].mesh(meshPropsOf(piece, id)) // own materials → live-recolorable, no shared-material bleed
       : entry.mesh.clone(true); // clone respects hidden info (face-down card = back only)
@@ -473,6 +508,8 @@ export function createInspection({
     byId('drawActions').hidden = true;
     const row = byId('inspectColorRow');
     if (row) row.hidden = true;
+    const dominoRow = byId('inspectDominoAppearance');
+    if (dominoRow) dominoRow.hidden = true;
     onClose?.();
     if (wasHand) onReleaseHand(); // restore the hand we hid for the inspect
   }

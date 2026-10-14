@@ -1,9 +1,75 @@
 # Public demo mode — staged implementation
 
+## Main synchronization (2026-10-14)
+
+Merged main through `14444d9` (release 0.22.0) into the existing demo branch.
+The merge retains guest/admin entry, expiry/invite handling, four stored/live tables,
+20 connections, the 15-dice cap and 1,000 ms roll cooldown. New main artwork, authored
+models, stacking and hand rendering use their existing runtime paths. Piece removal retains
+both demo deadline cleanup and main stacking wake-up behavior.
+The newer implementation record below takes precedence over main's earlier planning-only
+dice document. Automated synchronization checks passed as recorded below; no live deployment,
+real-device acceptance or sustained four-table retest is implied. Restart the server and
+refresh clients after deployment; existing Wordy rooms need board reselection/calibration.
+
+
 Branch: `codex/public-demo-mode`. Intended public origin: `https://play.open-tabletop.com`.
 The demo is an opt-in deployment of the same application, not a permanent fork.
 User selected a fresh table per visitor/group and approved the entry mock-up and recommended
 icons (`player-play`, `users-plus`, `copy`, `logout`) on 2026-09-29. The exact table placement and invite dialog were subsequently approved before implementation.
+
+### Synchronization resolution inventory
+
+All main changes through 0.22.0 are inherited by the merge. The manually reconciled or
+regenerated files are:
+
+| File | Resolution |
+| --- | --- |
+| `CHANGELOG.md` | Preserve demo entries under Unreleased and main release history verbatim; record synchronization. |
+| `docs/ARCHITECTURE.md` | Retain demo ownership/capacity and main release/scaling descriptions; add synchronization boundary. |
+| `docs/REFERENCE.md` | Preserve both sets of contracts and link current synchronization notes. |
+| `docs/RELEASING.md` | Document the older demo baseline's pending migration 023, demo-specific build and restart/refresh requirements. |
+| `docs/PLAN_DEMO_DICE_LIMITS.md` | Keep the implemented safeguard record instead of the earlier main-only proposal; record synchronization. |
+| `docs/DEMO_MODE_PLAN.md` | This synchronization inventory, validation and manual acceptance record. |
+| `public/admin.html`, `public/index.html`, `public/table.html`, `public/demo.html` | Regenerate the combined approved sprite via `build:icons`; retain existing demo/main controls and layouts. |
+| `server/game/piece-lifecycle.js` | `removePiece` runs demo deadline cleanup and main's `wakeStackAbove`; preserve both spawn paths. |
+| `test/backend-database-factory.js` | Production export check requires both `hasUsers` and the demo APIs. |
+
+No new production functions or helpers were introduced to reconcile the branches.
+`package.json` retains the demo/admin browser scripts and main's 0.22.0 version and tile
+preview checks. `package-lock.json` and Compose/README image pins follow main.
+
+### Synchronization verification
+
+Completed on 2026-10-14:
+
+- `npm ci --no-audit --no-fund`: installed the merged lockfile.
+- `npm run build:icons`: regenerated all four sprites with 168 approved icons each.
+- `npm run check`: passed lint, formatting, CSS checks and all 1,059 tests.
+- `npm run test:input`: passed 58/58 checks.
+- `npm run test:components`: passed desktop/touch scenes, notecard editor checks and tile
+  preview/mixed-back/restricted-Show checks. The existing ten Mahjong thumbnail fixture
+  404 diagnostics remain; successful verification of those fixture routes is not claimed.
+- `npm run test:devices`: passed all seven documented profiles.
+- `npm run test:demo-ui`: passed behavior checks and 16 layout/input combinations.
+- `npm run test:admin-login`: passed authorization/session/focus checks and eight layouts.
+- `npm run test:accounts`: passed all six full/compact desktop/touch layouts.
+- `npm run test:website`: passed all 25 page/viewport checks.
+- `npm run test:integration`: passed 25 ordinary and 11 demo tests, including numbered
+  upgrade fixtures before the test runs.
+- `sh scripts/test-compose-init.sh`: passed the real disposable PostgreSQL initialization,
+  quoted credentials, current/future CRUD and sequence grants, and denied schema DDL.
+- Package versions, combined sprite membership, preservation of demo-only runtime/SQL files,
+  main release history, documentation file links and `git diff --check`: passed.
+
+Checks used local HTTP/Chrome and disposable PostgreSQL, with the access required by those
+fixtures. No public demo requests, deployment, image publication or push was performed.
+
+After rebuilding/restarting the demo app and refreshing clients, manually verify guest
+create/resume/invite/rotation and expiry, administrator sign-in/close/sign-out, the cards/dice/chess
+starters, refreshed models/private hands and save/reconnect concealment. Check the 16th-die
+rejection and shared roll cooldown across table/tray/group actions. Real-device gesture feel,
+GPU performance, target-host upgrade and sustained four-table load testing remain pending.
 
 ## Capacity adjustment (2026-09-30)
 

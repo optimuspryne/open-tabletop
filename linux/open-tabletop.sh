@@ -3,7 +3,10 @@
 
 usage() {
   cat <<'EOF'
-Usage: sudo bash linux/open-tabletop.sh [install|update]
+Usage: sudo bash linux/open-tabletop.sh [install|update|reinstall|resume|uninstall|purge] [--dry-run]
+uninstall preserves data/configuration; purge requires typed confirmation and retains backups.
+--dry-run is available for uninstall/purge. Removal uses a local installer without fetching source.
+reinstall/resume reuse existing installer state and credentials; neither resets the database.
 Supported: Debian 12/13, Ubuntu 22.04/24.04/26.04 LTS, Fedora, Arch Linux.
 Requires a running systemd host. Arch installation performs a full pacman -Syu.
 Optional environment: SOURCE_REPO SOURCE_REF SOURCE_ARCHIVE
@@ -54,9 +57,23 @@ main() {
     usage
     return
   fi
-  [[ $# -le 1 && ( "$mode" == install || "$mode" == update ) ]] || { usage >&2; exit 2; }
+  case "$mode" in
+    uninstall|purge)
+      [[ $# -le 2 && ( $# -le 1 || "$2" == --dry-run ) ]] || { usage >&2; exit 2; }
+      ;;
+    install|update|reinstall|resume) [[ $# -le 1 ]] || { usage >&2; exit 2; } ;;
+    *) usage >&2; exit 2 ;;
+  esac
   [[ $EUID -eq 0 ]] || fail 'Run this script as root on the target Linux host'
   [[ -d /run/systemd/system ]] || fail 'A running systemd host is required'
+  if [[ "$mode" == uninstall || "$mode" == purge ]]; then
+    local companion
+    companion="$(dirname "$(realpath -- "${BASH_SOURCE[0]}")")/../proxmox/install.sh"
+    [[ -f "$companion" ]] || companion=/etc/open-tabletop/installer.sh
+    [[ -f "$companion" ]] || fail 'Use a current repository checkout to remove this older installation'
+    env OTT_INSTALL_PROFILE=linux bash "$companion" "$@"
+    return
+  fi
   if [[ "$mode" == install ]]; then
     [[ ! -e /etc/open-tabletop/open-tabletop.env ]] || fail 'Already installed; use update'
     BOOTSTRAP_ADMIN_USERNAME=${BOOTSTRAP_ADMIN_USERNAME:-admin}
@@ -67,9 +84,13 @@ main() {
     [[ "$BOOTSTRAP_ADMIN_USERNAME" =~ ^[a-zA-Z0-9_-]{3,20}$ ]] || fail 'Invalid admin username'
     [[ "$BOOTSTRAP_ADMIN_EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]] || fail 'Invalid admin email'
     export BOOTSTRAP_ADMIN_USERNAME BOOTSTRAP_ADMIN_EMAIL
-  else
+  elif [[ "$mode" == update ]]; then
     [[ -f /etc/open-tabletop/open-tabletop.env && -L /opt/open-tabletop/current ]] || fail 'Open Tabletop is not installed'
     mode=upgrade
+  else
+    [[ -f /etc/open-tabletop/open-tabletop.env || -f /etc/open-tabletop/install-pending ]] \
+      || fail 'No recoverable installer state; inspect the previous installation before retrying'
+    mode=resume
   fi
   temp_dir=$(mktemp -d /tmp/open-tabletop-source.XXXXXXXX)
   trap 'rm -rf -- "$temp_dir"' EXIT

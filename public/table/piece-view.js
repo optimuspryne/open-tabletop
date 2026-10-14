@@ -68,6 +68,8 @@ export function createPieceView({
   const qb = createQuaternion();
 
   const configurePieceMesh = (mesh, id, castsShadow) => {
+    mesh.castShadow = castsShadow;
+    mesh.receiveShadow = true;
     mesh.traverse((node) => {
       node.userData.id = id;
       if (node.isMesh) {
@@ -114,6 +116,7 @@ export function createPieceView({
         mesh.receiveShadow = true;
         mesh.userData.id = id;
       },
+      hideWhenInspected: true,
     });
   }
 

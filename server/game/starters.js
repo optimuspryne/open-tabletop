@@ -1,13 +1,24 @@
-import { BOARDS, PROPS, STARTERS } from '../../shared/pieces.js';
+import { BOARDS, PROPS, STARTERS, dieR } from '../../shared/pieces.js';
+import { mahjongWallFits, mahjongWallLayout } from '../../shared/mahjong-wall.js';
 
 // Build the starter-layout orchestrator around the room's existing inventory and geometry rules.
 // The room remains authoritative for clearing, spawning, calibration, dealing, and persistence.
-export function createStarterSetup({ deckBuilders, geoOf, maxPieces, spawnY }) {
+export function createStarterSetup({ deckBuilders, spawnMahjongWall, geoOf, maxPieces, spawnY }) {
   const { buildSimpleDeck, buildDominoSet, buildScrabbleBag, buildMahjongWall } = deckBuilders;
 
   return function setupStarter(room, game) {
+    if (typeof game !== 'string' || !Object.hasOwn(STARTERS, game)) return false;
     const def = STARTERS[game];
-    if (!def) return false;
+    if (def.mahjongWall) {
+      const count = def.mahjongWall.bonusTiles ? 144 : 136;
+      if (count + def.dice.length > maxPieces)
+        return { ok: false, message: 'The Mahjong starter exceeds this room’s piece limit.' };
+      if (!mahjongWallFits(mahjongWallLayout(count), room.state))
+        return {
+          ok: false,
+          message: 'The Mahjong wall does not fit this table. Enlarge the play surface first.',
+        };
+    }
     room.clearTable();
     let gridded = false;
     if (def.board) {
@@ -42,6 +53,12 @@ export function createStarterSetup({ deckBuilders, geoOf, maxPieces, spawnY }) {
       room.state.scale.gridStyle = 'off';
       room.scheduleSave();
     }
+    if (def.mahjongWall) {
+      const result = spawnMahjongWall(room, def.mahjongWall.bonusTiles);
+      if (!result.ok) return result;
+    }
+    for (const { x, z, ...props } of def.dice || [])
+      room.spawn('die', [x, dieR(props.sides) + 0.03, z], props, [0, 0, 0, 1]);
     for (const bowl of def.bowls || []) {
       room.spawn('dispenser', [bowl.x, spawnY, bowl.z], {
         disp: bowl.disp,

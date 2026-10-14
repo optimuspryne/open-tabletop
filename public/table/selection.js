@@ -1,5 +1,8 @@
 import { setIcon } from '../ui/icons.js';
+import { createTileAppearanceControls } from '../ui/tile-appearance.js';
+import { piecePropsOf } from './piece-view.js';
 import {
+  tileModelFamily,
   KINDS as PHYS,
   PALETTE,
   COLORS,
@@ -17,13 +20,10 @@ import {
 // compose and gather are hints for the UI, with authoritative validation on the server.
 export function selColorDesc(piece) {
   if (piece.type === 'die') return { sig: 'free', team: false, swatches: PALETTE };
-  if (piece.type !== 'prop' && piece.type !== 'dispenser') return null; // cards, etc.
-  let props;
-  try {
-    props = JSON.parse(piece.props || '{}');
-  } catch {
-    props = {};
-  }
+  const props = piecePropsOf(piece);
+  if (['card', 'deck'].includes(piece.type) && tileModelFamily(props))
+    return { sig: 'tile:' + props.tile, team: false, swatches: [] };
+  if (piece.type !== 'prop' && piece.type !== 'dispenser') return null;
   const dispDef = piece.type === 'dispenser' ? dispenserDefinition(props) : null;
   const opt = recolorPalette(piece.type, props, dispDef);
   if (!opt) return null;
@@ -155,18 +155,30 @@ export function createSelection({
   getBoardTopY,
   byId,
   doc = document,
+  deviceClass = () => 'desktop',
   getStyle = getComputedStyle,
 }) {
   const document = doc;
   const selectedPieces = () => [...selection].map((id) => getRoom()?.state.pieces.get(id));
   // Selection is private to this client; the server validates every batch action.
   const selection = new Set(); // selected piece ids (mine only)
+  const tileControls = createTileAppearanceControls(byId('selDominoAppearance'), {
+    doc,
+    deviceClass,
+    onChange(patch, commit) {
+      if (commit && selection.size)
+        getRoom()?.send('recolorGroup', {
+          ids: [...selection],
+          tileAppearance: patch,
+        });
+    },
+  });
   let selMode = false; // the Select tool is active → a felt drag boxes instead of orbiting
   let marquee = null; // { sx, sy, add } while boxing; null otherwise
   let selGesture = false; // a shift/select pointer gesture is in progress (so pointerup finalizes it)
   const selRings = new Map(); // id -> highlight ring mesh (pooled)
   const SEL_COLOR = '#c9a25a'; // fallback if the accent var isn't a valid hex
-  // MY UI accent colour (the one chosen in the lobby, stored as the `--accent` CSS var). The
+  // MY UI accent color (the one chosen in the lobby, stored as the `--accent` CSS var). The
   // selection is private to me, so it's tinted with my own accent.
   const selColor = () => {
     const v = getStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -280,6 +292,17 @@ export function createSelection({
     if (!bar) return;
     const desc = selection.size ? selectionPalette(selectedPieces()) : null;
     const sig = !selection.size ? '' : !desc ? 'none' : desc.mixed ? 'mixed' : desc.sig;
+    const dominoRow = byId('selDominoAppearance');
+    if (dominoRow) {
+      dominoRow.hidden = !sig.startsWith('tile:');
+      if (sig.startsWith('tile:')) {
+        const props = selectedPieces()
+          .filter((p) => p && ['card', 'deck'].includes(p.type))
+          .map(piecePropsOf)
+          .filter((p) => tileModelFamily(p));
+        tileControls?.setProps(props[0], props.slice(1));
+      }
+    }
     bar.hidden = !selection.size || sig === 'none'; // no selection, or nothing colorable → hide
     if (bar.hidden) {
       selBarSig = null;
@@ -372,7 +395,7 @@ export function createSelection({
     if (!el) return;
     const c = selColor();
     el.style.borderColor = c;
-    el.style.background = c + '24'; // my colour + ~14% alpha (8-digit hex)
+    el.style.background = c + '24'; // my color + ~14% alpha (8-digit hex)
     el.style.left = Math.min(x0, x1) + 'px';
     el.style.top = Math.min(y0, y1) + 'px';
     el.style.width = Math.abs(x1 - x0) + 'px';

@@ -1,3 +1,7 @@
+import { cardGeom, tileAppearanceProps, tileModelFamily } from '../../shared/pieces.js';
+import { HAND_TILE_TILT, isHandTile } from '../../shared/hand-fan.js';
+import { PLAYING_CARD_GEOM } from '../../shared/playing-cards.js';
+
 // Private hand state, rendering, Show controls, and hand-only pointer gestures.
 export function createHand({
   scene,
@@ -9,6 +13,8 @@ export function createHand({
   hit,
   setPointer,
   cardMesh,
+  disposeCard,
+  tilePreviewURL,
   notecardMesh,
   disposeNotecard,
   notecardPreviewURL,
@@ -49,6 +55,10 @@ export function createHand({
       disposeNotecard(m);
       return;
     }
+    if (disposeCard) {
+      disposeCard(m);
+      return;
+    }
     // Placed cards and drag previews share immutable geometry; keep the cached GPU buffer alive.
     if (m.geometry && !m.geometry.userData.sharedCardGeometry) m.geometry.dispose();
     (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x && x.dispose());
@@ -63,11 +73,18 @@ export function createHand({
       return;
     }
     inspectMesh(
-      cardMesh({ front: card.front, back: card.back, geom: card.geom, tile: card.tile }),
+      cardMesh({
+        front: card.front,
+        back: card.back,
+        geom: card.geom,
+        tile: card.tile,
+        ...tileAppearanceProps(card),
+      }),
       {
         drawn: true,
         type: 'card',
         hid: card.hid,
+        ...(tileModelFamily(card) ? { ownsMesh: true } : {}),
       },
     );
     byId('hand').style.display = 'none';
@@ -113,12 +130,68 @@ export function createHand({
   try {
     handCollapsed = localStorage.getItem('ott.handHidden') === '1';
   } catch {} // personal view preference, remembered across refreshes
+  let handActionsOpen = false;
+  function setHandActionsOpen(open) {
+    handActionsOpen = !!open;
+    byId('handRow')?.classList.toggle('handActionsOpen', handActionsOpen);
+    byId('handActionsBtn')?.setAttribute('aria-expanded', handActionsOpen ? 'true' : 'false');
+    if (!open) {
+      const choices = byId('dropChoices');
+      if (choices) choices.hidden = true;
+      byId('dropBtn')?.setAttribute('aria-expanded', 'false');
+    }
+  }
+  byId('handActionsBtn')?.addEventListener('click', () => setHandActionsOpen(!handActionsOpen));
+  byId('handRow')?.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || !handActionsOpen) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setHandActionsOpen(false);
+    byId('handActionsBtn')?.focus();
+  });
+  // Keep the actual DOM/focus order aligned with each layout. Touch retains its
+  // Show/Rearrange stack above the cards and Drop below; desktop uses the approved menu.
+  const handSheet = win.matchMedia?.('(max-width: 900px), (pointer: coarse)');
+  function syncHandActionsLayout() {
+    const panel = byId('handActionsPanel'),
+      stack = byId('handFlankStack'),
+      show = byId('showBtn'),
+      rearrange = byId('rearrangeBtn'),
+      drop = byId('dropFlank');
+    if (!panel || !stack || !show || !rearrange || !drop) return;
+    const focused = document.activeElement;
+    if (handSheet?.matches) {
+      stack.hidden = false;
+      stack.append(show, rearrange);
+      panel.append(stack, drop);
+    } else {
+      stack.hidden = true;
+      panel.append(rearrange, drop, show, stack);
+    }
+    setHandActionsOpen(false);
+    if (focused && panel.contains(focused)) {
+      if (handSheet?.matches) focused.focus();
+      else byId('handActionsBtn')?.focus();
+    } else if (handSheet?.matches && focused === byId('handActionsBtn')) show.focus();
+  }
+  handSheet?.addEventListener('change', syncHandActionsLayout);
+  syncHandActionsLayout();
   function setHandCollapsed(v) {
     handCollapsed = v;
+    if (v) {
+      setHandActionsOpen(false);
+      // Hiding while Rearrange is active must actually collapse the cards.
+      reorderMode = false;
+      const bar = byId('rearrangeBar');
+      if (bar) bar.hidden = true;
+      byId('rearrangeBtn')?.setAttribute('aria-pressed', 'false');
+    }
     try {
       localStorage.setItem('ott.handHidden', v ? '1' : '0');
     } catch {}
     renderHand(myHand);
+    if (v) byId('hand').firstElementChild?.focus();
+    else if (!handSheet?.matches) byId('handActionsBtn')?.focus();
   }
   addEventListener('pointermove', (e) => {
     if (!handDrag) return;
@@ -140,7 +213,13 @@ export function createHand({
               textBoxes: d.textBoxes,
               orientation: d.orientation,
             })
-          : cardMesh({ front: d.front, back: d.back, geom: d.geom, tile: d.tile });
+          : cardMesh({
+              front: d.front,
+              back: d.back,
+              geom: d.geom,
+              tile: d.tile,
+              ...tileAppearanceProps(d),
+            });
       mesh.renderOrder = 6;
       scene.add(mesh);
       handDrag.mesh = mesh;
@@ -355,12 +434,16 @@ export function createHand({
     el.classList.toggle('reordering', reorderMode); // grab-cursor + touch-action while rearranging
     {
       const has = cards.length > 0;
+      const collapsed = handCollapsed && !selectMode && !reorderMode;
+      const actions = byId('handActions');
+      if (actions) actions.hidden = !has || collapsed;
+      if (!has || collapsed) setHandActionsOpen(false);
       const sb = byId('showBtn'),
         db = byId('dropFlank');
-      if (sb) sb.hidden = !has;
-      if (db) db.hidden = !has;
+      if (sb) sb.hidden = !has || collapsed;
+      if (db) db.hidden = !has || collapsed;
       const rb = byId('rearrangeBtn');
-      if (rb) rb.hidden = !has;
+      if (rb) rb.hidden = !has || collapsed;
       if (!has && reorderMode) {
         reorderMode = false; // no cards left to rearrange (inline; we're mid-render)
         const bar = byId('rearrangeBar');
@@ -376,7 +459,7 @@ export function createHand({
         const dropBtn = byId('dropBtn');
         if (dropBtn) dropBtn.setAttribute('aria-expanded', 'false');
       }
-    } // Show/Drop flank the hand, only when you hold cards
+    } // Actions belong to the visible hand, only when you hold cards.
     if (handCollapsed && cards.length && !selectMode && !reorderMode) {
       // hidden: show only a peek tab (never while picking cards to show)
       el.classList.add('collapsed');
@@ -397,13 +480,31 @@ export function createHand({
       div.className = 'handcard';
       div.dataset.hid = card.hid;
       const cf = card.kind === 'notecard' ? { kind: 'notecard' } : parseCardFront(card.front);
+      const playingFace = cf.ref && (cf.kind === 'rank' || cf.kind === 'joker');
+      const cardName = playingFace
+        ? cf.kind === 'rank'
+          ? `${cf.rank} ${cf.suit}`
+          : `${cf.color === '#bd2500' ? 'Red' : 'Black'} joker`
+        : null;
+      const tileName = isHandTile(card)
+        ? cf.kind === 'domino'
+          ? `Domino ${cf.a}–${cf.b}`
+          : `${tileModelFamily(card)?.name || 'Custom'} tile`
+        : null;
+      if (playingFace) {
+        div.classList.add('playingFace');
+        div.style.aspectRatio = `${PLAYING_CARD_GEOM.w} / ${PLAYING_CARD_GEOM.h}`;
+        div.setAttribute('role', 'group');
+        div.setAttribute('aria-label', cardName);
+      }
       if (card.kind === 'notecard') {
         div.classList.add('img', 'notecard');
         div.style.backgroundImage = `url("${notecardPreviewURL(card.drawing, card.paper, card.textBoxes, card.orientation)}")`;
-      } else if (cf.kind === 'rank') {
+      } else if (cf.kind === 'rank' && !cf.ref) {
         div.textContent = cf.rank + cf.suit;
         div.style.color = cf.color || '#111';
       } else if (
+        cf.kind === 'rank' ||
         cf.kind === 'text' ||
         cf.kind === 'joker' ||
         cf.kind === 'domino' ||
@@ -421,6 +522,21 @@ export function createHand({
         else if (card.geom && card.geom.round === 0) div.classList.add('shape-square');
         const u = cardPreviewURL(cf.ref, { thumbnail: true });
         if (u) div.style.backgroundImage = `url("${u}")`;
+      }
+      if (isHandTile(card)) {
+        const { hw, hh } = cardGeom(card);
+        div.classList.add('img', 'tilePreview');
+        div.style.aspectRatio = `${hw} / ${hh}`;
+        div.style.width = `calc(var(--card-w) * ${((62 / 44) * hw) / hh})`;
+        div.setAttribute('role', 'group');
+        div.setAttribute('aria-label', cardName || tileName);
+      }
+      if (isHandTile(card) && tilePreviewURL) {
+        tilePreviewURL(card, { tilt: HAND_TILE_TILT })
+          .then((url) => {
+            if (url && div.isConnected) div.style.backgroundImage = `url("${url}")`;
+          })
+          .catch(() => {});
       }
       div.title = 'Left drag/click: face-down · Right drag/click: face-up';
       div.oncontextmenu = (ev) => ev.preventDefault(); // right-click is handled by the pointer events
@@ -467,6 +583,7 @@ export function createHand({
             back: card.back,
             geom: card.geom,
             tile: card.tile,
+            ...tileAppearanceProps(card),
             sx: ev.clientX,
             sy: ev.clientY,
             dragging: false,
@@ -481,7 +598,14 @@ export function createHand({
       }; // desktop: double-click to inspect
       const eye = document.createElement('button');
       eye.className = 'cardEye';
-      eye.setAttribute('aria-label', card.kind === 'notecard' ? 'Open notecard' : 'Inspect card');
+      eye.setAttribute(
+        'aria-label',
+        card.kind === 'notecard'
+          ? 'Open notecard'
+          : cardName || tileName
+            ? `Inspect ${cardName || tileName}`
+            : 'Inspect card',
+      );
       setIcon(eye, 'eye');
       eye.addEventListener('pointerdown', (ev) => ev.stopPropagation()); // tapping the eye must not arm a drag
       eye.onclick = (ev) => {

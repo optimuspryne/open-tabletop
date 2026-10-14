@@ -1,6 +1,7 @@
 import { ASSET_PACKAGE, AssetPackageError } from '../../shared/asset-package.js';
 import { DECK_MODELS, sanitizeGeom } from '../../shared/pieces.js';
 import { deckBeginPayload } from '../message-validation.js';
+import { bundledPlayingCardReference } from '../../shared/playing-cards.js';
 
 const invalid = (message) => {
   throw new AssetPackageError(message);
@@ -9,13 +10,14 @@ const object = (value) => value && typeof value === 'object' && !Array.isArray(v
 const only = (value, keys) =>
   object(value) && Object.keys(value).every((key) => keys.includes(key));
 
-// These tags are rendered locally by parseCardFront. Preserve their authored text verbatim;
-// they are never interpreted as network/file references by the package resolver.
+// Procedural tags and exact bundled playing-card refs need no uploaded dependency.
+// Preserve them verbatim; arbitrary static/network references are still rejected.
 export function generatedDeckReference(ref) {
   return (
     typeof ref === 'string' &&
     ref.length < ASSET_PACKAGE.maxReferenceChars &&
-    (['back', 'domback', 'lback', 'mjback'].includes(ref) ||
+    (bundledPlayingCardReference(ref) ||
+      ['back', 'domback', 'lback', 'mjback'].includes(ref) ||
       /^(text:|tback:|rank:|joker:|domino:|letter:)/.test(ref))
   );
 }

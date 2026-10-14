@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStarterSetup } from '../server/game/starters.js';
 import { clearGameTable } from '../server/game/scene-persistence.js';
-import { BOARDS, PROPS } from '../shared/pieces.js';
+import { BOARDS, PROPS, TABLE, dieR } from '../shared/pieces.js';
 
 function makeHarness({ maxPieces = 250, grid = { cellX: 2, cellZ: 3 } } = {}) {
   const events = [];
@@ -46,6 +46,9 @@ function makeHarness({ maxPieces = 250, grid = { cellX: 2, cellZ: 3 } } = {}) {
   const room = {
     state: {
       pieces: new Map([['old-piece', { type: 'prop' }]]),
+      tableX: TABLE.x,
+      tableZ: TABLE.z,
+      tableShape: 'rect',
       scale: { gridStyle: 'hex', gridHidden: false },
       turn: 'old-session',
       turnPending: 'Old player',
@@ -100,6 +103,12 @@ function makeHarness({ maxPieces = 250, grid = { cellX: 2, cellZ: 3 } } = {}) {
 
   const setupStarter = createStarterSetup({
     deckBuilders,
+    spawnMahjongWall(room, bonusTiles) {
+      events.push(['wall', bonusTiles]);
+      for (let i = 0; i < (bonusTiles ? 144 : 136); i++)
+        room.spawn('card', [0, 0.14, 0], { tile: 'mahjong' });
+      return { ok: true };
+    },
     geoOf: (props) => ({
       ...(props.tile ? { tile: props.tile } : {}),
       ...(props.snap ? { snap: true } : {}),
@@ -112,10 +121,68 @@ function makeHarness({ maxPieces = 250, grid = { cellX: 2, cellZ: 3 } } = {}) {
 
 test('unknown starters leave an existing table untouched', () => {
   const { room, events, setupStarter } = makeHarness();
-  assert.equal(setupStarter(room, 'missing'), false);
+  for (const game of ['missing', '__proto__', 'constructor', ['mahjong'], null])
+    assert.equal(setupStarter(room, game), false);
   assert.equal(room.state.pieces.has('old-piece'), true);
   assert.deepEqual(events, []);
 });
+
+for (const [game, count, bonusTiles] of [
+  ['mahjong', 136, false],
+  ['mahjong-bonus', 144, true],
+]) {
+  test(`${game} creates a wall and two center dice with empty hands and no automatic deal`, () => {
+    const { room, events, builderCalls, setupStarter } = makeHarness();
+    assert.equal(setupStarter(room, game), true);
+    assert.equal(events[0][0], 'clear');
+    assert.equal(room.state.pieces.size, count + 2);
+    assert.equal(room.state.scale.gridStyle, 'off');
+    assert.equal(room.hands.size, 0);
+    assert.equal(room.pendingHands.size, 0);
+    assert.deepEqual(
+      events.filter((event) => event[0] === 'wall'),
+      [['wall', bonusTiles]],
+    );
+    assert.deepEqual(builderCalls, []);
+    assert.equal(
+      events.some((event) => event[0] === 'deal'),
+      false,
+    );
+    const dice = [...room.state.pieces.values()].filter((piece) => piece.type === 'die');
+    assert.deepEqual(
+      dice.map((piece) => piece.pos),
+      [
+        [-0.75, dieR(6) + 0.03, 0],
+        [0.75, dieR(6) + 0.03, 0],
+      ],
+    );
+    assert.ok(dice.every((piece) => piece.props.sides === 6 && piece.props.model === 'pip-round'));
+    assert.ok(dice.every((piece) => piece.quaternion.join(',') === '0,0,0,1'));
+    assert.equal(
+      [...room.state.pieces.values()].some((piece) => piece.type === 'deck'),
+      false,
+    );
+  });
+
+  test(`${game} preflights table fit and the complete kit capacity before clearing`, () => {
+    for (const failure of ['capacity', 'size']) {
+      const { room, events, setupStarter } = makeHarness({
+        maxPieces: failure === 'capacity' ? count + 1 : 250,
+      });
+      if (failure === 'size') room.state.tableZ = 3;
+      const result = setupStarter(room, game);
+      assert.equal(result.ok, false);
+      assert.ok(result.message);
+      assert.equal(room.state.pieces.has('old-piece'), true);
+      assert.equal(room.hands.size, 1);
+      assert.equal(room.pendingHands.size, 1);
+      assert.deepEqual(events, []);
+    }
+    const { room, setupStarter } = makeHarness({ maxPieces: count + 2 });
+    assert.equal(setupStarter(room, game), true);
+    assert.equal(room.state.pieces.size, count + 2);
+  });
+}
 
 test('a board starter clears all old public and private game state before placing pieces', () => {
   const { room, events, privateMapNames, setupStarter } = makeHarness();

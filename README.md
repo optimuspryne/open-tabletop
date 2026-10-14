@@ -52,16 +52,19 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.20.0` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.22.0` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
 > [Security & production posture](#security--production-posture).
 
-**Upgrading from 0.19.0 to 0.20.0:** restart the server with automatic migrations enabled to apply
-migration 022 for saved notecard templates, then refresh all browsers. Source installs should run
-`npm ci` first. For manual migrations and earlier upgrades, see
-[0.20.0 upgrade notes](docs/RELEASING.md#upgrading-to-0200).
+**Upgrading from 0.21.1 to 0.22.0:** pull the updated image, recreate the app container,
+then refresh all browsers for the new models, card artwork, hand previews and stacking behavior.
+No new migration or required configuration change is introduced. Source installs should run
+`npm ci` before restart. Existing Wordy rooms need board reselection and recalibration to use
+the revised board height/grid, or a fresh Wordy starter.
+See [0.22.0 upgrade notes](docs/RELEASING.md#upgrading-to-0220); upgrades from older versions
+must also follow the preceding release instructions there.
 
 Prefer to run it directly with Node, bring your own Postgres, or deploy through Portainer? Those
 paths are below.
@@ -118,8 +121,8 @@ Table**, or an auto-save when the room empties — written into the room's
      tabletop -f postgres/schema.sql` (the flattened current schema, which also
      seeds `schema_migrations`). Upgrade: apply only pending numbered migrations in
      order through the last migration shipped with your target version. Version
-     0.20.0 requires `022_notecard_templates.sql`; see the
-     [upgrade notes](docs/RELEASING.md#upgrading-to-0200). Set **`AUTO_MIGRATE=false`**
+     0.21.0 requires `023_account_recovery.sql`; see the
+     [upgrade notes](docs/RELEASING.md#upgrading-to-0210). Set **`AUTO_MIGRATE=false`**
      (or just leave `MIGRATE_DATABASE_URL` unset) to keep the app out of the schema.
      (The per-migration backfills matter on a populated DB but are no-ops on an empty
      one, so they're dropped from the baseline.)
@@ -212,7 +215,7 @@ docker run --name open-tabletop-app -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
   -e REDIS_URL=redis://redis-host:6379 \
-  optimuspryne/open-tabletop:0.20.0
+  optimuspryne/open-tabletop:0.22.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -302,7 +305,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.20.0
+    image: optimuspryne/open-tabletop:0.22.0
     user: appuser                         # matches the image's non-root runtime user
     restart: unless-stopped
     container_name: open-tabletop-app
@@ -341,7 +344,10 @@ volumes:
 ```
 Open **http://localhost:2567** and sign in with the bootstrap administrator configured in the
 stack environment. Bootstrap provisioning runs only when the users table is empty; later stack
-deployments and container restarts never reset that account or its password.
+deployments and container restarts never reset that account or its password. Once any user
+exists, startup skips all bootstrap settings and password-file access. The bootstrap variables
+can remain configured even if the first-boot file is no longer available. If users exist but
+none is an administrator, use `npm run admin:grant -- <username-or-email>` for recovery.
 
 You do not create `bootstrap_admin_password` on the Docker host. The top-level Compose `config`
 renders `BOOTSTRAP_ADMIN_PASSWORD` into a read-only file, mounts it inside the app container at
@@ -483,11 +489,58 @@ Updates also accept `SOURCE_ARCHIVE`, preserve credentials/configuration, and cr
 dump in `/var/backups/open-tabletop/` before switching releases and restarting the service.
 They do not upgrade OS packages or PostgreSQL major versions. Back up uploaded files separately;
 for rollback, restore both the database dump and the matching old release because migrations
-may not be reversible. Interrupted fresh installs may leave accounts, roles, or configuration:
-inspect the failure before retrying; the installer does not delete or overwrite that state.
+may not be reversible.
+
+To recover an interrupted install, or reinstall after removing the application while retaining data:
+
+```bash
+sudo env SOURCE_REF=main bash linux/open-tabletop.sh resume
+# Equivalent: reinstall (uses the same recovery path)
+sudo env SOURCE_REF=main bash linux/open-tabletop.sh reinstall
+```
+
+Resume/reinstall accept the same source options as install. They may install/update host packages,
+reuse the existing account and stored passwords, preserve the environment file and uploads,
+back up an existing database, and restore the service/release. They never reset existing role
+passwords or replace a missing database from a completed installation with an empty one.
+New installs save recovery state before creating accounts/roles. Older interrupted installs
+can be resumed if their configuration and password files exist; otherwise manual inspection is
+required. Custom database endpoints/credentials or asset paths require manual recovery.
+
+Run removal from a current repository checkout on the Linux host:
+
+```bash
+sudo bash linux/open-tabletop.sh uninstall --dry-run
+sudo bash linux/open-tabletop.sh uninstall
+# Permanent removal of the retained application data:
+sudo bash linux/open-tabletop.sh purge --dry-run
+sudo bash linux/open-tabletop.sh purge
+```
+
+`uninstall` stops/disables the service and removes `/opt/open-tabletop` and the systemd unit.
+It retains the database/roles, uploads, configuration/password files, service account, service
+drop-ins, and backups so `reinstall` can restore the application. Removal uses the local shared
+installer (or a retained `/etc/open-tabletop/installer.sh`), with no source download.
+
+`purge` requires typing `PURGE open-tabletop`. It also removes the local `tabletop` database,
+`tabletop`/`tabletop_app` roles, `/var/lib/open-tabletop`, `/etc/open-tabletop`, service drop-ins,
+the app user/group, and `/root/open-tabletop-credentials.txt`. It makes a fresh database backup
+before dropping an existing database and retains `/var/backups/open-tabletop`. Back up uploaded
+files separately before purging. Backup or database failures stop removal; a failure after the
+service has stopped may leave it stopped. Role dependencies outside this database cause an error,
+not cascading deletion. Inspect the error before retrying a partial purge.
+
+Purge refuses mounted storage (including nested bind mounts), redirected installation roots,
+shared filesystems, and customized database/assets settings. Detach external storage and handle
+its contents separately; the script never unmounts it. Node.js, PostgreSQL, Redis/Valkey, package
+repositories, unrelated HBA rules, and host firewall/proxy settings remain installed. Only the
+exact installer-added PostgreSQL authentication rule is removed. `--dry-run` makes no changes.
+For a dedicated Proxmox deployment, removing the container remains a separate host operation;
+these Linux commands do not delete a container or its host-mounted storage.
 
 Manual acceptance remains: fresh install and reboot on each distro, administrator login,
-asset upload, two-client room connection, then update with data and credentials preserved.
+asset upload, two-client room connection, then update, uninstall/reinstall, interrupted-install
+resume, and purge with backups and unrelated services preserved.
 The installer restarts the application; refresh clients after an application update.
 
 ### Local Proxmox LXC installer
@@ -641,7 +694,7 @@ audit, and integration tests against its own PostgreSQL 16 service.
   system powers dominoes, letter tiles, mahjong, custom card geometry, and modeled
   deck skins such as the recolorable pouch. See the detailed section below.
 - **Boards, grids, and measurement.** Built-in modeled Chess/Checkers and Go
-  boards plus the procedural Wordy board can calibrate the room grid. GMs control
+  boards plus the authored Wordy board can calibrate the room grid. GMs control
   cell size, offsets, snap anchor, square/hex style, visibility, color, height,
   measurement units, and rounding. Players can place durable rulers, lines,
   circles, and cones; a live preview is shown while positioning them.

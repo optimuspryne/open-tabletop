@@ -1,4 +1,6 @@
 import { NOTECARD } from './notecards.js';
+import { TILE_MODELS, tileModel, tileModelFamily } from './tile-models.js';
+export { TILE_MODELS, tileModel, tileModelFamily } from './tile-models.js';
 // =============================================================================
 // SINGLE SOURCE OF TRUTH  —  every piece dimension, mass, color and proportion.
 // Imported by BOTH the server (to build cannon-es colliders) and the client (to
@@ -65,7 +67,7 @@ export const TILES = {
     t: KINDS.card.shape.box[1],
     round: CARD_ROUND,
   }, // the standard playing card
-  domino: { w: 0.5, h: 1.0, t: 0.09, round: 0.08 }, // a chunky 2:1 tile (1.0 × 2.0 full, pips on top)
+  domino: { w: 0.25, h: 0.5, t: 0.05, round: 0.08 }, // a chunky 2:1 tile (0.5 × 1.0 × 0.1 full, pips on top)
   letter: { w: 0.3, h: 0.3, t: 0.06, round: 0.16 }, // a chunky square word-tile (0.6 × 0.6, fits a Wordy board cell)
   mahjong: { w: 0.34, h: 0.473, t: 0.14, round: 0.06 }, // a chunky mahjong tile (~0.68 × 0.95, image face at the art's 0.72 aspect)
 };
@@ -192,7 +194,7 @@ export const PROPS = {
   },
   checker: {
     mass: 0.6,
-    collider: { box: [0.3376, 0.039, 0.3376], type: 'cylinder' },
+    collider: { box: [0.3415, 0.0391, 0.3416], type: 'cylinder' },
     model: '/models/pieces/checkers/checker.glb',
     modelScale: 0.45,
     team: 'checker',
@@ -201,9 +203,9 @@ export const PROPS = {
   },
   crowned_checker: {
     mass: 0.6,
-    collider: { box: [0.3376, 0.039, 0.3376], type: 'cylinder' },
+    collider: { box: [0.369, 0.0705, 0.369], type: 'cylinder' },
     model: '/models/pieces/checkers/crowned_checker.glb',
-    modelScale: 0.62,
+    modelScale: 0.45,
     team: 'checker',
     stand: 'flat',
     pearl: true,
@@ -211,17 +213,17 @@ export const PROPS = {
   // Bundled .glb models (/models/pieces). worldSizes differ wildly, so each has its own modelScale.
   coin: {
     mass: 0.3,
-    collider: { box: [0.4033, 0.0285, 0.4033], type: 'cylinder' },
+    collider: { box: [0.4005, 0.0302, 0.4005], type: 'cylinder' },
     model: '/models/pieces/misc/coin.glb',
     modelScale: 0.4,
     ownMaterial: false,
     metal: true,
     // Independent from dice metallic finish; applies to coins and coin stacks.
-    finishTuning: { metallic: { metalness: 1.0, roughness: 0.15 } },
+    finishTuning: { metallic: { metalness: 1.0, roughness: 0.3 } },
   }, // rotated flat; keeps its own look
   poker_chip: {
     mass: 0.25,
-    collider: { box: [0.64, 0.0751, 0.64], type: 'cylinder' },
+    collider: { box: [0.6, 0.0451, 0.6], type: 'cylinder' },
     model: '/models/pieces/misc/poker_chip.glb',
     modelScale: 0.6,
     tintMaterial: 'accent',
@@ -341,47 +343,10 @@ export const standMode = (shape) => {
 // box[1] (half-thickness) also sets how high the board sits so it rests on the table.
 // `grid` drives "calibrate grid to this board": `cells` across the playing area, and
 // whether pieces sit in cell `center`s (chess/checkers squares) or on `cross`ings (go
-// stones). Boards spawn centred at the world origin, which is where our grid is anchored,
-// so no offset is needed — only the cell size (estimated from the footprint, GM-tunable)
-// and the snap anchor.
-// The 15×15 premium-square layout for Wordy McWordface (one char per cell, row-major, top row first):
-//   T = triple word · D = double word · t = triple letter · d = double letter · * = centre (double word) · . = plain
-// The classic symmetric layout — a game mechanic, drawn in our own colours (see WORDY_COLORS). Defined
-// above BOARDS because the wordy board entry references it.
-export const WORDY_PREMIUM = [
-  'T..d...T...d..T',
-  '.D...t...t...D.',
-  '..D...d.d...D..',
-  'd..D...d...D..d',
-  '....D.....D....',
-  '.t...t...t...t.',
-  '..d...d.d...d..',
-  'T..d...*...d..T',
-  '..d...d.d...d..',
-  '.t...t...t...t.',
-  '....D.....D....',
-  'd..D...d...D..d',
-  '..D...d.d...D..',
-  '.D...t...t...D.',
-  'T..d...T...d..T',
-];
-// Our own premium-square palette (legally distinct), plus the board base + grid line + tile ink.
-export const WORDY_COLORS = {
-  base: '#e9ddc2',
-  line: '#c3b184',
-  ink: '#2c2115',
-  T: '#c65d4b',
-  D: '#e6a2a0',
-  t: '#3f74b8',
-  d: '#a9c8e6',
-  star: '#e6a2a0',
-};
-
-// A board is a built-in .glb model (`model`), an uploaded .glb, a plain slab, or a PROCEDURAL board
-// (`proc`) whose top is drawn from data by a client painter (see BOARD_PAINTERS in graphics.js). A
-// proc board needs no art file: it carries its world `box`, a `grid` for calibration, and a `paint`
-// spec the painter reads. This is the reusable procedural-board framework — add a painter + an entry
-// here and any new grid/premium/battlemap board travels the same swapBoard/calibrateGrid plumbing.
+// stones). Boards spawn centred at the world origin; authored playing areas can pin their
+// measured cell spacing and an offset inside the model's bounds, plus the snap anchor.
+// Built-in boards use .glb models with measured collider bounds and grid calibration metadata.
+// Uploaded models and plain/image-backed slabs share the same board lifecycle.
 export const BOARDS = {
   chess: {
     name: 'Chess / Checkers',
@@ -402,13 +367,19 @@ export const BOARDS = {
   },
   wordy: {
     name: 'Wordy McWordface',
-    proc: 'wordgrid',
-    box: [5.5, 0.1, 5.5],
-    // 15 cells across an 11-unit board → cell = 11/15. `anchor:'cross'` puts a cell CENTRE at
-    // every k·cell (k=-7..7), i.e. the odd (15×15) grid's centre cell sits on the origin, so a
-    // played tile snaps into a painted square. cells=15 → calibrateGrid derives cell = width/15.
-    grid: { cells: 15, anchor: 'cross' },
-    paint: { cells: 15, premium: WORDY_PREMIUM, colors: WORDY_COLORS },
+    model: '/models/boards/wordy_board.glb',
+    modelScale: 4.665029,
+    box: [5.5, 0.1271, 5.4969],
+    // Keep the 11-unit footprint. Raised square centers are inside the rim and slightly offset
+    // from the GLB bounds' center; pin their measured spacing/phase after runtime centering.
+    grid: {
+      cells: 15,
+      anchor: 'cross',
+      cellX: 0.693264,
+      cellZ: 0.693264,
+      offsetX: -0.006337,
+      offsetZ: -0.003197,
+    },
   },
 };
 export const BOARD_SIZE = 8; // uploaded .glb boards are normalized so their largest footprint dimension is this wide
@@ -425,12 +396,20 @@ export const DECK_MODELS = {
   bag: {
     name: 'Pouch',
     model: '/models/decks/bag.glb',
-    modelScale: 2,
-    box: [0.9786, 0.2273, 0.8828],
+    modelScale: 6,
+    box: [0.8432, 1.2943, 1.1478],
     tints: { bag: 'color', string: 'textColor' },
     matte: true,
-    color: 0x7a5a3a, // sack: warm leather brown
-    textColor: 0xc8b06a, // drawstring: tan
+    color: 0xa79d8a,
+    textColor: 0x381903,
+  },
+  dominoes_box: {
+    name: 'Dominoes Box',
+    model: '/models/decks/dominoes_box.glb',
+    modelScale: 0.75,
+    box: [1.2675, 0.6932, 0.866],
+    // Interior domino material follows tile appearance rather than container colors.
+    tileTints: { dominoBase: 'base' },
   },
 };
 
@@ -468,20 +447,19 @@ export const LETTER_DIST = {
 };
 
 // --- Mahjong -----------------------------------------------------------------
-// The standard 144-tile wall, built from bundled CC0 face art (/mahjong/faces/*.png, composited
-// onto ivory tiles). Each face id → its image URL; buildMahjongWall() (server) stamps the counts:
-//   3 suits × ranks 1-9 × 4  +  4 winds × 4  +  3 dragons × 4  +  4 flowers  +  4 seasons  = 144.
-// The white dragon (dragW) is a generated blue-frame blank (its art wasn't in the set). Edit the lists
-// to change the wall.
+// Stable face identities for authored Mahjong GLBs and legacy image fallbacks.
+// buildMahjongWall() creates 136 tiles: 3 suits × 9 ranks × 4 + 7 honors × 4.
+// Optional bonus tiles add eight singles for 144; old lotus/peony refs remain supported.
+// Legacy images are CC BY 3.0; engraved artwork is CC0 (see docs/ASSET_CREDITS.md).
 export const MAHJONG = {
   base: '/mahjong/faces/',
   suits: ['char', 'bam', 'cir'], // each rank 1..9, ×4
   honors: ['windE', 'windS', 'windW', 'windN', 'dragR', 'dragG', 'dragW'], // ×4
   bonus: [
-    'flowChrys',
-    'flowLotus',
+    'flowPlum',
     'flowOrchid',
-    'flowPeony', // ×1 (flowers + seasons)
+    'flowChrys',
+    'flowBamboo', // ×1 (flowers + seasons); old lotus/peony refs retain their image fallback
     'seasSpring',
     'seasSummer',
     'seasFall',
@@ -625,6 +603,10 @@ const _chessBack = [
   'chess-knight',
   'chess-rook',
 ];
+const MAHJONG_STARTER_DICE = [
+  { x: -0.75, z: 0, sides: 6, model: 'pip-round' },
+  { x: 0.75, z: 0, sides: 6, model: 'pip-round' },
+];
 export const STARTERS = {
   chess: {
     name: 'Chess',
@@ -672,13 +654,19 @@ export const STARTERS = {
   },
   wordy: {
     name: 'Wordy McWordface',
-    board: 'wordy', // 15×15 procedural board; snap-to-cell on
+    board: 'wordy', // 15×15 authored board; snap-to-cell on
     deck: { set: 'letter', deal: 7 },
     deckZ: 6.6, // the 100-tile bag sits just past the board's near edge; deal a 7-tile rack
   },
   mahjong: {
-    name: 'Mahjong',
-    deck: { set: 'mahjong', deal: 13 }, // the 144-tile wall; deal a 13-tile starting hand to each seated player
+    name: 'Mahjong (136 tiles)',
+    mahjongWall: { bonusTiles: false },
+    dice: MAHJONG_STARTER_DICE,
+  },
+  'mahjong-bonus': {
+    name: 'Mahjong (144 tiles)',
+    mahjongWall: { bonusTiles: true },
+    dice: MAHJONG_STARTER_DICE,
   },
   poker: {
     name: 'Poker night',
@@ -696,7 +684,8 @@ export const STARTER_LIST = [
   { id: 'go', name: 'Go' },
   { id: 'dominoes', name: 'Dominoes' },
   { id: 'wordy', name: 'Wordy McWordface' },
-  { id: 'mahjong', name: 'Mahjong' },
+  { id: 'mahjong', name: STARTERS.mahjong.name },
+  { id: 'mahjong-bonus', name: STARTERS['mahjong-bonus'].name },
   { id: 'poker', name: 'Poker night' },
 ];
 // Per-disc height + capped visible count for a stack — used by BOTH the client mesh
@@ -822,6 +811,69 @@ export const DICE_FINISH_KEYS = new Set(DICE_FINISHES.map((f) => f.key));
 // `translucent: true`, etc.); the legacy `metal: true` spelling remains an alias for `metallic`.
 export const OBJECT_FINISHES = DICE_FINISHES.filter((f) => f.key !== 'custom');
 export const OBJECT_FINISH_KEYS = new Set(OBJECT_FINISHES.map((f) => f.key));
+// Appearance is separate from a deck container's color/textColor. Each registered
+// family defines its material slots and defaults; all families share patch validation.
+export function normalizeTileAppearance(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  if (![Object.prototype, null].includes(Object.getPrototypeOf(value))) return null;
+  const out = {};
+  for (const key of Object.keys(value)) {
+    if (key === 'base' || key === 'inset') {
+      const color = clampColor(value[key]);
+      if (color === null) return null;
+      out[key] = color;
+    } else if (key === 'finish') {
+      if (value[key] !== 'original' && !OBJECT_FINISH_KEYS.has(value[key])) return null;
+      out.finish = value[key];
+    } else return null;
+  }
+  return out;
+}
+export function tileAppearanceOf(props = {}, families = TILE_MODELS) {
+  const family = tileModelFamily(props, families);
+  return family
+    ? { ...family.defaults, ...normalizeTileAppearance(props[family.appearanceKey]) }
+    : null;
+}
+// Transfer only appearance, never a face or order. includeDefaults captures an unstyled
+// tile's original appearance before it joins a differently styled deck.
+export function tileAppearanceProps(
+  props = {},
+  entry,
+  { includeDefaults = false, families = TILE_MODELS } = {},
+) {
+  const family = tileModelFamily(props, families);
+  if (!family) return {};
+  const value = entry?.[family.appearanceKey] ?? props[family.appearanceKey];
+  if (value === undefined && !includeDefaults) return {};
+  const normalized = value === undefined ? {} : normalizeTileAppearance(value);
+  return normalized ? { [family.appearanceKey]: { ...family.defaults, ...normalized } } : {};
+}
+// Compatibility exports for the original domino API; production paths use tile helpers.
+export const DOMINO_APPEARANCE = TILE_MODELS.domino.defaults;
+export const DOMINO_MODEL_BASE = '/models/pieces/dominoes/';
+export const normalizeDominoAppearance = normalizeTileAppearance;
+export const dominoAppearanceOf = (props = {}) => tileAppearanceOf({ ...props, tile: 'domino' });
+export const dominoModel = (props = {}) => (props.tile === 'domino' ? tileModel(props) : null);
+
+// Public shape and appearance are inherited through deck -> hand -> table. A private
+// entry overrides deck appearance without exposing its face or other entries' order.
+export function cardPublicProps(props = {}, entry) {
+  props ||= {};
+  const out = { ...tileAppearanceProps(props, entry) };
+  if (props.tile) out.tile = props.tile;
+  if (props.geom) out.geom = props.geom;
+  if (props.snap) out.snap = true;
+  for (const key of ['stackable', 'stackMode']) {
+    const value = props[key];
+    if (
+      (key === 'stackable' && typeof value === 'boolean') ||
+      (key === 'stackMode' && ['aligned', 'offset'].includes(value))
+    )
+      out[key] = value;
+  }
+  return out;
+}
 export function objectFinish(spec = {}, override) {
   spec ||= {}; // callers may deliberately use null for a non-object/dispenser definition
   if (OBJECT_FINISH_KEYS.has(override)) return override;
@@ -881,10 +933,22 @@ export function dieSpawnProps(raw = {}) {
 export function colorProps(
   type,
   props,
-  { color, textColor, team, finish, finishImg } = {},
+  { color, textColor, team, finish, finishImg, tileAppearance, dominoAppearance } = {},
   dispDef = null,
 ) {
   const out = { ...props };
+  if (tileAppearance !== undefined || dominoAppearance !== undefined) {
+    const family = tileModelFamily(props);
+    if (!['card', 'deck'].includes(type) || !family) return null;
+    if (dominoAppearance !== undefined && (props.tile !== 'domino' || tileAppearance !== undefined))
+      return null;
+    if ([color, textColor, team, finish, finishImg].some((value) => value !== undefined))
+      return null;
+    const appearance = normalizeTileAppearance(tileAppearance ?? dominoAppearance);
+    if (!appearance || !Object.keys(appearance).length) return null;
+    out[family.appearanceKey] = { ...tileAppearanceOf(props), ...appearance };
+    return out;
+  }
   if (type === 'die') {
     // dice are unconstrained (any color)
     if (color != null) {

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHand } from '../public/table/hand.js';
+import { playingCardFace, PLAYING_CARD_GEOM } from '../shared/playing-cards.js';
+import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
 
 class Element {
   constructor(tag = 'div') {
@@ -37,6 +39,18 @@ class Element {
   }
   get lastElementChild() {
     return this.children.at(-1);
+  }
+  get firstElementChild() {
+    return this.children[0];
+  }
+  get isConnected() {
+    return this.parentNode ? this.parentNode.isConnected : !!this.connectedRoot;
+  }
+  contains(node) {
+    return node === this || this.children.some((child) => child.contains(node));
+  }
+  focus() {
+    this.focused = true;
   }
   get nextSibling() {
     if (!this.parentNode) return null;
@@ -99,10 +113,15 @@ class Element {
   setPointerCapture() {}
 }
 
-function fixture() {
+function fixture({ sheet = false, hidden = false, preview } = {}) {
   const ids = new Map(
     [
       'hand',
+      'handRow',
+      'handActions',
+      'handActionsBtn',
+      'handActionsPanel',
+      'handFlankStack',
       'showBtn',
       'dropFlank',
       'rearrangeBtn',
@@ -115,6 +134,12 @@ function fixture() {
     ].map((id) => [id, new Element()]),
   );
   ids.get('showStrip').hidden = true;
+  ids.get('hand').connectedRoot = true;
+  ids.get('handFlankStack').append(ids.get('showBtn'), ids.get('rearrangeBtn'));
+  ids.get('handActionsPanel').append(ids.get('handFlankStack'), ids.get('dropFlank'));
+  ids.get('handActions').append(ids.get('handActionsBtn'), ids.get('handActionsPanel'));
+  const handSheet = new Element();
+  handSheet.matches = sheet;
   const sortButton = new Element('button');
   sortButton.dataset.sort = 'rank';
   ids.get('rearrangeBar').append(sortButton);
@@ -129,6 +154,7 @@ function fixture() {
     observers = [];
   let nextFrame = 1;
   const win = {
+    matchMedia: () => handSheet,
     ResizeObserver: class {
       constructor(callback) {
         this.callback = callback;
@@ -161,6 +187,7 @@ function fixture() {
     getSelection: () => ({ removeAllRanges() {} }),
   };
   const storage = new Map();
+  if (hidden) storage.set('ott.handHidden', '1');
   const timers = new Map();
   let nextTimer = 1;
   const sent = [],
@@ -205,8 +232,10 @@ function fixture() {
       rotation: { x: 0 },
       position: { set() {} },
     }),
-    parseCardFront: (front) => ({ kind: 'rank', rank: front.slice(0, -1), suit: front.at(-1) }),
-    cardPreviewURL: () => null,
+    parseCardFront: (front) =>
+      playingCardFace(front) || { kind: 'rank', rank: front.slice(0, -1), suit: front.at(-1) },
+    cardPreviewURL: assetThumbnailURL,
+    tilePreviewURL: preview,
     notecardPreviewURL: () => 'data:image/png;base64,test',
     openHandNotecard: (card) => inspected.push({ notecard: card.hid }),
     notecardMesh: () => ({
@@ -255,6 +284,7 @@ function fixture() {
     feedback,
     frames,
     observers,
+    handSheet,
     flushFrames() {
       const callbacks = [...frames.values()];
       frames.clear();
@@ -267,6 +297,102 @@ const sample = [
   { hid: 'king', front: 'K♠', back: 'red' },
   { hid: 'ace', front: 'A♠', back: 'red' },
 ];
+
+test('desktop hand actions close on Escape, collapse, empty hand and layout changes', () => {
+  const f = fixture();
+  const button = f.ids.get('handActionsBtn');
+  const panel = f.ids.get('handActionsPanel');
+  assert.deepEqual(panel.children.slice(0, 3), [
+    f.ids.get('rearrangeBtn'),
+    f.ids.get('dropFlank'),
+    f.ids.get('showBtn'),
+  ]);
+  f.hand.setCards(sample);
+  assert.equal(f.ids.get('handActions').hidden, false);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  button.emit('click');
+  assert.equal(f.ids.get('handRow').classes.has('handActionsOpen'), true);
+  f.ids.get('dropChoices').hidden = false;
+  f.ids.get('handRow').emit('keydown', {
+    key: 'Escape',
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(button.focused, true);
+  assert.equal(f.ids.get('dropChoices').hidden, true);
+
+  button.emit('click');
+  f.ids.get('rearrangeBtn').onclick();
+  f.ids
+    .get('hand')
+    .children.find((node) => node.classes.has('hide'))
+    .onclick();
+  for (const id of ['handActions', 'showBtn', 'rearrangeBtn', 'dropFlank', 'rearrangeBar'])
+    assert.equal(f.ids.get(id).hidden, true, id);
+  assert.equal(f.cards().length, 0);
+  f.ids.get('hand').firstElementChild.onclick();
+  assert.equal(f.cards().length, sample.length);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  assert.equal(f.ids.get('rearrangeBtn').getAttribute('aria-pressed'), 'false');
+
+  button.emit('click');
+  f.hand.setCards([]);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  assert.equal(button.getAttribute('aria-expanded'), 'false');
+  f.hand.setCards(sample);
+  f.handSheet.matches = true;
+  f.handSheet.emit('change');
+  assert.deepEqual(f.ids.get('handFlankStack').children, [
+    f.ids.get('showBtn'),
+    f.ids.get('rearrangeBtn'),
+  ]);
+  assert.equal(f.ids.get('handFlankStack').hidden, false);
+  f.handSheet.matches = false;
+  f.handSheet.emit('change');
+  assert.equal(f.ids.get('handFlankStack').hidden, true);
+  assert.equal(panel.children[1], f.ids.get('dropFlank'));
+});
+
+test('a persisted hidden hand keeps actions hidden on refresh and private message updates', () => {
+  const f = fixture({ hidden: true });
+  f.hand.setCards(sample);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  assert.equal(f.ids.get('showBtn').hidden, true);
+  f.hand.setCards([...sample, { hid: 'queen', front: 'Q♠', back: 'red' }]);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  f.ids.get('hand').firstElementChild.onclick();
+  assert.equal(f.ids.get('handActions').hidden, false);
+  assert.equal(f.ids.get('handActionsBtn').getAttribute('aria-expanded'), 'false');
+});
+
+test('hiding the local hand preserves an active Show audience', () => {
+  const f = fixture();
+  f.hand.setCards(sample);
+  f.hand.bindShowControls();
+  f.ids.get('handActionsBtn').emit('click');
+  f.ids.get('showBtn').onclick();
+  f.ids
+    .get('showStripChips')
+    .children.find((node) => node.dataset.sid === 'other')
+    .onclick();
+  const messagesBeforeHide = f.sent.length;
+  f.ids
+    .get('hand')
+    .children.find((node) => node.classes.has('hide'))
+    .onclick();
+  assert.equal(f.sent.length, messagesBeforeHide);
+  assert.equal(f.ids.get('handActions').hidden, true);
+  f.ids.get('hand').firstElementChild.onclick();
+  f.ids.get('handActionsBtn').emit('click');
+  assert.equal(
+    f.ids
+      .get('showStripChips')
+      .children.find((node) => node.dataset.sid === 'other')
+      .getAttribute('aria-pressed'),
+    'true',
+  );
+});
 
 test('hand arrows remeasure after hidden layout opens and stop watching replaced strips', () => {
   const f = fixture();
@@ -341,6 +467,94 @@ test('Show selection and Rearrange sorting retain their room messages', () => {
     f.cards().map((card) => card.dataset.hid),
     ['ace', 'king'],
   );
+});
+
+test('bundled playing-card images show full faces with accessible names and numeric rank/suit sorting', () => {
+  const f = fixture();
+  f.hand.setCards([
+    { hid: 'ten', front: '/cards/bridge/S-10.png', back: '/cards/bridge/Back-R.png' },
+    { hid: 'two', front: '/cards/bridge/H-2.png', back: '/cards/bridge/Back-R.png' },
+    { hid: 'ace', front: '/cards/bridge/S-1.png', back: '/cards/bridge/Back-R.png' },
+  ]);
+  assert.deepEqual(
+    f.cards().map((card) => card.getAttribute('aria-label')),
+    ['10 ♠', '2 ♥', 'A ♠'],
+  );
+  for (const card of f.cards()) {
+    assert.equal(card.classList.contains('img'), true);
+    assert.equal(card.classList.contains('playingFace'), true);
+    assert.equal(card.style.aspectRatio, `${PLAYING_CARD_GEOM.w} / ${PLAYING_CARD_GEOM.h}`);
+    assert.match(card.style.backgroundImage, /asset-textures\/v1\/bundled\/cards%2Fbridge%2F/);
+    assert.equal(card.getAttribute('role'), 'group');
+    assert.equal(
+      card.children[0].getAttribute('aria-label'),
+      `Inspect ${card.getAttribute('aria-label')}`,
+    );
+  }
+  f.hand.bindShowControls();
+  f.ids.get('rearrangeBtn').onclick();
+  f.sortButton.onclick();
+  assert.deepEqual(f.sent.at(-1), { type: 'reorderHand', data: { order: ['ace', 'two', 'ten'] } });
+  f.sortButton.dataset.sort = 'suit';
+  f.sortButton.onclick();
+  assert.deepEqual(f.sent.at(-1), { type: 'reorderHand', data: { order: ['ace', 'ten', 'two'] } });
+});
+
+test('image jokers retain their faces, names, and Inspect action while legacy rank labels remain', () => {
+  const f = fixture();
+  f.hand.setCards([
+    { hid: 'red', front: '/cards/bridge/X-R.png', back: '/cards/bridge/Back-B.png' },
+    { hid: 'black', front: '/cards/bridge/X-B.png', back: '/cards/bridge/Back-B.png' },
+    { hid: 'legacy', front: 'A♠', back: 'back' },
+  ]);
+  const [red, black, legacy] = f.cards();
+  assert.equal(red.getAttribute('aria-label'), 'Red joker');
+  assert.equal(black.getAttribute('aria-label'), 'Black joker');
+  assert.match(red.style.backgroundImage, /X-R\.png/);
+  assert.match(black.style.backgroundImage, /X-B\.png/);
+  red.children[0].onclick({ stopPropagation() {} });
+  assert.equal(f.inspected.at(-1).hid, 'red');
+  assert.equal(legacy.textContent, 'A♠');
+  assert.equal(legacy.classList.contains('playingFace'), false);
+});
+
+test('hand tiles request shallow previews, retain shape proportions, and ignore late detached results', async () => {
+  const pending = [];
+  const f = fixture({
+    preview: (card, options) =>
+      new Promise((resolve, reject) => pending.push({ card, options, resolve, reject })),
+  });
+  const tiles = [
+    { hid: 'domino', tile: 'domino', front: 'domino:2:5', back: 'domback' },
+    {
+      hid: 'hex',
+      open: true,
+      front: '/assets/decks/hex.png',
+      back: 'back',
+      geom: { w: 0.5, h: 0.58, t: 0.06, shape: 'hex' },
+    },
+  ];
+  f.hand.setCards(tiles);
+  const [domino, hex] = f.cards();
+  assert.equal(pending.length, 2);
+  assert.ok(pending.every((request) => request.options.tilt === 12));
+  assert.ok(domino.classes.has('tilePreview'));
+  assert.ok(hex.classes.has('tilePreview'));
+  assert.equal(domino.style.aspectRatio, '0.25 / 0.5');
+  assert.match(hex.style.width, /calc\(var\(--card-w\)/);
+  pending[0].resolve('data:image/webp;base64,domino');
+  await Promise.resolve();
+  assert.equal(domino.style.backgroundImage, 'url("data:image/webp;base64,domino")');
+  f.hand.setCards(sample);
+  pending[1].resolve('data:image/webp;base64,late');
+  await Promise.resolve();
+  assert.ok(!hex.style.backgroundImage?.includes('late'));
+  f.hand.setCards(tiles);
+  pending[2].reject(new Error('model unavailable'));
+  pending[3].resolve(null);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(f.cards().length, 2);
 });
 
 test('hand clicks play, double-click inspects, and touch drags preview and drop face-up', () => {

@@ -2,6 +2,7 @@ import { NOTECARD } from '../../shared/notecards.js';
 import { dispenserDefinition } from '../../shared/pieces.js';
 import { attachCollider, buildCollider } from '../physics.js';
 import { readProps } from './props-codec.js';
+import { wakeStackAbove } from './stacking.js';
 
 const replaceCollider = (body, collider) => {
   while (body.shapes.length) body.removeShape(body.shapes[0]);
@@ -18,6 +19,7 @@ export function updateDeckCollider(room, deckId) {
   const piece = room.state.pieces.get(deckId);
   if (!body || !piece) return;
   const props = readProps(piece);
+  wakeStackAbove(room, deckId);
   replaceCollider(body, buildCollider('deck', props, { count: piece.count }));
 }
 

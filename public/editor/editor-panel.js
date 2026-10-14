@@ -5,6 +5,11 @@ import { createCollectionController } from './collections.js';
 import { openColliderEditor } from './compound-collider-editor.js';
 import { wireBoardOutline } from './board-outline-editor.js';
 import { assetThumbnailURL } from '../rendering/asset-texture-url.js';
+import {
+  PLAYING_CARD_BACKS,
+  PLAYING_CARD_FACES,
+  PLAYING_CARD_JOKERS,
+} from '/shared/playing-cards.js';
 // editor-panel.js — the admin library-management panel (loaded on the table; its asset-creation UI is admin-gated). It rides
 // on the table engine's room connection, handed over by client.js via
 // window.onOttRoom, and gets asset lists via window.onLibraryList (client.js fans
@@ -12,10 +17,10 @@ import { assetThumbnailURL } from '../rendering/asset-texture-url.js';
 // keep working too). In the editor the admin sees private assets as well as public.
 import {
   cardPreviewURL,
+  tilePreviewURL,
   imageFilePreviewURL,
   propPreviewURL,
   boardPreviewURL,
-  procBoardTexURL,
   diePreviewURL,
   dieModelPreviewURL,
   uploadImage,
@@ -128,6 +133,7 @@ const ICON_FOR = {
   Filters: 'filter',
   'Import Assets': 'package-import',
   Spawn: 'square-rounded-plus',
+  'Build wall': 'wall',
   Apply: 'checks',
   'Set up': 'go-game',
   Edit: 'edit',
@@ -140,7 +146,8 @@ const ICON_FOR = {
 const btn = (label, fn, cls) => {
   const button = makeButton(label, fn, cls, ICON_FOR[label], { type: 'button' });
   button.setAttribute('aria-label', label);
-  if (['Spawn', 'Apply', 'Load', 'Set up'].includes(label)) button.dataset.roomMutation = '';
+  if (['Spawn', 'Build wall', 'Apply', 'Load', 'Set up'].includes(label))
+    button.dataset.roomMutation = '';
   return button;
 };
 
@@ -516,6 +523,8 @@ function spawnCard({
   stand = null,
   standOn = false,
   extraActs = [],
+  backChoices = null,
+  onBackChoice = () => {},
 }) {
   const li = document.createElement('li');
   li.className = 'libCard';
@@ -530,6 +539,38 @@ function spawnCard({
 
   const ctrls = document.createElement('div');
   ctrls.className = 'cardCtrls';
+  let backDesign = backChoices?.[0]?.id;
+  const backPicker = backChoices ? document.createElement('fieldset') : null;
+  if (backPicker) {
+    li.classList.add('hasBackChoices');
+    backPicker.className = 'deckBackPicker';
+    const legend = document.createElement('legend');
+    legend.className = 'field-label';
+    legend.textContent = 'Card back';
+    backPicker.append(legend);
+    for (const back of backChoices) {
+      const label = document.createElement('label');
+      label.className = 'chip deckBackChoice' + (back.id === backDesign ? ' on' : '');
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'deck-back-' + title;
+      radio.value = back.id;
+      radio.checked = back.id === backDesign;
+      const image = thumbImg(cardPreviewURL(back.ref));
+      image.alt = '';
+      const name = document.createElement('span');
+      name.textContent = back.name;
+      label.append(radio, image, name);
+      radio.onchange = () => {
+        if (!radio.checked) return;
+        backDesign = back.id;
+        for (const choice of backPicker.querySelectorAll('.deckBackChoice'))
+          choice.classList.toggle('on', choice.querySelector('input').checked);
+        onBackChoice(back);
+      };
+      backPicker.append(label);
+    }
+  }
   const qty = qtyStepper();
   ctrls.append(qty);
   const stack = count ? countStepper(count.def, count.max, count.min, count.label) : null;
@@ -548,17 +589,17 @@ function spawnCard({
     getTeam = () => null;
   // The swatch run is wrapped in a pop-group: inline on desktop, behind a trigger on
   // small/touch screens (CSS decides which). Before this it was display:none in short
-  // landscape, so colour choice was simply unavailable there.
+  // landscape, so color choice was simply unavailable there.
   const popWrap = (row) => {
     const group = document.createElement('div');
     group.className = 'pop-group swatchPop';
-    group.setAttribute('data-close', ''); // picking a colour closes the menu
+    group.setAttribute('data-close', ''); // picking a color closes the menu
     const trigger = document.createElement('button');
     trigger.type = 'button';
     trigger.className = 'pop-trigger chip';
     trigger.dataset.icon = 'color-swatch';
-    trigger.title = 'Colour';
-    trigger.setAttribute('aria-label', 'Colour');
+    trigger.title = 'Color';
+    trigger.setAttribute('aria-label', 'Color');
     const menu = document.createElement('div');
     menu.className = 'pop-menu';
     menu.hidden = true;
@@ -653,6 +694,7 @@ function spawnCard({
   li._spawn = () => {
     const n = qty.get();
     const cp = {};
+    if (backDesign) cp.backDesign = backDesign;
     const color = getColor();
     if (color != null) {
       cp.color = color;
@@ -672,7 +714,9 @@ function spawnCard({
     btn('Spawn', () => li._spawn()),
     ...extraActs,
   );
-  li.append(preview, meta, ctrls, acts);
+  li.append(preview, meta);
+  if (backPicker) li.append(backPicker);
+  li.append(ctrls, acts);
   wirePopGroups(li); // the swatch pop-group is built per card, so wire this subtree
   return li;
 }
@@ -1097,36 +1141,40 @@ function renderBuiltin(sink) {
       }),
     );
   }
-  {
+  for (const jokers of [false, true]) {
     const box = previewBox('deckPreview');
-    box.append(thumbImg(cardPreviewURL('back')), thumbImg(cardPreviewURL('rank:A:\u2660:#000')));
+    const backPreview = thumbImg(cardPreviewURL(PLAYING_CARD_BACKS[0].ref));
+    backPreview.alt = 'Blue card back';
+    const facePreview = thumbImg(
+      cardPreviewURL(jokers ? PLAYING_CARD_JOKERS[1].ref : PLAYING_CARD_FACES[0].ref),
+    );
+    facePreview.alt = jokers ? 'Black joker' : 'Ace of spades';
+    box.append(backPreview, facePreview);
     decks.append(
       spawnCard({
         preview: box,
-        title: 'Standard 52-card',
+        title: jokers ? 'Standard 54 (with Jokers)' : 'Standard 52-card',
         color: 'none',
-        send: () => sendPlacement('spawn', { type: 'deck', props: {} }),
+        backChoices: PLAYING_CARD_BACKS,
+        onBackChoice: (back) => {
+          backPreview.src = cardPreviewURL(back.ref);
+          backPreview.alt = back.name + ' card back';
+        },
+        send: (props) => sendPlacement('spawn', { type: 'deck', props: { ...props, jokers } }),
       }),
     );
   }
   {
     const box = previewBox('deckPreview');
-    box.append(
-      thumbImg(cardPreviewURL('joker:#bd2500')),
-      thumbImg(cardPreviewURL('rank:A:\u2660:#000')),
-    );
-    decks.append(
-      spawnCard({
-        preview: box,
-        title: 'Standard 54 (with Jokers)',
-        color: 'none',
-        send: () => sendPlacement('spawn', { type: 'deck', props: { jokers: true } }),
-      }),
-    );
-  }
-  {
-    const box = previewBox('deckPreview');
-    box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
+    for (const front of ['domino:6:3', 'domino:5:5']) {
+      const image = thumbImg(cardPreviewURL(front));
+      box.append(image);
+      tilePreviewURL({ tile: 'domino', front })
+        .then((url) => {
+          if (url && image.isConnected) image.src = url;
+        })
+        .catch(() => {});
+    }
     tiles.append(
       spawnCard({
         preview: box,
@@ -1150,27 +1198,64 @@ function renderBuiltin(sink) {
   } // the 100-tile bag on its own
   {
     const box = previewBox('deckPreview');
-    box.append(
-      thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')),
-      thumbImg(cardPreviewURL('/mahjong/faces/cir5.png')),
-    );
-    tiles.append(
-      spawnCard({
-        preview: box,
-        title: 'Mahjong wall (144)',
-        color: 'none',
-        send: () => sendPlacement('spawn', { type: 'deck', props: { set: 'mahjong' } }),
-      }),
-    );
-  } // the full wall on its own
+    for (const front of ['/mahjong/faces/dragR.png', '/mahjong/faces/cir5.png']) {
+      const image = thumbImg(cardPreviewURL(front));
+      box.append(image);
+      tilePreviewURL({ tile: 'mahjong', front })
+        .then((url) => {
+          if (url && image.isConnected) image.src = url;
+        })
+        .catch(() => {});
+    }
+    const setLabel = document.createElement('label');
+    setLabel.className = 'field-group librarySetPicker';
+    const caption = document.createElement('span');
+    caption.className = 'field-label';
+    caption.textContent = 'Set';
+    const setPicker = document.createElement('select');
+    setPicker.className = 'control control--select';
+    setPicker.setAttribute('aria-label', 'Mahjong set');
+    for (const [value, name] of [
+      ['standard', '136 tiles — standard'],
+      ['bonus', '144 tiles — flowers & seasons'],
+    ]) {
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = name;
+      setPicker.append(option);
+    }
+    setLabel.append(caption, setPicker);
+    const card = spawnCard({
+      preview: box,
+      title: 'Mahjong wall',
+      color: 'none',
+      extraActs: [
+        btn(
+          'Build wall',
+          () =>
+            sendPlacement('spawn', {
+              type: 'deck',
+              props: { set: 'mahjong', bonusTiles: setPicker.value === 'bonus', layout: 'wall' },
+            }),
+          'mahjongWallBuild',
+        ),
+      ],
+      send: () =>
+        sendPlacement('spawn', {
+          type: 'deck',
+          props: { set: 'mahjong', bonusTiles: setPicker.value === 'bonus' },
+        }),
+    });
+    card.classList.add('hasSetChoices');
+    card.insertBefore(setLabel, card.querySelector('.cardCtrls'));
+    tiles.append(card);
+  } // the tile inventory on its own
 
   const boards = sink('boards');
   clearPreviewList(boards);
   for (const key of Object.keys(BOARDS)) {
     const box = previewBox();
-    fillAsync(box, () =>
-      BOARDS[key].proc ? Promise.resolve(procBoardTexURL(key)) : boardPreviewURL(BOARDS[key].model),
-    ); // proc boards paint their own preview
+    fillAsync(box, () => boardPreviewURL(BOARDS[key].model));
     boards.append(
       builtinCard(box, BOARDS[key].name, 'Spawn', () =>
         sendPlacement('spawn', { type: 'board', props: { board: key } }),
@@ -1199,17 +1284,23 @@ function renderBuiltin(sink) {
           thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')),
           thumbImg(cardPreviewURL('/mahjong/faces/bam1.png')),
         );
+      else if (g.id === 'mahjong-bonus')
+        box.append(
+          thumbImg(cardPreviewURL('/mahjong/faces/flowPlum.png')),
+          thumbImg(cardPreviewURL('/mahjong/faces/seasSpring.png')),
+        );
       else
         box.append(
-          thumbImg(cardPreviewURL('rank:A:\u2660:#000')),
-          thumbImg(cardPreviewURL('joker:#bd2500')),
+          thumbImg(cardPreviewURL(PLAYING_CARD_FACES[0].ref)),
+          thumbImg(cardPreviewURL(PLAYING_CARD_JOKERS[0].ref)),
         ); // poker
-      games.append(
-        builtinCard(box, g.name, 'Set up', () => {
-          if (confirm(`Set up ${g.name}? This clears the current table.`))
-            ROOM.send('loadStarter', { game: g.id });
-        }),
-      );
+      const card = builtinCard(box, g.name, 'Set up', () => {
+        if (confirm(`Set up ${g.name}? This clears the current table.`))
+          ROOM.send('loadStarter', { game: g.id });
+      });
+      if (g.id === 'mahjong' || g.id === 'mahjong-bonus')
+        card.querySelector('button').classList.add('mahjongStarterSetup');
+      games.append(card);
     }
   }
 

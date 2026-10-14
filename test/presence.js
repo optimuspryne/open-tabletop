@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../public/vendor/three/three.module.js';
 import { seatAngle } from '../shared/pieces.js';
 import { createPresence, seatLayoutFor } from '../public/table/presence.js';
+import { handFanGroups } from '../shared/hand-fan.js';
 
 const player = (overrides = {}) => ({
   seat: 0,
@@ -274,6 +275,69 @@ test('public fans cap at twelve, refresh backs, and reveal only supplied face-up
   assert.ok(!fan.children[0].userData.card.front);
   f.change(p, 'hand', 0);
   assert.equal(fan.children.length, 0);
+});
+
+test('tile fans rebuild on shape/style updates and retain concealed 3D props after a restricted reveal', () => {
+  const hand = [
+    ...Array.from({ length: 4 }, () => ({ tile: 'mahjong', front: 'SECRET_FACE' })),
+    {
+      open: true,
+      front: 'SECRET_FRONT',
+      back: 'SECRET_BACK',
+      geom: { w: 0.5, h: 0.58, t: 0.06, shape: 'hex' },
+    },
+  ];
+  const p = player({ hand: hand.length, handFan: JSON.stringify(handFanGroups(hand)) });
+  const f = fixture([['me', p]]);
+  const fan = f.scene.children.find((node) => node.children[0]?.userData.card);
+  assert.equal(fan.children.length, 5);
+  assert.equal(fan.children.filter((node) => node.userData.card.tile === 'mahjong').length, 4);
+  assert.equal(fan.children.find((node) => node.userData.card.geom)?.userData.card.fanCover, true);
+  assert.ok(fan.children.every((node) => !node.userData.card.front));
+  for (let i = 1; i < fan.children.length; i++)
+    assert.ok(fan.children[i].position.x > fan.children[i - 1].position.x);
+  f.messages.get('showFan')({
+    sid: 'me',
+    cards: [{ tile: 'mahjong', front: '/mahjong/faces/cir5.png' }],
+  });
+  assert.equal(fan.children[0].userData.card.front, '/mahjong/faces/cir5.png');
+  assert.equal(fan.children.filter((node) => node.userData.card.tile === 'mahjong').length, 4);
+  assert.ok(fan.children.slice(1).every((node) => !node.userData.card.front));
+  const changed = hand.map((card) => ({ ...card, tile: 'domino' }));
+  f.messages.get('showFan')({ sid: 'me', cards: [] });
+  f.change(p, 'handFan', JSON.stringify(handFanGroups(changed)));
+  assert.ok(fan.children.every((node) => node.userData.card.tile === 'domino'));
+});
+
+test('mixed card fans refresh actual back proportions after draws, plays and restricted Show', () => {
+  const hand = Array.from({ length: 30 }, (_, i) => ({
+    front: `SECRET_${i}`,
+    back: i < 20 ? 'blue-back' : 'red-back',
+  }));
+  const p = player({ hand: 30, handFan: JSON.stringify(handFanGroups(hand)) });
+  const f = fixture([['other', p]]);
+  const fan = f.scene.children.find((node) => node.children[0]?.userData.card);
+  const counts = () =>
+    fan.children.reduce((out, node) => {
+      const card = node.userData.card;
+      if (!card.front) out[card.back] = (out[card.back] || 0) + 1;
+      return out;
+    }, {});
+  assert.deepEqual(counts(), { 'blue-back': 8, 'red-back': 4 });
+  f.messages.get('showFan')({
+    sid: 'other',
+    cards: hand.slice(0, 4).map((card) => ({ ...card, open: false })),
+  });
+  assert.deepEqual(counts(), { 'blue-back': 5, 'red-back': 3 });
+  f.messages.get('showFan')({ sid: 'other', cards: [] });
+  hand.splice(0, 10);
+  f.change(p, 'hand', hand.length);
+  f.change(p, 'handFan', JSON.stringify(handFanGroups(hand)));
+  assert.deepEqual(counts(), { 'blue-back': 6, 'red-back': 6 });
+  hand.push(...Array.from({ length: 10 }, () => ({ front: 'SECRET_NEW', back: 'red-back' })));
+  f.change(p, 'hand', hand.length);
+  f.change(p, 'handFan', JSON.stringify(handFanGroups(hand)));
+  assert.deepEqual(counts(), { 'blue-back': 4, 'red-back': 8 });
 });
 
 test('player property listeners refresh local chrome and remote markers', () => {

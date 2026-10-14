@@ -32,7 +32,22 @@ per-device/browser matrix; the checklist below remains reusable for future runs.
 - [ ] Export an asset/collection: feedback appears at bottom center and disappears; desktop filters match in full/compact modes.
 - [ ] Import ZIP and legacy JSON in the separate dialog; retry a failure, close/reopen during preview/import.
 - [ ] Use keyboard tabs/arrows, category summaries and Escape; closing Import restores Library focus.
+- [ ] In full/compact desktop and touch layouts, choose Mahjong's labeled Set control:
+  136 is the default; 144 adds one of each flower/season. Check keyboard focus/arrow-key
+  selection, 44px touch height, no clipping and the correct spawned pouch count.
+- [ ] Draw/inspect/recolor a bonus tile and play it from the private hand onto a stack;
+  save/reload both variants. An old lotus/peony tile should retain its original image.
+- [ ] Build each Mahjong wall from the library with keyboard, mouse and touch in full/compact
+  modes. The wall icon/text remain visible, with 17/18 stacks per side and two layers.
+  Check tightly spaced rows and the traditional one-stack overhang at each corner
+  against the supplied reference, including the 144-tile wall's projecting ends inside the table.
+  Move a bottom tile, flip/take a top tile, and save/reload; verify faces remain concealed
+  for another client. Test small/occupied tables and insufficient capacity without partial walls.
 - [ ] As a Helper, access Mats/Notecards while Boards, Games/Scenes and Skyboxes retain their role gates.
+- [ ] In full/compact desktop and touch layouts, find both Mahjong (136 tiles) and
+  Mahjong (144 tiles) under Pre-Built Games. Cancel Set up once, then confirm each variant:
+  expect 17/18 two-high stacks per side, two Rounded Pips dice at the center, no pouch
+  and empty hands. On a small table, the error must leave the previous setup intact.
 
 ### Drawable notecards
 The user accepted the freehand editor and approved the zoom/pan, private-hand and compact-icon

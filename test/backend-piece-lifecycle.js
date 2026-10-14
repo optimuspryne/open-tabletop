@@ -5,6 +5,11 @@ import * as CANNON from 'cannon-es';
 import { createPieceLifecycle } from '../server/game/piece-lifecycle.js';
 import { deckSpawnProps } from '../server/deck-state.js';
 import { readProps } from '../server/game/props-codec.js';
+import { createDeckBuilders } from '../server/game/deck-builders.js';
+import { spawnPayload } from '../server/message-validation.js';
+import { PLAYING_CARD_BACKS, PLAYING_CARD_GEOM } from '../shared/playing-cards.js';
+import { updateDeckCollider } from '../server/game/collider-maintenance.js';
+import { deckHeight } from '../shared/pieces.js';
 
 const SIM = {
   absorb: { x: 1.1, z: 1.4 },
@@ -30,11 +35,11 @@ const geoOf = (value) => {
   return geometry;
 };
 
-function harness() {
+function harness(deckBuilders) {
   const colliderUpdates = [];
   const broadcasts = [];
   const lifecycle = createPieceLifecycle({
-    deckBuilders: {
+    deckBuilders: deckBuilders || {
       buildDominoSet: () => ({ back: 'domino-back', cards: ['domino'] }),
       buildMahjongWall: () => ({ back: 'mahjong-back', cards: ['mahjong'] }),
       buildScrabbleBag: () => ({ back: 'letter-back', cards: ['letter'] }),
@@ -103,6 +108,75 @@ test('spawn creates one synchronized deck/body pair and keeps card order private
   assert.deepEqual([body.position.x, body.position.y, body.position.z], [1, 2, 3]);
   assert.equal(room.world.bodies.includes(body), true);
   assert.deepEqual(colliderUpdates, [['deck', id]]);
+});
+
+test('validated standard spawns preserve selected backs and bridge geometry without public faces', () => {
+  const { lifecycle, room } = harness(createDeckBuilders({ shuffle: (cards) => cards }));
+  room.updateDeckCollider = (id) => updateDeckCollider(room, id);
+  for (const backDesign of ['blue', 'red']) {
+    const request = spawnPayload({ type: 'deck', props: { jokers: true, backDesign, snap: true } });
+    const id = lifecycle.spawn(room, request.type, [0, 1, 0], request.props);
+    const piece = room.state.pieces.get(id);
+    const props = readProps(piece);
+    assert.equal(piece.count, 54);
+    assert.equal(room.deckCards.get(id).length, 54);
+    assert.equal(props.back, PLAYING_CARD_BACKS.find((back) => back.id === backDesign).ref);
+    assert.deepEqual(props.geom, PLAYING_CARD_GEOM);
+    assert.equal(props.snap, true);
+    assert.equal(props.front, undefined);
+    assert.equal(props.cards, undefined);
+    const extent = room.bodies.get(id).shapes[0].halfExtents;
+    assert.deepEqual(
+      [extent.x, extent.y, extent.z],
+      [props.geom.w, deckHeight(54) / 2, props.geom.h],
+    );
+    const restored = lifecycle.spawn(
+      room,
+      'deck',
+      [0, 1, 0],
+      deckSpawnProps(props, room.deckCards.get(id)),
+    );
+    assert.deepEqual(readProps(room.state.pieces.get(restored)), props);
+    assert.deepEqual(room.deckCards.get(restored), room.deckCards.get(id));
+    assert.notEqual(room.deckCards.get(restored), room.deckCards.get(id));
+  }
+});
+
+test('validated Mahjong spawns carry the bonus selection into private inventory and retain it on restore', () => {
+  const { lifecycle, room } = harness(createDeckBuilders({ shuffle: (cards) => cards }));
+  for (const bonusTiles of [false, true]) {
+    const request = spawnPayload({ type: 'deck', props: { set: 'mahjong', bonusTiles } });
+    const id = lifecycle.spawn(room, request.type, [0, 1, 0], request.props);
+    const piece = room.state.pieces.get(id);
+    const props = readProps(piece);
+    assert.equal(piece.count, bonusTiles ? 144 : 136);
+    assert.equal(room.deckCards.get(id).length, piece.count);
+    assert.equal(props.tile, 'mahjong');
+    assert.equal(props.front, undefined);
+    assert.equal(props.cards, undefined);
+    const restored = lifecycle.spawn(
+      room,
+      'deck',
+      [0, 1, 0],
+      deckSpawnProps(props, room.deckCards.get(id)),
+    );
+    assert.deepEqual(room.deckCards.get(restored), room.deckCards.get(id));
+    assert.equal(room.state.pieces.get(restored).count, piece.count);
+  }
+});
+
+test('Mahjong bonus spawn option rejects malformed values and other inventory families', () => {
+  for (const bonusTiles of [1, 'true', null, {}, []])
+    assert.equal(spawnPayload({ type: 'deck', props: { set: 'mahjong', bonusTiles } }), null);
+  for (const set of [undefined, 'domino', 'letter'])
+    assert.equal(
+      spawnPayload({ type: 'deck', props: { ...(set ? { set } : {}), bonusTiles: true } }),
+      null,
+    );
+  assert.deepEqual(spawnPayload({ type: 'deck', props: { set: 'mahjong' } }), {
+    type: 'deck',
+    props: { set: 'mahjong' },
+  });
 });
 
 test('removePiece clears the body, synchronized state, and every private piece map', () => {

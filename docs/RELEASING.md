@@ -2,6 +2,27 @@
 
 How versions work here, and the steps to cut a release.
 
+## Demo synchronization with 0.22.0 (2026-10-14)
+
+This branch now includes main through `14444d9` while retaining the demo guest/admin
+flows and limits. Its package version is 0.22.0; deploy the demo branch's own build to
+retain demo behavior. The published main-release image does not contain these demo commits.
+
+Existing demo installations based on 0.20.0 must apply the additive
+`023_account_recovery.sql` if it is not already recorded, even if demo migrations 024/025
+are present. The existing owner-role startup migrator applies missing numbered migrations;
+manual-migration deployments must apply pending files before startup. Preserve the separate
+runtime role and existing database/upload volumes. No new demo migration, port, required
+service or environment variable is added by this synchronization. Source installs need
+`npm ci`; rebuild/recreate the demo app, then refresh browsers. Reselect/recalibrate existing
+Wordy boards for the revised board model. See the full-app upgrade notes below for older
+release requirements and optional SMTP configuration.
+
+The four-table, 20-connection, 15-dice and 1,000 ms roll policies remain in force. Previous
+live load observations remain historical; this merge does not establish deployment or a
+sustained four-table/20-connection acceptance test. Automated synchronization results and
+manual smoke steps are recorded in [the demo plan](DEMO_MODE_PLAN.md#main-synchronization-2026-10-14).
+
 ## Unreleased demo storage migration 024
 
 This branch requires `024_demo_sessions.sql` before the updated server starts: ordinary session
@@ -97,6 +118,125 @@ the app's least-privilege `DATABASE_URL`). Shipping a schema change is just:
 No manual `psql -f`, and **no db-image rebuild required** — existing deployments pick it
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
+
+## Upgrading to 0.22.0
+
+From 0.21.1, pull the updated image and recreate the app container, then refresh all
+browsers. Source installs should run `npm ci` before restarting for the refreshed locked
+dependencies. No new numbered migration, snapshot conversion, required environment variable,
+service, exposed port or Compose setting is introduced. Existing accounts, assets and saved
+games remain compatible. Upgrades from older versions must also follow their notes below.
+
+This release adds bundled bridge-card artwork and selectable backs, authored Domino/Mahjong
+tiles and appearance controls, 136/144-tile Mahjong walls and starters, assisted independent
+stacking, 3D tile hand previews and player fans, proportional actual-card backs in player fans,
+desktop hand actions, updated Wordy/pouch and other piece models, ceramic tile sounds, and
+High/Ultra graphics improvements. Mahjong wall breaking, rolling and taking tiles remain
+manual; no rule or scoring automation is added. High now renders at a fixed 2× pixel ratio;
+Ultra is an explicit per-device choice rendering at 4× per axis. Check performance on the
+target devices.
+
+For existing Wordy rooms, reselect the board and recalibrate its height/grid, or load the
+Wordy starter in a fresh game. Old Mahjong peony/lotus identities keep image fallbacks;
+standard 136-tile sets and optional 144-tile sets use the new authored models. Hard-refresh
+if cached artwork or sounds remain. Python/ffmpeg is needed only to regenerate audio offline.
+
+The hardening walkthrough and room-scaling documents describe findings and proposed work;
+they do not represent implemented security fixes, multi-instance support or new deployment
+requirements. See [the hardening plan](../HARDENING_PLAN.md) for current status.
+
+### Release preparation and verification
+
+Release metadata and image references are prepared locally for 0.22.0. No tag, push, image
+publication or GitHub release is part of this preparation. Validation on 2026-10-14:
+
+- `npm run check`: passed lint, formatting, CSS checks and all 1,029 tests.
+- `npm run test:input`: passed all 58 checks.
+- `npm run test:integration`: passed all 25 tests against disposable PostgreSQL.
+- `npm run audit`: passed with zero production dependency vulnerabilities.
+- `npm run test:components`: passed desktop/touch component checks, notecard editor checks
+  at 1280/390/360 px, and tile preview/mixed-back/restricted-Show checks at 1280/390/320 px.
+  The existing component fixture still reports ten Mahjong thumbnail 404 paths; this is not
+  evidence that those thumbnail routes were verified successfully.
+- `npm run test:devices`: passed all seven documented profiles.
+- `npm run test:website`: passed all 25 page/viewport checks.
+- `npm run test:accounts`: passed all six full/compact desktop/touch layouts.
+- Version/image consistency, historical changelog preservation, workflow release-note
+  extraction, local documentation file links and `git diff --check`: passed.
+
+The sandbox blocked local HTTP, Docker and advisory-service access; the affected suites were
+rerun outside it. The restricted full-check attempt was stopped after the unrestricted run
+passed. Real-device gesture feel, GPU performance, multiplayer behavior, container/multi-arch
+builds and deployed upgrade acceptance remain separate manual or release-pipeline checks.
+
+After restarting the server and refreshing clients, smoke-test:
+
+1. Spawn blue/red 52/54-card decks, Dominoes and both Mahjong sets; inspect, play, return,
+   recolor, save/reload and reconnect. Check concealed hands and restricted Show with two users.
+2. Build 136/144-tile walls, load both Mahjong starters, and gently stack cards/tiles. Check
+   occupied-wall rejection, offset cards remaining separate, and centered deck returns.
+3. Check private-hand actions, Drop Hand choices, 3D tile previews and mixed-back player fans
+   in full/compact desktop and touch layouts, including keyboard focus.
+4. Reselect/recalibrate an existing Wordy board; check pouch appearance, tile sounds and
+   High/Ultra rendering on representative devices.
+
+## Upgrading to 0.21.1
+
+From 0.21.0, pull the updated image and recreate the app container. No new migration,
+dependency, environment variable, port or Compose change is required. This server-only fix
+does not require a browser refresh.
+
+Startup now checks whether any user exists before reading bootstrap settings or the password
+file. Existing installations can retain those settings even when the first-boot file is missing.
+Empty databases still validate configured bootstrap credentials; database lookup failures still
+stop startup. If users exist but none is an administrator, recover access through
+`npm run admin:grant -- <username-or-email>`.
+
+For Compose stacks containing inline configs, prefer stack deployment with image pulling over
+individual container updates so Compose recreates all generated config files. This patch
+removes the bootstrap-file dependency for existing users; it does not restore other lost files.
+
+Validation: `npm run check` passed 933 tests and `npm run test:integration` passed 25 tests,
+including an ordinary existing user with a missing bootstrap password file. Live Dockhand
+update verification remains pending. Upgrades from before 0.21.0 must also follow its notes below.
+
+## Upgrading to 0.21.0
+
+From 0.20.0, startup applies one additive migration:
+
+| Migration | Purpose | Existing data |
+| --- | --- | --- |
+| `023_account_recovery.sql` | Email verification, expiring recovery tokens and single-use recovery codes | Adds account fields and recovery tables; existing accounts, assets and saved games are preserved. Existing email addresses remain unverified until explicitly verified. |
+
+Back up the database and uploaded assets before upgrading. Keep the existing separate
+migration-role connection configured, restart the server, then refresh all browsers.
+If automatic migration is disabled, apply pending numbered migrations with the schema-owner
+connection before starting 0.21.0. Fresh installs use the updated schema baseline.
+Source installs should run `npm ci` before restart for the locked dependencies, including
+Nodemailer; Docker images include them. No snapshot conversion, required new service,
+required environment variable or exposed port is introduced.
+
+Email verification and recovery are optional. Existing deployments can continue without SMTP;
+users can generate and save recovery codes through Account security. To enable email, configure
+`PUBLIC_ORIGIN` and the SMTP settings described in [Account security](ACCOUNT_SECURITY.md).
+Docker deployments enabling SMTP must forward these optional variables and mount the password
+file via a Compose override. Merely adding variables to `.env` does not forward them through an
+older Compose file. Invalid or incomplete configured SMTP settings fail startup.
+
+This release includes GM object concealment, manual map fog with adjustable thickness,
+piece reveal auras, account security/recovery, native Linux installation and recovery tools,
+and the standalone public website. It also fixes room admission/save ownership, unsafe asset
+serving and HTML injection in action menus. Restarting and refreshing clients loads both the
+server protections and browser fixes. The website is deployed separately from the game server.
+
+User-reported gameplay and account/SMTP checks are recorded in the feature documentation.
+Live native Linux distro installation, reboot, uninstall/purge and recovery acceptance remains
+pending; automated installer fixtures do not establish live-host behavior. Public website
+publishing and user acceptance remain pending. Demo dice safeguards and room worker isolation
+are future plans, not functionality in this release.
+
+When upgrading from before 0.20.0, also follow the earlier upgrade notes below and apply all
+pending migrations in order.
 
 ## Upgrading to 0.20.0
 

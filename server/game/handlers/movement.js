@@ -25,6 +25,7 @@ export function registerMovementHandlers(
     const { id } = parsed;
     const piece = room.state.pieces.get(id);
     if (piece && !piece.owner && !room.flips.has(id) && isMovable(piece)) {
+      wakeStackAbove(room, id);
       piece.owner = client.sessionId;
     }
   });
@@ -56,6 +57,7 @@ export function registerMovementHandlers(
       const piece = room.state.pieces.get(id);
       const body = room.bodies.get(id);
       if (!piece || !body || piece.owner || room.flips.has(id) || !isMovable(piece)) continue;
+      wakeStackAbove(room, id);
       piece.owner = client.sessionId;
       offsets.set(id, {
         x: body.position.x - anchorBody.position.x,
@@ -96,3 +98,4 @@ export function registerMovementHandlers(
     room.groups.delete(client.sessionId);
   });
 }
+import { wakeStackAbove } from '../stacking.js';

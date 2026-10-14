@@ -1,5 +1,20 @@
 # Demo dice safeguards
 
+## Main synchronization (2026-10-14)
+
+Merged main through `14444d9` (release 0.22.0) into the existing demo branch.
+The merge retains guest/admin entry, expiry/invite handling, four stored/live tables,
+20 connections, the 15-dice cap and 1,000 ms roll cooldown. New main artwork, authored
+models, stacking and hand rendering use their existing runtime paths. Piece removal retains
+both demo deadline cleanup and main stacking wake-up behavior.
+The newer implementation record below takes precedence over main's earlier planning-only
+dice document. Synchronization passed 1,059 quality tests, 58 input checks, 36 database integration tests,
+Docker initialization and the component/device/demo/admin/account/website browser suites.
+See [the complete synchronization record](DEMO_MODE_PLAN.md#synchronization-verification).
+No live deployment, real-device acceptance or sustained four-table retest is implied. Restart the server and
+refresh clients after deployment; existing Wordy rooms need board reselection/calibration.
+
+
 Implemented on `codex/public-demo-mode`, 2026-09-30. The user deployed the dice safeguards
 and monitored the public stress tests below. The subsequent four-table cap change still needs
 deployment and a sustained retest. Real-device acceptance remains pending. The user approved

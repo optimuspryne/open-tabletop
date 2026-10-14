@@ -1,14 +1,29 @@
 import { getAuthToken } from '../auth.js';
-import { notecardMesh, notecardStackMesh, paintNotecard } from './notecards.js';
+import {
+  notecardMesh as buildNotecardMesh,
+  notecardStackMesh as buildNotecardStackMesh,
+  paintNotecard,
+} from './notecards.js';
 import { drawPlacard } from './placards.js';
+import { createTileRenderer } from './tiles.js';
 import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CONFIG, renderer, deviceClass, getQuality, tableMesh, rimMat } from './core.js';
+import {
+  CONFIG,
+  renderer,
+  deviceClass,
+  getQuality,
+  tableMesh,
+  rimMat,
+  waitForVisualAssets,
+} from './core.js';
+import { isHandTile } from '../../shared/hand-fan.js';
 import { assetTextureURL, assetThumbnailURL } from './asset-texture-url.js';
 import { THUMBNAIL_MAX_DIMENSION } from '../../shared/image-thumbnails.js';
+import { playingCardFace } from '../../shared/playing-cards.js';
 import {
   PROPS,
   COLORS,
@@ -32,6 +47,8 @@ import {
   gridActive,
   tableOutline,
   trayParts,
+  tileAppearanceOf,
+  tileModelFamily,
 } from '/shared/pieces.js';
 import { MEASURE, OVERLAY_KINDS } from '/shared/overlays.js';
 
@@ -59,10 +76,14 @@ function maxAnisotropy() {
   return _maxAniso || (_maxAniso = renderer.capabilities.getMaxAnisotropy());
 }
 
+// Keep canvas-only notecard painting independent of the live WebGL renderer.
+const notecardMesh = (props) => buildNotecardMesh(props, maxAnisotropy());
+const notecardStackMesh = (props) => buildNotecardStackMesh(props, maxAnisotropy());
+
 // Quality selection is finalized by a reload (the same boundary used for antialiasing). Keep the
 // current low/medium card cost, but render procedural art at 1.5x and request the larger uploaded
-// derivative when the page boots in High.
-const HIGH_CARD_DETAIL = getQuality() === 'high';
+// derivative when the page boots in High or Ultra-high.
+const HIGH_CARD_DETAIL = ['high', 'ultra-high'].includes(getQuality());
 const cardDetailScale = (base = 1) => base * (HIGH_CARD_DETAIL ? 1.5 : 1);
 function makeCardCanvas(w, h, baseScale = 1) {
   const scale = cardDetailScale(baseScale);
@@ -72,8 +93,8 @@ function makeCardCanvas(w, h, baseScale = 1) {
 }
 
 // ===== Texture builders (procedural canvas textures) ========================
-// Each returns a THREE texture via cTex(). Cards, dice, boards, and deck edges
-// are all drawn onto a 2D canvas rather than shipped as image files.
+// Each returns a THREE texture via cTex(). Legacy cards, procedural dice/boards,
+// and deck edges use canvases; standard playing decks load bundled images.
 
 // The face of a standard playing card: rank + suit small in two opposite corners
 // and large in the middle. `color` is the suit color (black or red).
@@ -221,7 +242,7 @@ function letterTileFace(letter, value) {
   const { canvas, ctx } = makeCanvas(S, S);
   ctx.fillStyle = '#f2e8cf'; // warm wood; the mesh's mask rounds the corners
   ctx.fillRect(0, 0, S, S);
-  ctx.fillStyle = '#2c2115'; // ink (matches WORDY_COLORS.ink)
+  ctx.fillStyle = '#2c2115'; // dark tile ink
   const L = String(letter || '').toUpperCase();
   if (L) {
     ctx.textAlign = 'center';
@@ -949,11 +970,14 @@ function cardTextureURL(ref) {
 }
 
 // Decode a card "front" ref into a structured descriptor. The tagged-string
-// encoding (rank: / text: / tback: / back / image) is defined HERE ONLY — both
+// encoding (rank: / text: / tback: / back / image) is decoded here; bundled
+// playing-card identities come from the shared catalog. Both
 // the 3D texture path (below) and the DOM hand-card path (client.js) decode via
 // this helper, so the format has a single source of truth.
 export function parseCardFront(ref) {
   if (!ref || ref === 'back') return { kind: 'back' };
+  const face = playingCardFace(ref);
+  if (face) return { ...face };
   if (ref.startsWith('rank:')) {
     const [, rank, suit, color] = ref.split(':');
     return { kind: 'rank', rank, suit, color };
@@ -991,7 +1015,8 @@ function resolveTexture(ref) {
 
   const parsed = parseCardFront(ref);
   let texture;
-  if (parsed.kind === 'back') texture = cardBack();
+  if (parsed.ref) texture = loadImageTexture(cardTextureURL(parsed.ref));
+  else if (parsed.kind === 'back') texture = cardBack();
   else if (parsed.kind === 'rank') texture = cardFront(parsed.rank, parsed.suit, parsed.color);
   else if (parsed.kind === 'joker') texture = jokerFace(parsed.color);
   else if (parsed.kind === 'domino') texture = dominoFace(parsed.a, parsed.b);
@@ -1285,6 +1310,11 @@ function fitModel(obj, opts) {
   const box = new THREE.Box3().setFromObject(obj);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
+  if (opts.size) {
+    obj.scale.set(...opts.size.map((target, i) => target / (size.getComponent(i) || 1)));
+    obj.position.copy(center).multiply(obj.scale).negate();
+    return obj.scale;
+  }
   const scale =
     opts.scale != null ? opts.scale : opts.target / (Math.max(size.x, size.y, size.z) || 1);
   obj.scale.setScalar(scale);
@@ -1472,6 +1502,10 @@ function thinCardGeo(hw, hh, th) {
 }
 
 function cardMesh(props = {}) {
+  return tileRenderer.mesh(props, () => proceduralCardMesh(props));
+}
+const FAN_COVER_COLOR = 0xb9b198;
+function proceduralCardMesh(props = {}) {
   const { hw, hh, th, round, shape } = cardGeom(props); // footprint/thickness/shape (standard card, a tile, or explicit geom)
   // Which face renders up vs down. A double-sided (open) tile shows its BACK when face-down (`down`);
   // otherwise the top is the front and the bottom is the back. A secret face-down card has no
@@ -1489,7 +1523,11 @@ function cardMesh(props = {}) {
         ? new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7 })
         : new THREE.MeshBasicMaterial({ visible: false });
     const faceMat = (ref) =>
-      new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 });
+      new THREE.MeshStandardMaterial(
+        props.fanCover
+          ? { color: FAN_COVER_COLOR, roughness: 0.7 }
+          : { map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 },
+      );
     const dnMat = faceMat(dn);
     const upMat = up ? faceMat(up) : dnMat;
     return new THREE.Mesh(geo, [upMat, dnMat, edge]); // groups: 0=top(up face), 1=bottom(down face), 2=sides
@@ -1505,8 +1543,10 @@ function cardMesh(props = {}) {
     // Procedural faces (dominoes) are opaque and already fit the rounded cap, so they stay plain.
     const capMask = roundMask(hw, hh, round);
     const capMat = (ref) => {
+      if (props.fanCover)
+        return new THREE.MeshStandardMaterial({ color: FAN_COVER_COLOR, roughness: 0.7 });
       const m = { map: resolveTexture(ref), roughness: 0.6 };
-      if (parseCardFront(ref || 'back').kind === 'image') {
+      if (parseCardFront(ref || 'back').ref) {
         m.alphaMap = capMask;
         m.alphaTest = 0.5;
       }
@@ -1526,7 +1566,8 @@ function cardMesh(props = {}) {
   const invisible = new THREE.MeshBasicMaterial({ visible: false });
   const faceMat = (ref) =>
     new THREE.MeshStandardMaterial({
-      map: resolveTexture(ref),
+      map: props.fanCover ? null : resolveTexture(ref),
+      color: props.fanCover ? FAN_COVER_COLOR : 0xffffff,
       alphaMap: mask,
       alphaTest: 0.5,
       roughness: 0.6,
@@ -1539,7 +1580,7 @@ function cardMesh(props = {}) {
   // Cast a shadow that follows the alpha silhouette, not the square box — no dark sliver at the corners.
   mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
     depthPacking: THREE.RGBADepthPacking,
-    map: resolveTexture(up || dn),
+    map: props.fanCover ? null : resolveTexture(up || dn),
     alphaMap: mask,
     alphaTest: 0.5,
   });
@@ -1564,12 +1605,7 @@ export function createCardBrowsePreview(props) {
     dispose() {
       if (disposed) return;
       disposed = true;
-      const materials = new Set();
-      mesh.traverse((node) => {
-        if (node.material) for (const material of [node.material].flat()) materials.add(material);
-        if (node.customDepthMaterial) materials.add(node.customDepthMaterial);
-      });
-      materials.forEach((material) => material.dispose());
+      disposeCardMesh(mesh);
       textures.forEach((texture) => texture.dispose());
     },
   };
@@ -1593,6 +1629,64 @@ function propColor(props) {
 }
 
 const gltfLoader = new GLTFLoader();
+function disposeCardMesh(root) {
+  if (!root || root.userData.ottDisposed) return;
+  root.userData.ottDisposed = true;
+  const materials = new Set();
+  const geometries = new Set();
+  root.traverse((node) => {
+    if (node.geometry && !node.geometry.userData.sharedCardGeometry) geometries.add(node.geometry);
+    for (const material of [node.material].flat()) if (material) materials.add(material);
+    if (node.customDepthMaterial) materials.add(node.customDepthMaterial);
+  });
+  materials.forEach((material) => material.dispose());
+  geometries.forEach((geometry) => geometry.dispose());
+}
+// Tile models paint every material; deck skins opt only their named interior slots in.
+// Both use the public deck/tile appearance, never private inventory entries.
+function paintTileModelMesh(node, props, tints, { paintUnmapped = false } = {}) {
+  const appearance = tileAppearanceOf(props);
+  if (!appearance || !node.material) return;
+  const finish =
+    deviceClass() === 'phone'
+      ? DICE_FINISH_FALLBACK[appearance.finish] || appearance.finish
+      : appearance.finish;
+  let painted = false;
+  const paint = (source) => {
+    if (!source) return source;
+    const slot = Object.keys(tints).find((slot) => isTintSlot(source.name, slot));
+    if (!slot && !paintUnmapped) return source;
+    painted = true;
+    const color = slot ? appearance[tints[slot]] : source.color;
+    return finish === 'original'
+      ? tintModelMaterial(source, color)
+      : modelFinishMaterial(source, finish, color);
+  };
+  node.material = Array.isArray(node.material) ? node.material.map(paint) : paint(node.material);
+  if (painted && node.geometry && (finish === 'marbled' || finish === 'brushed')) {
+    // Cached tile geometry is shared; freshly loaded deck geometry is already owned.
+    if (node.geometry.userData.sharedCardGeometry) {
+      node.geometry = node.geometry.clone();
+      delete node.geometry.userData.sharedCardGeometry;
+    }
+    addModelFinishUV(node.geometry);
+  }
+}
+const tileRenderer = createTileRenderer({
+  THREE,
+  loader: gltfLoader,
+  fitModel,
+  dispose: disposeCardMesh,
+  paintMesh(node, props) {
+    const slots = tileModelFamily(props).materialSlots;
+    paintTileModelMesh(
+      node,
+      props,
+      { [slots.base]: 'base', [slots.inset]: 'inset' },
+      { paintUnmapped: true },
+    );
+  },
+});
 const MODEL_SIZE = CONFIG.model.size; // custom-model normalization target
 
 // Load a .glb into a fresh group and return the group immediately; the model
@@ -1896,6 +1990,7 @@ function deckMesh(props = {}) {
         node.material = Array.isArray(node.material)
           ? node.material.map(paint)
           : paint(node.material);
+        if (skin.tileTints) paintTileModelMesh(node, props, skin.tileTints);
       },
       reorient,
     );
@@ -1966,87 +2061,7 @@ function measureBoard(url, targetSize = BOARD_SIZE) {
   });
 }
 
-// --- Procedural boards: a top texture drawn from data ------------------------
-// The reusable procedural-board framework. A BOARDS entry with `proc: <name>` is painted by the
-// matching function here from its `paint` spec — no art file. Add a painter + a BOARDS entry and a
-// new grid / premium / battlemap board travels the same swapBoard/collider/calibrateGrid plumbing.
-function drawStar(ctx, cx, cy, outer, inner, points) {
-  ctx.beginPath();
-  for (let i = 0; i < points * 2; i++) {
-    const r = i % 2 ? inner : outer,
-      a = (Math.PI * i) / points - Math.PI / 2;
-    ctx[i ? 'lineTo' : 'moveTo'](cx + Math.cos(a) * r, cy + Math.sin(a) * r);
-  }
-  ctx.closePath();
-  ctx.fill();
-}
-// Wordy McWordface board: a cells×cells grid with coloured premium squares (from WORDY_PREMIUM /
-// WORDY_COLORS via the board's `paint`). The texture is divided into equal cells, so its squares line
-// up 1:1 with the snap grid (calibrateGrid derives cell = board width ÷ cells).
-function wordGridTex(paint = {}) {
-  const cells = paint.cells || 15,
-    prem = paint.premium || [],
-    col = paint.colors || {};
-  const px = 900,
-    cell = px / cells;
-  const { canvas, ctx } = makeCanvas(px, px);
-  ctx.fillStyle = col.base || '#e9ddc2';
-  ctx.fillRect(0, 0, px, px);
-  const fillFor = { T: col.T, D: col.D, t: col.t, d: col.d, '*': col.star || col.D };
-  const label = { T: 'TW', D: 'DW', t: 'TL', d: 'DL' };
-  for (let r = 0; r < cells; r++) {
-    const row = prem[r] || '';
-    for (let c = 0; c < cells; c++) {
-      const ch = row[c] || '.',
-        x = c * cell,
-        y = r * cell;
-      if (fillFor[ch]) {
-        ctx.fillStyle = fillFor[ch];
-        ctx.fillRect(x, y, cell, cell);
-      }
-      if (ch === '*') {
-        ctx.fillStyle = col.ink || '#2c2115';
-        drawStar(ctx, x + cell / 2, y + cell / 2, cell * 0.3, cell * 0.14, 5);
-      } else if (label[ch]) {
-        ctx.fillStyle = 'rgba(44,33,21,0.72)';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.font = `700 ${Math.round(cell * 0.24)}px system-ui, sans-serif`;
-        ctx.fillText(label[ch], x + cell / 2, y + cell / 2);
-      }
-    }
-  }
-  ctx.strokeStyle = col.line || '#c3b184';
-  ctx.lineWidth = Math.max(1, px / 600);
-  for (let i = 0; i <= cells; i++) {
-    const p = Math.round(i * cell) + 0.5;
-    ctx.beginPath();
-    ctx.moveTo(p, 0);
-    ctx.lineTo(p, px);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, p);
-    ctx.lineTo(px, p);
-    ctx.stroke();
-  }
-  return cTex(canvas);
-}
-const BOARD_PAINTERS = { wordgrid: wordGridTex };
-// A data-URL preview of a procedural board's top, for the library (proc boards have no .glb to snapshot).
-export function procBoardTexURL(key) {
-  const b = BOARDS[key];
-  if (!b || !b.proc) return null;
-  const ck = 'proc:' + key;
-  if (_prevCache.has(ck)) return _prevCache.get(ck);
-  const painter = BOARD_PAINTERS[b.proc];
-  if (!painter) return null;
-  const tex = painter(b.paint || {});
-  const url = tex && tex.image && tex.image.toDataURL ? canvasThumbnailURL(tex.image) : null;
-  if (url) rememberPreview(ck, url);
-  return url;
-}
-
-// The board mesh: a built-in/uploaded .glb model, a procedural board, or a plain textured slab.
+// The board mesh: a built-in/uploaded .glb model or a plain/image-backed textured slab.
 function boardMesh(props = {}) {
   const builtin = props.board && BOARDS[props.board]; // a built-in model board
   const modelUrl = builtin ? builtin.model : props.model; // or an uploaded .glb board
@@ -2065,25 +2080,6 @@ function boardMesh(props = {}) {
         }); // de-metal so the board's own colors read
       },
     );
-  }
-
-  if (builtin && builtin.proc) {
-    // a procedural board: a slab sized by its box, top painted from data
-    const [hx, hy, hz] = builtin.box;
-    const painter = BOARD_PAINTERS[builtin.proc];
-    const map = painter ? painter(builtin.paint || {}) : boardTex();
-    const top = new THREE.MeshStandardMaterial({ map, roughness: 0.85 });
-    const edge = new THREE.MeshStandardMaterial({ color: COLORS.boardEdge });
-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(hx * 2, hy * 2, hz * 2), [
-      edge,
-      edge,
-      top,
-      edge,
-      edge,
-      edge,
-    ]);
-    mesh.receiveShadow = true;
-    return mesh;
   }
 
   // A plain procedural board: a textured slab.
@@ -2338,7 +2334,7 @@ const KIND = {
   notecardStack: { mesh: notecardStackMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   notecard: { mesh: notecardMesh, dispose: disposeHierarchy, grab: 0, heavy: true },
   die: { mesh: dieMesh, dispose: disposeHierarchy, grab: 0, rclick: 'roll' },
-  card: { mesh: cardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
+  card: { mesh: cardMesh, dispose: disposeCardMesh, grab: 0, lclick: 'takeCard', rclick: 'flip' },
   prop: { mesh: propMesh, grab: 0 },
   deck: { mesh: deckMesh, grab: 2, ldrag: 'deal', lclick: 'drawToHand', rclick: 'shuffle' }, // left-click → top card to your hand; left-drag → deal to table
   board: { mesh: boardMesh },
@@ -2349,7 +2345,7 @@ const KIND = {
 // ---- Table grid: a flat line grid on the felt (snap-to-grid, Phase 2) --------
 // Lines on cell multiples through the world origin (matching snapToCell, whose cell
 // CENTRES sit half a cell between them), spanning the whole table. Built flat at y=0;
-// the client lifts it just above the felt. Colour is GM-set (`scale.gridColor`) so it
+// the client lifts it just above the felt. Color is GM-set (`scale.gridColor`) so it
 // reads on any felt. Returns null when there's no grid to draw.
 
 // Clip a segment to the table rectangle [-hx,hx]x[-hz,hz] (Liang-Barsky), so hex
@@ -2723,6 +2719,7 @@ function snapshot(obj) {
 }
 
 const _prevCache = new Map();
+const _tilePreviewPending = new Map();
 const PREV_CACHE_CAP = 160; // preview data-URLs (JS strings, ~10-20KB each) — FIFO-evict oldest
 function rememberPreview(key, url) {
   if (_prevCache.size >= PREV_CACHE_CAP) {
@@ -2755,6 +2752,91 @@ export function cardPreviewURL(ref, { thumbnail = true } = {}) {
   }
   if (url) rememberPreview(key, url);
   return url;
+}
+// Hands request a shallow tilt; existing library callers keep their face-on preview.
+// Procedural/uploaded tiles reuse cardMesh rather than a second geometry implementation.
+export async function tilePreviewURL(props = {}, { tilt = 0 } = {}) {
+  if (!isHandTile(props)) return null;
+  tilt = Number.isFinite(tilt) ? Math.max(0, Math.min(30, tilt)) : 0;
+  const appearance = tileAppearanceOf(props);
+  const key =
+    'tile:' +
+    JSON.stringify([
+      props.tile,
+      props.front,
+      props.back,
+      props.geom,
+      props.open,
+      props.down,
+      appearance,
+      tilt,
+    ]);
+  if (_prevCache.has(key)) return _prevCache.get(key);
+  if (_tilePreviewPending.has(key)) return _tilePreviewPending.get(key);
+  const pending = (async () => {
+    if (appearance?.finish === 'marbled') {
+      marbleTexture();
+      await _marbleReady;
+    }
+    const preview = createCardBrowsePreview(props);
+    const { mesh } = preview;
+    let rig;
+    try {
+      if (mesh.userData.tileModel) {
+        if (!(await mesh.userData.tileModelReady)) return null;
+      } else mesh.rotation.y = Math.PI; // procedural face UVs have the opposite portrait orientation
+      await waitForVisualAssets();
+      const box = new THREE.Box3().setFromObject(mesh);
+      if (box.isEmpty()) return null;
+      const { hw, hh, th } = cardGeom(props);
+      const distance = Math.max(hw, hh, th) * 6 + 1;
+      const angle = THREE.MathUtils.degToRad(tilt);
+      const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, distance * 4);
+      cam.position.set(
+        Math.sin(angle) * 0.55 * distance,
+        Math.cos(angle) * distance,
+        -Math.sin(angle) * 0.84 * distance,
+      );
+      cam.up.set(0, 0, 1);
+      cam.lookAt(0, 0, 0);
+      cam.updateMatrixWorld();
+      // Fit all eight model bounds corners, including thickness, instead of clipping
+      // an angled tile to its flat footprint. The snapshot has transparent margins.
+      const bounds = new THREE.Box3();
+      for (const x of [box.min.x, box.max.x])
+        for (const y of [box.min.y, box.max.y])
+          for (const z of [box.min.z, box.max.z])
+            bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse));
+      const w = Math.max(0.001, bounds.max.x - bounds.min.x) * 1.07;
+      const h = Math.max(0.001, bounds.max.y - bounds.min.y) * 1.07;
+      const center = bounds.getCenter(new THREE.Vector3());
+      cam.left = center.x - w / 2;
+      cam.right = center.x + w / 2;
+      cam.top = center.y + h / 2;
+      cam.bottom = center.y - h / 2;
+      cam.updateProjectionMatrix();
+      rig = thumbRig();
+      rig.renderer.setSize(
+        Math.max(1, Math.round((220 * w) / Math.max(w, h))),
+        Math.max(1, Math.round((220 * h) / Math.max(w, h))),
+      );
+      rig.scene.add(mesh);
+      rig.renderer.render(rig.scene, cam);
+      const url = canvasThumbnailURL(rig.renderer.domElement);
+      rememberPreview(key, url);
+      return url;
+    } finally {
+      rig?.scene.remove(mesh);
+      rig?.renderer.setSize(220, 220);
+      preview.dispose();
+    }
+  })();
+  _tilePreviewPending.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    _tilePreviewPending.delete(key);
+  }
 }
 // A prop (a .glb in the library, or a built-in shape) → a rendered thumbnail data-URL.
 export async function propPreviewURL(props = {}) {
@@ -2928,7 +3010,7 @@ function roundRect(ctx, x, y, w, h, r) {
 // A standing seat-marker texture: a colored card with the player's avatar (or a
 // default silhouette) clipped to a circle, their name, and a "SHOWING n" badge
 // while they're revealing cards. Redrawn once the avatar image loads.
-const PLACARD_TEXTURE_SCALE = { low: 2, medium: 2, high: 3 };
+const PLACARD_TEXTURE_SCALE = { low: 2, medium: 2, high: 3, 'ultra-high': 3 };
 function makePlayerTexture(player) {
   const width = 320,
     height = 448;

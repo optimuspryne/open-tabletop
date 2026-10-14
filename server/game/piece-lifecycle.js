@@ -7,6 +7,7 @@ import {
 import * as CANNON from 'cannon-es';
 import {
   DECK_MODELS,
+  tileAppearanceProps,
   KINDS,
   PROPS,
   gridActive,
@@ -21,6 +22,7 @@ import { assertPieceCapacity } from './piece-capacity.js';
 import { readProps, writeProps } from './props-codec.js';
 import { Piece } from './schema.js';
 import { normalizePieceLabels } from '../../shared/piece-labels.js';
+import { assistStackPlacement, wakeStackAbove } from './stacking.js';
 
 // Own the synchronized-piece and physics-body lifecycle while retaining the room's existing
 // collider, sound, and private-state contracts. Runtime tuning and deck construction stay injected.
@@ -105,7 +107,7 @@ export function createPieceLifecycle({
           : props.set === 'letter'
             ? deckBuilders.buildScrabbleBag()
             : props.set === 'mahjong'
-              ? deckBuilders.buildMahjongWall()
+              ? deckBuilders.buildMahjongWall(props.bonusTiles === true)
               : props.cards && props.cards.length
                 ? {
                     back: props.back || 'back',
@@ -113,10 +115,14 @@ export function createPieceLifecycle({
                     ...geoOf(props),
                     deckModel: props.deckModel,
                   }
-                : deckBuilders.buildSimpleDeck(!!props.jokers);
+                : deckBuilders.buildSimpleDeck(!!props.jokers, props.backDesign);
       room.deckCards.set(id, deckData.cards.slice());
       piece.count = deckData.cards.length;
       const deckProps = { back: deckData.back, ...geoOf(deckData) };
+      Object.assign(deckProps, tileAppearanceProps({ ...props, tile: deckProps.tile }));
+      if (props.snap !== undefined) deckProps.snap = !!props.snap;
+      if (typeof props.stackable === 'boolean') deckProps.stackable = props.stackable;
+      if (['aligned', 'offset'].includes(props.stackMode)) deckProps.stackMode = props.stackMode;
       if (props.browseAccess === 'players') deckProps.browseAccess = 'players';
       if (deckData.deckModel && DECK_MODELS[deckData.deckModel])
         deckProps.model = deckData.deckModel;
@@ -187,6 +193,7 @@ export function createPieceLifecycle({
 
   const removePiece = (room, id) => {
     room.dicePolicy?.remove(id);
+    wakeStackAbove(room, id);
     room.notecards?.remove(id);
     room.deckBrowsing?.cancelDeck(id, 'The deck was removed.');
     const body = room.bodies.get(id);
@@ -203,11 +210,14 @@ export function createPieceLifecycle({
     const piece = room.state.pieces.get(id);
     if (!piece) return;
     const releasingClient = room.clients?.find((client) => client.sessionId === piece.owner);
+    const target = room.targets.get(id);
+    const grouped = (room.groups?.get(piece.owner)?.size ?? 0) > 1;
     piece.owner = '';
     room.targets.delete(id);
     room._released.set(id, now());
 
     const body = room.bodies.get(id);
+    let stacked = false;
     if (body) {
       const props = readProps(piece);
       if (piece.type !== 'deck' && gridActive(room.state.scale) && props.snap) {
@@ -229,11 +239,19 @@ export function createPieceLifecycle({
         body.velocity.set(vx * scale, vy * scale, vz * scale);
       }
       body.wakeUp();
+      const stackTarget =
+        target && props.snap && gridActive(room.state.scale)
+          ? {
+              ...target,
+              ...snapToCell(target.x, target.z, room.state.scale, gridFootprintCells(props)),
+            }
+          : target;
+      if (!grouped) stacked = assistStackPlacement(room, id, stackTarget, velocity);
     }
 
-    room.visibility?.settleReleasedPiece(id);
+    if (!stacked) room.visibility?.settleReleasedPiece(id);
 
-    if (piece.type === 'card' && body) {
+    if (piece.type === 'card' && body && !stacked) {
       for (const [deckId, cards] of room.deckCards) {
         const deckPiece = room.state.pieces.get(deckId);
         if (deckPiece?.type !== 'deck' || !!deckPiece.hidden !== !!piece.hidden) continue;
@@ -249,7 +267,16 @@ export function createPieceLifecycle({
         if (cardCompatibilityKey(cardProps) !== cardCompatibilityKey(deckProps)) continue;
         const front = (room.cardData.get(id) || {}).front || cardProps.front;
         if (!front) continue;
-        cards.push(absorbedEntry(front, cardProps.back, deckProps.back));
+        cards.push(
+          absorbedEntry(
+            front,
+            cardProps.back,
+            deckProps.back,
+            tileAppearanceProps(cardProps, undefined, {
+              includeDefaults: Object.keys(tileAppearanceProps(deckProps)).length > 0,
+            }),
+          ),
+        );
         deckPiece.count = cards.length;
         if (deckProps.open) {
           const topBack = cardBackRef(cards[cards.length - 1]);

@@ -46,7 +46,11 @@ export function primitiveColliderSpec(type, hx, hy, hz, options = {}) {
 
 // Authoritative renderer-neutral collider definition for both Cannon physics and browser debug
 // geometry. `count` is separate because it is a synchronized Piece field rather than part of props.
-export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, count } = {}) {
+export function colliderSpec(
+  type,
+  props = {},
+  { cardColliderThickness = 0, matColliderThickness = 0.04, count } = {},
+) {
   if (type === 'notecardStack' || type === 'notecard') {
     const { width, height } = notecardDimensions(props.orientation);
     return {
@@ -143,7 +147,10 @@ export function colliderSpec(type, props = {}, { cardColliderThickness = 0.04, c
 
   if (type === 'card' || type === 'mat') {
     const geometry = cardGeom(props);
-    const halfThickness = Math.max(geometry.th, cardColliderThickness);
+    const halfThickness = Math.max(
+      geometry.th,
+      type === 'mat' ? matColliderThickness : cardColliderThickness,
+    );
     return geometry.shape === 'hex'
       ? {
           type: 'cylinder',

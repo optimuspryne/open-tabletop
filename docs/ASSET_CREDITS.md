@@ -40,7 +40,54 @@ requirement is actually met.
 
 ### Open Tabletop original models
 
-`boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`,
+`boards/wordy_board.glb`:
+
+- **Author/source:** Project owner's original Wordy board, edited with Codex and supplied from
+  `Open-Tabletop_Asset_Builders/3d_models/original/GLB/wordy_board.glb`.
+  The editable source is `3d_models/original/BLEND/wordy_board_uv_fixed.blend` in that asset workspace.
+- **License:** Distributed under the repository license, with the other Open Tabletop originals.
+- The supplied GLB is bundled byte for byte. Authored wood/normal textures, raised squares,
+  premium-square colors, star and DL/DW/TL/TW lettering are preserved. Runtime centering/scaling
+  retains Wordy's 11-unit width; measured grid spacing and offsets align tile snapping.
+
+`pieces/mahjong/` (34 standard faces, three reserved red-five variants and `concealed.glb`):
+
+- **Model author/source:** Engraved models authored for the project owner with Codex,
+  supplied from `Open-Tabletop_Asset_Builders/3d_models/original/GLB/mahjong_glb/`.
+  The authoring kit is `3d_models/original/BLEND/mahjong_engraved_kit.zip`.
+- **Face artwork:** FluffyStuff, [riichi-mahjong-tiles](https://github.com/FluffyStuff/riichi-mahjong-tiles),
+  dedicated to the public domain under [CC0](https://creativecommons.org/publicdomain/zero/1.0/).
+- **Model license:** Distributed under the repository license, with the other Open Tabletop originals.
+- Original GLB bytes, colored recessed engravings, ivory `base` and green `back` materials
+  are preserved. Runtime fitting matches shared Mahjong dimensions. Base/Back color and
+  finish overrides are per instance; engraved symbol colors remain authored. The blank
+  white dragon is intentionally unmarked. Red fives are bundled but unused by default.
+
+`pieces/mahjong/Flower1_Plum.glb`, `Flower2_Orchid.glb`, `Flower3_Chrysanthemum.glb`,
+`Flower4_Bamboo.glb` and `Season1_Spring.glb` through `Season4_Winter.glb`:
+
+- **Model/artwork source:** Original botanical designs and matching engraved models created
+  for the project owner with Codex. Supplied from the `mahjong_bonus_kit/mahjong_glb/`
+  folder in the companion tile-authoring chat's outputs; the kit includes editable SVGs,
+  `mahjong_bonus.blend` and `build_engraved_mahjong_bonus.py`.
+- **Artwork license:** CC0, as recorded in the supplied kit's `README.txt`.
+- **Model license:** Distributed under the repository license, with the other Open Tabletop originals.
+- **Lettering:** Outlined Noto Serif CJK, [Noto CJK](https://github.com/notofonts/noto-cjk),
+  SIL Open Font License. No font files are embedded or redistributed. The resulting
+  artwork can retain its own license; see the [OFL FAQ, 1.1–1.1.2](https://openfontlicense.org/ofl-faq/).
+- All eight GLBs are bundled byte for byte, preserving authored materials and 0.45 mm
+  engraved recesses. The original botanical artwork complements FluffyStuff's CC0 set.
+
+`pieces/dominoes/Domino_0_0.glb` through `Domino_6_6.glb` (28 double-six pairs),
+and `pieces/dominoes/Domino_Concealed.glb`:
+
+- **Author/source:** Project owner's original domino models, supplied from
+  `Open-Tabletop_Asset_Builders/3d_models/original/GLB/domino_glb/`.
+- **License:** Distributed under the repository license, with the other Open Tabletop originals.
+- Original GLB bytes and `base`/`inset` materials are preserved. Runtime fitting centers
+  each model and matches the shared domino dimensions; color/finish overrides are per instance.
+
+`boards/checker_chess_board.glb`, `boards/go_board.glb`, `decks/bag.glb`, `decks/dominoes_box.glb`,
 `pieces/misc/gobowl.glb`, `pieces/misc/coin.glb`, `pieces/checkers/checker.glb`, 
 `pieces/checkers/crowned_checker.glb`, and `pieces/misc/token.glb`
 
@@ -52,6 +99,18 @@ requirement is actually met.
 ## Sound effects - `public/static_assets/sounds/`
 All CC0 (public domain).
 
+- **Ceramic tile cues** — `ceramic-tile-pickup-{1,2,3}.ogg`,
+  `ceramic-tile-drop-{1,2,3,4}.ogg`, `ceramic-tile-flip-{1,2,3}.ogg` and
+  `ceramic-tile-shuffle-{1,2,3}.ogg` are original procedural synthesis created with
+  Codex for Open Tabletop (2026-10-12), with no recordings or third-party samples.
+  CC0. `scripts/generate-tile-sounds.py` reproduces the waveforms using Python stdlib
+  and ffmpeg/libvorbis. Its default command authors this set; `--legacy` authors the
+  earlier flip/shuffle placeholders. These new files are the active tile cue pools;
+  the older files below are preserved, and tile-box cues retain their original sounds.
+  Timbre and timing were tuned against the project owner's supplied
+  `mahjong_tile_{1,2,3,4}.ogg` and `Shuffle_the_mahjong_tiles.ogg` examples from
+  `Mahjong_Sound_Pack_2026_02_24`. Those recordings are references only: no recording
+  samples or waveform data are copied into the bundled cues, and the pack is not redistributed.
 - **Synthesized tile flip/shuffle cues** — `tile-flip-{1,2,3}.ogg` and
   `tile-shuffle-{1,2,3}.ogg` were procedurally synthesized with Codex for Open Tabletop
   (2026-09-24), using no recordings or third-party samples. CC0. The reproducible authoring
@@ -83,10 +142,32 @@ All CC0 (public domain).
 
 ## Tile art - `public/static_assets/mahjong/faces/`
 
+`flowPlum.png` and `flowBamboo.png` are CC0 derivatives of the bonus kit's original
+`Flower1_Plum.svg` and `Flower4_Bamboo.svg`, rendered with Sharp to 360×480 PNG and
+flattened onto ivory `#efead8`. They provide image fallbacks for the new GLB identities.
+Their botanical artwork/outlined Noto lettering have the same provenance as the bonus
+models above. All pre-existing tile PNGs remain unchanged.
+
+The original tile PNG set (excluding these two new fallbacks):
+
 - **Mahjong Tileset** - CodeInfernoGames
   (https://opengameart.org/users/codeinfernogames)
   - https://opengameart.org/content/mahjong-tileset
 - **License:** CC BY 3.0. Author requests a link to https://codeinferno.com
+
+---
+
+## Playing-card art - `public/static_assets/cards/bridge/`
+
+- **Bridge-Sized Playing Card Deck (PNG, CC0)** — Mesmedir, derived from
+  Dmitry Fomin's 2017 Wikimedia Commons playing-card collection.
+- **Source:** https://opengameart.org/content/bridge-sized-playing-card-deck-png-cc0
+- **License:** CC0 (public domain).
+- The 56 PNG originals from `playingcards_bridgesize_png.zip` are unchanged:
+  52 faces (`C`, `D`, `H`, `S`, ranks 1–13), red/black jokers (`X-R`, `X-B`),
+  and blue/red backs (`Back-B`, `Back-R`). Browser thumbnails use the existing
+  on-demand WebP derivative service; originals retain their alpha corners.
+- Courtesy credit is also shown in the in-app Credits panel.
 
 ---
 
@@ -113,7 +194,8 @@ All CC0 (public domain).
 ### Tabler Icons
 - **Author:** Paweł Kuna and contributors - https://github.com/tabler/tabler-icons
 - **Source:** https://tabler.io/icons (outline style)
-- **Usage:** 163 outline SVGs, including `cloud-fog` for the fog tool, embedded as `<symbol>` elements in the inline icon sprite,
+- **Usage:** 167 outline SVGs, including `wall` for Mahjong's approved Build wall action and
+  `cloud-fog` for the fog tool, embedded as `<symbol>` elements in the inline icon sprite,
   regenerated from a single list by `scripts/build-icons.mjs` (`npm run build:icons`).
 - **License:** MIT - Copyright (c) 2020-2026 Paweł Kuna. Full text in
   [`docs/licenses/tabler-icons-LICENSE`](licenses/tabler-icons-LICENSE).

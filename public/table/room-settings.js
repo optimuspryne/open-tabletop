@@ -53,7 +53,7 @@ export function createRoomSettings({
     });
   };
   // The table grid (a flat LineSegments on the felt) or null when gridStyle is 'off'.
-  // Rebuilt whenever the grid fields (cell size / style / colour) or the table size
+  // Rebuilt whenever the grid fields (cell size / style / color) or the table size
   // change; reads everything from the synced room scale, so every seat draws the same.
   let gridLines = null;
   // The grid's height above the felt (GM-set, durable); falls back to the overlay lift.
@@ -281,7 +281,7 @@ export function createRoomSettings({
     cb(room.state).scale.listen('gridStyle', onGrid, false); // grid: off / square / hex
     cb(room.state).scale.listen('hexOrient', onGrid, false); // hex: pointy / flat orientation
     cb(room.state).scale.listen('gridHidden', onGrid, false); // grid: shown / hidden (still snaps)
-    cb(room.state).scale.listen('gridColor', onGrid, false); // grid: line colour
+    cb(room.state).scale.listen('gridColor', onGrid, false); // grid: line color
     cb(room.state).scale.listen(
       'gridLift',
       () => {
@@ -707,7 +707,11 @@ export function createRoomSettings({
         const bootedTier = getQuality();
         const chips = [...qrow.querySelectorAll('[data-quality]')];
         const sync = () => {
-          chips.forEach((c) => c.classList.toggle('on', c.dataset.quality === getQuality()));
+          chips.forEach((c) => {
+            const selected = c.dataset.quality === getQuality();
+            c.classList.toggle('on', selected);
+            c.setAttribute('aria-pressed', String(selected));
+          });
           if (applyBtn) applyBtn.hidden = getQuality() === bootedTier;
         };
         chips.forEach(

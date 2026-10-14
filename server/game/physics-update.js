@@ -9,6 +9,7 @@ import {
 } from '../../shared/pieces.js';
 import { dragVelocity } from './physics-safety.js';
 import { readProps } from './props-codec.js';
+import { hasStackSupport, prepareStackDrag, wakeStackAbove } from './stacking.js';
 
 // Drive held bodies toward their validated cursor targets while preserving physical collisions.
 export function driveHeldPieces(room, sim) {
@@ -20,6 +21,7 @@ export function driveHeldPieces(room, sim) {
     if (!body) return;
     if (body.__pinned) room.unpinPiece(id);
     if (!target) return;
+    wakeStackAbove(room, id);
     body.wakeUp();
 
     const velocity = dragVelocity(
@@ -39,6 +41,7 @@ export function driveHeldPieces(room, sim) {
     }
     body.velocity.set(velocity.x, velocity.y, velocity.z);
     body.angularVelocity.scale(angDamp, body.angularVelocity);
+    prepareStackDrag(room, id, target);
 
     if (room.standOf(piece)) {
       const quat = body.quaternion;
@@ -87,6 +90,10 @@ export function maintainSnapPins(room, sim) {
     const body = room.bodies.get(id);
     if (!body) return;
     if (room.wantsSnap(piece)) {
+      if (hasStackSupport(room, id)) {
+        if (body.__pinned) room.unpinPiece(id);
+        return;
+      }
       if (body.sleepTimeLimit !== sim.cards.sleepTime) {
         body.sleepSpeedLimit = sim.cards.sleepSpeed;
         body.sleepTimeLimit = sim.cards.sleepTime;

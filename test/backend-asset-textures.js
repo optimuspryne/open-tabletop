@@ -13,6 +13,31 @@ import {
   textureAssetPaths,
 } from '../server/http/routes/asset-textures.js';
 import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
+import { staticAssetPath } from '../server/static-assets.js';
+
+test('bundled bridge faces and backs produce alpha-preserving thumbnails from unchanged originals', async (t) => {
+  const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'open-tabletop-card-thumb-'));
+  t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
+  const app = express();
+  app.use(createAssetTextureRouter({ assetsDir: root, assetKinds: ['decks'] }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise((resolve) => server.once('listening', resolve));
+  t.after(() => new Promise((resolve) => server.close(resolve)));
+  for (const filename of ['S-1.png', 'H-13.png', 'X-B.png', 'Back-B.png', 'Back-R.png']) {
+    const ref = '/cards/bridge/' + filename;
+    const source = staticAssetPath(ref);
+    const original = await fs.promises.readFile(source);
+    const response = await fetch(
+      `http://127.0.0.1:${server.address().port}${assetThumbnailURL(ref)}`,
+    );
+    assert.equal(response.status, 200);
+    const info = await sharp(Buffer.from(await response.arrayBuffer())).metadata();
+    assert.equal(info.format, 'webp');
+    assert.equal(info.height, 320);
+    assert.equal(info.hasAlpha, true);
+    assert.deepEqual(await fs.promises.readFile(source), original);
+  }
+});
 
 test('texture HTTP route isolates thumbnail sizes and caches while preserving the original', async (t) => {
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'open-tabletop-thumb-'));
