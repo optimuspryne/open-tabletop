@@ -54,6 +54,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Tabletop player fans use concealed Domino/Mahjong models and uploaded-tile geometry,
+  with a shallow arc and tile-width spacing. Public fan metadata contains unordered
+  shape/material counts, never faces, double-sided artwork or private hand order;
+  restricted Show continues to reveal only to its audience. Private hands use cached
+  12-degree 3D tile thumbnails and fit complete images without clipping their sides.
+  Restart the server and refresh clients; no database migration is needed.
 - Fixed desktop Drop Hand choices being covered by the private hand. The Hand actions
   panel now paints above the cards; browser tests check visible pointer targets and keyboard
   focus for both orientations in full/compact desktop and touch layouts. Refresh the browser.

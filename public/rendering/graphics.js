@@ -11,7 +11,16 @@ import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { CONFIG, renderer, deviceClass, getQuality, tableMesh, rimMat } from './core.js';
+import {
+  CONFIG,
+  renderer,
+  deviceClass,
+  getQuality,
+  tableMesh,
+  rimMat,
+  waitForVisualAssets,
+} from './core.js';
+import { isHandTile } from '../../shared/hand-fan.js';
 import { assetTextureURL, assetThumbnailURL } from './asset-texture-url.js';
 import { THUMBNAIL_MAX_DIMENSION } from '../../shared/image-thumbnails.js';
 import { playingCardFace } from '../../shared/playing-cards.js';
@@ -1495,6 +1504,7 @@ function thinCardGeo(hw, hh, th) {
 function cardMesh(props = {}) {
   return tileRenderer.mesh(props, () => proceduralCardMesh(props));
 }
+const FAN_COVER_COLOR = 0xb9b198;
 function proceduralCardMesh(props = {}) {
   const { hw, hh, th, round, shape } = cardGeom(props); // footprint/thickness/shape (standard card, a tile, or explicit geom)
   // Which face renders up vs down. A double-sided (open) tile shows its BACK when face-down (`down`);
@@ -1513,7 +1523,11 @@ function proceduralCardMesh(props = {}) {
         ? new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.7 })
         : new THREE.MeshBasicMaterial({ visible: false });
     const faceMat = (ref) =>
-      new THREE.MeshStandardMaterial({ map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 });
+      new THREE.MeshStandardMaterial(
+        props.fanCover
+          ? { color: FAN_COVER_COLOR, roughness: 0.7 }
+          : { map: resolveTexture(ref), alphaTest: 0.5, roughness: 0.6 },
+      );
     const dnMat = faceMat(dn);
     const upMat = up ? faceMat(up) : dnMat;
     return new THREE.Mesh(geo, [upMat, dnMat, edge]); // groups: 0=top(up face), 1=bottom(down face), 2=sides
@@ -1529,6 +1543,8 @@ function proceduralCardMesh(props = {}) {
     // Procedural faces (dominoes) are opaque and already fit the rounded cap, so they stay plain.
     const capMask = roundMask(hw, hh, round);
     const capMat = (ref) => {
+      if (props.fanCover)
+        return new THREE.MeshStandardMaterial({ color: FAN_COVER_COLOR, roughness: 0.7 });
       const m = { map: resolveTexture(ref), roughness: 0.6 };
       if (parseCardFront(ref || 'back').ref) {
         m.alphaMap = capMask;
@@ -1550,7 +1566,8 @@ function proceduralCardMesh(props = {}) {
   const invisible = new THREE.MeshBasicMaterial({ visible: false });
   const faceMat = (ref) =>
     new THREE.MeshStandardMaterial({
-      map: resolveTexture(ref),
+      map: props.fanCover ? null : resolveTexture(ref),
+      color: props.fanCover ? FAN_COVER_COLOR : 0xffffff,
       alphaMap: mask,
       alphaTest: 0.5,
       roughness: 0.6,
@@ -1563,7 +1580,7 @@ function proceduralCardMesh(props = {}) {
   // Cast a shadow that follows the alpha silhouette, not the square box — no dark sliver at the corners.
   mesh.customDepthMaterial = new THREE.MeshDepthMaterial({
     depthPacking: THREE.RGBADepthPacking,
-    map: resolveTexture(up || dn),
+    map: props.fanCover ? null : resolveTexture(up || dn),
     alphaMap: mask,
     alphaTest: 0.5,
   });
@@ -2702,6 +2719,7 @@ function snapshot(obj) {
 }
 
 const _prevCache = new Map();
+const _tilePreviewPending = new Map();
 const PREV_CACHE_CAP = 160; // preview data-URLs (JS strings, ~10-20KB each) — FIFO-evict oldest
 function rememberPreview(key, url) {
   if (_prevCache.size >= PREV_CACHE_CAP) {
@@ -2735,44 +2753,89 @@ export function cardPreviewURL(ref, { thumbnail = true } = {}) {
   if (url) rememberPreview(key, url);
   return url;
 }
-// A portrait, face-on preview of the same model and material used on the table. Only the
-// owning hand / authorized library or browse caller supplies a visible face identity.
-export async function tilePreviewURL(props = {}) {
+// Hands request a shallow tilt; existing library callers keep their face-on preview.
+// Procedural/uploaded tiles reuse cardMesh rather than a second geometry implementation.
+export async function tilePreviewURL(props = {}, { tilt = 0 } = {}) {
+  if (!isHandTile(props)) return null;
+  tilt = Number.isFinite(tilt) ? Math.max(0, Math.min(30, tilt)) : 0;
   const appearance = tileAppearanceOf(props);
-  if (!appearance) return null;
   const key =
     'tile:' +
-    JSON.stringify([props.tile, props.front, props.geom, props.open, props.down, appearance]);
+    JSON.stringify([
+      props.tile,
+      props.front,
+      props.back,
+      props.geom,
+      props.open,
+      props.down,
+      appearance,
+      tilt,
+    ]);
   if (_prevCache.has(key)) return _prevCache.get(key);
-  if (appearance.finish === 'marbled') {
-    marbleTexture();
-    await _marbleReady;
-  }
-  const mesh = cardMesh(props);
-  if (!mesh.userData.tileModel || !(await mesh.userData.tileModelReady)) {
-    disposeCardMesh(mesh);
-    return null;
-  }
-  const { renderer, scene } = thumbRig();
-  const { hw, hh } = cardGeom(props);
-  const cam = new THREE.OrthographicCamera(-hw * 1.04, hw * 1.04, hh * 1.04, -hh * 1.04, 0.01, 10);
-  cam.position.set(0, 3, 0);
-  cam.up.set(0, 0, 1);
-  cam.lookAt(0, 0, 0);
-  renderer.setSize(
-    Math.max(1, Math.round((220 * hw) / Math.max(hw, hh))),
-    Math.max(1, Math.round((220 * hh) / Math.max(hw, hh))),
-  );
-  scene.add(mesh);
+  if (_tilePreviewPending.has(key)) return _tilePreviewPending.get(key);
+  const pending = (async () => {
+    if (appearance?.finish === 'marbled') {
+      marbleTexture();
+      await _marbleReady;
+    }
+    const preview = createCardBrowsePreview(props);
+    const { mesh } = preview;
+    let rig;
+    try {
+      if (mesh.userData.tileModel) {
+        if (!(await mesh.userData.tileModelReady)) return null;
+      } else mesh.rotation.y = Math.PI; // procedural face UVs have the opposite portrait orientation
+      await waitForVisualAssets();
+      const box = new THREE.Box3().setFromObject(mesh);
+      if (box.isEmpty()) return null;
+      const { hw, hh, th } = cardGeom(props);
+      const distance = Math.max(hw, hh, th) * 6 + 1;
+      const angle = THREE.MathUtils.degToRad(tilt);
+      const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.01, distance * 4);
+      cam.position.set(
+        Math.sin(angle) * 0.55 * distance,
+        Math.cos(angle) * distance,
+        -Math.sin(angle) * 0.84 * distance,
+      );
+      cam.up.set(0, 0, 1);
+      cam.lookAt(0, 0, 0);
+      cam.updateMatrixWorld();
+      // Fit all eight model bounds corners, including thickness, instead of clipping
+      // an angled tile to its flat footprint. The snapshot has transparent margins.
+      const bounds = new THREE.Box3();
+      for (const x of [box.min.x, box.max.x])
+        for (const y of [box.min.y, box.max.y])
+          for (const z of [box.min.z, box.max.z])
+            bounds.expandByPoint(new THREE.Vector3(x, y, z).applyMatrix4(cam.matrixWorldInverse));
+      const w = Math.max(0.001, bounds.max.x - bounds.min.x) * 1.07;
+      const h = Math.max(0.001, bounds.max.y - bounds.min.y) * 1.07;
+      const center = bounds.getCenter(new THREE.Vector3());
+      cam.left = center.x - w / 2;
+      cam.right = center.x + w / 2;
+      cam.top = center.y + h / 2;
+      cam.bottom = center.y - h / 2;
+      cam.updateProjectionMatrix();
+      rig = thumbRig();
+      rig.renderer.setSize(
+        Math.max(1, Math.round((220 * w) / Math.max(w, h))),
+        Math.max(1, Math.round((220 * h) / Math.max(w, h))),
+      );
+      rig.scene.add(mesh);
+      rig.renderer.render(rig.scene, cam);
+      const url = canvasThumbnailURL(rig.renderer.domElement);
+      rememberPreview(key, url);
+      return url;
+    } finally {
+      rig?.scene.remove(mesh);
+      rig?.renderer.setSize(220, 220);
+      preview.dispose();
+    }
+  })();
+  _tilePreviewPending.set(key, pending);
   try {
-    renderer.render(scene, cam);
-    const url = canvasThumbnailURL(renderer.domElement);
-    rememberPreview(key, url);
-    return url;
+    return await pending;
   } finally {
-    scene.remove(mesh);
-    renderer.setSize(220, 220);
-    disposeCardMesh(mesh);
+    _tilePreviewPending.delete(key);
   }
 }
 // A prop (a .glb in the library, or a built-in shape) → a rendered thumbnail data-URL.

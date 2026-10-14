@@ -907,6 +907,22 @@ chess}` each `[color0, color1]`.
 
 ---
 
+## `shared/hand-fan.js` — public hand presentation
+
+- **`handFanAppearance(card)`** projects canonical `tile`/`geom`, normalized family appearance,
+  and `fanCover` for double-sided tiles. It excludes faces, back artwork, IDs, model URLs and
+  notecard contents. **`handFanGroups(hand)`** aggregates/sorts by that public projection;
+  there are at most **`HAND_FAN_MAX = 12`** groups, independent of private hand order.
+- **`handFanCards(player, revealed)`** fills at most twelve slots, consumes matching public
+  shapes for authorized revealed slots, and strips any face fields from concealed descriptors.
+  Missing/malformed `handFan` uses the legacy `handBack` fan. **`isHandTile(props)`** identifies
+  built-in and custom tiles for fan spacing and hand thumbnails; thin ordinary cards keep
+  the card treatment. **`HAND_TILE_TILT = 12`** is the approved private-hand preview angle.
+- **`server/game/hand-state.sendHand(room, client)`**, called by `TableRoom.sendHand`, updates
+  public count/back/fan metadata and sends the complete `hand` only to its owner. The metadata
+  is recomputed from restored inventory rather than saved separately. This adds a synchronized
+  `Player.handFan` string; restart the server and refresh clients, with no database migration.
+
 ## `shared/overlays.js` — overlay and whiteboard protocol policy
 
 - **`OVERLAY_KINDS`** — immutable ordered overlay-kind list: `ruler`, `circle`, `cone`, and
@@ -1680,7 +1696,8 @@ covers the reported 384 KiB allocation recommendation with headroom. Restart the
   library editor's **Grid footprint** field and copied into the runtime props/asset snapshot.
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
-  image), **`role`** (the per-room owner/gm/helper/player rank).
+  image), **`handFan`** (bounded JSON of unordered public shape/material counts, without
+  faces, IDs, double-sided artwork or private order), **`role`** (the per-room owner/gm/helper/player rank).
 - **`Timer`** — `running, mode` (`'up'`/`'down'`), `base, since, duration`; the
   synced anchor (`timerLive()` computes the live value).
 - **`ScoreRow`** — `label, score`; one scoreboard entry (in the `scores` map).
@@ -1802,7 +1819,7 @@ persistence flush completes.
 
 Methods: **`spawn(type,pos,props,quat,hidden?) → id`** (piece-lifecycle facade), **`update(dt)`** (inspection recovery → extracted pre-step motion → hidden-body parking → profiled world step →
 extracted tray/table recovery → extracted transform publication; with `PERF_LOG=1`, logs a per-second step-time / awake-body / tick-health summary), **`updateDeckCollider(id)`** / **`updateStackCollider(id)`** (collider-maintenance facades), **`removePiece(id)`** (piece-lifecycle facade),
-**`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack`), **`clientBy(sid)`**,
+**`writeTransform(piece,body)`** / **`pinPiece(id)`** / **`unpinPiece(id)`** / **`wantsSnap(piece)`** (placement-operation facades), **`sendHand`** (also publishes `handBack` and `handFan`), **`clientBy(sid)`**,
 **`stopShow(sid)`**,
 **`advanceTurn`**, **`serializeScene`** (thin facade over `scene-persistence.js`;
 portable template: table size + pieces +
@@ -2636,9 +2653,17 @@ quiet for a full frame), and
   as its fourth argument; `inspectedEntry`, `takeTopCard` and `deckSpawnProps` retain both
   generic and legacy style fields. Bag patches change only requested fields on remaining
   stock; other individual fields, bag colors and already drawn tiles remain independent.
-- **`tilePreviewURL(props)`** — bounded async GLB thumbnail for private hands and library
-  callers. Uses table materials, family identity and `cardGeom` aspect, and waits for
-  model/marble readiness. **`createTileAppearanceControls`** (`public/ui/tile-appearance.js`)
+- **`tilePreviewURL(props, { tilt = 0 })`** — bounded async model/procedural tile thumbnail.
+  Private hands request a 12-degree tilt; existing library callers remain face-on. Uses
+  table materials and shared geometry, waits for model/texture/marble readiness, and fits
+  all projected bounds including thickness. Concurrent identical requests share a pending
+  render; snapshots use the bounded cache and failed loads can retry. Hand image slots use
+  contain sizing and tile proportions without clipping the angled silhouette.
+  Wide custom tiles cap slot width at `1.6 × --card-w` and contain the whole snapshot;
+  the scroll viewport reserves room for lifted/selected tiles without moving the tray.
+  Reuses `createCardBrowsePreview` ownership: newly created face textures are detached
+  from the shared cache before awaiting, then disposed; resident table textures remain usable.
+  **`createTileAppearanceControls`** (`public/ui/tile-appearance.js`)
   shares Base, Inset (Back for Mahjong) and Material controls between inspector and selection Recolor.
   Family names/color labels supply accessible labels. Native color inputs emit independent patches;
   compact labels remain visible and touch targets reach 44px. Material supports Original
@@ -2825,12 +2850,15 @@ in `client.js`.
 - **`seatLayoutFor(hx, hz)`** is a pure exported helper producing the eight hand positions, outward
   vectors, and camera poses. Internal `VIEW` knobs retain the default seat framing (`zoom: 0.65`).
 - **`bindRoom(room, cb)`** handles player add/remove and hand, seat, name, role, order, avatar,
-  color, showing, and hand-back changes, plus turn, pending-turn, and room-name presentation.
+  color, showing, hand-back and hand-fan changes, plus turn, pending-turn, and room-name presentation.
   Local seat hydration applies the camera and signals readiness; local role changes invoke the
   shell's role gate. Membership callbacks refresh unclaimed hands and clean up overlay previews.
 - **`bindMessages(room)`** handles `showFan`, updating the hand-owned reveal data and redrawing
   public fans. Fans display at most twelve cards, preserve public backs, and use supplied revealed
-  faces only in leading slots. Departures remove fans/markers and clear reveal data.
+  faces only in leading slots. Concealed tiles use public `handFan` geometry/material groups
+  and neutral family models; double-sided custom tiles receive plain covers. Tile-sized
+  spacing and a bounded shallow arc preserve their silhouettes, while ordinary card fans
+  retain overlap. Departures remove fans/markers and clear reveal data.
 - **`bindControls()`** wires My Seat, Birds Eye, next turn, and avatar upload. Avatar images are
   center-cropped to 512×512 and encoded as JPEG at quality 0.85, matching lobby profile uploads,
   then sent with the existing `setAvatar` message. Roster rendering keeps names
@@ -3322,8 +3350,10 @@ scrolls horizontally rather than shrinking the primary drag target.
 
 The presence controller owns seat layout, standing avatar/name markers (including the public
 **"SHOWING n"** badge built by `makePlayerTexture`), the local YOU chip, public fans, and the turn
-panel. Fans use the player's public **`handBack`** with supplied revealed cards face-up in leading
-slots, staggered to avoid z-fighting. The private bar remains in the hand controller. Held-piece
+panel. Fans use the player's public **`handFan`** shape/material counts with **`handBack`** for
+ordinary cards and supplied revealed cards face-up in leading slots. They are staggered to
+avoid z-fighting; tile fans use their actual models/geometry and width-based spacing. The
+private bar remains in the hand controller and uses contained 12-degree tile snapshots. Held-piece
 labels and client-owned pings share the `nameTag` texture builder.
 
 Presence also renders the **"⏳ Waiting on {name}"** row for a resumed turn whose owner has not

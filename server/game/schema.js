@@ -34,11 +34,12 @@ defineTypes(Player, {
   avatar: 'string',
   showing: 'number',
   handBack: 'string',
+  handFan: 'string',
   role: 'string',
   timedOut: 'boolean',
   participation: 'string',
   placard: 'string',
-}); // showing = revealed hand-card count; handBack = public hand back; role = per-room role
+}); // handFan = unordered public shape/material counts, never private faces or hand order
 
 // PUBLIC shared timer. Only its anchor is synchronized; clients compute its live value locally.
 export class Timer extends Schema {

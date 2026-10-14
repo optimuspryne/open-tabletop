@@ -1,4 +1,5 @@
-import { tileAppearanceProps, tileModelFamily } from '../../shared/pieces.js';
+import { cardGeom, tileAppearanceProps, tileModelFamily } from '../../shared/pieces.js';
+import { HAND_TILE_TILT, isHandTile } from '../../shared/hand-fan.js';
 import { PLAYING_CARD_GEOM } from '../../shared/playing-cards.js';
 
 // Private hand state, rendering, Show controls, and hand-only pointer gestures.
@@ -485,6 +486,11 @@ export function createHand({
           ? `${cf.rank} ${cf.suit}`
           : `${cf.color === '#bd2500' ? 'Red' : 'Black'} joker`
         : null;
+      const tileName = isHandTile(card)
+        ? cf.kind === 'domino'
+          ? `Domino ${cf.a}–${cf.b}`
+          : `${tileModelFamily(card)?.name || 'Custom'} tile`
+        : null;
       if (playingFace) {
         div.classList.add('playingFace');
         div.style.aspectRatio = `${PLAYING_CARD_GEOM.w} / ${PLAYING_CARD_GEOM.h}`;
@@ -517,8 +523,16 @@ export function createHand({
         const u = cardPreviewURL(cf.ref, { thumbnail: true });
         if (u) div.style.backgroundImage = `url("${u}")`;
       }
-      if (tileModelFamily(card) && tilePreviewURL) {
-        tilePreviewURL(card)
+      if (isHandTile(card)) {
+        const { hw, hh } = cardGeom(card);
+        div.classList.add('img', 'tilePreview');
+        div.style.aspectRatio = `${hw} / ${hh}`;
+        div.style.width = `calc(var(--card-w) * ${((62 / 44) * hw) / hh})`;
+        div.setAttribute('role', 'group');
+        div.setAttribute('aria-label', cardName || tileName);
+      }
+      if (isHandTile(card) && tilePreviewURL) {
+        tilePreviewURL(card, { tilt: HAND_TILE_TILT })
           .then((url) => {
             if (url && div.isConnected) div.style.backgroundImage = `url("${url}")`;
           })
@@ -588,8 +602,8 @@ export function createHand({
         'aria-label',
         card.kind === 'notecard'
           ? 'Open notecard'
-          : cardName
-            ? `Inspect ${cardName}`
+          : cardName || tileName
+            ? `Inspect ${cardName || tileName}`
             : 'Inspect card',
       );
       setIcon(eye, 'eye');

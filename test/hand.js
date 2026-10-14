@@ -43,6 +43,9 @@ class Element {
   get firstElementChild() {
     return this.children[0];
   }
+  get isConnected() {
+    return this.parentNode ? this.parentNode.isConnected : !!this.connectedRoot;
+  }
   contains(node) {
     return node === this || this.children.some((child) => child.contains(node));
   }
@@ -110,7 +113,7 @@ class Element {
   setPointerCapture() {}
 }
 
-function fixture({ sheet = false, hidden = false } = {}) {
+function fixture({ sheet = false, hidden = false, preview } = {}) {
   const ids = new Map(
     [
       'hand',
@@ -131,6 +134,7 @@ function fixture({ sheet = false, hidden = false } = {}) {
     ].map((id) => [id, new Element()]),
   );
   ids.get('showStrip').hidden = true;
+  ids.get('hand').connectedRoot = true;
   ids.get('handFlankStack').append(ids.get('showBtn'), ids.get('rearrangeBtn'));
   ids.get('handActionsPanel').append(ids.get('handFlankStack'), ids.get('dropFlank'));
   ids.get('handActions').append(ids.get('handActionsBtn'), ids.get('handActionsPanel'));
@@ -231,6 +235,7 @@ function fixture({ sheet = false, hidden = false } = {}) {
     parseCardFront: (front) =>
       playingCardFace(front) || { kind: 'rank', rank: front.slice(0, -1), suit: front.at(-1) },
     cardPreviewURL: assetThumbnailURL,
+    tilePreviewURL: preview,
     notecardPreviewURL: () => 'data:image/png;base64,test',
     openHandNotecard: (card) => inspected.push({ notecard: card.hid }),
     notecardMesh: () => ({
@@ -511,6 +516,45 @@ test('image jokers retain their faces, names, and Inspect action while legacy ra
   assert.equal(f.inspected.at(-1).hid, 'red');
   assert.equal(legacy.textContent, 'A♠');
   assert.equal(legacy.classList.contains('playingFace'), false);
+});
+
+test('hand tiles request shallow previews, retain shape proportions, and ignore late detached results', async () => {
+  const pending = [];
+  const f = fixture({
+    preview: (card, options) =>
+      new Promise((resolve, reject) => pending.push({ card, options, resolve, reject })),
+  });
+  const tiles = [
+    { hid: 'domino', tile: 'domino', front: 'domino:2:5', back: 'domback' },
+    {
+      hid: 'hex',
+      open: true,
+      front: '/assets/decks/hex.png',
+      back: 'back',
+      geom: { w: 0.5, h: 0.58, t: 0.06, shape: 'hex' },
+    },
+  ];
+  f.hand.setCards(tiles);
+  const [domino, hex] = f.cards();
+  assert.equal(pending.length, 2);
+  assert.ok(pending.every((request) => request.options.tilt === 12));
+  assert.ok(domino.classes.has('tilePreview'));
+  assert.ok(hex.classes.has('tilePreview'));
+  assert.equal(domino.style.aspectRatio, '0.25 / 0.5');
+  assert.match(hex.style.width, /calc\(var\(--card-w\)/);
+  pending[0].resolve('data:image/webp;base64,domino');
+  await Promise.resolve();
+  assert.equal(domino.style.backgroundImage, 'url("data:image/webp;base64,domino")');
+  f.hand.setCards(sample);
+  pending[1].resolve('data:image/webp;base64,late');
+  await Promise.resolve();
+  assert.ok(!hex.style.backgroundImage?.includes('late'));
+  f.hand.setCards(tiles);
+  pending[2].reject(new Error('model unavailable'));
+  pending[3].resolve(null);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(f.cards().length, 2);
 });
 
 test('hand clicks play, double-click inspects, and touch drags preview and drop face-up', () => {

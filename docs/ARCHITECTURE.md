@@ -724,7 +724,8 @@ exact `TRUST_PROXY_HOPS` deployment setting; Redis alone does not cluster Colyse
 The **synced state is public** — anything in it is one devtools-peek from being
 read. It holds: each piece's transform/type/owner/props/count; each player's
 seat, hand _count_, name, color, avatar, `showing` count (how many cards they're
-revealing) and `handBack` (their hand's back image); the shared `timer` anchor;
+revealing), `handBack` (their hand's public back image), and `handFan` (a bounded JSON
+description of unordered shape/material counts); the shared `timer` anchor;
 the room dressing (`scores`, `notes`, `tableX/Z`, `tableShape`, `whiteboard`, `trays` — which seats'
 personal dice trays are out, `skybox`,
 `feltColor`, `roomName`); and whose turn it is — including, after a resumed game, the public
@@ -936,7 +937,7 @@ The kinds:
   `server/deck-state.js`), so one stack can hold tiles with different backs (a tree-back among
   forageable-backs). `props.open` (+ the `down` orientation flag) makes a card/deck's tiles turn over rather than
   conceal, and it rides through hands too (`spawnHandCard`; the public seat-fan shows a generic
-  cover for an open card via `handBack`). Both axes ride the existing draw/deal/inspect/split/
+  neutral cover on the correct shape for an open tile via `handFan`). Both axes ride the existing draw/deal/inspect/split/
   combine/hand and scene-save paths, and both fall back to today's behavior (string entry → shared
   `back`; no `open` → secret flip).
 - **deck** — a public `back` + private ordered fronts (`deckCards`); public
@@ -1246,9 +1247,30 @@ The browser's `createTileRenderer` owns async loads and immutable template cachi
 by registered assets (29 GLBs for Domino, 43 active GLBs for Mahjong). Roots are centered and fitted on all three axes
 to `cardGeom`; no server GLB loading is needed. Instances own materials and finish UV geometry,
 while sharing template geometry. Disposed instances ignore late loads. `tilePreviewURL`
-uses the same renderer/materials and derives aspect from shared geometry. Dimensions remain
+uses the same renderer/materials and fits all projected bounds corners, including thickness.
+Private hands request a 12-degree tilt; library callers retain their face-on view. Uploaded
+tiles reuse the procedural card geometry and textures. Concurrent identical requests share a
+pending render, successful snapshots use the bounded preview cache, and temporary meshes
+and owned face textures are disposed through `createCardBrowsePreview`. Its synchronous
+cache detachment prevents concurrent table pieces from borrowing a transient preview texture;
+already-resident shared textures remain untouched. Image slots contain the entire snapshot
+without a card-frame or hex clip.
+Dimensions remain
 in `TILES`/`props.geom`; Domino now uses the owner's half-extents 0.25 × 0.5 × 0.05
 (full width × length × thickness 0.5 × 1 × 0.1), shared by rendering and colliders.
+
+`server/game/hand-state.sendHand` derives the public `handFan` description from the private
+hand whenever it sends an owner update, including reclaim/reconnect and inventory changes.
+`shared/hand-fan.js` projects only known tile families, canonical geometry, normalized tile
+materials and a neutral-cover flag. It aggregates and sorts by public appearance, with at
+most twelve groups; front/back artwork, identities, model URLs, notecard content and private
+hand order are excluded. This is derived state, not a new save format. `handFanCards` removes
+the matching public shape for each authorized revealed slot before filling concealed slots.
+Presence reuses `cardMesh`, so missing fronts choose concealed family models. Double-sided
+custom tiles render plain material covers rather than their identifying reverse artwork.
+Tile fans fit their footprints into a bounded shallow arc; ordinary cards retain their
+overlapping fan. Camera, sorting and interaction remain local; Show audience checks remain
+server-owned.
 
 Generic `tileAppearance: {base,inset,finish}` patches are server-authorized and validated
 separately from container `color`/`textColor`. The registry chooses a family's storage key;

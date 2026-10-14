@@ -1112,6 +1112,12 @@ a {
 .handScroll::-webkit-scrollbar {
   display: none;
 }
+/* Reserve space inside the scroll viewport for a lifted/selected tile, without
+   changing the tray's resting height or position. */
+.handScroll:has(.tilePreview) {
+  padding-top: 12px;
+  margin-top: -12px;
+}
 .handScrollBtn {
   flex-shrink: 0;
   align-self: center;
@@ -1153,8 +1159,9 @@ a {
   z-index: 3;
 }
 .handcard.img {
-  background-size: cover;
+  background-size: contain;
   background-position: center;
+  background-repeat: no-repeat;
 }
 /* Bundled playing faces use shared bridge aspect and retain all corner indices. */
 .handcard.playingFace {
@@ -1181,6 +1188,17 @@ a {
   border-radius: 0;
   align-self: center;
   clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%);
+}
+/* The snapshot supplies the tile silhouette; a card-shaped frame or hex clip would
+   cut off its angled sides. Keep the existing card-height and fit the entire image. */
+.handcard.tilePreview {
+  height: calc(var(--card-w) * 62 / 44);
+  max-width: calc(var(--card-w) * 1.6);
+  background-color: transparent;
+  border: 0;
+  border-radius: 0;
+  clip-path: none;
+  box-shadow: none;
 }
 .handcard.txt {
   font: 600 calc(var(--card-w) * 0.15)/1.1 var(--font);

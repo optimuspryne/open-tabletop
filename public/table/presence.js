@@ -1,5 +1,9 @@
 import { createPlacardSettings } from './placard-settings.js';
 import { AVATAR_IMAGE } from '../../shared/avatar.js';
+import { cardGeom } from '../../shared/pieces.js';
+import { handFanCards, isHandTile } from '../../shared/hand-fan.js';
+
+const FAN = { scale: 0.8, step: 0.55, yaw: 0.06, gap: 0.05, maxWidth: 6.6, arc: 0.012 };
 
 // Public player presentation. Room access and cross-feature effects are injected;
 // private hand state, member administration, and general permission gates stay with their owners.
@@ -165,11 +169,24 @@ export function createPresence({
     const out = new THREE.Vector3(...seat.out).normalize();
     const tangent = new THREE.Vector3(out.z, 0, -out.x); // along the table edge
     const yaw = Math.atan2(out.x, out.z);
-    const count = Math.min(player.hand, 12);
     const shown = getRevealed(sid); // cards this player is showing us (face-up)
+    const cards = handFanCards(player, shown);
+    const count = cards.length;
+    const tileFan = cards.some(isHandTile);
+    const halfWidths = cards.map((props, i) => {
+      const { hw, hh } = cardGeom(props);
+      const angle = (i - (count - 1) / 2) * FAN.yaw;
+      return Math.abs(hw * Math.cos(angle)) + Math.abs(hh * Math.sin(angle));
+    });
+    const totalWidth = halfWidths.reduce((sum, width) => sum + 2 * width, 0);
+    const scale = tileFan
+      ? Math.min(FAN.scale, (FAN.maxWidth - Math.max(0, count - 1) * FAN.gap) / totalWidth)
+      : FAN.scale;
+    const span = totalWidth * scale + Math.max(0, count - 1) * FAN.gap;
+    let cursor = -span / 2;
     for (let i = 0; i < count; i++) {
-      // Shown cards fill the leading fan slots face-up; the rest stay face-down,
-      // showing the hand's own back image (public) rather than a generic default.
+      // Authorized shown cards fill leading slots. Remaining slots use only public
+      // shape/materials, concealed models and safe backs or neutral tile covers.
       const card =
         i < shown.length
           ? shown[i].kind === 'notecard'
@@ -180,18 +197,21 @@ export function createPresence({
                 orientation: shown[i].orientation,
               })
             : cardMesh(shown[i])
-          : cardMesh({ back: player.handBack || undefined });
+          : cardMesh(cards[i]);
       card.castShadow = card.receiveShadow = false;
       const offset = i - (count - 1) / 2;
+      const along = tileFan ? cursor + halfWidths[i] * scale : offset * FAN.step;
+      const inward = tileFan ? offset * offset * FAN.arc : 0;
+      cursor += halfWidths[i] * scale * 2 + FAN.gap;
       // Lift each card a hair above the last so overlapping cards layer cleanly
       // instead of z-fighting (coplanar backs share the stripe texture and tear).
       card.position.set(
-        seat.hand[0] + tangent.x * offset * 0.55,
+        seat.hand[0] + tangent.x * along - out.x * inward,
         seat.hand[1] + i * 0.012,
-        seat.hand[2] + tangent.z * offset * 0.55,
+        seat.hand[2] + tangent.z * along - out.z * inward,
       );
-      card.rotation.y = yaw + offset * 0.06; // slight fan
-      card.scale.setScalar(card.userData?.notecard ? 0.4 : 0.8);
+      card.rotation.y = yaw + offset * FAN.yaw; // slight fan; tiles retain their full silhouette
+      card.scale.setScalar(card.userData?.notecard ? 0.4 : scale);
       group.add(card);
     }
   }
@@ -594,6 +614,7 @@ export function createPresence({
       );
       cb(player).listen('showing', () => refreshMarker(sid), false); // redraw the seat badge on show/stop
       cb(player).listen('handBack', () => refreshFan(sid), false); // re-skin the fan backs when the deck's back changes
+      cb(player).listen('handFan', () => refreshFan(sid), false);
     });
     cb(room.state).players.onRemove((player, sid) => {
       onHydration();

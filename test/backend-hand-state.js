@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { appendAccountHand, parkHand, claimHand } from '../server/game/hand-state.js';
+import { appendAccountHand, parkHand, claimHand, sendHand } from '../server/game/hand-state.js';
+import { Player, State } from '../server/game/schema.js';
+import { Encoder, Reflection } from '@colyseus/schema';
 
 test('multiple tabs park every card once and one returning tab reclaims the account inventory', () => {
   const card = { hid: 'h1', front: 'same', back: 'back', open: true };
@@ -45,4 +47,53 @@ test('account aggregation preserves duplicates, metadata, and room-local ownersh
   assert.deepEqual(first.get('7').cards[1], cards[0]);
   assert.equal(cards.length, 1);
   assert.equal(second.get('7').cards.length, 1);
+});
+
+test('live and reclaimed hands publish safe fan metadata while sending content only to the owner', () => {
+  const cards = [
+    {
+      hid: 'SECRET_ID',
+      tile: 'domino',
+      front: 'SECRET_FACE',
+      back: 'domback',
+      dominoAppearance: { base: 0x123456 },
+    },
+    {
+      hid: 'SECRET_ID_2',
+      open: true,
+      front: 'SECRET_FRONT',
+      back: 'SECRET_BACK',
+      geom: { w: 0.5, h: 0.5, t: 0.06 },
+    },
+  ];
+  const state = new State();
+  const player = new Player();
+  state.players.set('owner', player);
+  const sent = [];
+  const client = { sessionId: 'owner', send: (...args) => sent.push(args) };
+  const room = { state, hands: new Map([['owner', cards]]), pendingHands: new Map() };
+  sendHand(room, client);
+  assert.deepEqual(sent, [['hand', cards]]);
+  assert.equal(player.hand, 2);
+  assert.equal(player.handBack, 'domback');
+  assert.equal(
+    JSON.parse(player.handFan).find((group) => group.props.tile === 'domino').props.dominoAppearance
+      .base,
+    0x123456,
+  );
+  assert.ok(!JSON.stringify(state.toJSON()).includes('SECRET'));
+  const encoder = new Encoder(state);
+  const decoder = Reflection.decode(Reflection.encode(encoder));
+  decoder.decode(encoder.encodeAll());
+  assert.equal(decoder.state.players.get('owner').handFan, player.handFan);
+  room.hands.delete('owner');
+  room.pendingHands.set('7', { name: 'Owner', cards });
+  claimHand(room, 7, 'owner');
+  sendHand(room, client);
+  assert.deepEqual(sent.at(-1), ['hand', cards]);
+  room.hands.set('owner', []);
+  sendHand(room, client);
+  assert.equal(player.hand, 0);
+  assert.equal(player.handBack, '');
+  assert.equal(player.handFan, '');
 });

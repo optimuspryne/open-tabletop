@@ -114,7 +114,7 @@ import {
 } from './server/http/routes/asset-textures.js';
 import { createAdminRouter } from './server/http/routes/admin.js';
 import { cardBackRef, cardFrontRef } from './server/deck-state.js';
-import { parkHand, claimHand } from './server/game/hand-state.js';
+import { parkHand, claimHand, sendHand as sendPrivateHand } from './server/game/hand-state.js';
 import { registerPlacementHandlers } from './server/game/handlers/placement.js';
 import { MAX_PIECES } from './server/game/piece-capacity.js';
 import { registerCardHandlers } from './server/game/handlers/cards.js';
@@ -800,16 +800,10 @@ class TableRoom extends Room {
     return recolorRoomPiece(this, id, opts); // synced → every client rebuilds the piece
   }
 
-  // Send a player their private hand, and publish only its COUNT to everyone
-  // else (so others can draw the right-sized fan without seeing the cards).
+  // Send content only to its owner; publish count/back and unordered shape/material
+  // groups so everyone can render a concealed fan without seeing private faces.
   sendHand(client) {
-    const hand = this.hands.get(client.sessionId) || [];
-    const player = this.state.players.get(client.sessionId);
-    if (player) {
-      player.hand = hand.length; // public count only
-      player.handBack = hand.length ? (hand[0].open ? 'back' : hand[0].back || '') : ''; // public back image; a double-sided card shows a generic cover (its faces are public elsewhere)
-    }
-    client.send('hand', hand); // private contents, to this client alone
+    sendPrivateHand(this, client);
   }
 
   clientBy(sid) {
