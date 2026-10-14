@@ -91,7 +91,7 @@ async function waitForVisualAssets() {
 // --- Graphics quality tiers (docs/ROADMAP.md §1/§12) -----------------------
 // The tablet frame is fill-rate bound (pixel ratio × per-fragment shading, incl. soft-shadow
 // sampling), not draw bound, so quality is four fill-rate presets. Active tier resolves as:
-//   ?q=<tier>  >  localStorage 'tabletop.quality'  >  device default (coarse pointer → medium).
+//   ?q=<tier>  >  localStorage 'tabletop.quality'  >  device default (phone low, tablet medium, desktop high).
 // Per-axis dev knobs (?px, ?shadow, ?shadowtype, ?aa) override individual settings on top, for
 // A/B. setQuality() (exported, and window.setQuality) switches live; antialias is fixed at context
 // creation, so a tier change only re-applies AA on the next load.
@@ -177,8 +177,8 @@ renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(_q0.px);
 renderer.shadowMap.enabled = _q0.shadowsOn;
 renderer.shadowMap.type = SHADOW_TYPES[_q0.shadowType];
-// Only redraw the shadow map when scene geometry actually moved — the render loop (client.js
-// animate) sets needsUpdate on frames where a mesh changed. At rest, orbiting the camera no
+// Redraw shadows when piece transforms, geometry or visibility change; client.js retains the
+// previous frame's state and respects explicit lighting/quality refreshes. Orbiting the camera no
 // longer repays the shadow pass every frame.
 renderer.shadowMap.autoUpdate = false;
 renderer.shadowMap.needsUpdate = true; // draw it once at startup

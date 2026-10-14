@@ -105,6 +105,7 @@ export function decomposeOutline(outline) {
         b = remaining[i],
         c = remaining[(i + 1) % remaining.length];
       if (cross(points[a], points[b], points[c]) <= EPS) continue;
+      // An ear must contain no other remaining vertex, including points on its boundary.
       if (
         remaining.some(
           (j) =>
@@ -133,6 +134,7 @@ export function decomposeOutline(outline) {
         const edges = [pieces[i], pieces[j]].flatMap((ids) =>
           ids.map((id, k) => [id, ids[(k + 1) % ids.length]]),
         );
+        // Cancel opposite shared edges, then retain the merge only if its outer loop is convex.
         const boundary = edges.filter(([a, b]) => !edges.some(([c, d]) => a === d && b === c));
         if (boundary.length !== edges.length - 2) continue;
         const ids = [boundary[0][0]];

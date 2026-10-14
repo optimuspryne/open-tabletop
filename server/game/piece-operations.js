@@ -1,6 +1,6 @@
 import {
   PROPS,
-  colorProps,
+  applyAppearancePatch,
   dispenserDefinition,
   tileAppearanceOf,
   tileAppearanceProps,
@@ -45,7 +45,7 @@ export function recolorPiece(room, id, opts = {}) {
   if (!piece) return false;
   const props = readProps(piece);
   const dispDef = piece.type === 'dispenser' ? dispenserDefinition(props) : null;
-  const next = colorProps(piece.type, props, opts, dispDef);
+  const next = applyAppearancePatch(piece.type, props, opts, dispDef);
   if (!next) return false;
   const patch = opts.tileAppearance ?? opts.dominoAppearance;
   const family = tileModelFamily(props);

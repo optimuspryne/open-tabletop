@@ -7,7 +7,7 @@ import {
   dominoModel,
   dominoAppearanceOf,
   normalizeDominoAppearance,
-  colorProps,
+  applyAppearancePatch,
 } from '../shared/pieces.js';
 import { createTileRenderer } from '../public/rendering/tiles.js';
 import {
@@ -48,7 +48,7 @@ test('public model selection never loads an identifying face for a concealed dom
 
 test('appearance patches reject invalid values and preserve the independently chosen inset', () => {
   const props = { tile: 'domino', dominoAppearance: { inset: 0x123456, finish: 'glossy' } };
-  const next = colorProps('card', props, { dominoAppearance: { base: 0 } });
+  const next = applyAppearancePatch('card', props, { dominoAppearance: { base: 0 } });
   assert.deepEqual(next.dominoAppearance, { base: 0, inset: 0x123456, finish: 'glossy' });
   assert.deepEqual(props.dominoAppearance, { inset: 0x123456, finish: 'glossy' });
   for (const patch of [
@@ -60,8 +60,11 @@ test('appearance patches reject invalid values and preserve the independently ch
     null,
   ])
     assert.equal(normalizeDominoAppearance(patch), null);
-  assert.equal(colorProps('card', {}, { dominoAppearance: { base: 0 } }), null);
-  assert.equal(colorProps('card', props, { color: 0, dominoAppearance: { base: 0 } }), null);
+  assert.equal(applyAppearancePatch('card', {}, { dominoAppearance: { base: 0 } }), null);
+  assert.equal(
+    applyAppearancePatch('card', props, { color: 0, dominoAppearance: { base: 0 } }),
+    null,
+  );
   assert.equal(groupRecolor({ ids: ['1'], dominoAppearance: { finish: 'custom' } }), null);
   assert.deepEqual(groupRecolor({ ids: ['1'], dominoAppearance: { inset: 0 } }), {
     ids: ['1'],

@@ -970,33 +970,15 @@ const effects = createTableEffects({
   playSfx,
 });
 
+// Retain each piece's shadow state between frames; camera movement does not invalidate it.
+const shadowSeen = new Map();
 (function animate() {
-  // shadow-on-demand: last frame's caster-transform key, in an object so the cross-frame write
-  // (updated at the end of each rAF tick) isn't flagged dead by no-useless-assignment. See core.js.
-  const shadowSeen = { key: NaN };
   const renderTime = performance.now() - DELAY;
-  let shadowKey = 0;
   for (const [id, { mesh }] of meshes) {
     const buf = buffers.get(id);
     if (buf) sample(buf, renderTime, mesh);
     effects.applyAnim(id, mesh);
     colliderDebug.update(id, mesh);
-    // Fold each caster's live transform into a frame key; a change means geometry moved and the
-    // shadow map needs one redraw (renderer.shadowMap.autoUpdate is off — see core.js).
-    const mp = mesh.position,
-      mq = mesh.quaternion,
-      ms = mesh.scale;
-    shadowKey +=
-      mp.x +
-      mp.y * 1.7 +
-      mp.z * 2.3 +
-      mq.x * 3.1 +
-      mq.y * 4.7 +
-      mq.z * 5.9 +
-      mq.w * 7.3 +
-      ms.x * 11 +
-      ms.y * 13 +
-      ms.z * 17;
   }
   overlays.syncSurface(); // GLB boards can finish loading after restored overlays arrive
   fog.sync();
@@ -1020,9 +1002,39 @@ const effects = createTableEffects({
     camera.position.add(leanOffset); // apply the lean for this frame's render
   }
   pieceUi.updateHoldControls();
-  if (shadowKey !== shadowSeen.key) {
-    renderer.shadowMap.needsUpdate = true; // geometry moved this frame → refresh shadows
-    shadowSeen.key = shadowKey;
+  // Sample after visibility updates. Child identities/geometry catch async model loads and
+  // replacements at unchanged transforms; separate piece keys prevent opposing moves cancelling.
+  for (const [id, { mesh }] of meshes) {
+    const state = [];
+    mesh.traverse((node) => {
+      state.push(
+        node.id,
+        node.visible,
+        node.castShadow,
+        node.geometry?.id ?? '',
+        node.position.x,
+        node.position.y,
+        node.position.z,
+        node.quaternion.x,
+        node.quaternion.y,
+        node.quaternion.z,
+        node.quaternion.w,
+        node.scale.x,
+        node.scale.y,
+        node.scale.z,
+      );
+    });
+    const key = state.join(',');
+    if (key !== shadowSeen.get(id)) {
+      renderer.shadowMap.needsUpdate = true;
+      shadowSeen.set(id, key);
+    }
+  }
+  for (const id of shadowSeen.keys()) {
+    if (!meshes.has(id)) {
+      renderer.shadowMap.needsUpdate = true;
+      shadowSeen.delete(id);
+    }
   }
   renderer.render(scene, camera);
   perf.frame(renderer); // sample renderer.info for the overlay (no-op when disabled)

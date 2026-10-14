@@ -20,6 +20,27 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   `website/` directory, including `showcase.js`, then refresh; no game server
   restart, database migration or dependency change is needed.
 
+### Changed
+- Clarified appearance and dice geometry names: `colorProps` becomes
+  `applyAppearancePatch`, `dieR` becomes `dieGeometrySize`, and `DIE_RADIUS` becomes
+  `DIE_BASE_SIZE`, with production callers, tests and current documentation updated.
+  The library controller's `lib2` variable is now `libraryModal`; DOM IDs/classes,
+  layout, saved props and tuned dice dimensions remain unchanged.
+- Corrected stale library, recoloring, CSP and graphics-default comments; moved
+  serialization, transform-copy, simulation and dice-spawn explanations beside their
+  implementations. Documented persistence privacy, fog-mask bit layout and polygon
+  decomposition stages, and removed obsolete planning references from reviewed comments.
+
+### Fixed
+- Shadow state now persists between animation frames. Stationary scenes reuse the
+  shadow map while movement, visibility changes, piece additions/removals/replacements
+  and late model geometry refresh it. Per-piece comparisons prevent opposing movements
+  cancelling; explicit lighting, quality and context-restoration refreshes still work.
+  Regression tests execute the production frame loop. The user confirmed in-app functionality
+  after these changes; real-device GPU performance remains unmeasured. Restart the server
+  for renamed server imports and refresh clients; no database migration or dependency
+  change is needed.
+
 ## [0.22.0] — 2026-10-14
 
 ### Added

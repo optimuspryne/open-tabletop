@@ -32,7 +32,7 @@ import {
   HEX_HH,
   cardGeom,
   dieVerts,
-  dieR,
+  dieGeometrySize,
   DIE_GLYPH,
   BOARDS,
   BOARD_SIZE,
@@ -1428,7 +1428,11 @@ function pippedDiePainter(color, textColor, finish = 'matte') {
   };
 }
 function pippedDieMesh(url, color, textColor, finish) {
-  return loadModelGroup(url, { target: dieR(6) * 2 }, pippedDiePainter(color, textColor, finish));
+  return loadModelGroup(
+    url,
+    { target: dieGeometrySize(6) * 2 },
+    pippedDiePainter(color, textColor, finish),
+  );
 }
 
 // uses the special vertex-numbered build; everything else is a convex polyhedron.
@@ -1446,7 +1450,7 @@ function dieMesh(props = {}) {
   if (sides === 6) {
     const faceOrder = [1, 6, 2, 5, 3, 4]; // opposite faces sum to 7
     return new THREE.Mesh(
-      new THREE.BoxGeometry(dieR(6) * 2, dieR(6) * 2, dieR(6) * 2),
+      new THREE.BoxGeometry(dieGeometrySize(6) * 2, dieGeometrySize(6) * 2, dieGeometrySize(6) * 2),
       faceOrder.map((n) => dieFaceMaterial(n, props.color, props.textColor, finish, finishImg)),
     );
   }

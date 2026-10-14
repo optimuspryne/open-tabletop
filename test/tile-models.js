@@ -7,7 +7,7 @@ import {
   tileModelFamily,
   tileAppearanceOf,
   tileAppearanceProps,
-  colorProps,
+  applyAppearancePatch,
   cardGeom,
 } from '../shared/pieces.js';
 import { createTileRenderer } from '../public/rendering/tiles.js';
@@ -77,7 +77,7 @@ test('generic appearance respects family defaults, private overrides and neutral
 test('generic recolor messages preserve legacy domino storage and reject ambiguous patches', () => {
   const props = { tile: 'domino', dominoAppearance: { inset: 3, finish: 'glossy' } };
   const patch = { tileAppearance: { base: 2 } };
-  assert.deepEqual(colorProps('card', props, patch).dominoAppearance, {
+  assert.deepEqual(applyAppearancePatch('card', props, patch).dominoAppearance, {
     base: 2,
     inset: 3,
     finish: 'glossy',
@@ -91,10 +91,10 @@ test('generic recolor messages preserve legacy domino storage and reject ambiguo
     { tileAppearance: {} },
     { ...patch, color: 1 },
   ]) {
-    assert.equal(colorProps('card', props, bad), null);
+    assert.equal(applyAppearancePatch('card', props, bad), null);
     assert.equal(groupRecolor({ ids: ['1'], ...bad }), null);
   }
-  assert.equal(colorProps('card', { tile: 'fixture' }, patch), null); // an unregistered family cannot be recolored
+  assert.equal(applyAppearancePatch('card', { tile: 'fixture' }, patch), null); // an unregistered family cannot be recolored
 });
 
 test('generic private entry metadata survives draw, inspection return and snapshots', () => {

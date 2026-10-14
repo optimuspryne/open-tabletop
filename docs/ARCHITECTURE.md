@@ -357,7 +357,7 @@ importing a room singleton:
   calibrated state drives server snapping, browser previews and persistence; no new schema is needed.
 - **`server/game/piece-operations.js`** — authoritative recoloring and self-righting policy.
   It resolves effective and natural stand modes from synchronized props and shared piece
-  definitions, and applies validated color/team/material `colorProps` results through the
+  definitions, and applies validated color/team/material `applyAppearancePatch` results through the
   piece-props codec. Bundled and uploaded model props, modeled dispensers/stacks, and pipped dice
   use the shared standard-finish allowlist; dice-only custom textures cannot enter the model-object
   override path.
@@ -802,8 +802,14 @@ the per-tick `world.step` time and the awake-body count that drives it. So the r
 (graphics-quality tiers) and the simulation lever are aimed at genuinely different bottlenecks,
 and each is profiled on real hardware, not in the headless suites. A first pass found the client
 frame **fill-rate bound, not draw bound** (FPS flat as draw calls rose), so the shadow map now
-redraws only on frames where scene geometry moved (`shadowMap.autoUpdate = false`, driven from the
-render loop), and `?px` / `?shadow` / `?aa` expose pixel ratio, shadow size, and antialias for
+uses `shadowMap.autoUpdate = false` with persistent per-piece state in the render loop.
+After interpolation, animation and visibility updates, exact hierarchy/geometry identities and
+local transforms detect motion, hidden/visible changes, mesh replacement, removal and late model
+loads. Per-piece comparisons avoid cancellation between opposing moves; removed cache entries
+are discarded. Camera orbit reuses the map, while lighting/quality/context-restoration requests
+still explicitly refresh it. `test/render-loop.js` exercises the production loop through stubbed
+renderer/controller adapters; it does not measure real GPU cost.
+The `?px` / `?shadow` / `?aa` knobs expose pixel ratio, shadow size, and antialias for
 tuning on the target device.
 That tuning is now a shipped, client-local **quality tier** (low/medium/high/ultra-high, persisted per device,
 defaulting to Low on phones, Medium on tablets, and High on desktops) in Settings → UI.

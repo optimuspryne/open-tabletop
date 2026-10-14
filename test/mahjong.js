@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { TILE_MODELS, MAHJONG, tileModel, cardPublicProps, colorProps } from '../shared/pieces.js';
+import {
+  TILE_MODELS,
+  MAHJONG,
+  tileModel,
+  cardPublicProps,
+  applyAppearancePatch,
+} from '../shared/pieces.js';
 import { createDeckBuilders } from '../server/game/deck-builders.js';
 import { validateGlb } from '../server/assets/upload-validation.js';
 import { absorbedEntry, takeTopCard, inspectedEntry } from '../server/deck-state.js';
@@ -79,10 +85,13 @@ test('Mahjong colors survive hands and returns; recoloring only changes remainin
   assert.deepEqual(geo, { tile: 'mahjong', tileAppearance });
   assert.deepEqual(inspectedEntry({ front: draw.front, geo }), entry);
   assert.deepEqual(JSON.parse(JSON.stringify(entry)), entry);
-  assert.deepEqual(colorProps('card', geo, { tileAppearance: { inset: 1 } }).tileAppearance, {
-    ...tileAppearance,
-    inset: 1,
-  });
+  assert.deepEqual(
+    applyAppearancePatch('card', geo, { tileAppearance: { inset: 1 } }).tileAppearance,
+    {
+      ...tileAppearance,
+      inset: 1,
+    },
+  );
   const cards = [{ ...entry, tileAppearance: { ...tileAppearance } }, front];
   const piece = { type: 'deck', props: JSON.stringify({ tile: 'mahjong', color: '#456789' }) };
   const room = { state: { pieces: new Map([['1', piece]]) }, deckCards: new Map([['1', cards]]) };

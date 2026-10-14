@@ -210,6 +210,8 @@ for validation status and remaining manual smoke tests.
 - `shared/map-fog.js`: `MAP_FOG` constants, `fogBoardSize`, `emptyFog`, `parseFog`/`normalizeFog`,
   `encodeFogMask`/`decodeFogMask`, `normalizeFogStroke` and `paintFog`. Resolution is 256×256 bits
   (8 KiB, 10,924 base64 characters), with a 256-point stroke cap and world-radius range 0.01–256.
+  Cell index is `z * resolution + x`, packed least-significant bit first in each byte;
+  `1` means covered and `0` revealed, so an unexplored mask starts with bytes of `255`.
   Circle distances account for both board dimensions; segments are filled without gaps.
 - `Piece.fog` appends a string to the reflected schema. Empty/absent means disabled, fully covered
   when first enabled. Nonempty JSON is `{v:1, enabled:boolean, revision:integer, thickness:number, mask:base64}`.
@@ -412,7 +414,7 @@ classDiagram
         +PROPS {shape → mass, collider, render|model, team, tint...}
         +PROP_LIST[] {id, name, team}
         +BOARDS {key → model, modelScale, box}
-        +DECK_VISUAL / CARD_ROUND / DIE_RADIUS / DIE_SIDES / BOARD_SIZE
+        +DECK_VISUAL / CARD_ROUND / DIE_BASE_SIZE / DIE_SIDES / BOARD_SIZE
         +deckHeight(count) / dieVerts(sides, r) / timerLive(t, now)
     }
     class SharedLighting["shared/lighting.js"] {
@@ -820,7 +822,9 @@ chess}` each `[color0, color1]`.
   fallbacks. Tile mappings take precedence over container tints for the same slot and are
   ignored without a registered tile family. The Domino starter uses `dominoes_box`, whose
   `dominoBase` slot follows Base; letter and Mahjong inventories retain the `bag` skin.
-- **`DIE_RADIUS`** `{ sides → r }`, **`DIE_SIDES`** `[4,6,8,10,12,20]`.
+- **`DIE_BASE_SIZE`** `{ sides → size }` stores a d6 half-edge or polyhedral circumradius;
+  **`dieGeometrySize(sides)`** multiplies it by `DIE_SCALE` for shared rendering/physics geometry.
+  Tuned values and geometry-specific units are unchanged. **`DIE_SIDES`** `[4,6,8,10,12,20]`.
 - **`DICE_MODELS`** / **`DICE_MODEL_KEYS`** — built-in pipped d6 GLB visuals. They retain normal d6
   physics/value behavior, color the `Ivory` body and `Dots` pips independently, and accept every
   standard dice finish except the image-backed `custom` finish.
@@ -866,7 +870,7 @@ chess}` each `[color0, color1]`.
 - **`objectFinish(spec, override?) → string`** — resolve an object's effective material.
   A valid per-instance override wins, followed by `metal`/`metallic` and the definition's finish
   flag; absent or null definitions resolve safely to `matte`.
-- **`colorProps(type, props, change, dispDef?) → object | null`** — validate and immutably apply
+- **`applyAppearancePatch(type, props, change, dispDef?) → object | null`** — validate and immutably apply
   synchronized appearance changes. Bundled and uploaded model props plus modeled dispensers/stacks
   accept material-only `finish` changes from `OBJECT_FINISH_KEYS`; pipped dice accept the standard
   dice subset. Dice-only `custom`, pipped-die custom textures, and object finish textures are rejected.
@@ -1470,7 +1474,7 @@ For a valid fitting kit it calls `room.clearTable()` before creating anything, t
 - `mahjong` / `mahjong-bonus` create 136/144 concealed independent tiles through the
   injected `spawnMahjongWall`, with no automatic dealing or pouch;
 - both Mahjong entries spawn two `sides:6, model:'pip-round'` dice at x ±0.75, z 0,
-  upright just above the shared D6 collider rest height (`dieR(6) + 0.03`).
+  upright just above the shared D6 collider rest height (`dieGeometrySize(6) + 0.03`).
 
 `STARTERS` shares the `MAHJONG_STARTER_DICE` configuration between both variants.
 `STARTER_LIST` exposes Mahjong (136 tiles) / Mahjong (144 tiles); `renderBuiltin` gives
@@ -1628,7 +1632,8 @@ already scans. No separate public recovery queue is synchronized to clients.
 
 ### `server/game/scene-persistence.js` — snapshots and restoration
 
-- **`serializeScene(room, {includeLighting = false})`** — creates the portable public snapshot:
+- **`serializeScene(room, {includeLighting = false})`** — creates a portable persistence snapshot,
+  containing concealed content rather than a public room-state projection:
   table size, pieces and transforms, exact deck order, protected face-down card
   fronts, finite-dispenser inventory counts, overlays, measurement/grid scale, and
   enabled tray seats. When requested by the scene-save dialog, it also embeds a normalized
@@ -1874,7 +1879,7 @@ Piece-policy methods are thin facades over `server/game/piece-operations.js`:
 **`standOf(piece)`** honors a synchronized per-instance override before the shared shape default,
 **`naturalStand(piece)`** selects the declared or collider-derived mode used when self-righting is
 enabled, and **`recolorPiece(id, options)`** validates color, team, and material-finish changes
-through shared `colorProps` before writing the resulting props through the synchronized JSON
+through shared `applyAppearancePatch` before writing the resulting props through the synchronized JSON
 codec. Single and group handlers retain the existing `TableRoom` API, as does the physics update
 loop.
 
@@ -2521,9 +2526,14 @@ quiet for a full frame), and
   table-scaled seat pose comes from `public/table/presence.js`'s `VIEW`; its default `zoom` is 0.65.
 - **`LIGHTING`** — `hemi` / `sun` / `env` (three numbers); `dimEnvironment`
   scales the baked `RoomEnvironment` for the env-map strength.
-- **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off; the render loop sets
-  `needsUpdate` only on frames where a caster's transform changed, so a static table (even while
-  the camera orbits) doesn't repay the 4096² soft-shadow pass every frame.
+- **Shadow-on-demand.** `renderer.shadowMap.autoUpdate` is off. The render loop retains a
+  per-piece signature of hierarchy/geometry identities, visibility, shadow casting and local
+  transforms between frames, sampled after interpolation, animation and visibility updates.
+  Movement, piece addition/removal/replacement and late model children refresh shadows; opposing
+  moves cannot cancel one another. Removed entries are pruned. Camera orbit alone reuses the map;
+  explicit lighting, quality, startup and WebGL-restoration refresh requests remain effective.
+  `test/render-loop.js` executes the production loop with renderer/controller adapters to cover
+  these invalidation paths; real GPU performance still needs device testing.
 - **Graphics quality tiers** (docs/ROADMAP.md §1/§12): the tablet frame is fill-rate bound, so
   quality is four presets — `low` (px 1, soft shadows @1024, no AA), `medium` (px ≤1.5, soft @2048,
   AA), `high` (px 2, soft PCF @4096, AA), `ultra-high` (px 4, soft PCF @4096, AA).
@@ -2665,7 +2675,7 @@ quiet for a full frame), and
   Base/Inset/finish partial-patch validation, family defaults and appearance-only transfer
   metadata. `tileAppearanceProps(props, entry?, {includeDefaults})` captures an unstyled
   tile's default appearance when it joins a styled deck. `tileAppearance` patches in
-  `colorProps`, `recolor` and `recolorGroup` work on registered tile cards/decks and cannot
+  `applyAppearancePatch`, `recolor` and `recolorGroup` work on registered tile cards/decks and cannot
   mix with object/dice color fields. Each family chooses its persisted property; Domino
   retains `dominoAppearance` for save compatibility, and its legacy message/API aliases
   remain supported. New families use `tileAppearance`.

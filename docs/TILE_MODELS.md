@@ -127,7 +127,7 @@ retain their styles. Generic messages use `tileAppearance`; Domino retains the s
 | File | Change |
 | --- | --- |
 | `shared/tile-models.js` | Adds immutable `TILE_MODELS`, `tileModelFamily` and `tileModel`; owns family mappings, concealed model, material slots and defaults. |
-| `shared/pieces.js` | Adds `normalizeTileAppearance`, `tileAppearanceOf`, `tileAppearanceProps`; generalizes `cardPublicProps` and `colorProps`, reexports registry helpers and retains domino compatibility aliases. Preserves tuned dimensions and corrects their comment. |
+| `shared/pieces.js` | Adds `normalizeTileAppearance`, `tileAppearanceOf`, `tileAppearanceProps`; generalizes `cardPublicProps` and `applyAppearancePatch`, reexports registry helpers and retains domino compatibility aliases. Preserves tuned dimensions and corrects their comment. |
 | `public/rendering/tiles.js` | Replaces `dominoes.js` with `createTileRenderer`; generic load readiness/event, shared template geometry, owned painting, fitting and fallback/disposal. |
 | `public/rendering/graphics.js` | Dispatches `cardMesh` through the shared renderer, paints configured material names, replaces `dominoPreviewURL` with `tilePreviewURL`, includes family/orientation in cache keys and derives thumbnail aspect from geometry. |
 | `public/ui/tile-appearance.js` | Replaces `domino-appearance.js` with `createTileAppearanceControls`; uses family defaults/names while retaining approved DOM/CSS layout. |

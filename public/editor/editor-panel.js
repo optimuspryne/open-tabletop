@@ -151,7 +151,7 @@ const btn = (label, fn, cls) => {
   return button;
 };
 
-// ---- badges (UI_Redesign 7c slice 1) --------------------------------------
+// ---- Asset source and visibility badges --------------------------------------
 // Two facts about an asset, in reading order: where it came from, then who can see it.
 // Built-ins are always public and can't be curated, so they carry the source badge only.
 const badgeEl = (cls, text) => {
@@ -506,7 +506,7 @@ function countStepper(def, max, min = 1, label = 'Amount') {
   return wrap;
 }
 // One spawnable card: preview + title + quantity + optional color + Spawn.
-// send(colorProps) fires a single spawn; the card supplies quantity + color.
+// send(appearanceProps) fires a single spawn; the card supplies quantity and color.
 // color: 'palette' | 'team' | 'own' | 'none'. li._spawn() is used for batch spawn.
 function spawnCard({
   preview,
@@ -578,7 +578,7 @@ function spawnCard({
     ctrls.append(stack); // dispenser stack size
   else if (infinite) {
     // An unlimited dispenser has no Amount — say so rather than leaving a gap where
-    // every sibling card has a control (UI_Redesign 7c slice 4).
+    // every sibling card has a control.
     const inf = document.createElement('span');
     inf.className = 'infiniteNote';
     inf.innerHTML = '∞ <span class="lbl">unlimited</span>';
@@ -588,8 +588,7 @@ function spawnCard({
   let getColor = () => null,
     getTeam = () => null;
   // The swatch run is wrapped in a pop-group: inline on desktop, behind a trigger on
-  // small/touch screens (CSS decides which). Before this it was display:none in short
-  // landscape, so color choice was simply unavailable there.
+  // small/touch screens (CSS decides which).
   const popWrap = (row) => {
     const group = document.createElement('div');
     group.className = 'pop-group swatchPop';
@@ -2667,49 +2666,47 @@ window.onOttRoom = (room, { toast = () => {} } = {}) => {
     room.send('listSkyboxes');
     room.send('listDice');
   };
-  // Old #libraryPanel + #builtinModal removed — one combined #libraryModal below.
-
-  // Combined Library modal (parallel test alongside the two old ones).
-  const lib2 = byId('libraryModal');
-  if (lib2) {
+  // Combined library: custom assets and built-ins share source filtering and selection controls.
+  const libraryModal = byId('libraryModal');
+  if (libraryModal) {
     byId('lib2Btn').onclick = () => {
-      lib2.hidden = !lib2.hidden;
-      if (!lib2.hidden) {
+      libraryModal.hidden = !libraryModal.hidden;
+      if (!libraryModal.hidden) {
         renderLibrary();
         refresh();
       }
     };
     byId('lib2Close').onclick = () => {
-      lib2.hidden = true;
+      libraryModal.hidden = true;
     };
-    wireTabs(lib2);
-    wireControls(lib2);
-    lib2.querySelectorAll('#lib2Source .chip').forEach(
+    wireTabs(libraryModal);
+    wireControls(libraryModal);
+    libraryModal.querySelectorAll('#lib2Source .chip').forEach(
       (c) =>
         (c.onclick = () => {
-          lib2.querySelectorAll('#lib2Source .chip').forEach((x) => {
+          libraryModal.querySelectorAll('#lib2Source .chip').forEach((x) => {
             x.classList.toggle('on', x === c);
             x.setAttribute('aria-pressed', String(x === c));
           });
-          lib2.classList.remove('src-all', 'src-custom', 'src-builtin');
-          lib2.classList.add('src-' + c.dataset.src);
-          if (lib2._resetSelect) lib2._resetSelect(); // select mode may span lists that just hid
-          if (lib2._applySearch) lib2._applySearch(); // re-filter the now-visible list(s)
+          libraryModal.classList.remove('src-all', 'src-custom', 'src-builtin');
+          libraryModal.classList.add('src-' + c.dataset.src);
+          if (libraryModal._resetSelect) libraryModal._resetSelect(); // select mode may span lists that just hid
+          if (libraryModal._applySearch) libraryModal._applySearch(); // re-filter the now-visible list(s)
         }),
     );
-    lib2.classList.add('src-all');
+    libraryModal.classList.add('src-all');
     // Room Controls → Load a Scene: open the library straight to the Scenes tab.
     const roomScene = byId('roomScene');
     if (roomScene)
       roomScene.onclick = () => {
         const rg = byId('roomGrp');
         if (rg) rg.hidden = true;
-        lib2.hidden = false;
+        libraryModal.hidden = false;
         renderLibrary();
         refresh();
-        const t = lib2.querySelector('.libTab[data-tab="games"]');
+        const t = libraryModal.querySelector('.libTab[data-tab="games"]');
         if (t) t.click();
-        const scenes = lib2.querySelector('[data-pane="scenes"]');
+        const scenes = libraryModal.querySelector('[data-pane="scenes"]');
         scenes.open = true;
         scenes.scrollIntoView({ block: 'nearest' });
       };

@@ -275,7 +275,7 @@ implementation sequence without making the entire backlog a fixed priority queue
      (editor → Add to Library → Dice Textures → `/upload?kind=dice`) into the reusable
      `custom_dice` library (migration 012, mirrors `custom_skyboxes`; host-only `saveDice`,
      public `listDice`). A die wears it via `finish:'custom'` + `finishImg` (a local
-     `/assets/dice/` URL), synced on spawn/recolor and validated by `colorProps`/`dieSpawnProps`.
+     `/assets/dice/` URL), synced on spawn/recolor and validated by `applyAppearancePatch`/`dieSpawnProps`.
      Rendered as a triplanar map (async per-face composite on the d6), phone-safe (plain map, not
      in the fallback set). Applied from a dedicated **Custom** picker (sparkle) in the inspector
      and dice box; per-player default carries the texture. Phone fallbacks for GPU-heavy finishes
