@@ -111,7 +111,10 @@ for migration roles, source dependencies, SMTP forwarding and outstanding accept
 
 The public marketing website and wiki are a separate static surface in `website/`.
 They use plain HTML, one shared stylesheet, the existing app logo for header/footer branding,
-and derivatives of existing project artwork.
+and derivatives of existing project artwork. The homepage progressively enhances its static
+chess figure with the local `showcase.js` module; wiki pages remain script-free. Its meta CSP
+allows scripts only from the site's own origin, without inline code or external dependencies.
+The game application's CSP is unchanged.
 They do not connect to the room server, authentication, database, or asset-upload endpoints.
 The website can be served from its own document root or subdirectory without changing the
 game application's routes, CSP, build-free client, or deployment requirements. Wiki content
@@ -120,10 +123,15 @@ renderer or automatic synchronization. See [website maintenance](../website/READ
 [2026-09-29 wiki audit](../website/WIKI_AUDIT.md) for page-level evidence and limits.
 The audit separates room snapshots, scene templates, durable room settings and transient
 notebooks/chat/whiteboard state, without changing those persistence boundaries.
-Original gameplay captures in `website/assets/showcase/` are static assets from dedicated
-local rooms. The approved landing layout uses a chess hero and responsive cards/dice gallery;
-the Assets and scenes guide includes the library capture. These images do not connect the
-website to the app. See the capture README for provenance and attribution.
+The original four gameplay captures in `website/assets/showcase/` came from dedicated
+local rooms. Four additional approved Go, Dominoes, Mahjong and Wordy mockups use the
+production renderer and bundled models in isolated staged scenes, without a multiplayer
+connection. The landing hero cycles through seven images; the cards/dice gallery and wiki
+library capture retain their placement. Playback, selection and motion preferences are local
+website state. Images decode before display; failed loads retain the current image and stop
+playback. Manual navigation stops playback, focus/hover/hidden tabs suspend it, and reduced
+motion starts paused. A static chess figure remains when scripts are unavailable. These images
+do not connect the website to the app. See the capture README for provenance and attribution.
 
 ## Two worlds, kept apart
 

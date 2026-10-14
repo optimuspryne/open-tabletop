@@ -85,18 +85,28 @@ workstream; consult that branch for current implementation and rollout status.
 
 ### Public website
 
-- `website/index.html`, `website/styles.css`, and `website/assets/` provide the standalone
+- `website/index.html`, `website/styles.css`, `website/showcase.js`, and `website/assets/` provide the standalone
   landing page, approved shared website tokens, and existing logo artwork. Header/footer
   branding uses an unchanged copy of `public/logo-wordmark.svg`.
-- `website/assets/showcase/` holds four original browser screenshots and a capture/placement
-  record. The landing hero/gallery and Assets and scenes guide reference these images.
+- `website/assets/showcase/` holds four original browser screenshots, four approved staged
+  renderer mockups, and a capture/placement record. The hero has seven slides; the original
+  cards/dice gallery and Assets and scenes library image remain in place.
+- `website/showcase.js` adds `initShowcase` and its local `schedule`/`show` closures. It uses
+  the homepage's slide metadata and two image layers, decoding before swapping. The six-second
+  loop supports manual navigation, pause/play, hover/focus/visibility suspension, reduced motion,
+  failed-image recovery and a no-script chess fallback. It imports no game modules.
+- `scripts/build-icons.mjs --website` reuses `fetchSymbol` and the existing sprite writer for
+  the four approved Tabler controls, without including the full app sprite. Regenerate with
+  `npm run build:icons -- --website`; deploy the generated homepage with the local script.
 - `website/wiki/*.html` are 17 independently addressable guides. Each includes desktop and
   mobile navigation, a skip link, metadata, source-document links, and adjacent-guide links.
   The mobile contents list is native `details`/`summary`; no production JavaScript is added.
-- `test/website.js` checks links, fragments, assets, metadata, and the inactive demo in
+- `test/website.js` checks links, fragments, assets, metadata, the approved slides and live demo in
   `npm run check`. `scripts/website-test.mjs` is the `npm run test:website` entry point and
   reuses `serveDir`, `launch`, and `newPage` from the existing browser harness for responsive
-  and keyboard checks. No application helpers or routes were added or changed.
+  and keyboard checks. `checkShowcase` exercises the production carousel with a controlled
+  clock, including all image decodes, wraparound, rapid navigation, keyboard, playback suspension,
+  failed loads, reduced motion and no-script fallback. No game helpers or routes changed.
 - [Website maintenance](../website/README.md) lists every page, source documentation,
   local preview instructions, hosting boundary, and manual acceptance checks.
 

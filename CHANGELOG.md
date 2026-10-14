@@ -8,6 +8,18 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Added
+- The public website's hero cycles through Chess, Card games, Dice, Go, Dominoes,
+  Mahjong and Wordy every six seconds, with the approved crossfade, game selectors,
+  previous/next and pause/play controls. Manual selection stops playback; hover,
+  keyboard focus and hidden tabs suspend it. Reduced motion starts paused and
+  disables fades. Chess remains readable without JavaScript or if another image
+  fails to load. The four new approved images are staged captures of bundled
+  models rendered by the app, rather than saved multiplayer games. Existing
+  screenshot originals and chess attribution are retained. Publish the updated
+  `website/` directory, including `showcase.js`, then refresh; no game server
+  restart, database migration or dependency change is needed.
+
 ## [0.22.0] — 2026-10-14
 
 ### Added

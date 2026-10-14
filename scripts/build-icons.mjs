@@ -5,11 +5,15 @@
 //
 //   To add an icon:  add its Tabler *outline* name to ICONS, then run `npm run build:icons`.
 //   To remove one:   delete it here and rebuild (the sprite is generated, never hand-edited).
+//   Website subset:  edit WEBSITE_ICONS and run `npm run build:icons -- --website`.
 //
 // Pin REF to a Tabler release tag (e.g. 'v3.34.0') for a fully reproducible build; 'main' tracks latest.
 import { readFile, writeFile } from 'node:fs/promises';
 
 const REF = 'main';
+// The independently hosted website ships only its approved carousel icons.
+const WEBSITE_ONLY = process.argv.includes('--website');
+const WEBSITE_ICONS = ['chevron-left', 'chevron-right', 'player-pause', 'player-play'];
 const PAGES = ['public/table.html', 'public/index.html', 'public/admin.html'];
 
 // The full set of icons used across the app, grouped loosely by where they first appeared.
@@ -207,14 +211,16 @@ async function fetchSymbol(name) {
   return `<symbol id="i-${name}" viewBox="0 0 24 24">${inner}</symbol>`;
 }
 
-const dupes = ICONS.filter((n, i) => ICONS.indexOf(n) !== i);
+const names = WEBSITE_ONLY ? WEBSITE_ICONS : ICONS;
+const pages = WEBSITE_ONLY ? ['website/index.html'] : PAGES;
+const dupes = names.filter((n, i) => names.indexOf(n) !== i);
 if (dupes.length) {
   console.error('Duplicate icon names:', [...new Set(dupes)].join(', '));
   process.exit(1);
 }
 
-const symbols = await Promise.all(ICONS.map(fetchSymbol));
-const sprite = `<svg class="icon-sprite" aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden">${symbols.join('')}</svg>`;
+const symbols = await Promise.all(names.map(fetchSymbol));
+const sprite = `<svg class="icon-sprite" aria-hidden="true"${WEBSITE_ONLY ? '' : ' style="position:absolute;width:0;height:0;overflow:hidden"'}>${symbols.join('')}</svg>`;
 
 // Prettier reformats the pages after a build, so the existing sprite tag arrives as
 // `<svg\n  class="icon-sprite"\n  ...>` — a regex anchored on `<svg class="icon-sprite"`
@@ -222,7 +228,7 @@ const sprite = `<svg class="icon-sprite" aria-hidden="true" style="position:abso
 // then never reached a page. Match the tag whatever the formatting, and fail loudly
 // rather than writing the file back unchanged.
 const SPRITE_RE = /<svg[^>]*class="icon-sprite"[^>]*>[\s\S]*?<\/svg>/;
-for (const page of PAGES) {
+for (const page of pages) {
   const html = await readFile(page, 'utf8');
   let out;
   if (SPRITE_RE.test(html)) out = html.replace(SPRITE_RE, () => sprite);
@@ -231,4 +237,4 @@ for (const page of PAGES) {
   if (out === html) throw new Error(`${page}: sprite unchanged — the page was not updated`);
   await writeFile(page, out);
 }
-console.log(`Built sprite: ${ICONS.length} icons \u2192 ${PAGES.length} pages`);
+console.log(`Built sprite: ${names.length} icons \u2192 ${pages.length} pages`);

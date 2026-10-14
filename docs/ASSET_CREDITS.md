@@ -22,7 +22,15 @@ requirement is actually met.
   captures of staged local rooms, taken September 29, 2026. Their page placement was approved
   and applied to the landing page and Assets and scenes guide. They include bundled assets whose credits appear below; specifically,
   the chess models are JustinARay's CC BY 4.0 work and need attribution when published.
-  See [capture notes](../website/assets/showcase/README.md). No generated imagery was used.
+  See [capture notes](../website/assets/showcase/README.md).
+- `showcase/go.png`, `dominoes.png`, `mahjong.png`, and `wordy.png` are approved staged
+  mockups captured October 14, 2026 with the app's production renderer and bundled models,
+  including the project's original Go, Dominoes, Mahjong and Wordy models. These are isolated
+  arranged scenes, not screenshots of saved multiplayer games. Existing model, face-art,
+  texture and Tabler licenses apply as recorded below. No AI-generated or externally sourced
+  screenshot artwork was added. Their unchanged 1086 x 912 PNG originals ship with the site.
+- The homepage's four Tabler outline icons reuse the existing MIT-licensed icon sprite builder;
+  the separate website subset preserves the same attribution and license as the game icons.
 
 ---
 

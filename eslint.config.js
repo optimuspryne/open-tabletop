@@ -30,7 +30,7 @@ export default [
     },
   },
   {
-    files: ['public/**/*.js'],
+    files: ['public/**/*.js', 'website/**/*.js'],
     languageOptions: {
       globals: {
         ...globals.browser,

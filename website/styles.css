@@ -501,3 +501,137 @@ td {
     align-items: stretch;
   }
 }
+
+/* The hero remains a static chess figure until the local slideshow script loads. */
+.icon-sprite {
+  position: absolute;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+}
+.showcase-stage {
+  position: relative;
+  aspect-ratio: 1086 / 912;
+  overflow: hidden;
+}
+.showcase-stage .showcase-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
+  opacity: 0;
+}
+.showcase-image.is-current {
+  opacity: 1;
+}
+.showcase-caption {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.showcase-caption strong {
+  display: block;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+[data-showcase-caption] {
+  display: block;
+  margin-top: 2px;
+  min-height: 3.3em;
+}
+.showcase-count {
+  flex-shrink: 0;
+  padding-top: 3px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.showcase-controls,
+.showcase-buttons,
+.showcase-dots {
+  display: flex;
+  align-items: center;
+}
+.showcase-controls {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  gap: 10px;
+}
+.showcase-controls[hidden] {
+  display: none;
+}
+.showcase-dots {
+  flex: 0 1 308px;
+  max-width: 100%;
+}
+.showcase-buttons {
+  gap: 8px;
+  margin-left: auto;
+}
+.showcase-buttons .btn {
+  padding: 0;
+  min-width: 44px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+.showcase-buttons .ico {
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.showcase-dot {
+  flex: 1 1 44px;
+  min-width: 24px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.showcase-dot span {
+  border: 1px solid currentColor;
+  border-radius: 100%;
+  display: block;
+  width: 7px;
+  height: 7px;
+}
+.showcase-dot[aria-current='true'] {
+  color: var(--accent);
+}
+.showcase-dot[aria-current='true'] span {
+  background: currentColor;
+  width: 20px;
+  border-radius: 5px;
+}
+.showcase-credit {
+  font-size: 11px;
+  margin-top: 8px;
+}
+.showcase-status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .showcase-image {
+    transition: opacity 500ms ease;
+  }
+}
