@@ -82,6 +82,67 @@ No manual `psql -f`, and **no db-image rebuild required** — existing deploymen
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
 
+## Upgrading to 0.22.0
+
+From 0.21.1, pull the updated image and recreate the app container, then refresh all
+browsers. Source installs should run `npm ci` before restarting for the refreshed locked
+dependencies. No new numbered migration, snapshot conversion, required environment variable,
+service, exposed port or Compose setting is introduced. Existing accounts, assets and saved
+games remain compatible. Upgrades from older versions must also follow their notes below.
+
+This release adds bundled bridge-card artwork and selectable backs, authored Domino/Mahjong
+tiles and appearance controls, 136/144-tile Mahjong walls and starters, assisted independent
+stacking, 3D tile hand previews and player fans, proportional actual-card backs in player fans,
+desktop hand actions, updated Wordy/pouch and other piece models, ceramic tile sounds, and
+High/Ultra graphics improvements. Mahjong wall breaking, rolling and taking tiles remain
+manual; no rule or scoring automation is added. High now renders at a fixed 2× pixel ratio;
+Ultra is an explicit per-device choice rendering at 4× per axis. Check performance on the
+target devices.
+
+For existing Wordy rooms, reselect the board and recalibrate its height/grid, or load the
+Wordy starter in a fresh game. Old Mahjong peony/lotus identities keep image fallbacks;
+standard 136-tile sets and optional 144-tile sets use the new authored models. Hard-refresh
+if cached artwork or sounds remain. Python/ffmpeg is needed only to regenerate audio offline.
+
+The hardening walkthrough and room-scaling documents describe findings and proposed work;
+they do not represent implemented security fixes, multi-instance support or new deployment
+requirements. See [the hardening plan](../HARDENING_PLAN.md) for current status.
+
+### Release preparation and verification
+
+Release metadata and image references are prepared locally for 0.22.0. No tag, push, image
+publication or GitHub release is part of this preparation. Validation on 2026-10-14:
+
+- `npm run check`: passed lint, formatting, CSS checks and all 1,029 tests.
+- `npm run test:input`: passed all 58 checks.
+- `npm run test:integration`: passed all 25 tests against disposable PostgreSQL.
+- `npm run audit`: passed with zero production dependency vulnerabilities.
+- `npm run test:components`: passed desktop/touch component checks, notecard editor checks
+  at 1280/390/360 px, and tile preview/mixed-back/restricted-Show checks at 1280/390/320 px.
+  The existing component fixture still reports ten Mahjong thumbnail 404 paths; this is not
+  evidence that those thumbnail routes were verified successfully.
+- `npm run test:devices`: passed all seven documented profiles.
+- `npm run test:website`: passed all 25 page/viewport checks.
+- `npm run test:accounts`: passed all six full/compact desktop/touch layouts.
+- Version/image consistency, historical changelog preservation, workflow release-note
+  extraction, local documentation file links and `git diff --check`: passed.
+
+The sandbox blocked local HTTP, Docker and advisory-service access; the affected suites were
+rerun outside it. The restricted full-check attempt was stopped after the unrestricted run
+passed. Real-device gesture feel, GPU performance, multiplayer behavior, container/multi-arch
+builds and deployed upgrade acceptance remain separate manual or release-pipeline checks.
+
+After restarting the server and refreshing clients, smoke-test:
+
+1. Spawn blue/red 52/54-card decks, Dominoes and both Mahjong sets; inspect, play, return,
+   recolor, save/reload and reconnect. Check concealed hands and restricted Show with two users.
+2. Build 136/144-tile walls, load both Mahjong starters, and gently stack cards/tiles. Check
+   occupied-wall rejection, offset cards remaining separate, and centered deck returns.
+3. Check private-hand actions, Drop Hand choices, 3D tile previews and mixed-back player fans
+   in full/compact desktop and touch layouts, including keyboard focus.
+4. Reselect/recalibrate an existing Wordy board; check pouch appearance, tile sounds and
+   High/Ultra rendering on representative devices.
+
 ## Upgrading to 0.21.1
 
 From 0.21.0, pull the updated image and recreate the app container. No new migration,

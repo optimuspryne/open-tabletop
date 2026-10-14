@@ -3,6 +3,13 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
+Release 0.22.0 keeps the existing server/browser ownership and single-instance deployment
+boundaries. Its authored models, card artwork, assisted stacking and hand/fan rendering need
+a server restart and client refresh; no new database migration or required service/configuration
+is introduced. Source dependency and existing Wordy board calibration requirements, automated
+release checks and pending manual acceptance are recorded in the
+[upgrade guide](RELEASING.md#upgrading-to-0220).
+
 The [living hardening plan](../HARDENING_PLAN.md) records the account/host-approval walkthrough
 and proposed session-cookie, CSRF and multiplayer authentication changes. It distinguishes
 observed behavior from conditional risks and pending designs; current authentication behavior

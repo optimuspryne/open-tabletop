@@ -8,6 +8,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-10-14
+
 ### Added
 - Ceramic-style tile sounds: three pickup, four drop, three flip and three shuffle
   variations with short, high pitched clinks, heavily damped inharmonic resonance and irregular
@@ -54,6 +56,9 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Refreshed the authored poker chip, coin, checker and crowned-checker models.
+- Refreshed locked dependencies within the existing package ranges. Source installs
+  should run `npm ci`; Docker images include the locked dependencies.
 - Player card fans show the actual backs of ordinary cards, including mixed custom decks.
   Hands of up to twelve cards show every back; larger hands use a proportional twelve-slot
   sample, rounded to whole cards. Authorized Show removes revealed cards from their matching
@@ -1875,7 +1880,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...HEAD
+[0.22.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...v0.21.0
 [0.20.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.19.0...v0.20.0

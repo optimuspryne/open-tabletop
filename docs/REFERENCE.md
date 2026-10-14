@@ -64,6 +64,11 @@ For staged implementation status and **remaining proposed** work, see [DESIGN_ne
 The participation foundation, durable GM time-outs, self-service spectators and private deck browsing are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
+For release 0.22.0, see the [upgrade and verification guide](RELEASING.md#upgrading-to-0220):
+restart the server and refresh clients, run `npm ci` for source installs, and reselect/recalibrate
+existing Wordy boards for their revised height/grid. No new migration or required deployment
+configuration is introduced. Release preparation does not establish manual device or multiplayer acceptance.
+
 For release 0.21.1, see the [patch upgrade guide](RELEASING.md#upgrading-to-0211):
 server restart only, with no new migration or configuration requirement.
 

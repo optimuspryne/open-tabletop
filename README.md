@@ -52,17 +52,19 @@ restarts never reset its password. Two named volumes keep your data:
 `db-data` (the database) and `assets` (uploaded decks/boards/props/skyboxes).
 
 > **Don't want to build locally?** In `docker-compose.yml`, swap `build: .` for
-> `image: optimuspryne/open-tabletop:0.21.1` to pull the published image instead. Upgrading later is
+> `image: optimuspryne/open-tabletop:0.22.0` to pull the published image instead. Upgrading later is
 > `docker compose pull && docker compose up -d` — the app auto-applies any new migrations itself.
 >
 > **Playing beyond your LAN?** Put it behind a reverse proxy with TLS — see
 > [Security & production posture](#security--production-posture).
 
-**Upgrading from 0.21.0 to 0.21.1:** pull the updated image and recreate the app container.
-This fixes startup when an existing installation has bootstrap variables configured but its
-password file is missing. No new migration or configuration change is required.
-See [0.21.1 upgrade notes](docs/RELEASING.md#upgrading-to-0211); upgrades from older versions
-must also follow the [0.21.0 instructions](docs/RELEASING.md#upgrading-to-0210).
+**Upgrading from 0.21.1 to 0.22.0:** pull the updated image, recreate the app container,
+then refresh all browsers for the new models, card artwork, hand previews and stacking behavior.
+No new migration or required configuration change is introduced. Source installs should run
+`npm ci` before restart. Existing Wordy rooms need board reselection and recalibration to use
+the revised board height/grid, or a fresh Wordy starter.
+See [0.22.0 upgrade notes](docs/RELEASING.md#upgrading-to-0220); upgrades from older versions
+must also follow the preceding release instructions there.
 
 Prefer to run it directly with Node, bring your own Postgres, or deploy through Portainer? Those
 paths are below.
@@ -213,7 +215,7 @@ docker run --name open-tabletop-app -p 2567:2567 -v ott-assets:/data/assets \
   -e DATABASE_URL=postgresql://tabletop_app:…@dbhost:5432/tabletop \
   -e MIGRATE_DATABASE_URL=postgresql://tabletop:…@dbhost:5432/tabletop \
   -e REDIS_URL=redis://redis-host:6379 \
-  optimuspryne/open-tabletop:0.21.1
+  optimuspryne/open-tabletop:0.22.0
 # MIGRATE_DATABASE_URL (owner role) lets the app build/upgrade the schema itself;
 # omit it (or set AUTO_MIGRATE=false) to apply postgres/*.sql by hand instead.
 # For a remote DB, append `?sslmode=no-verify`
@@ -303,7 +305,7 @@ services:
       retries: 12
 
   app:
-    image: optimuspryne/open-tabletop:0.21.1
+    image: optimuspryne/open-tabletop:0.22.0
     user: appuser                         # matches the image's non-root runtime user
     restart: unless-stopped
     container_name: open-tabletop-app
