@@ -54,6 +54,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   graphics controls stay labeled in compact mode, and selection exposes its pressed state.
 
 ### Changed
+- Player card fans show the actual backs of ordinary cards, including mixed custom decks.
+  Hands of up to twelve cards show every back; larger hands use a proportional twelve-slot
+  sample, rounded to whole cards. Authorized Show removes revealed cards from their matching
+  back groups before sampling the concealed remainder. Public groups preserve no faces,
+  double-sided reverse artwork, identities or private hand order.
+  Restart the server and refresh clients; no database migration is needed.
 - Tabletop player fans use concealed Domino/Mahjong models and uploaded-tile geometry,
   with a shallow arc and tile-width spacing. Public fan metadata contains unordered
   shape/material counts, never faces, double-sided artwork or private hand order;

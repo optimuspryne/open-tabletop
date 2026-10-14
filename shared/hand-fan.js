@@ -2,9 +2,12 @@ import { TILES, cardGeom, tileAppearanceProps } from './pieces.js';
 
 export const HAND_FAN_MAX = 12;
 export const HAND_TILE_TILT = 12;
+export const HAND_FAN_GROUP_MAX = 128;
+const BACK_REF_MAX = 512;
+const FAN_METADATA_MAX = 256 * 1024;
 
-// This projection is deliberately narrower than cardPublicProps: no identity, artwork,
-// model URL, private order, notecard content, or arbitrary nested geometry fields.
+// Only ordinary backs are public artwork. Double-sided reverse faces and notecard
+// content remain concealed; no identity, model URL, order or arbitrary nested fields.
 export function handFanAppearance(card = {}) {
   const props = {};
   if (!card || typeof card !== 'object') return props;
@@ -24,6 +27,13 @@ export function handFanAppearance(card = {}) {
   }
   Object.assign(props, tileAppearanceProps(props, card, { includeDefaults: true }));
   if (card.open === true || card.fanCover === true) props.fanCover = true;
+  else if (
+    card.kind !== 'notecard' &&
+    typeof card.back === 'string' &&
+    card.back.length > 0 &&
+    card.back.length <= BACK_REF_MAX
+  )
+    props.back = card.back;
   return props;
 }
 
@@ -48,15 +58,32 @@ export function handFanGroups(hand) {
     else groups.set(key, { props, count: 1 });
   }
   return [...groups]
+    .sort(([a, ga], [b, gb]) => gb.count - ga.count || (a < b ? -1 : a > b ? 1 : 0))
+    .slice(0, HAND_FAN_GROUP_MAX)
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
-    .slice(0, HAND_FAN_MAX)
     .map(([, group]) => group);
 }
 
-function shapeKey(card) {
+function shapeKey(card, ignoreBack = false) {
   const props = handFanAppearance(card);
-  delete props.fanCover; // Show payloads contain faces but deliberately omit the open flag.
+  delete props.fanCover;
+  if (ignoreBack) delete props.back; // covered tiles and legacy shape-only descriptions
   return JSON.stringify(props);
+}
+
+// Largest-remainder rounding produces exactly the available number of slots. Ties
+// follow stable public group order, never private hand order, without inventing cards.
+function proportionalSlots(groups, slots) {
+  const total = groups.reduce((sum, group) => sum + group.count, 0);
+  if (!total || !slots) return groups.map(() => 0);
+  const quotas = groups.map((group, index) => {
+    const target = (group.count * slots) / total;
+    return { index, count: Math.floor(target), remainder: target - Math.floor(target) };
+  });
+  const extra = slots - quotas.reduce((sum, quota) => sum + quota.count, 0);
+  const ranked = [...quotas].sort((a, b) => b.remainder - a.remainder || a.index - b.index);
+  for (let i = 0; i < extra; i++) ranked[i].count++;
+  return quotas.map((quota) => quota.count);
 }
 
 // A missing/malformed new field falls back to the established card fan. Re-project
@@ -67,12 +94,12 @@ export function handFanCards(player, revealed = []) {
   let groups = [];
   try {
     const parsed =
-      typeof player.handFan === 'string' && player.handFan.length <= 16384
+      typeof player.handFan === 'string' && player.handFan.length <= FAN_METADATA_MAX
         ? JSON.parse(player.handFan)
         : null;
     if (Array.isArray(parsed))
       groups = parsed
-        .slice(0, HAND_FAN_MAX)
+        .slice(0, HAND_FAN_GROUP_MAX)
         .flatMap((group) =>
           group?.props &&
           typeof group.props === 'object' &&
@@ -85,18 +112,23 @@ export function handFanCards(player, revealed = []) {
     // Older servers and invalid descriptions retain their ordinary concealed-card fan.
   }
   for (const card of shown) {
-    const key = shapeKey(card);
-    const group = groups.find(
-      (candidate) => candidate.count > 0 && shapeKey(candidate.props) === key,
-    );
+    const group = groups.find((candidate) => {
+      if (candidate.count <= 0) return false;
+      if (typeof card.open === 'boolean' && !!candidate.props.fanCover !== card.open) return false;
+      const ignoreBack = candidate.props.fanCover || !candidate.props.back;
+      return shapeKey(candidate.props, ignoreBack) === shapeKey(card, ignoreBack);
+    });
     if (group) group.count--;
   }
+  const missing = player.hand - shown.length - groups.reduce((sum, group) => sum + group.count, 0);
+  if (missing > 0) groups.push({ props: {}, count: missing }); // legacy/overflow descriptions
   const cards = [...shown];
-  for (const group of groups) {
-    for (let i = 0; i < group.count && cards.length < count; i++)
+  const allocations = proportionalSlots(groups, count - shown.length);
+  for (const [index, group] of groups.entries()) {
+    for (let i = 0; i < allocations[index]; i++)
       cards.push({
         ...group.props,
-        ...(group.props.fanCover ? {} : { back: player.handBack || undefined }),
+        ...(group.props.fanCover ? {} : { back: group.props.back || player.handBack || undefined }),
       });
   }
   while (cards.length < count) cards.push({ back: player.handBack || undefined });

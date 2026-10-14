@@ -132,7 +132,12 @@ export function registerRoomFeatureHandlers(
             textBoxes: card.textBoxes,
             orientation: card.orientation,
           }
-        : { front: card.front, back: card.back, ...cardPublicProps(card) },
+        : {
+            front: card.front,
+            back: card.back,
+            open: card.open === true,
+            ...cardPublicProps(card),
+          },
     );
     for (const viewer of audience) {
       room.clientBy(viewer)?.send('showFan', { sid, cards: payload });

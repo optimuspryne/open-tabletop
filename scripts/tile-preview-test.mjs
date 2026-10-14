@@ -59,11 +59,11 @@ try {
       }));
       const cached=await graphics.tilePreviewURL(cards[0],{tilt:12});
       const faceOn=await graphics.tilePreviewURL(cards[0]);
-      const reveals=new Map(),messages=new Map(),calls=[];
+      const reveals=new Map(),messages=new Map(),calls=[],meshes=[];
       const player={seat:0,order:0,hand:cards.length,name:'Me',avatar:'',color:'#123456',handBack:'domback',handFan:JSON.stringify(handFanGroups(cards))};
       const room={state:{players:new Map([['me',player]]),tableX:10,tableZ:7},send(){},onMessage:(type,fn)=>messages.set(type,fn)};
       const presence=createPresence({THREE,scene:core.scene,camera:core.camera,controls:core.controls,
-        cardMesh:props=>{calls.push(props);return graphics.cardMesh(props);},disposeCard:graphics.KIND.card.dispose,
+        cardMesh:props=>{calls.push(props);const mesh=graphics.cardMesh(props);meshes.push(mesh);return mesh;},disposeCard:graphics.KIND.card.dispose,
         makePlayerTexture:graphics.makePlayerTexture,makeYouChipTexture:graphics.makeYouChipTexture,
         nameTag:graphics.nameTag,resizeToCanvas:graphics.resizeToCanvas,seatAngle,label:core.CONFIG.label,
         getRoom:()=>room,getSessionId:()=> 'me',getRank:()=>0,getRevealed:sid=>reveals.get(sid)||[],
@@ -98,7 +98,7 @@ try {
       presence.bindMessages(room);calls.length=0;messages.get('showFan')({sid:'me',cards:[cards[0]]});await core.waitForVisualAssets();
       const restrictedShow=calls[0].front===cards[0].front&&calls.slice(1).every(props=>!props.front);
       core.camera.position.set(1,3,10.5);core.camera.lookAt(0,.25,6.2);core.setTableVisible(true);core.setSeatCameraReady();core.renderer.render(core.scene,core.camera);
-      window.tileSmoke={hand,graphics,cards};
+      window.tileSmoke={hand,graphics,cards,presence,player,messages,calls,meshes,handFanGroups,core};
       return {margins,cached:cached===previews[0],tiltDiffers:faceOn!==previews[0],hiddenSafe,models,covers,geometryFits,restrictedShow,borrowedTextureSurvives,selectionFits,lastTileFits,styles,
         handFits:document.getElementById('handRow').getBoundingClientRect().right<=innerWidth+1};
     })()`);
@@ -146,7 +146,62 @@ try {
       page.sessionId,
     );
     await writeFile(`/tmp/tile-hand-${device.width}.png`, Buffer.from(screenshot.data, 'base64'));
-    console.log(`Tile previews, concealed fans and restricted Show pass at ${device.width}px.`);
+    const mixed = await page.evaluate(`(async () => {
+      const {presence,player,messages,calls,meshes,handFanGroups,core}=window.tileSmoke;
+      const imageBack=color=>{
+        const c=document.createElement('canvas');c.width=c.height=8;
+        const ctx=c.getContext('2d');ctx.fillStyle=color;ctx.fillRect(0,0,8,8);
+        return c.toDataURL('image/png');
+      };
+      const red=imageBack('#ff0000'),blue=imageBack('#0000ff');
+      const inventory=(r,b)=>[
+        ...Array.from({length:r},()=>({front:'PRIVATE_FRONT',back:red})),
+        ...Array.from({length:b},()=>({front:'PRIVATE_FRONT',back:blue})),
+      ];
+      const reset=()=>{calls.length=0;meshes.length=0;};
+      const counts=()=>[red,blue].map(back=>calls.filter(card=>!card.front&&card.back===back).length);
+      const setInventory=(r,b)=>{
+        const hand=inventory(r,b);player.hand=hand.length;player.handBack=red;
+        player.handFan=JSON.stringify(handFanGroups(hand));reset();presence.rebuildSeats();
+      };
+      messages.get('showFan')({sid:'me',cards:[]});setInventory(20,10);await core.waitForVisualAssets();
+      const initial=counts();
+      const texturesMatch=meshes.every((mesh,i)=>{
+        const material=mesh.material.find(mat=>mat.map?.image);
+        if(!material)return false;
+        const c=document.createElement('canvas');c.width=c.height=1;
+        const ctx=c.getContext('2d');ctx.drawImage(material.map.image,0,0,1,1);
+        const [r,g,b]=ctx.getImageData(0,0,1,1).data;
+        return calls[i].back===red?r===255&&g===0&&b===0:r===0&&g===0&&b===255;
+      });
+      const hiddenSafe=calls.every(card=>!card.front&&!JSON.stringify(card).includes('PRIVATE'));
+      reset();messages.get('showFan')({sid:'me',cards:inventory(4,0).map(card=>({...card,front:'text:#ffffff:#000000:#000000:Shown',open:false}))});
+      await core.waitForVisualAssets();const showing=counts(),revealed=calls.filter(card=>card.front).length;
+      reset();messages.get('showFan')({sid:'me',cards:[]});const stopped=counts();
+      setInventory(10,10);const played=counts();
+      setInventory(10,20);const drawn=counts();await core.waitForVisualAssets();
+      core.renderer.render(core.scene,core.camera);
+      return {initial,texturesMatch,hiddenSafe,showing,revealed,stopped,played,drawn};
+    })()`);
+    assert.deepEqual(mixed.initial, [8, 4], '20:10 back images occupy 8:4 fan slots');
+    assert.equal(mixed.texturesMatch, true, 'each production card mesh loads its own back image');
+    assert.equal(mixed.hiddenSafe, true, 'concealed meshes receive no faces or identities');
+    assert.deepEqual(mixed.showing, [5, 3], 'reveals are removed before sampling hidden cards');
+    assert.equal(mixed.revealed, 4);
+    assert.deepEqual(mixed.stopped, [8, 4]);
+    assert.deepEqual(mixed.played, [6, 6]);
+    assert.deepEqual(mixed.drawn, [4, 8]);
+    assert.deepEqual(page.errors, []);
+    const mixedScreenshot = await browser.send(
+      'Page.captureScreenshot',
+      { format: 'png' },
+      page.sessionId,
+    );
+    await writeFile(
+      `/tmp/mixed-card-fan-${device.width}.png`,
+      Buffer.from(mixedScreenshot.data, 'base64'),
+    );
+    console.log(`Tile previews, mixed card backs and restricted Show pass at ${device.width}px.`);
     await page.close();
   }
   assert.ok(

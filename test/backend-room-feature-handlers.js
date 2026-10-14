@@ -191,11 +191,21 @@ test('showing cards sends faces only to the selected audience', async () => {
   assert.deepEqual(clients.get('client-2').sent, [
     {
       type: 'showFan',
-      payload: { sid: 'client-1', cards: [{ front: 'king', back: 'blue' }] },
+      payload: { sid: 'client-1', cards: [{ front: 'king', back: 'blue', open: false }] },
     },
   ]);
   assert.deepEqual(clients.get('client-3').sent, []);
   assert.deepEqual(events, [{ name: 'stopShow', payload: 'client-1' }]);
+});
+
+test('Show identifies double-sided cards only in the authorized reveal payload', async () => {
+  const { room, handlers, clients } = harness();
+  room.hands.set('client-1', [
+    { hid: 'h1', front: 'PRIVATE_FRONT', back: 'PRIVATE_REVERSE', open: true },
+  ]);
+  await handlers.get('showStart')(makeClient('client-1'), { to: ['client-2'], hids: ['h1'] });
+  assert.equal(clients.get('client-2').sent[0].payload.cards[0].open, true);
+  assert.deepEqual(clients.get('client-3').sent, []);
 });
 
 test('pings are clamped to the current table bounds', async () => {

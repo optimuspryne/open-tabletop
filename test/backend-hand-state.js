@@ -97,3 +97,38 @@ test('live and reclaimed hands publish safe fan metadata while sending content o
   assert.equal(player.handBack, '');
   assert.equal(player.handFan, '');
 });
+
+test('mixed back counts survive parked hand restoration without publishing faces or order', () => {
+  const hand = Array.from({ length: 30 }, (_, i) => ({
+    hid: `PRIVATE_${i}`,
+    front: `SECRET_${i}`,
+    back: i < 20 ? '/assets/decks/a.png' : '/assets/decks/b.png',
+  }));
+  const player = new Player(),
+    state = new State();
+  state.players.set('owner', player);
+  const room = {
+    state,
+    hands: new Map([['owner', hand]]),
+    handOwners: new Map([['owner', '7']]),
+    pendingHands: new Map(),
+  };
+  const sent = [],
+    client = { sessionId: 'owner', auth: { userId: 7 }, send: (...args) => sent.push(args) };
+  sendHand(room, client);
+  const publicFan = player.handFan;
+  assert.deepEqual(
+    JSON.parse(publicFan).map((group) => group.count),
+    [20, 10],
+  );
+  room.hands.set('owner', [...hand].reverse());
+  sendHand(room, client);
+  assert.equal(player.handFan, publicFan);
+  parkHand(room, client);
+  claimHand(room, 7, 'owner');
+  sendHand(room, client);
+  assert.equal(player.handFan, publicFan);
+  assert.equal(sent.at(-1)[1][0].front, 'SECRET_29');
+  assert.ok(!JSON.stringify(state.toJSON()).includes('SECRET'));
+  assert.ok(!JSON.stringify(state.toJSON()).includes('PRIVATE'));
+});

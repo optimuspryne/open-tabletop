@@ -725,7 +725,7 @@ The **synced state is public** — anything in it is one devtools-peek from bein
 read. It holds: each piece's transform/type/owner/props/count; each player's
 seat, hand _count_, name, color, avatar, `showing` count (how many cards they're
 revealing), `handBack` (their hand's public back image), and `handFan` (a bounded JSON
-description of unordered shape/material counts); the shared `timer` anchor;
+description of unordered public shape/material/back counts); the shared `timer` anchor;
 the room dressing (`scores`, `notes`, `tableX/Z`, `tableShape`, `whiteboard`, `trays` — which seats'
 personal dice trays are out, `skybox`,
 `feltColor`, `roomName`); and whose turn it is — including, after a resumed game, the public
@@ -1262,10 +1262,17 @@ in `TILES`/`props.geom`; Domino now uses the owner's half-extents 0.25 × 0.5 ×
 `server/game/hand-state.sendHand` derives the public `handFan` description from the private
 hand whenever it sends an owner update, including reclaim/reconnect and inventory changes.
 `shared/hand-fan.js` projects only known tile families, canonical geometry, normalized tile
-materials and a neutral-cover flag. It aggregates and sorts by public appearance, with at
-most twelve groups; front/back artwork, identities, model URLs, notecard content and private
-hand order are excluded. This is derived state, not a new save format. `handFanCards` removes
-the matching public shape for each authorized revealed slot before filling concealed slots.
+materials, bounded ordinary back references and a neutral-cover flag. It aggregates public
+appearances, retaining the 128 most frequent groups and sorting them independently of private
+hand order. Faces, double-sided reverse artwork, identities, model URLs and notecard content
+are excluded. This is derived state, not a new save format. `handFanCards` removes the matching
+public shape/back/cover group for each authorized revealed slot, then uses largest-remainder
+rounding to proportionally fill the remaining slots of a fan capped at twelve cards. A 20:10
+mix becomes 8:4; a sufficiently rare group can round to zero. Older shape-only descriptions,
+invalid metadata and unrepresented overflow retain the `handBack` fallback. Ordinary back
+references are bounded to 512 characters, and parsed fan metadata to 256 KiB.
+The authorized `showFan` payload includes the card's `open` flag to distinguish an ordinary
+back from a double-sided reverse face when consuming groups; audience routing is unchanged.
 Presence reuses `cardMesh`, so missing fronts choose concealed family models. Double-sided
 custom tiles render plain material covers rather than their identifying reverse artwork.
 Tile fans fit their footprints into a bounded shallow arc; ordinary cards retain their

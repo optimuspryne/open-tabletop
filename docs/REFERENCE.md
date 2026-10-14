@@ -910,14 +910,20 @@ chess}` each `[color0, color1]`.
 ## `shared/hand-fan.js` — public hand presentation
 
 - **`handFanAppearance(card)`** projects canonical `tile`/`geom`, normalized family appearance,
-  and `fanCover` for double-sided tiles. It excludes faces, back artwork, IDs, model URLs and
-  notecard contents. **`handFanGroups(hand)`** aggregates/sorts by that public projection;
-  there are at most **`HAND_FAN_MAX = 12`** groups, independent of private hand order.
-- **`handFanCards(player, revealed)`** fills at most twelve slots, consumes matching public
-  shapes for authorized revealed slots, and strips any face fields from concealed descriptors.
-  Missing/malformed `handFan` uses the legacy `handBack` fan. **`isHandTile(props)`** identifies
-  built-in and custom tiles for fan spacing and hand thumbnails; thin ordinary cards keep
-  the card treatment. **`HAND_TILE_TILT = 12`** is the approved private-hand preview angle.
+  ordinary public `back` references (nonempty strings up to 512 characters), and `fanCover` for
+  double-sided tiles. It excludes faces, double-sided reverse artwork, IDs, model URLs and
+  notecard contents. **`handFanGroups(hand)`** aggregates by that projection, keeps up to
+  **`HAND_FAN_GROUP_MAX = 128`** groups by descending frequency, then sorts by public appearance,
+  independently of private hand order.
+- **`handFanCards(player, revealed)`** fills at most **`HAND_FAN_MAX = 12`** slots. Authorized
+  revealed cards consume matching shape/back/cover groups before the concealed remainder is
+  sampled. **`proportionalSlots(groups, slots)`** uses largest-remainder rounding with stable
+  public-group tie breaks: 20 A / 10 B cards produce 8 A / 4 B slots; very rare groups can round
+  to zero. Up to twelve held cards retain exact back counts within the metadata bounds.
+  Concealed descriptors contain no face fields. Missing/malformed `handFan`, older shape-only
+  groups and unrepresented overflow use the legacy `handBack` fallback. **`isHandTile(props)`**
+  identifies built-in and custom tiles for fan spacing and hand thumbnails; thin ordinary cards
+  keep the card treatment. **`HAND_TILE_TILT = 12`** is the approved private-hand preview angle.
 - **`server/game/hand-state.sendHand(room, client)`**, called by `TableRoom.sendHand`, updates
   public count/back/fan metadata and sends the complete `hand` only to its owner. The metadata
   is recomputed from restored inventory rather than saved separately. This adds a synchronized
@@ -1696,7 +1702,7 @@ covers the reported 384 KiB allocation recommendation with headroom. Restart the
   library editor's **Grid footprint** field and copied into the runtime props/asset snapshot.
 - **`Player`** — `seat, hand`, `name, color, avatar`, **`showing`** (count of
   cards being revealed — the public badge), **`handBack`** (the hand's public back
-  image), **`handFan`** (bounded JSON of unordered public shape/material counts, without
+  image), **`handFan`** (bounded JSON of unordered public shape/material/back counts, without
   faces, IDs, double-sided artwork or private order), **`role`** (the per-room owner/gm/helper/player rank).
 - **`Timer`** — `running, mode` (`'up'`/`'down'`), `base, since, duration`; the
   synced anchor (`timerLive()` computes the live value).
@@ -2854,9 +2860,9 @@ in `client.js`.
   Local seat hydration applies the camera and signals readiness; local role changes invoke the
   shell's role gate. Membership callbacks refresh unclaimed hands and clean up overlay previews.
 - **`bindMessages(room)`** handles `showFan`, updating the hand-owned reveal data and redrawing
-  public fans. Fans display at most twelve cards, preserve public backs, and use supplied revealed
-  faces only in leading slots. Concealed tiles use public `handFan` geometry/material groups
-  and neutral family models; double-sided custom tiles receive plain covers. Tile-sized
+  public fans. Fans display at most twelve cards, proportionally sample their actual public backs,
+  and use supplied revealed faces only in leading slots. Concealed tiles use public `handFan`
+  geometry/material groups and neutral family models; double-sided custom tiles receive plain covers. Tile-sized
   spacing and a bounded shallow arc preserve their silhouettes, while ordinary card fans
   retain overlap. Departures remove fans/markers and clear reveal data.
 - **`bindControls()`** wires My Seat, Birds Eye, next turn, and avatar upload. Avatar images are
@@ -3350,9 +3356,10 @@ scrolls horizontally rather than shrinking the primary drag target.
 
 The presence controller owns seat layout, standing avatar/name markers (including the public
 **"SHOWING n"** badge built by `makePlayerTexture`), the local YOU chip, public fans, and the turn
-panel. Fans use the player's public **`handFan`** shape/material counts with **`handBack`** for
-ordinary cards and supplied revealed cards face-up in leading slots. They are staggered to
-avoid z-fighting; tile fans use their actual models/geometry and width-based spacing. The
+panel. Fans use the player's public **`handFan`** shape/material/back counts, with **`handBack`**
+as a legacy fallback, and supplied revealed cards face-up in leading slots. Ordinary cards use
+their own backs, proportionally rounded across twelve slots for larger hands. They are staggered
+to avoid z-fighting; tile fans use their actual models/geometry and width-based spacing. The
 private bar remains in the hand controller and uses contained 12-degree tile snapshots. Held-piece
 labels and client-owned pings share the `nameTag` texture builder.
 

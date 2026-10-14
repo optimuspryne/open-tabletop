@@ -309,6 +309,37 @@ test('tile fans rebuild on shape/style updates and retain concealed 3D props aft
   assert.ok(fan.children.every((node) => node.userData.card.tile === 'domino'));
 });
 
+test('mixed card fans refresh actual back proportions after draws, plays and restricted Show', () => {
+  const hand = Array.from({ length: 30 }, (_, i) => ({
+    front: `SECRET_${i}`,
+    back: i < 20 ? 'blue-back' : 'red-back',
+  }));
+  const p = player({ hand: 30, handFan: JSON.stringify(handFanGroups(hand)) });
+  const f = fixture([['other', p]]);
+  const fan = f.scene.children.find((node) => node.children[0]?.userData.card);
+  const counts = () =>
+    fan.children.reduce((out, node) => {
+      const card = node.userData.card;
+      if (!card.front) out[card.back] = (out[card.back] || 0) + 1;
+      return out;
+    }, {});
+  assert.deepEqual(counts(), { 'blue-back': 8, 'red-back': 4 });
+  f.messages.get('showFan')({
+    sid: 'other',
+    cards: hand.slice(0, 4).map((card) => ({ ...card, open: false })),
+  });
+  assert.deepEqual(counts(), { 'blue-back': 5, 'red-back': 3 });
+  f.messages.get('showFan')({ sid: 'other', cards: [] });
+  hand.splice(0, 10);
+  f.change(p, 'hand', hand.length);
+  f.change(p, 'handFan', JSON.stringify(handFanGroups(hand)));
+  assert.deepEqual(counts(), { 'blue-back': 6, 'red-back': 6 });
+  hand.push(...Array.from({ length: 10 }, () => ({ front: 'SECRET_NEW', back: 'red-back' })));
+  f.change(p, 'hand', hand.length);
+  f.change(p, 'handFan', JSON.stringify(handFanGroups(hand)));
+  assert.deepEqual(counts(), { 'blue-back': 4, 'red-back': 8 });
+});
+
 test('player property listeners refresh local chrome and remote markers', () => {
   const me = player(),
     other = player({ seat: 1 });
