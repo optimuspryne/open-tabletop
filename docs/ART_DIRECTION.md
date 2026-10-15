@@ -1141,3 +1141,57 @@ loading after refresh remains manual. The owner requested committing this verifi
 app slice; the companion authoring workspace is outside this Git repository.
 No push is authorized. Refresh clients;
 no server restart, migration, app dependency or CSP change is required.
+
+## Versioned lossless authoring scripts — October 15, 2026
+
+The owner requested backing up the lossless export process in this repository.
+`tools/model-authoring/` is now the canonical publisher location; it supersedes
+references above to scripts existing only in the companion workspace. Blender
+masters, source exports and historical studies remain external. Existing models,
+GLB bytes, runtime loading, CSP and gameplay behavior are unchanged.
+
+Reuse/boundary decision: migrate the verified `compressAsset` and CLI publication
+code rather than add a new compression implementation. The only functional path
+change is the default `TABLETOP_ROOT`: the publisher resolves its containing repo
+(`../..`) instead of a machine-specific companion-folder relationship. Existing
+`TABLETOP_ROOT`, `GLTF_TOOLS` and `CHROME_BIN` overrides remain. The tools reuse
+`scripts/lib/model-integrity.mjs` and the actual browser `--prepare` comparator;
+no validator/browser/registry logic is duplicated in the migration.
+
+Files and functions in this slice:
+
+- `tools/model-authoring/compress.mjs`: repository copy of the verified
+  `compressAsset` API, formatted to project style. Lossless geometry, material,
+  image, animation/morph/skin and extension checks are preserved.
+- `tools/model-authoring/publish.mjs`: repository CLI copy with the portable
+  containing-repo default; preserves source/candidate browser comparison,
+  final GLB/manifest/URL registration and temporary cleanup behavior.
+- `tools/model-authoring/package.json` and `package-lock.json`: private isolated
+  Node 24 authoring package and complete pinned dependency tree copied from the
+  validated environment. Makes the already-used Sharp 0.34.5 pin explicit.
+  Root app dependencies/package files are unchanged.
+- `tools/model-authoring/.gitignore`: excludes installed `node_modules/`.
+- `tools/model-authoring/README.md`: setup, publication, provenance, isolated
+  dependencies, path overrides, source preservation and links to integration QA.
+- `.dockerignore`: excludes the offline tools folder from the production image.
+- `public/static_assets/models/README.md`: replaces external-only commands with
+  `npm ci --prefix tools/model-authoring` and
+  `node tools/model-authoring/publish.mjs SOURCE.glb relative/model.glb`.
+- `README.md`: adds the tools folder to the source overview and links the guide.
+- `docs/ARCHITECTURE.md`, `docs/REFERENCE.md`, `docs/RELEASING.md`: update the
+  canonical tool path, dependency/deployment boundary and default root behavior.
+- `CHANGELOG.md` and this plan: record the backed-up workflow and verification.
+
+Verification: a fresh `npm ci --prefix tools/model-authoring` installs from the
+versioned lockfile; the publisher runs end to end with those local packages and
+without `GLTF_TOOLS`/`TABLETOP_ROOT` overrides, launched from `/tmp`. Coin and
+animated Go bowl source exports each pass source/candidate metadata, exact image
+pixels and GPU comparisons in desktop/touch strict-CSP profiles. Source exports,
+both final GLBs, the manifest and generated bundled URL registry remain
+byte-identical after republication. An invalid traversal target fails before
+changing any published file. Git confirms installed packages are ignored.
+The full `npm run check` passes: **1,176 tests**, plus ESLint, Prettier and CSS checks. No runtime,
+input, responsive UI or database behavior changes, so those broader suites are not
+repeated. No browser refresh or server restart is required for this tooling change.
+The scripts are committed locally; pushing remains a separate explicitly authorized
+step. The prior external copies are retained as historical authoring files.

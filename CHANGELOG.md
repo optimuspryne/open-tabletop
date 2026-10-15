@@ -20,6 +20,11 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Refresh clients to load the updated board; no server restart is needed.
 
 ### Added
+- Versioned the lossless asset-builder scripts under `tools/model-authoring/`,
+  including the pinned dependency manifest/lockfile and publishing guide. The
+  publisher now defaults to its containing repository, so a fresh checkout can
+  reproduce exports without the external asset-builder folder. Authoring packages
+  remain isolated from app dependencies and excluded from Docker deployments.
 - Removed the duplicate uncompressed built-in GLBs after owner comparison. The
   lossless files now occupy their original canonical paths, preserving saved URLs
   and reclaiming 100.12 MB of comparison payloads. Final GLBs total 64.81 MB.

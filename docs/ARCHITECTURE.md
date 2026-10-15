@@ -592,7 +592,9 @@ importing a room singleton:
   callback/material/resource disposal. Server physics constants remain unchanged;
   offline collider measurement reads preserved GLB JSON bounds and transforms.
   `models/manifest.json` records final/source hashes, decoded fingerprints and
-  browser baselines. The offline authoring publisher verifies source/candidate
+  browser baselines. The versioned offline publisher under `tools/model-authoring/`
+  has its own pinned package/lockfile, resolves the app from its repository root
+  and stays outside the Docker image and app runtime dependency graph. It verifies source/candidate
   geometry, images, materials, animation and strict-CSP GPU loading before writing
   the one final GLB, manifest and allowlist. See [model workflow](../public/static_assets/models/README.md),
   [ART_DIRECTION.md](ART_DIRECTION.md) and [ASSET_CREDITS.md](ASSET_CREDITS.md).

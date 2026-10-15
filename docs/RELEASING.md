@@ -42,7 +42,9 @@ requirements below still apply. Run `npm run check`, `npm run test:models` and
 relevant component checks. Real-phone cold-load/resize/rejoin remains manual;
 the JavaScript decoder runs on the main thread and GPU memory is unchanged.
 For future exports use the [offline publishing guide](../public/static_assets/models/README.md)
-with sources in the companion authoring workspace. Do not run the old comparison
+using the versioned `tools/model-authoring/` scripts and lockfile, with original
+exports in the companion authoring workspace. The tools/dependencies are excluded
+from the Docker image and need no production installation. Do not run the old comparison
 batch workflow against final compressed files. Source licenses/credits still apply.
 
 ## Unreleased room-style upgrade

@@ -19,26 +19,27 @@ permission, worker, new service or app build step is required.
 1. Export a normal `.glb` from Blender with authored UVs, embedded textures and
    meaningful material/node names. Keep the `.blend` and source export in
    `Open-Tabletop_Asset_Builders`, outside the app's static asset directory.
-2. Set up the pinned **offline authoring** tools once (Node 24 and a local Chrome
-   or Chromium are needed). This does not install app runtime dependencies:
+2. From the repository root, set up the versioned **offline authoring** tools
+   once (Node 24 and a local Chrome/Chromium are needed). This does not install
+   app runtime dependencies:
 
    ```sh
-   cd /home/optimus/Open-Tabletop_Asset_Builders/3d_models/original/builtin_lossless_v1
-   npm ci
+   npm ci --prefix tools/model-authoring
    ```
 
 3. Publish one export using a path relative to `public/static_assets/models/`:
 
    ```sh
-   node publish.mjs "/path/to/new-model.glb" "pieces/misc/new-model.glb"
+   node tools/model-authoring/publish.mjs "/path/to/new-model.glb" "pieces/misc/new-model.glb"
    ```
 
    Use letters, digits, underscores or hyphens in the target path. For a room
    model, use e.g. `environments/cozy/new-plant.glb`. Reuse an existing path to
    replace an existing model. The input file must stay outside the app models
-   tree. Set `TABLETOP_ROOT` for a different app checkout, `GLTF_TOOLS` for a
-   separate installed authoring-tools directory, or `CHROME_BIN` if Chrome is
-   not discovered automatically.
+   tree. The app defaults to the repository containing the publisher, independently
+   of the current working directory. Set `TABLETOP_ROOT` for another checkout,
+   `GLTF_TOOLS` for a separate installed authoring-tools directory, or `CHROME_BIN`
+   if Chrome is not discovered automatically.
 
    The publisher checks supported extensions, uses Meshopt without quantization,
    simplification, welding or vertex reordering, and accepts lossless WebP only
@@ -89,6 +90,8 @@ Source licenses/attributions still apply to all encoded files; see
 warnings; current exports have zero validator errors. Source/export size and
 hash fields describe the validated input, not a second deployed file.
 
-The historical compression reports/studies remain in the authoring workspace.
+The canonical publisher and pinned dependency lockfile are versioned under
+[`tools/model-authoring/`](../../../tools/model-authoring/README.md). Historical
+compression reports/studies remain in the separate authoring workspace.
 Do not rerun the earlier all-model batch workflow against already compressed app
 files. Use `publish.mjs` with the original authoring export for each replacement.

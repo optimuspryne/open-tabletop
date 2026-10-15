@@ -762,6 +762,7 @@ server/
 shared/pieces.js       shared piece physics/render data, registries, geometry, grids, and trays
 postgres/              numbered migrations, flattened schema, and app-role grants
 scripts/               admin roles, icon generation, secret migration, DB integration runner
+tools/model-authoring/  offline lossless GLB publisher and pinned authoring dependencies
 test/                  unit/harness tests plus PostgreSQL integration tests
 docs/                  architecture, code reference, credits, release, and design notes
 docker/                first-start least-privilege Postgres role setup
@@ -794,6 +795,11 @@ Restart the server afterward. Production serving, browser test fixtures, and `as
 all use this setting; browser code and saved URLs need no edits. Keep deployments supplied with
 the configured directory if it lives outside the application tree. Uploaded assets continue to
 use `ASSETS_DIR` and `/assets/...` independently.
+
+The lossless GLB publisher is backed up under `tools/model-authoring/`, with its own
+pinned dependency lockfile. See the [model publishing guide](public/static_assets/models/README.md)
+for installation and usage. These offline tools are excluded from the Docker image
+and add no app runtime dependencies.
 
 The main game-client chain is `shared ← core ← graphics ← client`; `client`
 composes the focused `table/` controllers and also imports `controls` and

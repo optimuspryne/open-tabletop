@@ -3264,12 +3264,16 @@ phone material fallback and room failure fallback remain.
 
 `models/manifest.json` contains final/source hashes, sizes, validator results,
 decoded buffer and RGBA image fingerprints, and browser material/animation/
-hierarchy baselines. Normal checks do not need original payloads. The companion
-`builtin_lossless_v1/publish.mjs SOURCE.glb relative/model.glb` verifies a source
+hierarchy baselines. Normal checks do not need original payloads. The versioned
+`tools/model-authoring/publish.mjs SOURCE.glb relative/model.glb` verifies a source
 export against a candidate before publishing the one final GLB and updating the
 manifest and bundled URL registry. It uses no geometry quantization/simplification;
 lossless WebP is kept only when smaller with identical RGBA bytes. It retains
 source image encoding or the complete source GLB when compression increases size.
+Its isolated pinned dependencies install with `npm ci --prefix tools/model-authoring`;
+the app defaults to the script's repository root, with `TABLETOP_ROOT` override.
+Authoring dependencies are ignored in Git and excluded from the Docker image;
+no app dependency or build step is added.
 The publisher verifies raw/decoded geometry, morphs, skin matrices, animation and
 materials, and source/candidate pixels and metadata through two strict-CSP browser
 profiles. New usage still requires the appropriate catalog/theme registration,

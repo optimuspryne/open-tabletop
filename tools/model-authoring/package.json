@@ -1,0 +1,19 @@
+{
+  "name": "open-tabletop-model-authoring",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@gltf-transform/cli": "4.2.1",
+    "@gltf-transform/core": "4.2.1",
+    "@gltf-transform/extensions": "4.2.1",
+    "@gltf-transform/functions": "4.2.1",
+    "gltf-validator": "2.0.0-dev.3.10",
+    "meshoptimizer": "0.24.0",
+    "three": "0.161.0",
+    "sharp": "0.34.5"
+  }
+}
