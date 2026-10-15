@@ -1,4 +1,5 @@
 import { createAccountSecurityQueries } from './account-security-queries.js';
+import { normalizeRoomEnvironment } from '../shared/room-environments.js';
 import { ASSET_PACKAGE, PACKAGE_ASSET_KINDS, AssetPackageError } from '../shared/asset-package.js';
 // Pool-injected Postgres operations for the library, users, rooms, and membership.
 //
@@ -697,10 +698,11 @@ export function createDatabase(pool) {
       scene,
       scale,
       lighting,
+      environment,
     },
   ) {
     return pool.query(
-      'UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6, felt_color = $7, scene = $8, scale = $9, table_shape = $10, table_rim_wood = $11, room_lighting = $12 WHERE id = $1',
+      'UPDATE rooms SET scoreboard = $2, notes = $3, table_x = $4, table_z = $5, skybox = $6, felt_color = $7, scene = $8, scale = $9, table_shape = $10, table_rim_wood = $11, room_lighting = $12, room_environment = $13 WHERE id = $1',
       [
         roomId,
         JSON.stringify(scoreboard),
@@ -714,6 +716,7 @@ export function createDatabase(pool) {
         tableShape || 'rect',
         rimWood || 'mahogany',
         JSON.stringify(lighting || {}),
+        normalizeRoomEnvironment(environment),
       ],
     );
   }

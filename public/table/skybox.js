@@ -2,7 +2,7 @@ import { skyTextureURL } from '../rendering/asset-texture-url.js';
 import { releaseCanvasOnDispose } from '../rendering/resources.js';
 import { SKY_TEXTURE_SIZES } from '../../shared/image-thumbnails.js';
 
-// Room skybox presentation and viewer-local resolution. The library owns the picker;
+// Room skybox presentation and viewer-local resolution/orientation. The library owns the picker;
 // the composition root passes synchronized refs and publishes the built-in catalog.
 export const BUILTIN_SKIES = [
   // baked-in: drop files in the configured bundled asset root under sky/ and add entries here
@@ -49,11 +49,107 @@ export function createSkybox({
   let skyLast = null; // last applied skybox ref (guards against a stale async load)
   let requestVersion = 0; // resolution changes and Off also invalidate pending loads of the same ref
   let skyTex = null; // the current background texture, so we can dispose it when it changes
+  let skyMesh = null;
+  const SKY_ANGLES = {
+    tilt: { key: 'tabletop.skyTilt', limit: 90, range: 'skyTilt', number: 'skyTiltDegrees' },
+    rotation: {
+      key: 'tabletop.skyRotation',
+      limit: 180,
+      range: 'skyRotation',
+      number: 'skyRotationDegrees',
+    },
+  };
+  const angles = {};
+  for (const [axis, config] of Object.entries(SKY_ANGLES)) {
+    let value = 0;
+    try {
+      value = Number(storage.getItem(config.key));
+    } catch {
+      /* storage blocked — use the unrotated sky */
+    }
+    angles[axis] = Number.isFinite(value)
+      ? Math.round(Math.max(-config.limit, Math.min(config.limit, value)))
+      : 0;
+  }
+  let syncControls = () => {};
+
+  function releaseSkyMesh() {
+    if (!skyMesh) return;
+    scene.remove(skyMesh);
+    skyMesh.geometry.dispose();
+    skyMesh.material.dispose();
+    skyMesh = null;
+  }
+
+  function updateSkyPresentation() {
+    const rotated = !!skyTex && (angles.tilt !== 0 || angles.rotation !== 0);
+    if (rotated && !skyMesh) {
+      // Three r161 has no backgroundRotation. Reuse its sky shaders with an inverse
+      // sampling rotation; keep the original image, without another cubemap allocation.
+      const shader = skyTex.isCubeTexture ? THREE.ShaderLib.cube : THREE.ShaderLib.equirect;
+      const uniforms = THREE.UniformsUtils.clone(shader.uniforms);
+      uniforms.skyRotation = { value: new THREE.Matrix3() };
+      if (skyTex.isCubeTexture) {
+        uniforms.tCube.value = skyTex;
+        uniforms.tFlip.value = -1;
+      } else uniforms.tEquirect.value = skyTex;
+      const material = new THREE.ShaderMaterial({
+        uniforms,
+        vertexShader: `uniform mat3 skyRotation;\n${THREE.ShaderLib.cube.vertexShader}`.replace(
+          'vWorldDirection = transformDirection( position, modelMatrix );',
+          'vWorldDirection = skyRotation * transformDirection( position, modelMatrix );',
+        ),
+        fragmentShader: shader.fragmentShader,
+        side: THREE.BackSide,
+        depthTest: false,
+        depthWrite: false,
+        fog: false,
+        toneMapped: false, // loaded skies use sRGB, matching the built-in background
+      });
+      skyMesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), material);
+      skyMesh.name = 'Skybox presentation';
+      skyMesh.frustumCulled = false;
+      skyMesh.renderOrder = -Infinity;
+      skyMesh.raycast = () => {}; // background never participates in table picking
+      skyMesh.onBeforeRender = (_renderer, _scene, camera) => {
+        skyMesh.matrixWorld.copyPosition(camera.matrixWorld);
+      };
+      scene.add(skyMesh);
+    }
+    if (skyMesh) {
+      skyMesh.visible = rotated;
+      const rotation = new THREE.Matrix4().makeRotationFromEuler(
+        new THREE.Euler(
+          THREE.MathUtils.degToRad(angles.tilt),
+          THREE.MathUtils.degToRad(angles.rotation),
+          0,
+          'YXZ',
+        ),
+      );
+      skyMesh.material.uniforms.skyRotation.value.setFromMatrix4(rotation.invert());
+    }
+    scene.background = rotated ? skyDefault : skyTex || skyDefault;
+  }
+
+  function setSkyAngle(axis, raw) {
+    if (typeof raw !== 'string' || !raw.trim() || !Number.isFinite(Number(raw))) return;
+    const config = SKY_ANGLES[axis];
+    angles[axis] = Math.round(Math.max(-config.limit, Math.min(config.limit, Number(raw))));
+    try {
+      storage.setItem(config.key, String(angles[axis]));
+    } catch {
+      /* still applied in memory for this session */
+    }
+    updateSkyPresentation();
+    syncControls();
+  }
+
   // Swap the background texture, disposing the one it replaces (null → the flat default color).
   function setSkyTexture(tex) {
+    if (skyTex !== tex) releaseSkyMesh();
     if (skyTex && skyTex !== tex) skyTex.dispose();
     skyTex = tex || null;
-    scene.background = tex || skyDefault;
+    updateSkyPresentation();
   }
 
   // Per-viewer skybox resolution (Settings → UI → Graphics). Each level is a MAX equirect width; a
@@ -61,7 +157,9 @@ export function createSkybox({
   // built-ins are 2048, so 'high' and 'ultra' match on them; a larger custom upload uses 'ultra'.
   const SKY_RES = { off: 0, ...SKY_TEXTURE_SIZES, ultra: Infinity };
   const SKY_RES_KEY = 'tabletop.skyRes';
+  let skyRes = null;
   function getSkyRes() {
+    if (skyRes) return skyRes;
     try {
       const v = storage.getItem(SKY_RES_KEY);
       if (v && v in SKY_RES) return v;
@@ -73,6 +171,7 @@ export function createSkybox({
   }
   function setSkyRes(v) {
     if (!(v in SKY_RES)) return;
+    skyRes = v;
     try {
       storage.setItem(SKY_RES_KEY, v);
     } catch {
@@ -192,19 +291,52 @@ export function createSkybox({
 
   function bindControls() {
     const srow = byId('skyResRow');
+    const chips = srow ? [...srow.querySelectorAll('[data-skyres]')] : [];
+    syncControls = () => {
+      const off = getSkyRes() === 'off';
+      chips.forEach((c) => {
+        const selected = c.dataset.skyres === getSkyRes();
+        c.classList.toggle('on', selected);
+        c.setAttribute('aria-pressed', String(selected));
+      });
+      for (const [axis, config] of Object.entries(SKY_ANGLES)) {
+        for (const id of [config.range, config.number]) {
+          const input = byId(id);
+          if (!input) continue;
+          input.value = String(angles[axis]);
+          input.disabled = off;
+          if (id === config.range) input.setAttribute('aria-valuetext', `${angles[axis]} degrees`);
+        }
+      }
+      const status = byId('skyOrientationStatus');
+      if (status)
+        status.textContent = off
+          ? 'Turn skybox on to adjust its orientation.'
+          : `Tilt ${angles.tilt}° · Rotation ${angles.rotation}°`;
+    };
     if (srow) {
-      const chips = [...srow.querySelectorAll('[data-skyres]')];
-      const sync = () =>
-        chips.forEach((c) => c.classList.toggle('on', c.dataset.skyres === getSkyRes()));
       chips.forEach(
         (c) =>
           (c.onclick = () => {
             setSkyRes(c.dataset.skyres);
-            sync();
+            syncControls();
           }),
       );
-      sync();
     }
+    for (const [axis, config] of Object.entries(SKY_ANGLES)) {
+      for (const id of [config.range, config.number]) {
+        const input = byId(id);
+        if (!input) continue;
+        input.oninput = () => {
+          if (!input.disabled) setSkyAngle(axis, input.value);
+        };
+        input.onchange = () => {
+          if (!input.disabled) setSkyAngle(axis, input.value);
+          syncControls(); // restore empty/invalid numeric edits on commit
+        };
+      }
+    }
+    syncControls();
   }
   return { sync: syncSkybox, bindControls };
 }

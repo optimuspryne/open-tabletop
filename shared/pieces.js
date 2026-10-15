@@ -1156,7 +1156,10 @@ export const seatAngle = (seat) => SEAT_ANGLES[seat] ?? 0;
 
 // The set of table shapes; 'rect' is the historical default. Interpreted against tableX/tableZ.
 export const TABLE_SHAPES = ['rect', 'round', 'oval', 'hex', 'roundedRect'];
-// Wooden-rim textures (/textures/wood-*.jpg); 'mahogany' is the default.
+// Shared visual/grid/physics sampling for each rounded-rectangle corner.
+export const TABLE_CORNER_SEGMENTS = 20;
+
+// Wooden-rim textures (/textures/wood-*.png); 'mahogany' is the default.
 export const RIM_WOODS = ['mahogany', 'walnut', 'birch', 'green', 'oak'];
 
 // The table's outline as a closed polygon of {x,z} perimeter points, for a shape + half-extents.
@@ -1188,7 +1191,7 @@ export function tableOutline(shape, hx, hz) {
   }
   if (shape === 'roundedRect') {
     const r = Math.min(hx, hz) * 0.2, // corner radius
-      per = 4, // segments per 90° corner arc
+      per = TABLE_CORNER_SEGMENTS, // shared visual/grid/physics corner sampling
       pts = [];
     const corners = [
       { cx: hx - r, cz: hz - r, a0: 0 },

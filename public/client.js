@@ -4,6 +4,7 @@ import { createNotecardEditor } from './table/notecards.js';
 import { createDeckBrowser } from './table/deck-browsing.js';
 import { createParticipation } from './table/participation.js';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import {
   CONFIG,
   clamp,
@@ -12,6 +13,7 @@ import {
   renderer,
   controls,
   resizeTable,
+  setSceneryShadowBounds,
   setTableColor,
   setRimWood,
   setTableVisible,
@@ -23,6 +25,8 @@ import {
   applyLighting,
 } from './rendering/core.js';
 import { initPerf } from './rendering/perf.js';
+import { createRoomBackdrop } from './rendering/rooms/room-backdrop.js';
+import { getRoomTheme } from './rendering/rooms/room-themes.js';
 import {
   KIND,
   OVERLAY,
@@ -52,7 +56,7 @@ import { createTrays } from './table/trays.js';
 import { createHand } from './table/hand.js';
 import { createInspection } from './table/inspection.js';
 import { createSelection } from './table/selection.js';
-import { createPresence } from './table/presence.js';
+import { createPresence, seatLayoutFor } from './table/presence.js';
 import { createChat } from './table/chat.js';
 import { createNotebook } from './table/notebook.js';
 import { createScoreboard } from './table/scoreboard.js';
@@ -191,6 +195,21 @@ const dicePreferences = createDicePreferences({
 const { myDieProps, saveDiceDefault, clearDiceDefault } = dicePreferences;
 
 const skybox = createSkybox({ THREE, scene, renderer, deviceClass, byId });
+const roomEnvironment = createRoomBackdrop({
+  THREE,
+  scene,
+  modelLoader: new GLTFLoader(),
+  seatLayoutFor,
+  deviceClass,
+  onShadowBoundsChanged: setSceneryShadowBounds,
+  textureAnisotropy: renderer.capabilities.getMaxAnisotropy(),
+  onChanged: () => {
+    renderer.shadowMap.needsUpdate = true;
+  },
+});
+addEventListener('pagehide', (event) => {
+  if (!event.persisted) roomEnvironment?.dispose();
+});
 window.OTT_BUILTIN_SKIES = BUILTIN_SKIES;
 const roomSettings = createRoomSettings({
   scene,
@@ -203,6 +222,8 @@ const roomSettings = createRoomSettings({
   getQuality,
   setQuality,
   getRoom: () => room,
+  getEnvironmentTheme: () => getRoomTheme(room?.state.environment),
+  getRank: () => myRank,
   onTableResize: rebuildSeats,
   syncWhiteboardSettings: (state) => whiteboard.syncSettings(state),
   relabelOverlays: () => overlays.relabel(),
@@ -332,6 +353,7 @@ const membership = createMembership({
     whiteboard.sync(state.whiteboard); // board visual, ownership, and holder status
     trays.sync(state.trays); // reflect personal trays appearing / being put away
     skybox.sync(state.skybox); // reflect the room's skybox
+    roomEnvironment?.sync(state);
   });
 
   hand.bindRoom(room);
@@ -453,6 +475,8 @@ const membership = createMembership({
   membership.renderUnclaimed();
   roomSettings.hydrate();
   skybox.sync(room.state.skybox); // include the room's initial environment in the loading gate
+  roomEnvironment?.sync(room.state);
+  roomEnvironment?.update(camera.position, controls.target);
   setTableVisible(true); // reveal only after the joined room's complete table appearance is applied
   void finishTableLoading();
 
@@ -1002,6 +1026,7 @@ const shadowSeen = new Map();
     camera.position.add(leanOffset); // apply the lean for this frame's render
   }
   pieceUi.updateHoldControls();
+  roomEnvironment?.update(camera.position, controls.target);
   // Sample after visibility updates. Child identities/geometry catch async model loads and
   // replacements at unchanged transforms; separate piece keys prevent opposing moves cancelling.
   for (const [id, { mesh }] of meshes) {

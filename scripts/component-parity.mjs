@@ -1281,6 +1281,7 @@ const SCENES = [
   },
   {
     name: 'client-bootstrap',
+    page: '/table.html?environment=cozy',
     root: '#controlsModal',
     expect: { selector: '#controlsModal:not([hidden])', min: 1 },
     drive: `
@@ -1294,6 +1295,7 @@ const SCENES = [
         overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
         scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
+        environment: new URLSearchParams(location.search).get('fixtureEnvironment')==='cozy'?'cozy':'standard',
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
       const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
@@ -1322,6 +1324,151 @@ const SCENES = [
       patches.forEach(fn => fn(room.state));
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       assert(byId('sfxVol')?.oninput, 'Joined client did not finish binding controls');
+      const { scene: clientScene, camera: clientCamera, controls: clientControls, renderer: clientRenderer, waitForVisualAssets, deviceClass: clientDeviceClass, tableMesh: clientTableMesh, rimMat: clientRimMat, getLighting: clientGetLighting, applyLighting: clientApplyLighting } = await import('/rendering/core.js');
+      await waitForVisualAssets();
+      assert(clientTableMesh.castShadow&&clientTableMesh.receiveShadow,'The solid tabletop must block light as well as receive piece shadows');
+      const scenery = () => clientScene.children.filter(node=>node.name==='Cozy game room prototype');
+      if (room.state.environment==='cozy') {
+        assert(scenery().length===1,'Shared state did not register the cozy room');
+        assert(scenery()[0].userData.roomTheme==='cozy','Production bootstrap bypassed the room-theme runtime');
+        byId('roomSettings').click();
+        assert(!byId('tableThemeMatch').hidden,'Matching table option is missing from the cozy preview');
+        const matchStart=sent.length;
+        byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(matchStart))===JSON.stringify([['table',{rimWood:'oak'}],['tableColor',{color:'#2f6b4f'}]]),'Matching a table sent anything beyond wood/felt appearance');
+        byId('roomSettingsClose').click();
+        const phoneRoom=clientDeviceClass()==='phone';
+        const rugMap=scenery()[0].getObjectByName('Woven rug').material.map;
+        const rugSize=phoneRoom?512:1024;
+        assert(rugMap.image.width===rugSize&&rugMap.image.height===rugSize,'Rug texture has the wrong device resolution');
+        assert(rugMap.anisotropy===(phoneRoom?1:Math.max(1,Math.min(8,clientRenderer.capabilities.getMaxAnisotropy()))),'Rug filtering bypassed device policy');
+        assert(!!clientTableMesh.material.bumpMap===!phoneRoom,'Felt bump shading bypassed phone policy');
+        assert(clientRimMat.map.rotation===0&&clientRimMat.map.repeat.x===1&&clientRimMat.map.repeat.y===1,'Rim grain still uses the old global UV transform');
+        assert(scenery()[0].userData.halfSize.x===50,'Initial cozy dimensions did not follow room hydration');
+        const chairs = [];
+        scenery()[0].traverse(node=>{if(node.name==='Cozy chair model')chairs.push(node)});
+        assert(chairs.length===1,'One seated player must create exactly one chair');
+        assert(chairs.every(chair=>chair.children.some(node=>node.isMesh && node.material?.map && (phoneRoom?!node.material?.normalMap:node.material?.normalMap))), 'Authored chair maps were not preserved');
+        assert(scenery()[0].getObjectByName('Cozy shelf model'),'Production preview did not load the authored shelf');
+        const shelfModel=scenery()[0].getObjectByName('Cozy shelf model');
+        const coinMaterials=new Set();
+        shelfModel.traverse(node=>{
+          if(!node.isMesh)return;
+          for(const material of Array.isArray(node.material)?node.material:[node.material]){
+            if(['metallic','metallic.001'].includes(material.name))coinMaterials.add(material);
+            for(const value of Object.values(material))if(value?.isTexture&&value.image)
+              assert(Math.max(value.image.width,value.image.height)<=512,'Shelf texture exceeds its mobile memory cap');
+          }
+        });
+        assert(coinMaterials.size===2&&[...coinMaterials].every(material=>Math.abs(material.metalness-1)<.00001&&Math.abs(material.roughness-.3)<.00001),'Shelf coins do not match gameplay metal tuning');
+        const {METALS:shelfMetals}=await import('/shared/pieces.js');
+        for(const name of ['Gold','Silver'])
+          assert([...coinMaterials].some(material=>material.color.getHex()===shelfMetals.find(metal=>metal.name===name).hex),'Shelf coin does not match the built-in '+name+' color');
+        const displayBox=scenery()[0].getObjectByName('ShelfDominoesBox');
+        assert(displayBox,'The shelf is missing its built-in dominoes box');
+        const shelfTHREE=await import('three');
+        const displaySize=new shelfTHREE.Box3().setFromObject(displayBox).getSize(new shelfTHREE.Vector3());
+        assert(Math.abs(Math.max(displaySize.x,displaySize.y,displaySize.z)-1.82)<.005,'The shelf dominoes box is not half the approved mock-up size');
+        assert(scenery()[0].getObjectByName('Cozy lamp model'),'Production preview did not load the authored lamp');
+        const plants=[];
+        scenery()[0].traverse(node=>{if(['Cozy rubber model','Cozy snake model','Cozy pothos model'].includes(node.name))plants.push(node)});
+        assert(plants.length===6,'Production preview did not load all six plants');
+        assert(plants.every(plant=>plant.children.some(node=>node.isMesh&&node.material?.map&&(phoneRoom||node.material?.normalMap))),'Plant UV materials were lost');
+        const oak=scenery()[0].getObjectByName('Cozy shelf model').children.find(node=>node.material?.name.includes('satin oak'));
+        assert(oak&&oak.geometry.attributes.uv.array.some(value=>Math.abs(value)>1),'Shelf still uses stretched default cube UVs');
+        const contactShading=[];
+        scenery()[0].traverse(node=>{if(node.userData.cozyContactShadow)contactShading.push(node)});
+        assert(contactShading.length>=9&&contactShading.every(node=>node.material.isMeshBasicMaterial&&!node.castShadow&&!node.receiveShadow),'Furniture contact shading is missing or uses expensive shaders');
+        if(!phoneRoom){
+          assert(chairs.every(chair=>chair.children.some(node=>node.isMesh&&node.castShadow)),'Authored desktop chairs do not cast shadows');
+          const shadowSun=clientScene.children.find(node=>node.isDirectionalLight);
+          const savedLighting=clientGetLighting();
+          const shadowSize=shadowSun.shadow.mapSize.x;
+          const enabled=shadowSun.castShadow;
+          const verifyRoomShadowBounds=()=>{
+            const cam=shadowSun.shadow.camera;
+            const half=scenery()[0].userData.halfSize;
+            for(const x of [-half.x,half.x])for(const y of [-5.5,9.5])for(const z of [-half.z,half.z]){
+              const projected=new shelfTHREE.Vector3(x,y,z).applyMatrix4(cam.matrixWorldInverse).applyMatrix4(cam.projectionMatrix);
+              assert(Math.max(Math.abs(projected.x),Math.abs(projected.y),Math.abs(projected.z))<=1.0001,'Furniture shadow camera clips the room');
+            }
+          };
+          verifyRoomShadowBounds();
+          clientApplyLighting({...savedLighting,azimuth:275,elevation:35},{duration:0});
+          verifyRoomShadowBounds();
+          assert(shadowSun.shadow.mapSize.x===shadowSize&&shadowSun.castShadow===enabled,'Room shadow fitting overrides the selected graphics quality');
+          clientApplyLighting(savedLighting,{duration:0});
+        }
+        if(phoneRoom)scenery()[0].traverse(node=>{
+          if(!node.isMesh)return;
+          assert(!node.receiveShadow&&!node.castShadow,'Phone scenery still uses shadow-map rendering');
+          if(node.name==='Clear window glazing')assert(!node.visible,'Phone glazing still uses blended rendering');
+          for(const material of Array.isArray(node.material)?node.material:[node.material])
+            assert(!material.isMeshPhysicalMaterial&&!material.normalMap&&!material.roughnessMap,'Phone scenery bypassed the compatible material path');
+        });
+        room.state.tableX=10;room.state.tableZ=7;patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===1 && scenery()[0].userData.halfSize.x===20,'State patch did not replace cozy geometry');
+        await waitForVisualAssets();
+        const chairTHREE=await import('three');
+        const roomRoot=scenery()[0];
+        const liveChairs=()=>roomRoot.children.filter(node=>node.name==='Upholstered chair');
+        room.state.players.set('guest',{seat:2,participation:'player'});
+        room.state.players.set('watcher',{seat:5,participation:'spectator'});
+        patches.forEach(fn=>fn(room.state));
+        assert(scenery()[0]===roomRoot&&liveChairs().length===2,'Joining rebuilt the room or counted a spectator');
+        room.state.players.get('guest').seat=4;patches.forEach(fn=>fn(room.state));
+        assert(liveChairs().some(chair=>chair.userData.seat===4),'Chair did not follow a seat change');
+        room.state.players.delete('guest');patches.forEach(fn=>fn(room.state));
+        assert(liveChairs().length===1,'Leaving did not remove the chair');
+        for(let seat=1;seat<8;seat++)room.state.players.set('seat-'+seat,{seat,participation:'player'});
+        patches.forEach(fn=>fn(room.state));
+        assert(liveChairs().length===8,'All eight occupied seats must have chairs');
+        roomRoot.updateWorldMatrix(true,true);
+        for(const chair of liveChairs()){
+          const model=chair.getObjectByName('Cozy chair model');
+          assert(model,'New arrivals did not reuse the loaded chair model');
+          const inverse=model.matrixWorld.clone().invert();
+          const backCenter=new chairTHREE.Vector3();let count=0;
+          model.traverse(mesh=>{
+            if(!mesh.isMesh)return;
+            const vertices=mesh.geometry.attributes.position;
+            for(let i=0;i<vertices.count;i++){
+              const world=new chairTHREE.Vector3().fromBufferAttribute(vertices,i).applyMatrix4(mesh.matrixWorld);
+              if(world.clone().applyMatrix4(inverse).y>.75){backCenter.add(world);count++;}
+            }
+          });
+          const center=chair.getWorldPosition(new chairTHREE.Vector3());
+          const outward=center.clone().setY(0).normalize();
+          assert(count>0&&backCenter.divideScalar(count).sub(center).setY(0).dot(outward)>0,'Authored chair is backwards at seat '+chair.userData.seat);
+        }
+        for(const id of [...room.state.players.keys()])if(id!=='me')room.state.players.delete(id);
+        patches.forEach(fn=>fn(room.state));
+        const beforeScene=sent.length;
+        clientCamera.position.set(0,10,12);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!scenery()[0].children.find(node=>node.name==='South wall').visible,'Production loop did not update cutaway');
+        assert(sent.length===beforeScene,'Camera cutaway sent gameplay messages');
+        const select=byId('roomEnvironment');
+        assert(select.value==='cozy'&&select.options.length===2,'Room style choices did not hydrate');
+        const beforeStyle=sent.length;
+        select.value='standard';select.dispatchEvent(new Event('change'));
+        assert(sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style did not use its shared protocol');
+        assert(sent.length===beforeStyle+1&&scenery()[0]===roomRoot,'Style selection changed scenery before a server patch');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&roomRoot.parent===null,'Standard did not dispose the old room');
+        byId('roomSettings').click();
+        assert(select.value==='standard'&&byId('tableThemeMatch').hidden,'A shared style patch left stale settings');
+        room.state.environment='cozy';patches.forEach(fn=>fn(room.state));
+        await waitForVisualAssets();
+        assert(scenery().length===1&&scenery()[0]!==roomRoot,'Switching back did not build one fresh room');
+        byId('roomSettings').click();
+        assert(select.value==='cozy'&&!byId('tableThemeMatch').hidden,'Matching finish did not follow the new theme');
+        byId('roomSettingsClose').click();
+        room.state.tableX=40;room.state.tableZ=28;patches.forEach(fn=>fn(room.state));
+      } else {
+        assert(scenery().length===0,'The legacy preview URL overrode the saved Standard room');
+        assert(byId('tableThemeMatch').hidden,'A theme-free room offers a matching table');
+      }
       assert(messages.has('ping') && messages.has('pieceHighlighted') && messages.has('shuffled') && messages.has('dealt'), 'Missing effect/drag bindings');
       byId('sfxVol').value = '37'; byId('sfxVol').dispatchEvent(new Event('input'));
       const audio = await import('/table/audio.js');
@@ -1991,6 +2138,74 @@ const SCENES = [
       stale.addEventListener('dispose', () => { disposed = true; }); loads[0](stale);
       assert(resolution === 'off' && disposed && scene.background === null, 'Sky Off did not reject pending texture');
       byId('roomSettings').click(); lightTab.click();`,
+  },
+  {
+    name: 'sky-orientation',
+    root: '#settingsModal',
+    expect: { selector: '.skyOrientation input', min: 4 },
+    drive: `
+      const assert = (ok, message) => { if (!ok) throw new Error(message); };
+      const THREE = await import('three');
+      const { createSkybox } = await import('/table/skybox.js');
+      const { applyIcons } = await import('/ui/icons.js');
+      const byId = id => document.getElementById(id);
+      const stored = new Map([['tabletop.skyRes','ultra'],['tabletop.skyTilt','-25']]);
+      const loads = [];
+      class Loader { load(ref, done) { loads.push(done); } }
+      const scene = new THREE.Scene(); scene.background = new THREE.Color('#14181d');
+      const renderer = new THREE.WebGLRenderer({ antialias: false });
+      renderer.setSize(64,64);
+      renderer.debug.onShaderError = () => { throw Error('Sky shader failed to compile'); };
+      const sky = createSkybox({ THREE: {...THREE,TextureLoader:Loader,CubeTextureLoader:Loader}, scene,
+        renderer, deviceClass: () => 'desktop', byId,
+        storage: { getItem: key => stored.get(key) ?? null, setItem: (key,value) => stored.set(key,value) } });
+      sky.bindControls(); sky.sync('/sky');
+      const canvas = document.createElement('canvas'); canvas.width=64; canvas.height=32;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle='#ff0000'; ctx.fillRect(0,0,32,32); ctx.fillStyle='#0000ff'; ctx.fillRect(32,0,32,32);
+      const source = new THREE.CanvasTexture(canvas); source.colorSpace=THREE.SRGBColorSpace;
+      loads[0](source);
+      const camera = new THREE.PerspectiveCamera(60,1,0.1,100);
+      const target = new THREE.WebGLRenderTarget(64,64);
+      const pixel = () => { renderer.setRenderTarget(target); renderer.render(scene,camera);
+        const data = new Uint8Array(4); renderer.readRenderTargetPixels(target,32,32,1,1,data); return [...data]; };
+      const edit = (id,value,type='input') => { byId(id).value=value; byId(id).dispatchEvent(new Event(type)); };
+      assert(byId('skyTilt').value==='-25' && byId('skyTiltDegrees').value==='-25','Saved tilt did not hydrate');
+      edit('skyTilt','0'); edit('skyRotation','0'); const native = pixel();
+      edit('skyRotation','1'); const adapted = pixel();
+      assert(native.every((value,i)=>Math.abs(value-adapted[i])<8),'Adapter changed sky color or default alignment');
+      edit('skyRotationDegrees','180'); const turned = pixel();
+      assert(Math.abs(turned[0]-native[0])>100,'Sky rotation did not change rendered direction');
+      const foreground = new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({color:'#00ff00',toneMapped:false}));
+      foreground.position.z=-2; scene.add(foreground);
+      assert(pixel()[1]>240,'Rotated sky covered the table foreground');
+      scene.remove(foreground); foreground.geometry.dispose(); foreground.material.dispose();
+      edit('skyRotation','0'); edit('skyTiltDegrees','25'); pixel();
+      assert(loads.length===1 && byId('skyTilt').value==='25' && stored.get('tabletop.skyTilt')==='25','Angle reloaded texture or did not stay local');
+      edit('skyTiltDegrees','', 'change'); assert(byId('skyTiltDegrees').value==='25','Empty edit did not restore');
+      document.querySelector('#skyResRow [data-skyres="off"]').click();
+      assert(byId('skyTilt').disabled && byId('skyRotationDegrees').disabled && scene.children.length===0,'Off did not disable fields and release mesh');
+      document.querySelector('#skyResRow [data-skyres="ultra"]').click();
+      const faces = Array.from({length:6},()=>canvas);
+      sky.sync(JSON.stringify({t:'cube',f:Array(6).fill('/face')}));
+      loads.at(-1)(new THREE.CubeTexture(faces)); pixel();
+      assert(scene.children.length===1 && byId('skyTilt').value==='25','Cubemap did not retain angles');
+      sky.sync(''); target.dispose(); renderer.dispose();
+      byId('settingsModal').hidden=false;
+      byId('tableLoading').hidden=true;
+      document.querySelector('#settingsModal [data-pane="ui"]').hidden=false;
+      applyIcons();
+      const wasFull = document.body.classList.contains('ui-full');
+      document.body.classList.remove('ui-full');
+      assert([...document.querySelectorAll('#skyResRow .lbl')].every(label=>getComputedStyle(label).display!=='none'),'Sky quality labels hidden in compact mode');
+      assert(document.querySelector('.skyOrientationLabel').textContent.includes('Tilt'),'Tilt label missing');
+      document.body.classList.toggle('ui-full',wasFull);
+      const row = document.querySelector('.skyOrientationRow');
+      assert(row.scrollWidth<=row.clientWidth,'Sky controls overflow');
+      if (matchMedia('(pointer:coarse)').matches)
+        assert([...document.querySelectorAll('.skyOrientation input')].every(input=>input.getBoundingClientRect().height>=44),'Sky touch targets too small');
+      byId('skyTilt').focus();
+      assert(getComputedStyle(byId('skyTilt')).outlineStyle!=='none','Sky slider lacks a focus indicator');`,
   },
   {
     name: 'placard-settings',
@@ -2969,6 +3184,115 @@ const VIEWPORTS = [
 ];
 
 const out = {};
+SCENES.push({
+  name: 'cozy-window-sky',
+  page: '/table.html',
+  root: '#windowSkyFixture',
+  expect: { selector: '#windowSkyFixture canvas', min: 1 },
+  drive: `
+    const assert=(condition,message)=>{if(!condition)throw new Error(message);};
+    const THREE = await import('three');
+    const {GLTFLoader} = await import('three/addons/loaders/GLTFLoader.js');
+    const {createCozyRoom} = await import('/rendering/cozy-room.js');
+    const {createSkybox} = await import('/table/skybox.js');
+    const fixture=document.createElement('div');fixture.id='windowSkyFixture';document.body.append(fixture);
+    const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(64,64);fixture.append(renderer.domElement);
+    const scene=new THREE.Scene();scene.background=new THREE.Color('#14181d');
+    scene.add(new THREE.HemisphereLight(0xffffff,0x888888,1));
+    const camera=new THREE.PerspectiveCamera(40,1,.1,200);
+    camera.position.set(-7,4.3,-12);camera.lookAt(-7,4.3,-17);
+    const ready=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);
+    const room=createCozyRoom({THREE,scene,modelLoader:new GLTFLoader()});room.sync({tableX:10,tableZ:7});await ready;
+    const root=scene.children.find(node=>node.name==='Cozy game room prototype');
+    const windows=[];root.traverse(node=>{if(node.name==='Cozy window model')windows.push(node);});
+    assert(windows.length===4 && windows.every(node=>node.children.some(child=>child.isMesh && child.material.map && child.material.normalMap)), 'Authored window models and maps did not load');
+    const sky=createSkybox({THREE,scene,renderer,deviceClass:()=> 'desktop',byId:id=>document.getElementById(id),storage:{getItem:key=>key==='tabletop.skyRes'?'ultra':'0',setItem(){}}});
+    sky.bindControls();
+    const loadSky=async ref=>{const loaded=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);sky.sync(ref);await loaded;};
+    const angle=(axis,value)=>{const input=document.getElementById(axis==='tilt'?'skyTilt':'skyRotation');input.value=String(value);input.oninput();};
+    const target=new THREE.WebGLRenderTarget(64,64);target.texture.colorSpace=THREE.SRGBColorSpace;
+    const sample=visible=>{root.visible=visible;renderer.setRenderTarget(target);renderer.render(scene,camera);const pixel=new Uint8Array(4);renderer.readRenderTargetPixels(target,32,32,1,1,pixel);renderer.setRenderTarget(null);return [...pixel].slice(0,3);};
+    const checks=[];
+    const probe=name=>{const through=sample(true),background=sample(false);root.visible=true;const delta=Math.max(...through.map((value,i)=>Math.abs(value-background[i])));assert(delta<=12,name+' window masks the sky: '+through+' vs '+background);checks.push({name,through,background,delta});return background;};
+    const panorama=document.createElement('canvas');panorama.width=64;panorama.height=32;
+    const ctx=panorama.getContext('2d');const gradient=ctx.createLinearGradient(0,0,64,32);gradient.addColorStop(0,'#275ec6');gradient.addColorStop(1,'#ddb150');ctx.fillStyle=gradient;ctx.fillRect(0,0,64,32);
+    await loadSky(panorama.toDataURL());const panoNative=probe('panorama native');
+    angle('tilt',15);angle('rotation',65);const panoRotated=probe('panorama oriented');
+    assert(panoNative.some((value,i)=>Math.abs(value-panoRotated[i])>8),'Sky orientation did not remain visible through the window');
+    const faces=['#d86060','#60b060','#6080d8','#d8b860','#60b8c8','#a868b8'].map(color=>{const c=document.createElement('canvas');c.width=c.height=4;const x=c.getContext('2d');x.fillStyle=color;x.fillRect(0,0,4,4);return c.toDataURL();});
+    await loadSky(JSON.stringify({t:'cube',f:faces}));angle('tilt',0);angle('rotation',0);const cubeNative=probe('cube native');
+    angle('rotation',90);const cubeRotated=probe('cube oriented');
+    assert(cubeNative.some((value,i)=>Math.abs(value-cubeRotated[i])>20),'Cube rotation did not remain visible through the window');
+    sky.sync('');probe('sky off');
+    camera.position.x=-4;camera.lookAt(-4,4.3,-17);const wall=sample(true),outside=sample(false);root.visible=true;
+    assert(wall.some((value,i)=>Math.abs(value-outside[i])>15),'The wall surrounding the opening no longer occludes the sky');
+    camera.position.set(-15,3,0);camera.lookAt(-20,3,0);const plasterCenter=sample(true);
+    camera.position.z=3;camera.lookAt(-20,3,3);const plasterBeside=sample(true);
+    assert(plasterCenter.every((value,i)=>Math.abs(value-plasterBeside[i])<=6),'The old green picture still overlaps the west plaster wall');
+    fixture.dataset.skyChecks=JSON.stringify(checks);
+    renderer.render(scene,camera);room.dispose();target.dispose();renderer.dispose();
+  `,
+});
+// Exercise synchronized environment selection through the real bootstrap and frame loop.
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-cozy',
+  page: '/table.html?fixtureEnvironment=cozy&environment=standard',
+});
+
+// Keep the approved text action visible and operable in full/compact and touch layouts.
+SCENES.push({
+  name: 'room-theme-match',
+  root: '#roomSettingsModal',
+  expect: { selector: '#tableThemeMatch:not([hidden]) button', min: 1 },
+  drive: `
+    const assert=(ok,message)=>{if(!ok)throw Error(message)};
+    const THREE=await import('three');
+    const {createRoomSettings}=await import('/table/room-settings.js');
+    const {getRoomTheme}=await import('/rendering/rooms/room-themes.js');
+    const byId=id=>document.getElementById(id);
+    let rank=2;
+    const sent=[];
+    const room={state:{environment:'cozy',tableX:10,tableZ:7,tableShape:'roundedRect',rimWood:'walnut',feltColor:'#123456',scale:{},whiteboard:{},players:new Map()},send:(...args)=>sent.push(args)};
+    const settings=createRoomSettings({scene:new THREE.Scene(),gridMesh:()=>null,gridLiftFallback:.05,resizeTable(){},setTableColor(){},setRimWood(){},applyLighting(){},getQuality:()=> 'medium',setQuality(){},getRoom:()=>room,getEnvironmentTheme:()=>getRoomTheme(room.state.environment),getRank:()=>rank,onTableResize(){},syncWhiteboardSettings(){},relabelOverlays(){},byId,setIcon(){}});
+    settings.bindControls();
+    byId('roomSettings').click();
+    const button=byId('tableThemeApply');
+    for(const compact of [false,true]){
+      document.body.classList.toggle('ui-compact',compact);document.body.classList.toggle('ui-full',!compact);
+      const select=byId('roomEnvironment');
+      const selectBox=select.getBoundingClientRect();
+      assert(selectBox.width>0&&selectBox.left>=0&&selectBox.right<=innerWidth,'Room style selector is clipped');
+      assert(select.value==='cozy'&&select.options.length===2,'Room style options are missing');
+      assert(select.labels[0].textContent.trim()==='Room style'&&select.getAttribute('aria-describedby')==='roomEnvironmentHint','Room selector lost its accessible name or hint');
+      if(matchMedia('(pointer:coarse)').matches)assert(selectBox.height>=44,'Room style touch target is too short');
+      select.focus();assert(document.activeElement===select,'Room style is not keyboard focusable');
+      const beforeStyle=sent.length;select.value='standard';select.dispatchEvent(new Event('change'));
+      assert(sent.length===beforeStyle+1&&sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style failed to send one shared change');
+      assert(room.state.environment==='cozy'&&select.value==='cozy','Room selector bypassed authoritative state');
+      const box=button.getBoundingClientRect();
+      assert(box.width>0&&box.left>=0&&box.right<=innerWidth,'Matching table control is clipped');
+      assert(button.scrollWidth<=button.clientWidth,'Matching table label is truncated');
+      assert(button.textContent.trim()==='Use matching table','Compact mode lost the text action');
+      if(matchMedia('(pointer:coarse)').matches)assert(box.height>=44,'Matching table touch target is too short');
+      assert(button.getAttribute('aria-describedby')==='tableThemeHint','Matching action lost its explanatory text');
+      button.focus();assert(document.activeElement===button,'Matching action is not keyboard focusable');
+      button.click();
+      assert(sent.at(-2)[0]==='table'&&sent.at(-1)[0]==='tableColor','Matching action did not use existing settings messages');
+      assert(room.state.rimWood==='walnut'&&room.state.feltColor==='#123456','A theme mutated synchronized table state');
+    }
+    rank=0;const before=sent.length;button.click();assert(sent.length===before,'Demoted role used a stale matching action');
+    document.body.classList.remove('ui-compact');document.body.classList.add('ui-full');
+  `,
+});
+
+// Keep expensive WebGL regression iteration bounded while retaining both device profiles.
+if (process.env.COMPONENT_SCENE) {
+  const selected = SCENES.filter((scene) => scene.name === process.env.COMPONENT_SCENE);
+  if (!selected.length) throw new Error(`Unknown component scene: ${process.env.COMPONENT_SCENE}`);
+  SCENES.splice(0, SCENES.length, ...selected);
+}
+
 // Raster previews use the same bounded image format as production. serveDir
 // serves static fixtures, so provide the bundled derivative responses explicitly.
 const playingCardThumbnails = Object.fromEntries(

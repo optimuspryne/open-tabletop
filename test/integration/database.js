@@ -24,7 +24,7 @@ after(async () => {
 
 test('application role can use the real schema but cannot create tables', async () => {
   const migrations = await pool.query('SELECT version FROM schema_migrations ORDER BY version');
-  assert.equal(migrations.rows.length, 23); // Includes durable participation policy.
+  assert.equal(migrations.rows.length, 24); // Includes the shared room environment.
   await assert.rejects(
     pool.query('CREATE TABLE integration_forbidden (id integer)'),
     (error) => error.code === '42501',
@@ -83,6 +83,7 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
   await database.saveRoomState(room.id, {
     scoreboard: [{ id: 's1', label: 'Points', score: 4 }],
     notes: 'integration note',
+    environment: 'cozy',
     tableX: 12,
     tableZ: 9,
     tableShape: 'hex',
@@ -105,6 +106,20 @@ test('users, rooms, membership, and durable state round-trip through PostgreSQL'
   const state = await database.getRoomState(room.id);
   assert.deepEqual(state.scoreboard, [{ id: 's1', label: 'Points', score: 4 }]);
   assert.equal(state.notes, 'integration note');
+  assert.equal(state.environment, 'cozy');
+  const other = await database.createRoom({ ownerId: owner.id, code: 'OTHERROOM', name: 'Other' });
+  assert.equal((await database.getRoomState(other.id)).environment, 'standard');
+  const fresh = createDatabase(new pg.Pool({ connectionString }));
+  try {
+    assert.equal((await fresh.getRoomState(room.id)).environment, 'cozy');
+    assert.equal((await fresh.getRoomState(other.id)).environment, 'standard');
+  } finally {
+    await fresh.close();
+  }
+  await assert.rejects(
+    pool.query('UPDATE rooms SET room_environment = $2 WHERE id = $1', [room.id, 'invalid']),
+    (error) => error.code === '23514',
+  );
   assert.equal(state.tableX, 12);
   assert.equal(state.tableZ, 9);
   assert.equal(state.tableShape, 'hex');

@@ -83,3 +83,15 @@ test('offsetOutline: outward grows, inward shrinks; rect corners mitre; circle s
   const ro = offsetOutline(tableOutline('round', 10, 7), 0.5);
   assert.ok(ro.every((p) => Math.abs(Math.hypot(p.x, p.z) - 10.5) < 0.02));
 });
+
+test('rounded corner chords stay within a tenth of a percent of the shared arc radius', () => {
+  const points = tableOutline('roundedRect', hx, hz);
+  const r = Math.min(hx, hz) * 0.2;
+  const corner = points.filter((p) => p.x >= hx - r - 1e-9 && p.z >= hz - r - 1e-9);
+  assert.ok(points.length <= 96, 'Corner sampling must remain bounded for server walls');
+  for (let i = 1; i < corner.length; i++) {
+    const x = (corner[i - 1].x + corner[i].x) / 2 - (hx - r);
+    const z = (corner[i - 1].z + corner[i].z) / 2 - (hz - r);
+    assert.ok(r - Math.hypot(x, z) < r * 0.001);
+  }
+});

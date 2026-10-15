@@ -29,6 +29,23 @@ keyboard and password-manager paste. Recovery codes support Copy, Download and n
 Compact mode keeps action labels visible; touch action rows stack with 44px-minimum buttons. These
 account forms do not add tabletop gestures or bypass the gameplay intent layer.
 
+## Room style and matching table finish
+
+In **Room Settings → Table Size & Color**, GMs/owners choose **Room style** using
+the labeled native select: Standard (skybox only) or Cozy game room. Use mouse,
+tap, or Tab and the platform's native select keys. Touch full/compact stack the
+label, 44px select and shared/saved hint; labels remain visible in desktop compact
+mode. A choice updates everyone and persists for that room. Scene loads and game
+reset preserve it; old preview URLs cannot override it. This settings control adds
+no tabletop intent or gesture.
+
+In **Room Settings → Table Size & Color**, an active room theme can offer
+**Use matching table**. Click, tap, or focus the native button and press Enter/
+Space to apply its wood and felt recommendation. The text stays visible in compact
+mode; touch layouts stack the row with a 44px minimum action. Only GMs/owners can
+apply it. Theme selection alone preserves table appearance, shape and size. This
+settings action adds no tabletop gesture or pointer-intent mapping.
+
 ## Domino appearance
 
 These approved controls are now built by the shared tile appearance module. Future
@@ -456,6 +473,15 @@ What no tab spells out is the two exact-angle gaps listed above — there is sti
 45° for a selection you are not holding, and no truly unsnapped rotation off the mouse — but those
 are holes in the gesture surface itself, not in its documentation.
 
+
+## Sky orientation
+
+In **Settings → UI → Skybox**, drag **Tilt** or **Rotation** with mouse or one finger.
+Focus a slider and use arrow keys, or enter degrees in its numeric field. Tilt ranges
+from −90° to 90°; Rotation ranges from −180° to 180°. Both apply live, stay local to
+this device, and remain labeled in compact mode. Sky Off disables adjustment while
+retaining the angles. Enter 0° in both fields to restore the original orientation.
+These native settings controls do not change table gestures or send room messages.
 
 ## Library browsing
 

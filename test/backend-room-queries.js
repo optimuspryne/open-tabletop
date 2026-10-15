@@ -60,6 +60,7 @@ test('stored room state is shaped only after a successful query', async () => {
         table_x: '12',
         table_z: '8',
         skybox: '/sky.jpg',
+        room_environment: 'cozy',
         felt_color: '#123456',
         scene: { pieces: [] },
         scale: { worldPerUnit: 2 },
@@ -70,5 +71,13 @@ test('stored room state is shaped only after a successful query', async () => {
   assert.equal(state.tableX, 12);
   assert.equal(state.tableZ, 8);
   assert.equal(state.notes, 'note');
+  assert.equal(state.environment, 'cozy');
   assert.deepEqual(state.scoreboard, [{ id: 's1', label: 'A', score: 2 }]);
+});
+
+test('legacy and invalid stored environment values use Standard', async () => {
+  for (const value of [undefined, null, 'constructor', 'Cozy', '/custom.glb']) {
+    const rooms = createRoomQueries(async () => ({ rows: [{ room_environment: value }] }));
+    assert.equal((await rooms.getRoomState('1')).environment, 'standard');
+  }
 });

@@ -1,5 +1,6 @@
 import { timerLive } from '../../../shared/pieces.js';
 import { lightingSnapshot } from '../../../shared/lighting.js';
+import { isRoomEnvironment, normalizeRoomEnvironment } from '../../../shared/room-environments.js';
 import { RANK } from '../../permissions.js';
 import {
   boundedString,
@@ -145,6 +146,16 @@ export function registerRoomStateHandlers(
     room.scheduleSave();
   });
 
+  roomMessage('roomEnvironment', (client, message) => {
+    if (room.rank(client) < RANK.gm) return;
+    const parsed = oneField(message, 'environment', (value) =>
+      isRoomEnvironment(value) ? value : null,
+    );
+    if (!parsed || parsed.environment === room.state.environment) return;
+    room.state.environment = parsed.environment;
+    room.scheduleSave();
+  });
+
   roomMessage('lightingApply', (client, message) => {
     if (room.rank(client) < RANK.gm) return;
     const lighting = lightingPayload(message);
@@ -233,6 +244,7 @@ export async function saveRoomStateNow(room, { db }) {
     rimWood: room.state.rimWood,
     skybox: room.state.skybox,
     feltColor: room.state.feltColor,
+    environment: normalizeRoomEnvironment(room.state.environment),
     scene: room.savedScene,
     scale: room.scaleSnapshot(),
     lighting: room.defaultLighting,

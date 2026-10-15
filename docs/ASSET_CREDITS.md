@@ -187,13 +187,74 @@ The original tile PNG set (excluding these two new fallbacks):
   `public/static_assets/textures/wood-mahogany.png` (default), `wood-walnut.png`, `wood-birch.png`,
   `wood-green.png`, `wood-oak.png`.
 
+The opt-in cozy room prototype (`public/rendering/cozy-room.js`) also reuses the
+credited oak original for its trim and fallback furnishings. The woven rug is generated
+procedurally by project code (1024px desktop/tablet, 512px phones, with a fine
+weave and the original border proportions). The soft 128px furniture contact map is also an
+original procedural gradient; no third-party image is added. The authored
+furniture below supplies the chair, shelf and lamp. The AI-generated approval mock-up is a design
+reference and is not used as a runtime asset.
+
+The companion `Open-Tabletop_Asset_Builders/3d_models/original/cozy_room_v1/` asset
+study reuses the unchanged oak color image and new normal/roughness derivatives.
+Its chair, game shelf, floor lamp and woven-linen maps were created for Open Tabletop
+with Codex in Blender, under the repository license with other project originals.
+The owner's Go bowl, chess board and pouch are style references; none of their original
+models or maps were replaced. The owner's corrected
+`3d_models/original/BLEND/cozy_room_assets_fixed.blend` is now the authoritative
+source for `public/static_assets/models/environments/cozy/cozy-chair.glb`,
+`cozy-game-shelf.glb` and `cozy-floor-lamp.glb`. Chair/lamp exports remain byte-identical
+to the fixed exports. The shelf now uses the existing grain-aligned oak UV layer
+from a separate `cozy_plants_v1/cozy-room-shelf-uv.blend` derivative, with unchanged
+frame/tray geometry, images, materials and owner alignments. Only review-stage
+placement is removed. The source blend is never overwritten by export. The later
+`cozy_shelf_v2/cozy-game-shelf-collection.blend` derivative replaces generic props
+with display copies of existing built-in coin, poker-chip, Go bowl/stone, domino,
+domino-box and pouch models under the repository license. Card faces/backs reuse
+Mesmedir's CC0 bridge deck credited above. Shelf-only coin/chip/stone meshes are
+simplified, except for the full-detail top coin in each stack. Shelf-only embedded
+image derivatives are capped at 512px; gameplay originals remain untouched. The oak frame/tray and basket
+positions are retained. No new third-party runtime asset or attribution is introduced.
+See [Art Direction](ART_DIRECTION.md) and the asset pack's README for source files and
+the measured export checks. No additional third-party models or textures are included.
+
+`models/environments/cozy/cozy-window.glb` and `textures/cozy-*.png`:
+
+- **Source:** Companion `3d_models/original/room_shell_v1/build_room_shell.py` and
+  editable `cozy-room-shell.blend`, authored for Open Tabletop with Codex. Window
+  framing/hardware are original geometry; the app adds clear glazing without an
+  image insert so the selected skybox is visible.
+- **Wood maps:** Existing Luke.RUSTLTD CC0 oak, with a lighter floor-color derivative
+  and the study's oak normal/roughness derivatives. Original texture/model files remain
+  unchanged. Bundled maps: `cozy-floor-oak-color.png`, `cozy-oak-normal.png`,
+  `cozy-oak-roughness.png`.
+- **Plaster maps:** Original deterministic periodic surface maps,
+  `cozy-plaster-color.png`, `cozy-plaster-normal.png`, `cozy-plaster-roughness.png`.
+  Distributed under the repository license with other project originals.
+- All maps are 512×512; the window GLB embeds its oak maps. The shell approval image
+  is an AI design reference only; no generated concept image is used at runtime.
+
+`models/environments/cozy/cozy-{rubber-plant,snake-plant,pothos}.glb`:
+
+- **Source:** Companion `3d_models/original/cozy_plants_v1/build_plants.py` and
+  editable `cozy-plants.blend`, authored for Open Tabletop with Codex in Blender.
+  Original curved leaf/stem meshes, rounded planters and soil; original deterministic
+  512px color, tangent-normal and roughness maps for botanical veins/variegation,
+  ceramic, terracotta and soil. Distributed under the repository license.
+- No additional third-party models, texture downloads or AI images are bundled.
+  The approved plant mock-up is an AI-generated design reference only.
+- `cozy_plants_v1/export_shelf_uv.py` activates the existing oak UV layer in a separate
+  shelf derivative. Oak color and derived normal/roughness maps retain the CC0
+  provenance above; the owner's source file remains unchanged.
+
 ---
 
 ## Felt texture - `public/static_assets/textures/felt.jpg`
 
 - **Felt Backgrounds** - by **jbp4444**, https://opengameart.org/content/felt-backgrounds
 - **License:** CC0 (public domain; no attribution required - credited here as a courtesy). Scans of
-  real felt; used desaturated as the tintable felt surface (`public/static_assets/textures/felt.jpg`).
+  real felt; used desaturated as the tintable felt surface and desktop fine bump
+  detail (`public/static_assets/textures/felt.jpg`). The original is unchanged.
 
 ---
 

@@ -467,6 +467,8 @@
               <div
                 class="chipRow"
                 id="skyResRow"
+                role="group"
+                aria-label="Skybox quality"
                 title="Skybox resolution — saved on this device, only you see it"
               >
                 <button type="button" class="chip" data-skyres="off">
@@ -484,6 +486,28 @@
                 <button type="button" class="chip" data-skyres="ultra">
                   <span class="lbl">Ultra</span>
                 </button>
+              </div>
+              <div class="skyOrientation">
+                <div>
+                  <label class="skyOrientationLabel" for="skyTilt" data-icon="arrow-autofit-height">Tilt</label>
+                  <div class="skyOrientationRow">
+                    <input id="skyTilt" type="range" min="-90" max="90" step="1" value="0" aria-describedby="skyOrientationHint" />
+                    <input id="skyTiltDegrees" type="number" min="-90" max="90" step="1" value="0" aria-label="Sky tilt in degrees" aria-describedby="skyOrientationHint" />
+                    <span aria-hidden="true">°</span>
+                  </div>
+                  <div class="skyOrientationEnds" aria-hidden="true"><span>−90°</span><span>90°</span></div>
+                </div>
+                <div>
+                  <label class="skyOrientationLabel" for="skyRotation" data-icon="rotate-3d">Rotation</label>
+                  <div class="skyOrientationRow">
+                    <input id="skyRotation" type="range" min="-180" max="180" step="1" value="0" aria-describedby="skyOrientationHint" />
+                    <input id="skyRotationDegrees" type="number" min="-180" max="180" step="1" value="0" aria-label="Sky rotation in degrees" aria-describedby="skyOrientationHint" />
+                    <span aria-hidden="true">°</span>
+                  </div>
+                  <div class="skyOrientationEnds" aria-hidden="true"><span>−180°</span><span>180°</span></div>
+                </div>
+                <p id="skyOrientationHint" class="hint">Changes apply live. Saved on this device; only you see them.</p>
+                <p id="skyOrientationStatus" class="hint" role="status" aria-live="polite">Tilt 0° · Rotation 0°</p>
               </div>
             </div>
             <div class="modal__body libPane" data-pane="placard" hidden>
@@ -746,6 +770,13 @@
         </div>
         <div class="modal__body libPane" data-pane="table">
           <div class="tableBody">
+            <div class="sizeRow roomEnvironmentRow">
+              <label for="roomEnvironment">Room style</label>
+              <div class="roomEnvironmentControls">
+                <select id="roomEnvironment" class="control control--select" aria-describedby="roomEnvironmentHint"></select>
+                <p id="roomEnvironmentHint">Shared with everyone. Saved for this room.</p>
+              </div>
+            </div>
             <div class="sizeRow" id="tableShapeRow">
               <label>Shape</label>
               <div id="tableShapes" class="chipRow">
@@ -798,6 +829,14 @@
               </div>
               <label for="tableFelt">Custom</label
               ><input type="color" id="tableFelt" value="#2f6b4f" />
+            </div>
+            <div id="tableThemeMatch" class="tableThemeMatch" hidden>
+              <span class="tableThemeLabel">Room match</span>
+              <div class="tableThemeControls">
+                <span id="tableThemeName"></span>
+                <button type="button" id="tableThemeApply" class="button" aria-describedby="tableThemeHint">Use matching table</button>
+                <p id="tableThemeHint"></p>
+              </div>
             </div>
           </div>
         </div>
@@ -1428,6 +1467,8 @@
                 <b data-icon="dots"> > </b><b data-icon="settings">Settings.</b> Go here to change
                 UI and Volume settings. In <b>Placard</b>, choose a silhouette, pattern and two colors,
                 then <b>Save placard</b>. Your appearance follows your account across rooms. Click, tap, or use the keyboard; the preview stays private until saved.
+                Under <b>UI → Skybox</b>, drag Tilt and Rotation with mouse or touch, use arrow keys on a focused slider, or enter degrees. These sky adjustments apply live and stay on your device. Enter 0° in both fields to restore the original orientation.
+                In <b>Room Settings → Table Size &amp; Color</b>, GMs/owners choose <b>Room style</b> with the native select (mouse, touch, or keyboard). Standard or Cozy game room is shared with everyone and saved for this room, including after reloads and game resets. Wood, felt and lighting stay independent. They can click, tap, or keyboard-activate <b>Use matching table</b> when a room theme offers it. This applies its wood and felt recommendation while keeping table shape and size; selecting a room theme alone preserves your table finish.
               </li>
             </ul>
             <p><b>Spectators:</b> Choose Spectate in More, or Watch in the lobby. Return to play when ready. Spectators can chat and inspect, are skipped by turns, and keep any reserved seat, hand and tray. Returning to play never lifts a GM time-out.</p>

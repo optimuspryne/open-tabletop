@@ -25,6 +25,17 @@ blind.
 The version lives in three places that must always agree: `package.json`, the git tag
 (`vX.Y.Z`), and the Docker image tags.
 
+## Unreleased room-style upgrade
+
+Migration `024_room_environment.sql` adds `rooms.room_environment`, defaulting to
+`standard` with a checked `standard`/`cozy` whitelist. Existing table, lighting,
+scene and account data are preserved. The flattened fresh-install schema records
+migration 024. Use the existing migration-role connection during server startup
+(or apply pending numbered migrations as schema owner if automatic migration is
+disabled), then refresh clients. No new dependency, port, service or environment
+variable is required. Choose Cozy from Room Settings; saved room state supersedes
+legacy `?environment=cozy` preview links.
+
 ## Cutting a release
 
 Pushing a `vX.Y.Z` tag triggers **`.github/workflows/release.yml`**, which does the build,

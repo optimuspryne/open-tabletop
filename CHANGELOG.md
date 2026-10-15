@@ -9,6 +9,91 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Added
+- Added **Room style** above Shape in Room Settings → Table Size & Color, with
+  Standard (skybox only) and Cozy game room. Authorized GM/owner changes synchronize
+  to every client and persist independently for each room across reloads/restarts.
+  Switching disposes old scenery; table finish, lighting and skybox stay independent.
+  Scenes/resets preserve room style; saved state now takes precedence over old cozy
+  preview links. Migration `024_room_environment.sql`, a server restart and browser
+  refresh are required. Existing rooms default to Standard.
+- Refactored the cozy preview into a reusable room-theme runtime with structure,
+  openings, play area, furnishings, decoration and atmosphere components. Shared
+  owners handle batching/model loading, seating, cutaways, phone compatibility,
+  shadow bounds and resource cleanup; the cozy art and layout are retained.
+  Table appearance stays independent. The approved **Use matching table** action
+  in Room Settings explicitly applies a theme's wood/felt recommendation through
+  existing GM/owner settings messages. Cozy recommends Oak and green felt. Theme
+  selection is now shared and saved through the Room style control described above.
+  See `docs/ROOM_THEMES.md` for the authoring contract.
+- Sharpened the cozy rug with a 1024px procedural weave (512px on phones), a finer
+  thread pattern, scaled borders and device-bounded anisotropic filtering. The
+  solid felt slab now casts a full tabletop shadow, preventing tabletop-piece
+  silhouettes from appearing through it on the floor. Refresh clients to apply;
+  no additional server restart is needed for these two follow-up fixes.
+- Polished the table with a softly bevelled satin rim, grain mapped along the rail,
+  and finer world-scaled felt with desktop bump detail. Existing wood/felt choices
+  remain. Rounded corners now share 20 arc segments across rendering, grid clipping
+  and server walls. Cozy furnishings cast desktop shadows; bounded contact shading
+  grounds furniture on all devices while phones retain their shader fallback.
+  Restart the server and refresh clients so the shared corner outline agrees.
+- Added a phone shader fallback for the cozy room after the Pixel 10 Pro still
+  crashed with reduced textures while UI buttons remained usable. Phone scenery
+  keeps base artwork and metal tuning, omits physical layers/detail maps and room
+  shadow reception, and leaves window openings clear without blended panes. Uses
+  the existing device classifier independently of quality preferences. Desktop/tablet
+  material detail remains; GLB/source assets and gameplay rendering are unchanged.
+  The owner confirmed the Pixel 10 Pro crash resolved on October 15, 2026.
+  Refresh the preview; no server restart is needed.
+- Reduced the cozy shelf's embedded texture dimensions to at most 512px, cutting
+  estimated decoded image memory from 80 MB to 18 MB after an Android crash report.
+  Restored full-detail top coins while retaining gameplay metal tuning (metalness 1,
+  roughness 0.3) and matching the shared Gold/Silver palette. Original models/maps
+  remain intact. Texture reduction alone did not resolve the reported Android crash;
+  the phone shader fallback above was subsequently confirmed on the affected device.
+- Stocked the cozy-room shelf with miniature versions of the built-in card decks,
+  coins, poker chips, Go bowls/stones, dominoes and pouch. The dominoes box is half
+  the approved mock-up size. The separate shelf export retains the corrected oak
+  frame, tray and storage baskets; gameplay models and the owner's source stay intact.
+  Refresh `environment=cozy`; no server restart or migration is needed.
+- Cozy-room chairs now follow occupied player seats instead of a fixed six-chair
+  arrangement. Joining, leaving, switching seats and becoming a spectator update
+  just the chairs; empty seats stay clear. Chairs face inward at all eight seat
+  positions and stay outside the shared outline for every table shape. Shared chair
+  resources remain owned by the room across roster changes. Refresh the existing
+  `environment=cozy` preview; no server restart or migration is needed.
+- Added UV-textured rubber plants, snake plants and trailing pothos to the cozy
+  preview: six varied placements on the floor, window sill and bookshelf, sharing
+  model resources and following wall cutaways. Removed the green placeholder picture
+  that overlapped the plaster. The shelf now uses its authored grain-aligned UVs
+  instead of stretched cube UVs, with bounded anisotropic filtering on model maps.
+  The owner's fixed Blender source, corrected geometry and materials are preserved;
+  the shelf UV correction is a separate derivative. Refresh `environment=cozy`;
+  no server restart or migration is needed.
+- Gave the cozy preview UV-textured plaster walls, moulded oak trim, bevelled
+  staggered floorboards and deeper Blender-authored casement frames/sills. Clear
+  glazing now shows the room's selected skybox directly, including panorama/cube
+  tilt and rotation; the painted outdoor inserts are removed. New 512px color,
+  normal and roughness maps retain bounded geometry and owned-resource cleanup.
+  Refresh the existing `environment=cozy` URL; no restart or migration is needed.
+- The cozy preview now uses the owner's corrected Blender chair, game shelf and
+  floor lamp, exported from `cozy_room_assets_fixed.blend` with authored UVs,
+  materials and embedded textures preserved. Chairs share model resources; the
+  shelf follows wall cutaways. Failed model loads retain procedural furnishings,
+  and resize/cleanup releases stale loads and shared resources safely. Refresh an
+  existing `environment=cozy` link; no server restart or migration is needed.
+  See `docs/ART_DIRECTION.md` for the style and export contracts.
+- Added an opt-in cozy game room prototype: append `environment=cozy` to a table
+  URL to surround the existing table with oak flooring, a woven rug, upholstered
+  chairs, table supports, cream walls, daylight windows, a bookcase and a
+  lamp and houseplants. Near walls and their attached furnishings cut away as the camera orbits;
+  overhead views remove all walls. Scenery follows table size/shape and remains
+  viewer-local, unpickable and outside physics, inventory and saves. Refresh to
+  enable/remove the preview; no server restart or migration is needed.
+- Added viewer-local Skybox Tilt (−90° to 90°) and Rotation (−180° to 180°)
+  sliders and degree fields below sky quality in Settings → UI. Adjustments apply
+  live to panoramas and cubemaps, persist on this device, and retain visible labels
+  in compact mode and larger touch targets. Set both fields to 0° to restore the
+  original orientation. Refresh the browser; no server restart or migration is needed.
 - The public website's hero cycles through Chess, Card games, Dice, Go, Dominoes,
   Mahjong and Wordy every six seconds, with the approved crossfade, game selectors,
   previous/next and pause/play controls. Manual selection stops playback; hover,

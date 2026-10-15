@@ -1,4 +1,5 @@
 import { createAccountSecurityRouter } from './server/http/routes/account-security.js';
+import { normalizeRoomEnvironment } from './shared/room-environments.js';
 import { createRecoveryMailer } from './server/recovery-mail.js';
 import { createAssetFilesRouter } from './server/http/routes/asset-files.js';
 import { createPieceVisibility, broadcastPieceEvent } from './server/game/piece-visibility.js';
@@ -406,6 +407,7 @@ class TableRoom extends Room {
       if (/^#[0-9a-f]{6}$/i.test(rs.feltColor || '')) this.state.feltColor = rs.feltColor;
       this.applyScale(rs.scale); // grid + measurement calibration (seeded defaults survive a null column)
       this.state.skybox = validSky(String(rs.skybox || '')) ? String(rs.skybox || '') : '';
+      this.state.environment = normalizeRoomEnvironment(rs.environment);
       this.defaultLighting = normalizeLighting(rs.lighting);
       Object.assign(this.state.lighting, this.defaultLighting);
       this.savedScene = rs.scene || null; // GM's last saved table state — applied below, once physics maps exist

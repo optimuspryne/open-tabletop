@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from '../public/vendor/three/three.module.js';
 import { createRoomSettings } from '../public/table/room-settings.js';
 import { normalizeLighting } from '../shared/lighting.js';
+import { getRoomTheme } from '../public/rendering/rooms/room-themes.js';
 
 function field() {
   return {
@@ -23,7 +24,7 @@ function field() {
     blur() {},
   };
 }
-function fixture() {
+function fixture({ theme = null } = {}) {
   const scene = new THREE.Scene(),
     elements = new Map(),
     listeners = new Map();
@@ -32,6 +33,7 @@ function fixture() {
     return elements.get(id);
   };
   const state = {
+    environment: theme?.id || 'standard',
     tableX: 10,
     tableZ: 7,
     tableShape: 'rect',
@@ -89,6 +91,8 @@ function fixture() {
     getQuality: () => 'high',
     setQuality: () => {},
     getRoom: () => room,
+    getEnvironmentTheme: () => getRoomTheme(state.environment),
+    getRank: () => (['owner', 'gm'].includes(state.players.get('me')?.role) ? 2 : 0),
     onTableResize: () => resized++,
     syncWhiteboardSettings: () => whiteboardSyncs++,
     relabelOverlays: () => relabeled++,
@@ -257,4 +261,63 @@ test('owner-only lighting defaults and restore/factory messages retain their con
   f.byId('roomSettings').onclick();
   assert.equal(f.byId('lightingSaveDefault').hidden, true);
   assert.equal(f.byId('lightingFactory').hidden, true);
+});
+
+test('matching a room is explicit and sends only its independent wood/felt appearance', () => {
+  const f = fixture({ theme: getRoomTheme('cozy') });
+  f.settings.hydrate();
+  f.byId('roomSettings').onclick();
+  assert.deepEqual(f.sent, []);
+  assert.equal(f.state.feltColor, '#123456');
+  assert.equal(f.byId('tableThemeMatch').hidden, false);
+  assert.equal(f.byId('tableThemeName').textContent, 'Cozy game room');
+  assert.match(f.byId('tableThemeHint').textContent, /Keeps shape and size/);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, [
+    ['table', { rimWood: 'oak' }],
+    ['tableColor', { color: '#2f6b4f' }],
+  ]);
+  assert.equal(f.state.tableShape, 'rect');
+  assert.equal(f.state.tableX, 10);
+  assert.equal(f.state.tableZ, 7);
+  // Only the server patch changes synchronized appearance.
+  assert.equal(f.state.feltColor, '#123456');
+  f.state.players.get('me').role = 'player';
+  f.byId('tableThemeApply').onclick();
+  assert.equal(f.sent.length, 2, 'Stale enabled controls must recheck the live role');
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeApply').disabled, true);
+});
+
+test('rooms without matching finishes hide the action and cannot send appearance changes', () => {
+  const f = fixture();
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeMatch').hidden, true);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, []);
+});
+
+test('room style follows authoritative state, waits for patches and respects live permissions', () => {
+  const f = fixture();
+  const select = f.byId('roomEnvironment');
+  assert.equal(select.value, 'standard');
+  select.value = 'cozy';
+  select.onchange();
+  assert.deepEqual(f.sent, [['roomEnvironment', { environment: 'cozy' }]]);
+  assert.equal(f.state.environment, 'standard');
+  assert.equal(select.value, 'standard');
+  f.change(f.state, 'environment', 'cozy');
+  assert.equal(select.value, 'cozy');
+  assert.equal(f.byId('tableThemeMatch').hidden, false);
+  assert.equal(f.state.feltColor, '#123456');
+  assert.deepEqual(f.applied, [], 'Selecting the room must not apply any table or lighting finish');
+  f.state.players.get('me').role = 'player';
+  select.value = 'standard';
+  select.onchange();
+  assert.equal(f.sent.length, 1);
+  f.byId('roomSettings').onclick();
+  assert.equal(select.disabled, true);
+  f.change(f.state, 'environment', 'standard');
+  assert.equal(select.value, 'standard');
+  assert.equal(f.byId('tableThemeMatch').hidden, true);
 });

@@ -21,13 +21,15 @@ function pieceMesh() {
   return root;
 }
 
-function fixture() {
+function fixture({ scenery = false } = {}) {
   const meshes = new Map([['piece', { mesh: pieceMesh() }]]);
   const shadows = [];
+  const order = [];
   const camera = new THREE.PerspectiveCamera();
   const renderer = {
     shadowMap: { needsUpdate: false },
     render() {
+      order.push('render');
       shadows.push(this.shadowMap.needsUpdate);
       this.shadowMap.needsUpdate = false;
     },
@@ -43,6 +45,15 @@ function fixture() {
     CONFIG: {},
     scene: new THREE.Scene(),
     camera,
+    roomEnvironment: scenery
+      ? {
+          update(position, target) {
+            assert.equal(position, camera.position);
+            assert.ok(target.isVector3);
+            order.push('cutaway');
+          },
+        }
+      : null,
     renderer,
     meshes,
     buffers,
@@ -67,7 +78,12 @@ function fixture() {
     pieceDrag: { current() {} },
     selection: { update() {} },
     trays: { updateCamera: () => false },
-    controls: { target: new THREE.Vector3(), update() {} },
+    controls: {
+      target: new THREE.Vector3(),
+      update() {
+        order.push('camera');
+      },
+    },
     leanOffset: new THREE.Vector3(),
     leanT: 0,
     leanActive: false,
@@ -77,8 +93,17 @@ function fixture() {
     perf: { frame() {} },
     requestAnimationFrame: (callback) => (nextFrame = callback),
   });
-  return { meshes, shadows, camera, renderer, pieceView, buffers, frame: () => nextFrame() };
+  return { meshes, shadows, order, camera, renderer, pieceView, buffers, frame: () => nextFrame() };
 }
+
+test('room cutaways sample the final camera before rendering, without changing default frame order', () => {
+  const f = fixture({ scenery: true });
+  assert.deepEqual(f.order, ['camera', 'cutaway', 'render']);
+  f.order.length = 0;
+  f.frame();
+  assert.deepEqual(f.order, ['camera', 'cutaway', 'render']);
+  assert.deepEqual(fixture().order, ['camera', 'render']);
+});
 
 test('stationary frames reuse shadows while camera orbit and explicit refreshes still work', () => {
   const f = fixture();

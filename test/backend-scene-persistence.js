@@ -589,3 +589,16 @@ test('orphaned inspections survive a full snapshot and recover privately after l
   assert.deepEqual(spawn[3], { tile: 'domino', back: 'blue' });
   assert.ok([...room.cardData.values()].some((card) => card.front === 'orphan'));
 });
+
+test('portable scenes and game resets preserve the destination room environment', () => {
+  const source = serializationRoom();
+  source.state.environment = 'cozy';
+  assert.equal(Object.hasOwn(serializeScene(source, { geoOf }), 'environment'), false);
+  assert.equal(Object.hasOwn(serializeGame(source, { geoOf }), 'environment'), false);
+  const { room } = restorationRoom();
+  room.state.environment = 'cozy';
+  applyScene(room, { pieces: [], environment: 'standard' }, restoreOptions);
+  assert.equal(room.state.environment, 'cozy');
+  clearGameTable(room);
+  assert.equal(room.state.environment, 'cozy');
+});

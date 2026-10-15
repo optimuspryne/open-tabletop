@@ -1,5 +1,6 @@
 import { LIGHTING_PRESETS, normalizeLighting } from '../../shared/lighting.js';
 import { BOARDS } from '../../shared/pieces.js';
+import { ROOM_ENVIRONMENTS, normalizeRoomEnvironment } from '../../shared/room-environments.js';
 
 // Own synchronized table/grid presentation, settings drafts and controls, and local quality UI.
 // Rendering policy stays in core/graphics; shared geometry and message validation stay authoritative.
@@ -14,6 +15,8 @@ export function createRoomSettings({
   getQuality,
   setQuality,
   getRoom,
+  getEnvironmentTheme = () => null,
+  getRank = () => 0,
   onTableResize,
   syncWhiteboardSettings,
   relabelOverlays,
@@ -28,6 +31,22 @@ export function createRoomSettings({
   const alert = alertUser;
   const confirm = confirmAction;
   let syncLightingPanel = () => {};
+  function syncThemeMatch() {
+    const theme = getEnvironmentTheme();
+    const row = byId('tableThemeMatch');
+    if (row) row.hidden = !theme?.matchingTable;
+    if (byId('tableThemeName')) byId('tableThemeName').textContent = theme?.name || '';
+    if (byId('tableThemeHint'))
+      byId('tableThemeHint').textContent = theme?.matchingTable
+        ? `Applies ${theme.matchingTable.description}. Keeps shape and size.`
+        : '';
+    if (byId('tableThemeApply')) byId('tableThemeApply').disabled = getRank() < 2;
+    const select = byId('roomEnvironment');
+    if (select) {
+      select.value = normalizeRoomEnvironment(getRoom()?.state.environment);
+      select.disabled = getRank() < 2;
+    }
+  }
   // Preset colors for the felt + grid-line swatch popovers (the custom picker sits beside them).
   const FELT_COLORS = [
     '#2f6b4f',
@@ -216,6 +235,7 @@ export function createRoomSettings({
     relabelOverlays(); // scale drives every ruler's label
   }
   function bindRoom(room, cb) {
+    cb(room.state).listen('environment', syncThemeMatch, false);
     cb(room.state).listen(
       'tableX',
       () => {
@@ -387,6 +407,7 @@ export function createRoomSettings({
         renderLightingControls();
       };
       const syncRoomSettings = () => {
+        syncThemeMatch();
         byId('tableW').value = Math.round(room.state.tableX * 2);
         byId('tableD').value = Math.round(room.state.tableZ * 2);
         syncTableShapeUI();
@@ -544,6 +565,36 @@ export function createRoomSettings({
         const f = byId('tableFelt');
         if (f) f.value = hex;
         room.send('tableColor', { color: hex });
+      });
+      syncThemeMatch();
+      const environment = byId('roomEnvironment');
+      if (environment) {
+        if (!environment.childElementCount)
+          for (const { id, name } of ROOM_ENVIRONMENTS) {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = name;
+            environment.appendChild(option);
+          }
+        environment.value = normalizeRoomEnvironment(room.state.environment);
+        environment.onchange = () => {
+          const current = getRoom();
+          const value = environment.value;
+          if (current && getRank() >= 2 && ROOM_ENVIRONMENTS.some(({ id }) => id === value))
+            current.send('roomEnvironment', { environment: value });
+          // Selection reflects authoritative state until the server patch arrives.
+          syncThemeMatch();
+        };
+      }
+      wire('tableThemeApply', () => {
+        // Recheck live role/connection; existing server table handlers authorize
+        // each message and retain the synchronized appearance/save owners.
+        const current = getRoom();
+        const match = getEnvironmentTheme()?.matchingTable;
+        if (!current || !match || getRank() < 2) return;
+        current.send('table', { rimWood: match.rimWood });
+        current.send('tableColor', { color: match.feltColor });
+        if (felt) felt.value = match.feltColor;
       });
     }
 

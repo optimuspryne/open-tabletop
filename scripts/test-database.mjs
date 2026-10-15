@@ -117,6 +117,36 @@ async function prepareDatabase(ownerUrl) {
   try {
     const schema = await fs.readFile(path.join(root, 'postgres/schema.sql'), 'utf8');
     await client.query(schema);
+    // Existing rooms migrate to Standard without losing their other settings.
+    const environmentMigration = await fs.readFile(
+      path.join(root, 'postgres/024_room_environment.sql'),
+      'utf8',
+    );
+    await client.query('CREATE SCHEMA environment_upgrade_test');
+    try {
+      await client.query('SET search_path TO environment_upgrade_test');
+      await client.query(
+        'CREATE TABLE rooms (id bigint PRIMARY KEY, notes text, table_rim_wood text)',
+      );
+      await client.query("INSERT INTO rooms VALUES (1, 'legacy notes', 'walnut')");
+      await client.query(environmentMigration);
+      assert.deepEqual((await client.query('SELECT * FROM rooms')).rows, [
+        { id: '1', notes: 'legacy notes', table_rim_wood: 'walnut', room_environment: 'standard' },
+      ]);
+      await client.query("UPDATE rooms SET room_environment = 'cozy'");
+      await client.query(environmentMigration);
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms')).rows[0].room_environment,
+        'cozy',
+      );
+      await assert.rejects(
+        client.query("UPDATE rooms SET room_environment = 'unknown'"),
+        (error) => error.code === '23514',
+      );
+    } finally {
+      await client.query('SET search_path TO public');
+      await client.query('DROP SCHEMA environment_upgrade_test CASCADE');
+    }
     // Exercise migration 021 independently against an existing account, preserving its avatar.
     const placardMigration = await fs.readFile(
       path.join(root, 'postgres/021_user_placards.sql'),

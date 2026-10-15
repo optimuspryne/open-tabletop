@@ -64,6 +64,10 @@ For staged implementation status and **remaining proposed** work, see [DESIGN_ne
 The participation foundation, durable GM time-outs, self-service spectators and private deck browsing are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
+For the unreleased shared Room style selector, see the
+[room-style upgrade notes](RELEASING.md#unreleased-room-style-upgrade): migration 024,
+server restart and browser refresh are required; existing rooms default to Standard.
+
 For release 0.22.0, see the [upgrade and verification guide](RELEASING.md#upgrading-to-0220):
 restart the server and refresh clients, run `npm ci` for source installs, and reselect/recalibrate
 existing Wordy boards for their revised height/grid. No new migration or required deployment
@@ -342,7 +346,7 @@ The codebase:
 | `public/table/presence.js`                                                                            | browser | Seats/cameras, public fans, markers, held labels, roster/turn display, avatar controls, and player bindings |
 | `public/table/selection.js`                                                                            | browser | Local selection, marquee gestures, highlight rings, batch commands, recolor toolbar, and compose/gather planning |
 | `public/table/room-settings.js`                                                                        | browser | Table/grid presentation, scale and lighting controls, local drafts, graphics-quality UI, and room bindings |
-| `public/table/skybox.js`                                                                               | browser | Built-in sky catalog, background texture loading/disposal, and local resolution controls |
+| `public/table/skybox.js`                                                                               | browser | Built-in sky catalog, background texture loading/disposal, and local resolution/orientation controls |
 | `public/table/overlays.js`                                                                             | browser | Measurement shapes, board-surface height, selection, previews, movement, and room bindings |
 | `public/table/whiteboard.js`                                                                           | browser | Whiteboard mesh, strokes, ownership, camera/drawing mode, controls, and room messages |
 | `public/table/trays.js`                                                                                | browser | Personal tray meshes, seat placement, camera travel, dice actions, and controls |
@@ -749,6 +753,9 @@ Pure constants and helpers imported by both sides.
   half-extents. One source of truth read by the extracted physics wall ring
   (`server/game/table-bounds.js`), the felt mesh (`resizeTable`) and the grid clip (`gridMesh`).
   round/hex use `hx`; hex is flat-top.
+- **`TABLE_CORNER_SEGMENTS`** — 20 segments per rounded-rectangle quarter arc
+  (84 perimeter points including straight-edge endpoints), shared by browser and
+  server. Restart the server after changing it before testing refreshed clients.
 - **`offsetOutline(outline, w)`** — mitre-offset a convex, origin-centred outline by ±`w` (the
   wooden rim's outer edge + a slight inward overlap onto the felt).
 - **`COLORS`** — every piece color: `neutralProp`, `cardSide`, `deckEdge`,
@@ -1293,7 +1300,8 @@ an unbounded cache of each ink/image combination and cancels its redraw callback
 `public/rendering/resources.js` owns `releaseCanvasOnDispose` and the existing
 `disposeHierarchy` implementation extracted from graphics: deduplicate owned materials,
 geometries and textures; retain `ottSharedTexture`/`ottSharedFinish` maps; zero disposed canvas
-backing stores. Only independently built meshes may use this disposer. `KIND.die.dispose`
+backing stores. Its optional second `ownedMaterials` array includes unused room-palette
+materials in the same deduplicated cleanup. Only independently built meshes may use this disposer. `KIND.die.dispose`
 registers it with `public/table/piece-view.js` replacement/removal and
 `public/table/inspection.js` swap/release. Borrowed card/dispenser geometry is outside that
 ownership boundary. A failed replacement keeps the current mesh attached. `loadModelGroup`
@@ -2407,7 +2415,7 @@ return the flag:
 
 **Per-room durable state.** A room's non-piece settings survive restarts:
 `getRoomState(roomId) → {scoreboard, notes, tableX, tableZ, tableShape, rimWood, skybox, feltColor,
-scene, scale}` (where `scene` is the GM/auto-save game snapshot and `scale` the
+scene, scale, lighting, environment}` (where `scene` is the GM/auto-save game snapshot and `scale` the
 per-room measurement scale) and
 `saveRoomState(roomId, {…})` (called by the room's `saveStateNow`/`scheduleSave`).
 The read query explicitly selects `table_shape` and `table_rim_wood`, mapped to
@@ -2415,6 +2423,10 @@ The read query explicitly selects `table_shape` and `table_rim_wood`, mapped to
 even when `scene` is null; a saved scene is not required to restore them. Missing
 values retain the existing `rect` and `mahogany` defaults. PostgreSQL regression
 coverage saves and reloads a hex table with a walnut rim and no scene snapshot.
+`room_environment` maps to the shared `environment` (`standard` or `cozy`, default
+Standard); `room_lighting` maps to independently saved `lighting`. Migration 024
+adds the checked environment column. Separate-room and fresh-connection integration
+checks verify style persistence without a game snapshot.
 
 **Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,
 hasPassword,canOwnRooms}` where `canOwnRooms = host_status='approved' || is_admin`;
@@ -2501,7 +2513,8 @@ root, cache revalidation, audio ranges, missing/traversal requests, and browser 
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
 felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
-wooden rim around the edge; the physics walls are the server's `buildBounds`), **`setTableColor(hex)`** (recolor/tint the felt
+bevelled wooden rim around the edge; geometry is supplied by `table-geometry.js`,
+while physics walls use the same shared outline in the server's `buildBounds`), **`setTableColor(hex)`** (recolor/tint the felt
 fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`walnut`/`birch`/`green`/
 `oak`, from `public/static_assets/textures/wood-*.png`; the felt fabric is `public/static_assets/textures/felt.jpg`),
 **`setTableVisible(visible)`** (toggle the felt and rim together; initial room join reveals them
@@ -2511,6 +2524,23 @@ initial-view gate after the presence controller applies the synchronized seat ca
 quiet for a full frame), and
 **`setQuality(tier)`** / **`getQuality()`** (the graphics tier, below), plus the config:
 
+- **Table finish.** `public/rendering/table-geometry.js` exports pure
+  `createTableGeometry(THREE,hx,hz,shape)`, `createRimGeometry(THREE,hx,hz,shape)`
+  and named `TABLE_FINISH` settings. Felt caps use world-unit planar UVs; the
+  indexed, closed rail follows the shared outline with a shallow seven-point bevel
+  profile. V measures perimeter distance and U follows its cross-section. Curve
+  normals are smoothed; rect/hex corners retain hard normals. The existing wood
+  cache uses the images' vertical grain without global rotation or stretching.
+  Felt repeat is 0.8 and desktop bump scale 0.025, using the existing felt image;
+  phones omit bump shading. The solid slab both casts and receives shadows, so
+  tabletop pieces cannot cast silhouettes through it onto the room floor.
+  Existing `setRimWood`/`setTableColor` settings remain.
+- **`setSceneryShadowBounds(bounds|null)`** — accepts an owned-copy world `Box3`
+  from an opt-in environment, fitting the existing directional shadow camera to
+  table plus room in light-view space. Re-fits on resize and lighting animation;
+  clear/dispose restores the table-only frustum. Signed orthographic near/far
+  include room points behind the light's nominal position. Shadow-map size/type,
+  enabled state, lighting and quality preferences remain under their existing owners.
 - **`CONFIG`** — client feel, grouped: `grab` (height/scroll), `model.size`,
   `render.delay`, `ranges` (spawn clamps), `inspect`, `marker`, `label` (held-name
   tag), `ping` (attention-ping ring), `input` (click/drag thresholds, keyboard `panStep`, plus the
@@ -3172,11 +3202,187 @@ sources for board dimensions and lighting policy.
   `syncScalePanel` converts displayed values and preserves focused input. Lighting previews stay
   local; Apply sends `lightingApply`, Cancel restores synchronized lighting, and owner default
   actions keep the existing messages. Quality Apply reloads using the existing device preference.
+- **Room style.** The approved labeled native select above Shape offers Standard
+  (skybox only) / Cozy game room and the hint “Shared with everyone. Saved for this
+  room.” It reflects `State.environment` and follows remote patches; change sends
+  `roomEnvironment {environment}` after checking the live GM/owner role. It waits
+  for authoritative state and never applies a table finish. Touch full/compact stack
+  the row with a 44px target; desktop full/compact retain visible labels.
+- **Independent room match.** Injected `getEnvironmentTheme` supplies optional
+  matching wood/felt metadata; `getRank` guards the approved **Use matching table**
+  text action with a live GM/owner check. The row stays hidden without a matching
+  theme. Activation sends existing `table {rimWood}` and `tableColor {color}` messages;
+  selecting a theme never applies it or changes dimensions, shape or lighting.
 
 Whiteboard settings and overlay labels synchronize through injected callbacks; server validation,
 core rendering, and shared snapping policy remain outside this controller. `test/room-settings.js`
 covers hydration, mesh cleanup, state listeners, unit conversion, calibration, lighting drafts,
 and messages. Component parity exercises the real settings markup in desktop and touch layouts.
+
+## `public/rendering/cozy-room.js` — cozy room prototype
+
+This entry point is now a compatibility wrapper around the room-theme runtime.
+Production client code uses `createRoomBackdrop` from `rooms/room-backdrop.js`
+to follow the server-owned `environment`, resolve `rooms/room-themes.js` and switch
+`createRoomEnvironment` instances with cleanup. Cozy's six
+component builders/configuration live in `rooms/cozy-theme.js`; shared batching/
+model preparation and occupied seating live in `room-assembly.js` and
+`room-seating.js`. [ROOM_THEMES.md](ROOM_THEMES.md) documents the component contract,
+named anchors, resource ownership, optional parts and independent matching table.
+The existing APIs and appearance described below remain compatible.
+
+Select **Room Settings → Table Size & Color → Room style → Cozy game room**.
+The public schema field `State.environment` defaults to `standard`. The guarded
+`roomEnvironment {environment: 'standard'|'cozy'}` message requires the existing
+GM/owner gameplay access, rejects malformed/extra fields and unknown IDs, and
+ignores unchanged values. Save/load uses `rooms.room_environment` through the
+existing ordered/debounced save path; migration `024_room_environment.sql` adds a
+non-null Standard default and a checked ID whitelist. Each room keeps its own
+choice across joins, refreshes and server restarts. Scenes/game resets preserve it.
+Legacy `?environment=cozy` links follow saved state. `shared/room-environments.js`
+provides the canonical options/normalizer without importing browser assets.
+Apply migration 024 through the configured migration role, restart the server and
+refresh browsers. Fresh installs include it in the flattened schema baseline.
+
+The owner's corrected Blender [furnishings](ART_DIRECTION.md) are bundled under
+`/models/environments/cozy/`: chair, game shelf and floor lamp. A separate Blender
+shell source supplies `cozy-window.glb`; original botanical sources supply rubber,
+snake and pothos GLBs. The shelf's separate `cozy_shelf_v2` derivative retains the
+corrected oak frame/tray and baskets, replacing generic shelf props with miniature
+built-in decks, coins/chips, Go bowls/stones, dominoes and pouch. The dominoes box
+is 0.26 metres along its longest axis (1.82 room units), half the approved mock-up.
+`ShelfDominoesBox` names its exported group for the real-loader scale regression.
+Shelf-only embedded maps are capped at 512px (about 17.7 MB of unique RGBA images
+including estimated mipmaps, versus 80 MB before the Android report). This estimate
+excludes geometry, additional GPU copies and decoder/upload peaks. Each stack retains
+its full-detail top coin; lower coins remain simplified. Coin PBR parameters match
+`PROPS.coin.finishTuning.metallic`: metalness 1, roughness 0.3. Tints use shared
+`METALS` Gold/Silver values.
+These display copies are compiled into the shelf GLB: no runtime gameplay factory,
+shared gameplay cache, inventory or picking dependency is added. Source originals
+remain intact; the shelf follows the existing wall cutaway and room-owned disposal.
+The production client injects a `GLTFLoader`, presence's `seatLayoutFor` and core's
+`deviceClass` only when creating the opt-in environment. Phones use a compatibility
+path independently of saved graphics quality: standard materials retain base art,
+alpha cutouts, color and scalar metalness/roughness, while omitting physical layers,
+normal/bump/roughness/metalness/AO/light/emissive/displacement maps. Room surfaces
+skip detail-map requests, map anisotropy is one, and scenery does not receive shadows.
+The window openings show the existing sky directly; their near-invisible panes are
+hidden on phones. Desktop/tablet retain authored model detail. Clear glazing uses
+standard PBR because no physical-only property is required.
+
+`prepareModelMaterials` converts only a newly loaded, independently owned model,
+reuses one replacement per source material across clones/arrays, and releases
+replaced materials and discarded textures once. A map still referenced by retained
+material (including a different slot) survives until normal room cleanup. Stale
+callbacks still dispose their original hierarchy before conversion. GLBs, authored
+sources, gameplay meshes/caches, lighting and saved quality choices are unchanged.
+
+`createCozyRoom({ THREE, scene, modelLoader, seatLayoutFor, deviceClass = () => 'desktop', textureAnisotropy = 1, doc, onChanged, onShadowBoundsChanged })` exports `sync(tableState)`,
+`update(cameraPosition, target)` and idempotent `dispose()`. `sync` accepts finite,
+positive `tableX`/`tableZ`, keys dimensions plus `tableShape`, and rebuilds only when
+those change. Same-size calls reconcile `tableState.players` without rebuilding room
+surfaces or reloading GLBs. Room clearance/floor/wall/rug/cutaway tunables live in `COZY_ROOM`;
+surface/texture limits live in `ROOM_SURFACES` in `cozy-room-surfaces.js`.
+The procedural rug uses `COZY_ROOM.textureSize` (1024px desktop/tablet) or
+`phoneTextureSize` (512px phones). Its denser weave retains the original border
+proportions, uses normal mipmap filtering and anisotropy capped at 8 on desktop/
+tablet or 1 on phones, and stays a base-color-only map owned by room cleanup.
+Desktop/tablet furnishings and fallback batches cast shadows. The injected
+`onShadowBoundsChanged` receives room bounds at construction and null during clear;
+phones always request null, retaining the table-only shadow camera. Scenery floors,
+walls, glazing and contact meshes do not cast shadows. Phone scenery neither casts
+nor receives shadow maps.
+
+`cozy-room-shadows.js` exports `COZY_SHADOWS` and `createContactShadows(THREE,doc)`.
+Its `add(parent,footprints,height)` batches soft footprints into one instanced plane
+per support/owner, using one room-owned 128px canvas map, Basic material and plane.
+Chair templates retain shared resources when empty; removed clones release instance
+buffers. Contact shading stays visible when fallback furniture is hidden after load,
+follows owner/wall cutaways, and releases backing canvas and resources on clear.
+Floor-level and sill/shelf planter footprints use their parent's local transforms.
+It remains as inexpensive contact shading even with real shadow maps disabled.
+
+The room expands around large tables. Shared `inTable`
+keeps supports under the actual tabletop outline. Instanced boxes share owned
+geometry/materials within cutaway groups for fallback furnishings;
+fallback plant pots/leaves are also instanced. `COZY_ROOM.furnitureURLs` names the seven
+GLBs; `furnitureScale` converts authored metres at seven room-units per metre. Authored
+chair fronts face the table, and the shelf stays under the east wall's cutaway group.
+`syncChairs` includes unique integer seats from the injected layout for players whose
+participation is not `spectator`; invalid/unseated entries are ignored. A timed-out
+player retains their chair while their seated player record remains present.
+`refreshChairs` projects each seat's center/hand direction to the actual shared
+table boundary with a bounded binary search, then adds `COZY_ROOM.chairClearance`
+(2.5 units). Fallback fronts point -Z; GLB fronts point +Z and receive a local half-turn.
+Both therefore face inward at cardinal and diagonal seats on every table shape.
+The hidden `Chair resources` template owns fallback/model resources even when empty;
+only live copies are named `Upholstered chair`, with `userData.seat` and a
+`Cozy chair model` child after loading. No players means no visible/live chairs.
+Occupancy signatures ignore player names, hand counts, order and other unrelated
+patch fields. Joining/leaving/seat/spectator changes refresh only chair copies.
+Removed instance buffers are released immediately; shared geometry/materials/textures
+stay with the template until normal room cleanup. Asynchronous model completion
+refreshes the latest seats, so late arrivals cannot recreate departed players' chairs.
+`plant` registers two rubber floor plants, two snake plants beside opposing walls,
+one sill pothos and one shelf pothos, with varied rotations/scales and no table clutter.
+The shelf support height is `COZY_ROOM.shelfTop` (1.723m at the seven-unit scale).
+Sill/shelf/wall plants inherit cutaways; corner plants remain under the room root.
+The old coplanar green picture and its buried frame have been removed.
+
+`furnishing` registers a model slot and its fallback. Each build loads each GLB once,
+then clones its hierarchy into the slots while sharing geometry/materials/textures
+within that room root. Successful loads hide only fallback meshes, retain authored
+materials and disable picking on every clone. Loaded model maps receive the injected
+hardware anisotropy, bounded to 1–8;
+all other authored material parameters are retained. Failed loads leave fallback furnishings
+visible. Resize/dispose invalidates callbacks by root identity; late results are released
+without attaching to the new room. The default loading manager includes these GLBs in
+the room's initial visual-asset loading gate. No persistent model cache is added.
+
+`update` hides walls facing the camera relative to its current look target; overhead
+views hide every wall. Windows and bookcases attached to a hidden wall disappear with
+it. There is no ceiling. Camera input remains in the existing intent/OrbitControls path.
+Every scenery mesh is unpickable, with no physics or game inventory. The original
+table, rim, sky, trays and lighting are retained. Windows are actual openings with
+wood jambs/casings, sills, glazing bars and hardware. Their clear panes are shared
+`MeshPhysicalMaterial`s with 0.025 opacity, `depthWrite: false`, no image map and no
+transmission/refraction render pass. They reveal the existing background/native or
+rotated sky presentation; Sky Off reveals the normal flat background. Frame load
+failure retains simple framing while the panes remain clear. The lamp adds no runtime light.
+
+`roomTexture` now creates only the bounded rug canvas with `releaseCanvasOnDispose`.
+`createRoomMaterials` loads seven owned texture objects from the existing oak image
+and six `cozy-*.png` files, with color maps in sRGB and normal/roughness maps in linear
+space. Oak/floor materials share normal/roughness maps within the room lifetime.
+`createPlasterPanel` projects UVs at seven room-units per tile using physical panel
+coordinates, preserving scale and continuity across room resizing and window openings.
+`createOakFloor` uses one bevelled board geometry and instanced three-row staggered
+seams, cropped at the room edge. Geometry stays within 2,048 boards (up to 96 rows /
+32 main columns); ordinary board dimensions are about 1.5m by 0.2m. Instance colors
+vary subtly. `createOakTrim` extrudes a moulded profile with lengthwise oak grain.
+`clear` releases instance buffers, detaches the root and reuses `disposeHierarchy` to
+release owned textures/materials/geometry once. Late surface loads cannot mark a replaced
+room changed. Loaded model textures, normal maps and shared chair resources are
+deduplicated by the same cleanup helper. Non-persisted pagehide disposes the prototype;
+bfcache entry retains it.
+The production client follows the shared environment through its backdrop owner, syncs
+it before the loading gate opens, updates cutaways after camera movement, and requests
+shadow refreshes for geometry/visibility changes. `test/cozy-room.js` covers construction,
+rebuild deduplication, invalid sizes, model load success/failure, chair orientation,
+shared-resource disposal, stale completions, clear apertures, staggered board bounds,
+cutaways and picking exclusion. Occupancy tests cover all eight seats, spectator and
+invalid-seat filtering, shape boundaries and resource ownership through joins/leaves.
+The production
+frame-loop regression covers cutaway ordering; component parity checks both normal and
+shared Standard/Cozy bootstraps, live switching/disposal, state-driven rebuilding
+and frame-driven wall visibility.
+Its chair regression uses the real exported backrest vertices to verify inward facing
+at all eight seats, alongside join/leave/seat-change updates on desktop and touch.
+The `cozy-window-sky` browser fixture compares actual window pixels with unobstructed
+sky pixels for native/rotated panoramas, native/rotated cubemaps and Sky Off, on desktop
+and touch layouts. Real-device
+feel and GPU performance remain manual QA items in `docs/DEVICE_QA.md`.
 
 ## `public/table/skybox.js` — sky texture lifecycle
 
@@ -3186,11 +3392,30 @@ cube descriptor formats; duplicate state patches do not reload. **`bindControls(
 resolution chips using `tabletop.skyRes`: Off, Low (512), Medium (1024), High (2048), and Ultra
 (source size). Defaults remain phone Low, tablet Medium, and desktop High; choices apply live.
 
+The same Settings → UI → Skybox section binds Tilt (−90…90°) and Rotation
+(−180…180°) sliders and numeric fields. `tabletop.skyTilt` and `tabletop.skyRotation`
+store integer degrees per device, defaulting to zero. Nonfinite values fall back to
+zero; finite values clamp to their limits. Blocked storage retains choices for the
+session, including resolution. Fields stay synchronized, disable while sky quality
+is Off, and restore invalid numeric edits on change. Mouse/touch use native sliders;
+keyboard users use arrow keys or the numeric fields. Enter zero in both to reset.
+Orientation persists across sky changes and rooms without messages or texture reloads.
+
+`setSkyAngle` normalizes and saves angles; `updateSkyPresentation` applies an inverse
+YXZ sampling rotation (world Y heading, local X tilt). Three r161 lacks
+`backgroundRotation`, so nonzero orientation uses a camera-centered, unpickable box
+with the bundled cube/equirect shaders, sRGB output, no tone mapping or depth writes,
+and an early render order. It samples the loaded texture directly without allocating
+another cubemap. Zero orientation uses the native background. `releaseSkyMesh` removes
+and disposes owned geometry/material on texture replacement, clear, failure, and Off.
+The mesh follows camera translation in `onBeforeRender`; it does not alter lighting.
+
 Internal `capTexture`/`capCubeTexture` downscale oversized images, and `setSkyTexture` disposes
 replaced textures or restores the original flat background. Each load/resolution/Off request
 invalidates older callbacks, including callbacks for the same ref. Stale successful loads are
 disposed and stale failures cannot clear the current sky. `test/skybox.js` covers resolution,
-mapping/color, disposal, invalid descriptors, and callback races.
+mapping/color, disposal, invalid descriptors, callback races, angle normalization,
+blocked storage, camera centering, and orientation across pending loads and sky changes.
 
 **`BUILTIN_SKIES`** exports the existing catalog; the client publishes it as `window.OTT_BUILTIN_SKIES`
 for the library. Asset selection stays in `editor-panel.js`, and synchronized refs remain server-owned.
