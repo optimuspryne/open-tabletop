@@ -7,7 +7,7 @@ import { wireBoardOutline } from './board-outline-editor.js';
 import * as THREE from 'three';
 import { applyIcons } from '../ui/icons.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createModelLoader } from '../rendering/model-loader.js';
 import {
   COMPOUND_SHAPE_LIMIT,
   COMPOUND_TYPES,
@@ -732,7 +732,7 @@ export async function openColliderEditor({ source, rotation = [0, 0, 0], box, va
   };
   render();
   const objectUrl = typeof source === 'string' ? null : URL.createObjectURL(source);
-  new GLTFLoader()
+  createModelLoader()
     .loadAsync(objectUrl || source)
     .then((gltf) => {
       if (finished) {

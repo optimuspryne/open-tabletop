@@ -1313,6 +1313,13 @@ const SCENES = [
         },
         getStateCallbacks: () => callbacks,
       };
+      const policyViolations=[];
+      if(state.environment==='cozy'){
+        document.addEventListener('securitypolicyviolation',event=>policyViolations.push(event.violatedDirective));
+        const policy=document.createElement('meta');policy.httpEquiv='Content-Security-Policy';
+        policy.content="default-src 'self'; script-src 'self' 'sha256-nAG3xy0rRET2ecuPDHRx6qjQE+p+98x1xfv8G0NqT2c='; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' ws: wss: data: blob:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'";
+        document.head.append(policy);
+      }
       await import('/__client-live.js');
       await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       byId('controlsBtn').click();
@@ -1350,6 +1357,10 @@ const SCENES = [
         assert(chairs.length===1,'One seated player must create exactly one chair');
         assert(chairs.every(chair=>chair.children.some(node=>node.isMesh && node.material?.map && (phoneRoom?!node.material?.normalMap:node.material?.normalMap))), 'Authored chair maps were not preserved');
         assert(scenery()[0].getObjectByName('Cozy shelf model'),'Production preview did not load the authored shelf');
+        const requests=performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname);
+        assert(requests.includes('/models/environments/cozy/cozy-game-shelf.glb'),'The production room did not fetch the compressed shelf');
+        assert(!requests.some(url=>url.startsWith('/models/lossless/')||url.endsWith('-lossless.glb')),'Obsolete duplicate model URL requested');
+        assert(policyViolations.length===0,'The compressed room violated the enforced policy: '+policyViolations.join(','));
         const shelfModel=scenery()[0].getObjectByName('Cozy shelf model');
         const coinMaterials=new Set();
         shelfModel.traverse(node=>{
@@ -1482,6 +1493,16 @@ const SCENES = [
       assert(localStorage.getItem('ott-accent') === '#123456', 'Accent preference did not persist');
       byId('settingsBtn').click();
       assert(byId('creditsBody').textContent.includes('Libraries'), 'Credits did not render');
+      const meshoptCredit=[...byId('creditsBody').querySelectorAll('a')].find(link=>link.textContent==='meshoptimizer'&&link.href==='https://github.com/zeux/meshoptimizer');
+      assert(meshoptCredit,'Meshopt attribution did not reach the production Credits list');
+      document.querySelector('#settingsModal [data-tab="credits"]').click();
+      for(const compact of [false,true]){
+        document.body.classList.toggle('ui-compact',compact);document.body.classList.toggle('ui-full',!compact);
+        const box=meshoptCredit.getBoundingClientRect();
+        assert(box.width>0&&box.left>=0&&box.right<=innerWidth,'Meshopt credit is clipped in full/compact mode');
+        meshoptCredit.focus();assert(document.activeElement===meshoptCredit,'Meshopt credit is not keyboard focusable');
+      }
+      document.body.classList.toggle('ui-full',full);document.body.classList.toggle('ui-compact',!full);
       byId('settingsClose').click();
       const roster = byId('players'), dock = byId('roomInfoBody');
       byId('seatBtn').click(); assert(byId('seatPop').contains(roster), 'Seat popover lost live roster');
@@ -3192,7 +3213,7 @@ SCENES.push({
   drive: `
     const assert=(condition,message)=>{if(!condition)throw new Error(message);};
     const THREE = await import('three');
-    const {GLTFLoader} = await import('three/addons/loaders/GLTFLoader.js');
+    const {createModelLoader} = await import('/rendering/model-loader.js');
     const {createCozyRoom} = await import('/rendering/cozy-room.js');
     const {createSkybox} = await import('/table/skybox.js');
     const fixture=document.createElement('div');fixture.id='windowSkyFixture';document.body.append(fixture);
@@ -3202,7 +3223,7 @@ SCENES.push({
     const camera=new THREE.PerspectiveCamera(40,1,.1,200);
     camera.position.set(-7,4.3,-12);camera.lookAt(-7,4.3,-17);
     const ready=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);
-    const room=createCozyRoom({THREE,scene,modelLoader:new GLTFLoader()});room.sync({tableX:10,tableZ:7});await ready;
+    const room=createCozyRoom({THREE,scene,modelLoader:createModelLoader()});room.sync({tableX:10,tableZ:7});await ready;
     const root=scene.children.find(node=>node.name==='Cozy game room prototype');
     const windows=[];root.traverse(node=>{if(node.name==='Cozy window model')windows.push(node);});
     assert(windows.length===4 && windows.every(node=>node.children.some(child=>child.isMesh && child.material.map && child.material.normalMap)), 'Authored window models and maps did not load');

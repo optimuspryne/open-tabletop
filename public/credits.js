@@ -143,6 +143,7 @@ export const ART_CREDITS = [
 
 export const LIB_CREDITS = [
   { title: 'Three.js', url: 'https://threejs.org', license: 'MIT' },
+  { title: 'meshoptimizer', url: 'https://github.com/zeux/meshoptimizer', license: 'MIT' },
   { title: 'Colyseus', url: 'https://colyseus.io', license: 'MIT' },
   { title: 'cannon-es', url: 'https://github.com/pmndrs/cannon-es', license: 'MIT' },
 ];

@@ -36,6 +36,17 @@ requirement is actually met.
 
 ## 3D models - `public/static_assets/models/`
 
+All 101 bundled GLBs ship once in the approved lossless encoding at their existing
+canonical filenames. Uncompressed comparison copies and temporary derivative
+paths were removed at the owner's request. Source authors/licenses/required credits
+below remain applicable, including JustinARay's CC BY chess attribution. Offline
+Meshopt/lossless-WebP changes preserve decoded attributes, oriented triangles,
+image pixels and material slots; source image encodings remain where WebP would
+increase size or alter pixels. No new artwork/model source is added. Per-file
+source/final hashes, sizes and validation are in `models/manifest.json`. Authoring
+masters remain in the separate asset workspace. The MIT meshoptimizer source and
+license are under `public/vendor/meshoptimizer/`, with its approved in-app credit.
+
 ### Chess pieces  - `pieces/chess/`
 - **Author:** JustinARay - https://opengameart.org/users/justinaray
 - **Source:** https://opengameart.org/content/low-poly-chess-set
@@ -54,7 +65,7 @@ requirement is actually met.
   `Open-Tabletop_Asset_Builders/3d_models/original/GLB/wordy_board.glb`.
   The editable source is `3d_models/original/BLEND/wordy_board_uv_fixed.blend` in that asset workspace.
 - **License:** Distributed under the repository license, with the other Open Tabletop originals.
-- The supplied GLB is bundled byte for byte. Authored wood/normal textures, raised squares,
+- The supplied geometry/materials are retained through the lossless encoding above. Authored wood/normal textures, raised squares,
   premium-square colors, star and DL/DW/TL/TW lettering are preserved. Runtime centering/scaling
   retains Wordy's 11-unit width; measured grid spacing and offsets align tile snapping.
 
@@ -83,7 +94,7 @@ requirement is actually met.
 - **Lettering:** Outlined Noto Serif CJK, [Noto CJK](https://github.com/notofonts/noto-cjk),
   SIL Open Font License. No font files are embedded or redistributed. The resulting
   artwork can retain its own license; see the [OFL FAQ, 1.1–1.1.2](https://openfontlicense.org/ofl-faq/).
-- All eight GLBs are bundled byte for byte, preserving authored materials and 0.45 mm
+- All eight GLBs use the lossless encoding above, preserving authored materials and 0.45 mm
   engraved recesses. The original botanical artwork complements FluffyStuff's CC0 set.
 
 `pieces/dominoes/Domino_0_0.glb` through `Domino_6_6.glb` (28 double-six pairs),
@@ -203,8 +214,8 @@ The owner's Go bowl, chess board and pouch are style references; none of their o
 models or maps were replaced. The owner's corrected
 `3d_models/original/BLEND/cozy_room_assets_fixed.blend` is now the authoritative
 source for `public/static_assets/models/environments/cozy/cozy-chair.glb`,
-`cozy-game-shelf.glb` and `cozy-floor-lamp.glb`. Chair/lamp exports remain byte-identical
-to the fixed exports. The shelf now uses the existing grain-aligned oak UV layer
+`cozy-game-shelf.glb` and `cozy-floor-lamp.glb`. Chair/lamp authored geometry and materials from the fixed exports are preserved
+through lossless encoding. The shelf now uses the existing grain-aligned oak UV layer
 from a separate `cozy_plants_v1/cozy-room-shelf-uv.blend` derivative, with unchanged
 frame/tray geometry, images, materials and owner alignments. Only review-stage
 placement is removed. The source blend is never overwritten by export. The later
@@ -213,10 +224,17 @@ with display copies of existing built-in coin, poker-chip, Go bowl/stone, domino
 domino-box and pouch models under the repository license. Card faces/backs reuse
 Mesmedir's CC0 bridge deck credited above. Shelf-only coin/chip/stone meshes are
 simplified, except for the full-detail top coin in each stack. Shelf-only embedded
-image derivatives are capped at 512px; gameplay originals remain untouched. The oak frame/tray and basket
+image derivatives are capped at 512px; gameplay source geometry remains intact. The oak frame/tray and basket
 positions are retained. No new third-party runtime asset or attribution is introduced.
 See [Art Direction](ART_DIRECTION.md) and the asset pack's README for source files and
 the measured export checks. No additional third-party models or textures are included.
+
+`models/environments/cozy/cozy-game-shelf.glb` now holds the approved 7,485,328-byte
+lossless Meshopt/WebP payload from `cozy_shelf_compression_v1/`. All decoded
+geometry, 15 RGBA images, named material slots and active nodes were verified
+against the prior 15,942,228-byte export. The uncompressed app copy was removed
+at the owner's request; no Blender source was changed. See `models/manifest.json`
+and the model publishing guide for provenance and future export verification.
 
 `models/environments/cozy/cozy-window.glb` and `textures/cozy-*.png`:
 
@@ -225,8 +243,8 @@ the measured export checks. No additional third-party models or textures are inc
   framing/hardware are original geometry; the app adds clear glazing without an
   image insert so the selected skybox is visible.
 - **Wood maps:** Existing Luke.RUSTLTD CC0 oak, with a lighter floor-color derivative
-  and the study's oak normal/roughness derivatives. Original texture/model files remain
-  unchanged. Bundled maps: `cozy-floor-oak-color.png`, `cozy-oak-normal.png`,
+  and the study's oak normal/roughness derivatives. Source authoring files and
+  standalone texture maps remain unchanged. Bundled maps: `cozy-floor-oak-color.png`, `cozy-oak-normal.png`,
   `cozy-oak-roughness.png`.
 - **Plaster maps:** Original deterministic periodic surface maps,
   `cozy-plaster-color.png`, `cozy-plaster-normal.png`, `cozy-plaster-roughness.png`.
@@ -281,3 +299,19 @@ the measured export checks. No additional third-party models or textures are inc
 - **Rendering derivative:** `marble-white.webp`, 512×512, generated with Sharp `resize(512,512)`
   and `webp({quality:90})`. Used by the existing tintable Marbled finish on dice and objects;
   the source pack's optional normal/specular maps are not used.
+
+
+## Meshopt decoder — `public/vendor/meshoptimizer/`
+
+- **Source:** `meshoptimizer@0.24.0`, upstream
+  [meshoptimizer JavaScript tools](https://github.com/zeux/meshoptimizer/tree/v0.24/js).
+- **Authors:** Arseny Kapoulkine; reference JavaScript implementation by Jasper St. Pierre.
+- **License:** MIT; the complete upstream copyright/license notice is retained in
+  `public/vendor/meshoptimizer/LICENSE.md` and the unchanged decoder's header.
+- `meshopt_decoder_reference.js` SHA-256:
+  `2fad1a37ec276ddd0e1eaa1b389f2fcb1d57d684cbcb38de4116a95ba8925ef3`.
+- Used only by the room GLTFLoader for trusted bundled scenery, without WebAssembly
+  compilation/eval or CSP changes. Upstream notes that this reference implementation
+  is not performance optimized; see its bundled README for measured scope/limits.
+- The approved **Settings → Credits → Libraries** entry links to meshoptimizer
+  and lists MIT in desktop/touch, full/compact layouts using the existing renderer.

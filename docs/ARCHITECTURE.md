@@ -582,6 +582,21 @@ importing a room singleton:
   game assets. Its display meshes/textures belong entirely to that loaded room
   hierarchy; runtime gameplay factories/caches are not coupled to scenery cleanup.
   Shelf image dimensions are bounded offline at 512px to limit decode/upload pressure.
+  Bundled models now ship once at their existing canonical URLs, including the
+  7.49 MB compressed `cozy-game-shelf.glb`. Duplicate uncompressed payloads and
+  temporary derivative paths have been removed. The shared `createModelLoader()`
+  enables the self-hosted 0.24.0 JavaScript Meshopt decoder only for exact URLs
+  in `BUILTIN_MODEL_URLS`; other refs retain an ordinary GLTFLoader. The decoder
+  uses no WebAssembly, eval, workers or extra CSP permissions. Gameplay, previews,
+  collider editing and rooms share the adapter, while existing owners keep stale
+  callback/material/resource disposal. Server physics constants remain unchanged;
+  offline collider measurement reads preserved GLB JSON bounds and transforms.
+  `models/manifest.json` records final/source hashes, decoded fingerprints and
+  browser baselines. The offline authoring publisher verifies source/candidate
+  geometry, images, materials, animation and strict-CSP GPU loading before writing
+  the one final GLB, manifest and allowlist. See [model workflow](../public/static_assets/models/README.md),
+  [ART_DIRECTION.md](ART_DIRECTION.md) and [ASSET_CREDITS.md](ASSET_CREDITS.md).
+  No KTX2 or app build step is introduced; decoded GPU memory does not shrink.
   Core's injected `deviceClass` selects a phone shader fallback, independently of
   graphics quality. It retains base art/cutouts and scalar metal response, omits
   physical layers/detail-map shading and scenery shadow reception, and leaves clear

@@ -51,6 +51,16 @@ per-device/browser matrix; the checklist below remains reusable for future runs.
 
 ### Cozy room prototype
 
+- [ ] Lossless shelf adoption: refresh clients, cold-load Cozy on the Pixel 10 Pro
+  (Chrome/Brave) and desktop. Confirm cards, coin colors/relief, oak grain and Go
+  bowls match the retained original. Check first-load responsiveness: the CSP-safe
+  JavaScript Meshopt decoder runs on the main thread. Verify only
+  `cozy-game-shelf-lossless.glb` loads during normal room entry, with no request for
+  the backup `cozy-game-shelf.glb` and no CSP errors. Switch Standard/Cozy, resize,
+  rejoin and background/resume; no stale meshes or resource growth should appear.
+- [ ] In Settings → Credits → Libraries, verify the meshoptimizer — MIT link is
+  readable and keyboard/touch reachable in full/compact desktop and phone layouts.
+
 - [ ] After migration 024, server restart and browser refresh, select **Room Settings
   → Table Size & Color → Room style → Cozy game room** as GM/owner. Verify native
   mouse/keyboard/touch operation and visible labels/hint in full/compact desktop,
@@ -581,3 +591,32 @@ device/browser matrix was reported; the detailed checks below remain reusable.
 
 Restart the server and refresh browsers before testing custom ink. Native color picker appearance
 and keyboard controls vary by browser/OS; automation does not establish real-device usability.
+
+### Canonical lossless models — October 15, 2026
+
+The app ships one compressed GLB per existing canonical filename. Duplicate
+original payloads and temporary derivative paths were removed after the owner
+compared them. Authoring sources stay outside the app. The manifest pins decoded
+buffer/image fingerprints and browser metadata baselines; the offline publisher
+performs original/candidate comparison before updating those baselines.
+
+Manual: refresh/cold-load on Pixel 10 Pro Chrome/Brave; enter Cozy, join/resize,
+switch to Standard; spawn/recolor chess, chips/coins, Go board/bowls, dice and
+Dominoes; inspect shelf/plants/windows and corresponding previews. Confirm
+material/tint slots, responsiveness and no black canvas. Open an ordinary custom
+GLB in the collider editor. Compression does not lower decoded GPU memory.
+No server restart is needed for this asset-only change. The owner's comparison
+approved visual equivalence; current-file cold loading still remains a manual
+check and is not inferred from browser emulation.
+
+The single-asset publishing command is tested with the coin and animated Go bowl,
+including exact source/candidate browser pixels, materials, hierarchy, animation
+and GPU rendering in both profiles. Final unit/browser/component outcomes are
+recorded in `ART_DIRECTION.md`. The earlier unrelated notecard wheel-zoom failure
+remains historical context; no input behavior changed in this cleanup.
+
+Final cleanup checks: `npm run check` passed 1,176 tests; all 101 canonical models
+passed desktop/touch GPU/metadata verification; six focused production room and
+tile-appearance cases and tile previews at 1280/390/320px passed. Collider
+measurement reads all compressed registered models successfully. Full component
+and responsive suites were not repeated for this asset-only cleanup.

@@ -703,3 +703,441 @@ Real Pixel GPU performance, live human multiplayer use and deployment remain man
 Restart with migration 024 available through the existing migration-role connection,
 then refresh clients. Existing rooms default to Standard; choose Cozy in Room Settings.
 No changes were pushed and the owner's Go board replacement was preserved.
+
+## Shelf compression comparison — October 15, 2026
+
+The owner requested compressed game-shelf copies with the original retained for
+comparison. This is an export study; the production theme, loader, assets and
+Blender sources remain unchanged. Trial files live in companion
+`3d_models/original/cozy_shelf_compression_v1/`, with an exact original copy,
+pinned tooling manifests, reproducible scripts and detailed JSON reports/README.
+
+Reuse decision: inject a test-only shelf-URL adapter and compatible decoder into
+`createCozyRoom`'s existing loader dependency. All comparison renders use the real
+room assembly/material/device path. No second material implementation, app build
+step, decoder dependency, setting, UI or network protocol was introduced.
+
+Measured decimal file sizes (unencoded, on disk):
+
+| Variant | Bytes | Reduction | Result |
+| --- | ---: | ---: | --- |
+| Original | 15,942,228 | — | Preserved byte-for-byte |
+| Meshopt, original images/precision | 9,397,264 | 41.1% | Exact decoded vertex attributes and oriented triangles |
+| Meshopt + lossless WebP | 7,485,328 | 53.0% | Recommended conservative candidate; all 15 decoded RGBA images identical |
+| 16-bit precision + Meshopt + lossless WebP | 5,552,064 | 65.2% | Very small render differences; retained alternative |
+| Meshopt + high-quality UASTC/KTX2 | 6,973,836 | 56.3% | Small texture differences and lower GPU texture payload estimate |
+
+Lossless means identical attribute/image values; Meshopt may cyclically rotate
+triangle indices without changing winding or geometry. Candidate node/material
+names, 141,346 triangles, loaded material scalars and phone policy remain. The
+inactive empty review scene is omitted in derivatives so the writer does not emit
+an invalid empty `nodes` array; the active authored scene is unchanged.
+
+The recommended 7.49 MB candidate saves 8.46 MB. In seven desktop/phone views,
+six captures match pixel-for-pixel. The desktop shelf view differs in three color
+channels total (mean absolute error 0.0000078125 on a 0–255 scale; peak 13), with
+no visible change found in inspected shelf/wood details. Geometry-only lossless
+captures match exactly. The precision alternative's full-frame mean errors range
+0.00096–0.05886; KTX2 errors range 0.0084–0.4039. These metrics include unchanged
+surroundings, so the close-up images are retained for visual review.
+
+Storage and network/memory savings are distinct. Offline gzip reduces the original
+to 7.91 MB and the recommended candidate to 6.24 MB (about 21% additional saving);
+Brotli reduces them to 6.57/5.44 MB (about 17%). These are not live server transfer
+measurements. Lossless Meshopt alone barely changes the gzip result. The WebP
+candidate retains the existing decoded texture/geometry memory and draw workload.
+KTX2's software-GL ASTC4x4 mip payload estimate is 4.43 MB versus 17.69 MB for the
+unique desktop shelf images, or 2.08 versus 8.29 MB after phone detail-map removal.
+These exclude geometry, driver copies and upload peaks; real Pixel GPU memory,
+load speed and stability remain manual. KTX2 may align source image dimensions to
+multiples of four; the conservative WebP candidate preserves exact source pixels.
+
+Validation: all five encoded candidates have zero glTF-validator errors; the four
+PNG/WebP variants also have zero warnings. The KTX2 alternative has 30 warnings
+because this validator does not recognize its 15 KTX2 image formats/MIME types.
+Unsupported compression extensions are also informational, and their binary
+payloads are not validated by that tool. All 15 KTX2 images separately pass the
+official `ktx validate --gltf-basisu --warnings-as-errors` checks; their reports are
+retained in `ktx-validation.json`. Actual NodeIO/Meshopt round-trips check
+attributes/triangles, Sharp checks all 15 image RGBA buffers, and the bundled
+Three.js r161 loader with matching test-only decoders successfully renders the
+four reviewed candidates through both device profiles. Material scalar/name
+comparisons pass. Capture servers report no page errors or missing resources.
+The intermediate precision/PNG export is encoded/validated but not separately
+rendered. No production app code changed; full app suites were not rerun for this
+export/documentation-only slice. Relative documentation links and diff checks pass.
+
+Files/helpers added or changed in this slice:
+
+- Companion `compress.mjs`: source-hash guard, original copy, metadata/size/hash
+  report, lossless and 16-bit variants, validator and geometry round-trip checks;
+  focused `hash`/`describe` functions support the measured report.
+- Companion `check-images.mjs`: compares decoded RGBA pixels and writes the
+  per-image report. `finalize-ktx.mjs`: restores lossless Meshopt after the texture
+  encoder's decoded-geometry intermediate, removes only the unused empty scene,
+  and appends KTX2 size/validation results. Companion `validate-ktx.mjs` extracts
+  temporary embedded images, runs strict native glTF-compatible KTX2 validation,
+  writes `ktx-validation.json` and removes the temporary files.
+- Companion `render-comparison.mjs`: uses existing `serveDir`, actual room/core,
+  injected loader adapter, temporary matching Three.js decoders and Playwright;
+  renders seven views per variant/profile set, records pixel/material comparisons,
+  and estimates retained texture mip payload. Cleans each room/renderer/transcoder.
+- Companion `package.json`/`package-lock.json`: isolated pinned study tools, not app
+  dependencies. glTF Transform 4.2.1, meshoptimizer 0.24.0, Three.js 0.161.0,
+  glTF Validator 2.0.0-dev.3.10 and official KTX-Software 4.4.2 were used.
+- Companion `shelf-original.glb`, `shelf-meshopt-*.glb`, `compression-report.json`,
+  `decoded-image-comparison.json` and `README.md`: preserved baseline, comparison
+  exports, exact measurements/hashes and reproduction/limitations. The temporary
+  texture-only intermediate was discarded; original authored sources were not.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` and this file: record
+  the comparison, current unchanged production boundary and future decoder needs.
+- Review artifacts: `shelf-compression/` and `shelf-compression-ktx/` in this chat's
+  visualization workspace contain full-resolution views, JSON metrics and labeled
+  original/compressed shelf and wood comparison sheets.
+
+All study derivatives retain the original model/art licensing. No extra runtime
+asset is bundled and no in-app credit or icon changes are needed. The original
+shelf and the two relevant Blender sources were SHA-256 verified unchanged.
+Nothing from this study has been committed, pushed or selected as the live shelf.
+To adopt the recommended copy, the room loader needs a locally hosted compatible
+Meshopt decoder. KTX2 adoption would additionally need its loader/transcoder and
+worker/WASM CSP review. These integrations and real-device smoke tests are outside
+this comparison slice; the current app continues to load the original GLB.
+
+## Adopted lossless shelf and CSP-safe decoder — October 15, 2026
+
+The owner approved adopting the **7.49 MB lossless shelf** and retaining the original.
+Cozy now selects `cozy-game-shelf-lossless.glb` (7,485,328 bytes, SHA-256
+`e48b8f11593dee02d616de338e85e226aafc092c442bf6c004376b8f92d0c454`).
+The original `cozy-game-shelf.glb` remains untouched at 15,942,228 bytes and its
+recorded SHA-256, available at its old URL for comparison or a configuration rollback.
+Normal room loading requests only the compressed asset. Keeping the backup means
+this change adds 7.49 MB to bundled disk storage while reducing the active shelf's
+unencoded download by 53%; HTTP gzip/Brotli savings remain as measured above.
+
+Reuse/boundary decision: configure the existing room-only GLTFLoader with
+`setMeshoptDecoder`, and change the existing theme asset URL. No new loader owner,
+worker, cache, fallback mechanism or pipeline helper is introduced. Gameplay/
+uploaded-model loaders remain independent. Existing assembly material preparation,
+procedural failed-load fallback, picking exclusion, hierarchy ownership and stale
+success disposal handle the new model exactly as before.
+
+The enforced production CSP excludes WebAssembly compilation. Instead of broadening
+it, the room loader uses the unchanged upstream `meshoptimizer@0.24.0`
+`meshopt_decoder_reference.js`, locally hosted with the full MIT license. It is
+9,379 bytes (SHA-256 `2fad1a37ec276ddd0e1eaa1b389f2fcb1d57d684cbcb38de4116a95ba8925ef3`),
+uses normal JavaScript, and needs no eval, external service, worker lifecycle or
+WebAssembly permission. The module implements the GLTFLoader's existing Meshopt
+interface. Upstream labels it a reference implementation, not performance optimized;
+its scope is only trusted bundled scenery. All 117 compressed views decode to
+10,768,776 bytes; an isolated Node run measured about 52 ms. Strict-CSP browser
+captures measured about 68 ms desktop / 133 ms in the emulated phone profile on
+this host. These single runs are not loading-speed or Pixel performance guarantees;
+real-device cold loading and responsiveness remain manual. No KTX2 is shipped.
+
+The owner explicitly approved the existing **Settings → Credits → Libraries** list
+with `meshoptimizer — MIT` after Three.js, linking to the project page. The same
+list renderer and native anchor cover desktop/touch, full/compact, keyboard focus
+and wrapping. No icon, layout rule, tabletop input or in-app gesture was added.
+
+Files/functions changed or added for adoption:
+
+- `public/client.js`: imports the local decoder and configures the existing room
+  `GLTFLoader` through `setMeshoptDecoder`; all existing room dependencies/order stay.
+- `public/rendering/rooms/cozy-theme.js`: changes only `COZY_ROOM.furnitureURLs.shelf`
+  to the approved derivative. Original source/materials/tuned coordinates stay.
+- `public/vendor/meshoptimizer/meshopt_decoder_reference.js`: unchanged upstream
+  implementation, including its `supported`/`ready` and buffer decoding methods.
+  `LICENSE.md` retains the full MIT notice; `README.md` records version, provenance,
+  hashes, CSP rationale, trusted-input scope, performance and update requirements.
+- `public/static_assets/models/environments/cozy/cozy-game-shelf-lossless.glb`: adds
+  the exact approved study export. The existing original is not renamed/modified.
+  Its adjacent `README.md` records the active/backup files, decoder and rollback.
+- `public/credits.js`: extends `LIB_CREDITS` with the approved meshoptimizer link/MIT
+  entry. The existing `renderCredits` remains unchanged.
+- `test/room-model-assets.js`: adds actual-asset regressions using focused test-only
+  `parseGLB`, `bufferViews`, `accessorBytes` and `hash` readers. It verifies the
+  original/derivative hashes, chosen URL, 141,346 oriented triangles, identical
+  decoded vertex attributes, node/material names and all 15 decoded RGBA images.
+  It imports and uses the real shipped decoder with WebAssembly unavailable.
+- `scripts/component-parity.mjs`: the real client bootstrap applies the production
+  CSP restrictions before import, verifies compressed loading without a backup
+  request or policy violation, then checks authored materials, phone policy,
+  resize, seat updates, theme switches/disposal and the approved credit's native
+  focus/full/compact bounds. The window fixture configures its existing GLTFLoader
+  with the same decoder so it keeps testing the production asset set.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/ROOM_THEMES.md`,
+  `docs/RELEASING.md`: update the active file, existing loader integration, boundaries,
+  packaging/backup storage and refresh needs.
+- `docs/ASSET_CREDITS.md`: records derivative provenance and decoder MIT attribution.
+  `docs/DEVICE_QA.md`: records actual Pixel/desktop cold-load, backup-request,
+  resize/rejoin and native credit-link checks. This file records the implementation.
+- Companion `cozy_shelf_compression_v1/render-comparison.mjs`: its existing URL
+  adapter recognizes the new active basename as well as the original, preserving
+  the separate study's reproducibility. Its `README.md` now records production
+  adoption and the retained backup. No source GLB/Blender file was overwritten.
+
+Final verification:
+
+- `npm run check` passes 1,075 tests plus lint/format/CSS, including both actual-asset
+  regressions. Final changed-source lint/format and diff checks also pass.
+- All 100 `component-parity.mjs` scene/profile runs pass, including the actual
+  production client, strict-CSP compressed loading, original-request exclusion,
+  desktop/phone materials, room lifecycle and full/compact keyboard-focusable credit.
+- The complete `npm run test:components` command is not green: its following
+  `scripts/notecard-test.mjs:216` desktop wheel-zoom assertion fails (>100% expected).
+  One isolated retry fails at the same assertion. This is the previously reproduced
+  baseline failure recorded above, which also predates this adoption. That fixture
+  stubs `client.js`; its test/product code and gameplay loader were not modified.
+  No notecard work was attempted in this asset slice.
+- The separately run tile-preview stage passes 1280/390/320px. All seven
+  `test:devices` layout profiles pass.
+- The isolated production Cozy bootstrap also passes both desktop/coarse-390;
+  strict-CSP visual comparisons and original/source SHA-256 checks pass.
+- No database/input protocol/responsive-style changes were made, so integration
+  and input suites were not rerun for this slice. Real Pixel responsiveness,
+  GPU behavior and human multiplayer smoke checks remain manual.
+
+Separate renders use the production room/core, active asset, shipped JavaScript
+decoder and unchanged CSP restrictions, with an original-backup override only for
+the baseline. Six of seven desktop/phone views match exactly; desktop shelf
+mean absolute channel error remains 0.0000078125 (peak 13), as in the approved
+study. No page errors, missing resources or material scalar/name differences were
+reported. Logs, render helper and images are saved under `shelf-adopted/` and as
+`cozy-shelf-adoption-*` in this chat's visualization workspace. Strict policy
+imports use the real table import-map hash and an external self-hosted module.
+
+Refresh clients to adopt the new module and asset. This slice needs no database
+migration, dependency install, server restart or CSP change. No edits were pushed;
+real-device responsiveness/Pixel smoke testing remains pending.
+
+## All bundled GLBs: lossless derivatives — October 15, 2026
+
+The owner approved applying the shelf's lossless approach across the built-in
+catalog. This extends the earlier shelf-only loader decision above. All **101
+original GLBs** now have smaller active browser derivatives, including boards,
+chess/checkers, dice, coins/chips/tokens/bowls, deck containers, Dominoes, Mahjong
+and all Cozy furniture/plants/windows. Existing family activation is unchanged.
+
+| Group | Models | Original bytes | Derivative bytes |
+| --- | ---: | ---: | ---: |
+| Boards | 3 | 16,994,124 | 14,680,548 |
+| Deck containers | 2 | 6,193,280 | 5,328,388 |
+| Cozy furniture/windows/plants | 7 | 27,853,588 | 14,310,272 |
+| Pieces, dice and tiles | 89 | 49,081,372 | 30,492,240 |
+| Total | 101 | 100,122,364 | 64,811,448 |
+
+The total saving is **35,310,916 bytes / 35.3%**, before HTTP encoding. This is
+catalog size, not one room's request size. All originals remain byte-identical at
+their prior public paths, including the committed corrected Go board. The approved
+7,485,328-byte shelf derivative is reused exactly. The other 100 derivatives add
+57,326,120 bytes beyond that shelf slice. With backups retained, disk use increases;
+decoded GPU geometry/image dimensions and memory do not shrink.
+
+Offline authoring uses glTF Transform 4.2.1, meshoptimizer 0.24.0 and Sharp 0.34.5.
+Meshopt is applied without quantization, simplification, welding or vertex
+reordering. WebP is retained only when smaller **and every decoded RGBA byte
+matches**, including transparent RGB; otherwise the source encoding remains.
+Every typed mesh attribute and oriented triangle round-trips; triangle indices
+may cycle their three corners. All animation data, node/material names, material
+and texture settings and active hierarchy survive. Empty inactive review scenes
+are removed. No source model, Blender file or authored material was edited.
+
+All derivative files have zero glTF validator errors. Seven source models have
+unchanged runtime-generated tangent-space warnings (16 warnings in total), verified
+against the original files; no tangent generation is introduced. The validator's
+Meshopt support limitations are supplemented by round-trip tests through the
+actual vendored JavaScript decoder and real GLTFLoader/GPU loads.
+
+Reuse/boundary decision: keep the existing `GLTFLoader` loading and its callback,
+progress/error, async and resource-ownership behavior. A focused browser adapter
+selects an exact source/derivative allowlist rather than changing catalog/saved
+URLs or server geometry readers. Gameplay, previews, collider editing and scenery
+use this adapter. Other refs use an ordinary GLTFLoader with no decoder; a blob of
+a compressed bundled model is explicitly tested to reject instead of entering the
+trusted decoder path. No new global mutable context, asset cache, worker, service,
+CSP permission, build dependency or UI control is added. Existing tile preparation,
+tinting, room phone fallback, stale-callback handling and disposal stay with their
+current owners. The previously approved library credit/license remains applicable.
+
+Files/functions in this slice:
+
+- `public/rendering/model-loader.js`: adds `createModelLoader`, private `select`,
+  and `load`/`loadAsync` adapter methods; two ordinary loader instances isolate
+  allowlisted bundled decoding from other URLs.
+- `public/rendering/builtin-model-assets.js`: generated immutable
+  `BUILTIN_MODEL_ASSETS` map for all 101 sources. No runtime fetching of the report.
+- `public/rendering/graphics.js`: replaces only the shared `gltfLoader` creation;
+  existing gameplay, bounds, material names, tile renderer and preview functions
+  reuse it without changing their APIs or normalization/tint behavior.
+- `public/client.js`: injects the same adapter into the existing room backdrop.
+- `public/editor/compound-collider-editor.js`: `openColliderEditor` creates the
+  adapter; custom file/blob loading stays on its uncompressed path.
+- `public/static_assets/models/lossless/`: 100 new mirrored GLBs, `report.json`
+  (enumerates **every** new asset path/hash/size and retained original), and
+  `README.md` (totals, regeneration, source-license preservation and rollback).
+  The original files and existing shelf derivative are not rewritten.
+- `test/helpers/glb.js`: shares existing `parseGLB`, `bufferViews` and
+  `accessorBytes` test readers, adding signed/MAT4 formats; no runtime helper.
+- `test/room-model-assets.js`: reuses those readers, retaining the shelf-specific
+  exact-hash, without-WebAssembly and 15-image checks.
+- `test/builtin-model-assets.js`: adds `originalURLs` inventory verification and
+  all 101 actual-file round-trip/hash/size tests, including animation accessors.
+- `scripts/model-assets-test.mjs`: strict production-CSP browser harness with
+  material/texture/hierarchy/animation snapshots and exact browser image pixels,
+  rendering every derivative,
+  callback/async/direct-derivative coverage and custom-loader boundary checks.
+- `package.json`: adds `test:models`; no dependencies or lockfile change.
+- `scripts/component-parity.mjs`: the existing Cozy window fixture now injects
+  the shared adapter. Prior shelf/bootstrap/credit checks remain.
+- `public/vendor/meshoptimizer/README.md`: updates scope from room-only to
+  exact built-ins; third-party source/license remains unchanged.
+- `public/static_assets/models/environments/cozy/README.md`: links the all-model
+  report and updates shared-loader and rollback instructions.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`,
+  `docs/ROOM_THEMES.md`, `docs/RELEASING.md`, `docs/ASSET_CREDITS.md`,
+  `docs/DEVICE_QA.md`, and this plan: update current contracts, provenance,
+  packaging/disk impact, testing and manual phone checks.
+- Companion `3d_models/original/builtin_lossless_v1/`: adds offline
+  `compress.mjs` (`files`/`hash` and the export/verify loop), pinned
+  `package.json`/`package-lock.json`, per-file `report.json` and reproduction
+  `README.md`. No companion Blender sources or previous studies are altered.
+
+Implemented and automated checks are distinct from owner testing. Actual Pixel 10
+Pro cold loading, phone responsiveness and multiplayer behavior remain manual.
+Refresh clients; no server restart or migration is needed for this asset slice.
+
+Verification for this slice:
+
+- `npm run check`: **1,177 tests passed**, plus ESLint, Prettier and CSS checks.
+  The sandboxed first attempt was stopped when local-server tests stalled; the
+  permitted local-server run completed successfully.
+- `npm run test:models`: all **101 original/derivative pairs** passed on 1280px
+  desktop and 390px coarse-touch profiles, including exact browser-decoded image
+  pixels, actual GPU renders, animation/material/texture/hierarchy parity, strict
+  CSP, callback/async/direct URLs and the custom blob boundary.
+- `npm run test:components`: 99/100 scene/profile cases passed in the full
+  component stage; the coarse-touch selection-toolbar case hit Chrome's
+  `Promise was collected` error. Its isolated retry passed both profiles. Cozy
+  production bootstrap, authored windows and tile appearance passed in the full
+  run. The combined command therefore did not reach its later stages.
+- Ran the later stages separately: tile previews passed at 1280/390/320px;
+  `notecard-test.mjs` still fails the previously reproduced unrelated desktop
+  wheel-zoom assertion at line 216. The full component command is **not green**;
+  no notecard/input behavior was changed for asset compression.
+- `npm run test:devices`: all seven profiles passed. Final targeted formatting,
+  ESLint and `git diff --check` passed.
+- glTF validator: zero errors for all 101 derivatives; the 16 source tangent
+  warnings are unchanged. Full original/derivative hashes, geometry, image data
+  and the corrected Go source are protected by the actual-file tests.
+
+No commit or push was made for this slice. Owner testing on actual Android remains
+pending; see `DEVICE_QA.md` for the short cold-load/spawn/recolor/preview smoke list.
+
+## Single-copy canonical models and future publishing — October 15, 2026
+
+The owner compared the lossless models, found them visually identical, and asked
+that the extra originals be removed. This supersedes the earlier retained-backup
+and derivative-path instructions above. The app now ships **101 GLBs totalling
+64,811,448 bytes**, each at its existing canonical filename. The extra 100,122,364
+bytes of original comparison payloads and temporary `models/lossless/` and
+`cozy-game-shelf-lossless.glb` paths are gone. All final hashes match the previously
+approved compressed payloads, including the corrected Go board. Authoring masters,
+Blender files and historical studies in the companion workspace are retained;
+no Git history rewrite or push is involved.
+
+Reuse/boundary decision: preserve saved catalog URLs and the current GLTFLoader
+adapter rather than add HTTP redirects or a new server decoding layer. The adapter
+now selects its bundled decoder by canonical URL membership; it no longer maps to
+another file. Uploaded/blob/data/external refs remain on the ordinary loader.
+Collider measurements already read accessor min/max and node transforms from the
+GLB JSON; they do not need an uncompressed vertex payload, and existing collider
+specification tests and measured values still pass. Runtime physics and original
+material/UV data are unchanged.
+
+Future asset preparation is now a concrete one-asset workflow:
+`node publish.mjs SOURCE.glb relative/model.glb` in companion
+`3d_models/original/builtin_lossless_v1/`. The source must stay outside the app
+models tree. After pinned authoring-tool setup (`npm ci`, Node 24 and Chrome),
+the publisher compresses/compares the candidate, runs source/candidate comparisons
+in the real strict-CSP browser renderer, and only then writes one final model,
+the manifest and bundled URL registry. Geometry/UV/morph data, oriented triangles,
+material settings, image pixels, animation samples and skin matrices are verified.
+WebP/the complete candidate is selected only when smaller; unknown extensions
+and unsupported geometry fail explicitly. No source export is changed. Publishing
+registers decoder access, not gameplay semantics or room placement; normal catalog/
+theme/scale/collider/credit integration and owner visual review remain required.
+The [step-by-step model guide](../public/static_assets/models/README.md) documents
+commands, flags, limitations, checks and the separate ordinary-upload path.
+
+Files/functions in this cleanup:
+
+- All 101 `public/static_assets/models/**/*.glb` canonical paths: replace their
+  uncompressed payload with the corresponding approved lossless bytes. Every path,
+  byte count, source/final hash and validation result is listed in the manifest.
+  Remove the 100 temporary duplicate GLBs under `models/lossless/` and its old
+  README/report, and the separate `cozy-game-shelf-lossless.glb` duplicate.
+- `public/static_assets/models/manifest.json`: new durable source/final provenance,
+  exact decoded-buffer and RGBA fingerprints, metadata and browser snapshot hashes.
+  Full browser snapshots are hashed to avoid adding several megabytes of JSON.
+- `public/static_assets/models/README.md`: new current future-asset publishing guide.
+- `public/rendering/builtin-model-assets.js`: replaces the URL-remapping constant
+  with generated immutable `BUILTIN_MODEL_URLS`.
+- `public/rendering/model-loader.js`: `createModelLoader`, `load` and `loadAsync`
+  now select by exact canonical URL membership; removes private `select` mapping.
+- `public/rendering/rooms/cozy-theme.js`: restores the canonical shelf URL; this
+  returns to the pre-compression URL while the payload stays compressed.
+- `scripts/lib/glb.mjs`: relocates `parseGLB`, `bufferViews` and `accessorBytes`
+  from the earlier test helper so offline authoring can reuse them. `bufferViews`
+  passes a real Uint8Array copy to the reference decoder: Node Buffer.slice aliases
+  its source, whereas the decoder expects Uint8Array.slice copy semantics.
+- `scripts/lib/model-integrity.mjs`: adds `modelHash` and `modelIntegrity` for
+  frozen decoded-buffer/image fingerprints, dimensions and named metadata.
+- `test/builtin-model-assets.js`: `modelURLs` inventories all final GLBs and
+  verifies the exact canonical allowlist/manifest. Per-file cases check encoded
+  hashes/sizes, decoded fingerprints, repeat stability and nonmutation; all files
+  are also verified with WebAssembly disabled. Removes reliance on originals.
+- Removes the earlier `test/helpers/glb.js` location and shelf-only
+  `test/room-model-assets.js`; their without-WASM/actual-decoder/image protection
+  is covered for all models by the consolidated cases and recorded baselines.
+- `scripts/model-assets-test.mjs`: normal mode loads each canonical file, verifies
+  frozen browser material/hierarchy/animation hashes and GPU rendering under strict
+  CSP on desktop/touch; `--prepare source.glb candidate.glb baseline.json` compares
+  source/candidate metadata and exact browser pixels before authoring publication.
+  Local `snapshot`, `comparePixels`, `equal` and `browserHash` support these paths.
+- `scripts/component-parity.mjs`: production bootstrap assertions expect the one
+  canonical shelf request and reject obsolete derivative URLs.
+- `public/static_assets/models/environments/cozy/README.md`,
+  `public/vendor/meshoptimizer/README.md`, `CHANGELOG.md`, `docs/ARCHITECTURE.md`,
+  `docs/REFERENCE.md`, `docs/ROOM_THEMES.md`, `docs/RELEASING.md`,
+  `docs/ASSET_CREDITS.md`, `docs/DEVICE_QA.md` and this plan: update the current
+  source/deployment/verification/credit contracts. Historical plan/changelog
+  entries are retained as history; this section and the model guide supersede them.
+- Companion `builtin_lossless_v1/compress.mjs`: replaces the earlier app-directory
+  batch entry point with reusable `compressAsset`, preserving its lossless rules
+  and adding material/morph/animation/skin/extension verification.
+- Companion `builtin_lossless_v1/publish.mjs`: new single-asset command, browser
+  comparison orchestration, safe target validation, temporary cleanup and final
+  canonical model/manifest/allowlist publication. Companion `README.md` documents
+  the updated command; pinned manifests and historical report remain unchanged.
+
+During the publisher test, integrity checks caught the Buffer.slice aliasing
+issue described above before completion. Corrected the adapter and added
+nonmutation/repeat-decoding regression checks, republished the two trial models
+and confirmed **all 101 final hashes equal the prior approved compressed hashes**.
+The command is tested end to end with coin and animated Go bowl source exports,
+including both browser profiles, real registrations, material/pixel comparisons,
+source preservation and temporary cleanup. No broken intermediate trial asset is
+left in the final model tree.
+
+Verification: `npm run check` passes **1,176 tests**, ESLint/Prettier/CSS checks;
+`npm run test:models` passes all 101 canonical GLBs on desktop and coarse touch;
+`npm run assets:colliders` successfully measures every registered physical model
+from the compressed files. Focused production bootstrap/window/tile-appearance
+checks pass on both desktop/touch (six cases); tile previews pass at 1280/390/320px. The full component suite
+and device-layout suite were not repeated for this asset-only cleanup; the prior
+unrelated notecard wheel assertion remains documented above. Actual Pixel cold
+loading after refresh remains manual. The owner requested committing this verified
+app slice; the companion authoring workspace is outside this Git repository.
+No push is authorized. Refresh clients;
+no server restart, migration, app dependency or CSP change is required.

@@ -118,6 +118,22 @@ passes are installed.
 `COZY_ROOM_THEME` and `createCozyRoom(dependencies)`. It invokes the same runtime;
 production client code uses the shared-state backdrop owner.
 
+## Bundled compressed models
+
+Rooms, gameplay and model previews reuse `createModelLoader()`. Exact canonical
+URLs in `BUILTIN_MODEL_URLS` select the self-hosted JavaScript `MeshoptDecoder`;
+other URLs (including uploads/blob/data/external refs) use an ordinary GLTFLoader.
+Each asset ships once at its existing name. Cozy uses compressed
+`cozy-game-shelf.glb`; duplicate original and temporary derivative paths were removed.
+Use the [offline model publisher](../public/static_assets/models/README.md) for new
+assets or replacements, retaining named material/node slots and verifying scale
+and room placements. It updates the manifest and bundled URL allowlist after
+source/candidate verification; room placement/catalog integration remains separate.
+The decoder preserves the no-eval/no-WASM CSP and runs on the main thread, so test
+cold loading on actual phones. Existing procedural failure fallback, stale callback
+disposal and room-owned resources remain with the assembly. Gameplay resources
+remain independent of scenery cleanup. No worker/transcoder lifecycle is added.
+
 ## Independent table style
 
 A theme can provide frozen `matchingTable: {rimWood, feltColor, description}`

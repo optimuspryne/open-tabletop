@@ -24,7 +24,7 @@ Current shelf source hashes, verified unchanged during the collection export:
 - UV derivative: `89e7eee7023f34566af2f2f8e109ddb25463059569fcc181cab4e334be0f4241`.
 
 The companion `cozy_shelf_v2/README.md` records authoring, shelf-only LOD, active-UV
-batching, verification and sources. Gameplay originals and chair/lamp GLBs are unchanged.
+batching, verification and sources. Those authoring exports are the source of the current lossless app files.
 
 | File | Triangles | Material batches | SHA-256 |
 | --- | ---: | ---: | --- |
@@ -32,11 +32,28 @@ batching, verification and sources. Gameplay originals and chair/lamp GLBs are u
 | cozy-game-shelf.glb | 141,346 | 29 | 9533beeff99fe32317a3a411df6434094ddeb9662ce7803aabdc47e0ac3e71ba |
 | cozy-floor-lamp.glb | 4,940 | 4 | b746d58f63ec400e459ede6b3fafdc51959972467e54740137613c267a77b96c |
 
-Each GLB embeds its images and uses standard glTF PBR materials, without an
-external decoder. The shelf requires `KHR_texture_transform`, supported by the bundled
+The baseline GLBs in the table embed their images and use standard glTF PBR materials,
+without an external decoder. The shelf requires `KHR_texture_transform`, supported by the bundled
 loader; it embeds 15 images and is 15,942,228 bytes. Metres, Y-up, front +Z.
 The room places them at seven room-units per metre; the source review-stage offsets are not room placements. No physics, lights,
 cameras or game rules are included in the models.
+
+## Canonical lossless assets
+
+Each Cozy GLB ships once, at its existing filename. `cozy-game-shelf.glb` contains
+the approved **7,485,328-byte** lossless Meshopt/WebP payload, SHA-256
+`e48b8f11593dee02d616de338e85e226aafc092c442bf6c004376b8f92d0c454`.
+The prior uncompressed app copies and `-lossless.glb` / `models/lossless/` paths
+were removed after owner comparison. Source Blender files remain in the authoring
+workspace. The 141,346 shelf triangles, 15 decoded RGBA images, named materials
+and active hierarchy are preserved; only an unused empty review scene was omitted.
+
+All furniture/windows/plants use the shared canonical-URL decoder allowlist.
+See [the publishing workflow](../../README.md) and `../../manifest.json` for
+per-file hashes, fingerprints and future one-asset export commands. The JavaScript
+decoder preserves CSP without WebAssembly/eval. Phone fallback and room resource
+ownership remain; actual-phone cold loading still needs manual testing.
+Refresh clients; no restart/migration is needed for an asset-only replacement.
 
 ## Android memory mitigation
 
@@ -45,8 +62,9 @@ images plus estimated mipmaps cost about 17.7 MB, down from 80.0 MB. Geometry,
 additional GPU copies and decode/upload peaks are not included. Gameplay originals
 remain intact. Top coins retain full authored relief/normals; only lower stack coins
 use the .08 detail ratio. Metalness1 and roughness 0.3 match gameplay coin tuning.
-The Android freeze/black-canvas/crash report still requires an on-device retry;
-desktop/touch-sized fixtures cannot establish the actual crash cause or resolution.
+The owner confirmed the later phone shader fallback resolved the reported Pixel crash.
+The newly adopted compressed shelf still needs real-device cold-load/rejoin smoke tests;
+desktop/touch-sized fixtures cannot establish Pixel decoding cost or stability.
 
 ## Window frame
 

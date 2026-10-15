@@ -25,6 +25,26 @@ blind.
 The version lives in three places that must always agree: `package.json`, the git tag
 (`vX.Y.Z`), and the Docker image tags.
 
+## Unreleased built-in GLB compression
+
+Ship the single compressed GLB at each existing `public/static_assets/models/`
+path, plus `models/manifest.json`, `public/rendering/builtin-model-assets.js`,
+`model-loader.js` and `public/vendor/meshoptimizer/`. Remove obsolete deployed
+`models/lossless/` and `cozy-game-shelf-lossless.glb` copies; deployment by overlay
+alone may otherwise leave their extra disk usage. Do not touch user-upload storage.
+The 101 final GLBs total 64.81 MB, 35.3% smaller than the original catalog. The
+owner approved removing duplicate originals after comparing the lossless versions.
+Saved canonical URLs stay stable. The collider tool reads preserved GLB metadata.
+
+Refresh clients. No new migration, runtime dependency, service, port, restart or
+CSP permission is needed for this asset slice; earlier room-style migration
+requirements below still apply. Run `npm run check`, `npm run test:models` and
+relevant component checks. Real-phone cold-load/resize/rejoin remains manual;
+the JavaScript decoder runs on the main thread and GPU memory is unchanged.
+For future exports use the [offline publishing guide](../public/static_assets/models/README.md)
+with sources in the companion authoring workspace. Do not run the old comparison
+batch workflow against final compressed files. Source licenses/credits still apply.
+
 ## Unreleased room-style upgrade
 
 Migration `024_room_environment.sql` adds `rooms.room_environment`, defaulting to

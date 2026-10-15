@@ -20,6 +20,30 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Refresh clients to load the updated board; no server restart is needed.
 
 ### Added
+- Removed the duplicate uncompressed built-in GLBs after owner comparison. The
+  lossless files now occupy their original canonical paths, preserving saved URLs
+  and reclaiming 100.12 MB of comparison payloads. Final GLBs total 64.81 MB.
+  Added a verified one-asset offline publishing workflow and manifest with decoded
+  geometry/image fingerprints and browser baselines, so originals are not needed
+  in the deployed app. Authoring masters stay outside the app. See
+  `public/static_assets/models/README.md` for future exports; refresh clients.
+- Applied lossless Meshopt and pixel-identical WebP where smaller to all 101
+  bundled original GLBs: 100.12 MB → 64.81 MB (35.3% fewer bytes before HTTP
+  encoding). Preserved every original as a backup, including the corrected Go
+  board. Shared rendering/previews now select exact allowlisted derivatives;
+  saved URLs, server measurements and uploaded-model loading remain compatible.
+  No quantization, simplification, texture downscaling or CSP changes. Backups
+  add disk space; decoded GPU memory stays the same. Refresh clients. See the
+  per-model report and rollback notes in `models/lossless/README.md` and
+  `docs/ART_DIRECTION.md`.
+- Cozy now loads a 7.49 MB lossless Meshopt/WebP shelf instead of the 15.94 MB
+  original, reducing its unencoded download by 53%. The original remains bundled
+  as a backup and is not fetched during normal room loading. Added a locally
+  hosted MIT-licensed JavaScript Meshopt decoder to the room loader, preserving
+  the enforced CSP without WebAssembly/eval permissions or a build step. Geometry,
+  decoded texture pixels, desktop materials and phone fallback remain. Added the
+  approved meshoptimizer library credit. Refresh clients; no migration or server
+  restart is needed. See `docs/ART_DIRECTION.md` for the comparison and integration.
 - Added **Room style** above Shape in Room Settings → Table Size & Color, with
   Standard (skybox only) and Cozy game room. Authorized GM/owner changes synchronize
   to every client and persist independently for each room across reloads/restarts.

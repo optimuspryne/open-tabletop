@@ -10,7 +10,7 @@ import { disposeHierarchy, releaseCanvasOnDispose } from './resources.js';
 import { boardGeometry } from '/shared/board-geometry.js';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createModelLoader } from './model-loader.js';
 import {
   CONFIG,
   renderer,
@@ -1632,7 +1632,7 @@ function propColor(props) {
   return props.color ?? COLORS.neutralProp;
 }
 
-const gltfLoader = new GLTFLoader();
+const gltfLoader = createModelLoader();
 function disposeCardMesh(root) {
   if (!root || root.userData.ottDisposed) return;
   root.userData.ottDisposed = true;

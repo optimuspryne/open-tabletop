@@ -4,7 +4,7 @@ import { createNotecardEditor } from './table/notecards.js';
 import { createDeckBrowser } from './table/deck-browsing.js';
 import { createParticipation } from './table/participation.js';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createModelLoader } from './rendering/model-loader.js';
 import {
   CONFIG,
   clamp,
@@ -198,7 +198,7 @@ const skybox = createSkybox({ THREE, scene, renderer, deviceClass, byId });
 const roomEnvironment = createRoomBackdrop({
   THREE,
   scene,
-  modelLoader: new GLTFLoader(),
+  modelLoader: createModelLoader(),
   seatLayoutFor,
   deviceClass,
   onShadowBoundsChanged: setSceneryShadowBounds,

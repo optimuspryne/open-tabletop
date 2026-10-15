@@ -3244,6 +3244,45 @@ provides the canonical options/normalizer without importing browser assets.
 Apply migration 024 through the configured migration role, restart the server and
 refresh browsers. Fresh installs include it in the flattened schema baseline.
 
+All **101** bundled GLBs now ship in their lossless form at existing canonical
+URLs, including `cozy-game-shelf.glb` (7,485,328 bytes). Total GLBs are
+**64,811,448 bytes**, versus 100,122,364 before compression (35.3% smaller before
+HTTP encoding). Duplicate originals and temporary `models/lossless/` and
+`-lossless.glb` paths were removed at the owner's request, reclaiming 100.12 MB
+from the comparison install. Authoring sources remain in the separate asset
+workspace. Saved catalog URLs stay stable; no schema or gameplay behavior changes.
+
+`createModelLoader()` selects the locally hosted, unchanged MIT-licensed upstream
+0.24.0 JavaScript `MeshoptDecoder` only for exact canonical `BUILTIN_MODEL_URLS`.
+Gameplay, previews, collider editing and room scenery share this adapter. Uploads,
+blobs, data and external refs use the ordinary GLTFLoader without a decoder.
+The reference decoder runs on the main thread without WebAssembly/eval/workers,
+keeping the existing CSP. Server simulation uses current shared physics constants;
+`assets:colliders` can read the preserved JSON accessor bounds/node transforms
+without decompressing vertex buffers. Existing ownership, stale-load disposal,
+phone material fallback and room failure fallback remain.
+
+`models/manifest.json` contains final/source hashes, sizes, validator results,
+decoded buffer and RGBA image fingerprints, and browser material/animation/
+hierarchy baselines. Normal checks do not need original payloads. The companion
+`builtin_lossless_v1/publish.mjs SOURCE.glb relative/model.glb` verifies a source
+export against a candidate before publishing the one final GLB and updating the
+manifest and bundled URL registry. It uses no geometry quantization/simplification;
+lossless WebP is kept only when smaller with identical RGBA bytes. It retains
+source image encoding or the complete source GLB when compression increases size.
+The publisher verifies raw/decoded geometry, morphs, skin matrices, animation and
+materials, and source/candidate pixels and metadata through two strict-CSP browser
+profiles. New usage still requires the appropriate catalog/theme registration,
+scale/physics review and source-license credits. See the
+[complete authoring workflow](../public/static_assets/models/README.md).
+
+`npm run test:models` checks every final GLB through the real loader/GPU and frozen
+browser baseline on desktop/coarse touch. Unit tests pin every decompressed buffer
+and decoded RGBA image and verify operation without WebAssembly. New assets go
+through source/candidate comparison during publishing. Real Android cold loading
+remains manual. These encodings reduce file bytes, not GPU memory. Refresh clients;
+no new migration, server restart, runtime dependency or CSP permission is needed.
+
 The owner's corrected Blender [furnishings](ART_DIRECTION.md) are bundled under
 `/models/environments/cozy/`: chair, game shelf and floor lamp. A separate Blender
 shell source supplies `cozy-window.glb`; original botanical sources supply rubber,
