@@ -8,6 +8,17 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Fixed
+- Repaired the custom Go board Blender source (`Open-Tabletop_Asset_Builders/3d_models/original/BLEND/go_board.blend`):
+  continuous bamboo UVs across the wooden cells and rim, unfolded side walls at
+  matching texture density, and restored/packed the original color and normal maps.
+  Geometry, grid markings and material settings are preserved. Saved an original
+  backup and before/after renders in the sibling `go_board_uv_fix/` directory;
+  verified by reopening the source. Re-exported the corrected GLB to the asset
+  library and replaced the app's bundled `models/boards/go_board.glb`, preserving
+  geometry, normals, triangle indices, material definitions and embedded textures.
+  Refresh clients to load the updated board; no server restart is needed.
+
 ### Added
 - Added **Room style** above Shape in Room Settings → Table Size & Color, with
   Standard (skybox only) and Cozy game room. Authorized GM/owner changes synchronize
