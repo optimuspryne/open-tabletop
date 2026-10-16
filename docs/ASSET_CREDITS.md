@@ -161,13 +161,13 @@ All CC0 (public domain).
 
 ## Tile art - `public/static_assets/mahjong/faces/`
 
-`flowPlum.png` and `flowBamboo.png` are CC0 derivatives of the bonus kit's original
-`Flower1_Plum.svg` and `Flower4_Bamboo.svg`, rendered with Sharp to 360×480 PNG and
-flattened onto ivory `#efead8`. They provide image fallbacks for the new GLB identities.
-Their botanical artwork/outlined Noto lettering have the same provenance as the bonus
-models above. All pre-existing tile PNGs remain unchanged.
+Only `flowLotus.png` and `flowPeony.png` remain from the original tile PNG set, for
+saved flower identities without matching GLBs. The 42 replaced PNGs have been removed,
+including the former plum/bamboo fallbacks derived from the bonus kit SVGs. Current
+tile models retain the artwork and provenance described above; active faces use
+generated text during model loading or failure.
 
-The original tile PNG set (excluding these two new fallbacks):
+The two retained original PNGs:
 
 - **Mahjong Tileset** - CodeInfernoGames
   (https://opengameart.org/users/codeinfernogames)

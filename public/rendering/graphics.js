@@ -24,6 +24,7 @@ import { isHandTile } from '../../shared/hand-fan.js';
 import { assetTextureURL, assetThumbnailURL } from './asset-texture-url.js';
 import { THUMBNAIL_MAX_DIMENSION } from '../../shared/image-thumbnails.js';
 import { playingCardFace } from '../../shared/playing-cards.js';
+import { mahjongFaceLabel } from '../../shared/tile-models.js';
 import {
   PROPS,
   COLORS,
@@ -1015,7 +1016,9 @@ function resolveTexture(ref) {
 
   const parsed = parseCardFront(ref);
   let texture;
-  if (parsed.ref) texture = loadImageTexture(cardTextureURL(parsed.ref));
+  const mahjongLabel = mahjongFaceLabel(parsed.ref);
+  if (mahjongLabel) texture = textFaceTexture(mahjongLabel, COLORS.ink, COLORS.ivory, COLORS.ivory);
+  else if (parsed.ref) texture = loadImageTexture(cardTextureURL(parsed.ref));
   else if (parsed.kind === 'back') texture = cardBack();
   else if (parsed.kind === 'rank') texture = cardFront(parsed.rank, parsed.suit, parsed.color);
   else if (parsed.kind === 'joker') texture = jokerFace(parsed.color);
@@ -2736,7 +2739,8 @@ function rememberPreview(key, url) {
 // to callers needing more resolution; this never changes the texture used by a tabletop mesh.
 export function cardPreviewURL(ref, { thumbnail = true } = {}) {
   const r = ref || 'back';
-  if (r.startsWith('/')) return thumbnail ? assetThumbnailURL(r) : assetTextureURL(r);
+  if (r.startsWith('/') && !mahjongFaceLabel(r))
+    return thumbnail ? assetThumbnailURL(r) : assetTextureURL(r);
   if (r.startsWith('http') || r.startsWith('data:')) return thumbnail ? assetThumbnailURL(r) : r;
   const key = thumbnail ? 'thumb:' + r : r;
   if (_prevCache.has(key)) return _prevCache.get(key);

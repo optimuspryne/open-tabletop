@@ -39,9 +39,14 @@ inventory and appearance controls are reused; no new gameplay engine/helper is n
 - `public/static_assets/models/pieces/mahjong/`: 46 unchanged supplied GLBs: 42 faces,
   concealed model, three red fives reserved for later. The concealed model is already
   oriented back-up. Known open face-down tiles rotate their face model through the renderer.
-- `public/static_assets/mahjong/faces/flowPlum.png`, `flowBamboo.png`: 360×480 image fallbacks
-  rendered from the bonus kit's original SVGs with Sharp, on ivory `#efead8`. Existing image
-  assets are unchanged; these new refs remain readable during loading or on GLB failure.
+- `shared/tile-models.js`: `mahjongFaceLabel` generates labels for the 42 active face IDs;
+  rendering uses local text fallback textures while loading or on GLB failure. The 42
+  replaced PNGs, including plum/bamboo, are removed. `LEGACY_MAHJONG_FACE_URLS` retains
+  the two lotus/peony PNGs because no supplied model matches those saved flower identities.
+- Library sets and starters use the approved GLB image pairs via `tilePairPreview`,
+  reusing `tilePreviewURL`, lazy loading/cancellation and the existing `deckPreview`
+  layout. No controls or icons change. Active face IDs and private inventories keep
+  their original spelling; thumbnail mapping rejects retired PNG/derivative requests.
 - `test/mahjong.js`: validates all bundled GLBs, exact inventory/model membership,
   concealment, legacy bonuses, appearance transfers and remaining-stock recoloring.
   `test/backend-deck-builders.js` verifies both 136/144 counts. `test/backend-piece-lifecycle.js`
@@ -52,6 +57,10 @@ inventory and appearance controls are reused; no new gameplay engine/helper is n
   concealed orientation, symbol colors, hand preview and inspector/selection messages
   in its desktop and touch profiles, including compact controls. It also exercises the
   real selector-to-spawn caller, defaults, keyboard focus, width, order and touch sizing.
+  `library-tile-model-previews` checks all five set/starter entries in full/compact
+  desktop/touch layouts, actual model snapshots, containment, retained legacy artwork
+  and a failed-model fallback without retired PNG fetches. Fixture derivatives cover
+  only real retained Mahjong images; missing Mahjong thumbnails now fail the suite.
 - `CHANGELOG.md`, `ASSET_CREDITS.md`, `REFERENCE.md`, `ARCHITECTURE.md` record behavior,
   provenance, contracts and boundaries; `ROADMAP.md` updates the current inventory count
   while retaining the older profiling record. `DEVICE_QA.md` adds manual variant checks.
@@ -66,7 +75,42 @@ Real-device performance and gameplay
 smoke testing remain pending; the supplied set is about 39.6 MB with roughly 1.09 million
 triangles across all unique assets, and the renderer shares template geometry.
 
-Mahjong integration verification:
+### GLB preview and PNG retirement file summary
+
+| File | Current change |
+| --- | --- |
+| `shared/tile-models.js` | Adds `mahjongFaceLabel` and the frozen `LEGACY_MAHJONG_FACE_URLS`; existing face-to-model identities remain unchanged. |
+| `public/rendering/graphics.js` | Extends `resolveTexture` and `cardPreviewURL` to reuse `textFaceTexture` for active model IDs, avoiding PNG fetches. |
+| `public/rendering/asset-texture-url.js` | `assetThumbnailURL` rejects retired Mahjong PNGs and their derivative aliases. |
+| `public/editor/editor-panel.js` | Adds `tilePairPreview` using existing `fillAsync`/`tilePreviewURL`; updates `renderBuiltin` sets/starters and gives decorative `thumbImg` images empty alt text. |
+| `public/static_assets/mahjong/faces/` | Removes 42 replaced PNGs: `bam1–9`, `char1–9`, `cir1–9`, `dragG/R/W`, `windE/N/S/W`, `flowBamboo/Chrys/Orchid/Plum`, `seasFall/Spring/Summer/Winter`. Retains `flowLotus.png` and `flowPeony.png`. No GLBs or authored materials change. |
+| `test/mahjong.js`, `test/asset-texture-url.js` | Verify fallback labels, exact active membership, legacy exceptions and rejected retired thumbnail sources. |
+| `test/backend-static-assets.js` | Verifies the bundled model catalog, retained flower images and 404s for retired PNGs; preserves cache/relocation/fixture checks. |
+| `scripts/component-parity.mjs` | Adds the production Library preview/failure regression, generates only retained flower derivatives, checks procedural flower fallbacks and fails on missing Mahjong thumbnail fixtures. Supplies bounded synthetic upload thumbnails and verifies decoded Library images instead of URL assignment alone. |
+| `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/ASSET_CREDITS.md`, `docs/TILE_MODELS.md` | Record current behavior, helper contracts, provenance and this implementation/verification status. |
+
+These changes reuse the existing preview renderer and lifecycle rather than introducing
+a separate thumbnail implementation. Refresh browser clients; this cleanup does not require
+a server restart. Manual smoke testing should open Tiles and Pre-Built Games in both UI
+modes, check Domino/Mahjong image pairs, and spawn/reload existing tiles to confirm identities.
+Real-device and live multiplayer checks remain pending.
+
+PNG retirement verification:
+
+- `npm run check`: passed lint, formatting, CSS parity and all 1,165 tests on the final changes.
+- `npm run test:components`: passed the full component suite and all three notecard and
+  three tile-preview profiles. After adding synthetic upload thumbnail fixtures and stronger
+  decoding/failure assertions, the full component runner passed again: 102 desktop/touch
+  scenes. No missing Mahjong/upload thumbnail warnings remain; the static fixture reports
+  one unrelated `/favicon.ico` request.
+- `npm run test:input`: all 58 checks passed. `npm run test:devices`: all seven profiles passed.
+- `npm run test:models`: all 101 canonical GLBs passed integrity/material/animation checks
+  and GPU rendering on desktop and touch under strict CSP. `node scripts/tile-skin-test.mjs`
+  passed all eight finishes on desktop and phone.
+- Implemented preview captures were visually inspected against the approved full/compact
+  desktop/touch examples. `git diff --check` and local documentation links passed.
+
+Original Mahjong integration verification (historical):
 
 - `npm run check`: passed lint, formatting, CSS parity and all 992 tests.
 - `npm run test:components`: component parity passed the full desktop/touch suite; all
@@ -163,7 +207,7 @@ Implementation is complete. Checks run:
   callers on desktop/390px touch, plus notecard editor checks at 1280/390/360px.
 - `git diff --check` and updated documentation links pass.
 
-Repository HTTP/browser fixtures and isolated test subprocesses used authorized execution
+Original refactor verification note (historical): repository HTTP/browser fixtures and isolated test subprocesses used authorized execution
 outside the sandbox. The component harness reported eight missing derivative thumbnails
 in static fixtures (Mahjong WebP paths); the suite passed and all new model checks loaded
 successfully. Automated passes do not establish real-device gesture feel, GPU performance

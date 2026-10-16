@@ -1376,6 +1376,13 @@ and owned face textures are disposed through `createCardBrowsePreview`. Its sync
 cache detachment prevents concurrent table pieces from borrowing a transient preview texture;
 already-resident shared textures remain untouched. Image slots contain the entire snapshot
 without a card-frame or hex clip.
+Library set and starter cards share `tilePairPreview`, which queues two authored
+tile snapshots through the existing `fillAsync` observer and cancellation lifecycle.
+The pair uses the existing contained deck-preview layout in full/compact and touch modes.
+Active Mahjong face IDs retain their historical PNG spelling solely as model keys.
+`mahjongFaceLabel` supplies procedural text faces during loading/failure, so mesh and
+synchronous preview creation never fetch the 42 retired PNGs. Thumbnail URL mapping
+rejects those IDs and their derivative aliases; normal Library previews use GLBs.
 Dimensions remain
 in `TILES`/`props.geom`; Domino now uses the owner's half-extents 0.25 × 0.5 × 0.05
 (full width × length × thickness 0.5 × 1 × 0.1), shared by rendering and colliders.
@@ -1425,8 +1432,9 @@ library Set selector adds one of each bonus for 144. The spawn-only `bonusTiles`
 strictly boolean and accepted only for `set: 'mahjong'`; `spawnPayload` normalizes it and
 `createPieceLifecycle.spawn` passes it to `buildMahjongWall`. Private inventory persists
 the actual refs/count through existing save/restore, without needing a variant flag.
-Plum/bamboo have new refs and image fallbacks; old peony/lotus refs retain their original
-image fallback rather than being reassigned to different flowers. Three red-five GLBs are reserved and
+Old peony/lotus refs retain their two original PNGs rather than being reassigned to
+different flowers. All 42 active faces, including plum/bamboo, use generated text
+fallbacks; their former PNGs have been removed. Three red-five GLBs are reserved and
 do not alter the default inventory or model allowlist. Mahjong's Build wall action uses a
 separate server operation and shared layout; see [Mahjong wall](MAHJONG_WALL.md).
 A selection can share the picker only within one registered family. Existing DOM IDs/CSS
@@ -2609,6 +2617,24 @@ receive 500 rather than specific 4xx responses (HARD-42/43). Header verification
 fixture is separate from actual browser enforcement, HTTPS termination and trusted-proxy setup.
 Remaining optional hardening: post-parse model complexity limits, per-user storage
 caps. Defense in depth, not provably safe.
+
+## Regression coverage boundaries
+
+`test/backend-interaction-policy.js` owns the complete TableRoom registration inventory,
+duplicate-name checks, capability classification and shared error-boundary checks, including
+rejection of legacy inline `assetMessage` calls. Handler suites retain behavior and failure
+coverage rather than duplicating ordered registration lists or pinning an inline-handler count.
+
+Browser fixtures reuse production composition seams: collider checks call
+`createTableShell().prepare()` for number inputs, and the device matrix compares
+`createUiSurfaces().isSheet()` with actual CSS across independent width/pointer profiles.
+Collider upload fixtures unpack the actual bundled GLBs offline through the existing
+GLB/decoder helpers and verify their decoded integrity, preserving ordinary upload-loader
+restrictions. Unexpected alerts fail the fixture instead of blocking a headless browser.
+Component scenes assert behavior and rendered state, including visible Library swatches;
+computed-style snapshots are captured only when explicitly requested with `--out`.
+Standalone material, tile-skin and GPU-memory checks retain their distinct resource/appearance
+coverage. These fixtures do not establish real-device gesture feel or multiplayer acceptance.
 
 ## Adding things
 

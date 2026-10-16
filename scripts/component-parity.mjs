@@ -36,6 +36,7 @@ import {
   PLAYING_CARD_JOKERS,
 } from '../shared/playing-cards.js';
 import { assetThumbnailURL } from '../public/rendering/asset-texture-url.js';
+import { LEGACY_MAHJONG_FACE_URLS } from '../shared/tile-models.js';
 import { launch, newPage, serveDir, snapshotExpression } from './lib/headless.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', 'public');
@@ -228,7 +229,7 @@ const SCENES = [
     drive: `
       const assert = (ok, message) => { if (!ok) throw Error(message); };
       const THREE = await import('three');
-      const { KIND, cardMesh, tilePreviewURL } = await import('/rendering/graphics.js');
+      const { KIND, cardMesh, cardPreviewURL, tilePreviewURL } = await import('/rendering/graphics.js');
       const { CONFIG, deviceClass } = await import('/rendering/core.js');
       const { cardGeom } = await import('/shared/pieces.js');
       const { createInspection } = await import('/table/inspection.js');
@@ -342,8 +343,10 @@ const SCENES = [
       const preview=await tilePreviewURL(mjProps);
       assert(preview?.startsWith('data:image/'),'Mahjong hand preview missing');
       for(const id of ['flowPlum','flowBamboo']) {
-        const image=new Image();image.src='/mahjong/faces/'+id+'.png';await image.decode();
-        assert(image.naturalWidth===360&&image.naturalHeight===480,'New flower image fallback is missing');
+        const ref='/mahjong/faces/'+id+'.png';
+        const image=new Image();image.src=cardPreviewURL(ref);await image.decode();
+        assert(image.src.startsWith('data:image/')&&image.naturalWidth<=320&&image.naturalHeight<=320,
+          'Flower fallback must be generated without a retired PNG');
       }
       KIND.card.dispose(painted);KIND.card.dispose(mesh);
       piece.props=JSON.stringify(mjProps);meshes.set('1',{type:'card',mesh:original});
@@ -750,7 +753,10 @@ const SCENES = [
         for (const box of list.querySelectorAll('.libPreview')) {
           box.scrollIntoView({block:'center'});
           await waitFor(()=>box.querySelector('img')?.hasAttribute('src'));
-          assert(box.querySelector('img').src.endsWith('.png.webp?quality=thumbnail'), kind+' loaded a raw original');
+          const image=box.querySelector('img');
+          assert(image.src.endsWith('.png.webp?quality=thumbnail'), kind+' loaded a raw original');
+          await image.decode();
+          assert(image.naturalWidth===320&&image.naturalHeight===160,kind+' thumbnail did not load its bounded fixture');
         }
       }
       const {createDicePreferences} = await import('/table/dice-preferences.js');
@@ -2966,12 +2972,23 @@ const SCENES = [
   {
     name: 'library-swatches-open',
     root: '#libraryModal',
-    expect: { selector: '.libCard', min: 40 },
+    expect: { selector: '.swatchPop > .pop-menu:not([hidden]) .swatch', min: 2 },
     drive: `
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
+      document.querySelector('#libraryModal .libTab[data-tab="objects"]').click();
       (await import('/ui/icons.js')).applyIcons();
-      document.querySelector('.swatchPop > .pop-trigger').click();`,
+      const trigger = [...document.querySelectorAll('.swatchPop > .pop-trigger')]
+        .find(button => button.getBoundingClientRect().width > 0);
+      if (!trigger) throw new Error('No visible library color control');
+      const menu = trigger.parentElement.querySelector(':scope > .pop-menu');
+      if (!menu.hidden) throw new Error('Swatches started open');
+      trigger.click();
+      const swatches = [...menu.querySelectorAll('.swatch')];
+      if (menu.hidden || swatches.length < 2 || swatches.some(swatch => {
+        const bounds = swatch.getBoundingClientRect();
+        return bounds.width <= 0 || bounds.height <= 0;
+      })) throw new Error('Color control did not reveal usable swatches');`,
   },
   ...['full', 'compact'].map((mode) => ({
     name: 'hand-playing-faces-' + mode,
@@ -3209,7 +3226,82 @@ const VIEWPORTS = [
   { name: 'coarse-390', width: 390, height: 844, touch: true },
 ];
 
+const file = process.argv[2] === '--out' ? process.argv[3] : null;
 const out = {};
+SCENES.push({
+  name: 'library-tile-model-previews',
+  root: '#libraryModal',
+  expect: { selector: '#libraryModal .libPreview img[src^="data:image/"]', min: 2 },
+  drive: `
+    ${BE_ADMIN}
+    const assert=(ok,message)=>{if(!ok)throw Error(message);};
+    const {tilePreviewURL,cardPreviewURL,KIND,cardMesh}=await import('/rendering/graphics.js');
+    const {TILE_MODELS,LEGACY_MAHJONG_FACE_URLS}=await import('/shared/tile-models.js');
+    document.getElementById('tableLoading')?.remove();
+    window.onOttRoom(${STUB_ROOM});
+    document.getElementById('lib2Btn').click();
+    const cases=[
+      ['tiles','Dominoes (double-six)','domino',['domino:6:3','domino:5:5']],
+      ['tiles','Mahjong wall','mahjong',['/mahjong/faces/dragR.png','/mahjong/faces/cir5.png']],
+      ['games','Dominoes','domino',['domino:6:3','domino:5:5']],
+      ['games','Mahjong (136 tiles)','mahjong',['/mahjong/faces/dragR.png','/mahjong/faces/bam1.png']],
+      ['games','Mahjong (144 tiles)','mahjong',['/mahjong/faces/flowPlum.png','/mahjong/faces/seasSpring.png']],
+    ];
+    for(const mode of ['full','compact']) {
+      document.body.classList.toggle('ui-full',mode==='full');
+      document.body.classList.toggle('ui-compact',mode==='compact');
+      for(const [tab,name,tile,fronts] of cases) {
+        document.querySelector('.libTab[data-tab="'+tab+'"]').click();
+        const card=[...document.querySelectorAll('#nlb_'+tab+' .libCard')]
+          .find(card=>card.querySelector('.libName')?.textContent===name);
+        assert(card,'Missing Library entry: '+name);
+        const preview=card.querySelector('.libPreview');
+        preview.scrollIntoView({block:'center'});
+        const images=[...preview.querySelectorAll('img')];
+        assert(images.length===2,'Expected two model previews: '+name);
+        for(let i=0;i<100&&!images.every(image=>image.complete&&image.naturalWidth>0);i++)
+          await new Promise(resolve=>setTimeout(resolve,50));
+        for(const [index,image] of images.entries()) {
+          assert(image.complete&&image.naturalWidth>0,'Preview did not load: '+name);
+          assert(image.src===await tilePreviewURL({tile,front:fronts[index]}),
+            'Library preview differs from the authored tile model: '+name);
+          assert(image.alt===''&&image.naturalWidth<=320&&image.naturalHeight<=320,
+            'Preview must be decorative and bounded: '+name);
+          const bounds=image.getBoundingClientRect(),parent=preview.getBoundingClientRect();
+          assert(bounds.left>=parent.left-.5&&bounds.right<=parent.right+.5&&
+            bounds.top>=parent.top-.5&&bounds.bottom<=parent.bottom+.5,
+            'Tile model preview is cropped: '+name+' '+mode);
+        }
+        assert(card.scrollWidth<=card.clientWidth+1,'Library tile card overflows: '+name+' '+mode);
+      }
+    }
+    // A missing model must leave a legible procedural face, without fetching a retired PNG.
+    const originalFetch=window.fetch;
+    window.fetch=(url,...args)=>String(url instanceof Request?url.url:url).endsWith('/mahjong/Man9.glb')
+      ? Promise.reject(new Error('deliberate model failure')):originalFetch(url,...args);
+    let failed;
+    try {
+      failed=cardMesh({tile:'mahjong',front:'/mahjong/faces/char9.png',back:'mjback'});
+      assert(await failed.userData.tileModelReady===false,'Missing model did not use its fallback');
+      assert(failed.children.length===1&&failed.children[0].visible&&
+        failed.children[0].material[0].map.image instanceof HTMLCanvasElement,
+        'Failed model did not retain a visible tile with a local front texture');
+      const image=new Image();image.src=cardPreviewURL('/mahjong/faces/char9.png');await image.decode();
+      assert(image.src.startsWith('data:image/')&&image.naturalWidth>0,'Missing model has no local face fallback');
+    } finally {
+      window.fetch=originalFetch;
+      if(failed)KIND.card.dispose(failed);
+    }
+    for(const ref of LEGACY_MAHJONG_FACE_URLS) {
+      const image=new Image();image.src=cardPreviewURL(ref);await image.decode();
+      assert(image.naturalWidth>0,'Legacy flower artwork failed to load: '+ref);
+    }
+    const resources=performance.getEntriesByType('resource').map(entry=>decodeURIComponent(new URL(entry.name).pathname));
+    for(const ref of Object.keys(TILE_MODELS.mahjong.faces))
+      assert(!resources.includes(ref)&&!resources.includes('/asset-textures/v1/bundled'+ref+'.webp'),
+        'Rendering requested retired Mahjong artwork: '+ref);
+  `,
+});
 SCENES.push({
   name: 'cozy-window-sky',
   page: '/table.html',
@@ -3368,9 +3460,14 @@ if (process.env.COMPONENT_SCENE) {
 
 // Raster previews use the same bounded image format as production. serveDir
 // serves static fixtures, so provide the bundled derivative responses explicitly.
-const playingCardThumbnails = Object.fromEntries(
+const bundledThumbnails = Object.fromEntries(
   await Promise.all(
-    [...PLAYING_CARD_BACKS, ...PLAYING_CARD_FACES, ...PLAYING_CARD_JOKERS].map(async ({ ref }) => [
+    [
+      ...PLAYING_CARD_BACKS,
+      ...PLAYING_CARD_FACES,
+      ...PLAYING_CARD_JOKERS,
+      ...LEGACY_MAHJONG_FACE_URLS.map((ref) => ({ ref })),
+    ].map(async ({ ref }) => [
       decodeURIComponent(assetThumbnailURL(ref).split('?')[0]),
       {
         body: await sharp(staticAssetPath(ref))
@@ -3382,12 +3479,24 @@ const playingCardThumbnails = Object.fromEntries(
     ]),
   ),
 );
+const uploadedThumbnail = await sharp({
+  create: { width: 320, height: 160, channels: 3, background: '#4b7c91' },
+})
+  .webp()
+  .toBuffer();
+const uploadedThumbnails = Object.fromEntries(
+  ['sky', 'dice', 'boards', 'mats', 'decks'].map((kind) => [
+    `/asset-textures/v1/${kind}/0123456789abcdefab.png.webp`,
+    { body: uploadedThumbnail, type: 'image/webp' },
+  ]),
+);
 const server = await serveDir({
   root: ROOT,
   stubOnly: ['/client.js', '/landing.js', '/admin.js'], // most scenes exercise controllers independently
   mounts: { '/shared/': SHARED },
   routes: {
-    ...playingCardThumbnails,
+    ...bundledThumbnails,
+    ...uploadedThumbnails,
     '/__admin-live.js': {
       body: await readFile(resolve(ROOT, 'admin.js'), 'utf8'),
       type: 'text/javascript',
@@ -3447,25 +3556,35 @@ for (const vp of VIEWPORTS)
     }
 
     const key = `${scene.name} @${vp.name}`;
-    out[key] = JSON.parse(
-      await page.evaluate(
-        snapshotExpression({ root: scene.root, revealHidden: false, normalizeDataUrls: true }),
-      ),
-    );
+    if (file)
+      out[key] = JSON.parse(
+        await page.evaluate(
+          snapshotExpression({ root: scene.root, revealHidden: false, normalizeDataUrls: true }),
+        ),
+      );
     console.log(
-      `  ${key}: ${found} ${scene.expect.selector}, ${Object.keys(out[key]).length} elements`,
+      `  ${key}: ${found} ${scene.expect.selector}` +
+        (file ? `, ${Object.keys(out[key]).length} elements` : ''),
     );
     await page.close();
   }
 
 await cdp.close();
 server.close();
+const missingMahjong = server.missing.filter((path) =>
+  path.startsWith('/asset-textures/v1/bundled/mahjong/faces/'),
+);
+if (missingMahjong.length) {
+  console.error(
+    `  FAIL  missing Mahjong thumbnail fixtures: ${[...new Set(missingMahjong)].join(' ')}`,
+  );
+  bad++;
+}
 if (server.missing.length)
   console.log(
     `  (${new Set(server.missing).size} asset paths 404'd: ${[...new Set(server.missing)].slice(0, 3).join(' ')}…)`,
   );
 
-const file = process.argv[2] === '--out' ? process.argv[3] : null;
 if (file) {
   await writeFile(file, JSON.stringify(out, null, 0));
   console.log(`wrote ${file}`);

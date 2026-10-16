@@ -4,18 +4,59 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { readFile, writeFile } from 'node:fs/promises';
 import { launch, newPage, serveDir } from './lib/headless.mjs';
+import { parseGLB, bufferViews } from './lib/glb.mjs';
+import { modelIntegrity } from './lib/model-integrity.mjs';
+import { MeshoptDecoder } from '../public/vendor/meshoptimizer/meshopt_decoder_reference.js';
+import { staticAssetPath } from '../server/static-assets.js';
 const root = resolve(import.meta.dirname, '..');
+// Real user uploads use the ordinary loader, which deliberately cannot decode bundled-only
+// Meshopt files. Keep the actual model geometry/materials, but unpack fixture uploads offline.
+await MeshoptDecoder.ready;
+const uploadRoutes = Object.fromEntries(
+  await Promise.all(
+    ['/models/pieces/chess/rook.glb', '/models/boards/go_board.glb'].map(async (url) => {
+      const source = await readFile(staticAssetPath(url));
+      const glb = parseGLB(source);
+      const views = bufferViews(glb, MeshoptDecoder);
+      const chunks = [];
+      let offset = 0;
+      glb.json.bufferViews = glb.json.bufferViews.map((view, index) => {
+        const bytes = views[index];
+        const next = { ...view, buffer: 0, byteOffset: offset, byteLength: bytes.length };
+        delete next.extensions?.EXT_meshopt_compression;
+        if (!Object.keys(next.extensions || {}).length) delete next.extensions;
+        const padded = Buffer.alloc(Math.ceil(bytes.length / 4) * 4);
+        bytes.copy(padded);
+        chunks.push(padded);
+        offset += padded.length;
+        return next;
+      });
+      glb.json.buffers = [{ byteLength: offset }];
+      for (const key of ['extensionsUsed', 'extensionsRequired'])
+        if (glb.json[key])
+          glb.json[key] = glb.json[key].filter((name) => name !== 'EXT_meshopt_compression');
+      const json = Buffer.from(JSON.stringify(glb.json));
+      const paddedJSON = Buffer.alloc(Math.ceil(json.length / 4) * 4, 0x20);
+      json.copy(paddedJSON);
+      const header = Buffer.alloc(20);
+      [0x46546c67, 2, 28 + paddedJSON.length + offset, paddedJSON.length, 0x4e4f534a].forEach(
+        (value, index) => header.writeUInt32LE(value, index * 4),
+      );
+      const binaryHeader = Buffer.alloc(8);
+      binaryHeader.writeUInt32LE(offset, 0);
+      binaryHeader.writeUInt32LE(0x004e4942, 4);
+      const body = Buffer.concat([header, paddedJSON, binaryHeader, ...chunks]);
+      assert.deepEqual(await modelIntegrity(body), await modelIntegrity(source), url);
+      return ['/fixture-uploads' + url, { body, type: 'model/gltf-binary' }];
+    }),
+  ),
+);
 const server = await serveDir({
   root: resolve(root, 'public'),
   stubOnly: ['/client.js'],
   mounts: { '/shared/': resolve(root, 'shared') },
+  routes: uploadRoutes,
 });
-// Exercise the real number-stepper wrapper even though the networked table client is stubbed.
-const clientSource = await readFile(resolve(root, 'public/client.js'), 'utf8');
-const stepperSource = clientSource.slice(
-  clientSource.indexOf('function enhanceNumberInputs()'),
-  clientSource.indexOf('enhanceNumberInputs();') + 'enhanceNumberInputs();'.length,
-);
 let cdp;
 try {
   cdp = await launch({ webgl: true });
@@ -24,12 +65,23 @@ try {
       url: server.origin + '/table.html',
       width,
       height: 900,
+      touch: width === 390,
       settle: 1000,
     });
-    await page.evaluate(stepperSource);
+    // Prepare the production shell without booting the networked table client.
+    await page.evaluate(`(async () => {
+      const { createTableShell } = await import('/table/table-shell.js');
+      createTableShell({
+        byId: id => document.getElementById(id),
+        clamp: (value, min, max) => Math.max(min, Math.min(max, value)),
+        getRoom: () => null,
+      }).prepare();
+    })()`);
     const result = await page.evaluate(`(async()=>{
       const assert=(ok,message)=>{if(!ok)throw new Error(message);};
-      const wait=async test=>{for(let i=0;i<200;i++){if(test())return;await new Promise(r=>setTimeout(r,25));}throw new Error('UI did not become ready');};
+      window.colliderAlert=null;
+      window.alert=message=>{window.colliderAlert=message;};
+      const wait=async test=>{for(let i=0;i<200;i++){if(window.colliderAlert)throw new Error(window.colliderAlert);if(test())return;await new Promise(r=>setTimeout(r,25));}throw new Error('UI did not become ready');};
       document.getElementById('tableLoading').remove();
       window.OTT_IS_ADMIN=true;document.body.classList.remove('not-admin','not-gm');
       const sent=[];window.onOttRoom(new Proxy({}, {get:(t,k)=>k==='sessionId'?'test':k==='state'?new Proxy({}, {get:()=>undefined}):k==='send'?((...args)=>sent.push(args)):(()=>{})}));
@@ -47,7 +99,7 @@ try {
         else body=id?{preset:presets.find(p=>p.id===id)}:{presets,nextOffset:null};
         return new Response(JSON.stringify(body),{headers:{'content-type':'application/json'}});
       };
-      const choose=async(id,url)=>{const blob=await (await actualFetch(url)).blob();const files=new DataTransfer();files.items.add(new File([blob],'model.glb',{type:'model/gltf-binary'}));const input=document.getElementById(id);input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));};
+      const choose=async(id,url)=>{const blob=await (await actualFetch('/fixture-uploads'+url)).blob();const files=new DataTransfer();files.items.add(new File([blob],'model.glb',{type:'model/gltf-binary'}));const input=document.getElementById(id);input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));};
       const openTab=tab=>{document.getElementById('addModal').hidden=false;document.querySelector('#addModal .libTab[data-tab="'+tab+'"]').click();};
       const modal=()=>document.querySelector('.compoundEditor');
       const button=name=>modal().querySelector('[data-action="'+name+'"]');
@@ -268,6 +320,7 @@ try {
       if(!add.disabled||dialog.querySelector('[data-field="list"]').options.length!==16)throw new Error('Shape limit failed');
       dialog.querySelector('[data-action="cancel"]').click();
     })()`);
+    assert.equal(await page.evaluate('window.colliderAlert'), null, 'Unexpected collider alert');
     await page.close();
   }
 } finally {

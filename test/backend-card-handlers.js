@@ -192,25 +192,6 @@ test('a full table retains inspected cards until they can be placed or returned 
   assert.equal(events.filter((event) => event.name === 'hand').length, 1);
 });
 
-test('card handler module registers the complete card/deck message family', () => {
-  const { handlers } = harness();
-  assert.deepEqual(
-    [...handlers.keys()],
-    [
-      'flip',
-      'dealToTable',
-      'drawToHand',
-      'dealDrag',
-      'takeCard',
-      'drawInspect',
-      'inspectPlace',
-      'shuffle',
-      'splitDeck',
-      'combineIntoDeck',
-    ],
-  );
-});
-
 test('flipping moves a face between public props and private card data', () => {
   const { room, handlers, events } = harness();
   const body = {

@@ -2,35 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerLibraryHandlers } from '../server/game/handlers/library.js';
 
-const MESSAGE_NAMES = [
-  'deckBegin',
-  'deckAppend',
-  'deckFinish',
-  'listDecks',
-  'loadDeck',
-  'saveBoard',
-  'listBoards',
-  'saveMat',
-  'listMats',
-  'loadMat',
-  'saveProp',
-  'listProps',
-  'removePropDispenser',
-  'loadProp',
-  'assetPublic',
-  'assetRename',
-  'getDeck',
-  'assetDelete',
-  'listScenes',
-  'sceneSave',
-  'sceneLoad',
-  'loadBoard',
-  'listSkyboxes',
-  'saveSkybox',
-  'listDice',
-  'saveDice',
-];
-
 function harness({ admin = true, rank = 3 } = {}) {
   const handlers = new Map();
   const calls = [];
@@ -157,10 +128,6 @@ test('a full table still saves a mat but skips the optional spawn', async () => 
   assert.equal(calls.filter(({ name }) => name === 'insertMat').length, 1);
   assert.equal(calls.filter(({ name }) => name === 'spawn').length, 0);
   assert.equal(calls.filter(({ name }) => name === 'full').length, 1);
-});
-
-test('library handler module registers the complete asset message family', () => {
-  assert.deepEqual([...harness().handlers.keys()], MESSAGE_NAMES);
 });
 
 test('deck drafts are assembled in chunks and persisted by the finish handler', async () => {

@@ -27,12 +27,8 @@ import { launch, newPage, serveDir } from './lib/headless.mjs';
 const ROOT = resolve(import.meta.dirname, '..', 'public');
 const SHARED = resolve(import.meta.dirname, '..', 'shared');
 
-// Keep this string identical to SHEET_MQ in public/client.js and the .region,.sheet media
-// query in public/styles.css — the drift between them is one of the things this test catches.
-const SHEET_MQ = '(max-width: 900px), (pointer: coarse)';
-
 // name, viewport, and the branch each profile is expected to land in.
-// sheet = SHEET_MQ matches; fine = (pointer: fine) matches; mark = compact logo (<= 560px).
+// sheet = production isSheet(); fine = (pointer: fine) matches; mark = compact logo (<= 560px).
 const PROFILES = [
   {
     name: 'desktop-1440',
@@ -84,9 +80,11 @@ const PROFILES = [
 ];
 
 // Runs in the page. Reveals the elements it measures (they ship hidden), reports the live
-// branch for each switch as both the matchMedia predicate AND the CSS effect it should cause,
+// branch for each switch as both the production predicate AND the CSS effect it should cause,
 // so a JS/CSS drift shows up as the two disagreeing rather than both being wrong together.
-const PROBE_TABLE = `(() => {
+const PROBE_TABLE = `(async () => {
+  const { createUiSurfaces } = await import('/ui/ui-surfaces.js');
+  const ui = createUiSurfaces();
   const mq = (q) => matchMedia(q).matches;
   const region = document.getElementById('regionTR'); // a .region: fixed 300px panel, or a bottom sheet
   if (region) region.hidden = false;
@@ -104,7 +102,7 @@ const PROBE_TABLE = `(() => {
   const xInView = !!xr && xr.top >= 0 && xr.left >= 0 && xr.bottom <= innerHeight && xr.right <= innerWidth;
 
   return JSON.stringify({
-    mqSheet: mq(${JSON.stringify(SHEET_MQ)}),
+    jsSheet: ui.isSheet(),
     mqFine: mq('(pointer: fine)'),
     cssSheet,
     hasRegion: !!region,
@@ -162,18 +160,19 @@ for (const p of PROFILES) {
   });
   const t = JSON.parse(await table.evaluate(PROBE_TABLE));
 
-  if (t.mqSheet !== p.sheet) fail(p.name, `SHEET_MQ matched ${t.mqSheet}, matrix says ${p.sheet}`);
+  if (t.jsSheet !== p.sheet)
+    fail(p.name, `production isSheet() returned ${t.jsSheet}, matrix says ${p.sheet}`);
   if (!t.hasRegion) fail(p.name, `#regionTR missing — cannot verify the sheet CSS effect`);
   else if (t.cssSheet !== p.sheet)
     fail(
       p.name,
       `.region laid out as sheet=${t.cssSheet} but matrix says ${p.sheet} — ` +
-        `SHEET_MQ (client.js) and the .region media query (styles.css) are out of step`,
+        `isSheet() (ui-surfaces.js) and the .region media query (styles.css) are out of step`,
     );
-  else if (t.mqSheet !== t.cssSheet)
+  else if (t.jsSheet !== t.cssSheet)
     fail(
       p.name,
-      `matchMedia says sheet=${t.mqSheet} but the CSS rendered sheet=${t.cssSheet} — JS/CSS drift`,
+      `isSheet() says sheet=${t.jsSheet} but the CSS rendered sheet=${t.cssSheet} — JS/CSS drift`,
     );
 
   if (t.mqFine !== p.fine)
@@ -215,8 +214,8 @@ for (const p of PROFILES) {
 
   console.log(
     `  ${p.name} (${p.width}x${p.height}${p.touch ? ' touch' : ''}): ` +
-      `sheet=${t.mqSheet} fine=${t.mqFine} mark=${b.markShown} — ` +
-      `${p.sheet === t.mqSheet && p.fine === t.mqFine && p.mark === b.markShown ? 'ok' : 'MISMATCH'}`,
+      `sheet=${t.jsSheet} fine=${t.mqFine} mark=${b.markShown} — ` +
+      `${p.sheet === t.jsSheet && p.fine === t.mqFine && p.mark === b.markShown ? 'ok' : 'MISMATCH'}`,
   );
 }
 

@@ -754,6 +754,7 @@ const thumbImg = (src, cls) => {
   im.className = 'libThumb' + (cls ? ' ' + cls : '');
   im.loading = 'lazy';
   im.decoding = 'async';
+  im.alt = ''; // decorative artwork; the containing card supplies its accessible title
   const url = assetThumbnailURL(src);
   if (url) im.src = url;
   return im;
@@ -807,6 +808,13 @@ function clearPreviewList(ul) {
     box._thumbCancelled = true;
   }
   ul.replaceChildren();
+}
+
+// Sets and starters share the authored tile renderer and the existing lazy preview lifecycle.
+function tilePairPreview(tile, fronts) {
+  const box = previewBox('deckPreview');
+  for (const front of fronts) fillAsync(box, () => tilePreviewURL({ tile, front }));
+  return box;
 }
 
 // Build the preview image(s) for a card. Decks show back + first-front; skyboxes,
@@ -1164,16 +1172,7 @@ function renderBuiltin(sink) {
     );
   }
   {
-    const box = previewBox('deckPreview');
-    for (const front of ['domino:6:3', 'domino:5:5']) {
-      const image = thumbImg(cardPreviewURL(front));
-      box.append(image);
-      tilePreviewURL({ tile: 'domino', front })
-        .then((url) => {
-          if (url && image.isConnected) image.src = url;
-        })
-        .catch(() => {});
-    }
+    const box = tilePairPreview('domino', ['domino:6:3', 'domino:5:5']);
     tiles.append(
       spawnCard({
         preview: box,
@@ -1196,16 +1195,7 @@ function renderBuiltin(sink) {
     );
   } // the 100-tile bag on its own
   {
-    const box = previewBox('deckPreview');
-    for (const front of ['/mahjong/faces/dragR.png', '/mahjong/faces/cir5.png']) {
-      const image = thumbImg(cardPreviewURL(front));
-      box.append(image);
-      tilePreviewURL({ tile: 'mahjong', front })
-        .then((url) => {
-          if (url && image.isConnected) image.src = url;
-        })
-        .catch(() => {});
-    }
+    const box = tilePairPreview('mahjong', ['/mahjong/faces/dragR.png', '/mahjong/faces/cir5.png']);
     const setLabel = document.createElement('label');
     setLabel.className = 'field-group librarySetPicker';
     const caption = document.createElement('span');
@@ -1272,22 +1262,18 @@ function renderBuiltin(sink) {
       go: BOARDS.go.model,
     };
     for (const g of STARTER_LIST) {
-      const box = previewBox();
+      let box = previewBox();
       if (gamePreview[g.id]) fillAsync(box, () => boardPreviewURL(gamePreview[g.id]));
-      else if (g.id === 'dominoes')
-        box.append(thumbImg(cardPreviewURL('domino:6:3')), thumbImg(cardPreviewURL('domino:5:5')));
+      else if (g.id === 'dominoes') box = tilePairPreview('domino', ['domino:6:3', 'domino:5:5']);
       else if (g.id === 'wordy')
         box.append(thumbImg(cardPreviewURL('letter:W:4')), thumbImg(cardPreviewURL('letter:A:1')));
       else if (g.id === 'mahjong')
-        box.append(
-          thumbImg(cardPreviewURL('/mahjong/faces/dragR.png')),
-          thumbImg(cardPreviewURL('/mahjong/faces/bam1.png')),
-        );
+        box = tilePairPreview('mahjong', ['/mahjong/faces/dragR.png', '/mahjong/faces/bam1.png']);
       else if (g.id === 'mahjong-bonus')
-        box.append(
-          thumbImg(cardPreviewURL('/mahjong/faces/flowPlum.png')),
-          thumbImg(cardPreviewURL('/mahjong/faces/seasSpring.png')),
-        );
+        box = tilePairPreview('mahjong', [
+          '/mahjong/faces/flowPlum.png',
+          '/mahjong/faces/seasSpring.png',
+        ]);
       else
         box.append(
           thumbImg(cardPreviewURL(PLAYING_CARD_FACES[0].ref)),

@@ -9,6 +9,22 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Fixed
+- Library tile sets and starter games now preview the current Domino and Mahjong
+  GLBs using the shared lazy thumbnail renderer, including full/compact and touch
+  layouts. Removed the 42 replaced Mahjong PNGs (about 2.35 MiB); saved face IDs
+  remain unchanged, with generated text faces during model loading or failure.
+  The two legacy lotus/peony PNGs remain for saved tiles with no matching GLB.
+  Browser fixtures serve those retained images and fail on missing Mahjong thumbnail
+  derivatives. Refresh clients to load these changes; no server restart is needed.
+- Repaired browser regression fixtures to prepare collider number inputs through the
+  production table shell, compare the production sheet predicate against rendered CSS,
+  and require the Library color control to reveal visible swatches. Component snapshots
+  are now collected only with `--out`; ordinary checks retain their behavior assertions.
+  Collider fixtures unpack bundled models into integrity-checked ordinary uploads and
+  report unexpected alerts instead of stalling the headless browser.
+  Consolidated message-registration coverage and removed 12 redundant test cases while
+  preserving the legacy asset-message guard and unique gameplay/rendering checks.
+  Test-only changes; no server restart or client refresh is required.
 - Repaired the custom Go board Blender source (`Open-Tabletop_Asset_Builders/3d_models/original/BLEND/go_board.blend`):
   continuous bamboo UVs across the wooden cells and rim, unfolded side walls at
   matching texture density, and restored/packed the original color and normal maps.

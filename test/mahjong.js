@@ -12,9 +12,20 @@ import { createDeckBuilders } from '../server/game/deck-builders.js';
 import { validateGlb } from '../server/assets/upload-validation.js';
 import { absorbedEntry, takeTopCard, inspectedEntry } from '../server/deck-state.js';
 import { recolorPiece } from '../server/game/piece-operations.js';
+import { mahjongFaceLabel, LEGACY_MAHJONG_FACE_URLS } from '../shared/tile-models.js';
 
 const directory = new URL('../public/static_assets/models/pieces/mahjong/', import.meta.url);
 const family = TILE_MODELS.mahjong;
+
+test('saved Mahjong face identities have procedural fallback labels without raster dependencies', () => {
+  assert.equal(Object.keys(family.faces).length, 42);
+  for (const ref of Object.keys(family.faces)) assert.ok(mahjongFaceLabel(ref), ref);
+  assert.equal(mahjongFaceLabel('/mahjong/faces/bam1.png'), 'Bamboo 1');
+  assert.equal(mahjongFaceLabel('/mahjong/faces/dragR.png'), 'Red dragon');
+  assert.equal(mahjongFaceLabel('/mahjong/faces/flowPlum.png'), 'Plum');
+  for (const ref of [null, {}, '__proto__', '/secret.glb', ...LEGACY_MAHJONG_FACE_URLS])
+    assert.equal(mahjongFaceLabel(ref), null);
+});
 
 test('all Mahjong faces in the default inventory map to valid standalone GLBs', () => {
   const { cards } = createDeckBuilders({ shuffle: (cards) => cards }).buildMahjongWall();

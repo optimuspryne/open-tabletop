@@ -407,6 +407,32 @@ the safe mesh-props helper from `piece-view`; neither feature module imports `cl
 
 ---
 
+## Regression test commands and coverage
+
+- `npm run check` runs lint, formatting, CSS vocabulary checks and the fast Node suite.
+  `test/backend-interaction-policy.js` owns full TableRoom message registration, uniqueness,
+  capability classification and inline error-boundary checks; individual handler suites
+  cover behavior without repeating ordered message inventories.
+- `npm run test:components` runs component scenes, notecard interactions and tile/hand previews.
+  Library swatch coverage requires the actual color control to reveal visible swatches.
+  Ordinary component runs skip computed-style capture. Use
+  `node scripts/component-parity.mjs --out /tmp/components.json` to record snapshots, or set
+  `COMPONENT_SCENE=library-swatches-open` to run that scene on both existing device profiles.
+- `npm run test:devices` compares the production `createUiSurfaces().isSheet()` predicate
+  with rendered region CSS and the seven expected profiles in [DEVICE_MATRIX.md](DEVICE_MATRIX.md).
+  `npm run test:input` exercises the input intent seam separately.
+- `node scripts/collider-editor-test.mjs` prepares number inputs through the production
+  `createTableShell().prepare()` seam before exercising object/board authoring and presets.
+  Its ordinary-upload fixtures unpack the real bundled models offline and compare decoded
+  integrity before serving them, preserving the bundled-only decoder boundary. Unexpected
+  alerts surface as fixture failures rather than blocking browser execution.
+  `node scripts/material-test.mjs`, `node scripts/tile-skin-test.mjs` and
+  `node scripts/rendering-memory.mjs` retain focused material and GPU resource checks.
+
+Browser commands require Chrome/Chromium (`CHROME_BIN` can select the binary) and a local
+fixture server; they do not require a running game server. No production runtime behavior
+changes with this test cleanup, and no restart or client refresh is required.
+
 ## Component diagram
 
 ```mermaid
@@ -814,7 +840,8 @@ chess}` each `[color0, color1]`.
 - **`MAHJONG`** `{ base, suits, honors, bonus }` — stable Mahjong face lists (faces are
   image URL references under `base`; 34 ordinary and eight bonus faces map to GLBs).
   Bonus flowers are plum, orchid, chrysanthemum and bamboo; seasons are spring, summer,
-  fall and winter. Plum/bamboo add refs and PNG fallbacks; old lotus/peony remain image-only.
+  fall and winter. Active refs keep their historical PNG spelling as GLB keys, with
+  generated text fallbacks; old lotus/peony retain their two PNGs and remain image-only.
   New inventory uses four copies of each ordinary face, optionally one of each bonus.
 - **`DECK_MODELS`** `{ key → { name, model, modelScale, box, modelRot?, tints?, tileTints?, color?, textColor? } }`
   — 3D deck _skins_ (a bag/box/pouch `.glb` a deck wears instead of the card stack); a deck opts in
@@ -1283,6 +1310,8 @@ Regression coverage lives in `test/asset-texture-url.js` (all categories, bundle
 fallback), `test/backend-asset-textures.js` (real HTTP size/cache isolation, bundled refresh and
 path rejection), and `scripts/component-parity.mjs` (library dice/sky/board/mat images, finish-chip
 actions, generated/local WebP previews and stale file-selection cleanup on desktop/touch).
+The static harness supplies bounded derivatives for retained Mahjong images and synthetic
+uploaded-image refs; Library image checks decode the actual responses and verify their dimensions.
 The `library-png-fallback` scene forces canvas WebP requests to return PNG and verifies actual
 image decoding and 320px bounds through library dice, deck, domino, board and object sinks;
 `test/asset-texture-url.js` covers repeated mapper passes and malformed fallback rejection.
@@ -2694,6 +2723,11 @@ quiet for a full frame), and
   Mahjong preserves old image identities and lotus/peony image fallback. Its `base`
   and `back` material slots map to Base and Back colors; engraving colors remain authored.
   Optional `colorLabels` change visible/accessibility labels without changing saved fields.
+- **`mahjongFaceLabel(ref)` / `LEGACY_MAHJONG_FACE_URLS`** (`shared/tile-models.js`) —
+  finite fallback labels for the 42 active model keys, and the two retained lotus/peony
+  raster URLs. `resolveTexture` and `cardPreviewURL` generate active fallback faces
+  locally; `assetThumbnailURL` rejects retired raster refs and derivative aliases.
+  Saved face IDs, model mappings and private inventory do not change.
 - **`createTileRenderer`** (`public/rendering/tiles.js`) — shared authored-tile branch
   of `cardMesh`. Deduplicates the registered model loads, owns per-instance materials,
   retains loading/failure fallback and ignores late loads for disposed instances.
@@ -2724,6 +2758,11 @@ quiet for a full frame), and
   the scroll viewport reserves room for lifted/selected tiles without moving the tray.
   Reuses `createCardBrowsePreview` ownership: newly created face textures are detached
   from the shared cache before awaiting, then disposed; resident table textures remain usable.
+  Library `tilePairPreview` (`public/editor/editor-panel.js`) reuses this renderer for
+  Domino/Mahjong sets and starter games through `fillAsync`'s lazy observer and cancellation
+  lifecycle. The existing `deckPreview` layout contains both silhouettes in full/compact
+  and touch modes. `library-tile-model-previews` checks actual model images, bounds,
+  legacy artwork and a failed-model fallback without requests for the retired PNGs.
   **`createTileAppearanceControls`** (`public/ui/tile-appearance.js`)
   shares Base, Inset (Back for Mahjong) and Material controls between inspector and selection Recolor.
   Family names/color labels supply accessible labels. Native color inputs emit independent patches;

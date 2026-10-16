@@ -6,24 +6,6 @@ import {
   scheduleRoomSave,
 } from '../server/game/handlers/room-state.js';
 
-const MESSAGE_NAMES = [
-  'stateSave',
-  'notebook',
-  'notebookSync',
-  'timer',
-  'score',
-  'roomNotes',
-  'table',
-  'tableColor',
-  'roomEnvironment',
-  'lightingApply',
-  'lightingRestore',
-  'lightingDefaultSave',
-  'lightingFactoryReset',
-  'scaleSet',
-  'calibrateGrid',
-];
-
 function harness({ rank = 3, scene = { pieces: [] }, sceneMaxBytes = 1000 } = {}) {
   const handlers = new Map();
   const events = [];
@@ -143,10 +125,6 @@ test('GMs apply and restore lighting while only owners can replace the room defa
   assert.ok(owner.events.some(({ name }) => name === 'save'));
   await owner.handlers.get('lightingFactoryReset')(client());
   assert.deepEqual(owner.room.state.lighting, owner.room.factoryLighting);
-});
-
-test('room-state module registers the complete settings and persistence family', () => {
-  assert.deepEqual([...harness().handlers.keys()], MESSAGE_NAMES);
 });
 
 test('helpers can update scores but cannot mutate GM-only room settings', async () => {

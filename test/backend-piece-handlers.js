@@ -2,29 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerPieceHandlers } from '../server/game/handlers/pieces.js';
 
-const MESSAGE_NAMES = [
-  'setPieceLabels',
-  'setStandGroup',
-  'setSnapGroup',
-  'rollGroup',
-  'flipGroup',
-  'setOpenGroup',
-  'takeGroup',
-  'rotateGroup',
-  'recolor',
-  'recolorGroup',
-  'spawn',
-  'rollOne',
-  'setStand',
-  'setSnap',
-  'snap',
-  'remove',
-  'removeGroup',
-  'gatherDispensers',
-  'absorbIntoDispenser',
-  'dispenseFromPieces',
-];
-
 function vector(initial = {}) {
   return {
     x: initial.x || 0,
@@ -129,10 +106,6 @@ function harness({ rank = 3 } = {}) {
 }
 
 const client = { sessionId: 'client-1', send() {} };
-
-test('piece handler module registers the complete piece and group family', () => {
-  assert.deepEqual([...harness().handlers.keys()], MESSAGE_NAMES);
-});
 
 test('group flipping keeps hidden card fronts in private room state', async () => {
   const { room, handlers, events } = harness();

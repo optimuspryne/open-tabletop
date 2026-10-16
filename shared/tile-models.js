@@ -4,12 +4,33 @@
 const dominoRoot = '/models/pieces/dominoes/';
 const mahjongRoot = '/models/pieces/mahjong/';
 const mahjongFaces = {};
+const mahjongLabels = {};
+const suitLabels = { char: 'Characters', bam: 'Bamboo', cir: 'Dots' };
 for (const [ref, model] of Object.entries({ char: 'Man', bam: 'Sou', cir: 'Pin' }))
-  for (let rank = 1; rank <= 9; rank++)
+  for (let rank = 1; rank <= 9; rank++) {
+    mahjongLabels[`/mahjong/faces/${ref}${rank}.png`] = `${suitLabels[ref]} ${rank}`;
     mahjongFaces[`/mahjong/faces/${ref}${rank}.png`] = Object.freeze({
       url: mahjongRoot + model + rank + '.glb',
       turn: false,
     });
+  }
+const honorLabels = {
+  windE: 'East wind',
+  windS: 'South wind',
+  windW: 'West wind',
+  windN: 'North wind',
+  dragR: 'Red dragon',
+  dragG: 'Green dragon',
+  dragW: 'White dragon',
+  flowPlum: 'Plum',
+  flowOrchid: 'Orchid',
+  flowChrys: 'Chrysanthemum',
+  flowBamboo: 'Bamboo',
+  seasSpring: 'Spring',
+  seasSummer: 'Summer',
+  seasFall: 'Autumn',
+  seasWinter: 'Winter',
+};
 for (const [ref, model] of Object.entries({
   windE: 'Ton',
   windS: 'Nan',
@@ -26,11 +47,25 @@ for (const [ref, model] of Object.entries({
   seasSummer: 'Season2_Summer',
   seasFall: 'Season3_Autumn',
   seasWinter: 'Season4_Winter',
-}))
+})) {
+  mahjongLabels[`/mahjong/faces/${ref}.png`] = honorLabels[ref];
   mahjongFaces[`/mahjong/faces/${ref}.png`] = Object.freeze({
     url: mahjongRoot + model + '.glb',
     turn: false,
   });
+}
+Object.freeze(mahjongLabels);
+
+// Saved face IDs retain their historical spelling; active faces no longer require PNG files.
+// Only these two old flower identities still use raster art because no supplied GLB matches them.
+export const LEGACY_MAHJONG_FACE_URLS = Object.freeze([
+  '/mahjong/faces/flowLotus.png',
+  '/mahjong/faces/flowPeony.png',
+]);
+
+export function mahjongFaceLabel(ref) {
+  return typeof ref === 'string' && Object.hasOwn(mahjongLabels, ref) ? mahjongLabels[ref] : null;
+}
 const dominoFaces = {};
 for (let a = 0; a <= 6; a++)
   for (let b = 0; b <= 6; b++)
