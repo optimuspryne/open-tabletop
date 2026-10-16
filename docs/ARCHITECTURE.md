@@ -3,6 +3,19 @@
 A web-based, physics-driven tabletop where any game can be played, because the
 engine only ever simulates _physical objects_ and lets humans enforce the rules.
 
+Dependency ownership and update boundaries are recorded in the
+[inventory](DEPENDENCY_INVENTORY.md) and [maintenance plan](MAINTENANCE_PLAN.md).
+Runtime npm packages, vendored browser libraries and offline authoring tools have
+separate installation paths. The [Colyseus 0.18 upgrade record](COLYSEUS_018_ASSESSMENT.md)
+records core 0.18.18, transport 0.18.4, server schema 5.0.40 and vendored SDK 0.18.5.
+Explicit table/editor static authentication, refreshed reconnect tokens, private-hand
+hydration and leave-handler ordering preserve existing authority and privacy boundaries.
+Physics and persisted snapshot formats are unchanged. The app requires
+Node 24 or newer, with Node 24 selected by `.nvmrc`, Docker, CI and fresh Debian/Ubuntu
+native provisioning. CI also tests the built Alpine image; newer distro runtimes
+remain possible but require deployment verification. Native updates validate the
+service runtime before backup or release activation; they do not install a new Node version.
+
 Release 0.22.0 keeps the existing server/browser ownership and single-instance deployment
 boundaries. Its authored models, card artwork, assisted stacking and hand/fan rendering need
 a server restart and client refresh; no new database migration or required service/configuration

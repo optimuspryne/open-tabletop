@@ -104,7 +104,7 @@
           <code>https://github.com/optimuspryne/open-tabletop.git</code> at <code>main</code> by
           default and extracts its companion <code>proxmox/install.sh</code> from that same source
           revision. It creates an unprivileged Debian 13 LXC with nesting enabled so Debian's Redis
-          systemd service can create its user namespace; the companion installs Node.js 26,
+          systemd service can create its user namespace; the companion installs Node.js 24,
           PostgreSQL 16, Redis, and the app directly inside it and enables a non-root systemd
           service. Docker is not used. The Proxmox host needs <code>git</code> for this fetch.
           Nesting does not make the container privileged, but it relaxes isolation by exposing some

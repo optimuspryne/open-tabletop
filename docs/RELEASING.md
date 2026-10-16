@@ -2,6 +2,160 @@
 
 How versions work here, and the steps to cut a release.
 
+Dependency-only releases follow the [maintenance plan](MAINTENANCE_PLAN.md), with
+exact current artifacts in the [inventory](DEPENDENCY_INVENTORY.md). The
+[Colyseus 0.18 upgrade record](COLYSEUS_018_ASSESSMENT.md) records the implemented
+local migration. Rollout needs a coordinated server/SDK restart and browser refresh,
+with backup/rollback and manual deployment acceptance before release.
+
+## Unreleased Node runtime alignment
+
+The app now requires **Node.js 24 or newer**. `.nvmrc` selects Node 24 for local
+development and all setup-node CI jobs, matching the existing `node:24-alpine`
+production image. Fresh Debian/Ubuntu native installs now select NodeSource 24.
+Fedora/Arch retain their distro packages; newer existing Node versions remain
+accepted but need deployment verification. npm is not newly pinned in this slice.
+
+Source/native operators on Node 20 or 22 must upgrade the runtime before updating
+the app and rerun the locked `npm ci` install appropriate to their deployment.
+For native systemd deployments, verify `/usr/bin/node`, the service executable,
+rather than only an interactive-shell version. Native upgrades check that executable
+before backup/dependency installation/release activation; they do not upgrade or
+downgrade host Node automatically. Existing credentials, uploads and database/service
+versions are preserved. Restart the app after a runtime replacement; this slice
+alone needs no browser refresh, migration or new environment variable/port.
+
+CI runs the current quality, browser, audit and PostgreSQL integration jobs on 24.
+A separate amd64 production-image job builds the real Dockerfile with locked
+production dependencies and runs existing schema, room-access, piece-privacy and
+Sharp/HTTP derivative tests as the image's non-root user. It does not publish an
+image, start the full deployment or establish arm64/native-host acceptance.
+That runtime slice preserved Colyseus 0.17; the subsequent coordinated upgrade is
+recorded in the Colyseus section below.
+
+Validation on 2026-10-16:
+
+- Local Node **24.19.0**, npm **12.2.0**: `npm run check` passed all **1,177** tests;
+  standalone native-installer checks passed all **50**, including rejection of Node
+  20/22/23, acceptance of 24/newer, and upgrade rejection before backup/activation.
+- `npm run test:input`: **58/58** passed; `npm run test:integration`: **25** passed
+  against disposable PostgreSQL; `npm run audit`: **zero** production vulnerabilities.
+- `npm run test:website` passed all **25** page/profile checks and the slideshow
+  checks. `npm run test:components` passed desktop/touch component checks, notecard
+  checks at 1280/390/360 px, and tile-preview/mixed-back/restricted-Show checks at
+  1280/390/320 px. The component fixture reports one `/favicon.ico` 404.
+- Built the actual production Dockerfile with `--pull` and a clean locked production
+  dependency installation. Its linux/amd64 **Node 24.22.0**, non-root UID **100**
+  image passed all **43** selected smoke tests, including native Sharp processing.
+- Bash syntax, CI YAML/runtime declarations, unchanged package resolutions/SDK,
+  local documentation file links and `git diff --check`: passed. The restricted
+  full-check attempt stalled on local-network fixtures and was stopped; the complete
+  unrestricted Node-24 run passed.
+
+Hosted GitHub Actions execution, arm64 image acceptance, full-stack deployed startup
+and real native host provisioning/update remain unverified. No push, publication,
+host runtime replacement or Colyseus upgrade was performed during that runtime-only slice.
+
+Implementation summary:
+
+| Files | Changes |
+| --- | --- |
+| [.nvmrc](../.nvmrc), [package.json](../package.json), [package-lock.json](../package-lock.json) | Select Node 24 for development/CI and require `>=24`; dependency declarations/resolutions are preserved |
+| [ci.yml](../.github/workflows/ci.yml) | Existing jobs read `.nvmrc`; add actual production Alpine-image tests |
+| [proxmox/install.sh](../proxmox/install.sh) | `install_apt_packages` selects NodeSource 24; add shared `validate_node_runtime`, reused by `install_packages` and the upgrade path in `main` |
+| [test/linux-installer.js](../test/linux-installer.js) | Update package-source fixture; add runtime-range and failed-upgrade preservation regressions |
+| [README.md](../README.md), [Linux wiki](../website/wiki/linux.html), [Proxmox wiki](../website/wiki/proxmox.html) | Correct setup/runtime version guidance; website changes are factual prose only |
+| [ARCHITECTURE.md](ARCHITECTURE.md), [REFERENCE.md](REFERENCE.md) | Record current runtime ownership, CI and native-gate contracts |
+| [DEPENDENCY_INVENTORY.md](DEPENDENCY_INVENTORY.md), [MAINTENANCE_PLAN.md](MAINTENANCE_PLAN.md), [COLYSEUS_018_ASSESSMENT.md](COLYSEUS_018_ASSESSMENT.md) | Mark Node prerequisite implemented while retaining pending Colyseus acceptance |
+| [CHANGELOG.md](../CHANGELOG.md), this release guide | Record the source/native support change, verification and upgrade instructions |
+
+No JavaScript application function was added, removed or changed. The shell runtime
+guard consolidates the existing version check so provisioning and updates enforce
+the same minimum without new dependencies.
+
+## Unreleased Colyseus 0.18 upgrade
+
+The local implementation pins core **0.18.18**, WebSocket transport **0.18.4** and
+server schema **5.0.40**, with unchanged upstream UMD SDK **0.18.5** (embedded
+schema **5.0.8**) at the existing `/vendor/colyseus.js` path. Published stable tags,
+peer ranges and tarball integrity were verified on 2026-10-16. See the
+[upgrade record](COLYSEUS_018_ASSESSMENT.md) and
+[SDK provenance](../public/vendor/colyseus-README.md).
+
+Save active games and back up database/uploads before deploying. Stop the old app,
+install the locked dependencies with Node 24 (`npm ci` for source installations),
+restart the new server and **refresh all clients together**. Docker installations
+receive the matching SDK/dependencies in the app image. Do not mix 0.17 clients
+and 0.18 servers or assume live rooms/reconnect reservations survive a process
+restart. This slice introduces no SQL migration, snapshot conversion, service,
+port, environment variable or CSP change; other unreleased migration requirements
+elsewhere in this guide still apply. Our own authentication remains in use, so
+Colyseus-auth password-reset guidance does not apply.
+
+Local validation on 2026-10-16:
+
+- Published tarballs for all four artifacts matched registry SHA-512 integrity;
+  `npm ls` found a compatible deduplicated core/schema/transport tree. The vendored
+  JS and complete MIT license match the downloaded SDK byte-for-byte.
+- An isolated Node-24 `npm ci` passed, including optional native dependencies.
+  Unrelated package resolutions, authored assets and prior Node/hardening edits
+  were preserved; the incidental @types/node update was reverted.
+- Node **24.19.0**: `npm run check` passed all **1,177** tests. Schema reflection,
+  view privacy, permission and persistence tests remain in that suite. Schema 5
+  emits the upstream `defineTypes` deprecation warning; this supported JS API was
+  retained to keep the migration focused.
+- `npm run test:multiplayer` passed the existing **25** PostgreSQL tests and the
+  real-server/Chromium migration scenarios: strict CSP, legacy save loading,
+  raw-packet privacy, table/editor/lobby admission, role changes, restricted Show,
+  empty-view hide/reveal patches, automatic token rotation, actual-client refresh
+  hand hydration, revocation/reconnect rejection and save/server-restart recovery.
+  This test is registered in the PostgreSQL CI job with a ten-minute bound.
+- `test:input`: **58/58** passed; `test:devices`: all **7** profiles passed;
+  `test:accounts`: all **6** full/compact desktop/touch layouts passed.
+- `test:components` passed full desktop/touch, notecard 1280/390/360 px and tile
+  1280/390/320 px checks. An initial library fixture raced module initialization;
+  a bounded binding-readiness check was added and the complete suite rerun.
+  The final fixture still reports the unrelated `/favicon.ico` 404.
+- The updated production linux/amd64 Node-24 Alpine image built with a clean
+  locked production install and passed all **43** schema/access/privacy/Sharp
+  smoke tests. Production and full development audits both reported **zero**
+  vulnerabilities.
+
+On 2026-10-16, the user reported that everything still functions as expected after
+the local multiplayer smoke-test handoff and approved a local commit. Individual
+checklist steps and device/network conditions were not separately reported.
+
+Hosted CI, arm64, real devices, WAN/Wi-Fi behavior, sustained multiplayer load and
+operator deployment/rollback remain unverified. The live driver uses disposable
+PostgreSQL, temporary uploads, explicit memory rate limiting and a controlled
+reconnect close signal; it does not establish Redis failover or real radio behavior.
+No push, image publication or running deployment update was performed.
+
+Before release, smoke-test two real users drawing/showing cards, hiding/revealing
+objects, switching GM/player/spectator roles, reconnecting after a network change,
+refreshing after reconnect, saving/restarting and reclaiming hands. Also check
+pending inspections/account switching separately; related hardening findings are
+not broadly marked resolved by this migration. Keep the previous matching app/SDK
+pair and coordinated backup for rollback, restart and refresh together; do not
+substitute only the old browser bundle or claim mixed-version compatibility.
+
+Files and implementation boundary:
+
+| Files | Changes |
+| --- | --- |
+| [package.json](../package.json), [package-lock.json](../package-lock.json) | Pin the three server packages; refresh only their dependency set; register `test:multiplayer` |
+| [SDK](../public/vendor/colyseus.js), [provenance](../public/vendor/colyseus-README.md), [license](../public/vendor/colyseus-LICENSE.txt) | Vendor the exact verified UMD artifact and deployed license |
+| [server.js](../server.js) | Change `TableRoom.onAuth`, add static `EditorRoom.onAuth`, extend `TableRoom.onReconnect` using existing preflight/hand helpers |
+| [public/client.js](../public/client.js) | Persist rotated reconnect tokens and defer exit DOM replacement until feature cleanup finishes |
+| [multiplayer driver](../scripts/multiplayer-test.mjs), [database runner](../scripts/test-database.mjs) | New real-server/browser driver (`waitFor`, server lifecycle, API/page helpers); reuse the existing disposable DB/CDP infrastructure |
+| [component fixture](../scripts/component-parity.mjs), [CI](../.github/workflows/ci.yml) | Support reconnect registration, wait for library binding and run the real SDK regression in CI |
+| [inventory](DEPENDENCY_INVENTORY.md), [maintenance plan](MAINTENANCE_PLAN.md), [upgrade record](COLYSEUS_018_ASSESSMENT.md) | Record exact current versions, decisions and acceptance limits |
+| [architecture](ARCHITECTURE.md), [reference](REFERENCE.md), [credits](ASSET_CREDITS.md), [changelog](../CHANGELOG.md), this guide | Update runtime contracts, artifact attribution, validation and rollout instructions |
+
+No new server service, schema class or physics adapter was introduced. Existing `roomAccess.preflight`,
+`sendHand`, plain-JS schema definitions, persistence and input handlers remain the
+authority. The new test driver is the only new functional module.
+
 ## Versioning
 
 Open Tabletop follows [Semantic Versioning](https://semver.org/) (`MAJOR.MINOR.PATCH`).

@@ -71,8 +71,9 @@ paths are below.
 
 ## Run via NPM
 
-The package declares Node.js 20.9 or newer for the runtime. Use **Node.js 24** for the
-current npm launch commands and locked development tools, matching the production container.
+Requires **Node.js 24 or newer**. Node.js 24 is the production and CI target;
+[.nvmrc](.nvmrc) selects that major for local development (`nvm use` if you use nvm).
+Newer distro-provided runtimes satisfy the minimum but need deployment verification.
 See the [ordered Node.js setup](website/wiki/node.html) for database grants and bootstrap setup
 before the first start.
 
@@ -427,10 +428,10 @@ variants are outside this installer’s scope. Full VM installation testing on e
 still pending; automated command-mocked tests cover provisioning and update behavior.
 
 It reuses the Proxmox native installer for releases, separate database roles, credentials,
-upload storage, backups, and the non-root systemd service. Debian/Ubuntu use NodeSource Node.js 26,
+upload storage, backups, and the non-root systemd service. Debian/Ubuntu use NodeSource Node.js 24,
 the distro’s PostgreSQL package, and Redis. Fedora/Arch use their Node.js/npm, PostgreSQL, and
 Valkey packages ([Fedora package](https://packages.fedoraproject.org/pkgs/valkey/valkey/),
-[Arch package](https://archlinux.org/packages/extra/x86_64/valkey/)); Node.js 22.12 or newer
+[Arch package](https://archlinux.org/packages/extra/x86_64/valkey/)); Node.js 24 or newer
 is required. Arch installation runs a full
 `pacman -Syu --needed --noconfirm` to avoid partial upgrades. Install `git` first for repository
 fetches (`apt install git`, `dnf install git`, or `pacman -Syu git` as appropriate).
@@ -551,7 +552,7 @@ host**, download only `open-tabletop.sh`. It fetches the app source from
 `https://github.com/optimuspryne/open-tabletop.git` at `main` by default and extracts its companion
 `proxmox/install.sh` from that same source revision. It creates an unprivileged Debian 13 LXC with
 nesting enabled so Debian's Redis systemd service can create its user namespace;
-the companion installs Node.js 26, PostgreSQL 16, Redis, and the app directly inside it and enables
+the companion installs Node.js 24, PostgreSQL 16, Redis, and the app directly inside it and enables
 a non-root systemd service. Docker is not used. The Proxmox host needs `git` for this fetch.
 Nesting does not make the container privileged, but it relaxes isolation by exposing some host
 `/proc` and `/sys` information to the guest.

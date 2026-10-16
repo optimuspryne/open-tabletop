@@ -1305,7 +1305,7 @@ const SCENES = [
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
       const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
-        onMessage: (key, fn) => messages.set(key, fn), onStateChange(fn) { patches.push(fn); }, onLeave() {},
+        onMessage: (key, fn) => messages.set(key, fn), onStateChange(fn) { patches.push(fn); }, onLeave() {}, onReconnect() {},
         send: (...args) => sent.push(args), leave() {}, };
       const callbacks = (object) => new Proxy({ listen() {} }, {
         get: (target, key) => target[key] || {
@@ -2860,6 +2860,11 @@ const SCENES = [
     expect: { selector: '.pop-group > .overflowMenu', min: 1 },
     drive: `
       ${BE_ADMIN}
+      const deadline = Date.now() + 5000;
+      while (typeof window.onOttRoom !== 'function') {
+        if (Date.now() > deadline) throw Error('Library room binding did not initialize');
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      }
       window.onOttRoom(${STUB_ROOM});
       document.getElementById('lib2Btn').click();
       document.querySelector('.libTab[data-tab="decks"]').click();

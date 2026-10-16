@@ -3,6 +3,18 @@
 A map of every module, data structure, and key function. For the _why_, see
 `ARCHITECTURE.md`; this is the _what_ — the API surface.
 
+For declared/locked npm versions, vendored browser artifacts, native/tooling and
+container/CI baselines, see the [dependency inventory](DEPENDENCY_INVENTORY.md).
+The [maintenance plan](MAINTENANCE_PLAN.md) defines review and release checks; the
+[Colyseus 0.18 upgrade record](COLYSEUS_018_ASSESSMENT.md) records exact artifacts
+and local compatibility verification. `TableRoom.onAuth` and the new static
+`EditorRoom.onAuth` pass explicit admission kinds to `roomAccess.preflight`.
+`TableRoom.onReconnect` rechecks access, refreshes visibility and sends the private
+hand before `whoami`. The browser persists rotated tokens after `onReconnect` and
+lets feature leave handlers finish before replacing the DOM.
+`npm run test:multiplayer` reuses the PostgreSQL harness and Chrome/CDP helpers
+to exercise the actual server/client under CSP; the PostgreSQL CI job runs it.
+
 The [living hardening plan](../HARDENING_PLAN.md) tracks security findings and proposed fixes
 from the user-journey walkthrough, beginning with accounts, host approval and browser sessions.
 Coverage now includes Quick Join, room management/admission, avatars, recovery and logout.
@@ -135,9 +147,12 @@ are transient. Template ownership remains distinct from administrator-only uploa
   `purge` with optional `--dry-run`, and a read-only `--check-platform`;
   `OTT_INSTALL_PROFILE=linux`
   selects ordinary hosts, while the default `proxmox` profile preserves Debian 13, PostgreSQL 16,
-  Node.js 26 and UID/GID 1000 for existing LXC/NFS mappings. `detect_platform` selects supported
+  Node.js 24 and UID/GID 1000 for existing LXC/NFS mappings. `detect_platform` selects supported
   distro versions and Redis/Valkey service/CLI names. `install_packages` / `install_apt_packages`
-  provision dependencies; `apt_update` retains its bounded retry behavior. `initialize_postgres`
+  provision dependencies; `validate_node_runtime` checks the service executable
+  `/usr/bin/node` for major 24 or newer after package installation and before an
+  upgrade backup/activation. Debian/Ubuntu provision NodeSource 24; newer existing
+  runtimes remain accepted. `apt_update` retains its bounded retry behavior. `initialize_postgres`
   initializes Fedora/Arch clusters only when `PG_VERSION` is absent. `create_app_user` allocates
   a system account on Linux and rejects fresh-install account/group conflicts; `validate_app_user`
   permits reuse of matching retained accounts on resume. `configure_database_auth` preserves the

@@ -307,6 +307,11 @@ try {
   await run(process.execPath, ['--test', 'test/integration/database.js'], {
     env: { TEST_DATABASE_URL: appUrl },
   });
+  if (process.argv.includes('--multiplayer')) {
+    await run(process.execPath, ['scripts/multiplayer-test.mjs'], {
+      env: { TEST_DATABASE_URL: appUrl, TEST_DATABASE_OWNER_URL: ownerUrl },
+    });
+  }
 } finally {
   await stopDisposablePostgres().catch((error) => {
     console.error(`[test:integration] cleanup failed: ${error.message}`);

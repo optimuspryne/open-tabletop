@@ -301,6 +301,10 @@ const membership = createMembership({
       history.replaceState(null, '', location.pathname + '?' + params.toString());
     }
     sessionStorage.setItem(key, room.reconnectionToken);
+    room.onReconnect(() => {
+      // The SDK emits onReconnect before assigning the rotated token.
+      queueMicrotask(() => sessionStorage.setItem(key, room.reconnectionToken));
+    });
   }
   mySession = room.sessionId;
   if (!editorMode) {
@@ -414,7 +418,9 @@ const membership = createMembership({
     sessionStorage.removeItem(key);
   });
   room.onLeave(() => {
-    if (!leaving) showExit(exitReason || 'You have been disconnected from the table.');
+    // Feature leave handlers still need the table DOM while releasing their state.
+    if (!leaving)
+      queueMicrotask(() => showExit(exitReason || 'You have been disconnected from the table.'));
   });
 
   // Leaving on purpose is a deliberate leave (no reconnection window), so clear the

@@ -364,7 +364,8 @@ const {
 class TableRoom extends Room {
   static accessKind = 'table';
   static async onAuth(_token, options) {
-    await roomAccess.preflight(options, this.accessKind);
+    // Colyseus invokes static auth as a plain callback, without a class receiver.
+    await roomAccess.preflight(options, 'table');
     return true; // admission is repeated in onJoin, never trusted from the reservation
   }
 
@@ -1023,6 +1024,7 @@ class TableRoom extends Room {
   async onReconnect(client) {
     await roomAccess.reconnect(this, client);
     this.visibility.syncClient(client);
+    this.sendHand(client);
     client.send('whoami', { isAdmin: this.isAdmin(client), userId: String(client.auth.userId) });
   }
 
@@ -1221,6 +1223,10 @@ class TableRoom extends Room {
 // testing library assets live. The admin joins at max role + admin rights.
 class EditorRoom extends TableRoom {
   static accessKind = 'editor';
+  static async onAuth(_token, options) {
+    await roomAccess.preflight(options, 'editor');
+    return true;
+  }
   async authorizeJoin(client, options) {
     return roomAccess.authorize(this, client, options, 'editor');
   }

@@ -8,6 +8,33 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Changed
+- Upgrade the coordinated Colyseus stack to core 0.18.18, WebSocket transport
+  0.18.4, schema 5.0.40 and the self-hosted SDK 0.18.5 after published peer/integrity
+  verification. Keep the existing JS schema, physics and saved-game formats.
+  Make table/editor static admission independent of callback binding, persist
+  rotated reconnect tokens, resend private hands after access-checked reconnects,
+  and finish feature leave handlers before replacing the disconnect screen DOM.
+  Add real-server/browser privacy, admission, reconnect and save/restart regressions
+  through the existing disposable PostgreSQL harness and CI job. Restart the server
+  and refresh clients together; no new migration or CSP permission is introduced.
+  User reported normal functionality after local multiplayer smoke testing on
+  2026-10-16. The upgrade has not been pushed or deployed.
+- **Breaking for source/native installs:** require Node.js 24 or newer, with `.nvmrc`,
+  production CI and fresh Debian/Ubuntu native provisioning targeting Node 24 to
+  match Docker. Native upgrades reject an
+  older service runtime before backup or activation. CI now builds the production
+  Alpine image and runs existing schema, access/privacy and native image-processing
+  regressions inside it. Package versions and Colyseus remain unchanged. Source/native
+  operators on Node 20/22 must upgrade Node before updating; see the runtime upgrade notes.
+
+### Documentation
+- Added a dependency inventory, maintenance procedure and source-based Colyseus 0.18
+  upgrade assessment. Recorded the separate runtime/offline/vendored dependency sets,
+  existing Node support inconsistencies, coordinated upgrade gates and pending live
+  verification. The documentation slice did not upgrade packages or enable scheduled
+  automation; the separate Node prerequisite is recorded above.
+
 ### Fixed
 - Library tile sets and starter games now preview the current Domino and Mahjong
   GLBs using the shared lazy thumbnail renderer, including full/compact and touch

@@ -326,3 +326,17 @@ wood attribution covers the reused maps; no new third-party source is introduced
   is not performance optimized; see its bundled README for measured scope/limits.
 - The approved **Settings → Credits → Libraries** entry links to meshoptimizer
   and lists MIT in desktop/touch, full/compact layouts using the existing renderer.
+
+## Colyseus browser SDK — `public/vendor/colyseus.js`
+
+- **Source:** `@colyseus/sdk@0.18.5`, unchanged `package/dist/colyseus.js` from the
+  [published npm tarball](https://registry.npmjs.org/@colyseus/sdk/-/sdk-0.18.5.tgz).
+- **Author/license:** Endel Dreyer, MIT. The complete upstream notice is retained
+  in [`public/vendor/colyseus-LICENSE.txt`](../public/vendor/colyseus-LICENSE.txt)
+  and ships in the production image. The existing in-app Colyseus library credit applies.
+- **Integrity:** SHA-256
+  `96557215f2411918b1eed792ed99983ff3df129cf9512fa12a0faf89a11410f4`;
+  verified registry tarball integrity and embedded schema version are recorded in
+  [the SDK provenance](../public/vendor/colyseus-README.md).
+- Self-hosted UMD global, with no CDN/build step or new CSP permission. The
+  [upgrade record](COLYSEUS_018_ASSESSMENT.md) covers server/browser compatibility.
