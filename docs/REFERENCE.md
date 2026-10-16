@@ -15,7 +15,7 @@ lets feature leave handlers finish before replacing the DOM.
 `npm run test:multiplayer` reuses the PostgreSQL harness and Chrome/CDP helpers
 to exercise the actual server/client under CSP; the PostgreSQL CI job runs it.
 
-The [living hardening plan](../HARDENING_PLAN.md) tracks security findings and proposed fixes
+The [living hardening plan](HARDENING_PLAN.md) tracks security findings and proposed fixes
 from the user-journey walkthrough, beginning with accounts, host approval and browser sessions.
 Coverage now includes Quick Join, room management/admission, avatars, recovery and logout.
 It also traces table entry, private-state hydration and reconnects, with open findings for
@@ -65,7 +65,7 @@ Deployment/recovery coverage adds retained migration credentials, Docker context
 and incomplete upgrade recovery checkpoints (HARD-44–46). Sixty-three targeted tests passed
 with mocked installer/database dependencies; real images, secrets and restore drills were not
 tested. These proposed safeguards do not change current deployment contracts.
-The [consolidated implementation sequence](../HARDENING_PLAN.md#consolidated-implementation-sequence)
+The [consolidated implementation sequence](HARDENING_PLAN.md#consolidated-implementation-sequence)
 now assigns all 46 findings to primary batches, with separate policy decisions, dependencies
 and completion gates. A1/A2/A3 are the first recommended handoffs: reveal scope, locked login
 issuance and upload admission. Batch assignments are planning status, not implemented API changes.

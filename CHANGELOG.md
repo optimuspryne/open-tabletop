@@ -29,6 +29,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   operators on Node 20/22 must upgrade Node before updating; see the runtime upgrade notes.
 
 ### Documentation
+- Move the living hardening plan into `docs/` and update relative links; preserve
+  its findings, status and historical evidence.
 - Added a dependency inventory, maintenance procedure and source-based Colyseus 0.18
   upgrade assessment. Recorded the separate runtime/offline/vendored dependency sets,
   existing Node support inconsistencies, coordinated upgrade gates and pending live
@@ -425,7 +427,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   failures, recovery-code authentication, admission-policy timing, room abuse limits, avatar
   validation and pending-room lifecycle state. Recorded 28 passing related tests and bounded
   synthetic checks, with live/browser verification still pending. No runtime fixes implemented.
-- Added `HARDENING_PLAN.md` as a living record of the landing/account/host-approval review
+- Added `docs/HARDENING_PLAN.md` as a living record of the landing/account/host-approval review
   and proposed session-cookie migration. Separates observed behavior, conditional risks,
   design safeguards and pending verification; linked from architecture and reference docs.
   Documentation only; no security fixes or authentication behavior changes are implemented.

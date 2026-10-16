@@ -293,7 +293,7 @@ if cached artwork or sounds remain. Python/ffmpeg is needed only to regenerate a
 
 The hardening walkthrough and room-scaling documents describe findings and proposed work;
 they do not represent implemented security fixes, multi-instance support or new deployment
-requirements. See [the hardening plan](../HARDENING_PLAN.md) for current status.
+requirements. See [the hardening plan](HARDENING_PLAN.md) for current status.
 
 ### Release preparation and verification
 

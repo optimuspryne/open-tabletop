@@ -23,7 +23,7 @@ is introduced. Source dependency and existing Wordy board calibration requiremen
 release checks and pending manual acceptance are recorded in the
 [upgrade guide](RELEASING.md#upgrading-to-0220).
 
-The [living hardening plan](../HARDENING_PLAN.md) records the account/host-approval walkthrough
+The [living hardening plan](HARDENING_PLAN.md) records the account/host-approval walkthrough
 and proposed session-cookie, CSRF and multiplayer authentication changes. It distinguishes
 observed behavior from conditional risks and pending designs; current authentication behavior
 remains unchanged until implementation and verification are recorded.
@@ -84,7 +84,7 @@ incomplete exclusions for local Docker build material and upgrade dumps that do 
 complete recovery checkpoints (HARD-44–46). Separate database connections, non-root execution,
 transactional migrations and guarded installer recovery remain protections. Runtime credential
 isolation, image-canary checks and coordinated restore drills remain proposed work.
-The [consolidated implementation sequence](../HARDENING_PLAN.md#consolidated-implementation-sequence)
+The [consolidated implementation sequence](HARDENING_PLAN.md#consolidated-implementation-sequence)
 orders the 46 findings into bounded fixes, authority/data preservation, coordinated sessions
 and resource controls, then remaining reliability work. Privacy/identity policies are a separate
 decision track. It preserves the HTTP/multiplayer authentication boundary and the distinction

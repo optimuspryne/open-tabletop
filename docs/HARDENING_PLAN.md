@@ -11,7 +11,7 @@ decisions, and verification history.
 The initial scope is the two discussions covering landing-page access, signup, login,
 host requests and administrator approval, followed by alternatives to session-token storage
 in `localStorage`. The earlier database/startup discussion is outside this initial scope.
-This supplements the [earlier security audit](docs/SECURITY_AUDIT_2026-09-28.md); it does not
+This supplements the [earlier security audit](SECURITY_AUDIT_2026-09-28.md); it does not
 replace that audit or reopen its remediated findings without new evidence.
 
 The next walkthrough extends coverage to all landing-page controls: Quick Join, room listing,
@@ -296,12 +296,12 @@ required example approval; no deployment, live-data test or push is implied by t
 
 ## HARD-01 — Account token accessible to JavaScript
 
-**Current behavior and evidence.** [public/auth.js](public/auth.js) implements `getAuthToken`,
+**Current behavior and evidence.** [public/auth.js](../public/auth.js) implements `getAuthToken`,
 `setAuthToken`, and `clearAuthToken` using the `tabletop.token` localStorage key.
-[public/landing.js](public/landing.js) stores tokens received from signup/login and resolves
-them on page load. [public/http.js](public/http.js) adds them to authenticated requests as
-Bearer credentials. [server/session-config.js](server/session-config.js) defaults sessions
-to 30 days; [server/user-queries.js](server/user-queries.js) checks expiration and reads
+[public/landing.js](../public/landing.js) stores tokens received from signup/login and resolves
+them on page load. [public/http.js](../public/http.js) adds them to authenticated requests as
+Bearer credentials. [server/session-config.js](../server/session-config.js) defaults sessions
+to 30 days; [server/user-queries.js](../server/user-queries.js) checks expiration and reads
 current permissions during token lookup.
 
 **Risk.** JavaScript executing on the application's origin could read and export the token,
@@ -342,8 +342,8 @@ read the account cookie; do not treat that as proof that XSS is harmless.
 
 ## HARD-02 — CSRF protection for cookie authentication
 
-**Current boundary.** [public/http.js](public/http.js) explicitly attaches a Bearer token and
-[server/http/auth-context.js](server/http/auth-context.js) reads it. A change to automatically
+**Current boundary.** [public/http.js](../public/http.js) explicitly attaches a Bearer token and
+[server/http/auth-context.js](../server/http/auth-context.js) reads it. A change to automatically
 attached cookies changes this boundary. This finding does not establish a current CSRF bypass.
 
 **Potential fix.** Design server-side protection for state-changing requests as part of
@@ -360,8 +360,8 @@ cannot mutate data and do not disclose credentials.
 
 ## HARD-03 — Multiplayer authentication and reconnection
 
-**Current behavior and evidence.** [public/client.js](public/client.js) reads the account token
-and passes it to Colyseus `joinOrCreate` for table/editor rooms. [public/landing.js](public/landing.js)
+**Current behavior and evidence.** [public/client.js](../public/client.js) reads the account token
+and passes it to Colyseus `joinOrCreate` for table/editor rooms. [public/landing.js](../public/landing.js)
 does the same for lobby rooms. The table client separately keeps Colyseus reconnection tokens
 in per-tab `sessionStorage`; these are distinct from the durable account token.
 
@@ -379,7 +379,7 @@ bound their lifetime, prevent replay, and recheck live authorization before room
 and admission. Do not expose the durable account token to JavaScript to make the migration easier.
 
 Explicitly validate allowed origins for cookie-authenticated WebSocket handshakes and relevant
-matchmaking requests. Reuse [server/room-access.js](server/room-access.js)'s authorization,
+matchmaking requests. Reuse [server/room-access.js](../server/room-access.js)'s authorization,
 revalidation, and revocation behavior rather than introducing a second permissions system.
 Keep pending lobby access distinct from admitted table access and administrator-only editor
 access. Check how reconnection credentials remain bound to a live, authorized account session.
@@ -392,7 +392,7 @@ or session coordination must be explicit; do not introduce scaling infrastructur
 
 ## HARD-04 — Account discovery through responses and timing
 
-**Current behavior and evidence.** In [server/http/routes/auth.js](server/http/routes/auth.js),
+**Current behavior and evidence.** In [server/http/routes/auth.js](../server/http/routes/auth.js),
 `createAuthRouter` returns the same login failure message for missing accounts, passwordless
 accounts, and incorrect passwords. However, missing/passwordless accounts skip `verifyPassword`,
 while an account with a password performs scrypt. Signup also returns a specific conflict
@@ -415,8 +415,8 @@ failure paths do not create sessions.
 
 ## HARD-05 — Authentication throttling keyed only by IP
 
-**Current behavior and evidence.** [server/rate-limit.js](server/rate-limit.js)'s `makeRateLimiter`
-keys consumption by namespace and request IP. [server.js](server.js) configures the authentication
+**Current behavior and evidence.** [server/rate-limit.js](../server/rate-limit.js)'s `makeRateLimiter`
+keys consumption by namespace and request IP. [server.js](../server.js) configures the authentication
 bucket with capacity 20 and replenishment at 20 per minute. Auth routes use that shared limiter.
 
 **Risk.** Distributed guessing can spread requests across addresses; shared networks can cause
@@ -435,7 +435,7 @@ from one address, shared-network legitimate use, spoofed forwarding headers, Red
 bounded storage/expiry, and recovery after throttling. Retain safe failure behavior when the
 limiter backend is unavailable.
 
-**2026-10-07 telemetry extension.** `/csp-report` in [server.js](server.js) uses the same
+**2026-10-07 telemetry extension.** `/csp-report` in [server.js](../server.js) uses the same
 `rateLimitAuth` middleware and `auth:<IP>` bucket as login/signup/recovery. It consumes budget
 before parsing or ignoring a benign report. A fixed-clock memory-store fixture using the
 production CSP registration block accepted 20 report requests, then rejected the next login
@@ -447,11 +447,11 @@ deployment-dependent and was not tested against a real proxy.
 
 ## HARD-06 — Unverified email in signup and host approval
 
-**Current behavior and evidence.** [server/auth-validation.js](server/auth-validation.js) checks
-email syntax. [server/http/routes/auth.js](server/http/routes/auth.js) allows signup without
-email-ownership verification. Host request/approval in [rooms.js](server/http/routes/rooms.js)
-and [admin.js](server/http/routes/admin.js) does not require verified email. The administrator's
-user list in [public/admin.js](public/admin.js) displays the supplied email.
+**Current behavior and evidence.** [server/auth-validation.js](../server/auth-validation.js) checks
+email syntax. [server/http/routes/auth.js](../server/http/routes/auth.js) allows signup without
+email-ownership verification. Host request/approval in [rooms.js](../server/http/routes/rooms.js)
+and [admin.js](../server/http/routes/admin.js) does not require verified email. The administrator's
+user list in [public/admin.js](../public/admin.js) displays the supplied email.
 
 **Risk.** An administrator could mistake a claimed email address for a verified identity when
 approving hosting. Signup can also reserve someone else's email. This is distinct from email
@@ -471,7 +471,7 @@ badges, explanatory copy, or workflow changes require mock-up approval.
 
 ## HARD-07 — Host approval does not refresh an open landing page
 
-**Current behavior and evidence.** [public/landing.js](public/landing.js)'s `showHome` uses a cached
+**Current behavior and evidence.** [public/landing.js](../public/landing.js)'s `showHome` uses a cached
 user to show pending status or room-creation controls. `refreshRooms` polls room membership
 admission, not account-level hosting permission. Administrator `setHost` updates the database
 and reloads the administrator's list. The waiting user's page remains stale until it obtains a
@@ -510,9 +510,9 @@ server restart/browser refresh when an implementation is ready.
 
 ## HARD-09 — Logout can leave the server session usable
 
-**Evidence.** [public/landing.js](public/landing.js)'s `onLogout` removes the local token and
+**Evidence.** [public/landing.js](../public/landing.js)'s `onLogout` removes the local token and
 shows Quick Join before awaiting `/auth/logout`; its catch block ignores revocation failure.
-The server route in [auth.js](server/http/routes/auth.js) correctly waits for database revocation
+The server route in [auth.js](../server/http/routes/auth.js) correctly waits for database revocation
 before revoking live room access, but the browser cannot claim that work succeeded if the
 request never arrives or the database fails. An isolated execution of the production client
 function confirmed local clearing and swallowed rejection with a simulated offline request.
@@ -537,9 +537,9 @@ and actual server rejection of the old credential. Approve any new error/retry U
 ## HARD-10 — A session can mint independent recovery credentials
 
 **Evidence.** `/auth/recovery/codes` in
-[account-security.js](server/http/routes/account-security.js) calls `requireUser` and
+[account-security.js](../server/http/routes/account-security.js) calls `requireUser` and
 `db.accountSecurity.replaceCodes` without checking the current password or recent independent
-authentication. [account-security-queries.js](server/account-security-queries.js)'s `replaceCodes`
+authentication. [account-security-queries.js](../server/account-security-queries.js)'s `replaceCodes`
 revalidates the session and replaces the stored code hashes. `exchange` accepts a valid code to
 issue a recovery grant; `recover` uses a valid grant to replace a password without the old one.
 Ordinary logout deletes sessions, not saved recovery codes. An isolated production-route
@@ -568,8 +568,8 @@ pending; the isolated handler test establishes only the missing fresh-authentica
 
 ## HARD-11 — Admission policy read and membership insertion are separate
 
-**Evidence.** `/rooms/join` in [rooms.js](server/http/routes/rooms.js) reads a room, then passes
-its `requireApproval` value to [room-queries.js](server/room-queries.js)'s `joinRoom`. The latter
+**Evidence.** `/rooms/join` in [rooms.js](../server/http/routes/rooms.js) reads a room, then passes
+its `requireApproval` value to [room-queries.js](../server/room-queries.js)'s `joinRoom`. The latter
 chooses `pending`/`admitted` from that argument and inserts it without rereading or locking the
 room policy. A deterministic harness using the production handler and query factory changed
 the simulated room policy from open to approval-required between those operations; the
@@ -594,8 +594,8 @@ subsequent table/lobby authorization paths and existing admitted-member behavior
 
 ## HARD-12 — Bound room discovery and resource creation
 
-**Evidence.** [rooms.js](server/http/routes/rooms.js) generates eight hexadecimal room-code
-characters from four random bytes. The router and its registration in [server.js](server.js)
+**Evidence.** [rooms.js](../server/http/routes/rooms.js) generates eight hexadecimal room-code
+characters from four random bytes. The router and its registration in [server.js](../server.js)
 do not attach room-join/creation-specific rate limiters or impose a per-account room quota.
 Any signed-in account can try `/rooms/join`; only approved hosts/admins can create rooms.
 The join response distinguishes an unknown code from an existing room and creates membership
@@ -619,9 +619,9 @@ selecting limits. Verify gated rooms remain inaccessible without admission.
 
 ## HARD-13 — Avatar bytes are not validated as an image on the server
 
-**Evidence.** [public/landing.js](public/landing.js)'s `fileToAvatarDataURL` normally crops a
+**Evidence.** [public/landing.js](../public/landing.js)'s `fileToAvatarDataURL` normally crops a
 chosen image to a 512-pixel square JPEG. That browser conversion can be bypassed by a direct
-API request. [shared/avatar.js](shared/avatar.js)'s `isBoundedImageDataURL` checks only string
+API request. [shared/avatar.js](../shared/avatar.js)'s `isBoundedImageDataURL` checks only string
 type, a `data:image` prefix, and length below 512 KiB of characters. A direct call accepted
 `data:image-not-an-image`. `/me/avatar` authenticates the account and enforces a body limit,
 but does not decode or validate the declared format/dimensions before storing it.
@@ -642,7 +642,7 @@ of accepted avatars. Tests must verify contents, not merely reproduce the prefix
 
 ## HARD-14 — Pending-room retry and account lifecycle state
 
-**Evidence.** In [public/landing.js](public/landing.js), `resolveApproved` and `resolveDeclined`
+**Evidence.** In [public/landing.js](../public/landing.js), `resolveApproved` and `resolveDeclined`
 add a room code to the module-level `resolved` Set. `watchLobby` skips such codes, and repeated
 resolution returns early. `stopPolling` closes current sockets/timers but does not reset that
 Set or `lastStatus`; signup/login/logout can switch accounts without reloading the document.
@@ -662,12 +662,12 @@ correct account/request is shown and redirected once, and old sockets/timers are
 
 ## HARD-15 — Reconnect can retain the previous account identity
 
-**Evidence.** [public/client.js](public/client.js)'s connection bootstrap reads the current
+**Evidence.** [public/client.js](../public/client.js)'s connection bootstrap reads the current
 account token, but first tries `client.reconnect(saved)` using `sessionStorage['tt_token:' +
 code]`. Successful reconnection skips the fresh join that would use that current token.
-[server/room-access.js](server/room-access.js)'s `reconnect` correctly revalidates the original
+[server/room-access.js](../server/room-access.js)'s `reconnect` correctly revalidates the original
 connection's stored token hash; it is not given the browser's newly selected account.
-[public/landing.js](public/landing.js)'s logout clears the account token but does not clear
+[public/landing.js](../public/landing.js)'s logout clears the account token but does not clear
 these per-room reconnection tokens. Deliberate table departure does clear its room token.
 
 **Preconditions and impact.** A previous connection must still have a valid reconnect
@@ -697,9 +697,9 @@ window. Neither private state nor privileged actions may resume under an unexpec
 
 ## HARD-16 — Table-loading gate can wait indefinitely
 
-**Evidence.** [public/client.js](public/client.js)'s `finishTableLoading` loops until the local
+**Evidence.** [public/client.js](../public/client.js)'s `finishTableLoading` loops until the local
 player exists, mesh count matches received piece count, visual assets settle, and hydration stays
-unchanged for 300 ms. [public/rendering/core.js](public/rendering/core.js)'s `waitForVisualAssets`
+unchanged for 300 ms. [public/rendering/core.js](../public/rendering/core.js)'s `waitForVisualAssets`
 also waits without an application deadline. The caller uses `void finishTableLoading()` without
 a local rejection handler; global error handling can show a toast but does not resolve this gate.
 Ordinary asset failures that call the loading manager's `itemEnd` do settle; this finding must not
@@ -722,7 +722,7 @@ offers a usable exit. Browser reproduction and UI design remain pending.
 
 ## HARD-17 — Group replacement can strand held pieces
 
-**Evidence.** In [server/game/handlers/movement.js](server/game/handlers/movement.js),
+**Evidence.** In [server/game/handlers/movement.js](../server/game/handlers/movement.js),
 `grabGroup` claims eligible pieces and replaces `room.groups[sessionId]` without releasing
 the previous group's claims. `releaseGroup` subsequently releases only the replacement map.
 Sending group A, then group B, then release leaves A's pieces owned by the original connection;
@@ -730,8 +730,8 @@ another participant cannot grab them. Repeating a grab of the same already-owned
 also replace its tracking map with an empty map, since owned pieces are skipped.
 
 The reviewed movement/physics path has no elapsed-time expiry for ordinary held-piece ownership.
-[driveHeldPieces](server/game/physics-update.js) retains a valid target while ownership remains.
-[stopPlayerInteraction](server/game/interaction-cleanup.js) does clear all of the connection's
+[driveHeldPieces](../server/game/physics-update.js) retains a valid target while ownership remains.
+[stopPlayerInteraction](../server/game/interaction-cleanup.js) does clear all of the connection's
 claims on departure or participation restriction; a valid individual release can also recover
 a stranded piece. This is not an irreversible inventory loss.
 
@@ -754,17 +754,17 @@ participants regain pieces appropriately and ordinary stationary holds/group dra
 
 ## HARD-18 — Pointer cancellation is treated as a completed action
 
-**Evidence.** [public/table/controls.js](public/table/controls.js)'s `logical` sets
+**Evidence.** [public/table/controls.js](../public/table/controls.js)'s `logical` sets
 `cancelled:true` for `pointercancel`, and `attachControls` routes that event through the
-release intent. [input-router.js](public/table/input-router.js)'s `endGesture` forwards the
-event to `pieces.release(e)`, but [piece-drag.js](public/table/piece-drag.js)'s `release`
+release intent. [input-router.js](../public/table/input-router.js)'s `endGesture` forwards the
+event to `pieces.release(e)`, but [piece-drag.js](../public/table/piece-drag.js)'s `release`
 accepts no event and does not inspect cancellation. It executes the normal click action or
 sends the stored throw velocity. Isolated production-router/controller checks using the
 existing test fixture reproduced a cancelled card tap sending `flip` and a cancelled drag
 sending a nonzero throw vector.
 
 **Spatial-tool follow-up (2026-10-07).** `endGesture` also passes cancellation to
-[overlays.js](public/table/overlays.js)'s `finishMeasure`, which does not inspect `cancelled`.
+[overlays.js](../public/table/overlays.js)'s `finishMeasure`, which does not inspect `cancelled`.
 Using the existing test fixture with the production `createOverlays` controller, a cancelled
 ruler drag from (0,0) to (3,4) emitted `overlayAdd`. This extends the same finding to unintended
 shared annotations. `finishMove` also ignores cancellation, but rollback of already broadcast
@@ -791,7 +791,7 @@ clear remote previews, and define whether already published movement is retained
 
 ## HARD-19 — “Picked” can reveal the entire hand
 
-**Evidence.** In [public/table/hand.js](public/table/hand.js), `bindShowControls` defines
+**Evidence.** In [public/table/hand.js](../public/table/hand.js), `bindShowControls` defines
 `showHids` as `selOnly && selected.size ? [...selected] : 'all'`. Enabling Picked clears the
 selection. Choosing a recipient while Picked is active and zero cards are selected therefore
 sends `showStart { to: [recipient], hids: 'all' }`. The selected-card pointer handler changes
@@ -799,7 +799,7 @@ only the local selection/classes; it does not update an already-active reveal. A
 check of the production `createHand` controller with the existing DOM fixture reproduced both
 the all-hand request and the absence of a revised request after selecting one card.
 
-[server/game/handlers/room-features.js](server/game/handlers/room-features.js)'s `showStart`
+[server/game/handlers/room-features.js](../server/game/handlers/room-features.js)'s `showStart`
 correctly interprets `hids:'all'` as the sender's entire hand and delivers those faces to the
 requested audience. It cannot infer that the sender's UI intended a narrower selection.
 
@@ -821,10 +821,10 @@ and picking. Verify the actual recipient payloads, not just labels, contain only
 
 ## HARD-20 — Failed transfers and replacement can lose prior state
 
-**Evidence.** [server/game/handlers/cards.js](server/game/handlers/cards.js)'s `dealToTable`
+**Evidence.** [server/game/handlers/cards.js](../server/game/handlers/cards.js)'s `dealToTable`
 and `dealDrag` call `takeTopCard` before constructing the destination. `inspectPlace` removes
 the pending inspection before placing it into the hand or table. The common
-[safe-message.js](server/game/safe-message.js) boundary catches and reports exceptions but does
+[safe-message.js](../server/game/safe-message.js) boundary catches and reports exceptions but does
 not roll back mutations. With an injected `spawnCardFlat` exception, the production
 `dealToTable` and `inspectPlace` handlers both reported an error while leaving the card absent
 from the source deck, table and pending inspection. Only synthetic state was used.
@@ -840,12 +840,12 @@ hand delivery failures, need regression coverage before claiming general atomici
 and clean up partial destinations on failure. Separate inventory commit from notifications so
 socket errors neither consume twice nor reverse a completed transfer. Reuse or carefully extend
 the transaction/rollback pattern already implemented in
-[deck-browsing.js](server/game/deck-browsing.js)'s `action`, with explicit variants for ordinary
+[deck-browsing.js](../server/game/deck-browsing.js)'s `action`, with explicit variants for ordinary
 draws and inspections; do not merely wrap a partially mutating operation in another catch.
 
 **2026-10-05 library-loading extension.** The same early-mutation pattern appears at larger
-scope. [server.js](server.js)'s `swapBoard` removes the old board before spawning its replacement.
-[scene-persistence.js](server/game/scene-persistence.js)'s `applyScene` checks some scene
+scope. [server.js](../server.js)'s `swapBoard` removes the old board before spawning its replacement.
+[scene-persistence.js](../server/game/scene-persistence.js)'s `applyScene` checks some scene
 properties, then calls `clearTable` before building the replacement. `clearGameTable` clears
 pieces, private hands and pending inventory, invalidates `savedScene`, and schedules a save.
 An injected new-piece failure in the production scene loader left the old pieces/hand cleared,
@@ -871,13 +871,13 @@ intentional clearing behavior on success distinct from a failed attempt.
 
 ## HARD-21 — Pending inspection survives reconnect without its UI
 
-**Evidence.** [server.js](server.js)'s `onLeave` calls `stopPlayerInteraction` with
+**Evidence.** [server.js](../server.js)'s `onLeave` calls `stopPlayerInteraction` with
 `recoverInspection:false` while waiting for reconnection and returns early on successful
 reconnect. A normal unrestricted player's pending inspection therefore remains server-side.
 `onReconnect` revalidates access, syncs visibility and sends `whoami`, but does not resend the
-private inspection. The client [inspection controller](public/table/inspection.js)'s `bindRoom`
+private inspection. The client [inspection controller](../public/table/inspection.js)'s `bindRoom`
 listens for `inspectCard` but does not request pending inspection state, unlike hand hydration's
-explicit `handSync`. [cards.js](server/game/handlers/cards.js)'s `drawInspect` rejects another
+explicit `handSync`. [cards.js](../server/game/handlers/cards.js)'s `drawInspect` rejects another
 inspection while one already exists for that session.
 
 **Potential impact and limits.** Refreshing during a private inspection and reconnecting within
@@ -899,11 +899,11 @@ recipient may receive its face.
 
 ## HARD-22 — “Private” library records still use publicly retrievable media
 
-**Evidence.** [game/library.js](server/game/library.js) and
-[library-queries.js](server/library-queries.js) filter private records from non-admin catalog
-responses. [handlers/library.js](server/game/handlers/library.js) separately rejects loading
-private records for non-admins. However, [server.js](server.js) mounts `/assets` without an
-authentication middleware, and [asset-files.js](server/http/routes/asset-files.js) serves
+**Evidence.** [game/library.js](../server/game/library.js) and
+[library-queries.js](../server/library-queries.js) filter private records from non-admin catalog
+responses. [handlers/library.js](../server/game/handlers/library.js) separately rejects loading
+private records for non-admins. However, [server.js](../server.js) mounts `/assets` without an
+authentication middleware, and [asset-files.js](../server/http/routes/asset-files.js) serves
 allowlisted generated raster/GLB filenames without checking a session, record publication or
 room membership. Original files receive one-year immutable caching. Filenames are generated
 from nine random bytes; this review did not establish a practical guessing attack.
@@ -934,11 +934,11 @@ privacy independently. Derivative authorization and full browser/cache behavior 
 
 ## HARD-23 — Direct upload bodies are parsed before authorization
 
-**Evidence.** [uploads.js](server/http/routes/uploads.js)'s `/upload` and `/upload-model`
+**Evidence.** [uploads.js](../server/http/routes/uploads.js)'s `/upload` and `/upload-model`
 middleware order is rate limiter, `express.raw` with a 16 MiB limit, then `requireAdmin`.
 Thus an unauthenticated request admitted by the limiter can consume body-parsing/buffering
-resources before rejection. The upload bucket in [server.js](server.js) permits a burst of
-300 requests and refills at three per second; [makeRateLimiter](server/rate-limit.js) keys it
+resources before rejection. The upload bucket in [server.js](../server.js) permits a burst of
+300 requests and refills at three per second; [makeRateLimiter](../server/rate-limit.js) keys it
 by IP. This limits request count, not concurrent bytes. The package router already authenticates
 before its own body parsing/staging and serializes transfers within the router instance.
 
@@ -962,11 +962,11 @@ Measure resource use in a controlled deployment before claiming denial-of-servic
 
 ## HARD-24 — File signatures are not complete media validation
 
-**Evidence.** [imageExtension](server/assets/upload-validation.js) recognizes a small prefix
+**Evidence.** [imageExtension](../server/assets/upload-validation.js) recognizes a small prefix
 and minimum length. The direct upload router stores accepted bytes without decoding the
 image or applying explicit image dimension/frame budgets. Browser `uploadImage` resizing in
-[graphics.js](public/rendering/graphics.js) is useful but can be bypassed by an authenticated
-caller. By contrast, [packages.js](server/assets/packages.js)'s `imageInfo` checks dimensions,
+[graphics.js](../public/rendering/graphics.js) is useful but can be bypassed by an authenticated
+caller. By contrast, [packages.js](../server/assets/packages.js)'s `imageInfo` checks dimensions,
 single-frame status and pixel limits with Sharp and decodes the image before accepting it,
 while preserving its original bytes.
 
@@ -998,10 +998,10 @@ Use controlled CPU/memory/GPU measurements for resource claims; do not infer saf
 
 ## HARD-25 — Deck forms and drafts are cleared before save confirmation
 
-**Evidence.** [editor-panel.js](public/editor/editor-panel.js)'s `saveText`, `saveImg` and
+**Evidence.** [editor-panel.js](../public/editor/editor-panel.js)'s `saveText`, `saveImg` and
 `saveTiles` send the draft messages, then clear their forms and close the dialog without waiting
 for persistence acknowledgment. `sendDeck`/`sendTileSet` send `deckBegin`, batches of
-`deckAppend`, and `deckFinish`. In [handlers/library.js](server/game/handlers/library.js),
+`deckAppend`, and `deckFinish`. In [handlers/library.js](../server/game/handlers/library.js),
 `deckFinish` deletes the draft and optionally spawns the deck before awaiting insert/update.
 The error boundary reports `assetError` on database failure, but does not restore the draft.
 
@@ -1029,7 +1029,7 @@ capacity and permission changes while saving and distinguish saved-but-not-spawn
 
 ## HARD-26 — Background saves do not capture current gameplay
 
-**Evidence.** [room-state.js](server/game/handlers/room-state.js)'s `scheduleRoomSave` schedules
+**Evidence.** [room-state.js](../server/game/handlers/room-state.js)'s `scheduleRoomSave` schedules
 one settings write after 800 ms and coalesces requests while that timer is pending. Its
 `saveRoomStateNow` clones current room settings together with `room.savedScene`; it does not
 call `serializeGame`. The manual `stateSave` handler and `saveFinalRoomState` capture current
@@ -1058,9 +1058,9 @@ settings write must not be presented as proof that current gameplay is durable.
 
 ## HARD-27 — Final-save failure or size rejection can discard the latest progress
 
-**Evidence.** `saveFinalRoomState` in [room-state.js](server/game/handlers/room-state.js) captures
+**Evidence.** `saveFinalRoomState` in [room-state.js](../server/game/handlers/room-state.js) captures
 the current game but only replaces `savedScene` when `JSON.stringify(snapshot).length` is at
-most `SCENE_MAX_BYTES` (2,000,000 in [server.js](server.js)). Despite the constant name, this is
+most `SCENE_MAX_BYTES` (2,000,000 in [server.js](../server.js)). Despite the constant name, this is
 a JavaScript string-length check, not a UTF-8 byte measurement. If exceeded, it writes the
 previous snapshot without reporting the skipped capture. Manual Save instead reports a size
 error. `TableRoom.onDispose` wraps the final write in `safeRoomTask` with `notify:false`; after
@@ -1092,11 +1092,11 @@ resource use and write ordering. Test empty and hands-only rooms as well as popu
 
 ## HARD-28 — Two saved configuration copies disagree during cold restoration
 
-**Evidence.** [saveRoomStateNow](server/game/handlers/room-state.js) stores current table
+**Evidence.** [saveRoomStateNow](../server/game/handlers/room-state.js) stores current table
 dimensions/shape/rim and scale alongside `savedScene`, which contains its own table/scale
 snapshot. Later `table` and `scaleSet` handlers change live settings and schedule a write
-without refreshing those fields in the saved scene. [server.js](server.js)'s `onCreate` first
-loads the top-level settings, then calls [applyScene](server/game/scene-persistence.js), which
+without refreshing those fields in the saved scene. [server.js](../server.js)'s `onCreate` first
+loads the top-level settings, then calls [applyScene](../server/game/scene-persistence.js), which
 replaces them with the older scene values.
 
 **Reproduction and limits.** A synthetic checkpoint recorded table width 10 and scale 2. After
@@ -1119,11 +1119,11 @@ geometry. Cover old snapshots, null scenes, explicit scene loads, final-save fai
 
 ## HARD-29 — Notes lack reliable acceptance and limit feedback
 
-**Evidence.** [notebook.js](public/table/notebook.js) sends private notebook text after a
-400 ms input debounce. [scoreboard.js](public/table/scoreboard.js) does the same for shared
+**Evidence.** [notebook.js](../public/table/notebook.js) sends private notebook text after a
+400 ms input debounce. [scoreboard.js](../public/table/scoreboard.js) does the same for shared
 room notes, also flushing on blur. The corresponding textareas in
-[table.html](public/table.html) have no matching `maxlength` or limit feedback. The handlers in
-[room-state.js](server/game/handlers/room-state.js) reject private text over 4,000 characters
+[table.html](../public/table.html) have no matching `maxlength` or limit feedback. The handlers in
+[room-state.js](../server/game/handlers/room-state.js) reject private text over 4,000 characters
 and shared text over 8,000 without acknowledgment/error. Private notebook input has no blur
 flush or controller-level departure flush. A still-visible draft is not proof of acceptance.
 
@@ -1134,7 +1134,7 @@ was not browser-tested. Shared notes do flush on blur; do not attribute the priv
 missing blur handler to both controls. Multi-editor overwrite behavior remains untested.
 
 **Related retention wording.** The private-notes UI says they are cleared when the user leaves,
-but [server.js](server.js) deletes only session-keyed notes on departure; authenticated notes
+but [server.js](../server.js) deletes only session-keyed notes on departure; authenticated notes
 are account-keyed and survive until that live room is disposed. This is a source-confirmed
 retention-description mismatch, not demonstrated disclosure to another account. Personal
 notebooks (both account-keyed and session-keyed) are not made durable by Save Table; shared room
@@ -1154,11 +1154,11 @@ notebook, and that leave/rejoin/room-disposal behavior matches the displayed ret
 
 ## HARD-30 — Duplicate names can misattribute chat messages
 
-**Evidence.** The chat handler in [room-features.js](server/game/handlers/room-features.js)
+**Evidence.** The chat handler in [room-features.js](../server/game/handlers/room-features.js)
 derives `from` from the server-held player display name, but sends only `from`, `text` and `ts`.
-[server.js](server.js)'s `setName` permits changing that display name without a uniqueness
-check. [chat.js](public/table/chat.js) decides whether a message is the viewer's by comparing
-that name with `myName`; [chatRow](public/ui/rows.js) then renders the sender as `you`.
+[server.js](../server.js)'s `setName` permits changing that display name without a uniqueness
+check. [chat.js](../public/table/chat.js) decides whether a message is the viewer's by comparing
+that name with `myName`; [chatRow](../public/ui/rows.js) then renders the sender as `you`.
 
 **Reproduction and limits.** A synthetic chat from a different authenticated account named
 Alice was rendered as `you` for a viewer whose displayed name was Alice. The production handler
@@ -1179,9 +1179,9 @@ render as `you`; display-name changes must not rewrite historical authorship sem
 
 ## HARD-31 — Chat limits history length on the server, not traffic or live DOM growth
 
-**Evidence.** [room-features.js](server/game/handlers/room-features.js) bounds incoming text,
+**Evidence.** [room-features.js](../server/game/handlers/room-features.js) bounds incoming text,
 normalizes it to at most 400 characters and retains 80 entries, but broadcasts every accepted
-message without a chat-specific rate budget. [chat.js](public/table/chat.js) appends every
+message without a chat-specific rate budget. [chat.js](../public/table/chat.js) appends every
 live message without trimming rows; the 80-entry server cap only bounds a history replay.
 The installed Colyseus Room defaults `maxMessagesPerSecond` to `Infinity`, and the reviewed
 TableRoom setup does not override it. Spectator/time-out policy intentionally still permits
@@ -1205,8 +1205,8 @@ controlled browser/server load tests before assigning an availability severity. 
 text rendering, history ordering and honest delivery/throttle feedback.
 
 **Spatial-tool follow-up (2026-10-07).** This resource-budget concern also applies to
-`overlayDrag` in [overlay handlers](server/game/handlers/overlays.js). The normal browser
-[overlay controller](public/table/overlays.js) spaces drag previews by roughly 55 ms, but that
+`overlayDrag` in [overlay handlers](../server/game/handlers/overlays.js). The normal browser
+[overlay controller](../public/table/overlays.js) spaces drag previews by roughly 55 ms, but that
 client-side throttle is not a server limit. A bounded production-handler fixture sent 100
 valid requests and received 100 broadcast calls. Persistent overlay caps (200 per room, 40 per
 session) do not bound preview traffic. Add a separate server preview budget/coalescing policy
@@ -1216,8 +1216,8 @@ availability review rather than treating each message family as a separate vulne
 
 ## HARD-32 — Whiteboard stroke eviction and visible pixels diverge
 
-**Evidence.** The server and [whiteboard.js](public/table/whiteboard.js) both retain at most
-`WHITEBOARD_LIMITS.maxStrokes` (2,000 in [overlays.js](shared/overlays.js)). The client's
+**Evidence.** The server and [whiteboard.js](../public/table/whiteboard.js) both retain at most
+`WHITEBOARD_LIMITS.maxStrokes` (2,000 in [overlays.js](../shared/overlays.js)). The client's
 `rememberStroke` shifts the oldest entry on overflow, while `pushStroke` only paints the new
 stroke. It does not clear/repaint the canvas to remove evicted ink. History replay clears and
 paints only retained strokes, so a current viewer and a rejoining viewer can see different
@@ -1241,13 +1241,13 @@ clear and reconnect. Verify the selected retention policy and frame-time/memory 
 
 ## HARD-33 — Member mutations can authorize against stale target privileges
 
-**Evidence.** [members.js](server/game/handlers/members.js)'s `kick` and `setRole` handlers
+**Evidence.** [members.js](../server/game/handlers/members.js)'s `kick` and `setRole` handlers
 read target membership, await a separate user/admin lookup, then recheck the actor's live
 authority against the same previously read `membership.role`. The target's current membership
-is not reloaded or locked. [database.js](server/database.js)'s `kickMember` and `setMemberRole`
+is not reloaded or locked. [database.js](../server/database.js)'s `kickMember` and `setMemberRole`
 then delete/update by room and user ID alone; the SQL does not condition the write on target
 role or actor authority. This differs from the row-locking transactions used for time-outs in
-[participation-queries.js](server/participation-queries.js).
+[participation-queries.js](../server/participation-queries.js).
 
 **Reproduction.** Two isolated runs invoked the production registered handlers as a GM,
 returned a copied target membership with role `player`, paused `findUserById`, then changed the
@@ -1277,10 +1277,10 @@ outcome under current durable permissions and agreement between committed and pu
 
 ## HARD-34 — Visual map fog is not a confidentiality boundary
 
-**Evidence and intended behavior.** [map-fog.js](public/table/map-fog.js) draws a mask/volume
-over the browser's board mesh. The existing [architecture](docs/ARCHITECTURE.md#manual-map-fog)
+**Evidence and intended behavior.** [map-fog.js](../public/table/map-fog.js) draws a mask/volume
+over the browser's board mesh. The existing [architecture](ARCHITECTURE.md#manual-map-fog)
 explicitly describes this as visual covering over downloaded artwork. The server's
-[piece visibility service](server/game/piece-visibility.js) filters explicit `piece.hidden`
+[piece visibility service](../server/game/piece-visibility.js) filters explicit `piece.hidden`
 state, not fog-mask coverage. A covered board still delivers its props/artwork reference;
 ordinary pieces under the covering still arrive in synchronized state.
 
@@ -1313,7 +1313,7 @@ as well as visual concealment; browser screenshots alone cannot establish it.
 
 ## HARD-35 — Pixel-ratio developer override bypasses quality bounds
 
-**Evidence.** [core.js](public/rendering/core.js)'s `qualitySettings` accepts any finite
+**Evidence.** [core.js](../public/rendering/core.js)'s `qualitySettings` accepts any finite
 `parseFloat` result from the URL's `px` parameter. Startup and `setQuality` pass that value
 to `renderer.setPixelRatio`, independently of the selected preset. There is no positive-range
 or maximum-ratio check here. The console-only `ottPixelRatio` hook also lacks equivalent
@@ -1337,10 +1337,10 @@ controlled device testing; do not intentionally exhaust a user's GPU to validate
 
 ## HARD-36 — Optional preferences can abort later table setup
 
-**Evidence.** [audio.js](public/table/audio.js)'s `readVol` and mute/shuffle accessors directly
-read localStorage; setters write directly. [preferences.js](public/table/preferences.js)'s
+**Evidence.** [audio.js](../public/table/audio.js)'s `readVol` and mute/shuffle accessors directly
+read localStorage; setters write directly. [preferences.js](../public/table/preferences.js)'s
 `bindPreferences` calls these during setup and also accesses storage for appearance settings.
-[client.js](public/client.js) calls it before chat/notebook/scoreboard/timer control binding
+[client.js](../public/client.js) calls it before chat/notebook/scoreboard/timer control binding
 inside its joined-room initialization promise. An exception propagates to the generic exit
 handler rather than allowing the remaining controls to initialize. Core quality storage and
 table-shell layout storage already catch storage errors, providing existing patterns to reuse.
@@ -1363,11 +1363,11 @@ a joined connection behind an exit screen nor reports an authentication failure.
 
 ## HARD-37 — Modal state does not consistently block background shortcuts
 
-**Evidence.** [client.js](public/client.js) supplies `isModalActive` for notecard/aura editors
-to [createInputRouter](public/table/input-router.js). The router uses it for context-menu
+**Evidence.** [client.js](../public/client.js) supplies `isModalActive` for notecard/aura editors
+to [createInputRouter](../public/table/input-router.js). The router uses it for context-menu
 entry, but `onKeyDown` does not apply it before Delete/Backspace, selection commands and other
 gameplay shortcuts. The typing check recognizes INPUT/TEXTAREA, not a focused modal button.
-[controls.js](public/table/controls.js) installs the command listener on `window`, so bubbled
+[controls.js](../public/table/controls.js) installs the command listener on `window`, so bubbled
 keyboard events can reach that path. Modal presence is not an authorization restriction.
 
 **Reproduction and limits.** The existing input-router fixture, using production router and
@@ -1390,11 +1390,11 @@ Include real desktop/touch-keyboard testing and retain spectator/time-out server
 
 ## HARD-38 — Login can create a session after its password proof becomes stale
 
-**Evidence.** `/auth/login` in [auth.js](server/http/routes/auth.js) reads an account with
+**Evidence.** `/auth/login` in [auth.js](../server/http/routes/auth.js) reads an account with
 `findUserByLogin`, awaits `verifyPassword` against that returned hash, then calls `createSession`.
-[database.js](server/database.js)'s `createSession` performs an unconditional session INSERT;
+[database.js](../server/database.js)'s `createSession` performs an unconditional session INSERT;
 it does not lock/recheck the account or compare the verified password hash. In contrast,
-[account-security-queries.js](server/account-security-queries.js)'s `setPassword` locks the
+[account-security-queries.js](../server/account-security-queries.js)'s `setPassword` locks the
 account, rechecks the session and expected hash, and calls `rotateAccess` in one transaction.
 Recovery also rotates access transactionally, but that does not serialize the login caller.
 
@@ -1422,11 +1422,11 @@ concurrency coverage and verify HTTP plus room access with the resulting credent
 
 ## HARD-39 — Site-admin writes outlive authority and can remove the final admins
 
-**Evidence.** [createRequireAdmin](server/http/auth-context.js) authenticates a current database
-session and checks `isAdmin` at route entry. In [admin.js](server/http/routes/admin.js), account
+**Evidence.** [createRequireAdmin](../server/http/auth-context.js) authenticates a current database
+session and checks `isAdmin` at route entry. In [admin.js](../server/http/routes/admin.js), account
 deletion then awaits target lookup, owned-room enumeration and live-room disposal before
 `purgeUser`, without rechecking the actor. Room purge and orphan purge similarly await work
-after authorization. `setAdmin` and `purgeUser` in [database.js](server/database.js) receive only
+after authorization. `setAdmin` and `purgeUser` in [database.js](../server/database.js) receive only
 the target ID, so their database mutations cannot authorize the actor atomically.
 
 The HTTP admin-role endpoint rejects self-demotion and account deletion rejects self-deletion,
@@ -1461,14 +1461,14 @@ PostgreSQL concurrency and multi-browser tests in addition to route fixtures.
 
 ## HARD-40 — Trash cleanup misses variants and obscures partial completion
 
-**Evidence.** [trashOrphans](server/asset-cleanup.js) renames each original into
+**Evidence.** [trashOrphans](../server/asset-cleanup.js) renames each original into
 `.trash/<kind>/<name>`, removes only `.texture-cache/v1/<kind>/<name>.webp`, then records the
-move in its returned list. [textureAssetPaths](server/http/routes/asset-textures.js) also
+move in its returned list. [textureAssetPaths](../server/http/routes/asset-textures.js) also
 creates `v1-high`, `v1-thumbnail` and `v1-sky-low/medium/high` variants. Those remain on disk.
 If the standard derivative removal fails, the catch logs an error but does not count the
-already-completed original move. The [admin purge route](server/http/routes/admin.js) returns
+already-completed original move. The [admin purge route](../server/http/routes/admin.js) returns
 the size sum of all scan candidates as `totalBytes`, regardless of which files actually moved;
-[purgeOrphans](public/admin.js) presents that number as moved bytes.
+[purgeOrphans](../public/admin.js) presents that number as moved bytes.
 
 **Reproduction and impact.** A temporary sky original with six cache variants was scanned and
 trashed through production helpers: five variants remained. A production derivative-route
@@ -1494,8 +1494,8 @@ interleavings and restoration without writing to production asset storage.
 
 ## HARD-41 — Public derivative generation has no shared admission budget
 
-**Evidence.** [createAssetTextureRouter](server/http/routes/asset-textures.js) is mounted in
-[server.js](server.js) without authentication or a route rate limiter. Public media access is
+**Evidence.** [createAssetTextureRouter](../server/http/routes/asset-textures.js) is mounted in
+[server.js](../server.js) without authentication or a route rate limiter. Public media access is
 already tracked in HARD-22; this finding concerns conversion work. On a cache miss, `pending`
 coalesces requests for the same destination, but every different key immediately calls
 `createTextureDerivative`. There is no application-wide active/queued-job bound here. The
@@ -1527,10 +1527,10 @@ latency. Keep originals unchanged, path validation intact, and successful cache 
 
 ## HARD-42 — Safe client errors do not imply safe server logs
 
-**Evidence.** [httpErrorHandler](server/http/async-route.js) sends a generic client error, but
+**Evidence.** [httpErrorHandler](../server/http/async-route.js) sends a generic client error, but
 logs `req.originalUrl` (including query values) and the raw exception message or thrown value.
-[safe-message.js](server/game/safe-message.js)'s `safeContext` omits the incoming room payload,
-but `report` still appends raw exception text. [server.js](server.js)'s public `/csp-report`
+[safe-message.js](../server/game/safe-message.js)'s `safeContext` omits the incoming room payload,
+but `report` still appends raw exception text. [server.js](../server.js)'s public `/csp-report`
 handler logs the entire submitted JSON body except for its benign-eval filter. The 64 KiB
 parser limit bounds each accepted report, not its schema or the total retained log volume.
 
@@ -1566,9 +1566,9 @@ shipping/retention separately; do not use real credentials in fixtures.
 
 ## HARD-43 — Expected HTTP parse failures are classified as server errors
 
-**Evidence.** [httpErrorHandler](server/http/async-route.js) returns HTTP 500 for every error
+**Evidence.** [httpErrorHandler](../server/http/async-route.js) returns HTTP 500 for every error
 arriving before headers are sent. It does not distinguish parser errors' safe type/status
-metadata from unexpected application failures. [createAuthRouter](server/http/routes/auth.js)
+metadata from unexpected application failures. [createAuthRouter](../server/http/routes/auth.js)
 uses Express JSON parsing with a 1 KiB limit; malformed JSON and excessive bodies are rejected
 before the route's database work but still reach the generic 500 response.
 
@@ -1593,13 +1593,13 @@ repository's approved-example workflow.
 
 ## HARD-44 — Separate database roles share the running application's secret boundary
 
-**Evidence.** [docker-compose.yml](docker-compose.yml) supplies the app with both runtime
+**Evidence.** [docker-compose.yml](../docker-compose.yml) supplies the app with both runtime
 password-file settings and `MIGRATE_DATABASE_*` owner settings, and mounts both secrets into
-the same long-lived container. [runMigrations](migrate.js) closes its privileged connection
+the same long-lived container. [runMigrations](../migrate.js) closes its privileged connection
 after startup, but does not remove the mounted secret. Setting `AUTO_MIGRATE=false` skips the
 runner; it does not remove those mounts or permissions.
 
-The native [installer](proxmox/install.sh) similarly writes the owner-password path into the
+The native [installer](../proxmox/install.sh) similarly writes the owner-password path into the
 service environment and makes configuration files `root:open-tabletop`, mode 0640. Its service
 runs as `open-tabletop`, so the owner password remains readable to the runtime identity.
 The app role's CRUD grants are a useful restriction on that particular database connection,
@@ -1629,10 +1629,10 @@ permissions separately from configuration review.
 
 ## HARD-45 — Broad Docker COPY can include ignored local credentials
 
-**Evidence.** [Dockerfile](Dockerfile) uses `COPY . .`. [.dockerignore](.dockerignore) excludes
+**Evidence.** [Dockerfile](../Dockerfile) uses `COPY . .`. [.dockerignore](../.dockerignore) excludes
 `.env`, `secrets`, `.git`, dependencies, docs and saved assets, but has no `.env.*` exclusion or
 exclusions for local assistant/session directories such as `.codex`, `.agents` and `.claude`.
-[.gitignore](.gitignore) excludes `.env.*` and those directories; Git exclusion is not a Docker
+[.gitignore](../.gitignore) excludes `.env.*` and those directories; Git exclusion is not a Docker
 build-context exclusion. A local build from a checkout containing `.env.production`, for example,
 can copy it into `/app` and the resulting image. Other local logs/dumps require the same review.
 
@@ -1655,14 +1655,14 @@ Do not build from a developer's real secret-bearing workspace to test this findi
 
 ## HARD-46 — Upgrade backups have a narrower recovery boundary than the running app
 
-**Evidence.** [backup_database](proxmox/install.sh) creates a custom-format `pg_dump` in a
+**Evidence.** [backup_database](../proxmox/install.sh) creates a custom-format `pg_dump` in a
 mode-0700 backup directory using `mktemp`, checks that output is nonempty and stops the
 operation on dump failure. The update branch calls it before dependency preparation, release
 activation and `systemctl restart`; it does not first stop admission or flush/stop live tables.
 The existing mocked installer tests verify dump-before-restart and failure-before-activation.
 This is a database recovery point, not evidence of a corrupt SQL dump.
 
-[README.md](README.md) already says uploaded files must be backed up separately and rollback
+[README.md](../README.md) already says uploaded files must be backed up separately and rollback
 needs both the matching old release and database dump. The helper itself does not copy assets,
 configuration/secrets or off-host backups, nor perform a restore check. A database dump cannot
 capture server-only live state that has not been saved (see HARD-26/27). Changes accepted after
@@ -2195,4 +2195,4 @@ retain accepted risks and deferred decisions with their rationale.
 - [OWASP: authentication](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html)
 - [OWASP: WebSocket security](https://cheatsheetseries.owasp.org/cheatsheets/WebSocket_Security_Cheat_Sheet.html)
 - [MDN: Set-Cookie](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Set-Cookie)
-- [Current account-security contract](docs/ACCOUNT_SECURITY.md)
+- [Current account-security contract](ACCOUNT_SECURITY.md)
