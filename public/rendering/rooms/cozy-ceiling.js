@@ -203,8 +203,14 @@ export function createCozyCeiling({ THREE, layout, materials, assembly, phoneSaf
   );
   return {
     group: roof,
-    hideAbove: top,
+    // Both outward-facing slope planes enclose the space below the pitched roof.
+    cutawayPlanes: [-1, 1].map((side) =>
+      new THREE.Plane(
+        new THREE.Vector3(side * COZY_CEILING.risePerHalfWidth, 1, 0),
+        -(top + rise),
+      ).normalize(),
+    ),
     top: top + rise + 1,
-    gables: [...gables].map(([end, group]) => ({ group, normal: [0, end === 'north' ? -1 : 1] })),
+    gables: [...gables].map(([end, group]) => ({ group, end })),
   };
 }

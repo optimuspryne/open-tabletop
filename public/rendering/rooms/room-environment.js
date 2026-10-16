@@ -21,8 +21,7 @@ export function createRoomEnvironment({
   const phoneSafe = deviceClass() === 'phone';
   let root = null;
   let materials = {};
-  let walls = [];
-  let ceiling = null;
+  let cutaways = [];
   let seating = null;
   let lastSize = '';
   let disposed = false;
@@ -38,8 +37,7 @@ export function createRoomEnvironment({
     onShadowBoundsChanged(null);
     root = null;
     materials = {};
-    walls = [];
-    ceiling = null;
+    cutaways = [];
     seating = null;
     lastSize = '';
   }
@@ -98,9 +96,12 @@ export function createRoomEnvironment({
         doc,
       });
       const structure = theme.structure.build(dependencies) || {};
-      walls = structure.walls || [];
-      ceiling = structure.ceiling || null;
-      walls = [...walls, ...(ceiling?.gables || [])];
+      const ceiling = structure.ceiling;
+      cutaways = [
+        ...(structure.walls || []),
+        ...(ceiling?.gables || []),
+        ...(ceiling ? [ceiling] : []),
+      ];
       const openings = theme.openings?.build?.({ ...dependencies, structure }) || {};
       const playArea = theme.playArea?.build?.({ ...dependencies, structure, openings }) || {};
       const furnishings =
@@ -144,29 +145,16 @@ export function createRoomEnvironment({
     }
   }
 
-  function update(cameraPosition, target) {
+  function update(cameraPosition) {
     if (!root || disposed) return;
-    const dx = cameraPosition.x - target.x,
-      dz = cameraPosition.z - target.z;
-    const length = Math.hypot(dx, dz);
-    const overhead = cameraPosition.y - target.y > length * theme.structure.overheadSlope;
     let changed = false;
-    if (ceiling) {
-      // Below the eaves the roof cannot obstruct the playable tabletop. Above
-      // them it cuts away as a whole, including its shadows and gable infills.
-      const visible = !overhead && cameraPosition.y < ceiling.hideAbove;
-      if (ceiling.group.visible !== visible) {
-        ceiling.group.visible = visible;
-        changed = true;
-      }
-    }
-    for (const wall of walls) {
-      const towardCamera =
-        length > 0.001 &&
-        (wall.normal[0] * dx + wall.normal[1] * dz) / length > theme.structure.cutawayThreshold;
-      const visible = !towardCamera && !overhead;
-      if (wall.group.visible !== visible) {
-        wall.group.visible = visible;
+    for (const { group, cutawayPlanes = [] } of cutaways) {
+      // A surface stays visible on its interior side, regardless of aim/pan.
+      // Re-enter slightly farther inside before restoring a hidden surface.
+      const limit = group.visible ? 0 : -(theme.structure.cutawayHysteresis ?? 0);
+      const visible = cutawayPlanes.every((plane) => plane.distanceToPoint(cameraPosition) < limit);
+      if (group.visible !== visible) {
+        group.visible = visible;
         changed = true;
       }
     }

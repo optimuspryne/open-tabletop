@@ -3302,9 +3302,16 @@ wall-following gable cutaways. The
 room's clear alpha material on desktop/tablet and is hidden on phones. The selected
 sky/background stays visible through both real apertures. No transmission pass,
 light or gameplay picking is introduced. The roof does not cast shadows over the
-table. `structure.ceiling {group, hideAbove, top}` supplies eaves-height/overhead
-cutaways and conservative shadow bounds. `furnishing` accepts an optional fifth
-`prepare(copy)` callback; assembly releases source geometry/materials no longer
+table. `structure.ceiling {group, cutawayPlanes, top, gables}` supplies two outward
+roof-slope planes and conservative shadow bounds. Walls supply the same normalized
+`THREE.Plane` contract. The existing visibility owner keeps each group while the
+camera is on the interior side of all its planes; camera aim no longer removes
+visible room edges. Cozy's wall planes sit 0.3 units inside their center lines,
+and a 0.15-unit hysteresis band prevents boundary jitter. Gables share their wall's
+planes; furnishings remain attached to their support. The roof stays visible above
+the eaves until the camera crosses a pitched slope, and cuts away for above-ridge
+views. Overhead angle alone no longer hides walls. `furnishing` accepts an optional
+fifth `prepare(copy)` callback; assembly releases source geometry/materials no longer
 retained by any placement. Late callbacks and rebuilds use the existing cleanup.
 Refresh clients after updating; no server restart/migration is needed.
 
@@ -3399,7 +3406,8 @@ callbacks still dispose their original hierarchy before conversion. GLBs, author
 sources, gameplay meshes/caches, lighting and saved quality choices are unchanged.
 
 `createCozyRoom({ THREE, scene, modelLoader, seatLayoutFor, deviceClass = () => 'desktop', textureAnisotropy = 1, doc, onChanged, onShadowBoundsChanged })` exports `sync(tableState)`,
-`update(cameraPosition, target)` and idempotent `dispose()`. `sync` accepts finite,
+`update(cameraPosition)` and idempotent `dispose()`. An existing second target
+argument is accepted but unused. `sync` accepts finite,
 positive `tableX`/`tableZ`, keys dimensions plus `tableShape`, and rebuilds only when
 those change. Same-size calls reconcile `tableState.players` without rebuilding room
 surfaces or reloading GLBs. Room clearance/floor/wall/rug/cutaway tunables live in `COZY_ROOM`;

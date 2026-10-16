@@ -34,7 +34,7 @@ interaction adds no tabletop gesture or icon.
 
 | Component | Contract and responsibility | Cozy implementation |
 | --- | --- | --- |
-| Structure | Required `build(dependencies)` plus `floorY`, `wallHeight`, `clearance`, `minimumHalfSize`, `cutawayThreshold`, `overheadSlope`. Returns optional `walls`, `ceiling` and named `anchors`. | Oak ground/floorboards, plaster walls/trim and vaulted oak ceiling with two skylights; north/south/east/west anchors. |
+| Structure | Required `build(dependencies)` plus `floorY`, `wallHeight`, `clearance`, `minimumHalfSize` and optional `cutawayHysteresis`. Returns optional `walls`, `ceiling` and named `anchors`. | Oak ground/floorboards, plaster walls/trim and vaulted oak ceiling with two skylights; north/south/east/west anchors. |
 | Openings and surroundings | Optional `build({...dependencies, structure})`. Creates windows/doors and returns attachment anchors. Existing sky/background belongs to the skybox owner. | Four transparent windows and a sill planter anchor. |
 | Play area | Optional `build({...dependencies, structure, openings})`. Builds visual supports and an optional hidden `chairTemplate`; returns its `chairModel` asset key. `chairClearance`/`chairName` configure seating. | Shared-outline table legs and occupied-seat upholstered chairs. |
 | Main furnishings | Optional `build({...dependencies, structure, openings, playArea})`. Returns furniture anchors for decoration. | Game shelf and lamp; shelf anchor follows the east cutaway wall. |
@@ -71,7 +71,8 @@ lighting and synchronized sky references remain with their existing owners.
 
 `createRoomEnvironment({theme, THREE, scene, modelLoader, seatLayoutFor,
 deviceClass, textureAnisotropy, doc, onChanged, onShadowBoundsChanged})` returns
-`sync(tableState)`, `update(cameraPosition, target)` and idempotent `dispose()`.
+`sync(tableState)`, `update(cameraPosition)` and idempotent `dispose()`. Existing
+callers may still pass a target; cutaways depend only on camera position.
 
 `sync` builds once per size/shape, reconciles occupied chairs for same-size patches,
 and rebuilds through the normal resource cleanup path on dimension changes.
@@ -110,18 +111,27 @@ and the injected presence `seatLayoutFor`, preserves inward orientation at all
 seats/shapes, and excludes spectators/unseated players. Hidden templates own shared
 resources when empty; departing chairs release only their own instance buffers.
 
-Cutaway walls return `{group, normal: [x,z]}` using normalized outward horizontal
-normals. `update` runs after camera controls and before shadow refresh/render.
+Cutaway walls return `{group, cutawayPlanes}` with normalized, outward-facing
+`THREE.Plane` instances in room/world coordinates (the root remains at the origin).
+Negative signed distance is the interior side. `update` runs after camera controls
+and before shadow refresh/render. A group stays visible while the camera is inside
+all its planes; a missing/empty list leaves it visible. The runtime applies optional
+`structure.cutawayHysteresis` in world units: hide at a plane, restore only after
+moving that far back inside. Cozy uses a 0.15-unit band and places wall planes 0.3
+units inside their center lines, just before the plaster face. Wall furnishings and
+gables inherit the same cutaway; aim, pan and overhead angle alone do not hide walls.
 Desktop/tablet construction reports the room world bounds to core's existing
 shadow-camera fitter; disposal reports null. Phone construction reports null and
 uses lightweight contact shading. No new lights, render loop or postprocessing
 passes are installed.
 
-An optional `structure.ceiling {group, hideAbove, top}` follows the same update
-and disposal path. The group is visible below its absolute eaves-height threshold
-except during overhead views; elevated cameras hide the whole roof, preserving
-table visibility. Its peak expands desktop shadow bounds. Cozy's ceiling itself
-does not cast shadows that could darken the tabletop. The loaded mesh retains
+An optional `structure.ceiling {group, cutawayPlanes, top, gables}` follows the same
+update and disposal path. Cozy supplies two normalized slope planes, preserving
+the ceiling above the eaves while the camera is below the pitched roof. Crossing
+either slope hides the whole roof; above-ridge/overhead cameras keep the table clear.
+Each gable record `{group, end}` receives its matching wall's plane list in the
+structure builder. The ceiling peak still expands desktop shadow bounds. Cozy's
+ceiling itself does not cast shadows that could darken the tabletop. The loaded mesh retains
 real skylight apertures; desktop/tablet use the palette's clear alpha glass while
 phones omit glazing and physical/detail shader paths. No additional input or
 responsive UI control is needed; mouse/touch camera intents remain unchanged.
@@ -176,6 +186,10 @@ retry and device policy. It is a test fixture, not a second shipped room theme.
 Resource and settings tests cover unused palette cleanup, preserved shared maps,
 explicit matching messages and live permission rechecks. Component tests exercise
 the registered cozy production bootstrap, windows/sky and full/compact touch UI.
+Cutaway regressions cover interior pans, all outside wall directions, shared gables,
+room resizing, both pitched slopes and re-entry jitter. Browser probes verify that
+retained side walls still occlude the sky and ceiling apertures remain clear on
+desktop and touch. Physical-device orbit feel and GPU performance need manual testing.
 
 To add a bundled theme, define its six component records (optional components may
 be omitted), own its palette/assets, add it to `ROOM_THEMES`, record asset sources

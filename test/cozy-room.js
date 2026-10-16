@@ -193,30 +193,74 @@ test('occupied chairs clear the real table outline and face their hand positions
   f.room.dispose();
 });
 
-test('camera cutaways remove near walls and their furnishings across seats and overhead views', () => {
+test('room boundaries keep interior walls visible and cut away outside walls on every side', () => {
+  for (const device of ['desktop', 'phone']) {
+    const f = fixture({ device });
+    for (const state of [
+      { tableX: 10, tableZ: 7 },
+      { tableX: 40, tableZ: 15 },
+      { tableX: 12, tableZ: 7, tableShape: 'round' },
+    ]) {
+      f.room.sync(state);
+      const root = f.scene.children[0];
+      const { x, z } = root.userData.halfSize;
+      const target = new THREE.Vector3();
+      const walls = ['North wall', 'South wall', 'East wall', 'West wall'];
+      const visible = (name) => root.getObjectByName(name).visible;
+      // A panned view along the east wall used to remove its visible plaster/shelf.
+      const inside = new THREE.Vector3(x - 2, 6, z - 5);
+      f.room.update(inside, new THREE.Vector3(x - 6, 2, 0));
+      for (const name of walls) assert.equal(visible(name), true);
+      const unchanged = f.changes();
+      f.room.update(inside, new THREE.Vector3(-50, 30, -50));
+      assert.equal(f.changes(), unchanged, 'Changing aim must not remove interior surfaces');
+      for (const [name, position] of [
+        ['North wall', [0, 5, -z - 2]],
+        ['South wall', [0, 5, z + 2]],
+        ['East wall', [x + 2, 5, 0]],
+        ['West wall', [-x - 2, 5, 0]],
+      ]) {
+        f.room.update(new THREE.Vector3(...position), target);
+        for (const wall of walls) assert.equal(visible(wall), wall !== name);
+        assert.equal(root.getObjectByName('north ceiling gable').visible, name !== 'North wall');
+        assert.equal(root.getObjectByName('south ceiling gable').visible, name !== 'South wall');
+      }
+      f.room.update(new THREE.Vector3(-x - 2, 5, -z - 2), target);
+      assert.equal(visible('North wall'), false);
+      assert.equal(visible('West wall'), false);
+      assert.equal(visible('East wall'), true);
+      assert.equal(visible('South wall'), true);
+      f.room.update(new THREE.Vector3(0, 100, 0), target);
+      for (const name of walls) assert.equal(visible(name), true);
+      assert.equal(root.getObjectByName('Vaulted oak ceiling').visible, false);
+    }
+    f.room.dispose();
+  }
+});
+
+test('small camera movements at a wall boundary do not flicker walls or gables', () => {
   const f = fixture();
-  f.room.sync({ tableX: 10, tableZ: 7, players: playersAt(0, 1, 2, 3, 4, 5, 6, 7) });
+  f.room.sync({ tableX: 10, tableZ: 7 });
   const root = f.scene.children[0];
-  const target = new THREE.Vector3(0, 0, 0);
-  const visible = (name) => root.children.find((child) => child.name === name).visible;
-  f.room.update(new THREE.Vector3(0, 10, 12), target);
-  assert.equal(visible('South wall'), false);
-  assert.equal(visible('North wall'), true);
+  const wall = root.getObjectByName('North wall');
+  const gable = root.getObjectByName('north ceiling gable');
+  const update = (z) => f.room.update(new THREE.Vector3(0, 5, z), new THREE.Vector3());
+  update(-16);
+  assert.equal(wall.visible, true);
+  update(-16.75);
+  assert.equal(wall.visible, false);
+  assert.equal(gable.visible, false);
   const unchanged = f.changes();
-  f.room.update(new THREE.Vector3(0, 10, 12), target);
+  for (const z of [-16.68, -16.74, -16.6, -16.72]) update(z);
   assert.equal(f.changes(), unchanged);
-  f.room.update(new THREE.Vector3(-12, 10, -12), target);
-  assert.equal(visible('North wall'), false);
-  assert.equal(visible('West wall'), false);
-  assert.equal(visible('East wall'), true);
-  assert.equal(visible('South wall'), true);
-  f.room.update(new THREE.Vector3(0, 40, 0), target);
-  for (const name of ['North wall', 'South wall', 'East wall', 'West wall'])
-    assert.equal(visible(name), false);
+  assert.equal(gable.visible, false);
+  update(-16.5);
+  assert.equal(wall.visible, true);
+  assert.equal(gable.visible, true);
   f.room.dispose();
 });
 
-test('ceiling follows room dimensions, cuts away above eaves and preserves its fallback on load failure', () => {
+test('ceiling cuts away through the pitched roof, preserves its fallback and follows room size', () => {
   const f = fixture({ models: true });
   for (const state of [
     { tableX: 10, tableZ: 7 },
@@ -226,19 +270,38 @@ test('ceiling follows room dimensions, cuts away above eaves and preserves its f
     f.room.sync(state);
     const root = f.scene.children[0];
     const roof = root.getObjectByName('Vaulted oak ceiling');
-    assert.equal(roof.position.y, COZY_ROOM.floorY + COZY_ROOM.wallHeight);
-    f.room.update(new THREE.Vector3(0, 5, 12), new THREE.Vector3());
-    assert.equal(roof.visible, true);
-    assert.equal(roof.getObjectByName('south ceiling gable').visible, false);
-    assert.equal(roof.getObjectByName('north ceiling gable').visible, true);
-    f.room.update(new THREE.Vector3(0, 10, 12), new THREE.Vector3());
-    assert.equal(roof.visible, false);
-    f.room.update(new THREE.Vector3(0, 40, 0), new THREE.Vector3());
+    const { x, z } = root.userData.halfSize;
+    const eaves = COZY_ROOM.floorY + COZY_ROOM.wallHeight;
+    assert.equal(roof.position.y, eaves);
+    for (const side of [-1, 1]) {
+      // Remain enclosed above the old eaves cutoff, including a steep downward aim.
+      f.room.update(new THREE.Vector3(0, eaves + 2, 0), new THREE.Vector3());
+      assert.equal(roof.visible, true);
+      assert.equal(roof.getObjectByName('south ceiling gable').visible, true);
+      assert.equal(roof.getObjectByName('north ceiling gable').visible, true);
+      // At half-width the roof lies a quarter-width above the eaves.
+      f.room.update(new THREE.Vector3((side * x) / 2, eaves + x / 4 - 1, 0), new THREE.Vector3());
+      assert.equal(roof.visible, true);
+      f.room.update(
+        new THREE.Vector3((side * x) / 2, eaves + x / 4 + 0.05, 0),
+        new THREE.Vector3(),
+      );
+      assert.equal(roof.visible, false);
+      const unchanged = f.changes();
+      f.room.update(
+        new THREE.Vector3((side * x) / 2, eaves + x / 4 - 0.05, 0),
+        new THREE.Vector3(),
+      );
+      assert.equal(roof.visible, false, 'Tiny movements must not restore the roof');
+      assert.equal(f.changes(), unchanged);
+      f.room.update(new THREE.Vector3((side * x) / 2, eaves + x / 4 - 1, 0), new THREE.Vector3());
+      assert.equal(roof.visible, true);
+    }
+    f.room.update(new THREE.Vector3(0, 100, 0), new THREE.Vector3());
     assert.equal(roof.visible, false);
     f.modelLoads.findLast((load) => load.url === COZY_ROOM.furnitureURLs.ceiling).fail();
     assert.ok(roof.getObjectByName('Ceiling fallback').children.every((mesh) => mesh.visible));
     const bounds = new THREE.Box3().setFromObject(roof);
-    const { x, z } = root.userData.halfSize;
     assert.ok(bounds.max.x >= x && bounds.min.x <= -x);
     assert.ok(Math.abs(bounds.max.z - z) < 0.01);
     assert.ok(f.shadowBounds.at(-1).containsBox(bounds));
@@ -450,7 +513,7 @@ test('authored furnishings preserve materials, share chair resources and follow 
   }
   const east = root.children.find((n) => n.name === 'East wall');
   assert.ok(east.getObjectByName('Cozy shelf model'));
-  f.room.update(new THREE.Vector3(12, 10, 0), new THREE.Vector3());
+  f.room.update(new THREE.Vector3(24, 5, 0), new THREE.Vector3());
   assert.equal(east.visible, false);
   assert.ok(root.getObjectByName('Cozy lamp model'));
   const panes = [];
@@ -505,7 +568,7 @@ test('six varied plants share assets, keep the table clear and follow their supp
     assert.equal(shelfPlant.position.y, COZY_ROOM.shelfTop);
     const west = root.getObjectByName('West wall');
     assert.ok(west.getObjectByName('Potted snake'));
-    f.room.update(new THREE.Vector3(-12, 10, -12), new THREE.Vector3());
+    f.room.update(new THREE.Vector3(-24, 5, -22), new THREE.Vector3());
     assert.equal(west.visible, false);
     assert.equal(root.getObjectByName('North wall').visible, false);
     assert.equal(root.getObjectByName('East wall').visible, true);
@@ -565,7 +628,7 @@ test('clear window openings expose the existing sky without a painted insert or 
   assert.ok(panels.length);
   for (const panel of panels)
     assert.equal(openingRay.intersectsBox(new THREE.Box3().setFromObject(panel)), false);
-  f.room.update(new THREE.Vector3(0, 10, -12), new THREE.Vector3());
+  f.room.update(new THREE.Vector3(0, 5, -22), new THREE.Vector3());
   assert.equal(north.visible, false, 'Window surround and glazing must follow wall cutaways');
   f.room.dispose();
 });
@@ -738,7 +801,7 @@ test('contact shading survives model swaps, follows occupied seats and releases 
     assert.deepEqual(released, [0, 0, 0]);
     const shelf = root.getObjectByName('Authored game shelf');
     assert.ok(shelf.children.some((n) => n.userData.cozyContactShadow));
-    f.room.update(new THREE.Vector3(12, 10, 0), new THREE.Vector3());
+    f.room.update(new THREE.Vector3(24, 5, 0), new THREE.Vector3());
     assert.equal(root.getObjectByName('East wall').visible, false);
     if (device === 'phone') assert.ok(f.shadowBounds.every((bounds) => bounds === null));
     else assert.ok(f.shadowBounds[0].containsPoint(new THREE.Vector3(20, COZY_ROOM.floorY, 17)));

@@ -602,8 +602,12 @@ importing a room singleton:
   derivative; `rooms/cozy-ceiling.js` fits separate parts to room dimensions with
   fixed beam sections/UV density and batches them by material. Shared assembly's
   optional placement preparer releases displaced source resources. The structure
-  returns a ceiling owner/eaves threshold/peak bound; the existing camera update
-  cuts it away above the eaves or overhead, and room cleanup owns every batch.
+  returns a ceiling owner/two normalized outward slope planes/peak bound; the existing
+  camera update keeps it below the actual pitched roof and hides it after crossing
+  either slope. Walls use the same signed-distance visibility rule, with gables
+  sharing their wall's planes. A small interior inset avoids entering plaster;
+  a hysteresis band prevents flicker on re-entry. Camera aim/overhead angle alone
+  no longer removes visible room edges. Room cleanup still owns every batch.
   Desktop clear alpha glazing and empty phone apertures preserve the room skybox;
   no refraction pass, new light, input or synchronized ceiling state is added.
   The shelf is compiled offline from the corrected frame and miniature built-in

@@ -38,6 +38,12 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   automation; the separate Node prerequisite is recorded above.
 
 ### Fixed
+- Keep Cozy walls, attached furnishings and gables visible while the camera remains
+  inside the room, replacing early angle-based cutaways with actual wall boundaries.
+  Keep the ceiling above the eaves until the camera crosses the pitched roof;
+  outside-wall and above-roof views still cut away to reveal the table. Add a small
+  re-entry buffer to prevent boundary flicker. Reuse the existing visibility owner
+  and resource lifecycle. Refresh clients; no server restart is needed.
 - Library tile sets and starter games now preview the current Domino and Mahjong
   GLBs using the shared lazy thumbnail renderer, including full/compact and touch
   layouts. Removed the 42 replaced Mahjong PNGs (about 2.35 MiB); saved face IDs

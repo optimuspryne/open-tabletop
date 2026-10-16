@@ -1466,9 +1466,12 @@ const SCENES = [
         for(const id of [...room.state.players.keys()])if(id!=='me')room.state.players.delete(id);
         patches.forEach(fn=>fn(room.state));
         const beforeScene=sent.length;
-        clientCamera.position.set(0,10,12);clientControls.target.set(0,0,0);clientControls.update();
+        clientCamera.position.set(18,6,12);clientControls.target.set(14,2,0);clientControls.update();
         await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-        assert(!scenery()[0].children.find(node=>node.name==='South wall').visible,'Production loop did not update cutaway');
+        assert(scenery()[0].getObjectByName('East wall').visible,'Production loop removed an interior wall during a pan');
+        clientCamera.position.set(0,5,scenery()[0].userData.halfSize.z+2);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!scenery()[0].getObjectByName('South wall').visible,'Production loop did not update the outside-wall cutaway');
         assert(sent.length===beforeScene,'Camera cutaway sent gameplay messages');
         const select=byId('roomEnvironment');
         assert(select.value==='cozy'&&select.options.length===2,'Room style choices did not hydrate');
@@ -3400,6 +3403,13 @@ SCENES.push({
           assert(Math.max(...through.map((v,i)=>Math.abs(v-sky[i])))<=12,'Skylight masks sky '+side+' '+tableX+': '+through+' vs '+sky);
         }
       }
+      camera.position.set(half.x-2,6,half.z-5);camera.lookAt(half.x,4,-half.z+2);
+      room.update(camera.position,new THREE.Vector3(half.x-6,2,0));
+      assert(root.getObjectByName('East wall').visible,'Panned interior wall cut away');
+      const wall=sample(true),outside=sample(false);
+      assert(wall.some((value,i)=>Math.abs(value-outside[i])>15),'Visible side wall no longer occludes the sky');
+      camera.position.set(0,COZY_ROOM.floorY+COZY_ROOM.wallHeight+2,0);room.update(camera.position,new THREE.Vector3());
+      assert(roof.visible,'Ceiling disappeared above the eaves while still below the ridge');
       camera.position.set(0,4,-35);room.update(camera.position,new THREE.Vector3(0,14,0));
       assert(!roof.getObjectByName('north ceiling gable').visible&&roof.getObjectByName('south ceiling gable').visible,'Near gable obscures the ceiling instead of following its wall cutaway');
       camera.position.set(0,35,20);room.update(camera.position,new THREE.Vector3());assert(!roof.visible,'Elevated camera cannot see the table');

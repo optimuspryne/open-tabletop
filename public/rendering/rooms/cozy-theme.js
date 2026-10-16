@@ -16,8 +16,8 @@ export const COZY_ROOM = Object.freeze({
   minimumHalfSize: 17,
   wallThickness: 1.05,
   rugMargin: 3,
-  cutawayThreshold: 0.22,
-  overheadSlope: 3,
+  cutawayInset: 0.3, // Just inside the plaster face; avoid entering opaque walls.
+  cutawayHysteresis: 0.15,
   textureSize: 1024,
   phoneTextureSize: 512,
   // Authored furniture is in metres; the table is 5cm lower relative to the room.
@@ -144,14 +144,18 @@ function buildStructure({ THREE, root, layout, materials: surfaces, assembly, ph
     cap.rotation.z = Math.PI;
     cap.scale.y = 0.4;
     wall.add(cap);
-    return { group: wall, normal: spec.normal, width: spec.width };
+    const normal = new THREE.Vector3(spec.normal[0], 0, spec.normal[1]);
+    const distance = normal.dot(wall.position) - COZY_ROOM.cutawayInset;
+    return {
+      group: wall,
+      width: spec.width,
+      cutawayPlanes: [new THREE.Plane(normal, -distance)],
+    };
   });
-
-  return {
-    walls,
-    ceiling: createCozyCeiling({ THREE, layout, materials: surfaces, assembly, phoneSafe }),
-    anchors: new Map(['north', 'south', 'east', 'west'].map((id, i) => [id, walls[i]])),
-  };
+  const anchors = new Map(['north', 'south', 'east', 'west'].map((id, i) => [id, walls[i]]));
+  const ceiling = createCozyCeiling({ THREE, layout, materials: surfaces, assembly, phoneSafe });
+  for (const gable of ceiling.gables) gable.cutawayPlanes = anchors.get(gable.end).cutawayPlanes;
+  return { walls, ceiling, anchors };
 }
 function buildOpenings({ THREE, structure, layout, materials: surfaces, assembly, phoneSafe }) {
   const materials = surfaces;
@@ -377,8 +381,7 @@ export const COZY_ROOM_THEME = Object.freeze({
     wallHeight: COZY_ROOM.wallHeight,
     clearance: COZY_ROOM.clearance,
     minimumHalfSize: COZY_ROOM.minimumHalfSize,
-    cutawayThreshold: COZY_ROOM.cutawayThreshold,
-    overheadSlope: COZY_ROOM.overheadSlope,
+    cutawayHysteresis: COZY_ROOM.cutawayHysteresis,
     build: buildStructure,
   }),
   openings: Object.freeze({ build: buildOpenings }),

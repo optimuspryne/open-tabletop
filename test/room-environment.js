@@ -19,8 +19,6 @@ function fixture({ device = 'desktop', fail = false } = {}) {
       wallHeight: 0,
       clearance: 6,
       minimumHalfSize: 12,
-      overheadSlope: 3,
-      cutawayThreshold: 0.22,
       build({ root, layout, assembly, materials }) {
         rootCreated = root;
         builds.push(layout);
