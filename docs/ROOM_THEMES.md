@@ -34,7 +34,7 @@ interaction adds no tabletop gesture or icon.
 
 | Component | Contract and responsibility | Cozy implementation |
 | --- | --- | --- |
-| Structure | Required `build(dependencies)` plus `floorY`, `wallHeight`, `clearance`, `minimumHalfSize`, `cutawayThreshold`, `overheadSlope`. Returns optional `walls` and named `anchors`. | Oak ground/floorboards, plaster walls and trim; north/south/east/west anchors. |
+| Structure | Required `build(dependencies)` plus `floorY`, `wallHeight`, `clearance`, `minimumHalfSize`, `cutawayThreshold`, `overheadSlope`. Returns optional `walls`, `ceiling` and named `anchors`. | Oak ground/floorboards, plaster walls/trim and vaulted oak ceiling with two skylights; north/south/east/west anchors. |
 | Openings and surroundings | Optional `build({...dependencies, structure})`. Creates windows/doors and returns attachment anchors. Existing sky/background belongs to the skybox owner. | Four transparent windows and a sill planter anchor. |
 | Play area | Optional `build({...dependencies, structure, openings})`. Builds visual supports and an optional hidden `chairTemplate`; returns its `chairModel` asset key. `chairClearance`/`chairName` configure seating. | Shared-outline table legs and occupied-seat upholstered chairs. |
 | Main furnishings | Optional `build({...dependencies, structure, openings, playArea})`. Returns furniture anchors for decoration. | Game shelf and lamp; shelf anchor follows the east cutaway wall. |
@@ -88,8 +88,11 @@ are deduplicated during disposal; explicitly borrowed shared maps retain the exi
 - `box(parent, size, position, color, material = materials.plain, yaw = 0)`:
   queue instanced fallback boxes by parent and material. A theme using the default
   must provide `materials.plain`; authored theme surfaces can be passed explicitly.
-- `furnishing(assetKey, parent, fallback, yaw = 0)`: register a replacement slot.
+- `furnishing(assetKey, parent, fallback, yaw = 0, prepare?)`: register a replacement slot.
   Theme `assets` map keys to `{url, scale, name, resourceName?}` records.
+  Optional `prepare(copy)` fits a placement before attachment. Clone any geometry
+  it changes; assembly releases source geometry/materials no live copy retains.
+  Cozy's ceiling uses this for fixed-section joinery and material batching.
 - `contact(parent, footprints, height?)`: attach shared, instanced contact footprints.
   This reuses the existing `cozy-room-shadows.js` resource implementation; its
   historical `cozyContactShadow` marker remains compatible.
@@ -113,6 +116,15 @@ Desktop/tablet construction reports the room world bounds to core's existing
 shadow-camera fitter; disposal reports null. Phone construction reports null and
 uses lightweight contact shading. No new lights, render loop or postprocessing
 passes are installed.
+
+An optional `structure.ceiling {group, hideAbove, top}` follows the same update
+and disposal path. The group is visible below its absolute eaves-height threshold
+except during overhead views; elevated cameras hide the whole roof, preserving
+table visibility. Its peak expands desktop shadow bounds. Cozy's ceiling itself
+does not cast shadows that could darken the tabletop. The loaded mesh retains
+real skylight apertures; desktop/tablet use the palette's clear alpha glass while
+phones omit glazing and physical/detail shader paths. No additional input or
+responsive UI control is needed; mouse/touch camera intents remain unchanged.
 
 `cozy-room.js` remains a compatibility wrapper exporting `COZY_ROOM`,
 `COZY_ROOM_THEME` and `createCozyRoom(dependencies)`. It invokes the same runtime;

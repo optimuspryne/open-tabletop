@@ -216,6 +216,117 @@ test('camera cutaways remove near walls and their furnishings across seats and o
   f.room.dispose();
 });
 
+test('ceiling follows room dimensions, cuts away above eaves and preserves its fallback on load failure', () => {
+  const f = fixture({ models: true });
+  for (const state of [
+    { tableX: 10, tableZ: 7 },
+    { tableX: 40, tableZ: 15 },
+    { tableX: 12, tableZ: 7, tableShape: 'round' },
+  ]) {
+    f.room.sync(state);
+    const root = f.scene.children[0];
+    const roof = root.getObjectByName('Vaulted oak ceiling');
+    assert.equal(roof.position.y, COZY_ROOM.floorY + COZY_ROOM.wallHeight);
+    f.room.update(new THREE.Vector3(0, 5, 12), new THREE.Vector3());
+    assert.equal(roof.visible, true);
+    assert.equal(roof.getObjectByName('south ceiling gable').visible, false);
+    assert.equal(roof.getObjectByName('north ceiling gable').visible, true);
+    f.room.update(new THREE.Vector3(0, 10, 12), new THREE.Vector3());
+    assert.equal(roof.visible, false);
+    f.room.update(new THREE.Vector3(0, 40, 0), new THREE.Vector3());
+    assert.equal(roof.visible, false);
+    f.modelLoads.findLast((load) => load.url === COZY_ROOM.furnitureURLs.ceiling).fail();
+    assert.ok(roof.getObjectByName('Ceiling fallback').children.every((mesh) => mesh.visible));
+    const bounds = new THREE.Box3().setFromObject(roof);
+    const { x, z } = root.userData.halfSize;
+    assert.ok(bounds.max.x >= x && bounds.min.x <= -x);
+    assert.ok(Math.abs(bounds.max.z - z) < 0.01);
+    assert.ok(f.shadowBounds.at(-1).containsBox(bounds));
+  }
+  f.room.dispose();
+});
+
+test('lower physical table height keeps supports grounded, windows floor-relative and all seats below the roof', () => {
+  const f = fixture();
+  for (const [tableX, tableZ] of [
+    [10, 7],
+    [40, 28],
+    [20, 40],
+  ]) {
+    f.room.sync({ tableX, tableZ, players: playersAt(0) });
+    const root = f.scene.children[0];
+    assert.ok(Math.abs(-COZY_ROOM.floorY / COZY_ROOM.furnitureScale - 0.74) < 0.01);
+    const legs = root
+      .getObjectByName('Table supports')
+      .children.find((n) => n.isInstancedMesh && !n.userData.cozyContactShadow);
+    const bounds = new THREE.Box3().setFromObject(legs);
+    assert.ok(Math.abs(bounds.min.y - COZY_ROOM.floorY) < 0.001);
+    assert.ok(
+      Math.abs(bounds.max.y + 1) < 0.001,
+      'Leg tops must still meet the unchanged tabletop underside',
+    );
+    const windows = [];
+    root.traverse((n) => {
+      if (n.name === 'Oak casement window') windows.push(n);
+    });
+    assert.equal(windows.length, 4);
+    assert.ok(
+      windows.every(
+        (n) => Math.abs(n.position.y - COZY_ROOM.floorY - COZY_ROOM.windowCenterAboveFloor) < 0.001,
+      ),
+    );
+    for (const { cam } of seatLayoutFor(tableX, tableZ)) {
+      f.room.update(new THREE.Vector3(...cam.pos), new THREE.Vector3(...cam.target));
+      assert.equal(root.getObjectByName('Vaulted oak ceiling').visible, true);
+    }
+  }
+  f.room.dispose();
+});
+
+test('authored ceiling stretches beam length while preserving sections, density and resource ownership', () => {
+  for (const device of ['desktop', 'phone']) {
+    const f = fixture({ models: true, device });
+    f.room.sync({ tableX: 25, tableZ: 10 });
+    const root = f.scene.children[0];
+    const model = authoredModel();
+    model.mesh.geometry.dispose();
+    model.mesh.geometry = new THREE.BoxGeometry(0.24, 0.28, 6.18);
+    model.mesh.position.set(0, 1.4, 0);
+    model.mesh.userData.cozyCeiling = {
+      kind: 'box',
+      moveWidth: [0, 0.5, 0],
+      moveDepth: [0, 0, 0],
+      sizeWidth: [0, 0, 0],
+      sizeDepth: [0, 0, 2],
+    };
+    let sourceDisposals = 0;
+    model.mesh.geometry.addEventListener('dispose', () => sourceDisposals++);
+    f.modelLoads.find((load) => load.url === COZY_ROOM.furnitureURLs.ceiling).done(model);
+    const loaded = root.getObjectByName('Cozy ceiling model');
+    const bounds = new THREE.Box3().setFromObject(loaded);
+    const size = bounds.getSize(new THREE.Vector3());
+    assert.ok(Math.abs(size.x - 0.24 * 7) < 0.001);
+    assert.ok(Math.abs(size.y - 0.28 * 7) < 0.001);
+    assert.ok(Math.abs(size.z - (20 * 2 + 0.18 * 7)) < 0.001);
+    const mesh = loaded.children[0];
+    const uv = mesh.geometry.getAttribute('uv');
+    assert.ok([...uv.array].every(Number.isFinite));
+    const vRange =
+      Math.max(...Array.from({ length: uv.count }, (_, i) => uv.getY(i))) -
+      Math.min(...Array.from({ length: uv.count }, (_, i) => uv.getY(i)));
+    assert.ok(Math.abs(vRange - size.z / 7 / 0.42) < 0.001);
+    assert.equal(mesh.castShadow, false);
+    assert.equal(mesh.receiveShadow, device !== 'phone');
+    assert.equal(sourceDisposals, 1);
+    let fittedDisposals = 0;
+    mesh.geometry.addEventListener('dispose', () => fittedDisposals++);
+    f.room.sync({ tableX: 10, tableZ: 7 });
+    assert.equal(fittedDisposals, 1);
+    f.room.dispose();
+    assert.equal(sourceDisposals, 1);
+  }
+});
+
 test('resize/disposal releases owned instance buffers, geometry, materials and canvas textures once', () => {
   const f = fixture();
   f.room.sync({ tableX: 10, tableZ: 7 });

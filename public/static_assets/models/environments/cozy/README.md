@@ -48,12 +48,33 @@ were removed after owner comparison. Source Blender files remain in the authorin
 workspace. The 141,346 shelf triangles, 15 decoded RGBA images, named materials
 and active hierarchy are preserved; only an unused empty review scene was omitted.
 
-All furniture/windows/plants use the shared canonical-URL decoder allowlist.
+All furniture/windows/plants/ceiling use the shared canonical-URL decoder allowlist.
 See [the publishing workflow](../../README.md) and `../../manifest.json` for
 per-file hashes, fingerprints and future one-asset export commands. The JavaScript
 decoder preserves CSP without WebAssembly/eval. Phone fallback and room resource
 ownership remain; actual-phone cold loading still needs manual testing.
 Refresh clients; no restart/migration is needed for an asset-only replacement.
+
+## Vaulted ceiling
+
+`cozy-ceiling.glb` is the approved exposed-oak/plaster ceiling with two large
+skylights, one per slope. Source: companion
+`3d_models/original/cozy_ceiling_v1/cozy-vaulted-ceiling.blend` (unchanged);
+`export_runtime.py` creates a separate `cozy-ceiling-runtime.glb` with
+`cozyCeiling` node extras describing dimension-fitting translation/length changes.
+The baseline is 6 × 6 metres with 1.5m rise, eaves-center origin, glTF Y-up.
+The runtime fits individual pieces, retaining beam thickness, rounded edges and
+world-scale UV density; it draws five roof batches and two wall-following gable
+cutaways instead of 65 part meshes.
+The source/export has 10,452 triangles, six embedded maps and no cameras/lights.
+Published losslessly by `tools/model-authoring/publish.mjs`: 1,641,664 → 1,123,540
+bytes, with exact geometry/image and desktop/touch browser validation. Final hashes
+and baselines are recorded in `../../manifest.json`.
+
+Glazing uses the room's existing clear alpha material; phone apertures omit panes.
+There is no transmission/refraction pass, baked sky or new light. Elevated and
+overhead cameras cut away the roof. Load failure retains a batched open-skylight
+fallback; late loads and resize/theme switches use room-owned resource cleanup.
 
 ## Android memory mitigation
 

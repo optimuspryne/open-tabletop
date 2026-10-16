@@ -1,6 +1,7 @@
 import { inTable } from '../../../shared/pieces.js';
 import { releaseCanvasOnDispose } from '../resources.js';
 import { COZY_SHADOWS } from '../cozy-room-shadows.js';
+import { COZY_CEILING, createCozyCeiling } from './cozy-ceiling.js';
 import {
   createRoomMaterials,
   createPlasterPanel,
@@ -9,7 +10,7 @@ import {
 } from '../cozy-room-surfaces.js';
 
 export const COZY_ROOM = Object.freeze({
-  floorY: -5.5,
+  floorY: -5.15, // Tabletop stays at physics Y=0: about 0.74m above the floor.
   wallHeight: 15,
   clearance: 10,
   minimumHalfSize: 17,
@@ -19,8 +20,10 @@ export const COZY_ROOM = Object.freeze({
   overheadSlope: 3,
   textureSize: 1024,
   phoneTextureSize: 512,
-  // A 5.5-unit table height corresponds to a roughly 0.79m dining table.
+  // Authored furniture is in metres; the table is 5cm lower relative to the room.
   furnitureScale: 7,
+  windowCenterAboveFloor: 8.6,
+  windowHeight: 5.5,
   shelfWallInset: 1.6,
   shelfTop: 12.061, // Owner's corrected shelf: 1.723m, scaled by seven.
   chairClearance: 2.5,
@@ -32,6 +35,7 @@ export const COZY_ROOM = Object.freeze({
     rubber: '/models/environments/cozy/cozy-rubber-plant.glb',
     snake: '/models/environments/cozy/cozy-snake-plant.glb',
     pothos: '/models/environments/cozy/cozy-pothos.glb',
+    ceiling: COZY_CEILING.url,
   }),
 });
 function roomTexture({ THREE, doc, phoneSafe, textureAnisotropy }) {
@@ -71,8 +75,11 @@ function roomTexture({ THREE, doc, phoneSafe, textureAnisotropy }) {
   return texture;
 }
 
-function buildStructure({ THREE, root, layout, materials: surfaces, assembly }) {
+function buildStructure({ THREE, root, layout, materials: surfaces, assembly, phoneSafe }) {
   const { rx, rz, floor, top } = layout;
+  const windowCenter = floor + COZY_ROOM.windowCenterAboveFloor;
+  const windowBottom = windowCenter - COZY_ROOM.windowHeight / 2;
+  const windowTop = windowCenter + COZY_ROOM.windowHeight / 2;
   const woodMaterial = surfaces.oak;
   const { group } = assembly;
   const floorMesh = new THREE.Mesh(
@@ -113,11 +120,17 @@ function buildStructure({ THREE, root, layout, materials: surfaces, assembly }) 
       ];
       for (let i = 0; i < edges.length; i += 2)
         panel(
-          [edges[i + 1] - edges[i], 5.5, COZY_ROOM.wallThickness],
-          [(edges[i] + edges[i + 1]) / 2, 3.1, -0.25],
+          [edges[i + 1] - edges[i], COZY_ROOM.windowHeight, COZY_ROOM.wallThickness],
+          [(edges[i] + edges[i + 1]) / 2, windowCenter, -0.25],
         );
-      panel([spec.width, 0.35 - floor, COZY_ROOM.wallThickness], [0, (floor + 0.35) / 2, -0.25]);
-      panel([spec.width, top - 5.85, COZY_ROOM.wallThickness], [0, (top + 5.85) / 2, -0.25]);
+      panel(
+        [spec.width, windowBottom - floor, COZY_ROOM.wallThickness],
+        [0, (floor + windowBottom) / 2, -0.25],
+      );
+      panel(
+        [spec.width, top - windowTop, COZY_ROOM.wallThickness],
+        [0, (top + windowTop) / 2, -0.25],
+      );
     } else
       panel(
         [spec.width, COZY_ROOM.wallHeight, COZY_ROOM.wallThickness],
@@ -136,16 +149,18 @@ function buildStructure({ THREE, root, layout, materials: surfaces, assembly }) 
 
   return {
     walls,
+    ceiling: createCozyCeiling({ THREE, layout, materials: surfaces, assembly, phoneSafe }),
     anchors: new Map(['north', 'south', 'east', 'west'].map((id, i) => [id, walls[i]])),
   };
 }
-function buildOpenings({ THREE, structure, materials: surfaces, assembly, phoneSafe }) {
+function buildOpenings({ THREE, structure, layout, materials: surfaces, assembly, phoneSafe }) {
   const materials = surfaces;
+  const windowCenter = layout.floor + COZY_ROOM.windowCenterAboveFloor;
   const { box, furnishing } = assembly;
   function windowPane(parent, x) {
     const surround = new THREE.Group();
     surround.name = 'Oak casement window';
-    surround.position.set(x, 3.1, 0);
+    surround.position.set(x, windowCenter, 0);
     parent.add(surround);
     const pane = new THREE.Mesh(new THREE.PlaneGeometry(3.64, 4.82), surfaces.glass);
     pane.name = 'Clear window glazing';
@@ -170,7 +185,9 @@ function buildOpenings({ THREE, structure, materials: surfaces, assembly, phoneS
   for (const { group: wall, width } of structure.walls.slice(0, 2))
     [-width * 0.2, width * 0.2].forEach((x) => windowPane(wall, x));
   const north = structure.anchors.get('north');
-  return { sill: { parent: north.group, position: [-north.width * 0.2 - 1.1, 0.25, 0.73] } };
+  return {
+    sill: { parent: north.group, position: [-north.width * 0.2 - 1.1, windowCenter - 2.85, 0.73] },
+  };
 }
 function buildPlayArea({ layout, materials, assembly }) {
   const { hx, hz, floor, tableShape } = layout;

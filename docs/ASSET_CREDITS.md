@@ -252,6 +252,17 @@ and the model publishing guide for provenance and future export verification.
 - All maps are 512×512; the window GLB embeds its oak maps. The shell approval image
   is an AI design reference only; no generated concept image is used at runtime.
 
+`models/environments/cozy/cozy-ceiling.glb`: companion
+`3d_models/original/cozy_ceiling_v1/cozy-vaulted-ceiling.blend` and GLB contain
+original exposed-beam/skylight geometry authored for Open Tabletop with Codex,
+under the repository license. Packed oak/plaster/bronze materials come from the
+saved room-shell source above; oak retains Luke.RUSTLTD CC0 provenance. Review
+daylight is a Blender sky shader, not a new third-party texture or runtime sky.
+The approved master stays unchanged. `export_runtime.py` exports a derivative
+with dimension-fitting metadata and simple alpha glazing; the offline publisher
+verifies/bundles its 1,123,540-byte lossless Meshopt/WebP asset. Existing in-app CC0
+wood attribution covers the reused maps; no new third-party source is introduced.
+
 `models/environments/cozy/cozy-{rubber-plant,snake-plant,pothos}.glb`:
 
 - **Source:** Companion `3d_models/original/cozy_plants_v1/build_plants.py` and

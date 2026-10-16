@@ -5,6 +5,7 @@ export const BUILTIN_MODEL_URLS = Object.freeze([
   '/models/boards/wordy_board.glb',
   '/models/decks/bag.glb',
   '/models/decks/dominoes_box.glb',
+  '/models/environments/cozy/cozy-ceiling.glb',
   '/models/environments/cozy/cozy-chair.glb',
   '/models/environments/cozy/cozy-floor-lamp.glb',
   '/models/environments/cozy/cozy-game-shelf.glb',

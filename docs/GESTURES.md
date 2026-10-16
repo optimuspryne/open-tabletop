@@ -31,6 +31,13 @@ account forms do not add tabletop gestures or bypass the gameplay intent layer.
 
 ## Room style and matching table finish
 
+The existing **My Seat** action uses the approved lower seated view on desktop,
+keyboard activation and touch. Joining or changing seats uses the same pose;
+large tables cap camera height so Cozy's ceiling remains visible. **Birds Eye**
+keeps the full-table overhead view. Existing orbit, pan and pinch/zoom intents are
+unchanged; no new gesture or control is added. After a browser refresh, activate
+My Seat to reframe an already open session.
+
 In **Room Settings → Table Size & Color**, GMs/owners choose **Room style** using
 the labeled native select: Standard (skybox only) or Cozy game room. Use mouse,
 tap, or Tab and the platform's native select keys. Touch full/compact stack the

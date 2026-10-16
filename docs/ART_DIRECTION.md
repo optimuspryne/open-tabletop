@@ -1195,3 +1195,128 @@ input, responsive UI or database behavior changes, so those broader suites are n
 repeated. No browser refresh or server restart is required for this tooling change.
 The scripts are committed locally; pushing remains a separate explicitly authorized
 step. The prior external copies are retained as historical authoring files.
+
+## Approved vaulted ceiling integration — October 15, 2026
+
+The owner approved the exposed-oak/plaster ceiling render and requested integration.
+Cozy now includes two large skylights flanking the peak. The approved companion
+`cozy_ceiling_v1/cozy-vaulted-ceiling.blend` remains byte-identical, SHA-256
+`efcff14e445196f9a2f174bd8027f4aa7a003f7d8d7e208f67d169931d6bb01e`.
+The separate runtime derivative adds fitting metadata and simple alpha glazing;
+existing furnishing masters, materials and uploaded assets are preserved.
+
+Reuse decision: extend structure/assembly/camera/resource owners, with a focused
+roof module for per-piece fitting. Whole-model stretching would distort timber
+sections, bevels and grain. Individual pieces retain sections and joinery offsets;
+UVs/tangents retain physical density. The 26.6° pitch follows room width and
+skylights follow width/length independently. Five roof draws and two wall-following
+gable cutaways replace 65 part meshes. Elevated/overhead views hide the roof;
+views below the eaves retain it. The roof casts no shadow over gameplay. Desktop/
+tablet use existing clear alpha glazing; phones omit panes/detail/physical shaders.
+No new light, refraction pass, UI, input gesture or synchronized state is added.
+
+Changed-file/function summary:
+
+- `public/rendering/rooms/cozy-ceiling.js`: adds `COZY_CEILING`, `createCozyCeiling`
+  (owned groups/fallback, with nested `addBox`/`part` construction helpers),
+  `fitCozyCeiling` (piece sizing/UVs/glazing/gables), and
+  internal `batch` (material/cutaway batches and temporary geometry disposal).
+- `public/rendering/rooms/cozy-theme.js`: extends `COZY_ROOM.furnitureURLs` and
+  `buildStructure` to register the new asset through assembly.
+- `public/rendering/rooms/room-assembly.js`: extends `furnishing`/`loadModels` with
+  optional per-placement preparation and releases source geometry/materials no
+  placement retains. Ordinary model sharing remains compatible.
+- `public/rendering/rooms/room-environment.js`: extends `sync`, `update`, `clear`
+  for optional ceiling ownership, gable/eaves cutaways and peak/padded shadow bounds.
+- `public/static_assets/models/environments/cozy/cozy-ceiling.glb`,
+  `public/static_assets/models/manifest.json`, `public/rendering/builtin-model-assets.js`:
+  add the 1,123,540-byte lossless model (from 1,641,664 bytes), canonical URL and
+  verified decoded/browser baselines. It has 10,452 triangles and six embedded maps.
+  Final GLB SHA-256: `06c232b73b21c7c5870724caf9dcd1fe70fd6186b01aba4f822151f3db0edd10`.
+- `test/cozy-room.js`: adds size/shape, camera/gable cutaway, failed-load fallback,
+  section/UV density, phone and fitted/source ownership regressions.
+- `scripts/component-parity.mjs`: extends production bootstrap assertions and adds
+  `cozy-ceiling-sky` pixel/device/size/cutaway checks for both apertures.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/ASSET_CREDITS.md`,
+  `docs/ROOM_THEMES.md`, model-root and Cozy READMEs document the current contracts,
+  provenance, updated totals and refresh needs.
+- Companion `cozy_ceiling_v1/export_runtime.py` adds fit metadata without saving the
+  master; `review_runtime.mjs` captures production modules; its README records the
+  integrated derivative. No app helpers were removed.
+
+Verification: `npm run check` passes ESLint, Prettier, CSS lint and **1,168 tests**.
+All **102** registered models pass `npm run test:models` on desktop/coarse-touch
+under strict CSP. `client-bootstrap-cozy` passes both profiles; `cozy-ceiling-sky`
+checks both apertures against three background colors at small, large and round
+room sizes, device materials and gable/elevated/overhead cutaways. The selected
+`COMPONENT_SCENE=client-bootstrap-cozy npm run test:components` command passes its
+bootstrap plus notecard/tile-preview companions. Desktop/390px production-module
+renders were inspected in the companion review folder. The earlier sandbox-limited
+Node failures did not recur with local test-server access. Nothing was pushed.
+
+Manual smoke test after refreshing: choose Cozy, lower the camera and look up at
+both skylights; orbit to check gable cutaways; return to elevated/overhead play;
+resize and switch Standard/Cozy; repeat with a real phone and chosen skybox,
+including cold load/rejoin. Real-phone GPU stability, lighting taste and camera
+feel remain unverified. No server restart, migration or new service is required.
+
+## Approved seated view and lower table — October 15, 2026
+
+After the ceiling integration the owner supplied a lower-view reference, clarified
+that the table should be physically lower, and explicitly approved the rendered
+desktop/phone examples plus a roughly 5cm height reduction before implementation.
+Review renders and the production captures are in this chat's visualization folder
+as `proposed-*.png` and `approved-runtime-*.png`.
+
+Reuse decision: tune the existing `VIEW`/`seatLayoutFor` boundary and Cozy's floor/
+support/opening builders. No new camera helper, preference, shared protocol, model
+or control is needed. The baseline seat camera is `[0,4.75,12.01]` looking at
+`[0,1.5,2]`, approximately 18° down. Horizontal fit still follows table dimensions;
+vertical scaling caps eye height at eight units so normal large-table seats stay
+below the eaves. Joining, changing seats and My Seat reuse the same helper.
+Birds Eye retains its independent aspect-aware overhead fit.
+
+The tabletop remains the server/physics Y=0 reference. Cozy's floor moves from
+-5.5 to -5.15, reducing physical table height from approximately 0.786m to 0.736m.
+Table legs shorten while still ending at Y=-1. Furnishings remain grounded, and
+wall/ceiling tops, window apertures/frames and sill plants follow the room floor.
+Existing models/materials, pieces, board heights, hands and saves retain their
+owners and coordinates. This changes physical table-to-room proportions, rather
+than merely moving the image of the tabletop.
+
+Files/functions changed for this follow-up:
+
+- `public/table/presence.js`: tunes `VIEW` and the vertical scale in `seatLayoutFor`;
+  no changes to hand/outward vectors, `applySeat`, `applyBirdsEye` or input routes.
+- `public/rendering/rooms/cozy-theme.js`: tunes `COZY_ROOM.floorY`, adds named
+  `windowCenterAboveFloor`/`windowHeight`, and extends `buildStructure`/`buildOpenings`
+  to derive matching aperture/frame/sill heights. Existing `buildPlayArea` naturally
+  shortens the supports through its floor dependency.
+- `test/presence.js`: adds all-seat shallow-angle and large-table eye-height coverage.
+- `test/cozy-room.js`: adds physical height, leg endpoints, floor-relative window
+  and all-seat ceiling-visibility regressions at several table sizes.
+- `scripts/component-parity.mjs`: verifies visible ceiling and capped eye height
+  through production hydration; updates shadow bounds/skylight probes to current
+  configured room height, including peak coverage.
+- `CHANGELOG.md`, `docs/REFERENCE.md`, `docs/ARCHITECTURE.md`, `docs/GESTURES.md`,
+  `docs/DEVICE_MATRIX.md`, and this section record current behavior and validation.
+  Review-only `preview-seat-camera.mjs`/`capture-approved-seat.mjs` render the
+  proposed and actual defaults without modifying game state. No helpers removed.
+
+Verification: `npm run check` passes ESLint/Prettier/CSS and **1,170 tests**;
+`npm run test:input` passes **58/58** and `npm run test:devices` passes all **seven**
+profiles. Production Cozy bootstrap and window/skylight skybox pixel tests pass
+desktop/coarse-390 profiles. Actual desktop, phone and large-table captures use
+the production defaults and show the ceiling. Component companion results are
+recorded with the run logs in `/tmp/seat-view-components.log`.
+
+Refresh the browser and choose My Seat to reframe an existing session. Smoke-test
+seat changes, all table shapes, My Seat/Birds Eye, orbit/pan/zoom, and physical
+chair/table proportions on a real phone. Automated runs do not establish real-device
+camera feel or visual comfort. No server restart/migration is needed; nothing pushed.
+
+Commit validation — October 16, 2026: an isolated copy of the staged snapshot passes
+`npm run check` with **1,181 tests**, plus production `client-bootstrap-cozy` and
+`cozy-ceiling-sky` desktop/touch browser checks. The earlier 1,170 count describes
+the combined working tree; unrelated pending test cleanup was deliberately excluded
+from this commit. The ceiling model's staged bytes/hash match its manifest.

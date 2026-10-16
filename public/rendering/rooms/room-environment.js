@@ -22,6 +22,7 @@ export function createRoomEnvironment({
   let root = null;
   let materials = {};
   let walls = [];
+  let ceiling = null;
   let seating = null;
   let lastSize = '';
   let disposed = false;
@@ -38,6 +39,7 @@ export function createRoomEnvironment({
     root = null;
     materials = {};
     walls = [];
+    ceiling = null;
     seating = null;
     lastSize = '';
   }
@@ -97,6 +99,8 @@ export function createRoomEnvironment({
       });
       const structure = theme.structure.build(dependencies) || {};
       walls = structure.walls || [];
+      ceiling = structure.ceiling || null;
+      walls = [...walls, ...(ceiling?.gables || [])];
       const openings = theme.openings?.build?.({ ...dependencies, structure }) || {};
       const playArea = theme.playArea?.build?.({ ...dependencies, structure, openings }) || {};
       const furnishings =
@@ -120,10 +124,14 @@ export function createRoomEnvironment({
       assembly.finish();
       scene.add(root);
       lastSize = key;
+      const shadowPadding = ceiling ? 1 : 0;
       onShadowBoundsChanged(
         phoneSafe
           ? null
-          : new THREE.Box3(new THREE.Vector3(-rx, floor, -rz), new THREE.Vector3(rx, top, rz)),
+          : new THREE.Box3(
+              new THREE.Vector3(-rx - shadowPadding, floor, -rz - shadowPadding),
+              new THREE.Vector3(rx + shadowPadding, ceiling?.top ?? top, rz + shadowPadding),
+            ),
       );
       seating?.sync(players);
       changed();
@@ -143,6 +151,15 @@ export function createRoomEnvironment({
     const length = Math.hypot(dx, dz);
     const overhead = cameraPosition.y - target.y > length * theme.structure.overheadSlope;
     let changed = false;
+    if (ceiling) {
+      // Below the eaves the roof cannot obstruct the playable tabletop. Above
+      // them it cuts away as a whole, including its shadows and gable infills.
+      const visible = !overhead && cameraPosition.y < ceiling.hideAbove;
+      if (ceiling.group.visible !== visible) {
+        ceiling.group.visible = visible;
+        changed = true;
+      }
+    }
     for (const wall of walls) {
       const towardCamera =
         length > 0.001 &&

@@ -525,6 +525,12 @@ importing a room singleton:
   the client keeps general role
   gates, table/track resize orchestration, and Lean In; the render loop calls `presence.update()`
   after interpolation so held-piece labels follow the current meshes.
+  Approved seated camera defaults use a shallower angle and an eight-unit height
+  cap independent of large-table scaling; join/seat changes/My Seat share that
+  helper. Birds Eye keeps its separate aspect-aware overhead fit. Camera state
+  remains local. Cozy's lower physical table height is expressed through a closer
+  floor, shorter supports and floor-relative openings/furnishings, preserving the
+  server-owned tabletop/physics Y=0 and all gameplay coordinates.
 - **`public/table/selection.js`** — local selection, Select-tool mode, marquee gestures, highlight
   rings, batch commands, and toolbar/recolor state. Its mode bindings also own the floating
   Multi-Select button above Seat, including active styling and accessible pressed state; the
@@ -578,6 +584,15 @@ importing a room singleton:
   directly; no outdoor image, new light, refraction render pass or sky override is added.
   The owner's fixed Blender [furnishings](ART_DIRECTION.md) replace chairs, the shelf
   and lamp after successful loads; the separate shell source supplies oak casement frames.
+  Companion `cozy_ceiling_v1/cozy-vaulted-ceiling.blend` supplies the approved
+  exposed-beam/twin-skylight ceiling. `export_runtime.py` adds fit metadata in a
+  derivative; `rooms/cozy-ceiling.js` fits separate parts to room dimensions with
+  fixed beam sections/UV density and batches them by material. Shared assembly's
+  optional placement preparer releases displaced source resources. The structure
+  returns a ceiling owner/eaves threshold/peak bound; the existing camera update
+  cuts it away above the eaves or overhead, and room cleanup owns every batch.
+  Desktop clear alpha glazing and empty phone apertures preserve the room skybox;
+  no refraction pass, new light, input or synchronized ceiling state is added.
   The shelf is compiled offline from the corrected frame and miniature built-in
   game assets. Its display meshes/textures belong entirely to that loaded room
   hierarchy; runtime gameplay factories/caches are not coupled to scenery cleanup.

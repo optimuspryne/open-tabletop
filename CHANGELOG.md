@@ -20,6 +20,20 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Refresh clients to load the updated board; no server restart is needed.
 
 ### Added
+- Applied the approved lower default seated view (about 18° on the baseline table),
+  with eye height capped on large tables so Cozy's ceiling stays visible. Join,
+  seat changes and **My Seat** reuse this framing; **Birds Eye** still fits overhead.
+  Cozy's table is about 5 cm lower relative to the floor (roughly 74 cm high),
+  with shorter supports and floor-relative windows/furnishings. Tabletop physics,
+  pieces and hands retain their coordinates. Refresh clients; no restart/migration.
+- Integrated the approved Blender ceiling into Cozy: exposed oak ridge/rafters,
+  warm plaster and two large skylights flanking the peak. Piecewise fitting follows
+  room sizes while retaining timber sections, joinery offsets and physical UVs;
+  overhead/elevated cameras cut the ceiling away. Skylights show the selected sky
+  with lightweight desktop glazing and clear phone apertures. The 1.12 MB lossless
+  model uses five roof batches plus two gable cutaways, a load-failure fallback and room-owned cleanup.
+  Authoring masters remain in companion `cozy_ceiling_v1/`. Refresh clients; no
+  server restart or migration is needed. Real-device visual review remains pending.
 - Versioned the lossless asset-builder scripts under `tools/model-authoring/`,
   including the pinned dependency manifest/lockfile and publishing guide. The
   publisher now defaults to its containing repository, so a fresh checkout can

@@ -1357,6 +1357,10 @@ const SCENES = [
         assert(chairs.length===1,'One seated player must create exactly one chair');
         assert(chairs.every(chair=>chair.children.some(node=>node.isMesh && node.material?.map && (phoneRoom?!node.material?.normalMap:node.material?.normalMap))), 'Authored chair maps were not preserved');
         assert(scenery()[0].getObjectByName('Cozy shelf model'),'Production preview did not load the authored shelf');
+        const ceilingModel=scenery()[0].getObjectByName('Cozy ceiling model');
+        assert(ceilingModel&&ceilingModel.children.length===5,'Production room did not load and batch the authored ceiling');
+        assert(scenery()[0].getObjectByName('Vaulted oak ceiling').visible,'Default seated camera does not reveal the approved ceiling');
+        assert(clientCamera.position.y<=8,'Large-table hydration raised the seated camera above the eaves');
         const requests=performance.getEntriesByType('resource').map(entry=>new URL(entry.name).pathname);
         assert(requests.includes('/models/environments/cozy/cozy-game-shelf.glb'),'The production room did not fetch the compressed shelf');
         assert(!requests.some(url=>url.startsWith('/models/lossless/')||url.endsWith('-lossless.glb')),'Obsolete duplicate model URL requested');
@@ -1396,10 +1400,11 @@ const SCENES = [
           const savedLighting=clientGetLighting();
           const shadowSize=shadowSun.shadow.mapSize.x;
           const enabled=shadowSun.castShadow;
+          const {COZY_ROOM}=await import('/rendering/cozy-room.js');
           const verifyRoomShadowBounds=()=>{
             const cam=shadowSun.shadow.camera;
             const half=scenery()[0].userData.halfSize;
-            for(const x of [-half.x,half.x])for(const y of [-5.5,9.5])for(const z of [-half.z,half.z]){
+            for(const x of [-half.x,half.x])for(const y of [COZY_ROOM.floorY,COZY_ROOM.floorY+COZY_ROOM.wallHeight+half.x*.5+1])for(const z of [-half.z,half.z]){
               const projected=new shelfTHREE.Vector3(x,y,z).applyMatrix4(cam.matrixWorldInverse).applyMatrix4(cam.projectionMatrix);
               assert(Math.max(Math.abs(projected.x),Math.abs(projected.y),Math.abs(projected.z))<=1.0001,'Furniture shadow camera clips the room');
             }
@@ -3259,6 +3264,53 @@ SCENES.push({
   ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
   name: 'client-bootstrap-cozy',
   page: '/table.html?fixtureEnvironment=cozy&environment=standard',
+});
+
+SCENES.push({
+  name: 'cozy-ceiling-sky',
+  page: '/table.html',
+  root: '#ceilingFixture',
+  expect: { selector: '#ceilingFixture canvas', min: 1 },
+  drive: `
+    const assert=(ok,message)=>{if(!ok)throw Error(message)};
+    const THREE=await import('three');
+    const {createCozyRoom,COZY_ROOM}=await import('/rendering/cozy-room.js');
+    const {createModelLoader}=await import('/rendering/model-loader.js');
+    const phone=matchMedia('(pointer:coarse)').matches;
+    const fixture=document.createElement('div');fixture.id='ceilingFixture';document.body.append(fixture);
+    const renderer=new THREE.WebGLRenderer({antialias:false});renderer.setSize(64,64);fixture.append(renderer.domElement);
+    const scene=new THREE.Scene();scene.background=new THREE.Color('#558ac7');
+    scene.add(new THREE.HemisphereLight(0xffffff,0x888888,1));
+    const camera=new THREE.PerspectiveCamera(35,1,.1,1000);
+    const room=createCozyRoom({THREE,scene,modelLoader:createModelLoader(),deviceClass:()=>phone?'phone':'desktop'});
+    const target=new THREE.WebGLRenderTarget(64,64);target.texture.colorSpace=THREE.SRGBColorSpace;
+    const sample=visible=>{const root=scene.children.find(n=>n.userData.roomTheme);root.visible=visible;renderer.setRenderTarget(target);renderer.render(scene,camera);const p=new Uint8Array(4);renderer.readRenderTargetPixels(target,32,32,1,1,p);renderer.setRenderTarget(null);root.visible=true;return [...p].slice(0,3);};
+    for(const [tableX,tableZ,tableShape] of [[10,7,'rect'],[40,15,'oval'],[12,7,'round']]){
+      const ready=new Promise(resolve=>THREE.DefaultLoadingManager.onLoad=resolve);
+      room.sync({tableX,tableZ,tableShape});await ready;
+      const root=scene.children.find(n=>n.userData.roomTheme),roof=root.getObjectByName('Vaulted oak ceiling');
+      const loaded=root.getObjectByName('Cozy ceiling model');
+      assert(loaded&&loaded.children.length===5,'Ceiling geometry did not fit and batch');
+      const bounds=new THREE.Box3().setFromObject(loaded),half=root.userData.halfSize;
+      assert(Math.abs(bounds.max.x-half.x)<1&&Math.abs(bounds.min.x+half.x)<1&&Math.abs(bounds.max.z-half.z)<1,'Ceiling does not meet the resized walls');
+      loaded.traverse(mesh=>{if(!mesh.isMesh)return;assert(!mesh.castShadow,'Ceiling blacks out table lighting');if(mesh.material.transparent){assert(mesh.visible===!phone&&!mesh.material.depthWrite,'Skylight glazing bypasses device policy');}if(phone)assert(!mesh.material.normalMap&&!mesh.material.roughnessMap&&!mesh.material.isMeshPhysicalMaterial,'Phone ceiling compiles detail shaders');});
+      for(const side of [-1,1]){
+        const lookAt=new THREE.Vector3(side*half.x*.491934955,COZY_ROOM.floorY+COZY_ROOM.wallHeight+half.x*.254032522,0);
+        camera.position.set(0,4,1);camera.lookAt(lookAt);
+        room.update(camera.position,lookAt);assert(roof.visible,'Low camera has no ceiling');
+        for(const color of ['#558ac7','#c99759','#14181d']){
+          scene.background.set(color);const through=sample(true),sky=sample(false);
+          assert(Math.max(...through.map((v,i)=>Math.abs(v-sky[i])))<=12,'Skylight masks sky '+side+' '+tableX+': '+through+' vs '+sky);
+        }
+      }
+      camera.position.set(0,4,-35);room.update(camera.position,new THREE.Vector3(0,14,0));
+      assert(!roof.getObjectByName('north ceiling gable').visible&&roof.getObjectByName('south ceiling gable').visible,'Near gable obscures the ceiling instead of following its wall cutaway');
+      camera.position.set(0,35,20);room.update(camera.position,new THREE.Vector3());assert(!roof.visible,'Elevated camera cannot see the table');
+      camera.position.set(0,100,0);room.update(camera.position,new THREE.Vector3());assert(!roof.visible,'Overhead roof did not cut away');
+    }
+    fixture.dataset.checked='resizing, two clear apertures, device materials, cutaways';
+    room.dispose();target.dispose();renderer.dispose();
+  `,
 });
 
 // Keep the approved text action visible and operable in full/compact and touch layouts.

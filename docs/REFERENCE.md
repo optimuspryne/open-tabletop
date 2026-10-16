@@ -2909,7 +2909,12 @@ cross-feature effects are injected callbacks; member administration and general 
 in `client.js`.
 
 - **`seatLayoutFor(hx, hz)`** is a pure exported helper producing the eight hand positions, outward
-  vectors, and camera poses. Internal `VIEW` knobs retain the default seat framing (`zoom: 0.65`).
+  vectors, and camera poses. Approved internal `VIEW` uses `lookH: 1.5`, `rise: 5`,
+  `lookFwd: 2`, `dist: 15.4`, `zoom: 0.65`: about 18° down on the 20×14 baseline.
+  Horizontal positioning follows table size; vertical scaling is capped at an
+  eight-unit eye height so large-table seats remain below Cozy's eaves. This
+  applies on join, seat change and My Seat, with no new preference or shared state.
+  Birds Eye retains aspect-aware table fitting and overhead ceiling cutaways.
 - **`bindRoom(room, cb)`** handles player add/remove and hand, seat, name, role, order, avatar,
   color, showing, hand-back and hand-fan changes, plus turn, pending-turn, and room-name presentation.
   Local seat hydration applies the camera and signals readiness; local role changes invoke the
@@ -3231,6 +3236,24 @@ model preparation and occupied seating live in `room-assembly.js` and
 named anchors, resource ownership, optional parts and independent matching table.
 The existing APIs and appearance described below remain compatible.
 
+Approved ceiling authoring source: companion
+`Open-Tabletop_Asset_Builders/3d_models/original/cozy_ceiling_v1/` contains
+`cozy-vaulted-ceiling.blend`, its GLB, builder, dimensions/provenance and review
+renders. `export_runtime.py` adds affine fit metadata to a separate export while
+preserving the approved master. `rooms/cozy-ceiling.js` fits the eight-asset theme's
+ceiling at seven units/metre, with a 26.6° pitch, fixed beam sections/offsets and
+physical UV density, then batches its 65 parts into five roof draws plus two
+wall-following gable cutaways. The
+6 × 6m nominal footprint adapts to actual room half sizes. Glazing reuses the
+room's clear alpha material on desktop/tablet and is hidden on phones. The selected
+sky/background stays visible through both real apertures. No transmission pass,
+light or gameplay picking is introduced. The roof does not cast shadows over the
+table. `structure.ceiling {group, hideAbove, top}` supplies eaves-height/overhead
+cutaways and conservative shadow bounds. `furnishing` accepts an optional fifth
+`prepare(copy)` callback; assembly releases source geometry/materials no longer
+retained by any placement. Late callbacks and rebuilds use the existing cleanup.
+Refresh clients after updating; no server restart/migration is needed.
+
 Select **Room Settings → Table Size & Color → Room style → Cozy game room**.
 The public schema field `State.environment` defaults to `standard`. The guarded
 `roomEnvironment {environment: 'standard'|'cozy'}` message requires the existing
@@ -3244,9 +3267,9 @@ provides the canonical options/normalizer without importing browser assets.
 Apply migration 024 through the configured migration role, restart the server and
 refresh browsers. Fresh installs include it in the flattened schema baseline.
 
-All **101** bundled GLBs now ship in their lossless form at existing canonical
+All **102** bundled GLBs now ship in their lossless form at canonical
 URLs, including `cozy-game-shelf.glb` (7,485,328 bytes). Total GLBs are
-**64,811,448 bytes**, versus 100,122,364 before compression (35.3% smaller before
+**65,934,988 bytes**, versus 101,764,028 before compression (35.2% smaller before
 HTTP encoding). Duplicate originals and temporary `models/lossless/` and
 `-lossless.glb` paths were removed at the owner's request, reclaiming 100.12 MB
 from the comparison install. Authoring sources remain in the separate asset
@@ -3327,6 +3350,12 @@ positive `tableX`/`tableZ`, keys dimensions plus `tableShape`, and rebuilds only
 those change. Same-size calls reconcile `tableState.players` without rebuilding room
 surfaces or reloading GLBs. Room clearance/floor/wall/rug/cutaway tunables live in `COZY_ROOM`;
 surface/texture limits live in `ROOM_SURFACES` in `cozy-room-surfaces.js`.
+Cozy's `floorY: -5.15` puts the tabletop at about 0.736m above its floor (5cm
+lower than the previous 0.786m). Gameplay/physics keep tabletop Y=0; floor,
+furnishings, wall tops and ceiling rise relative to that reference, and table
+supports shorten while retaining their Y=-1 upper contact. `windowCenterAboveFloor`
+(8.6) and `windowHeight` (5.5) keep aperture panels, authored frames and sill
+plants aligned with the room as floor height changes. Authored models are unchanged.
 The procedural rug uses `COZY_ROOM.textureSize` (1024px desktop/tablet) or
 `phoneTextureSize` (512px phones). Its denser weave retains the original border
 proportions, uses normal mipmap filtering and anisotropy capped at 8 on desktop/
@@ -3349,7 +3378,7 @@ It remains as inexpensive contact shading even with real shadow maps disabled.
 The room expands around large tables. Shared `inTable`
 keeps supports under the actual tabletop outline. Instanced boxes share owned
 geometry/materials within cutaway groups for fallback furnishings;
-fallback plant pots/leaves are also instanced. `COZY_ROOM.furnitureURLs` names the seven
+fallback plant pots/leaves are also instanced. `COZY_ROOM.furnitureURLs` names the eight
 GLBs; `furnitureScale` converts authored metres at seven room-units per metre. Authored
 chair fronts face the table, and the shelf stays under the east wall's cutaway group.
 `syncChairs` includes unique integer seats from the injected layout for players whose

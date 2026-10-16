@@ -80,9 +80,9 @@ export function createRoomAssembly({
 
   const bins = new Map();
   const modelSlots = new Map();
-  function furnishing(kind, parent, fallback, yaw = 0) {
+  function furnishing(kind, parent, fallback, yaw = 0, prepare) {
     if (!modelSlots.has(kind)) modelSlots.set(kind, []);
-    modelSlots.get(kind).push({ parent, fallback, yaw });
+    modelSlots.get(kind).push({ parent, fallback, yaw, prepare });
   }
   function box(parent, size, position, color, surface = materials.plain, yaw = 0) {
     if (!bins.has(parent)) bins.set(parent, new Map());
@@ -143,7 +143,7 @@ export function createRoomAssembly({
               return;
             }
             prepareModelMaterials(model);
-            for (const { parent, fallback, yaw } of slots) {
+            for (const { parent, fallback, yaw, prepare } of slots) {
               // Hide only fallback meshes. Parent groups also position the authored replacements.
               fallback.traverse((node) => {
                 if (node.isMesh && !node.userData.cozyContactShadow) node.visible = false;
@@ -156,8 +156,25 @@ export function createRoomAssembly({
               copy.name = assets[kind].resourceName || assets[kind].name;
               copy.scale.multiplyScalar(assets[kind].scale ?? 1);
               copy.rotation.y += yaw;
+              // A single asset can have dimension-aware placements. Preparers own
+              // replacement geometry; retained siblings still share source resources.
+              prepare?.(copy);
               parent.add(copy);
             }
+            const retained = new Set();
+            for (const { parent } of slots)
+              parent.traverse((node) => {
+                if (node.geometry) retained.add(node.geometry);
+                for (const mat of [node.material].flat()) if (mat) retained.add(mat);
+              });
+            const released = new Set();
+            model.traverse((node) => {
+              for (const resource of [node.geometry, ...[node.material].flat()])
+                if (resource && !retained.has(resource) && !released.has(resource)) {
+                  released.add(resource);
+                  resource.dispose();
+                }
+            });
             onModelLoaded(kind);
             onChanged();
           },

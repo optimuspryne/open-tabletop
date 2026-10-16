@@ -31,6 +31,14 @@ is chosen to put each switch in both states independently of the others.
 
 ## Profiles
 
+Approved seated framing is shared across fine/coarse and full/compact modes:
+join/seat changes/My Seat use the lower view with capped eye height on large tables.
+Cozy's physical table is about 74cm above its floor. Birds Eye still fits the table
+from viewport aspect; existing orbit/pan/pinch routes and layout branches are unchanged.
+Desktop/390px production-module captures verify the approved composition; the
+seven-profile device suite checks layout consistency. Real-device camera feel remains
+manual QA, including portrait phone zoom/pan and returning to My Seat.
+
 `sheet` = `SHEET_MQ` matches (bottom-sheet chrome). `fine` = `(pointer: fine)` matches
 (movable panels). `mark` = compact logo (`≤ 560px`). `touch` = the profile is rendered with
 touch emulation on, which is what makes the pointer coarse.
