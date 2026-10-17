@@ -2562,7 +2562,7 @@ root, cache revalidation, audio ranges, missing/traversal requests, and browser 
 
 Exports `scene`, `camera`, `renderer`, `controls`, **`resizeTable(x,z,shape)`** (rebuild the
 felt at a new half-extent / shape — a box for `rect`, else the extruded `tableOutline`, plus the
-bevelled wooden rim around the edge; geometry is supplied by `table-geometry.js`,
+flush, bevelled wooden rim around the edge; geometry is supplied by `table-geometry.js`,
 while physics walls use the same shared outline in the server's `buildBounds`), **`setTableColor(hex)`** (recolor/tint the felt
 fabric), **`setRimWood(name)`** (swap the rim to a named wood — `mahogany`/`walnut`/`birch`/`green`/
 `oak`, from `public/static_assets/textures/wood-*.png`; the felt fabric is `public/static_assets/textures/felt.jpg`),
@@ -2576,8 +2576,11 @@ quiet for a full frame), and
 - **Table finish.** `public/rendering/table-geometry.js` exports pure
   `createTableGeometry(THREE,hx,hz,shape)`, `createRimGeometry(THREE,hx,hz,shape)`
   and named `TABLE_FINISH` settings. Felt caps use world-unit planar UVs; the
-  indexed, closed rail follows the shared outline with a shallow seven-point bevel
-  profile. V measures perimeter distance and U follows its cross-section. Curve
+  indexed, closed rail follows the shared outline with a six-point profile and
+  softened outer bevel. Its `rimTop` is y=0, level with the felt; the inner edge
+  meets the exact felt outline without coplanar overlap or an inset bevel. This
+  finish applies to all five table shapes and every room environment. V measures
+  perimeter distance and U follows its cross-section. Curve
   normals are smoothed; rect/hex corners retain hard normals. The existing wood
   cache uses the images' vertical grain without global rotation or stretching.
   Felt repeat is 0.8 and desktop bump scale 0.025, using the existing felt image;

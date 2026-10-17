@@ -43,7 +43,7 @@ test('felt caps retain shared outlines, physical UV density and top height acros
     }
 });
 
-test('bevelled rails are closed, finite and bounded with UV distance following the perimeter', () => {
+test('flush bevelled rails meet felt without overlap and stay closed with perimeter UVs', () => {
   for (const shape of TABLE_SHAPES)
     for (const [x, z] of [
       [2, 2],
@@ -59,9 +59,31 @@ test('bevelled rails are closed, finite and bounded with UV distance following t
       assert.ok(geometry.index.count / 3 < 1500);
       assert.ok([...p.array, ...uv.array, ...normals.array].every(Number.isFinite));
       geometry.computeBoundingBox();
-      assert.ok(Math.abs(geometry.boundingBox.max.y - TABLE_FINISH.rimLip) < 1e-6);
+      assert.equal(geometry.boundingBox.max.y, 0, 'Rail top must be level with the felt');
       assert.equal(geometry.boundingBox.min.y, TABLE_FINISH.rimBase);
       assert.ok(Math.abs(geometry.boundingBox.max.x - Math.max(...outer.map((v) => v.x))) < 1e-5);
+      const top = [];
+      for (let i = 0; i < p.count; i++)
+        if (p.getY(i) === 0) top.push(new THREE.Vector2(p.getX(i), p.getZ(i)));
+      const boundary = points.map((point) => new THREE.Vector2(point.x, point.z));
+      for (const point of boundary)
+        assert.ok(
+          top.some((vertex) => vertex.distanceTo(point) < 1e-5),
+          'Rail must meet every felt boundary vertex without a recessed seam',
+        );
+      const winding = Math.sign(THREE.ShapeUtils.area(boundary));
+      for (const vertex of top) {
+        const inside = boundary.every((point, i) => {
+          const next = boundary[(i + 1) % boundary.length];
+          return (
+            winding *
+              ((next.x - point.x) * (vertex.y - point.y) -
+                (next.y - point.y) * (vertex.x - point.x)) >
+            1e-5
+          );
+        });
+        assert.ok(!inside, 'Flush wood must not overlap the felt and cause coplanar flickering');
+      }
       const edges = new Map();
       const key = (i) => [p.getX(i), p.getY(i), p.getZ(i)].map((v) => v.toFixed(5)).join(',');
       for (let i = 0; i < geometry.index.count; i += 3) {

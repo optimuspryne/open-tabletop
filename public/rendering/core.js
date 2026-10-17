@@ -440,7 +440,7 @@ tableMesh.visible = false; // reveal only after the joined room's durable appear
 scene.add(tableMesh);
 
 // A wooden rim around the felt edge: the shared tableOutline offset outward for the outer edge,
-// with a slight inward overlap onto the felt, extruded into a low raised lip. Purely visual — the
+// with its top flush with the felt and no inward overlap. Purely visual — the
 // physics walls already sit at the felt edge — and rebuilt with the felt on any resize / reshape.
 // The wood is a GM-chosen texture, swapped on the shared material by setRimWood.
 const WOOD_RIM = {

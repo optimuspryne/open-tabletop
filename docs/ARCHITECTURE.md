@@ -1585,7 +1585,10 @@ color (mirrored-wrapped + gradient-flattened for seamless tiling).
 `TABLE_CORNER_SEGMENTS` samples rounded corners at 20 segments per quarter in the
 shared outline, including server wall geometry and browser grid clipping. Pure
 `public/rendering/table-geometry.js` keeps the felt's top at y=0 and lofts a closed,
-bevelled visual rail around that boundary. Perimeter-distance UVs align wood grain;
+visual rail with its wooden top flush with the felt at y=0 in every room and table
+shape. Only its outer edge is bevelled; the inner edge meets the exact felt boundary
+without overlap to avoid coplanar flickering. The finish is visual and leaves server
+containment unchanged. Perimeter-distance UVs align wood grain;
 world-unit felt UVs retain physical density. Core retains material/texture-cache
 ownership and existing synchronized wood/color setters. Fine felt bump shading is
 desktop/tablet-only, preserving the phone shader policy. Shared-outline changes

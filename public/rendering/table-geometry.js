@@ -3,9 +3,8 @@ import { tableOutline, offsetOutline } from '../../shared/pieces.js';
 // Visual finish only: the felt outline remains the shared playable boundary.
 export const TABLE_FINISH = Object.freeze({
   rimWidth: 0.4,
-  rimLip: 0.35,
+  rimTop: 0,
   rimBase: -1,
-  rimOverlap: 0.06,
   bevel: 0.04,
   grainLength: 7,
   grainCrossSection: 1.6,
@@ -38,11 +37,11 @@ export function createRimGeometry(THREE, hx, hz, shape = 'rect') {
   const profile = [
     [f.rimWidth - f.bevel, f.rimBase],
     [f.rimWidth, f.rimBase + f.bevel],
-    [f.rimWidth, f.rimLip - f.bevel * 1.5],
-    [f.rimWidth - f.bevel * 0.75, f.rimLip],
-    [-f.rimOverlap + f.bevel * 0.75, f.rimLip],
-    [-f.rimOverlap, f.rimLip - f.bevel * 1.5],
-    [-f.rimOverlap, f.rimBase],
+    [f.rimWidth, f.rimTop - f.bevel * 1.5],
+    [f.rimWidth - f.bevel * 0.75, f.rimTop],
+    // Meet the felt at its exact outline: coplanar overlap would cause z-fighting.
+    [0, f.rimTop],
+    [0, f.rimBase],
   ];
   const rings = profile.map(([offset]) => offsetOutline(outline, offset));
   const n = outline.length;

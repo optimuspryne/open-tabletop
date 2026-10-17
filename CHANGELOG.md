@@ -8,6 +8,15 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+### Changed
+- Make the wooden table rim flush with the felt across all five table shapes and
+  every room environment, following the approved profile. Keep the outer bevel,
+  wood choices, rail width and underside; remove the inward overlap to avoid
+  coplanar flickering. Reuse the shared rim geometry and existing resize lifecycle.
+  Client refresh only; no server restart or migration is needed.
+  `npm run check` passes all 1,229 tests; an isolated browser render verifies all
+  five shapes. In-app room/device smoke testing remains manual.
+
 ## [0.23.0] — 2026-10-17
 
 **Upgrade:** source/native installs now require **Node.js 24+**. Back up database/uploads,
