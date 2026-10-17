@@ -1,6 +1,7 @@
 import { disposeHierarchy } from '../resources.js';
 import { createRoomAssembly } from './room-assembly.js';
 import { createRoomSeating } from './room-seating.js';
+import { tableOutline } from '../../../shared/pieces.js';
 
 // Own the local backdrop lifecycle. A theme supplies component builders and art;
 // this owner supplies dimensions, occupancy, cutaways, GPU policy and cleanup.
@@ -56,7 +57,14 @@ export function createRoomEnvironment({
     clear();
     const config = theme.structure;
     const hx = tableX,
-      hz = tableShape === 'round' ? tableX : tableZ;
+      hz =
+        tableShape === 'round'
+          ? tableX
+          : tableShape === 'hex'
+            ? Math.max(
+                ...tableOutline(tableShape, tableX, tableZ).map((point) => Math.abs(point.z)),
+              )
+            : tableZ;
     const rx = Math.max(config.minimumHalfSize, hx + config.clearance);
     const rz = Math.max(config.minimumHalfSize, hz + config.clearance);
     const floor = config.floorY,

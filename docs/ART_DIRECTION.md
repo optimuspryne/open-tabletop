@@ -1,5 +1,75 @@
 # Room asset material study
 
+Rear-wall additions were approved and integrated locally: Modern Bar glass entry/teal corner
+booth, Poker Night windowed walnut door and a second Tavern leaded window. See
+[the approved review](PLAN_ROOM_THEMES.md#rear-wall-additions--blender-review).
+These extend the existing palettes. The two doors/nook are exported individually;
+Tavern reuses its corrected window on a second wall. See the integration record
+below the review for current checks.
+
+## Modern Bar — approved Blender source and local integration
+
+Companion `3d_models/original/modern_bar_v1/modern-bar-mockup.blend` develops the
+Modern Pub / Tavern concept as a contemporary neighbourhood bar: walnut slats,
+charcoal quartz, brass rails, exposed brick, backlit bottles, tan leather chairs
+and a channel-tufted teal booth. A quiet teal table center and warm pendant light
+keep the game readable. The review includes a black-framed window with original
+3D evening buildings, restrained mint signage, draught taps and lowball glasses.
+
+Actual room/seated Cycles renders are linked in
+[the review plan](PLAN_ROOM_THEMES.md#modern-bar-blender-mockup). The user approved
+the design with "Looks good". Thirteen individual GLBs are published and the local
+theme reuses shared room/seating/resource owners. Fine leather detail is adapted
+to portable normal/roughness maps; the authored materials/approved snapshot are
+preserved. Review lighting, fixed seating composition, city and table remain
+illustrative. Runtime matching is explicitly Walnut/deep teal; saved table,
+lighting and sky remain independent. The window cutout ends within its frame,
+and decorative steel bases reach from floor to the existing tabletop underside.
+The later `modern-bar-detail-fit.blend` revision corrects the two user-reported
+fit/material defects: a slight rearward chair back with piping following its
+beveled leather surface, and a smooth satin-brass table pendant without coarse
+relief maps. Only those two derivatives are replaced; original snapshots remain.
+See [detail correction](PLAN_ROOM_THEMES.md#modern-bar-chair-and-pendant-correction).
+
+## Medieval Tavern — approved Blender source and local integration
+
+The user requested the next theme in Blender on 2026-10-16. Companion
+`3d_models/original/medieval_tavern_v1/medieval-tavern-mockup.blend` contains the
+editable oak/stone/limewash room, arched hearth, leaded window, mismatched wooden
+seating, coopered barrels, bar, stoneware and iron candle wheel. Actual room and
+seated Cycles renders are saved beside it. The user approved the design with
+"Yep looks great". Eight furnishing GLBs and four shell maps are now published
+locally and `medieval-tavern` is registered. The heavy trestle table and warm/cool
+staged lights remain examples; the runtime retains the existing table, physics
+and independently saved lighting. Original sources and the approved snapshot
+are preserved. Procedural relief is adapted to packed PBR maps for portability.
+See [the current review plan](PLAN_ROOM_THEMES.md#medieval-tavern-blender-mockup).
+
+The in-app fit correction restores the approved trestle-base intent and moves
+window shutters clear of the wall. The owner's unsaved source (including the
+wider right shutter) is preserved separately. The current corrected source,
+`medieval-tavern-window-reveal.blend`, mirrors the good left shutter onto the
+right and retains the interior stand-off. Exterior plaster is set behind the
+casing; all four rough-opening edges lie within solid timber, hiding plaster
+reveals and eliminating coincident faces. Timber framing avoids the full surround.
+This is a fit/support correction
+within the approved design, not a new room direction.
+
+## Poker Night Blender redesign — source history
+
+Companion `3d_models/original/poker_night_v1/poker-night-assets.blend` contains nine
+new editable masters, authored through BlenderMCP on 2026-10-16: leather chair,
+sideboard, green pendant, carafe, tumbler, curtained window, framed landscape,
+woven rug and dark walnut floor study. Actual Cycles chair/room/furnishing renders
+and source/geometry reports are saved beside it. Materials use packed UV maps;
+the exposed chair frame stops below the upholstered back. Existing Cozy sources
+and the open startup scene are preserved. Eight exported models now extend the
+procedural fallbacks, preserving the owner's later curtain/tieback edits. The
+user reported the refreshed room looks really good. See the historical review
+and current status in [the plan](PLAN_ROOM_THEMES.md#blender-asset-redesign-review).
+
+## Cozy material study and approved sources
+
 Status: the owner's fixed assets are exported and integrated into the Cozy game room,
 now selected through Room Settings → Table Size & Color → Room style (October 15, 2026).
 Earlier preview-link instructions below describe the prior prototype stages.

@@ -1301,7 +1301,7 @@ const SCENES = [
         overlays: new Map(), trays: new Map(), scores: new Map(), unclaimed: new Map(),
         scale: { gridStyle: 'off', worldPerUnit: 1, unitLabel: 'ft', roundStep: 1, cellWorld: 1 },
         whiteboard: { enabled: false }, timer: { running: false, mode: 'up', base: 0, since: 0 },
-        environment: new URLSearchParams(location.search).get('fixtureEnvironment')==='cozy'?'cozy':'standard',
+        environment: ['cozy','poker-night','medieval-tavern','modern-bar'].includes(new URLSearchParams(location.search).get('fixtureEnvironment'))?new URLSearchParams(location.search).get('fixtureEnvironment'):'standard',
         tableX: 40, tableZ: 28, tableShape: 'rectangle', roomName: 'Fixture table', skybox: '',
       };
       const room = { state: { ...state, pieces: undefined }, sessionId: 'me', reconnectionToken: 'fixture',
@@ -1340,7 +1340,7 @@ const SCENES = [
       const { scene: clientScene, camera: clientCamera, controls: clientControls, renderer: clientRenderer, waitForVisualAssets, deviceClass: clientDeviceClass, tableMesh: clientTableMesh, rimMat: clientRimMat, getLighting: clientGetLighting, applyLighting: clientApplyLighting } = await import('/rendering/core.js');
       await waitForVisualAssets();
       assert(clientTableMesh.castShadow&&clientTableMesh.receiveShadow,'The solid tabletop must block light as well as receive piece shadows');
-      const scenery = () => clientScene.children.filter(node=>node.name==='Cozy game room prototype');
+      const scenery = () => clientScene.children.filter(node=>node.userData.roomTheme);
       if (room.state.environment==='cozy') {
         assert(scenery().length===1,'Shared state did not register the cozy room');
         assert(scenery()[0].userData.roomTheme==='cozy','Production bootstrap bypassed the room-theme runtime');
@@ -1474,7 +1474,7 @@ const SCENES = [
         assert(!scenery()[0].getObjectByName('South wall').visible,'Production loop did not update the outside-wall cutaway');
         assert(sent.length===beforeScene,'Camera cutaway sent gameplay messages');
         const select=byId('roomEnvironment');
-        assert(select.value==='cozy'&&select.options.length===2,'Room style choices did not hydrate');
+        assert(select.value==='cozy'&&select.options.length===5,'Room style choices did not hydrate');
         const beforeStyle=sent.length;
         select.value='standard';select.dispatchEvent(new Event('change'));
         assert(sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style did not use its shared protocol');
@@ -1490,6 +1490,256 @@ const SCENES = [
         assert(select.value==='cozy'&&!byId('tableThemeMatch').hidden,'Matching finish did not follow the new theme');
         byId('roomSettingsClose').click();
         room.state.tableX=40;room.state.tableZ=28;patches.forEach(fn=>fn(room.state));
+      } else if (room.state.environment==='poker-night') {
+        assert(scenery().length===1&&scenery()[0].userData.roomTheme==='poker-night','Production bootstrap did not register Poker Night');
+        const pokerRoot=scenery()[0];
+        assert(pokerRoot.getObjectByName('Poker pendant')&&pokerRoot.getObjectByName('Poker leather chair'),'Poker fixtures/seating did not build');
+        const rearTHREE=await import('three');
+        const door=pokerRoot.getObjectByName('Poker windowed door');
+        for(let i=0;i<400&&!door.getObjectByName('Poker door model');i++)await new Promise(resolve=>setTimeout(resolve,25));
+        const doorModel=door.getObjectByName('Poker door model');
+        const pane=pokerRoot.getObjectByName('Poker clear door glazing');
+        assert(doorModel&&pane&&pane.visible!==matchMedia('(pointer:coarse)').matches&&!pane.material.depthWrite,'Poker door glazing/phone policy did not load');
+        pokerRoot.updateWorldMatrix(true,true);
+        const origin=new rearTHREE.Vector3(.3,12.6,3).applyMatrix4(door.matrixWorld);
+        const ray=new rearTHREE.Raycaster(origin,new rearTHREE.Vector3(0,0,-1).transformDirection(door.matrixWorld),0,6.5),blocked=[];
+        door.parent.traverse(node=>{
+          if(!node.isMesh||[node.material].flat().every(m=>m.transparent))return;
+          (node.isInstancedMesh?rearTHREE.InstancedMesh:rearTHREE.Mesh).prototype.raycast.call(node,ray,blocked);
+        });
+        assert(!blocked.length,'Opaque Poker dressing blocks the actual door lite');
+        const savedLighting=JSON.stringify(clientGetLighting());
+        byId('roomSettings').click();
+        const select=byId('roomEnvironment');
+        assert(select.value==='poker-night'&&byId('tableThemeName').textContent==='Poker Night','Poker settings did not hydrate');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'walnut'}],['tableColor',{color:'#1e5c3f'}]]),'Poker matching changed fields beyond wood/felt');
+        byId('roomSettingsClose').click();
+        clientCamera.position.set(0,80,0.1);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!pokerRoot.getObjectByName('Poker ceiling').visible,'Poker pendant/ceiling obstruct overhead view');
+        assert(JSON.stringify(clientGetLighting())===savedLighting,'Poker changed independent lighting');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&pokerRoot.parent===null,'Poker switch leaked scenery');
+        room.state.environment='poker-night';patches.forEach(fn=>fn(room.state));
+        await waitForVisualAssets();
+        assert(scenery().length===1&&scenery()[0]!==pokerRoot,'Poker switch did not construct a fresh owner');
+      } else if (room.state.environment==='medieval-tavern') {
+        assert(scenery().length===1&&scenery()[0].userData.roomTheme==='medieval-tavern','Production bootstrap did not register Medieval Tavern');
+        const tavernRoot=scenery()[0];
+        for(let attempt=0;attempt<400&&(!tavernRoot.getObjectByName('Tavern chair model')||!tavernRoot.getObjectByName('Tavern hearth model')||!tavernRoot.getObjectByName('Tavern bar model')||!tavernRoot.getObjectByName('Tavern clear glazing'));attempt++)await new Promise(resolve=>setTimeout(resolve,25));
+        assert(tavernRoot.getObjectByName('Tavern chair model'),'Authored tavern chair did not load');
+        assert(tavernRoot.getObjectByName('Tavern hearth model')&&tavernRoot.getObjectByName('Tavern bar model'),'Authored hearth/bar did not load');
+        const glazing=tavernRoot.getObjectByName('Tavern clear glazing');
+        assert(glazing&&glazing.material.opacity===0.025&&glazing.material.depthWrite===false,'Window did not preserve sky visibility');
+        const fitTHREE=await import('three');
+        const {MEDIEVAL_TAVERN:fit}=await import('/rendering/rooms/medieval-tavern-theme.js');
+        tavernRoot.updateWorldMatrix(true,true);
+        for(const windowName of ['Tavern leaded window','Tavern rear leaded window']) {
+        const installedWindow=tavernRoot.getObjectByName(windowName);
+        assert(installedWindow.getObjectByName('Tavern window model'),'Second tavern window did not load');
+        const toWindow=installedWindow.matrixWorld.clone().invert();
+        const shutterBounds=new fitTHREE.Box3(),shutterSides=[new fitTHREE.Box3(),new fitTHREE.Box3()],casingMeshes=[];let rearCasingVertices=0;
+        installedWindow.getObjectByName('Tavern window model').traverse(node=>{
+          if(!node.isMesh)return;
+          const names=[node.material].flat().map(m=>m.name);
+          const matrix=toWindow.clone().multiply(node.matrixWorld);
+          if(names.some(name=>name.includes('aged timber framing'))){
+            const positions=node.geometry.attributes.position;
+            for(let i=0;i<positions.count;i++){
+              const point=new fitTHREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(matrix);
+              shutterBounds.expandByPoint(point);shutterSides[point.x<0?0:1].expandByPoint(point);
+            }
+          }
+          if(names.some(name=>name.includes('honey oak joinery'))){
+            casingMeshes.push(node);
+            const positions=node.geometry.attributes.position,normals=node.geometry.attributes.normal;
+            const normalMatrix=new fitTHREE.Matrix3().getNormalMatrix(matrix);
+            for(let i=0;i<positions.count;i++){
+              const p=new fitTHREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(matrix);
+              const n=new fitTHREE.Vector3().fromBufferAttribute(normals,i).applyNormalMatrix(normalMatrix);
+              const outsideOpening=Math.abs(p.x)>=fit.windowWidth/2-.01||p.y<=fit.windowBottom||p.y>=fit.windowBottom+fit.windowHeight;
+              if(n.z<-.99&&outsideOpening){
+                rearCasingVertices++;
+                assert(p.z<fit.wallInteriorFace-fit.windowWallThickness-.10,'Exterior jamb is nearly coplanar with plaster');
+              }
+            }
+          }
+        });
+        assert(!shutterBounds.isEmpty()&&shutterBounds.min.z>fit.wallInteriorFace+.20,'Shutters remain embedded in plaster');
+        assert(rearCasingVertices>0,'Exterior casing geometry was not checked');
+        const west=installedWindow.parent;
+        const plasterMeshes=west.children.filter(node=>node.name==='Textured plaster panel');
+        // Cast through each inner reveal, including the old coincident jamb plane.
+        // Scenery deliberately disables picking: invoke the mesh implementation directly.
+        for(const depth of [-.30,0,.10])for(const direction of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]]){
+          const origin=new fitTHREE.Vector3(0,(fit.windowBottom+fit.windowHeight/2),depth).applyMatrix4(installedWindow.matrixWorld);
+          const ray=new fitTHREE.Raycaster(origin,new fitTHREE.Vector3(...direction).transformDirection(installedWindow.matrixWorld));
+          const woodHits=[],plasterHits=[];
+          for(const node of casingMeshes)fitTHREE.Mesh.prototype.raycast.call(node,ray,woodHits);
+          for(const node of plasterMeshes)fitTHREE.Mesh.prototype.raycast.call(node,ray,plasterHits);
+          woodHits.sort((a,b)=>a.distance-b.distance);plasterHits.sort((a,b)=>a.distance-b.distance);
+          assert(woodHits.length&&plasterHits.length,'Window reveal geometry was not checked');
+          assert(plasterHits[0].distance-woodHits[0].distance>.25,'Window reveal plaster overlaps or is coplanar with the inner timber face');
+        }
+        assert(shutterSides.every(side=>!side.isEmpty()),'Both shutter leaves were not checked');
+        const shutterCenters=shutterSides.map(side=>side.getCenter(new fitTHREE.Vector3()));
+        assert(Math.abs(shutterCenters[0].x+shutterCenters[1].x)<.02,'Right shutter does not mirror the left beside the frame');
+        for(const node of west.children){
+          if(!node.isMesh)continue;
+          node.geometry.computeBoundingBox();
+          for(let i=0;i<(node.isInstancedMesh?node.count:1);i++){
+            const matrix=toWindow.clone().multiply(node.matrixWorld);
+            if(node.isInstancedMesh){const instance=new fitTHREE.Matrix4();node.getMatrixAt(i,instance);matrix.multiply(instance);}
+            assert(!shutterBounds.intersectsBox(node.geometry.boundingBox.clone().applyMatrix4(matrix)),'Shutters intersect wall masonry or framing');
+          }
+        }
+        }
+        const base=tavernRoot.getObjectByName('Tavern table supports');
+        assert(base,'Tavern omitted its table base');
+        const baseBox=new fitTHREE.Box3().setFromObject(base),tableBox=new fitTHREE.Box3().setFromObject(clientTableMesh);
+        assert(Math.abs(baseBox.min.y-fit.floorY)<.001&&Math.abs(baseBox.max.y-tableBox.min.y)<.001,'Trestles do not connect the floor and real tabletop');
+
+
+        assert(tavernRoot.getObjectByName('Tavern candle wheel')&&tavernRoot.getObjectByName('Tavern occupied chair'),'Tavern fixtures/seating did not build');
+        const savedLighting=JSON.stringify(clientGetLighting());
+        byId('roomSettings').click();
+        const select=byId('roomEnvironment');
+        assert(select.value==='medieval-tavern'&&byId('tableThemeName').textContent==='Medieval Tavern','Tavern settings did not hydrate');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'oak'}],['tableColor',{color:'#354c36'}]]),'Tavern matching changed fields beyond wood/felt');
+        byId('roomSettingsClose').click();
+        clientCamera.position.set(0,80,0.1);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!tavernRoot.getObjectByName('Tavern ceiling').visible,'Tavern candle wheel/ceiling obstruct overhead view');
+        assert(JSON.stringify(clientGetLighting())===savedLighting,'Tavern changed independent lighting');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&tavernRoot.parent===null,'Tavern switch leaked scenery');
+        room.state.environment='medieval-tavern';patches.forEach(fn=>fn(room.state));
+        await waitForVisualAssets();
+        assert(scenery().length===1&&scenery()[0]!==tavernRoot,'Tavern switch did not construct a fresh owner');
+        const tavernTHREE=await import('three');
+        for(const [shape,x,z] of [['rect',2,2],['roundedRect',10,7],['round',80,56]]){
+          room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));
+          const current=scenery()[0];
+          for(let attempt=0;attempt<400&&(!current.getObjectByName('Tavern hearth model')||!current.getObjectByName('Tavern bar model')||!current.getObjectByName('Tavern stool model'));attempt++)await new Promise(resolve=>setTimeout(resolve,25));
+          assert(current.getObjectByName('Tavern hearth model')&&current.getObjectByName('Tavern bar model')&&current.getObjectByName('Tavern stool model'),'Resized Tavern models did not load');
+          current.updateWorldMatrix(true,true);
+          const hz=shape==='round'?x:z;
+          const protectedArea=new tavernTHREE.Box3(new tavernTHREE.Vector3(-x-5.3,-10,-hz-5.3),new tavernTHREE.Vector3(x+5.3,10,hz+5.3));
+          current.traverse(node=>{
+            if(!['Tavern hearth model','Tavern bar model','Tavern barrel model','Tavern bench model','Tavern stool model'].includes(node.name))return;
+            assert(!protectedArea.intersectsBox(new tavernTHREE.Box3().setFromObject(node)),'Ambient '+node.name+' crowds player seating at '+shape+' '+x);
+          });
+        }
+
+
+      } else if (room.state.environment==='modern-bar') {
+        const THREE=await import('three');
+        const {MODERN_BAR:fit,MODERN_BAR_THEME:theme}=await import('/rendering/rooms/modern-bar-theme.js');
+        const kinds=Object.keys(theme.assets);
+        const ready=root=>kinds.every(kind=>root.getObjectByName('Modern '+kind+' model'));
+        const modern=scenery()[0];
+        assert(scenery().length===1&&modern.userData.roomTheme==='modern-bar','Modern Bar did not bootstrap');
+        for(let i=0;i<400&&!ready(modern);i++)await new Promise(resolve=>setTimeout(resolve,25));
+        assert(ready(modern),'Approved Modern Bar models did not load');
+        const glazing=modern.getObjectByName('Modern clear glazing');
+        assert(glazing&&glazing.material.opacity===.035&&!glazing.material.depthWrite,'Modern glazing hides the saved sky');
+        assert(glazing.visible!==matchMedia('(pointer:coarse)').matches,'Modern glazing ignores the device policy');
+        const door=modern.getObjectByName('Modern glass door');
+        const doorPanes=[];door.traverse(node=>{if(node.name==='Modern door glazing')doorPanes.push(node)});
+        assert(doorPanes.length===2&&doorPanes.every(node=>node.visible!==matchMedia('(pointer:coarse)').matches&&!node.material.depthWrite),'Modern glass/etched-band device policy failed');
+        modern.updateWorldMatrix(true,true);
+        const doorOrigin=new THREE.Vector3(.3,12.6,3).applyMatrix4(door.matrixWorld);
+        const doorRay=new THREE.Raycaster(doorOrigin,new THREE.Vector3(0,0,-1).transformDirection(door.matrixWorld),0,6.5),doorBlocked=[];
+        door.parent.traverse(node=>{
+          if(!node.isMesh||[node.material].flat().every(m=>m.transparent))return;
+          (node.isInstancedMesh?THREE.InstancedMesh:THREE.Mesh).prototype.raycast.call(node,doorRay,doorBlocked);
+        });
+        assert(!doorBlocked.length,'Opaque Modern wall dressing blocks the actual glass door');
+        const nook=modern.getObjectByName('Modern nook slot');
+        assert(nook.parent===door.parent&&nook.getWorldPosition(new THREE.Vector3()).x>0,'Modern nook lost the approved left corner/cutaway');
+        const lighting=JSON.stringify(clientGetLighting());
+        byId('roomSettings').click();
+        assert(byId('roomEnvironment').value==='modern-bar'&&byId('tableThemeName').textContent==='Modern Bar','Modern Bar settings did not hydrate');
+        const start=sent.length;byId('tableThemeApply').click();
+        assert(JSON.stringify(sent.slice(start))===JSON.stringify([['table',{rimWood:'walnut'}],['tableColor',{color:'#294b4c'}]]),'Modern matching changed independent settings');
+        byId('roomSettingsClose').click();
+        modern.updateWorldMatrix(true,true);
+        const chair=modern.getObjectByName('Modern chair model');
+        const toChair=chair.matrixWorld.clone().invert(),bodyTriangles=[],pipingMeshes=[];
+        chair.traverse(node=>{
+          if(!node.isMesh)return;
+          const names=[node.material].flat().map(mat=>mat.name);
+          if(names.some(name=>name.includes('leather piping')))pipingMeshes.push(node);
+          if(!names.some(name=>name.includes('saddle leather upholstery')))return;
+          const matrix=toChair.clone().multiply(node.matrixWorld),positions=node.geometry.attributes.position,index=node.geometry.index;
+          for(let i=0;i<(index?index.count:positions.count);i+=3){
+            const points=[0,1,2].map(offset=>new THREE.Vector3().fromBufferAttribute(positions,index?index.getX(i+offset):i+offset).applyMatrix4(matrix));
+            const triangle=new THREE.Triangle(...points);
+            if(triangle.getArea()>1e-12)bodyTriangles.push(triangle);
+          }
+        });
+        let checkedPiping=0,maxPipingGap=0;
+        const closest=new THREE.Vector3();
+        for(const node of pipingMeshes){
+          const positions=node.geometry.attributes.position,matrix=toChair.clone().multiply(node.matrixWorld);
+          for(let i=0;i<positions.count;i+=Math.max(1,Math.floor(positions.count/120))){
+            const point=new THREE.Vector3().fromBufferAttribute(positions,i).applyMatrix4(matrix);
+            if(point.y<.56)continue;
+            let gap=Infinity;
+            for(const triangle of bodyTriangles){triangle.closestPointToPoint(point,closest);gap=Math.min(gap,closest.distanceTo(point));}
+            maxPipingGap=Math.max(maxPipingGap,gap);checkedPiping++;
+          }
+        }
+        assert(bodyTriangles.length&&checkedPiping>=10,'Authored chair piping contact was not checked');
+        assert(maxPipingGap<.006,'Chair back piping floats away from the angled cushion: '+maxPipingGap);
+        const pendant=modern.getObjectByName('Modern table-pendant model');
+        const lampMaterials=[];pendant.traverse(node=>{if(node.isMesh)lampMaterials.push(...[node.material].flat());});
+        const satin=lampMaterials.find(mat=>mat.name.includes('satin brass luminaire'));
+        assert(satin&&!satin.normalMap&&!satin.roughnessMap&&Math.abs(satin.roughness-.42)<.001,'Table luminaire regained a coarse or stretched finish');
+        const window=modern.getObjectByName('Modern city window');
+        const wood=[],plaster=modern.getObjectByName('Modern west wall').children.filter(node=>node.name==='Textured plaster panel');
+        window.getObjectByName('Modern window model').traverse(node=>{
+          if(node.isMesh&&[node.material].flat().some(mat=>mat.name.includes('powder coated charcoal steel')))wood.push(node);
+        });
+        for(const depth of [-.25,0,.08])for(const direction of [[1,0,0],[-1,0,0],[0,1,0],[0,-1,0]]){
+          const origin=new THREE.Vector3(0,fit.windowBottom+fit.windowHeight/2,depth).applyMatrix4(window.matrixWorld);
+          const ray=new THREE.Raycaster(origin,new THREE.Vector3(...direction).transformDirection(window.matrixWorld));
+          const frameHits=[],wallHits=[];
+          for(const node of wood)THREE.Mesh.prototype.raycast.call(node,ray,frameHits);
+          for(const node of plaster)THREE.Mesh.prototype.raycast.call(node,ray,wallHits);
+          frameHits.sort((a,b)=>a.distance-b.distance);wallHits.sort((a,b)=>a.distance-b.distance);
+          assert(frameHits.length&&wallHits.length,'Modern window reveal was not checked');
+          assert(wallHits[0].distance-frameHits[0].distance>.15,'Modern plaster is coplanar with its inner window frame');
+        }
+        const baseBox=new THREE.Box3().setFromObject(modern.getObjectByName('Modern table supports'));
+        const tableBox=new THREE.Box3().setFromObject(clientTableMesh);
+        assert(Math.abs(baseBox.min.y-fit.floorY)<.001&&Math.abs(baseBox.max.y-tableBox.min.y)<.001,'Modern table supports do not reach floor/tabletop');
+        assert(modern.getObjectByName('Modern art slot').parent===modern.getObjectByName('Modern east wall'),'Artwork lost its wall cutaway');
+        clientCamera.position.set(0,100,.1);clientControls.target.set(0,0,0);clientControls.update();
+        await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+        assert(!modern.getObjectByName('Modern ceiling').visible,'Modern pendants obstruct overhead play');
+        assert(JSON.stringify(clientGetLighting())===lighting,'Modern Bar changed saved lighting');
+        room.state.environment='standard';patches.forEach(fn=>fn(room.state));
+        assert(scenery().length===0&&modern.parent===null,'Modern Bar leaked on switch');
+        room.state.environment='modern-bar';patches.forEach(fn=>fn(room.state));
+        for(const [shape,x,z] of [['rect',2,1.4],['roundedRect',10,7],['round',80,56],['hex',80,2],['oval',2,80]]){
+          room.state.tableShape=shape;room.state.tableX=x;room.state.tableZ=z;patches.forEach(fn=>fn(room.state));
+          const current=scenery()[0];
+          for(let i=0;i<400&&!ready(current);i++)await new Promise(resolve=>setTimeout(resolve,25));
+          assert(ready(current),'Modern resize models did not load');
+          current.updateWorldMatrix(true,true);
+          const {tableOutline}=await import('/shared/pieces.js');
+          const hz=Math.max(...tableOutline(shape,x,z).map(point=>Math.abs(point.z)));
+          assert(current.userData.halfSize.z>=hz+fit.clearance,'Modern room clips its playable outline');
+          const protectedArea=new THREE.Box3(new THREE.Vector3(-x-5.3,-10,-hz-5.3),new THREE.Vector3(x+5.3,10,hz+5.3));
+          current.traverse(node=>{
+            if(!['Modern bar model','Modern booth model','Modern stool model','Modern plant model','Modern nook model'].includes(node.name))return;
+            assert(!protectedArea.intersectsBox(new THREE.Box3().setFromObject(node)),'Modern furnishing crowds seating at '+shape+' '+x);
+          });
+        }
+
       } else {
         assert(scenery().length===0,'The legacy preview URL overrode the saved Standard room');
         assert(byId('tableThemeMatch').hidden,'A theme-free room offers a matching table');
@@ -3365,6 +3615,22 @@ SCENES.push({
   name: 'client-bootstrap-cozy',
   page: '/table.html?fixtureEnvironment=cozy&environment=standard',
 });
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-poker-night',
+  page: '/table.html?fixtureEnvironment=poker-night',
+});
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-medieval-tavern',
+  page: '/table.html?fixtureEnvironment=medieval-tavern',
+});
+
+SCENES.push({
+  ...SCENES.find((scene) => scene.name === 'client-bootstrap'),
+  name: 'client-bootstrap-modern-bar',
+  page: '/table.html?fixtureEnvironment=modern-bar',
+});
 
 SCENES.push({
   name: 'cozy-ceiling-sky',
@@ -3433,7 +3699,7 @@ SCENES.push({
     const byId=id=>document.getElementById(id);
     let rank=2;
     const sent=[];
-    const room={state:{environment:'cozy',tableX:10,tableZ:7,tableShape:'roundedRect',rimWood:'walnut',feltColor:'#123456',scale:{},whiteboard:{},players:new Map()},send:(...args)=>sent.push(args)};
+    const room={state:{environment:'poker-night',tableX:10,tableZ:7,tableShape:'roundedRect',rimWood:'walnut',feltColor:'#123456',scale:{},whiteboard:{},players:new Map()},send:(...args)=>sent.push(args)};
     const settings=createRoomSettings({scene:new THREE.Scene(),gridMesh:()=>null,gridLiftFallback:.05,resizeTable(){},setTableColor(){},setRimWood(){},applyLighting(){},getQuality:()=> 'medium',setQuality(){},getRoom:()=>room,getEnvironmentTheme:()=>getRoomTheme(room.state.environment),getRank:()=>rank,onTableResize(){},syncWhiteboardSettings(){},relabelOverlays(){},byId,setIcon(){}});
     settings.bindControls();
     byId('roomSettings').click();
@@ -3443,13 +3709,13 @@ SCENES.push({
       const select=byId('roomEnvironment');
       const selectBox=select.getBoundingClientRect();
       assert(selectBox.width>0&&selectBox.left>=0&&selectBox.right<=innerWidth,'Room style selector is clipped');
-      assert(select.value==='cozy'&&select.options.length===2,'Room style options are missing');
+      assert(select.value==='poker-night'&&select.options.length===5,'Room style options are missing');
       assert(select.labels[0].textContent.trim()==='Room style'&&select.getAttribute('aria-describedby')==='roomEnvironmentHint','Room selector lost its accessible name or hint');
       if(matchMedia('(pointer:coarse)').matches)assert(selectBox.height>=44,'Room style touch target is too short');
       select.focus();assert(document.activeElement===select,'Room style is not keyboard focusable');
       const beforeStyle=sent.length;select.value='standard';select.dispatchEvent(new Event('change'));
       assert(sent.length===beforeStyle+1&&sent.at(-1)[0]==='roomEnvironment'&&sent.at(-1)[1].environment==='standard','Room style failed to send one shared change');
-      assert(room.state.environment==='cozy'&&select.value==='cozy','Room selector bypassed authoritative state');
+      assert(room.state.environment==='poker-night'&&select.value==='poker-night','Room selector bypassed authoritative state');
       const box=button.getBoundingClientRect();
       assert(box.width>0&&box.left>=0&&box.right<=innerWidth,'Matching table control is clipped');
       assert(button.scrollWidth<=button.clientWidth,'Matching table label is truncated');

@@ -139,6 +139,77 @@ async function prepareDatabase(ownerUrl) {
         (await client.query('SELECT room_environment FROM rooms')).rows[0].room_environment,
         'cozy',
       );
+      const pokerMigration = await fs.readFile(
+        path.join(root, 'postgres/025_poker_night.sql'),
+        'utf8',
+      );
+      await client.query("INSERT INTO rooms VALUES (2, 'standard notes', 'oak', 'standard')");
+      await client.query(pokerMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['cozy', 'standard'],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'poker-night' WHERE id = 1");
+      await client.query(pokerMigration);
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 1')).rows[0]
+          .room_environment,
+        'poker-night',
+      );
+      const tavernMigration = await fs.readFile(
+        path.join(root, 'postgres/026_medieval_tavern.sql'),
+        'utf8',
+      );
+      await client.query(tavernMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['poker-night', 'standard'],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'medieval-tavern' WHERE id = 1");
+      await client.query(tavernMigration);
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 1')).rows[0]
+          .room_environment,
+        'medieval-tavern',
+      );
+      const modernMigration = await fs.readFile(
+        path.join(root, 'postgres/027_modern_bar.sql'),
+        'utf8',
+      );
+      await client.query(
+        "INSERT INTO rooms VALUES (3, 'cozy notes', 'oak', 'cozy'), (4, 'poker notes', 'walnut', 'poker-night')",
+      );
+      await client.query(modernMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['medieval-tavern', 'standard', 'cozy', 'poker-night'],
+      );
+      await client.query("UPDATE rooms SET room_environment = 'modern-bar' WHERE id = 2");
+      await client.query(modernMigration);
+      assert.deepEqual(
+        (await client.query('SELECT room_environment FROM rooms ORDER BY id')).rows.map(
+          (row) => row.room_environment,
+        ),
+        ['medieval-tavern', 'modern-bar', 'cozy', 'poker-night'],
+      );
+      assert.deepEqual(
+        (await client.query('SELECT notes, table_rim_wood FROM rooms WHERE id = 2')).rows,
+        [{ notes: 'standard notes', table_rim_wood: 'oak' }],
+      );
+      await client.query(
+        "INSERT INTO rooms (id, notes, table_rim_wood) VALUES (5, 'fresh default', 'oak')",
+      );
+      assert.equal(
+        (await client.query('SELECT room_environment FROM rooms WHERE id = 5')).rows[0]
+          .room_environment,
+        'standard',
+      );
       await assert.rejects(
         client.query("UPDATE rooms SET room_environment = 'unknown'"),
         (error) => error.code === '23514',

@@ -331,17 +331,22 @@ test('a completed save does not send privileged acknowledgment after participati
 });
 
 test('only GMs and owners can change the room environment without changing table or scene', async () => {
-  for (const rank of [0, 1, 2, 3]) {
+  for (const [rank, environment] of [0, 1, 2, 3].flatMap((rank) =>
+    ['cozy', 'poker-night', 'medieval-tavern', 'modern-bar'].map((environment) => [
+      rank,
+      environment,
+    ]),
+  )) {
     const { room, handlers, events } = harness({ rank });
     const original = structuredClone(room.state);
     room.savedScene = { pieces: [{ type: 'die' }] };
     const scene = room.savedScene;
-    await handlers.get('roomEnvironment')(client(), { environment: 'cozy' });
-    assert.equal(room.state.environment, rank >= 2 ? 'cozy' : 'standard');
+    await handlers.get('roomEnvironment')(client(), { environment });
+    assert.equal(room.state.environment, rank >= 2 ? environment : 'standard');
     assert.deepEqual({ ...room.state, environment: original.environment }, original);
     assert.equal(room.savedScene, scene);
     assert.equal(events.length, rank >= 2 ? 1 : 0);
-    await handlers.get('roomEnvironment')(client(), { environment: 'cozy' });
+    await handlers.get('roomEnvironment')(client(), { environment });
     assert.equal(events.length, rank >= 2 ? 1 : 0, 'Repeated state must not schedule another save');
     await handlers.get('roomEnvironment')(client(), { environment: 'standard' });
     assert.equal(room.state.environment, 'standard');

@@ -297,6 +297,57 @@ test('rooms without matching finishes hide the action and cannot send appearance
   assert.deepEqual(f.sent, []);
 });
 
+test('Poker Night matching uses the existing wood/felt messages without changing shape or lighting', () => {
+  const f = fixture({ theme: getRoomTheme('poker-night') });
+  f.settings.hydrate();
+  f.applied.length = 0;
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeName').textContent, 'Poker Night');
+  assert.deepEqual(f.sent, []);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, [
+    ['table', { rimWood: 'walnut' }],
+    ['tableColor', { color: '#1e5c3f' }],
+  ]);
+  assert.equal(f.state.tableShape, 'rect');
+  assert.equal(f.state.feltColor, '#123456');
+  assert.deepEqual(f.applied, []);
+});
+
+test('Medieval Tavern matching uses the existing wood/felt messages without changing shape or lighting', () => {
+  const f = fixture({ theme: getRoomTheme('medieval-tavern') });
+  f.settings.hydrate();
+  f.applied.length = 0;
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeName').textContent, 'Medieval Tavern');
+  assert.deepEqual(f.sent, []);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, [
+    ['table', { rimWood: 'oak' }],
+    ['tableColor', { color: '#354c36' }],
+  ]);
+  assert.equal(f.state.tableShape, 'rect');
+  assert.equal(f.state.feltColor, '#123456');
+  assert.deepEqual(f.applied, []);
+});
+
+test('Modern Bar matching uses the existing wood/felt messages without changing shape or lighting', () => {
+  const f = fixture({ theme: getRoomTheme('modern-bar') });
+  f.settings.hydrate();
+  f.applied.length = 0;
+  f.byId('roomSettings').onclick();
+  assert.equal(f.byId('tableThemeName').textContent, 'Modern Bar');
+  assert.deepEqual(f.sent, []);
+  f.byId('tableThemeApply').onclick();
+  assert.deepEqual(f.sent, [
+    ['table', { rimWood: 'walnut' }],
+    ['tableColor', { color: '#294b4c' }],
+  ]);
+  assert.equal(f.state.tableShape, 'rect');
+  assert.equal(f.state.feltColor, '#123456');
+  assert.deepEqual(f.applied, []);
+});
+
 test('room style follows authoritative state, waits for patches and respects live permissions', () => {
   const f = fixture();
   const select = f.byId('roomEnvironment');

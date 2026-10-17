@@ -9,6 +9,33 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 ## [Unreleased]
 
 ### Changed
+- Furnish the approved rear walls: Modern Bar gets a black-framed glass door and
+  small teal booth/cafe table on the reverse viewer's left; Poker Night gets a
+  windowed walnut door; Medieval Tavern gets a second matching leaded window.
+  Reuse existing wall cutaways, adaptive layout, occupied seating and model owners.
+  Clip plaster, paneling and trim around glazed openings. Client refresh only;
+  no additional migration, physics, input or lighting change is introduced.
+  All 1,229 code tests, 132 model checks and the three real-model desktop/touch
+  bootstrap scenarios pass. The user accepted the final room views on 2026-10-17;
+  real-device performance remains manual.
+- Add the approved **Modern Bar** room style using eleven Blender-authored
+  furnishing models, walnut floor/slats, brick, brass, a teal booth, leather chairs
+  and decorative LED pendants. Reuse shared room/seating/cutaway/resource owners;
+  matching explicitly applies Walnut and deep teal felt. Keep table dimensions,
+  saved lighting/sky, physics and gameplay independent. Room enclosures now use
+  the shared hex outline when width and saved depth differ. Apply additive
+  migration 027 through the migration role, restart and refresh clients.
+  All 1,222 code tests, 129 model checks, full desktop/touch components, 25 database
+  tests and seven device profiles pass. Actual-device/gameplay acceptance remains.
+- Add the approved **Medieval Tavern** room style using eight Blender-authored
+  furnishing models, oak framing/floor, limestone and limewash, arched hearth,
+  leaded window, bar, stools/bench and iron candle wheel. Reuse shared occupancy,
+  cutaways, mobile materials, fallback loading and cleanup. Explicit matching
+  applies Oak/moss felt; selecting the room preserves table settings, sky and
+  lighting. Apply additive migration 026, restart the server and refresh clients.
+  No game rules, input path, physics or runtime lights are added.
+  Code checks pass 1,203 tests; all 118 bundled models, desktop/touch components,
+  25 database tests and seven device profiles pass. Manual gameplay/device QA remains.
 - Upgrade the coordinated Colyseus stack to core 0.18.18, WebSocket transport
   0.18.4, schema 5.0.40 and the self-hosted SDK 0.18.5 after published peer/integrity
   verification. Keep the existing JS schema, physics and saved-game formats.
@@ -29,6 +56,28 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   operators on Node 20/22 must upgrade Node before updating; see the runtime upgrade notes.
 
 ### Documentation
+- Add Blender review studies for the three empty rear walls: a glazed Modern Bar
+  entry and compact teal corner booth/table, a windowed walnut Poker Night door,
+  and a second corrected Medieval Tavern window. Keep current sources and runtime
+  assets intact; design approval and integration remain pending.
+- Add an editable Modern Bar mockup authored through background BlenderMCP,
+  with actual Cycles room/seated renders: walnut slats, dark stone bar, brass,
+  backlit bottles, exposed brick, tan leather chairs, teal booth and evening window.
+  Preserve the live unsaved Tavern source. Record design/provenance/source checks;
+  visual approval and runtime integration remain pending. The user confirmed the
+  preceding Tavern window fixes look good and flickering is gone.
+- Add an editable BlenderMCP Medieval Tavern mockup in the companion asset
+  workspace, with actual Cycles room/seated renders: oak framing and furniture,
+  limestone hearth, leaded window, bar, barrels and iron candle wheel. Record
+  source checks/provenance and remaining approval/export/integration work.
+  This review slice adds no runtime theme, bundled model, physics or lighting change.
+- Add an editable BlenderMCP-authored Poker Night asset redesign and actual
+  chair/room/furnishings Cycles review renders in the companion asset workspace.
+  Record source provenance, material/UV/frame checks and pending approval/export
+  gates. The app's procedural furnishings and bundled assets remain unchanged by
+  this review slice; earlier runtime test results do not validate the new models.
+- Record fourteen room-theme concepts in `docs/PLAN_ROOM_THEMES.md`, the approved
+  Poker Night concept/prompt, implementation decisions and verification gates.
 - Move the living hardening plan into `docs/` and update relative links; preserve
   its findings, status and historical evidence.
 - Added a dependency inventory, maintenance procedure and source-based Colyseus 0.18
@@ -38,6 +87,28 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   automation; the separate Node prerequisite is recorded above.
 
 ### Fixed
+- Correct Modern Bar chair-back piping in Blender so it follows the beveled
+  upholstery, with a slight rearward back lean. Replace the pendant's coarse
+  relief with smooth satin brass. Preserve the approved source in a separate
+  revision and republish only these two models. Real-model browser regressions
+  check piping clearance and the satin material. Client hard refresh only.
+- Correct the remaining Medieval Tavern window reveal flicker by sizing the
+  plaster cutout within the solid timber surround on all four edges. Mirror the
+  good left shutter's position for the right shutter in a new Blender source,
+  retaining both earlier source snapshots. Real-model browser regressions check
+  reveal depth separation and shutter symmetry. All 1,204 code tests, the focused
+  desktop/touch component scenario and 118-model GPU suite pass. Client refresh only.
+- Correct Medieval Tavern window fit: move shutter leaves clear of plaster,
+  preserve the owner's moved right shutter in a separate Blender source, recess
+  exterior plaster behind the casing and keep timber posts out of its surround.
+  Restore adaptive oak trestles from floor to tabletop using shared outlines and
+  rendering assembly; table physics and picking stay unchanged. Refresh clients;
+  no migration or server restart is required for this correction.
+- Compare Poker Night scene ownership as booleans in regression assertions so a
+  failed cutaway or lifecycle check cannot expand an entire Three.js scene graph
+  into its error report. Update the curtain check for the authored-window fallback
+  group. All three focused Poker Night tests pass with a 192 MiB JavaScript heap;
+  `npm run check` passes all 1,190 tests using one worker and 512 MiB per process.
 - Keep Cozy walls, attached furnishings and gables visible while the camera remains
   inside the room, replacing early angle-based cutaways with actual wall boundaries.
   Keep the ceiling above the eaves until the camera crosses the pitched roof;
@@ -71,6 +142,16 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   Refresh clients to load the updated board; no server restart is needed.
 
 ### Added
+- Add the approved Poker Night room: walnut paneling, olive plaster, leather
+  chairs at occupied seats, curtains, sideboard, green pendant, framed landscapes,
+  plants and a charcoal rug. Reuse the existing theme lifecycle, batching,
+  cutaways, surface geometry, phone policy and credited textures/plant model;
+  new furnishings are procedural. Room style is shared and saved; optional
+  **Use matching table** applies Walnut/green felt while preserving shape, size,
+  lighting and sky. Apply migration 025, restart the server and refresh clients.
+  Full check (1,182 tests), component, seven-device and database integration
+  checks pass; inspected seated/overhead runtime previews are linked in the plan.
+  Physical-device performance and user gameplay testing remain pending.
 - Applied the approved lower default seated view (about 18° on the baseline table),
   with eye height capped on large tables so Cozy's ceiling stays visible. Join,
   seat changes and **My Seat** reuse this framing; **Birds Eye** still fits overhead.

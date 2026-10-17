@@ -182,7 +182,14 @@ test('room style patches reach every viewer and late joins hydrate the current c
   const initial = encoder.encodeAll();
   viewers.forEach((viewer) => viewer.decode(initial));
   encoder.discardChanges();
-  for (const environment of ['cozy', 'standard', 'cozy']) {
+  for (const environment of [
+    'cozy',
+    'poker-night',
+    'medieval-tavern',
+    'modern-bar',
+    'standard',
+    'modern-bar',
+  ]) {
     state.environment = environment;
     const patch = encoder.encode();
     viewers.forEach((viewer) => viewer.decode(patch));
@@ -194,5 +201,5 @@ test('room style patches reach every viewer and late joins hydrate the current c
   }
   const lateJoin = Reflection.decode(Reflection.encode(encoder));
   lateJoin.decode(encoder.encodeAll());
-  assert.equal(lateJoin.state.environment, 'cozy');
+  assert.equal(lateJoin.state.environment, 'modern-bar');
 });

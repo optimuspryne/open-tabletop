@@ -2619,6 +2619,3389 @@
     "browserSha256": "004b6477a04b4b2422050d455ecd4911412518b1706d7523cbdd6fd36004b37e"
   },
   {
+    "source": "/models/environments/medieval-tavern/tavern-bar.glb",
+    "url": "/models/environments/medieval-tavern/tavern-bar.glb",
+    "originalBytes": 4613100,
+    "bytes": 2631752,
+    "originalSha256": "18e4949f5550f7e9f5642aed6ba7efbbc7a6e6849a2042f3446847c1ae31353b",
+    "sha256": "99a0d80378e5f977ce028c89cd8442ca70ea2a1816de4567f9c012a7097dbdd4",
+    "images": 12,
+    "meshes": 8,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/7/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/7/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "c3fe7346f2c4d8a19863031dc3319db44acaedf93563cfd230617ac58e995249",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "6382130ba6cfed5b9ce40a54785e49d1d4ae902149be3d6adcd7f3ec1f7ee0ff",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "4eb79ba33931ef1b2f7dec07a2aaf430170b2d783c96cda8315b8144c2ba7308",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "705f9d1ca112aa7c5dc9167a4e8c10ae597789ac4caa18c4133a83b540192c42",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "3fa6acfe61929e7964ce9f75ae73a592459c18b2888e7502e9fec02e7766567a",
+        "56a29e81000517b785435dd51546803347e1f0ba11bc037081979851b95ca900",
+        "0706bc2c707e09c6ffaaf49a742420cc6aba23234aab691b72b20251db39205f",
+        "25d1e662ad0372d5ba50fdb64f61328843b877a8e0756d4d5d52aa97c98b89ee",
+        "45c27bbad90895148cd563f1200974431c1a33c6cb594c4f20b27718a41c6ecf",
+        "acdcd4a767a49f95e56a3cd3e8a2d89ffad96ac615dc22c10f6651cb8483f96d",
+        "b606956f8105037cae74729a7c30ad86154f96821cfbe5724231f96829153a19",
+        "d532a366beffb7bcad065606fce7edf8ab8f6b4f3a10f9595ed1a6261206b454",
+        "efd622c6de20c58617f581c11a377c63765127d342b6917fd40d512d054ec272",
+        "2d2188c20a1a951737a499f22ded8324e944f73c78f21d58bdda60a60a5ecca8",
+        "f2ef4333a1efad13923a826b59ec00ff6b9c2cfbfdb1e86d6f7aa7676ff8c1d3",
+        "9c68fbacb352968afb2d5eabb9f2ee410602f332f3649aa2824196f4a9a5a228",
+        "9b3d4c2d3d1c81acd6686fdda4adb97fec8e3fc4f66b1f64108f1d1686773e40",
+        "8cd3f5235516790bc762b19d79754bc6e9edaad159edc3a58d6a41b395952da1",
+        "a256a20a70aa5700ee3efc86dc355b476c9deb217d5bb640c64b8c75fd1c4ae6",
+        "c15dd1998b8c3710a2539c304c9da8bdafbbacdad7c82040356e10a8b497ed31",
+        "388b6646ea9c3cf67809f8ab15551cc63e87f2952d337143850f9ef6b49b49cd",
+        "0a4908d7fd59e89578031f8569b994f55c7f782d2e6f28be7e9ba2be8b109953",
+        "527e66e01ea7c145e4f076a84b21d626168432edaf0fa4a9018c789361574e70",
+        "d740a50c13587ece8a60088a8667fc3a6b5f6bf187efbff1ab9d7ad5b3b0a2a1",
+        "f44601decbdaa51adf9e43aa639aeae4d055f09361cce1428fb3eff7a34bab3f",
+        "f0b50ef3ecfdbbd73b1086fdb6161fbbc89b0ec4016bfc46c7d304ec9538fc0f",
+        "19f02e4eb659d97d91c5c52554d5b16426a83ea36e8af89a55c376315143c221",
+        "cca0898c1b41beb9153cb4da73b71627d38ad8544478742460a69d5be18a038f",
+        "92c3b7fb8e9bac596ae161978037aa5c70ddc5da28aae062e911d74969bbcb70",
+        "c58a288ced325f972a594f17d69930477f94d10723f58df66a8ddb5f4ba27faa",
+        "8e58929a73d6aaa3328165bc4dccde815242b4dcb409d34d0782bdb20be9427e",
+        "62380e8dea0a47e0766cf9deae9f6f64f888d8fd3483ae9a8c31ce007f1d096f",
+        "966f28286a2ba916000aa4234e1c6c7617748868380742237ccbd7bbbfc4fb9c",
+        "4cd2ffc52f213a204c444107f05eab1d1f942f9cf1b3b1fb112e9821ef18898d",
+        "2f2254c07796e1ec151c54ba90c304daedd550d13aff461f097c5fae83d589ef",
+        "ae6c5ddf1639153f29b0dca3cca77a126745bf6ce0a044bd65af55f38037b59b",
+        "84add33dbb207d29fa9f82bd9c44b0991ec8227f1542aa0b528ab636129f4000",
+        "caf0accc3a534c62652370c0cc9f41b678517816fef9e08743bc884eeae0e5bd"
+      ],
+      "images": [
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        },
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        },
+        {
+          "name": "faded-oxblood-wool-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "faded-oxblood-wool-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "3194deb45628ecf4d16943e26a5d2fce840dc02af59bfbd40e1f7e65b8e90216"
+        },
+        {
+          "name": "forged-black-iron-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "forged-black-iron-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "83cb23a06b29c75c18a928985120c636017997f2f3c52456c0b8271eeb3ae1e3"
+        },
+        {
+          "name": "oatmeal-linen-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "oatmeal-linen-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "bac0bff0890fa504b4d8bcf853926b74dcf26879f6e813a0988c0ec9fc434d08"
+        },
+        {
+          "name": "olive-glazed-stoneware-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "olive-glazed-stoneware-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "aa83692a8bf120ec85016568563d21818afd59d336736a4cc4f316c523ddbfa3"
+        },
+        {
+          "name": "salt-glazed-brown-jug-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "salt-glazed-brown-jug-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "f5cf973d83028459b84fe69e5cb86537736110a1e550d0e7e57ef3080e223710"
+        }
+      ],
+      "nodes": [
+        "tavern-bar - Tavern aged timber framing runtime PBR",
+        "tavern-bar - Tavern faded oxblood wool runtime PBR",
+        "tavern-bar - Tavern forged black iron runtime PBR",
+        "tavern-bar - Tavern honey oak joinery runtime PBR",
+        "tavern-bar - Tavern oatmeal linen runtime PBR",
+        "tavern-bar - Tavern olive glazed stoneware runtime PBR",
+        "tavern-bar - Tavern salt glazed brown jug runtime PBR",
+        "tavern-bar - Tavern worn brass fittings runtime PBR"
+      ],
+      "materials": [
+        "Tavern aged timber framing runtime PBR",
+        "Tavern faded oxblood wool runtime PBR",
+        "Tavern forged black iron runtime PBR",
+        "Tavern honey oak joinery runtime PBR",
+        "Tavern oatmeal linen runtime PBR",
+        "Tavern olive glazed stoneware runtime PBR",
+        "Tavern salt glazed brown jug runtime PBR",
+        "Tavern worn brass fittings runtime PBR"
+      ],
+      "meshes": 8,
+      "animations": 0
+    },
+    "browserSha256": "cd3edc13ea18a64a713982d8d74dead0ea6447450ed97487d7566de3e84e44d0"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-barrel.glb",
+    "url": "/models/environments/medieval-tavern/tavern-barrel.glb",
+    "originalBytes": 1716592,
+    "bytes": 982976,
+    "originalSha256": "3c52d769afa3e49186f300837d44ac667a008c9f0319d45d0f13e12af1d2db60",
+    "sha256": "0e364a53ede180db7b728f8961efb6220590bbea8e24225a4f9d179dbf73851f",
+    "images": 4,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "6382130ba6cfed5b9ce40a54785e49d1d4ae902149be3d6adcd7f3ec1f7ee0ff",
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "35494705e39166b3ac340189030b474c770744eae2013c31feb5b434265e51c1",
+        "ae145fee5e2b54c6554c3455c399d104dab4d8ce47689419592c79cbd06b02f8",
+        "081424dcf3ff91770176ee68677367aefb4607a1ab2bba1d25e58a4a615d289f",
+        "99a7254da5e7c1534dd32c6408a34afb79846009371524cf24a38cc683bd3f0a",
+        "3b1807d9afe936156c47002a438b0cdc66c44f0b79d62d3fa7416bc2c6cd4e82",
+        "3e6acde2db3480a143e95ab047edffd4c69e5bcade01288659fe028e245959c7",
+        "cd784fbf52144aacbfa2c1de673ecbe4e304d276f5ee14bb4439e0f3eca4cc50",
+        "7bf16466ffba91e404e97d93ffdcdd41697af384f9de5b7503d6507100acd8cc",
+        "e277a9a3de85e8fdaabc5f1f75409d7911380e57825f2a717a493612d2b23b70",
+        "ed1fb60b90c2b8792919d33ae7e6bda95f37f6f689ff291457381c22acd41c17",
+        "68bd99b059c7fbf3b7a4687f59814e78400ee4ec16f2aa0e0c1f474f46e75054",
+        "c8840567fe7eee72b8c870c942c638e5dbcd7612699f5e70b6ff80dae99925f0",
+        "f2ae065705cd67f2d3b876eaaf1dd458925de45a048e7d175d00aca100ceb367",
+        "c85e8c4bb1a9e9f5da8d4065b52806d68fa9e4065c85b6a39e278b8b79cc179b",
+        "42e8e81c094481642a8f2bf03ddfa61f0c2ec0ed1a4e78272317549940923d88",
+        "5d788ab9612af6d7b222e02ecb013d7ee8de848aca9dda92dc6c3ffc3b7897a3",
+        "c40c83448e14a872f4eb1ac41f1b348b5d98c3c350f4f4936f29f6092cbab835"
+      ],
+      "images": [
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        },
+        {
+          "name": "forged-black-iron-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "forged-black-iron-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "83cb23a06b29c75c18a928985120c636017997f2f3c52456c0b8271eeb3ae1e3"
+        },
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        }
+      ],
+      "nodes": [
+        "tavern-barrel - Tavern dark oak end grain runtime PBR",
+        "tavern-barrel - Tavern forged black iron runtime PBR",
+        "tavern-barrel - Tavern honey oak joinery runtime PBR",
+        "tavern-barrel - Tavern worn oak floor runtime PBR"
+      ],
+      "materials": [
+        "Tavern dark oak end grain runtime PBR",
+        "Tavern forged black iron runtime PBR",
+        "Tavern honey oak joinery runtime PBR",
+        "Tavern worn oak floor runtime PBR"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "4e04b2e8dba1f889f3a180c0515031d5c4c35798d8296ab1b807d7bb040c8d5a"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-bench.glb",
+    "url": "/models/environments/medieval-tavern/tavern-bench.glb",
+    "originalBytes": 500264,
+    "bytes": 287236,
+    "originalSha256": "0f163d28704172d03bdcf1b864500ef09b70c9dfb4eb1bf251ae8982b9d347fb",
+    "sha256": "b44bcd26ece29f2dcb7ff6fa9d58bdcc1cc53b0c084b9b106339fb2035e36d80",
+    "images": 2,
+    "meshes": 2,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "0f0bb54dbea07217fbc24a96c766b357d0ccd929f34884a2be072f3784415129",
+        "f0e9fc0059680e33d0465ae8a8b30fe156d19b263c2bdb3973e62a1599b4ffbd",
+        "a03f831cc37e378c96c3fbd23cce822dfa932b72bb72ba7cd94aaf5e80d6f06c",
+        "84211028de1ad52ca246d0734bb3767cbb8c710702725fe1c51980e061645578",
+        "52189f37337c82e510fa9a3e112e2a0fb4cc30e0f2359665ce50348799a46aeb",
+        "ef5730ed6e2ad87125bb3b067457b58c02252547b6eb9dafb9847bab83e75725",
+        "96224631fd009e29189a5dc11a4991c2dae43c984a78885e42d81b7c92644f45",
+        "92697c6f6654b04c31dca0cffd7671a481a6e2889bc5193e02a95602cb9bdd1c",
+        "459be6b30a0b770e5611783e8058244bddcdd35b3f94d55798531cb602636368"
+      ],
+      "images": [
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        },
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        }
+      ],
+      "nodes": [
+        "tavern-bench - Tavern aged timber framing runtime PBR",
+        "tavern-bench - Tavern honey oak joinery runtime PBR"
+      ],
+      "materials": [
+        "Tavern aged timber framing runtime PBR",
+        "Tavern honey oak joinery runtime PBR"
+      ],
+      "meshes": 2,
+      "animations": 0
+    },
+    "browserSha256": "a3a1c850ae73ff4a3c7d2e153cd8a4327a16d2ce669cb72c77cd07562a378254"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-chair.glb",
+    "url": "/models/environments/medieval-tavern/tavern-chair.glb",
+    "originalBytes": 592524,
+    "bytes": 348688,
+    "originalSha256": "c6315355f5e95a67bb7afe4e749db90535c4cb6523fb6d853d83d53376542003",
+    "sha256": "188e7db97f552d48b4eb1e0a7eb4c9a3c7890d496c3489f93f4a8335c7645a1b",
+    "images": 2,
+    "meshes": 2,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "dafd5011a32deaeea518b59c57a725bb7007d362ffbe8f1a75efcf33d4f5e7d3",
+        "1f0aab6dacc78b466b0e042cec5692a2aad02739fc0264fd7285474ecce1275e",
+        "3f310f328eb9793d4321f03aaebd7588ebd0d12c4b2ef0f0c48fc5a085110958",
+        "ccc9bd2e03883da5bc690e511136ce2f654f9fabdc73f7f0a5153946e7642f21",
+        "2d0544f508a9c98215ffd7071d96097044dcf9730762d58dbf0416df72f7aafe",
+        "3e59e54721dae67c2850fb7d04261cf0523ccaff45f63ca39c35808cefd95417",
+        "fb6cec20ba449ddaa3cded252c99f79cfbb7eea4bcd55604fd5c2712489d5286",
+        "2cb188763e38639ae40a342e3e992dee980f266904c478fdc756a0985662c3d5",
+        "150ec4123ca459177d069d087e32c1c07ff8acd3eb8d0916b831ceeaa3220b30"
+      ],
+      "images": [
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        },
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        }
+      ],
+      "nodes": [
+        "tavern-chair - Tavern aged timber framing runtime PBR",
+        "tavern-chair - Tavern honey oak joinery runtime PBR"
+      ],
+      "materials": [
+        "Tavern aged timber framing runtime PBR",
+        "Tavern honey oak joinery runtime PBR"
+      ],
+      "meshes": 2,
+      "animations": 0
+    },
+    "browserSha256": "be4e6b153deb886e916d118e43f90605395c3480cb95c0b491b1b279dcedbd08"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-chandelier.glb",
+    "url": "/models/environments/medieval-tavern/tavern-chandelier.glb",
+    "originalBytes": 985500,
+    "bytes": 591572,
+    "originalSha256": "881477e15464e83408b548b4920d05e553608beb74d663da2d5e3da068f3bc57",
+    "sha256": "e4e8d1192bfe5af17dcaa0805592f791470cf258d81dd3388473d40efe9da793",
+    "images": 2,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "6382130ba6cfed5b9ce40a54785e49d1d4ae902149be3d6adcd7f3ec1f7ee0ff",
+        "50e119d746ab3f3ecce9075bf678f728abf8ca55ce81269725bfd15b1d6495e4",
+        "12125c5be1b3e873fdfc052859d461995652c45929dc37b3554aa115ed6dde9e",
+        "4cb733589d2b0dd32826128ca021fd4e65a4d4a47eb103959bf61f9448c57766",
+        "61ef69433c3f80c1b652733849944136afe84b7e69ce22568d777c7614e275a4",
+        "9bd46a2364f6df5d9b53022b98ddfd767e21b974e486b726960204c958a72bf3",
+        "ecfe74cd7faa7a81939a4b0617039096c19948c05abf7cc3e9dea057c7c361ab",
+        "7ec7f530b8da6e76aad358f899d497b26205d4f6947cb3b3ca91299a9bf0c63f",
+        "eeec10a0dff2eda730c0d5cb285131d9dc72e32957ed9aa5073d2ef297180693",
+        "95bf8f6a927f8bf06ed8dfd549bb8ef2e3851245a4b1c12a8de181d4ec6ff29c",
+        "6c9f319bc5c8b8f681b7e39e0a760b0ea144fd8acba0dbb72fc1511d6234aa56",
+        "7071f4ebfebea658a4761549faf0bf9d4985d5a101b065166ec83d8cca611c6a",
+        "79f9580ec29623118d7627a00d20bf8bfd6c787e960132099c41ac8c65f87002",
+        "a753d18de15a713931f56aefc85470af0bd0e156d198cbc14f3a759e747aac60",
+        "5dce0b350525161412c08a7545f5e59c531e19fb40cb969dd4e668243cb6385a",
+        "f24e43bfd2555829ac4d4b0a30d51cccb5b315109f135f8b86df3d341d3f1494",
+        "a57e8bbf7cd56a16c5644a5d01b895cade7235b074e372a5531c1e5bfff1093d",
+        "05b50b7d5f32305ea0d1b51c25b8fade722c70ff8fef438316f245f527a05f65"
+      ],
+      "images": [
+        {
+          "name": "forged-black-iron-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "forged-black-iron-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "83cb23a06b29c75c18a928985120c636017997f2f3c52456c0b8271eeb3ae1e3"
+        }
+      ],
+      "nodes": [
+        "tavern-chandelier - Tavern amber flame runtime PBR",
+        "tavern-chandelier - Tavern beeswax candle runtime PBR",
+        "tavern-chandelier - Tavern forged black iron runtime PBR",
+        "tavern-chandelier - Tavern gold flame core runtime PBR"
+      ],
+      "materials": [
+        "Tavern amber flame runtime PBR",
+        "Tavern beeswax candle runtime PBR",
+        "Tavern forged black iron runtime PBR",
+        "Tavern gold flame core runtime PBR"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "5c3483085f58bd9eff2b894cb9b7d0767c1f197f3240797d96404f83c71fe2bc"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-hearth.glb",
+    "url": "/models/environments/medieval-tavern/tavern-hearth.glb",
+    "originalBytes": 7209208,
+    "bytes": 4186384,
+    "originalSha256": "49a77e2326e9aa7a40b4876dc1cab0209b6ecb0a211f1ea52eefcb2fd5c9a6da",
+    "sha256": "d55dda4d5f8c7996194269a014be4e7497fbbaa46d7e1206cd5d2696bb6c8d00",
+    "images": 20,
+    "meshes": 14,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/6/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/6/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "b8fa15286b54ba2d5f864a90f82902b23b3ed1bc95069782e17a2b1a54deeb58",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "6382130ba6cfed5b9ce40a54785e49d1d4ae902149be3d6adcd7f3ec1f7ee0ff",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "7a60a2a247ac3f375e6253908121b9af46fe996324898a2ff42e9e508b069b6c",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "feffc8949aa32c9abca6a61701f4cb7f5c4d0fc4b75d30bdcc14d557644e6d95",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "17a6c5f566b43e511ab79350a1b43f70772d36274ceb20399c5aef8efde0d753",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "71fde609b894a100d6214a03e54527031192ddc331e6c081e462d3fdc4cb7b01",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "2810e06620baf05741d93684379ce20f87d1ba8e5a2425ba1c7980f10b23a0de",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "14c6e83819d033961a2c0b98faf49a761b7b75c148790270765ce7f62e8af860",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "3de118751ca02eaf61327746f8a0221852dbfce7cd68f59a8fa0398cb1ea1ca1",
+        "dfd14b013b77ee2e040d017d021d56dcec69f6b38de98cf794b9d094b47f7318",
+        "17dd1ba1003d4584c895f0e1706c539602a1419de3073af792031eb8d96a3b15",
+        "06dd1ef6964377779013e110d59af5f232d1058e9d6a8ede3fa3be5897c2a4a2",
+        "18f5c908f5d707e23959ac6eca178e79720b6c8bb716bd12f7d2fcebe9e8505b",
+        "5d5dcfde614a1bedf5119c05ad4435df2d826edcb4b359b6df429f513bab23b6",
+        "830924cec9964cca4b494e857820349c2ca2a11d819816fe199715324dfa17b4",
+        "5c48d7f6e0344c50ac20d0a8b9fe0f7ed7540c6a0b192ee0d7c964f6df9f9548",
+        "2208c2ce5f860d9b2d4193a6b4facb0b096eb6c98078951dd7379e573e7e4d96",
+        "5db72380fe3f694fdd244c2ce3194c2d6bd7929962612f6ab073552d35f4b986",
+        "3a3b448ca5151bd02269c5b8b5a8a8e88aa496f57b4f5d151f70ca57044359c3",
+        "48b7a847f85c0c23640b4719d1f2fa6dfb11577b9e67d8210a35ba614676e45c",
+        "8c361bba984cd8e17815ed14b3925f62582771c99c4fce9903e0c0916ea1d751",
+        "22828610928b9ce4ec5b8935e1efefbba4a7cd96a7fb991198e6de1bb995d585",
+        "2cdd9e77f45abd4afb95c6314211dc69b971d4dd311bc0e02eba60d658f292e7",
+        "cf77dad8ad5848b30ff4019e53fd872d184eaf533efb5a455b7222c3ca1ffde5",
+        "462d2daae6777eb417f9885a1a86fac58f13be8059b3460ebe96b654e708882c",
+        "655cbf7d93b224b738d5a53e43c468eb27b952aa814de352296366507e851fe5",
+        "3129e12547faf8ca323704c9a459b46dab1413cd8d2df238929bd0f58c16a662",
+        "2582d8fc062003efa7186c89fac11bfeb4e4f2d11d69c4bd4cf9f2569f36448a",
+        "47f3bd8f22a23063ebb61fd6ae371094a1f00037d1554174d92da328ff923fa7",
+        "77ba301fd3657a0cfe6637221e0fe6c146e797d904d1627710cbdf83763fc092",
+        "5011a0dcd792c7bcecfa10f84e4578c38aef17e58b8a56cc2d6fe63aab596f80",
+        "7a13d09180c6bf148d16f37dc6e21ad9f6641c2dc1584d64e11258cfc41d1fc2",
+        "7b7b472c5062a814107db37fc138c55855f6097107c3ebe3d608f193bde9ea88",
+        "1ce9f1a39f6673dbd7a584208693012db56c13f8de57510b4eb2674d236d467a",
+        "006adc4cc47096c70766df71ea05acb43052df5b662f4bf4ab6ffdf0df23c7a8",
+        "6e6d770f3d0a54468b64b50e2379376b7ad601b1c5cc2c9fa115d46f2dfad95e",
+        "9ba28643718ea9cf8c40d6ad135ad491ca1de2fc107e64a148cbedcc3981a0a8",
+        "27e11e9c5d3eeaaac5eeba465a857850d883c2166d73ebef5daf36eed5c9ace7",
+        "f07fb70c9232fb432a251d086529bc4231037bc8028c7b28e779c169bb6eb1dc",
+        "976966f38ba9f46a0329a57710f31d7a2977a3900a4554a1c2d8d160cbaf1136",
+        "3f9f7a00bc7b07c6a415a7b0228b6d81305863f4139bf40ba0b643f9bbac5941",
+        "21c9a4acd25f88186a347e712c8cfb1fd562264073a5801eb6563f075f038030",
+        "34157ffadc0ca3196aaabd2fc22d5241d37aa00a977fb7f1f182d0ccbed7ac17",
+        "ead2cb529a18aa4e792cbb59a5645ef6fc2b253a9ec3915d761aa82fef14e5e0",
+        "ec9f6f544b16ffcfaf88d381fa456070d7ce53fa050a8943c09bc8bb24182474",
+        "094fe3681968d8e0701356cbf0d6ad65b8ba0ac8a01405ff9c8fae9913829092",
+        "33d3586e47d2a58afc3b66908025247df872503fb530d109a96270fd501f3a37",
+        "49984f72f959853af660ff647fb0127707d9cc052fea4ac942118c9f46deca71",
+        "7dc16e05832b57cffacdaa219e6e809f5025e9963787c6d5aeb7057ef5b536e5",
+        "96b2c6ef64562cdae3a600971ba0578ba45346c916cabf29942d17018e2a8984",
+        "352a3e630bfeca27fe5552ab0b785bf9b5d65aea0df6fc07eb500f604145e61b",
+        "150e6961dea4882a3801cc780cf85b5e726262fe48e940324749a1a9a364628e",
+        "417d878ad5fdb0b062abd59a6f9f2620f00f085909197185f94cca4db474365e",
+        "3b552f05e933208ac9a5f28e1c1c3fad93e362821bf4aa9a93218831dc961695",
+        "05e493e81cb2f6051316cbd0d5953363d6390f316315ec53474238d089c5f23a",
+        "fb322f4d8a6cb616920ce69ee5bc76091f9f2d6cc56cd695aaf0bb9a24b78051",
+        "967be6f9042fbd2e3eb796c888beb05dff2798dcc6526185fb45f86c52ffb7fb",
+        "6779d7cf66b1db3445c2f2bcd03d4a4e3e46d5794e976ee0e826874351aad66f",
+        "a10155ae895ac19b776f5963df47ce732c94fe9dbb62e8a6911fa813bc97c3e2",
+        "31db9b75b8a6bc65fd121e932fa10faa00fda285335b64a2481093978e19f524",
+        "5d27ac80f7c58e972366b4007b5215f0acc8f25e235012b8b191d75ad5cdc9e8",
+        "56b6e202837a29ef242e27c5c8bef207791b50b46257902beaeceabbedde5a77",
+        "e64e7da662c689f5b982306111b283b812575b2313b7983c5019a813919fc7a1",
+        "132e3d152a920ea6d03f1f2f3d7339fb9c9ef91ad8014ba0d34b53f3dca580ff",
+        "d2c0af69cf2d6d54347234216303e7c8bc48c7c27a9f9cf61887140ff54eb318",
+        "3f010be53fd0768ab054159c538215099df1ddd218f0433f053db1ec9c45f2b0"
+      ],
+      "images": [
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        },
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        },
+        {
+          "name": "charred-oak-logs-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "charred-oak-logs-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "8c8c730852012da6faeda8a1a6d60e4e65fa561374be6d12530b460533592938"
+        },
+        {
+          "name": "forged-black-iron-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "forged-black-iron-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "83cb23a06b29c75c18a928985120c636017997f2f3c52456c0b8271eeb3ae1e3"
+        },
+        {
+          "name": "smoke-darkened-firebrick-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "smoke-darkened-firebrick-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "b3e5d565f10b0d1481f97e7e340582f56792dfed274083112900479d62b8e92a"
+        },
+        {
+          "name": "warm-limestone-0-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "warm-limestone-0-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "2c242deddc965d35865a84064bc801f5fcc2aa8a004d5549c114242c4ce1355c"
+        },
+        {
+          "name": "warm-limestone-1-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "warm-limestone-1-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "a9f14996c04f60cdf23e6d071387bbc3d1a7f485d6ab59aa96861edb1f7af347"
+        },
+        {
+          "name": "warm-limestone-2-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "warm-limestone-2-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "25f2af9351d78456377446ad4f1d4ab754df858fa4afeabda4b450586765255b"
+        },
+        {
+          "name": "warm-limestone-3-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "warm-limestone-3-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "4ff7b5ae1243fef6ca5eab7b57253ef24df004bf9f9693a912ea1f74b4bc57af"
+        },
+        {
+          "name": "warm-limestone-4-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "warm-limestone-4-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "2862a2788062ff7be8eb2521cf25ebb59ac4510f91e717e5d7fd32c296e5dd17"
+        },
+        {
+          "name": "warm-limewash-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "warm-limewash-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "177ebe298bf20a4f93fca17a40450bb55c939f700f40e1a2b6305a82f3ad3ce4"
+        }
+      ],
+      "nodes": [
+        "tavern-hearth - Tavern aged timber framing runtime PBR",
+        "tavern-hearth - Tavern amber flame runtime PBR",
+        "tavern-hearth - Tavern banked hearth embers runtime PBR",
+        "tavern-hearth - Tavern beeswax candle runtime PBR",
+        "tavern-hearth - Tavern charred oak logs runtime PBR",
+        "tavern-hearth - Tavern forged black iron runtime PBR",
+        "tavern-hearth - Tavern gold flame core runtime PBR",
+        "tavern-hearth - Tavern smoke darkened firebrick runtime PBR",
+        "tavern-hearth - Tavern warm limestone 0 runtime PBR",
+        "tavern-hearth - Tavern warm limestone 1 runtime PBR",
+        "tavern-hearth - Tavern warm limestone 2 runtime PBR",
+        "tavern-hearth - Tavern warm limestone 3 runtime PBR",
+        "tavern-hearth - Tavern warm limestone 4 runtime PBR",
+        "tavern-hearth - Tavern warm limewash runtime PBR"
+      ],
+      "materials": [
+        "Tavern aged timber framing runtime PBR",
+        "Tavern amber flame runtime PBR",
+        "Tavern banked hearth embers runtime PBR",
+        "Tavern beeswax candle runtime PBR",
+        "Tavern charred oak logs runtime PBR",
+        "Tavern forged black iron runtime PBR",
+        "Tavern gold flame core runtime PBR",
+        "Tavern smoke darkened firebrick runtime PBR",
+        "Tavern warm limestone 0 runtime PBR",
+        "Tavern warm limestone 1 runtime PBR",
+        "Tavern warm limestone 2 runtime PBR",
+        "Tavern warm limestone 3 runtime PBR",
+        "Tavern warm limestone 4 runtime PBR",
+        "Tavern warm limewash runtime PBR"
+      ],
+      "meshes": 14,
+      "animations": 0
+    },
+    "browserSha256": "431d9b3844966a925297a102d50bacc1cad2d18c1b99647126384675f6d5dd2f"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-stool.glb",
+    "url": "/models/environments/medieval-tavern/tavern-stool.glb",
+    "originalBytes": 462520,
+    "bytes": 274120,
+    "originalSha256": "58e03f946078ba8ffeaf4e5caa229f7d78103f9f41670c289dd97b186b81193b",
+    "sha256": "d62bce1df1ca08c87ac0bf8bf798a21df13165a9682ea3f46572c069fc68eeba",
+    "images": 2,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "042be21b986984ad5da3bac9ae76f44782887608b10d27713376e4bb27a74276",
+        "613eea18a9537fb41a1fb62c267c743c282a1e4b76dcb8da0236c0dd5d749283",
+        "22b93976198c32d70ffb38861212a793c98611c64bdf39fd84a0611225251164",
+        "cb6386826f95880990e7f41b1d68c924c030f532ae7d2cdde750ef760caad361",
+        "0a81bf477ec84499979da7a4421e0504e611470e0c5f2480c372f8f8573829b7",
+        "0e81c0888edb0ca009e8863af476ea8b0370cfae778d37ff3be0e54193e393ec",
+        "940d596a6d3345880278a5aa359ab1c91c9c85c942319b0e4c615edfe0ad0240",
+        "44dcb38d8ca37a2b4a8fee7da2fa3ff4eb593d4e0a266bdeb51d03a39e911d03",
+        "ef76bb6e571e5453502c80b065cd67435d6a91ca45a2f81000723e25573e1141",
+        "0c7395b63f8cfe8a663811fc14177ef9929e643203c5e0f581d9d74b178af9da",
+        "2129f30fc3197e3fc3c6a69c79aabbf6a71cd607c56173d69ef82a6fea0f0a3b",
+        "a12ed6f7ad9b86b8bb789ad19081c6407add90c6e616d2fbb805740440868979",
+        "ea73286aa8fa73120854e5eff96f8c7284b3f394a0c46e8b7553781278c897bb"
+      ],
+      "images": [
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        },
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        }
+      ],
+      "nodes": [
+        "tavern-stool - Tavern aged timber framing runtime PBR",
+        "tavern-stool - Tavern honey oak joinery runtime PBR",
+        "tavern-stool - Tavern worn oak floor runtime PBR"
+      ],
+      "materials": [
+        "Tavern aged timber framing runtime PBR",
+        "Tavern honey oak joinery runtime PBR",
+        "Tavern worn oak floor runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "080896d60cc6a699017b79347ac25efbc3da2e93625b228f303d72c0660639db"
+  },
+  {
+    "source": "/models/environments/medieval-tavern/tavern-window.glb",
+    "url": "/models/environments/medieval-tavern/tavern-window.glb",
+    "originalBytes": 1337412,
+    "bytes": 800924,
+    "originalSha256": "f8ae5bbd7ecd75c266f83b6e93d593484c456c9eb9e42c60107c3fe82442dae1",
+    "sha256": "4228933e7ee808fa8a39af40722a17b5c7ea8a54e47f736998ff1d4db0b80c69",
+    "images": 4,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "97d14e09cf79fca93871db3a057e492c76356a21fbed86532fd0f3d49e6847d1",
+        "e56c85273dd121b40842904e3c62482b143b17e769d770df708ee7c4bba4fd5e",
+        "04409719717b62fc3b320dea6109e8daa974fe8e2638f999ccdca48d7707f715",
+        "6382130ba6cfed5b9ce40a54785e49d1d4ae902149be3d6adcd7f3ec1f7ee0ff",
+        "d1c083dbb13e0ab5b4d49fdbd3031cf1d404dbdbadf751c5f46a6d23abd7bde7",
+        "7a03279b47bad39ab2fc71f3c9cafd883c77aac8b07009de5621401ac377f52c",
+        "34578383462caa677174da3f0962eba95377a3934f7a2813a30e248ea0378ff5",
+        "a4f0d05043af298fe239239a34f528028392283b87f0ab776795180ecf8d3f42",
+        "44cafb52a2633461554ea4cbd5b9d339ba280a18d7f1e854360e01bf96699df5",
+        "659994eee060e8900902a3d56f26223f4553f9a2e40a33dc3622c73fb77ef1b0",
+        "0e3e908567336761e0a2b93e409b1967b8426cbbc1c69cdc43034de7077e5e07",
+        "a18482f82de3c01474189c2cade8a9d7556d0e429ba63d258ca4fc3f81d21b3e",
+        "80da226e68ff32cbe99c908285b441276020364b213d738b7aeb38a51e308ede",
+        "7d2f8db87882bcb3e1c896374c8b234f2306f867587c5554e37f9e7691bee935",
+        "5c3af422ea0da308ac5ef3db5d03b6981794032694dded280a80f3ff2bb1025c",
+        "47026c3f17b7ffd8ac356fe924b58badd2229e45bc312577961167e368564421",
+        "bbd90593f23356f199087ccb5c7d389158505a5740f7a2bea0bac12f178b2cf2",
+        "569f9318accc324e515a65d149036db4f0989940bf6f4070bed6900ff94e39f3",
+        "ecb00505808cc228e3a0c102263581aef776c90eee12f986b08e0b79fafaf924",
+        "681b11e74ff336ec3c658e8cc8ae286a3f00412f11275b7ab0353f3b0172bf98",
+        "d643b9b51d724635002e089dd4fd5174e6a27cef38b34c3f06dc478899640721"
+      ],
+      "images": [
+        {
+          "name": "cozy-oak-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "df8738a2095f7d0ee14953ff6dd3c8e8c7fea1bff26ae87e12e36f164122533f"
+        },
+        {
+          "name": "wood-oak",
+          "width": 512,
+          "height": 512,
+          "rgba": "16baff7cdf523e787ec191e50036cda624b5d77b6e0b580a9d4520cc98212be7"
+        },
+        {
+          "name": "forged-black-iron-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "39874c7a8a7e0f7d2f6894445ce8490873af1ce7eaee8456fbcf154460904cc7"
+        },
+        {
+          "name": "forged-black-iron-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "83cb23a06b29c75c18a928985120c636017997f2f3c52456c0b8271eeb3ae1e3"
+        }
+      ],
+      "nodes": [
+        "tavern-window - Tavern aged timber framing runtime PBR",
+        "tavern-window - Tavern clear window glazing runtime",
+        "tavern-window - Tavern forged black iron runtime PBR",
+        "tavern-window - Tavern honey oak joinery runtime PBR"
+      ],
+      "materials": [
+        "Tavern aged timber framing runtime PBR",
+        "Tavern clear window glazing runtime",
+        "Tavern forged black iron runtime PBR",
+        "Tavern honey oak joinery runtime PBR"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "23fca93ff618174682209bdc825d6651a8a783eb0f78e2e8b83db3f496113fa9"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-art.glb",
+    "url": "/models/environments/modern-bar/modern-bar-art.glb",
+    "originalBytes": 1514044,
+    "bytes": 928248,
+    "originalSha256": "b6260cf9721e31e9b5813a00a51a9099e670341e9dd3de096c1fbd682093d7a6",
+    "sha256": "4cc7957a25aafe4bd65ecb36cefe3b1ecd94307c90fc76a4abb25b63618e29dc",
+    "images": 4,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "b722d82cf4462bd0d8231adc3cecb2186345d20c8e234dd004f89f3076f8be7d",
+        "301bcd7a22ca293a41a0e85d3dd0d1eebb69cbe1ee05588dc9c9a6ed5efe1cd5",
+        "b722d82cf4462bd0d8231adc3cecb2186345d20c8e234dd004f89f3076f8be7d",
+        "00019e3491abac7b5d5312d69757e4a965d230d3888425662cb936ee4e8fb990",
+        "8fe092e9b2b4de3b22fe493ec8b70f7ce443a35cfdae15a1835c4bbf30743a85",
+        "21c6cee2e311353b8b7ab32d75bba565aca15443a9039bd53fcdc960f6185852",
+        "155a8802f51519b1d7491d4ec393db479a1ef9aabaf71a72d53ffe2daebe5270",
+        "c8937f26b0e072827a17a31921c10b550d4901f4fbc824359343dd4d64a559f1",
+        "18e5a85d4024f3d9a74470a9116c1ed3b90fe9c8d726b53efafeff332c295aed",
+        "38c9a1d873d790467d5d6e4d033a726f8449eb822d8d0b6b946bb297c4647ad9",
+        "40cc665fe64801284f04d723e481d7a72d061d919526e47e674be435dbe7086b",
+        "2ffe916e4f38fa25410cd08c163112471489c198ccb71c89341f24fba0054edc",
+        "0e12f2f1378d4d34e9bbe5853d815490780d38492ba10e55c38edc427bbe8f1c",
+        "bd7244b5c0f16a7aa78b6f5cfef8ce926d2c6b291e352b7ceef935e4f32a8433",
+        "b6262ec5323e8eb97538b538e56c40814a855d939a91057d4c8938f5897aa461",
+        "b755d51a9e880f84322f194928b1f74b407438e35942ab43749691be34525a8f",
+        "dc5eeffbce7d0e60491d429c031bbea000f039f10c9e517f625e1c2fc543a993",
+        "dd74f364cea52bf1dd86b7da2bc10650602779189b0ea91e207d86960774b717",
+        "9bda7c50eacdbd3e2f1748c7122b6a6749899de394855b1e7ee1cd9ae5358fca",
+        "b2d5365119e6ee166e49ff3a3a73c4a6737758e1b0c321e57fb9fa5ef72849d1",
+        "43d6c56dc9a2ce7d79f6c21e6755295f3cbf7dc298ae8ab7db705f2aa5228ddb"
+      ],
+      "images": [
+        {
+          "name": "petrol-leather-booth-upholstery-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "ff74ffbd8a0d7ca32eed718ae5dca0aee82f0c4a1c5edea2cb403c41359cfc86"
+        },
+        {
+          "name": "petrol-leather-booth-upholstery-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "315748ad43202b76cd4f8db58725e2fe71b8ed9a72a6d05d364e9ea5bea39cfe"
+        },
+        {
+          "name": "saddle-leather-upholstery-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "ff74ffbd8a0d7ca32eed718ae5dca0aee82f0c4a1c5edea2cb403c41359cfc86"
+        },
+        {
+          "name": "saddle-leather-upholstery-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "6e786aec5b7a458a5d4ce29b940c04aae1720bd6dc9b93067d6eb49cd0b555b6"
+        }
+      ],
+      "nodes": [
+        "modern-bar-art - Modern Bar ivory ceramic runtime PBR",
+        "modern-bar-art - Modern Bar petrol leather booth upholstery runtime PBR",
+        "modern-bar-art - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-art - Modern Bar saddle leather upholstery runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar ivory ceramic runtime PBR",
+        "Modern Bar petrol leather booth upholstery runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar saddle leather upholstery runtime PBR"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "0838b16bbcaa3e4bead22d2a6519c7c36eeea97ea6570a73b34da639be7ea5e0"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-bar-pendants.glb",
+    "url": "/models/environments/modern-bar/modern-bar-bar-pendants.glb",
+    "originalBytes": 168248,
+    "bytes": 125416,
+    "originalSha256": "e78e1359b2cf415de3ba01e5d6c373ae98df9e2636bf1fab9bc0023a13c3e67f",
+    "sha256": "75bc6cd30ce68feef009c3bd02990713c79889d73fe6ab89e4597acb7aa28ad4",
+    "images": 0,
+    "meshes": 2,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "e02bca9e24e41829040fa79f9573c45b850c125e439bfbedfaf5712865bba92f",
+        "c82e3bf4b72ca801f92463e073a85881d52fb4ced3cabeb642d2074d7dc4465e",
+        "59b1617bbd65ade01f398c2cbfb12bf9a83881bacfb75cca8c95106960a11aac",
+        "e004115d9f4b4cce57a828ee09214ff15161f4e395dd5eedfb72c5da1f79b27d",
+        "ab2f67e11e862273419a302e6af36558e9f6fa1437a6fc23977c3982c9017fc0",
+        "8f1160959de78d0d7bf61c557bbb4db8ff6b69acd7dfc4639ffc3e089e817cc9",
+        "1ca906381aa8aa316f8e61e214afaa534ce945c4394d3a8e7eaa738570ad9353",
+        "6eaa3a3fdb9a27dbaa5f96dac2ff5c55f49c0a8f1301a57f5f1279b2d1f56571",
+        "822eb962be60ab224cfcb0de054f386ecbcbd739fde0441bf7402f1eb0fe43ff"
+      ],
+      "images": [],
+      "nodes": [
+        "modern-bar-bar-pendants - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-bar-pendants - Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "meshes": 2,
+      "animations": 0
+    },
+    "browserSha256": "01754976d2cc6b31db89ce891bd5694812c357ed77448ac3bfdb2c2b0a6dc6d5"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-bar.glb",
+    "url": "/models/environments/modern-bar/modern-bar-bar.glb",
+    "originalBytes": 3491324,
+    "bytes": 1915164,
+    "originalSha256": "dec4bfb3f991fa43fb69094067f15765ab7680f14249d65031544463c548b905",
+    "sha256": "aad927dcfb47d4854765471c268aa2bbb523505bbacfe322ecaaa50d6fc84cf1",
+    "images": 5,
+    "meshes": 8,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/5/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/5/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/6/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/7/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/7/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "f9cf2476460807b1ae80288aaee9f45924b57035cc4273af35d55c0a8e4297ed",
+        "1de781c3b3656994d01be95b8714a5ee481c2312feee40d996f99c06518dcb3b",
+        "f9cf2476460807b1ae80288aaee9f45924b57035cc4273af35d55c0a8e4297ed",
+        "9f17ca98c6a0676bf457e52e8a01a23485cc8a30c896e49b864763aeecda3163",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "99e9973d794a3fa83146c1ecead699ee85a109402c382709c82c7c3e35267a4b",
+        "267273662ea9e1b97312e945e2dfe5619f84f2e5dcc1df1fbdd264ce519f817e",
+        "9456db51d95f3935266eeec349a7d1402a496e096973e4b84809dd8d8a806d52",
+        "297f043dba72a20204edcbce6fc51cd30649efc6a9f31f65eea8e6ccb8fa7888",
+        "ab8211161f8fcde0808b407ff17103dd82a62320ef421321621434df5227289c",
+        "0503106d08bac113ffcb56d04a5e835105e978bc9524fef2f58cd410f2ae7023",
+        "144b641c66e2acd3136e87d9a20a19163b4e0774efd28f28216d91b44a63144e",
+        "69962a1418fc08a3a4d1ca70c69d4eaf119f333c4f18a7d416baa9b2c74bceca",
+        "681bea8b4fa6c99da3e29ac4012f141f2598fcf57ae0da5165c620161cedd86c",
+        "cf7797a8b749c22ae8340fcca8ff299732c21f003090ff2381d47624815cac02",
+        "1b28376f07f0af4a18defa5c9942521926b2ca6b40b5fc04f291b1f18cabeafc",
+        "c242048ace5dcde344e1b8a29d02aa7b6d1f0ad842b2d47b4b190bc720c7de6d",
+        "5138cbac400e625bd72dbbd40083adce10de81cc66bf7dcd101e0fda5c61e0ec",
+        "a48c05debdf222689522999bf07de0d25d12deb2a4c6eec9b01e381ee16ca305",
+        "76bfc59c2552c383ee269998b444993cd4cb2e59e1e28880e9a09ae16e5030c6",
+        "53e062781012377eef420efc101fbff39fb3d4071cc4771b6b80dbbd261a453f",
+        "1b6ef890191a97b6d48132206e3394fd401a1f6be4aa99780f3d98645cd56e9e",
+        "010a953dddd8cb79de202bc655e0fdc3bab96c095e944ad3f8984e519b79bf46",
+        "37fa2735ffd71fe13416c3529393282d784acbabfd38bc900c3f649da4b5d1af",
+        "136dcdff45d49ce6547793021bc99a54a0e4fa12ebd349b7b17a11a0ca010ce2",
+        "fd0455a662ba03c4c08ddab82a66ebe69204a27547699bd18559b0bf69d9e76b",
+        "9d13d546a26fbe4730ebb79f04a449556c5edd40b1658f28eec0932c2256b4c2",
+        "ca21b15f6fafc405a33819cd25d160b4e246ceffdbaf55a20c8ff9bb5729b402",
+        "01ff8f1f3085cda829f9d0f8ae70a330f6493cacc675f4e372ed5a1399585c5a",
+        "18a9983990e756cc67ce6525c0c8ab8d88384626a8f7d9278d63839b7ab32fb9",
+        "10dae2669363040962fe6cfb1c35d5e3ca25fc83054058b557164b7adcde50c9",
+        "dd2ac069409620b950a1f71b95f4430e2bd3ff52d8898bfeae003e567c5a27a2",
+        "1f0c40a8deb1cac8c334f56f43810eb3d04b65d881aa38ae2bb8ccf0cbdb91c6",
+        "95972844fd82a4b6ef3a03abf4330dcb63000d31733e6f300538aa60574edd04",
+        "4e3f0964c973b65255ee98d3ba0b38b66e13cb9461129a6f4e4aea37aea1dd24",
+        "0932b35650f4d7f3d354aca36acced80cfdf4f9532516ed68101f48027c99ddc",
+        "fb3df6500590e6cecfb60e8a6ad5a0a32d14a41c256df1e4a70aa6a3e071c662",
+        "2a60070677f8881e2c0070fa0e4d9d2c130cbd80705cc05d5807f76b3773c9cf"
+      ],
+      "images": [
+        {
+          "name": "brushed-champagne-brass-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "3ea9491183e70f507d83b8a79682e211cf87929ce1746a812c7a852dd2854fde"
+        },
+        {
+          "name": "brushed-champagne-brass-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "7c11b495c9401d34470f8a2c5e3e4a4f3ad79d361dc129d5b233a52c7834db81"
+        },
+        {
+          "name": "charcoal-quartz-counter-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "3ea9491183e70f507d83b8a79682e211cf87929ce1746a812c7a852dd2854fde"
+        },
+        {
+          "name": "charcoal-quartz-counter-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "84aba6641f4aa41959f3cbb63f413cdaea7bd1ff13683dbbd69056739d694f6d"
+        },
+        {
+          "name": "wood-walnut",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        }
+      ],
+      "nodes": [
+        "modern-bar-bar - Modern Bar amber bottle glass runtime PBR",
+        "modern-bar-bar - Modern Bar brushed champagne brass runtime PBR",
+        "modern-bar-bar - Modern Bar charcoal quartz counter runtime PBR",
+        "modern-bar-bar - Modern Bar clear glazing runtime",
+        "modern-bar-bar - Modern Bar ivory ceramic runtime PBR",
+        "modern-bar-bar - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-bar - Modern Bar satin walnut joinery runtime PBR",
+        "modern-bar-bar - Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar amber bottle glass runtime PBR",
+        "Modern Bar brushed champagne brass runtime PBR",
+        "Modern Bar charcoal quartz counter runtime PBR",
+        "Modern Bar clear glazing runtime",
+        "Modern Bar ivory ceramic runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar satin walnut joinery runtime PBR",
+        "Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "meshes": 8,
+      "animations": 0
+    },
+    "browserSha256": "62aa6faadbe7583f2ca161a80620bcc047601d933a6e0f9cf8649e678edfc91f"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-booth.glb",
+    "url": "/models/environments/modern-bar/modern-bar-booth.glb",
+    "originalBytes": 1387100,
+    "bytes": 879992,
+    "originalSha256": "cf90cfd3562230f875b6646cee24a18a69fe225e1d97dd9c72a0ae88cf1521e1",
+    "sha256": "3fc8904be8bda949efc8f12f755993202b31d372b5333bd65bb72d62720fd110",
+    "images": 3,
+    "meshes": 5,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TANGENT"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "b722d82cf4462bd0d8231adc3cecb2186345d20c8e234dd004f89f3076f8be7d",
+        "301bcd7a22ca293a41a0e85d3dd0d1eebb69cbe1ee05588dc9c9a6ed5efe1cd5",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "f1b8e7684b12b15c49b0e5ac27a0a6bb31b3dbefbb508b3cfcb5fef66b81b806",
+        "c7dceb0e15e0f82d9315f6e975b6732dacc2e5fcceb11d47b1342222d9ed0a56",
+        "ae6aa3940c8a6ab614e481ab31f9fb2cf432c4f41662a10f7234bc4bda62e3aa",
+        "9a58921702841dfa1442ec9333fba5d959fec8aeb36cbaf83be96fbba7ee4dcc",
+        "1f45109c491983c4f301440094f7c5bb6cb8576ac08157b5ef5e597df2da1227",
+        "b2634240bdced6d5f4a624bd45f84ba2828c02691e0e2f25be0520920e24608c",
+        "e928a8708e2e2f2d0e77dbd4bb2ae16c19654ae1ddb40cfb9093421916710130",
+        "2ae29db36a4c524be2ada4383b5fd7b83134198f9a290a79e5801ab56360abdc",
+        "fc1d94c42e111523205537fac702b9ef893773d67133cfac489a4b701754487e",
+        "3b073a63048b6f81de0b639f92d5e88d7f98fc98cc7b48ddb6ca0403e8c06ada",
+        "fe9d327ca151058ee50d77685e6519421c364ac81ccf23eecce4b196f51bc0b4",
+        "eda0bb3760e722d1519e72ff47d4ecef7d9f8377701c635bbe68f30d66664536",
+        "c2a149d7d61228ffba2a0ea27f7a92bb8a9f4d80773c6a274b75166c053b2d8c",
+        "13304a70e78e72cbc49eca719c1eb0c44c5575bb5015c4f10b63e2e5819672cb",
+        "4bcb682bb3b8ff2d8a5dfbf16eb4468d3e8af09e9bb1b7f291ce197bb216972b",
+        "f29b10d8140ed492729437e5d4ac048f4d7ba3a7b6cf577b754256ecf3801d47",
+        "26f0079b02f8c9630d582dc1fbd4ea6b81205674cbe94316c324fb4fe532e8f8",
+        "b019bcd28e63f727293d083154c79a74c167f68b8038384cab02c53cfc7c8586",
+        "579a7bb006c41e2c35249d8fb192fe6150d9e7c639ba23f498f44797ac1edfae",
+        "a641c06264e4b055a7ee99c355c76dab14e816047ab4a05876b75268db605613",
+        "e24b9e0a8ee8113d30e66094067cf1057aed528fe531ea2989cfca535ce1f12b"
+      ],
+      "images": [
+        {
+          "name": "petrol-leather-booth-upholstery-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "ff74ffbd8a0d7ca32eed718ae5dca0aee82f0c4a1c5edea2cb403c41359cfc86"
+        },
+        {
+          "name": "petrol-leather-booth-upholstery-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "315748ad43202b76cd4f8db58725e2fe71b8ed9a72a6d05d364e9ea5bea39cfe"
+        },
+        {
+          "name": "wood-walnut",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        }
+      ],
+      "nodes": [
+        "modern-bar-booth - Modern Bar ivory ceramic runtime PBR",
+        "modern-bar-booth - Modern Bar petrol leather booth upholstery runtime PBR",
+        "modern-bar-booth - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-booth - Modern Bar rubber plant leaves runtime PBR",
+        "modern-bar-booth - Modern Bar satin walnut joinery runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar ivory ceramic runtime PBR",
+        "Modern Bar petrol leather booth upholstery runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar rubber plant leaves runtime PBR",
+        "Modern Bar satin walnut joinery runtime PBR"
+      ],
+      "meshes": 5,
+      "animations": 0
+    },
+    "browserSha256": "a57ccaba40fc885f50c88403e10fa08a5425d8d6946739b4c419839e5f4bcf58"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-chair.glb",
+    "url": "/models/environments/modern-bar/modern-bar-chair.glb",
+    "originalBytes": 902612,
+    "bytes": 562244,
+    "originalSha256": "b9bbe117962d4a4979c20891f8d654b6cc0dbfa73b7328f394664b2da18b7ba2",
+    "sha256": "43f92f4dc64004b0d20702ef293590a06c56a8e1172b8422ae121a9b8519f45d",
+    "images": 2,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "b722d82cf4462bd0d8231adc3cecb2186345d20c8e234dd004f89f3076f8be7d",
+        "00019e3491abac7b5d5312d69757e4a965d230d3888425662cb936ee4e8fb990",
+        "018ce53fa3aabef139288e8415826fc5aea160577a6debaadeffbdcb17072b7b",
+        "7ee74427fa4d1edfe895ac1297b7a7511dcb5b5cef7a01cdf7340738a352a386",
+        "da2274246606b1d8572fb6c77f91f15420f1d0601188f6597d58ae1a53624eb8",
+        "d2b0d083c866b9efd6332be51d96f3f22ea98eb37f265d293ad5f5b0974e7848",
+        "8c6e87fdb10603529b0cd1faf065044b5054e74313c7daa2882904f4b6b0d089",
+        "adcb12cdd3a24b710c17507fa9c4b49736836c2d82e84b9067449c493e9328ed",
+        "80f495edc17fb2dc3af1004e85a9ff5f59ecdc24e6f1054d0099bab57f2e2d3b",
+        "decf24aeb6a875a532dd4efb646eb5398a921f13d10d5e00e2d90ec24ca56c45",
+        "11da2429afab6f132a0fe8ed8111d92509dc24a71f387128502f363cdaef293e",
+        "cf67886ff5dc46a293b7ee1d77cdb9305a6e2a1b2b646978c5384b400248099e",
+        "0ac5ef30c7f1ed0b98da1f4e4ec8ed4b4c4f04099aa6b62e9857267aa072938a",
+        "eb9d852bca0ff88c1eca53cfa4578d4473d8ffff4a13a2d07547d3d52d271160",
+        "b47629885ea8e85ebfa9f9f0cb197e42357d648bd5c6b3243c2e0eaf0b7e51f7"
+      ],
+      "images": [
+        {
+          "name": "saddle-leather-upholstery-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "ff74ffbd8a0d7ca32eed718ae5dca0aee82f0c4a1c5edea2cb403c41359cfc86"
+        },
+        {
+          "name": "saddle-leather-upholstery-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "6e786aec5b7a458a5d4ce29b940c04aae1720bd6dc9b93067d6eb49cd0b555b6"
+        }
+      ],
+      "nodes": [
+        "modern-bar-chair - Modern Bar leather piping runtime PBR",
+        "modern-bar-chair - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-chair - Modern Bar saddle leather upholstery runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar leather piping runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar saddle leather upholstery runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "1d88ff4304a37212641e7edbd216f5b06141cfcf643daa65b5990d6f11d7ba67"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-door.glb",
+    "url": "/models/environments/modern-bar/modern-bar-door.glb",
+    "originalBytes": 224492,
+    "bytes": 172952,
+    "originalSha256": "fce43f6d8c36bc740b4fc86a1f92c19416c82fe9117d0b8af1fe063903c28136",
+    "sha256": "7502d7c77a3fb6f4f2f88b3ec54b22006f76642857b5f3630a8d6f2d6d3c8b3c",
+    "images": 0,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "6b00c10055e19a0ba1eab5384837d8eee2415527caee20e7ffd8e7f884835ce8",
+        "2d8db021141120df871950ea34d7b4003a7790552eb426911d989ed6d0b6ad1d",
+        "ca8921bcdf1d8347ce8b2180e757d3714b723669b379fb532440437c58ab9a52",
+        "ebfa0111666d40b009429c3d751312189a9b620af6eaf62c4e7bc38040ec7867",
+        "3b2c497f055827f25259e22eecd32c021c340498c55b8e20949f1426e4e560cb",
+        "8f5704682e49859260c18291aaba14b5ee14af85a29a485d3ef3cc20bce289ed",
+        "6c331a4ba5157cf3d8220e5f10eff2983f22a05b19543784ce0f02773fb21a1b",
+        "82b761227c23c4380dd0485ec9d79b45264505b06f78b7f83c910fdeafa1db1b",
+        "7fbd997daa58d015cdb5fae7be9ae2765d622218d212e256bd611d57a9000751",
+        "fb8aa4a7f2e24a06bb2c0e506fda7b5101b8fb0417799a4ff3fe106c89b15683",
+        "99871fb81ba8290459d38f7c6d38c240d0729039a086847f18781f6bce7a7bcb",
+        "2df6d9a82719d4649f89a0667471ba6ef7c5d6ec9b11d476092a11526b6f2aa2",
+        "791608824cf33a3575cbfdd43029c9d8ba118e139d834f21ae7b6b960611fe70",
+        "b6ff56a00486b97622102fe220122c30c5f3a79d59f1691e6603c5ca76bd3995",
+        "da61eba5f30e287d36360edeaf478016ff0b4e42a1d5cf6a7f120f6de0552b8e",
+        "32cd366cb92de5cd388a4b0ddba47c5de9c0451107da64a917011b7dc89b997c",
+        "3ab6ac9c420645b61b25c14af0b07a286bfdf50bc9be10ab23161d333cb350cd"
+      ],
+      "images": [],
+      "nodes": [
+        "modern-door - Modern Bar backwall etched privacy band runtime clear glazing",
+        "modern-door - Modern Bar backwall soft blue clear entry glass runtime clear glazing",
+        "modern-door - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-door - Modern Bar satin brass luminaire runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar backwall etched privacy band runtime clear glazing",
+        "Modern Bar backwall soft blue clear entry glass runtime clear glazing",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar satin brass luminaire runtime PBR"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "0300b2096ddf608a1151763a8c57c30521c40a77da575c490535cabccbb9873c"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-nook.glb",
+    "url": "/models/environments/modern-bar/modern-bar-nook.glb",
+    "originalBytes": 1161528,
+    "bytes": 785292,
+    "originalSha256": "d9a1a090fc6a890d70ed4c30e5a1b4c8938b9e371dd67ad814d2623dff13310f",
+    "sha256": "c72095c4217432785f0577c81cc06f8a7013ac0535574e5953e7657cea93c814",
+    "images": 3,
+    "meshes": 5,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TANGENT"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "b722d82cf4462bd0d8231adc3cecb2186345d20c8e234dd004f89f3076f8be7d",
+        "301bcd7a22ca293a41a0e85d3dd0d1eebb69cbe1ee05588dc9c9a6ed5efe1cd5",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "71967cfebdae4d2942b7a8972feaa1265418a184854853edd1e6bab2484ce8f3",
+        "c67322e8f4cfb9acbdc97e93b5207cc473b166e3cae966cfbef418de212b020a",
+        "2fa3409f33b1ddd133f90fe62808470c73423c9ae075676ce47f55aa3cf8e881",
+        "f40a6d147362ea73e0d2bc81976c225027f4784222a0dda85f18555f5ab68f5b",
+        "2a07ef0bf4f7e4748b316c413175afc38bcc38557c8f4425bdbd3f61a23a62e2",
+        "e0be5d541b3d3cb3585363b10ed37c7ff83700b18783ab001feda350756fdd16",
+        "1cf621748d1ee7aeafff0a25285e4a4214ac1411c655f02974c2eefce8b9f6c0",
+        "a23a456dedce702191e7d798f3b5b91f08bd420f4b18ee582fd3572008a0c89b",
+        "76c8f45543c7183572adbd02e851f8c5180f8fcafc9e0f1443b598d270b86a4f",
+        "36024af298fb05b1e4bf1877096e4c7540f9821693528b9695ee746b06d00d32",
+        "490c118d08f3bf3b2a65e61f5e392e7ecedab40577888cb75bfad0fb7dff0173",
+        "4f02601f5ea4f45a0bb388de2107a7bf305389e749d9b8f753ad728f42a07272",
+        "7a11bcf73bc0a5a7e29d03e396a0a4974a2f9a078a02a9bd408a3d1d0eff8234",
+        "0c16a80049e720d13a3615210be128a58cfcc7bdf428fab39e75e8560544e5c9",
+        "d0cfee769ba37740ae6f53fcccc2cb88985d25f7f3d357deade554d7bf9ac1c7",
+        "268c34dc435a8cc4f9e55aeb75bbeccd468b5d8a9becb3c95411e4dfaa863662",
+        "3289c99190034874d567c18928b2ca0559a8ad1f39e5bcbcabd24b35b6991eae",
+        "b934500381e136c810d47fe8a0b33fa6539e49c2b6c8713ee148e2bf51265b4b",
+        "194c157c275a92b25913267d8652747445d9e129840e0d3c7e45cc7918ed7602",
+        "b3a983c3a6f9fa9df15d5747c3e58b87f1cd8faf0fe3f073dbabdcff9f9ecd0c",
+        "3e30e206eece610b8a4dfad311aa75463fe03fc7b5832bb3ceb76635c21feb6f"
+      ],
+      "images": [
+        {
+          "name": "petrol-leather-booth-upholstery-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "ff74ffbd8a0d7ca32eed718ae5dca0aee82f0c4a1c5edea2cb403c41359cfc86"
+        },
+        {
+          "name": "petrol-leather-booth-upholstery-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "315748ad43202b76cd4f8db58725e2fe71b8ed9a72a6d05d364e9ea5bea39cfe"
+        },
+        {
+          "name": "wood-walnut",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        }
+      ],
+      "nodes": [
+        "modern-nook - Modern Bar ivory ceramic runtime PBR",
+        "modern-nook - Modern Bar petrol leather booth upholstery runtime PBR",
+        "modern-nook - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-nook - Modern Bar rubber plant leaves runtime PBR",
+        "modern-nook - Modern Bar satin walnut joinery runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar ivory ceramic runtime PBR",
+        "Modern Bar petrol leather booth upholstery runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar rubber plant leaves runtime PBR",
+        "Modern Bar satin walnut joinery runtime PBR"
+      ],
+      "meshes": 5,
+      "animations": 0
+    },
+    "browserSha256": "4e72c94442c29653199b40448d6f1658df24664dda070b54e22dd3cfb03c4dd0"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-plant.glb",
+    "url": "/models/environments/modern-bar/modern-bar-plant.glb",
+    "originalBytes": 130940,
+    "bytes": 103520,
+    "originalSha256": "a178dafab40221254ec2cc69449dbd3d3db9496ddf1026b9d2e1e694495b0c0d",
+    "sha256": "8df9a3dc356e6b63b22a4f365e6327bdb7a18eece6345c553a2be1e7207d2b32",
+    "images": 0,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "6f7dc4fe050ed2fec2e8c28a6c95d8987c3ee92ce6ee7a521c197741d960180e",
+        "1a3c18f65c042f2989b6c0f31ecf5e4b47249b446088ab26d1d4cf20719b9047",
+        "d0e5199ce05b062a7dfad21cad60ff83b69d11e0c5986708c833199cf965bcf5",
+        "644eebf876328f79d5c960a1d5a17eef645ddad179b89f8a2f108908ea1776b9",
+        "721e3f429e998bda6e15e06e03b3af16bae8f121652393535a84a3980c159882",
+        "36600b1602d63cb5db86ab390d22adcd72a8b3dfb2e086374b5a3287ace66a09",
+        "af919765c7e62b9be75a1a741d0e149ab573dcc199a31eb9e364385dcad6b6f2",
+        "5540882aa4a7904fa1a6e6ee7c4f3f4c00482eb27fc428116c5a3d90e1195bc1",
+        "83aa29cf1e66a5ab62069301f6ee0191b37ef6c32974ecccd61bc664fbdb33da",
+        "176c7c0dd729e94de1d19ff7153840ea3eca4f163f453b2124531be75a9256e0",
+        "3d9eb692a216ee0d94e7d4f38860b5f898679cd2f1f46b0b9dcefb74b0e09731",
+        "28e82f3cca0d6f869ec8ceb09b6b42bf1fcd80eabd40df577285ff1b86106cff",
+        "65c0a6db0d7e3ed07352ee76717a4c6473150d083f86b060bf5727e69a22107f"
+      ],
+      "images": [],
+      "nodes": [
+        "modern-bar-plant - Modern Bar ivory ceramic runtime PBR",
+        "modern-bar-plant - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-plant - Modern Bar rubber plant leaves runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar ivory ceramic runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar rubber plant leaves runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "6fed24bf0c575b31446f170ade2d14d22fdfb1963420b16e3d746d0f80004303"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-shelves.glb",
+    "url": "/models/environments/modern-bar/modern-bar-shelves.glb",
+    "originalBytes": 2490320,
+    "bytes": 1557672,
+    "originalSha256": "4e0ae8019896fc03a085163f0831f0f9555c61c857136c6099a7d6541f6046fe",
+    "sha256": "2e96682c4ce141f72d32d636e16b76ae2b581468f8e4a110260be5eb63bb5ff1",
+    "images": 3,
+    "meshes": 8,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/5/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/6/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/6/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/7/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/7/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "f9cf2476460807b1ae80288aaee9f45924b57035cc4273af35d55c0a8e4297ed",
+        "1de781c3b3656994d01be95b8714a5ee481c2312feee40d996f99c06518dcb3b",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "6984e7f8168edca3d1bb678b7ebe0581f5d82bf1cce7e5a67071ad9f1605f832",
+        "eeda04ca1eb1f60e946dfc10e971e625d01002fb4737dc2457957eca815cff2d",
+        "89f7bbcd5363a4512afa44a6490947c7a34fb50eb4a50bb73b7432546ec8b02c",
+        "9c34541527d252c77e10e5ac604c8bfae024ab271acbfb6d8fa8c14ad8fd0520",
+        "d48ca2a74d64b730bba4895aa3e6fb7bed57c6af75b921c157ccb079fb2c92a8",
+        "b370c0094fe55472b29da9f2ee837bd4e5025486c97958bb0f0c9cd070105eaa",
+        "fe32cbb11e7b7c1c210f40782660c3d2c8d59cc525c5a201e271d201cf218527",
+        "2cfc8e0e39f6f9fc2d7cb83ccafa125971a3f7f73e7f9be4a794e3c1935d2ba1",
+        "eddcf326f929377b734fea19fa320b8de21ea7ba7e098f70865aea7dcbaa27c5",
+        "8e1fde0ecf89cfc02ebec74096453b40423c58fa7745ba5fc83512b1bdee0b98",
+        "7e9995843ec4163ba9fa3bebb0090e0f2f14ba9a1857d19ccaa955547236570e",
+        "a4f0278ba7e76a04eaf5a69e2105093e03911b823af9e4f8e9f3ddaeef8bd61b",
+        "1c9a7cde787a460ffd54638246f35874223a57e13ae71dee6cf03bf8b8862d7a",
+        "f377ae2b283eb81af9dad8e020c342b61e068678a06a602aa379ffb4dd9bf955",
+        "db02a2188e694912fd8001b9d2fd46ea750252d6729988597d9abc9823fd2ca6",
+        "2d8d6cf0a49fccb9244b80a67ef2115e36e479269b3b82525442b1d04ba42235",
+        "109e5f6a81a20fc022dba5cf5499c5ee4e4f4e774a119758eaef1bc7c49394e2",
+        "65301cef5f2c28440b3c17e34b08e658c5cd145553dac345e10c1057b1206983",
+        "0a0a926f10c6c99ed74bcf13a169b69e8c8023ff8aa397bb30293e2e3e211349",
+        "bdd1b6d24feed8ea3b4cc4269fa35cbca69ac6d28a5c6ca8d5498c93d9bcc432",
+        "78f39f555efd9e2912612f23c5e99b9d09637084c305ca04e965470b13bdae72",
+        "daf280b75ed460c4913034799c0a48e7ac8aab9827528104b9267e3c92aaceed",
+        "0ae4dbc0646b385973f6d0dd6a95ef534a1df6357883730c07ea96ba8890870c",
+        "991569082d432b8f52f4a63571020358d3180d7e1f60044f4ae9799b30a439a5",
+        "426b7c8d1e57fa93ea96c6710ca7827bb7003d98fa27bf2c470d316d04afac52",
+        "23835e734b48d57c4eac64d0008613d2a962075f15d2d0ed9435d59c87612331",
+        "570a61b20230e8c042468f6db5f028639035cdfdd3877c8dfaca03bacb96e579",
+        "f2e0c692b63f028ef9c76b12fa3b30c2a6df830320456b7d85a2d49f2d0c1386",
+        "ce7545301894005982d17a42313161c22e31f4f4988ee35a7d6979d001e16541",
+        "fca4d631f944de34f233e142dd7eb2f5686fb4554e405dffe43e398e32aa41c8",
+        "7a965bfaa27dd7a5f3da43c8f132b75819822b5c07eea6f091ed98374344c154",
+        "46c255e28eecf7d73d159e86fec4131c2793bf5c55a8fa600ed8c4e91851cebd",
+        "6154b7f027a912e36f1b655a82c938afec2e7f0a32b1b4166d4d6af1d8eb825d"
+      ],
+      "images": [
+        {
+          "name": "brushed-champagne-brass-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "3ea9491183e70f507d83b8a79682e211cf87929ce1746a812c7a852dd2854fde"
+        },
+        {
+          "name": "brushed-champagne-brass-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "7c11b495c9401d34470f8a2c5e3e4a4f3ad79d361dc129d5b233a52c7834db81"
+        },
+        {
+          "name": "wood-walnut",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        }
+      ],
+      "nodes": [
+        "modern-bar-shelves - Modern Bar amber bottle glass runtime PBR",
+        "modern-bar-shelves - Modern Bar brushed champagne brass runtime PBR",
+        "modern-bar-shelves - Modern Bar frosted bottle glass runtime PBR",
+        "modern-bar-shelves - Modern Bar green bottle glass runtime PBR",
+        "modern-bar-shelves - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-shelves - Modern Bar satin walnut joinery runtime PBR",
+        "modern-bar-shelves - Modern Bar unbranded bottle labels runtime PBR",
+        "modern-bar-shelves - Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar amber bottle glass runtime PBR",
+        "Modern Bar brushed champagne brass runtime PBR",
+        "Modern Bar frosted bottle glass runtime PBR",
+        "Modern Bar green bottle glass runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar satin walnut joinery runtime PBR",
+        "Modern Bar unbranded bottle labels runtime PBR",
+        "Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "meshes": 8,
+      "animations": 0
+    },
+    "browserSha256": "c1a7f62a55db0bb590f8b8a54488c4c11b74676c19ef734e307ddeb767b18d6c"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-sign.glb",
+    "url": "/models/environments/modern-bar/modern-bar-sign.glb",
+    "originalBytes": 1536628,
+    "bytes": 757268,
+    "originalSha256": "a84d1c0e73509057c32109cdd8a92779ad135f128b3f5d44c75c5c12008ba6ad",
+    "sha256": "dadf74aaad1426cc61dbb2df30e0c9ff0a513929c581192f4678d98ac7cd8dc8",
+    "images": 2,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "f9cf2476460807b1ae80288aaee9f45924b57035cc4273af35d55c0a8e4297ed",
+        "1de781c3b3656994d01be95b8714a5ee481c2312feee40d996f99c06518dcb3b",
+        "65337a486955924a352431a363773357c83e56735bfce358835cb98b8d1bc130",
+        "9accbbb011c7d8be7f754379007f2b2b1f94821d8bbb91e487f57e7f0cb453c7",
+        "cdc4aa8887937027cf6e37daba95596c27e4f39f1078ab49f1873891edc358e1",
+        "95759ab0e7159e3c96061b838208a99a113ca9fbdd1acb91842caaf8465450c2",
+        "5abfc1a9079b91302d8565b9b43c3b9ca891acbb8bf2585c398b723cebc85fbc",
+        "af5c7de7e06b414a79a0c5f0340934a68796f9cb4d156188d3ea7b69e65c4407",
+        "3f2c41bf115d030626f7f161ffabdcf2458168fa83d76cd53498e91e0412a865",
+        "bed1c6036d6a092e6c7bea1ade276457594af4d16922ace3e194cd5861d083e7",
+        "5bf356dc74e41517ed72faa05d3bc4091f25e5089d16dadb6a5d16b0ae259191",
+        "08dbf3f01feb6dfbb85f03dd12c70ce34f5903e527ae258043f5f32aa0854d6f",
+        "36754bdaf888b41bdfab7067be18495c57ad3f34592154f9fb7406829d853783",
+        "b1c1a023a329e4d68f48ae4b2a45fd82d6d7352fdb35ff92d4c3b330da07f41a",
+        "17293e87e70ca1e0922cb0973ef2112cd5c3670e09702c97546a0ded57d74249",
+        "1ca49150038ba38753b22bae71ee1f6913d6dee516c2510b3a93e261e4770498",
+        "164d6fb03c02e72f6143f132b594cc3d75bcf2bd873c88ff7c5f8c473044edac",
+        "4992a1a16e0af4c6c3cce77ec060dd74677d8fdd223ca50e2d7cbe77ad95d298",
+        "27291060ee93e933eb330b9878ff1d13b4d34ff398da63b62d0687ead28fbd3b"
+      ],
+      "images": [
+        {
+          "name": "brushed-champagne-brass-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "3ea9491183e70f507d83b8a79682e211cf87929ce1746a812c7a852dd2854fde"
+        },
+        {
+          "name": "brushed-champagne-brass-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "7c11b495c9401d34470f8a2c5e3e4a4f3ad79d361dc129d5b233a52c7834db81"
+        }
+      ],
+      "nodes": [
+        "modern-bar-sign - Modern Bar brushed champagne brass runtime PBR",
+        "modern-bar-sign - Modern Bar ivory ceramic runtime PBR",
+        "modern-bar-sign - Modern Bar muted mint sign tubing runtime PBR",
+        "modern-bar-sign - Modern Bar powder coated charcoal steel runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar brushed champagne brass runtime PBR",
+        "Modern Bar ivory ceramic runtime PBR",
+        "Modern Bar muted mint sign tubing runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "c40bcafda16e6c40fa19761180532cb4baba790a8fea8f617bb787aba0018d7e"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-stool.glb",
+    "url": "/models/environments/modern-bar/modern-bar-stool.glb",
+    "originalBytes": 1582772,
+    "bytes": 862444,
+    "originalSha256": "69d943759476b3b10fc308c0aad00ccb3cc82ab0b09fe66164fd2bf4a0be5697",
+    "sha256": "335b902be434441063e3e4e182cb1ebc200b0be2719462e547b2c5355798f367",
+    "images": 4,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "f9cf2476460807b1ae80288aaee9f45924b57035cc4273af35d55c0a8e4297ed",
+        "1de781c3b3656994d01be95b8714a5ee481c2312feee40d996f99c06518dcb3b",
+        "b722d82cf4462bd0d8231adc3cecb2186345d20c8e234dd004f89f3076f8be7d",
+        "301bcd7a22ca293a41a0e85d3dd0d1eebb69cbe1ee05588dc9c9a6ed5efe1cd5",
+        "ed48346f1b87b571b5d7d2cfc33f18dcb12c2532c06376207ca038a7c56bb5c9",
+        "082f84c53fa3ae6385b4f596a117fabb8e06805d402762d5b6077619bab09a0f",
+        "8dcf746a721d3d3d05081646dbbfe64631810cee832e244d7f9405e9ac79ac61",
+        "f51889b5992bebf9372c54a77cecf115630f6f7b064d255701600f9890eb0268",
+        "e18b2d2f2ad375b9ddfdd1d18130ac2ba592fc4a5e3fa466a2904534efa16ce6",
+        "64106742cd4dda07649bdc41bc0a8fb0432ba36e7c759b49d3b66b8c857dac8f",
+        "a92ea80f737e596bf71b6fe28f4ca377a7e10a3c30a9586b18e98e9dd40d46dc",
+        "6a9cd76b5d7a83cadf5ec0b2262c794fd8a132fb5c8e4d1518c109d5d0274be4",
+        "eafadd764ac310c42a47c232b45b5a57f04c1bf5cc845571707898c0d102ef26",
+        "c7308f0573890d09a91c1ac0f85d5716013b3c44a051e301c0ec4c59bcb8856b",
+        "d55a6d6e5cc0752f5957cbff15f440ce484b54c5e6d3dc9a8c6ff28c0192a15d",
+        "754ed375ce1fd6a3f532a69d80bfdb2907b61999dac9f893385c77dd482152c8",
+        "607768ab0dbaa9fea45fd4940659b4b6cb39d1af9d025ec21b76bb07548fa278"
+      ],
+      "images": [
+        {
+          "name": "brushed-champagne-brass-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "3ea9491183e70f507d83b8a79682e211cf87929ce1746a812c7a852dd2854fde"
+        },
+        {
+          "name": "brushed-champagne-brass-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "7c11b495c9401d34470f8a2c5e3e4a4f3ad79d361dc129d5b233a52c7834db81"
+        },
+        {
+          "name": "petrol-leather-booth-upholstery-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "ff74ffbd8a0d7ca32eed718ae5dca0aee82f0c4a1c5edea2cb403c41359cfc86"
+        },
+        {
+          "name": "petrol-leather-booth-upholstery-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "315748ad43202b76cd4f8db58725e2fe71b8ed9a72a6d05d364e9ea5bea39cfe"
+        }
+      ],
+      "nodes": [
+        "modern-bar-stool - Modern Bar brushed champagne brass runtime PBR",
+        "modern-bar-stool - Modern Bar petrol leather booth upholstery runtime PBR",
+        "modern-bar-stool - Modern Bar powder coated charcoal steel runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar brushed champagne brass runtime PBR",
+        "Modern Bar petrol leather booth upholstery runtime PBR",
+        "Modern Bar powder coated charcoal steel runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "b25e53ce1ae1fc545439f3bad9dd9eb1b834e96961b58a01a3332ea465a91b3c"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-table-pendant.glb",
+    "url": "/models/environments/modern-bar/modern-bar-table-pendant.glb",
+    "originalBytes": 73000,
+    "bytes": 53292,
+    "originalSha256": "127a3dc437432bb2f49cdd5f9f4a8ab7a5ecc500261e23ad1cdaaaf937f5c0aa",
+    "sha256": "696e80a765385b8a6542e998e6cd7b172a302049985c860deee5fe1429cec45d",
+    "images": 0,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "80dd96dff86294245cb34916a217d22e883b8865e02173f193a32930015e3f25",
+        "46460f6cff63c4f28d24587c505b35f6dc91f0b37b410ea81dca7eac75013f89",
+        "c6104a9a170e2adde07777af63b52f2dc379ad07168dd1140e1232678d12a387",
+        "64ff0402c1105f904e950c4aeda29063a673a247372f3b6e9b87c04567d253f5",
+        "fe8af2635781762e49b7768f93047df264bf30ed383fb025aea0fbbf8890e92d",
+        "fce20fc122c54f1597356069692e1d344f9936b74c9f016e5b04f552bc7f6440",
+        "ad1172941d827e6616c864ae15acb2490cfe9b3923a757ef3cceb15e8af66c47",
+        "51cfd6c89f7d680d162e9e5745ea6182e7783115eca80ca6a54d7df9d49d1bdb",
+        "2ec88adc6a1009f0d9977e914fdf41cc6e53d75576b41fcc1bfed148d30f13fa",
+        "9f54f3e60715bd70c40a11ed63d617b8c309eb2d4b72ab3d8b4663d4f5cf5ed0",
+        "5370929a80761e7bdc8da3e58a457b9723d3baa2f3dbdfab010d81cf7e98dde2",
+        "e481e53893668c8089eea7770eed65b41f6ba97af78a67aa5ad0a7f80d71485a",
+        "ff2e422a77e397e04f76965bd1ca2baf8d37ff49f7e4689f569e28f185140727"
+      ],
+      "images": [],
+      "nodes": [
+        "modern-bar-table-pendant - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-table-pendant - Modern Bar satin brass luminaire runtime PBR",
+        "modern-bar-table-pendant - Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar satin brass luminaire runtime PBR",
+        "Modern Bar warm LED diffuser runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "90580340ddf37a123aefed0d9ddd0fb503f8b3c81273b57c8145fd02a1294fc1"
+  },
+  {
+    "source": "/models/environments/modern-bar/modern-bar-window.glb",
+    "url": "/models/environments/modern-bar/modern-bar-window.glb",
+    "originalBytes": 310548,
+    "bytes": 207812,
+    "originalSha256": "932a2746acaacf6c1473ade60190520223760ac842e10efd61cc9f37a47d15e8",
+    "sha256": "e660418159f8f41588f918ffb37bd21647f77afa0456ecc51e63917db535f426",
+    "images": 1,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "4e5485d4e6666616bde8a8ccf62b6b7c2119fed148c13465b4e1cc84f416c464",
+        "9682ef282fa88fe757aff64701e3649b8d10094613c6ead11abdaef8a1733727",
+        "004a7f84eb8baf5afa74ff4c47f195e3bae3ed20f4022f72dbe40af86ea5300d",
+        "2fc03b86ce38b08bb014e408120d37d9ba7bf50e1732a4b5e214ac66c4f55ed4",
+        "241ab18cdf26c26b15cc2f36e0d80b331aa468c9cd496f6892e2052ac23b059b",
+        "d13c980b88d0b54329fd04b95bd330c7f4862a525fc300f4debf1936669c0206",
+        "10c13c85f39870c4e0a805f82c8f418ab1d50d422b88fc9453b419604f26538d",
+        "878561a44bba5852ae4be23057b4028d1ef4301300522d52c8bc53c8e4609ebf",
+        "0a45e835bc918d53a4f63651f864365d3761925f87e7a41d538a9ad0c99d5b6d",
+        "e961cd49f2bc5d639c0cf03566eb577a1095470b7003d639938207b192755c24",
+        "8368faceefe2e005b2a3feae1df2ab683aed26ce7162552cd57c89722fc3ddae",
+        "3d1eef04b773d9ddb0e91a714b2e4899a7a56e54d0d8f746f851eb45bfba3bf6",
+        "473f24f4abce514e7ff47d209489a74a7bf0ab48c60b9f6f12811c63dc928e02"
+      ],
+      "images": [
+        {
+          "name": "wood-walnut",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        }
+      ],
+      "nodes": [
+        "modern-bar-window - Modern Bar clear glazing runtime",
+        "modern-bar-window - Modern Bar powder coated charcoal steel runtime PBR",
+        "modern-bar-window - Modern Bar satin walnut joinery runtime PBR"
+      ],
+      "materials": [
+        "Modern Bar clear glazing runtime",
+        "Modern Bar powder coated charcoal steel runtime PBR",
+        "Modern Bar satin walnut joinery runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "db0746192e09792fcd13c5df6272b4e35ab10b8f223e9078bdffdd078d6dc179"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-carafe.glb",
+    "url": "/models/environments/poker-night/poker-carafe.glb",
+    "originalBytes": 107556,
+    "bytes": 67456,
+    "originalSha256": "84888a4adb8a280207dd2b46330b6a6c3a9781d095ecb2287df6a46cba0dec38",
+    "sha256": "34ec77e82e04a882defefe9e8627aea92a167368c00c81f64f87e9a52767d283",
+    "images": 0,
+    "meshes": 2,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "579960a5a5effb6ee8cc88f20bf0f112974a3171e17f864b87a973a9c2a0f850",
+        "186ade27b8a33c20643e83a26a90d192c5d65a6e053fe3ced8ae2ecd6f28a64a",
+        "53314ead48ee8be22cadd3c4392241cd67fae8a3f17d22c9e1d6c8c95c475c2b",
+        "412f8bd5be3827268c4325950da43bbd66a0c86bdef786d91402d6e1e17077dd",
+        "8955ce9ca0de5fdc403aa2091eb6543f1e3236a6c77c7d463455ef14aedee34e",
+        "1838c2d1a69010180e67552b06e6207aa5611ad1c65c9f3a246e715b97094c0d",
+        "267033fe334b200378e2c24dc90fcd02e72eca813ac2cc1d05c70c28cab0eb22",
+        "8874eb2b8878168cde8eaccdbedda2680b045619cf5af182af5a6db1b38325a4",
+        "41f1090b8765e796fa83cc5794cbb82087d17be05b9b7df523989a7fb51612d2"
+      ],
+      "images": [],
+      "nodes": [
+        "poker-carafe - Poker amber drink runtime alpha",
+        "poker-carafe - Poker clear cut crystal runtime alpha"
+      ],
+      "materials": [
+        "Poker amber drink runtime alpha",
+        "Poker clear cut crystal runtime alpha"
+      ],
+      "meshes": 2,
+      "animations": 0
+    },
+    "browserSha256": "da4e44c31a204ae779006f8505d9a0f67997de8582e90a930d6e3f8cd1468ef5"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-chair.glb",
+    "url": "/models/environments/poker-night/poker-chair.glb",
+    "originalBytes": 2104448,
+    "bytes": 1347820,
+    "originalSha256": "76adb87afc4e82f4496d3e654358c7e766123cdf1ede925e72a549418e3a21f8",
+    "sha256": "ba57dc20e1db727d6466a6ea8b72bba6be57317d5524c480bcad1d04b6db0c41",
+    "images": 6,
+    "meshes": 4,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "5844080fc70077f7252c9093e50ac6b89c08d7e5f8d08f9e11e96624c6dec3b2",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "8d06c64c98fc330982794525b81da2e907e104ef1b5ac0c04a50c03931915cd5",
+        "c85561e32f29fc90fa720f647b043b41ba39825a259e31958bd09666be154d96",
+        "097d558a7f2bcf067935de9cb315a5408e00149b7428ced57945593e5335ac62",
+        "9aa9543d7203d455cd9171ca8163ae072177504ceaf1b23868c4853fa3444962",
+        "348ee06f3a11c515cbef2ab84451f1ab8432f9dd5aa4e578e3f58d2a06706696",
+        "6f0845dcb90b97b8f98ce0b2343d253ed6c3e154a0f317802f3e4a5ef99a98d4",
+        "ecde57a8cc143f986db987c1af744c1b06724ac00542bf55abbc4b8ffc7a13aa",
+        "f2b9fee8afecaae151404bd739cc917f218899031ade181e1e2cda07b9a58852",
+        "3114bdc6a9633117903c7b44864ae980ae243f911f30b9540e2eb006ff9c1f89",
+        "89a5431a086167fbeca3e0e950b2e5733bc32e1f6a1b3a86eef6ce3c36a2ca80",
+        "536233b43f64b14c319cf32aae78529a5110e031e9e1d39ddaf3d291bd7c71d0",
+        "28914e5661341a4fac4c3e21304e5f59c4296712b53cf677eda620bbb9f6019e",
+        "047bf034c319503139b0525644fdc53989f5d015128e27742b9c4c99425703bf",
+        "54da1fed2a52688b94b45f4b5e4dd088396e7ffd41de99124e26279692332e91",
+        "b0d14f25222cd00ba92d20f6eabc690127fc351d8e5211160e0c595f112e6d94",
+        "6f032fbe4f17d3ef8acf202f04cd084ddbba1530b748fec6e771dda4a15fdefd",
+        "e3646424348923f6e5dd7d7c6995d6153787d18f10a7c6a90edb6fa215a730b1",
+        "97892d318a12913ece63d81e80e6636ce00f76e8468457f2f9b276f04a21f091",
+        "6f8728c2ab6a8167cc2c35029657efcb98704d9f30779d408081952d15b595f3",
+        "ecde57a8cc143f986db987c1af744c1b06724ac00542bf55abbc4b8ffc7a13aa",
+        "e6f6a52026121d0c42052748e5a4dba8d9d5c0ff75c203322851e54ec43a7985"
+      ],
+      "images": [
+        {
+          "name": "walnut-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "04ba1265cfd194aa06b32c9bcff4dbabd73bbbc2b134f95edaf9cb0c80dd250c"
+        },
+        {
+          "name": "walnut-original-cc0",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        },
+        {
+          "name": "walnut-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "c2376c292afae7ee868b910e89d2c7195c265a516f368959fb93dde916be6033"
+        },
+        {
+          "name": "leather-pebble-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "a043e19ce835613e3c45810221fcf95415b0d04a06b230cad99800260654681b"
+        },
+        {
+          "name": "leather-chestnut-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "070b159550abb9935dab8719ace51bcb32dfb4d55c8b9ecbbca609ed9bfd075e"
+        },
+        {
+          "name": "leather-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "d8dcb7067a6d4eb53081aed640ec50bbe1f21926a8a5bc68c8b7b59b6020e3ae"
+        }
+      ],
+      "nodes": [
+        "poker-chair - Poker leather edge welt",
+        "poker-chair - Poker satin walnut joinery",
+        "poker-chair - Poker supple chocolate leather",
+        "poker-chair - Poker warm saddle stitching"
+      ],
+      "materials": [
+        "Poker leather edge welt",
+        "Poker satin walnut joinery",
+        "Poker supple chocolate leather",
+        "Poker warm saddle stitching"
+      ],
+      "meshes": 4,
+      "animations": 0
+    },
+    "browserSha256": "e829f8f8122f4ed610c2cd0b1e761fe2c15331d87e3cd4640bfe35c4239c9515"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-door.glb",
+    "url": "/models/environments/poker-night/poker-door.glb",
+    "originalBytes": 1127772,
+    "bytes": 796944,
+    "originalSha256": "c08029c5f0e02205f218765b815c5ff249d3a6f55c4bc0c92ddcb319cb374de7",
+    "sha256": "f28c4fa465b84362f36b90365bfdb8397ccbd3e246503a024a4896614dace130",
+    "images": 3,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "5844080fc70077f7252c9093e50ac6b89c08d7e5f8d08f9e11e96624c6dec3b2",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "8d06c64c98fc330982794525b81da2e907e104ef1b5ac0c04a50c03931915cd5",
+        "edec8cf729d9d8db0ac79049d807d0dd1b6e2085032338328f12cbf64aa777c4",
+        "c41196bd0c3bd59406714ab9f923d3f3d5c04b262b117defd68c1cbd85cfdcfb",
+        "33f69d0f97d0ae83a7fbb01ae44b648a80ecf6ad30fca3e33980b7d96b11ac8f",
+        "fd1dbe10e162209d3f28ef24079acbccac166b78e4607ec9e279d3c3a271f65e",
+        "f3ada75fd5b45125cf6f5a7976fce33568882755058d8795272e2752ccaaa26e",
+        "451e9a215212a398c5150e174495e8f93e26da41df6473704930e55e9ed180fb",
+        "89aad85dcc466be7eff5251be4a945078d63cb21f4c6348421019e85b971e2a9",
+        "76e0374deda533ac0f58056d9bc96be4feca32970e56ab62496ad8240a2875a6",
+        "b422b3046f4ab37dfae5b9aca198de3ee70ff30163c6801a43bb797cf02d7847",
+        "ba379b9b88d8f6a191a1a0663d6bf3ee72c07db53b56df048d286784b798ee24",
+        "d9119c4dde7ca05c148532ae9b614c36a367570f7cf3410d1245a005df81df3f",
+        "1916f5e687bb1d3beb5c56b6958e9fe063f1b0576f8d9e6a9047bd8c63595429",
+        "ad5edd99e6b1009dff4d4c97e41f2a0f806d462e8253fc36be9120a182209d3b"
+      ],
+      "images": [
+        {
+          "name": "walnut-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "04ba1265cfd194aa06b32c9bcff4dbabd73bbbc2b134f95edaf9cb0c80dd250c"
+        },
+        {
+          "name": "walnut-original-cc0",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        },
+        {
+          "name": "walnut-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "c2376c292afae7ee868b910e89d2c7195c265a516f368959fb93dde916be6033"
+        }
+      ],
+      "nodes": [
+        "poker-door - Poker aged satin brass runtime PBR",
+        "poker-door - Poker Night backwall door upper clear glass runtime clear glazing",
+        "poker-door - Poker satin walnut joinery runtime PBR"
+      ],
+      "materials": [
+        "Poker aged satin brass runtime PBR",
+        "Poker Night backwall door upper clear glass runtime clear glazing",
+        "Poker satin walnut joinery runtime PBR"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "35b104ef0ffd7831f25dce9a54541206dac7cf435b256dea20b5fb876eabd8d3"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-landscape.glb",
+    "url": "/models/environments/poker-night/poker-landscape.glb",
+    "originalBytes": 678828,
+    "bytes": 463080,
+    "originalSha256": "93a5819cad7903b2772f0da89ace12efbb63c4a87e3161169a7bd8ea4053aa7d",
+    "sha256": "ed0c1f30abeae5b1f87bdc8627fb754079f4604513bde2af85d90f73ad451dc7",
+    "images": 4,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "23110bb0137f026a31583be0d5bbbaeb4c1408dacb02ecac0c5c31772adfee97",
+        "5844080fc70077f7252c9093e50ac6b89c08d7e5f8d08f9e11e96624c6dec3b2",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "8d06c64c98fc330982794525b81da2e907e104ef1b5ac0c04a50c03931915cd5",
+        "f5aee437713330929b9b7ae7516e88129ecaa98a31fc1669a39930f31c618ca2",
+        "6774e6a8598de5ea6c752baa88a8c2adcb202de59ca97b3f1b8579d1d693296b",
+        "c7d2032ef6ed15a95eedf2dcc97d9f9078419f43d21be24f46b4e5016020166f",
+        "b3be33d09c8ceece1f38f0f84d3784e9595b26b6cd9eb447338ab63b84589493",
+        "7c1617b9dd286ad6641f05fddd1b4bc678df53779497e41b3371138920825d30",
+        "049ac47ba0b4925766be5802b802bef962faa56f5425c9ec334383f74a1424ad",
+        "50489e2581385de3b9da63a976c801b3ad90547d051e9387997eaf8c59957e1a",
+        "7ae61be8ac0d77a6a06da7b178704b96b686700a92565fc953894482e6c7e121",
+        "86cdb8a58d341f6ea1e40054cb020f54c8138d90d36f021a82afdb295033e551",
+        "14208980fd0643c980064b6eca5354920600f1ec011ff5a9a00c98d6e6d763ce",
+        "1f0b992b50838bd78a13e32607fb6b8f1d769855c745416d0c0d03432acd2435",
+        "d5f7ad12d359dcb23bf62b6089c8d5253bd6d8f319155cd498313e86c2ee25da",
+        "d02dde2e6dd4352dfc6b9a00a9fa1c0ffe357f94362529a16f4fd6e91482cc23"
+      ],
+      "images": [
+        {
+          "name": "original-landscape",
+          "width": 512,
+          "height": 256,
+          "rgba": "3a6e86f786497636d75dc7bd0da56136e00fa4b4e00e32a5fe0d97968540730f"
+        },
+        {
+          "name": "walnut-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "04ba1265cfd194aa06b32c9bcff4dbabd73bbbc2b134f95edaf9cb0c80dd250c"
+        },
+        {
+          "name": "walnut-original-cc0",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        },
+        {
+          "name": "walnut-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "c2376c292afae7ee868b910e89d2c7195c265a516f368959fb93dde916be6033"
+        }
+      ],
+      "nodes": [
+        "poker-landscape - Poker linen picture mount",
+        "poker-landscape - Poker original landscape painting",
+        "poker-landscape - Poker satin walnut joinery"
+      ],
+      "materials": [
+        "Poker linen picture mount",
+        "Poker original landscape painting",
+        "Poker satin walnut joinery"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "3690f6b2fa17cedcfd5033b80f17527d41c75d1585a26dd18ab3bda0d2c5fa35"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-pendant.glb",
+    "url": "/models/environments/poker-night/poker-pendant.glb",
+    "originalBytes": 175968,
+    "bytes": 102496,
+    "originalSha256": "024ff055e20d3359cd115a5b24a51d4db47ca0f9dd2a81f82bf3c09279d3189d",
+    "sha256": "38abf9cdc44a81a99350463e739c86395f475dc142fe82d8b9b1b4dd9c17bf1a",
+    "images": 0,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "c824eb4821d0a2de4d54c9244ce7ac9d96df83abf3ebe3f4d64e9a850888fb76",
+        "aaa37911bfebbdd2a6c402044b48fada336dd894908e090950804b64f5bba651",
+        "46e74785fe5d2ceda5e40d8d12657192a2f3b88d17bb532f7260eb2c308ae35c",
+        "dcc6f71b2c16e150dbf8904d28dd45ea172f75083cea1af2433f5b7e29f2ed8d",
+        "4f1b4f51cd75998a56aae9e984163e6b7962d1f1b126a393aa7d80f2985f609d",
+        "4e08f16ceace535c9de10c9c63d9dba7d9bb5ab453e3bb1d98a074a6d64285e8",
+        "2ca899a06a61dcfa55f7fc89d0ba25a9252ffbf90d4396a653600324a63b4013",
+        "aca106e9dcb717cb27a5c1724ee3626e9a609bc5a1984c22018e2d69b7643ddf",
+        "77e1bf33293be08c7e8da6cd5944aada97d912fbc52c51d5e5f6e416f5fb64c6",
+        "34d6b017bb68e73e554eb2f40de3b52b6a431f4e999db85bd0e0d45833f733fe",
+        "ba30c7df379f296211c3c15faaf989c617825e44aee1b04e679f33c54231ada9",
+        "38bd928752a54a719f22cabd3ae46e77f343522bd2231863ca6a177decdc588d",
+        "ca6d867eb0f8d9a825b066472699eb643b67f6f4993cfb23a4077a7f519e5e68"
+      ],
+      "images": [],
+      "nodes": [
+        "poker-pendant - Poker aged satin brass",
+        "poker-pendant - Poker bottle green enamel",
+        "poker-pendant - Poker warm ivory diffuser"
+      ],
+      "materials": [
+        "Poker aged satin brass",
+        "Poker bottle green enamel",
+        "Poker warm ivory diffuser"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "7e7e1542458d641dc5af06bb2964410cb490be5192e36211a0c205be7e491dbf"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-rug.glb",
+    "url": "/models/environments/poker-night/poker-rug.glb",
+    "originalBytes": 18032,
+    "bytes": 9632,
+    "originalSha256": "0d88f223dfa712d71b0ce7ebb094e336c75dd8576fabd2ebb44b6c1e3ca179e6",
+    "sha256": "1300275a067ec1651c7b6dfb0477b76fc52dcac6856759405484677d952f7d24",
+    "images": 2,
+    "meshes": 1,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "691e00acba39f305ef594ef910259e0836e228be6c53af66c90069be005e7cad",
+        "af0ebea3d0fdd9957c2ab54e2f8867d8b20eab20b92b89e2bc2c244d7099d872",
+        "bb23e2effee5faf961b642ead857b7d355e094b97d9fbe4bb9adbbb3e0a2525c",
+        "1b2dc77d9cf312949cba4d866d8f210c3a3e99cba39a5ac7c1b91408712c358a",
+        "4c5f16d785a7f164f58f790087f41dde5157af8794bceaf4aa1e0f5869ac9c29",
+        "a7576658209350ecf4af23bdb5272ac5c233d9353d0c1c5ef5756fbffc1028ad",
+        "114fa03579e15ad9fa622d121635203df273ea21f7a6a731fbcda1a65102b39d"
+      ],
+      "images": [
+        {
+          "name": "rug-weave-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "81fbd4be04d1b4333ef9192804a93dc99a1037423a51a639acc08020387b5083"
+        },
+        {
+          "name": "charcoal-rug-color",
+          "width": 512,
+          "height": 512,
+          "rgba": "e6bac145bb3e7db65fb67f27ff63b456ec7ddbac5c6c6d45e45734b56a6d5b4f"
+        }
+      ],
+      "nodes": [
+        "poker-rug - Poker woven charcoal rug"
+      ],
+      "materials": [
+        "Poker woven charcoal rug"
+      ],
+      "meshes": 1,
+      "animations": 0
+    },
+    "browserSha256": "40fa9f0ab1040152afe17906004a839f4fb8b5c2b0ccbcb52ac0c605c34c5b20"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-sideboard.glb",
+    "url": "/models/environments/poker-night/poker-sideboard.glb",
+    "originalBytes": 814032,
+    "bytes": 562500,
+    "originalSha256": "b145c62a411aa5e98ec109ad7be933e74b4946c1b44f7dc33395c2fa5959db9d",
+    "sha256": "e65a33ea87befc4c8cfe3435c47c11347abde939c24c938256d4b4a46e18ab5f",
+    "images": 3,
+    "meshes": 3,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "5844080fc70077f7252c9093e50ac6b89c08d7e5f8d08f9e11e96624c6dec3b2",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "8d06c64c98fc330982794525b81da2e907e104ef1b5ac0c04a50c03931915cd5",
+        "818b65660feee508846f376284dc03467b88cbbe268ab9007090d04ff972c3a4",
+        "cd8c0fce8594b71986b1adf16acd6fcb03fe46d4b2f36f6c9e4dc9c643445a23",
+        "4adb1623dc6b5b8f277f331699f11ddb366226ef6999e7e59cea2c1ab31cf108",
+        "9fd804e0abd99993236844b7adf3004090c30728f1f63d6941bdaed25a158c8c",
+        "82edda9e07bb5b219e20bd5a72ba7e9eadb3b876b2223272a1c8a357aafc695c",
+        "b3282702418e1f1293e9020292883f106bf7bfe49a22dc877593a29e9c7de09e",
+        "68d682a1aad7587477d3905732ab2346dcd16792894ba17fc5373afc511813b8",
+        "2d7284ff13893d7f2c28630849df687d8c927140055e0f2e204153261d24019d",
+        "3fb74ffd186ce58047053fd95676d4437be4d4d129cd2d9721c898aa8780589b",
+        "342e08e70722b910af22b0a44a939ad461ad0bb8f07d6887bdec41f0b54e6a78",
+        "e2611fb4c4f396cacbc7088e18891b1cf4b21754bf276cf5a15ef2c240d1a187",
+        "3f15f9b2064b34014d78f8f2db5ee2086f21d7fc2d9a823913fdffb5c7a10a73",
+        "70629abfcf4d026590ef38e3920c672077232fe5919347feeb012bb1da02b5e1"
+      ],
+      "images": [
+        {
+          "name": "walnut-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "04ba1265cfd194aa06b32c9bcff4dbabd73bbbc2b134f95edaf9cb0c80dd250c"
+        },
+        {
+          "name": "walnut-original-cc0",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        },
+        {
+          "name": "walnut-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "c2376c292afae7ee868b910e89d2c7195c265a516f368959fb93dde916be6033"
+        }
+      ],
+      "nodes": [
+        "poker-sideboard - Poker aged satin brass",
+        "poker-sideboard - Poker dark fixture details",
+        "poker-sideboard - Poker satin walnut joinery"
+      ],
+      "materials": [
+        "Poker aged satin brass",
+        "Poker dark fixture details",
+        "Poker satin walnut joinery"
+      ],
+      "meshes": 3,
+      "animations": 0
+    },
+    "browserSha256": "5be0c7a3473a9dd1fe402dadf47832db8869713118413721701f4f811bc0852a"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-tumbler.glb",
+    "url": "/models/environments/poker-night/poker-tumbler.glb",
+    "originalBytes": 37204,
+    "bytes": 23400,
+    "originalSha256": "be42811ebb03e63e7f75d3832f4757159fbfd918c6d2fb473e5ff09d9fd9a94b",
+    "sha256": "a9c29f048c35a46134c1521e77907049051d775dc8db49e0df7e3dd50730b0ef",
+    "images": 0,
+    "meshes": 1,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/buffers/0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "d80079e3397a8bad1715ca95af1355efcc01194c8c1608a98d078bcbd8666de5",
+        "a2933c2c14945253a7da84ae770e3ff209e99c24f6f3fe62c42a0a4adff4e9d4",
+        "2494d5712bc5722c8ec45557b58c308255123a44f13544da7e47fedc667aea20",
+        "f7849d6f619cea1fc2435ef600da1c196263820f97050fba03edc1232c866319",
+        "7d0832b8f82c26fb2b7fecdd0d914191c665a01d747b995817cc16da9d2dbd9d"
+      ],
+      "images": [],
+      "nodes": [
+        "poker-tumbler - Poker clear cut crystal runtime alpha"
+      ],
+      "materials": [
+        "Poker clear cut crystal runtime alpha"
+      ],
+      "meshes": 1,
+      "animations": 0
+    },
+    "browserSha256": "1c8b634ae0fd3889b2675ed1c505d23aeaa61aea44d62f219ef95e594e5d4eb8"
+  },
+  {
+    "source": "/models/environments/poker-night/poker-window.glb",
+    "url": "/models/environments/poker-night/poker-window.glb",
+    "originalBytes": 1100752,
+    "bytes": 762780,
+    "originalSha256": "a01a0a53c5de055fb1af843e48206f5ab94d94c51d59e567fdb043c906dd86c3",
+    "sha256": "9ea9df86e339864068b8bcbc4af93550a48ba0fb5a75aea30f05a6497d3137d8",
+    "images": 3,
+    "meshes": 6,
+    "animations": 0,
+    "validation": {
+      "errors": 0,
+      "warnings": 0,
+      "messages": [
+        {
+          "code": "UNSUPPORTED_EXTENSION",
+          "message": "Cannot validate an extension as it is not supported by the validator: 'EXT_meshopt_compression'.",
+          "severity": 2,
+          "pointer": "/extensionsUsed/0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/0/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/1/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/2/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/3/primitives/0/attributes/TEXCOORD_0"
+        },
+        {
+          "code": "UNUSED_MESH_TANGENT",
+          "message": "Tangents are not used because the material has no normal texture.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TANGENT"
+        },
+        {
+          "code": "UNUSED_OBJECT",
+          "message": "This object may be unused.",
+          "severity": 2,
+          "pointer": "/meshes/4/primitives/0/attributes/TEXCOORD_0"
+        }
+      ]
+    },
+    "integrity": {
+      "views": [
+        "5844080fc70077f7252c9093e50ac6b89c08d7e5f8d08f9e11e96624c6dec3b2",
+        "67794db716483929217321b360c45af30c3c583b50260aebad4369069246c026",
+        "8d06c64c98fc330982794525b81da2e907e104ef1b5ac0c04a50c03931915cd5",
+        "561c80e42cd83d67ce94ff293fe45afb62ca1ad3690bb01d6fa4670bec9e29fc",
+        "4c3fe7849608897332447559c7cac690467ca4635ee9f9c5d453acfe5d22aae7",
+        "36b051c86895ca115b909043d51df5fa98373dc2d03fcbd9727137eacf45d2a9",
+        "b8eda5aba31f2352d964a7081db3ed8ece1aa5ae8120ef519602248c48dd0fac",
+        "9a89c25881b68eb60193e812289c3d9164c02f4ee40a0b4d9a7c520b9bc7a4d1",
+        "6d5837fc855ed5c6129bb1dbada7e4d633b2af4365131e28d95257c29f330789",
+        "c799037b792e2119f1384344a452d2b8c5a8ec9e1d19a4550d70f800b95d1d07",
+        "c1f718b56a14a53b9b3a2ec88dc14f43fdbe3e1e5c3dc652f120937c7094b441",
+        "a2c5d7559246e57cc801c191f2146e501e3d08891a100708d7e69341e864407c",
+        "a60fe9b0da549675cc3cc57b77b16f2424b4cd35a7b43ef99c0fc800923ec363",
+        "56f9f3a01b027249608b473ed87546780938d67c31c7ca1ba0a1f8d95adce3a4",
+        "7d3b8bf6b5fcd1afc48fd6534cd7c4469e39bac21770ffbd5f2b27b0c5b22042",
+        "538d856f438d1671dbb64b40b0492e3c2a60bc4b05ce0b98fd3c2ed039bf5abf",
+        "44be511edc62444243b9f686e97aa3f2a17611077247cfad7881a4c3cc2d9c09",
+        "2959301c74f56dcfb2b38ba2be12c0a3d5364b8e0e95cf657c7cd9c2145fc2a3",
+        "be6a6cb317cafc4a175cdceaa99c7b29af1a7cacde33fd4eda8165eb7d67b9bb",
+        "55cf59abb892a7183c124d0d22cf417dfc4e3914d7bc23d3bd538d090a70b968",
+        "44be511edc62444243b9f686e97aa3f2a17611077247cfad7881a4c3cc2d9c09",
+        "2959301c74f56dcfb2b38ba2be12c0a3d5364b8e0e95cf657c7cd9c2145fc2a3",
+        "be6a6cb317cafc4a175cdceaa99c7b29af1a7cacde33fd4eda8165eb7d67b9bb",
+        "55cf59abb892a7183c124d0d22cf417dfc4e3914d7bc23d3bd538d090a70b968",
+        "1d674619899507b73777936fedda98a562800e4b5186730f730853d55476403e",
+        "3147846bdcd43dbab9e6c959b514eaa35e1ecf957e31d6942ce366d4c31f815a",
+        "751092abf069b98ed00eccae7049c097ee2d304fd65932d5c69d9f66a3852e37",
+        "d63a0e5f03f2e9c1a5696e32ef44a382213ff68cb682445d051bc14dc8fa28bf"
+      ],
+      "images": [
+        {
+          "name": "walnut-normal",
+          "width": 512,
+          "height": 512,
+          "rgba": "04ba1265cfd194aa06b32c9bcff4dbabd73bbbc2b134f95edaf9cb0c80dd250c"
+        },
+        {
+          "name": "walnut-original-cc0",
+          "width": 512,
+          "height": 512,
+          "rgba": "d30b2ef63747ed257d0215a853a464922ba03a4e5feae4b124fbbc4b56031ded"
+        },
+        {
+          "name": "walnut-roughness",
+          "width": 512,
+          "height": 512,
+          "rgba": "c2376c292afae7ee868b910e89d2c7195c265a516f368959fb93dde916be6033"
+        }
+      ],
+      "nodes": [
+        "poker-window - Poker aged satin brass",
+        "poker-window - Poker aged satin brass.002",
+        "poker-window - Poker clear cut crystal runtime alpha",
+        "poker-window - Poker olive woven drapery",
+        "poker-window - Poker olive woven drapery.001",
+        "poker-window - Poker satin walnut joinery"
+      ],
+      "materials": [
+        "Poker aged satin brass",
+        "Poker aged satin brass.002",
+        "Poker clear cut crystal runtime alpha",
+        "Poker olive woven drapery",
+        "Poker olive woven drapery.001",
+        "Poker satin walnut joinery"
+      ],
+      "meshes": 6,
+      "animations": 0
+    },
+    "browserSha256": "fe0cff4f3985f884b887cec4b37f077f6c288e64127dfc16a50f33ab1e78a435"
+  },
+  {
     "source": "/models/pieces/checkers/checker.glb",
     "url": "/models/pieces/checkers/checker.glb",
     "originalBytes": 595532,

@@ -206,6 +206,68 @@ original procedural gradient; no third-party image is added. The authored
 furniture below supplies the chair, shelf and lamp. The AI-generated approval mock-up is a design
 reference and is not used as a runtime asset.
 
+Poker Night (`public/rendering/rooms/poker-night-theme.js`) reuses the credited
+CC0 walnut map, original Cozy plaster maps and original rubber-plant GLB below.
+Paneled walls, beveled leather chairs, sideboard, carafe/glasses, pendant, curtain
+folds, woven rug and landscape pictures are original procedural project artwork
+under the repository license. Rug/landscape canvases are 512px desktop and 256px
+phone maximum; contact shadows reuse the existing original gradient. The initial procedural pass included no new
+third-party asset or replacement GLB. The built-in imagegen approval
+concept and its full prompt are preserved in `docs/mockups/poker-night-concept.*`
+as design references only; neither is used by the runtime.
+
+The companion `3d_models/original/poker_night_v1/` Blender redesign is a later
+approved source for eight bundled models, preserving the owner-edited curtains
+and tiebacks. Its nine model/material masters and
+leather/rug/landscape/detail maps are original project work under the repository
+license, reusing the credited CC0 walnut color and the unchanged original rubber
+plant for review context. Actual Cycles renders, packed `.blend`, source scripts
+and provenance/geometry reports are retained there. No new third-party asset was
+downloaded. Eight GLBs are published under `models/environments/poker-night/`, with two walnut
+detail maps in the shell palette. The original source remains unchanged.
+
+The companion `3d_models/original/medieval_tavern_v1/` approved Blender source contains
+original project geometry and procedural stone/plaster/cloth materials, a modeled
+cup emblem and actual Cycles room/seated review renders, under the repository
+license. It reuses the already credited CC0 oak image and original Cozy oak normal
+derivative; both are packed without altering the originals. No external asset,
+font or image-generation insert was downloaded. Eight optimized GLBs are bundled
+under `models/environments/medieval-tavern/`; four shell maps are bundled as
+`textures/tavern-{stone,plaster}-{color,normal}.png`. Procedural review relief is
+adapted to original periodic 512px color/normal maps; clear glazing uses alpha
+PBR. The approved `.blend` and its materials remain unchanged. See the bundled
+model directory's README for source hash, scope and portability details.
+
+The Tavern window revisions preserve the owner's unsaved horizontal shutter
+placement in an input snapshot and shift the leaves clear of the wall in a
+separate `.blend` copy. The current `medieval-tavern-window-reveal.blend` mirrors
+the reviewed left shutter for the right leaf, as requested in the second fit review.
+The original approval file/materials and other seven model derivatives are
+preserved; provenance hashes are in the bundled model README and companion fit
+reports. Adaptive runtime trestles are original project rendering geometry.
+
+The approved companion Modern Bar source in
+`Open-Tabletop_Asset_Builders/3d_models/original/modern_bar_v1/` contains original
+geometry for the bar/shelves, leather chairs, booth, stools, steel table bases,
+brick shell, window, illustrative 3D skyline, lights, plant and unbranded dressing.
+New geometry/procedural materials are project originals under the repository
+license. It reuses and packs the unchanged Luke.RUSTLTD CC0 walnut map credited
+above; lettering uses Blender's built-in font. No external model/photo/font or
+generated-image insert is downloaded. Source notes and actual Cycles room/seated
+renders are retained. Thirteen losslessly optimized GLBs, including the approved
+rear-wall door/nook additions, are bundled under
+`models/environments/modern-bar/`; procedural review relief becomes original
+periodic 512px normal/roughness maps inside derivative GLBs, retaining fine leather
+grain. Alpha glazing replaces transmission. The runtime shell reuses the credited
+walnut and original Tavern plaster/stone normal maps. No review light, table,
+fixed chair roster or city backdrop is imported. The approved/editable `.blend`
+files and original materials remain unchanged; source/export hashes and asset
+scope are recorded in the bundled README and companion export report.
+The original project `modern-bar-detail-fit.blend` revision supplies only the
+corrected chair and table pendant: surface-fitted piping/rearward back lean and
+smooth satin brass. The other nine assets retain the approved source. Per-asset
+hashes identify both sources; no additional external asset or license is introduced.
+
 The companion `Open-Tabletop_Asset_Builders/3d_models/original/cozy_room_v1/` asset
 study reuses the unchanged oak color image and new normal/roughness derivatives.
 Its chair, game shelf, floor lamp and woven-linen maps were created for Open Tabletop
@@ -340,3 +402,13 @@ wood attribution covers the reused maps; no new third-party source is introduced
   [the SDK provenance](../public/vendor/colyseus-README.md).
 - Self-hosted UMD global, with no CDN/build step or new CSP permission. The
   [upgrade record](COLYSEUS_018_ASSESSMENT.md) covers server/browser compatibility.
+
+The companion `room_backwalls_v1/` review adds original door/nook geometry using
+the existing project materials and credited wood maps above. It directly reuses
+the corrected Tavern window geometry and material data. No external model, image,
+font or texture is downloaded. Editable sources and input/helper hashes are kept
+with the review reports. The user approved these studies on 2026-10-17. Three
+new optimized derivatives are now bundled: Modern Bar door/nook and Poker Night
+door. Tavern reuses its existing corrected window GLB. Portable alpha and original
+PBR adaptations change derivatives only; source files retain their authored
+materials. The model READMEs and companion runtime report contain exact hashes.

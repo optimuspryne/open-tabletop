@@ -2467,9 +2467,10 @@ The read query explicitly selects `table_shape` and `table_rim_wood`, mapped to
 even when `scene` is null; a saved scene is not required to restore them. Missing
 values retain the existing `rect` and `mahogany` defaults. PostgreSQL regression
 coverage saves and reloads a hex table with a walnut rim and no scene snapshot.
-`room_environment` maps to the shared `environment` (`standard` or `cozy`, default
+`room_environment` maps to the shared `environment` (`standard`, `cozy`, `poker-night` or `medieval-tavern`, default
 Standard); `room_lighting` maps to independently saved `lighting`. Migration 024
-adds the checked environment column. Separate-room and fresh-connection integration
+adds the checked environment column; migration 025 extends the whitelist for
+Poker Night without changing stored choices. Separate-room and fresh-connection integration
 checks verify style persistence without a game snapshot.
 
 **Users.** `publicUser` shape: `{id,username,email,avatar,isAdmin,hostStatus,
@@ -3280,7 +3281,55 @@ and messages. Component parity exercises the real settings markup in desktop and
 
 ## `public/rendering/cozy-room.js` — cozy room prototype
 
+The fourteen-theme backlog and approved Poker Night design are tracked in
+[PLAN_ROOM_THEMES.md](PLAN_ROOM_THEMES.md). Poker Night is registered through
+`rooms/poker-night-theme.js`, reusing the same lifecycle, assembly, surface helpers
+and occupied seating. Its procedural walnut/olive room, leather chairs, pendant,
+sideboard, rug and landscapes reuse credited wood/plaster maps and the rubber-plant
+GLB. The first procedural pass added no new GLB; approved Blender additions
+are described below. No light, gameplay gesture or table geometry is introduced.
+Its explicit matching finish is Walnut and green `#1e5c3f`; table shape, dimensions,
+lighting and sky remain independent. Apply migration `025_poker_night.sql`, restart
+the server and refresh clients. See [ROOM_THEMES.md](ROOM_THEMES.md#poker-night)
+for device/resource behavior. Other proposed themes remain unimplemented.
+
+The approved Blender-authored Poker Night redesign now supplies eight furnishing
+GLBs, preserving the owner-edited curtains/tiebacks; sources and actual renders
+remain in companion `poker_night_v1/`. See [review status](PLAN_ROOM_THEMES.md#blender-asset-redesign-review).
+
 This entry point is now a compatibility wrapper around the room-theme runtime.
+The approved Medieval Tavern theme uses eight GLBs from companion
+`medieval_tavern_v1/`, with actual room/seated renders and preserved editable source.
+`rooms/medieval-tavern-theme.js` registers `medieval-tavern` through the same room
+owner, with bounded adaptive shell geometry and shared occupied seating. Its
+explicit matching finish is Oak / `#354c36`. Review lights and table geometry are
+not imported. Apply migration 026 through the migration role, restart and refresh; see
+[review status](PLAN_ROOM_THEMES.md#medieval-tavern-blender-mockup).
+
+The subsequent fit correction adds adaptive decorative trestles beneath the
+existing tabletop, clear-standing shutters and recessed exterior plaster behind
+the casing. The current Blender derivative mirrors the good left shutter for
+the right leaf; earlier source snapshots retain the owner's horizontal edit.
+The rough plaster opening ends within solid timber on all four sides, keeping
+plaster reveal faces behind the visible jamb/lintel faces. Browser regressions
+verify ray-hit separation at three depths and mirrored shutter bounds.
+This correction only needs a client refresh; migration 026
+still applies to first installing the theme.
+The approved Modern Bar sources in companion `modern_bar_v1/` and
+`room_backwalls_v1/` supply thirteen
+bundled GLBs to registered `modern-bar` / **Modern Bar**. Its dynamic shell and
+occupied chairs use the same owners. Steel pedestal scenery fits the shared
+outline and actual tabletop underside; window reveal edges end within the frame.
+Hex room enclosures derive their depth from the shared outline, including wide
+hexes whose saved depth differs. Matching explicitly applies Walnut / `#294b4c`.
+Review table, lights and city are excluded; saved table/lighting/sky stay independent.
+Apply migration 027 through the migration role, restart and refresh clients.
+The chair/table-pendant replacements come from a separate Blender detail revision:
+surface-fitted back piping, slight rearward lean and smooth satin brass. Their
+canonical URLs and runtime owners are unchanged; this correction needs only a
+client hard refresh, with no additional migration or restart.
+See [approval and verification](PLAN_ROOM_THEMES.md#modern-bar-integration) and
+[detail correction](PLAN_ROOM_THEMES.md#modern-bar-chair-and-pendant-correction).
 Production client code uses `createRoomBackdrop` from `rooms/room-backdrop.js`
 to follow the server-owned `environment`, resolve `rooms/room-themes.js` and switch
 `createRoomEnvironment` instances with cleanup. Cozy's six
@@ -3317,7 +3366,7 @@ Refresh clients after updating; no server restart/migration is needed.
 
 Select **Room Settings → Table Size & Color → Room style → Cozy game room**.
 The public schema field `State.environment` defaults to `standard`. The guarded
-`roomEnvironment {environment: 'standard'|'cozy'}` message requires the existing
+`roomEnvironment {environment: 'standard'|'cozy'|'poker-night'|'medieval-tavern'}` message requires the existing
 GM/owner gameplay access, rejects malformed/extra fields and unknown IDs, and
 ignores unchanged values. Save/load uses `rooms.room_environment` through the
 existing ordered/debounced save path; migration `024_room_environment.sql` adds a
@@ -3328,9 +3377,9 @@ provides the canonical options/normalizer without importing browser assets.
 Apply migration 024 through the configured migration role, restart the server and
 refresh browsers. Fresh installs include it in the flattened schema baseline.
 
-All **102** bundled GLBs now ship in their lossless form at canonical
+All **132** bundled GLBs now ship in their lossless form at canonical
 URLs, including `cozy-game-shelf.glb` (7,485,328 bytes). Total GLBs are
-**65,934,988 bytes**, versus 101,764,028 before compression (35.2% smaller before
+**89,086,064 bytes**, versus 140,319,296 before compression (36.5% smaller before
 HTTP encoding). Duplicate originals and temporary `models/lossless/` and
 `-lossless.glb` paths were removed at the owner's request, reclaiming 100.12 MB
 from the comparison install. Authoring sources remain in the separate asset
@@ -4259,3 +4308,17 @@ authoring only. Existing pickup/drop cues and uploaded originals are unchanged.
 
 See [implementation and manual checks](DESIGN_placards_sounds.md). Restart the server for
 migration 021 and refresh browsers; no new runtime dependency or environment setting is required.
+
+The user approved the three rear-wall Blender layouts on 2026-10-17. They are now
+integrated locally: Modern Bar glass entry/left corner nook, Poker Night windowed
+walnut door and a second instance of the corrected Tavern window. Three additional
+canonical GLBs use existing loading/resource owners; the two Tavern placements
+share one model load. `rooms/wall-openings.js` supplies `wallOpeningPanels` to
+clip plaster, wainscot and trim around apertures. Frames hide reveal boundaries;
+wall children inherit cutaways. Modern nook coordinates adapt to room extent,
+with named half-width/margin/inset values preserving table and seating clearance.
+Door glazing has no depth write/shadows and is omitted on phones. Decorative doors
+add no interaction, collider, server state or runtime light. Selected sky/lighting,
+existing source materials and previous curtain/chair/window corrections remain.
+This addition needs only a client refresh, with no extra migration/restart. See
+[approved integration and verification](PLAN_ROOM_THEMES.md#rear-wall-integration).

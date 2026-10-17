@@ -563,7 +563,7 @@ importing a room singleton:
   The client forwards synchronized refs and publishes its
   built-in catalog; the library retains asset selection and authorization-aware presentation.
 - **`public/rendering/rooms/`** — bundled room-theme framework, currently shipping
-  shared per-room Standard/Cozy selection. `room-backdrop.js` switches/disposes
+  shared per-room Standard/Cozy/Poker Night selection. `room-backdrop.js` switches/disposes
   the active runtime from public `State.environment`; `room-themes.js` resolves static
   theme IDs. `room-environment.js` owns lifecycle, dimensions, shadow bounds and
   cutaways; `room-assembly.js` owns batching/model replacement/device policy;
@@ -580,6 +580,46 @@ importing a room singleton:
   `rooms.room_environment` (migration 024) defaults to Standard. Portable scenes,
   game snapshots and reset leave this per-room configuration alone. Old preview URLs
   cannot override shared state. See [ROOM_THEMES.md](ROOM_THEMES.md).
+  [PLAN_ROOM_THEMES.md](PLAN_ROOM_THEMES.md) records the proposed expansion and
+  approved Poker Night design. `poker-night-theme.js` supplies a second six-component
+  definition using the shared surface geometry, assembly and seating owners, with
+  original procedural fallbacks, eight approved Blender furnishing GLBs and reused
+  wood/plaster textures and plant GLB.
+  It adds no lighting override, physics, picking or input path. Migration 025
+  extends the room-environment constraint; apply it, restart and refresh clients.
+  Blender authoring sources remain separate from runtime derivatives;
+  [their plan](PLAN_ROOM_THEMES.md#blender-asset-redesign-review) records approval,
+  publication and the owner-edited curtains/tiebacks.
+  The approved [Medieval Tavern source](PLAN_ROOM_THEMES.md#medieval-tavern-blender-mockup)
+  supplies eight optimized furnishing GLBs to `medieval-tavern-theme.js`. It reuses
+  the same lifecycle, occupancy, late-load cleanup, phone policy and cutaways;
+  dynamic shell geometry and bounded stone/post instancing retain table resizing.
+  Static fire/candle emission adds no light or simulation. Review lighting and
+  the trestle table do not alter the app's lighting, table, physics or shared-state
+  owners. Additive migration 026 extends the public room-environment whitelist.
+  Tavern trestles are decorative assembly geometry fitted against shared
+  `tableOutline`/`inTable` and the existing tabletop underside. They add no server
+  collider or input path. Window wall thickness and framing exclusion account
+  for the complete authored surround; the revised shutter model comes from a
+  separate copy preserving the owner's unsaved state and original approval source.
+  The latest derivative mirrors the right shutter to the reviewed left leaf.
+  Rough-opening edges end within solid timber on all four sides; real-model
+  reveal ray tests prevent coincident plaster/jamb faces as well as depth overlap.
+  The approved Modern Bar sources in companion `modern_bar_v1/` and
+  `room_backwalls_v1/` supply thirteen
+  optimized GLBs to `modern-bar-theme.js` through the same assembly/seating
+  owners. The shell uses bounded instanced brick, shared walnut floor/panels,
+  a recessed window opening and adaptive decorative steel pedestals. Attached
+  furnishings follow their wall/ceiling cutaways. Review lights/table/city and
+  fixed seat roster are excluded; saved sky/lighting/table remain independent.
+  A separate Blender detail revision supplies the corrected chair and table
+  pendant. Back piping follows the beveled cushion; satin brass has no coarse
+  relief maps. These are model replacements through existing owners, with no
+  new runtime helper, physics, lighting or server-state behavior.
+  Migration 027 extends the environment constraint; matching is Walnut/deep teal.
+  Room enclosure depth now follows shared `tableOutline` for width-sized hexes,
+  preventing the walls/floor from clipping wide hex tables with a small saved
+  depth. Other shape sizing and server geometry are unchanged.
   The client injects a `GLTFLoader` and forwards table dimensions/shape during
   hydration and state patches, then applies cutaways after camera updates and before
   rendering. Supports reuse shared `inTable`; cleanup reuses `disposeHierarchy`
@@ -1918,7 +1958,7 @@ room-state loading. Their restoration is independent of a scene snapshot, so an 
 room retains those choices. When present, a scene can still apply its own saved table settings
 afterward; a scene without lighting leaves the current lighting unchanged.
 Room style is public `State.environment`, persisted as `rooms.room_environment`
-(migration 024, Standard default). Its GM/owner-guarded `roomEnvironment` message
+(migration 024, extended by 025 for Poker Night, Standard default). Its GM/owner-guarded `roomEnvironment` message
 uses the existing gameplay capability gate and save queue. It stays outside both
 portable scenes and game snapshots; loads and reset preserve the destination
 room's style. Browser backdrop owners follow it, disposing old scenery on switches.
@@ -2791,3 +2831,17 @@ Tile sound variants reuse public material-kind metadata and the existing server-
 boundary. No concealed face or deck order is included in sound messages. Group flips deduplicate
 by material; shuffle animation is unchanged. Six original static OGGs are generated offline and
 played with the existing per-viewer volume/mute preferences. See [checkpoint](DESIGN_placards_sounds.md).
+
+The user approved the three rear-wall Blender layouts on 2026-10-17. They are now
+integrated locally: Modern Bar glass entry/left corner nook, Poker Night windowed
+walnut door and a second instance of the corrected Tavern window. Three additional
+canonical GLBs use existing loading/resource owners; the two Tavern placements
+share one model load. `rooms/wall-openings.js` supplies `wallOpeningPanels` to
+clip plaster, wainscot and trim around apertures. Frames hide reveal boundaries;
+wall children inherit cutaways. Modern nook coordinates adapt to room extent,
+with named half-width/margin/inset values preserving table and seating clearance.
+Door glazing has no depth write/shadows and is omitted on phones. Decorative doors
+add no interaction, collider, server state or runtime light. Selected sky/lighting,
+existing source materials and previous curtain/chair/window corrections remain.
+This addition needs only a client refresh, with no extra migration/restart. See
+[approved integration and verification](PLAN_ROOM_THEMES.md#rear-wall-integration).

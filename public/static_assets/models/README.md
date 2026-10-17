@@ -1,8 +1,8 @@
 # Bundled lossless GLBs
 
 The app ships one GLB per model, at the existing canonical `/models/...` URL.
-All 102 bundled GLBs use the approved lossless encoding: **65,934,988 bytes**,
-versus 101,764,028 bytes before compression (35.2% smaller before HTTP encoding).
+All 132 bundled GLBs use the approved lossless encoding: **89,086,064 bytes**,
+versus 140,319,296 bytes before compression (36.5% smaller before HTTP encoding).
 The extra uncompressed app copies and temporary `lossless/` / `-lossless.glb`
 paths have been removed at the owner's request. Blender sources and authoring
 exports remain in the separate asset workspace; they are not deployed.
