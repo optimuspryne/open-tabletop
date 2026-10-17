@@ -1051,3 +1051,17 @@ authorized committing the changes and preparing the next release. This accepts
 the final room appearance; device/network conditions and unrelated multiplayer
 checks were not separately reported. Release preparation is local; pushing and
 publication require separate authorization.
+
+The approved room-theme work is committed as `1ee4de1`. Version 0.23.0 release
+metadata, upgrade notes and final preparation checks are tracked in
+[the release preparation record](RELEASING.md#0230-preparation-and-verification).
+The companion Blender source workspace has no Git repository; its preserved
+editable sources remain there, with hashes/provenance in the committed app records.
+No tag, push or publication is authorized by this preparation.
+
+Release preparation validation is complete: Node 26 host quality gate (1,229
+tests), disposable PostgreSQL (25), zero production advisories, version/image/note
+extraction and documentation checks pass. A fresh actual Node-24 Alpine image
+passes 61 selected tests as UID 100 on linux/amd64. Runtime/asset bytes from the
+feature commit are unchanged. Multi-arch publication and deployed upgrade/rollback
+remain separate operator steps; nothing is tagged, pushed or deployed.

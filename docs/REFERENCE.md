@@ -76,14 +76,18 @@ For staged implementation status and **remaining proposed** work, see [DESIGN_ne
 The participation foundation, durable GM time-outs, self-service spectators and private deck browsing are implemented; the remaining suggested messages,
 modules and schemas are not current API contracts.
 
-For the unreleased shared Room style selector, see the
-[room-style upgrade notes](RELEASING.md#unreleased-room-style-upgrade): migration 024,
+For the shared Room style selector, see the
+[room-style upgrade notes](RELEASING.md#0230-room-style-upgrade): migrations 024–027,
 server restart and browser refresh are required; existing rooms default to Standard.
 
-For release 0.22.0, see the [upgrade and verification guide](RELEASING.md#upgrading-to-0220):
-restart the server and refresh clients, run `npm ci` for source installs, and reselect/recalibrate
-existing Wordy boards for their revised height/grid. No new migration or required deployment
-configuration is introduced. Release preparation does not establish manual device or multiplayer acceptance.
+For prepared release 0.23.0, see the [upgrade and verification guide](RELEASING.md#upgrading-to-0230):
+Node 24+ for source/native hosts, locked `npm ci`, additive migrations 024–027, a
+coordinated server restart and all-client refresh for Colyseus 0.18. Existing rooms,
+table/lighting/sky, accounts and saved content are preserved; no new service, port
+or required environment variable is introduced. The version bump adds no runtime
+function/helper. Publication, multi-arch and deployed upgrade/rollback acceptance
+remain separate from local preparation. Older Wordy installations must still follow
+the [0.22.0 recalibration notes](RELEASING.md#upgrading-to-0220).
 
 For release 0.21.1, see the [patch upgrade guide](RELEASING.md#upgrading-to-0211):
 server restart only, with no new migration or configuration requirement.

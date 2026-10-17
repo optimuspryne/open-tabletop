@@ -3,7 +3,7 @@
 Updated **2026-10-16**, app **0.22.0**. The coordinated upgrade is implemented
 locally. No push, release, deployment, database migration or UI design change is
 part of this work. Node 24 remains the production/CI target and minimum runtime.
-See [verification and rollout](RELEASING.md#unreleased-colyseus-018-upgrade) for
+See [verification and rollout](RELEASING.md#0230-colyseus-018-upgrade) for
 completed checks and remaining manual acceptance.
 
 ## Exact published selection
@@ -127,7 +127,7 @@ for its library binding in the scene that previously raced module initialization
 
 Exact artifact verification, compatible peer resolution, isolated clean install,
 unit/browser/database/production-image results are recorded in the
-[release guide](RELEASING.md#unreleased-colyseus-018-upgrade). Hosted CI has not run
+[release guide](RELEASING.md#0230-colyseus-018-upgrade). Hosted CI has not run
 for these unpushed changes. On 2026-10-16, the user reported that everything still
 functions as expected after the local multiplayer smoke-test handoff and approved
 a local commit; individual scenarios and device/network conditions were not

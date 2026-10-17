@@ -8,6 +8,20 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-10-17
+
+**Upgrade:** source/native installs now require **Node.js 24+**. Back up database/uploads,
+apply additive migrations **024–027** through the configured migration role, restart the
+updated server and refresh all clients together for Colyseus 0.18. Existing rooms default
+to Standard; existing table/lighting/sky settings and saved games are retained. See the
+[upgrade and validation guide](docs/RELEASING.md#upgrading-to-0230).
+
+This release adds Cozy, Poker Night, Medieval Tavern and Modern Bar room styles,
+Blender-authored furnishings and adaptive cutaways, table/skybox polish, current-model
+library previews and a single lossless canonical catalog of 132 GLBs (89,086,064 bytes).
+Implementation-stage notes below retain the source/provenance and verification history;
+final sources, acceptance and current counts are recorded in the room-theme plan.
+
 ### Changed
 - Furnish the approved rear walls: Modern Bar gets a black-framed glass door and
   small teal booth/cafe table on the reverse viewer's left; Poker Night gets a
@@ -59,23 +73,23 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
 - Add Blender review studies for the three empty rear walls: a glazed Modern Bar
   entry and compact teal corner booth/table, a windowed walnut Poker Night door,
   and a second corrected Medieval Tavern window. Keep current sources and runtime
-  assets intact; design approval and integration remain pending.
+  source assets intact. The final layouts were subsequently approved and integrated.
 - Add an editable Modern Bar mockup authored through background BlenderMCP,
   with actual Cycles room/seated renders: walnut slats, dark stone bar, brass,
   backlit bottles, exposed brick, tan leather chairs, teal booth and evening window.
   Preserve the live unsaved Tavern source. Record design/provenance/source checks;
-  visual approval and runtime integration remain pending. The user confirmed the
+  the final approved mockup is integrated with its source preserved. The user confirmed the
   preceding Tavern window fixes look good and flickering is gone.
 - Add an editable BlenderMCP Medieval Tavern mockup in the companion asset
   workspace, with actual Cycles room/seated renders: oak framing and furniture,
   limestone hearth, leaded window, bar, barrels and iron candle wheel. Record
-  source checks/provenance and remaining approval/export/integration work.
-  This review slice adds no runtime theme, bundled model, physics or lighting change.
+  source checks/provenance and the later approved integration. The review stage
+  itself changed no runtime theme, bundled model, physics or lighting.
 - Add an editable BlenderMCP-authored Poker Night asset redesign and actual
   chair/room/furnishings Cycles review renders in the companion asset workspace.
-  Record source provenance, material/UV/frame checks and pending approval/export
-  gates. The app's procedural furnishings and bundled assets remain unchanged by
-  this review slice; earlier runtime test results do not validate the new models.
+  Record source provenance and material/UV/frame checks. The later approved
+  Blender derivatives replace the initial procedural room furnishings; the review
+  stage itself preserved runtime assets.
 - Record fourteen room-theme concepts in `docs/PLAN_ROOM_THEMES.md`, the approved
   Poker Night concept/prompt, implementation decisions and verification gates.
 - Move the living hardening plan into `docs/` and update relative links; preserve
@@ -146,7 +160,8 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   chairs at occupied seats, curtains, sideboard, green pendant, framed landscapes,
   plants and a charcoal rug. Reuse the existing theme lifecycle, batching,
   cutaways, surface geometry, phone policy and credited textures/plant model;
-  new furnishings are procedural. Room style is shared and saved; optional
+  final furnishings use nine Blender-authored GLBs, including the rear door.
+  Room style is shared and saved; optional
   **Use matching table** applies Walnut/green felt while preserving shape, size,
   lighting and sky. Apply migration 025, restart the server and refresh clients.
   Full check (1,182 tests), component, seven-device and database integration
@@ -185,7 +200,7 @@ See [RELEASING.md](docs/RELEASING.md) for what each version bump means and how r
   saved URLs, server measurements and uploaded-model loading remain compatible.
   No quantization, simplification, texture downscaling or CSP changes. Backups
   add disk space; decoded GPU memory stays the same. Refresh clients. See the
-  per-model report and rollback notes in `models/lossless/README.md` and
+  current per-model manifest and publishing notes in `models/README.md` and
   `docs/ART_DIRECTION.md`.
 - Cozy now loads a 7.49 MB lossless Meshopt/WebP shelf instead of the 15.94 MB
   original, reducing its unencoded download by 53%. The original remains bundled
@@ -2184,7 +2199,8 @@ Initial public release.
   a Portainer-friendly configuration, and a custom Postgres image that bakes in the
   schema and role initialization.
 
-[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/optimuspryne/open-tabletop/compare/v0.23.0...HEAD
+[0.23.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.22.0...v0.23.0
 [0.22.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.1...v0.22.0
 [0.21.1]: https://github.com/optimuspryne/open-tabletop/compare/v0.21.0...v0.21.1
 [0.21.0]: https://github.com/optimuspryne/open-tabletop/compare/v0.20.0...v0.21.0

@@ -16,12 +16,13 @@ native provisioning. CI also tests the built Alpine image; newer distro runtimes
 remain possible but require deployment verification. Native updates validate the
 service runtime before backup or release activation; they do not install a new Node version.
 
-Release 0.22.0 keeps the existing server/browser ownership and single-instance deployment
-boundaries. Its authored models, card artwork, assisted stacking and hand/fan rendering need
-a server restart and client refresh; no new database migration or required service/configuration
-is introduced. Source dependency and existing Wordy board calibration requirements, automated
-release checks and pending manual acceptance are recorded in the
-[upgrade guide](RELEASING.md#upgrading-to-0220).
+Prepared release 0.23.0 keeps the server/browser ownership and single-instance
+boundaries. Node 24+ and the coordinated Colyseus 0.18 server/browser pair require
+an app restart and client refresh. Additive migrations 024–027 persist room style
+and extend the accepted choices; table/sky/lighting and private saved state retain
+their existing owners. The new scenery remains browser-owned, unpickable and outside
+physics/rules. Version/image metadata, local verification and deployment/rollback
+steps are recorded in the [upgrade guide](RELEASING.md#upgrading-to-0230).
 
 The [living hardening plan](HARDENING_PLAN.md) records the account/host-approval walkthrough
 and proposed session-cookie, CSRF and multiplayer authentication changes. It distinguishes

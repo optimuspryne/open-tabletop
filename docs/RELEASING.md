@@ -8,7 +8,7 @@ exact current artifacts in the [inventory](DEPENDENCY_INVENTORY.md). The
 local migration. Rollout needs a coordinated server/SDK restart and browser refresh,
 with backup/rollback and manual deployment acceptance before release.
 
-## Unreleased Node runtime alignment
+## 0.23.0 Node runtime alignment
 
 The app now requires **Node.js 24 or newer**. `.nvmrc` selects Node 24 for local
 development and all setup-node CI jobs, matching the existing `node:24-alpine`
@@ -73,7 +73,7 @@ No JavaScript application function was added, removed or changed. The shell runt
 guard consolidates the existing version check so provisioning and updates enforce
 the same minimum without new dependencies.
 
-## Unreleased Colyseus 0.18 upgrade
+## 0.23.0 Colyseus 0.18 upgrade
 
 The local implementation pins core **0.18.18**, WebSocket transport **0.18.4** and
 server schema **5.0.40**, with unchanged upstream UMD SDK **0.18.5** (embedded
@@ -179,15 +179,17 @@ blind.
 The version lives in three places that must always agree: `package.json`, the git tag
 (`vX.Y.Z`), and the Docker image tags.
 
-## Unreleased built-in GLB compression
+## 0.23.0 built-in GLB compression
 
 Ship the single compressed GLB at each existing `public/static_assets/models/`
 path, plus `models/manifest.json`, `public/rendering/builtin-model-assets.js`,
 `model-loader.js` and `public/vendor/meshoptimizer/`. Remove obsolete deployed
 `models/lossless/` and `cozy-game-shelf-lossless.glb` copies; deployment by overlay
 alone may otherwise leave their extra disk usage. Do not touch user-upload storage.
-The 101 final GLBs total 64.81 MB, 35.3% smaller than the original catalog. The
-owner approved removing duplicate originals after comparing the lossless versions.
+The initial 101-model compression stage totaled 64.81 MB; the final 0.23.0 catalog
+includes 132 models totaling 89,086,064 bytes versus 140,319,296 raw export bytes
+(36.5% smaller). The owner approved removing duplicate originals after comparing
+the lossless versions. The additional room sources remain in the authoring workspace.
 Saved canonical URLs stay stable. The collider tool reads preserved GLB metadata.
 
 Refresh clients. No new migration, runtime dependency, service, port, restart or
@@ -201,16 +203,22 @@ exports in the companion authoring workspace. The tools/dependencies are exclude
 from the Docker image and need no production installation. Do not run the old comparison
 batch workflow against final compressed files. Source licenses/credits still apply.
 
-## Unreleased room-style upgrade
+## 0.23.0 room-style upgrade
 
 Migration `024_room_environment.sql` adds `rooms.room_environment`, defaulting to
-`standard` with a checked `standard`/`cozy` whitelist. Existing table, lighting,
-scene and account data are preserved. The flattened fresh-install schema records
-migration 024. Use the existing migration-role connection during server startup
-(or apply pending numbered migrations as schema owner if automatic migration is
-disabled), then refresh clients. No new dependency, port, service or environment
-variable is required. Choose Cozy from Room Settings; saved room state supersedes
-legacy `?environment=cozy` preview links.
+`standard`, with the initial Standard/Cozy whitelist. Migrations 025, 026 and 027
+extend the constraint for Poker Night, Medieval Tavern and Modern Bar. The fresh
+baseline records all 27 migrations. Existing room data, accounts, uploads, table
+finish, lighting and sky are preserved. Authorized Room Settings changes are shared
+and saved; matching wood/felt is explicit. Existing rooms default to Standard.
+
+Use the existing migration-role connection during startup, or apply all pending
+numbered migrations with the schema-owner connection if automatic migration is
+disabled. Restart and refresh all clients. No new dependency for scenery, service,
+port, required environment variable, input path or physics rule is introduced.
+The decorative doors do not introduce navigation or colliders. The validated Blender
+sources, lossless asset manifests and user-approved room/rear-wall appearances are
+recorded in [the room plan](PLAN_ROOM_THEMES.md).
 
 ## Cutting a release
 
@@ -268,6 +276,112 @@ the app's least-privilege `DATABASE_URL`). Shipping a schema change is just:
 No manual `psql -f`, and **no db-image rebuild required** — existing deployments pick it
 up on their next `docker compose pull && up`. A deployment can opt out with
 `AUTO_MIGRATE=false` (or by leaving `MIGRATE_DATABASE_URL` unset) and migrate by hand.
+
+## Upgrading to 0.23.0
+
+From 0.22.0, back up the database and uploaded assets, save active games, stop the
+old app, update the locked dependencies/image, restart and **refresh every client
+together**. Source/native hosts require **Node.js 24+** before `npm ci`; check the
+actual service executable (`/usr/bin/node` for the native systemd unit). Docker
+uses Node 24 already. Do not mix Colyseus 0.17 clients and 0.18 servers or expect
+active connections/reconnect reservations to survive the restart. The matching
+new server/schema/transport and vendored browser SDK are included in this source.
+
+Startup applies these additive migrations through the existing migration-role
+connection (`MIGRATE_DATABASE_URL`); the app runtime role stays least-privileged:
+
+| Migration | Purpose | Existing data |
+| --- | --- | --- |
+| `024_room_environment.sql` | Shared, saved room style and initial Cozy option | Existing rooms become Standard; table/lighting/sky settings remain. |
+| `025_poker_night.sql` | Accept Poker Night | Existing environment choices and other fields remain. |
+| `026_medieval_tavern.sql` | Accept Medieval Tavern | Existing environment choices and other fields remain. |
+| `027_modern_bar.sql` | Accept Modern Bar | Existing environment choices and other fields remain. |
+
+If automatic migration is disabled, apply every pending migration with the schema
+owner before starting the new server. Fresh installs use the flattened baseline.
+No manual snapshot conversion, new service, port, required environment variable,
+Compose structure or CSP permission is needed. Keep prior matching app/SDK bits
+and a coordinated database/upload backup for rollback; do not overwrite a published
+tag or restore just one side of the client/server pair.
+
+This release includes the four room styles, independently saved appearance,
+optional matching table finishes, occupied seating, adaptive walls/cutaways,
+Blender furnishings and rear-wall additions, improved default seated framing,
+viewer-local skybox rotation/tilt, table/texture/shadow polish, GLB-based tile
+previews and the public website slideshow. It ships 132 canonical lossless GLBs
+with unchanged saved URLs and no duplicate deployed originals. Remove obsolete
+`models/lossless/` or `*-lossless.glb` files if deployment overlays leave them behind;
+preserve uploaded originals. The website is deployed separately from the app.
+
+### 0.23.0 preparation and verification
+
+Prepared locally on 2026-10-17 after the user accepted the final three room views.
+Feature commit: `1ee4de1`. This preparation changes version metadata, release notes,
+image examples and upgrade documentation only. No application function/helper is
+added, changed or removed by the version bump. No Git tag, push, Docker publication,
+GitHub release, host-runtime replacement or live database migration is performed.
+The read-only remote tag check found `v0.23.0` unused at preparation time.
+
+Current room-integration evidence: all 1,229 code tests plus lint/format/CSS pass;
+all 132 canonical model checks pass on desktop/coarse touch under strict CSP; the
+three changed production-bootstrap scenarios and component companions pass.
+The 18 focused aperture/theme tests, source/raw/canonical hashes, actual-renderer
+captures and final user appearance acceptance are recorded in the room plan.
+Earlier full component, input/device/account/website, disposable database,
+real-server multiplayer and production-image checks are dated in the sections
+above and in their implementation records; they are not relabeled as new runs.
+
+Preparation file inventory:
+
+| Files | Change |
+| --- | --- |
+| `package.json`, `package-lock.json` | Set app/root-lock versions to 0.23.0; dependency declarations/resolutions unchanged. |
+| `docker-compose.yml`, `README.md` | Align published-image examples and current upgrade summary. |
+| `CHANGELOG.md` | Move the existing unreleased work into dated 0.23.0 notes, retain an empty Unreleased section and update compare links; older release entries stay identical. Clarify completed review stages and final Poker models. |
+| This guide | Current upgrade/migration/compatibility steps, version-preparation record and smoke tests. |
+| `docs/REFERENCE.md`, `docs/ARCHITECTURE.md` | Current release ownership and operating requirements. |
+| `docs/COLYSEUS_018_ASSESSMENT.md`, `docs/DEPENDENCY_INVENTORY.md` | Repair anchors after naming the formerly unreleased sections; retain dated dependency/version snapshots. |
+| `docs/PLAN_ROOM_THEMES.md` | Record feature commit and local release-preparation handoff. |
+
+Final preparation checks on 2026-10-17:
+
+- Host Node **26.11.1**, npm **12.2.0**: `npm run check` passes lint, formatting,
+  CSS and all **1,229** tests. This is a newer supported runtime; the production
+  Node-24 image is tested separately below.
+- `npm run test:integration` passes all **25** tests against disposable PostgreSQL,
+  including setup-time migration 024–027 preservation/default/reapplication checks.
+  No live user database is changed.
+- `npm run audit`: **zero** production dependency vulnerabilities.
+- Built the actual Dockerfile with `--pull` and a clean locked production install,
+  locally named `open-tabletop:release-0.23.0-check`. Its **linux/amd64**, Node
+  **24.22.0**, non-root UID **100** image passes all **61** selected tests: the
+  existing CI schema/access/privacy/native Sharp suite plus the four room/aperture
+  test files. Tests run with no network or mounted user storage. The image is not
+  pushed, deployed or used to replace any running container.
+- Package/root-lock versions, all README/Compose image references, unchanged
+  dependency declarations/resolutions, exact workflow `awk` extraction of the
+  nonempty 0.23.0 notes, historical changelog entries, **221** local links,
+  **41** Markdown anchors and `git diff --check`: pass.
+
+No new application code is changed during preparation. The 132-model browser
+checks and three updated room bootstrap runs remain the exact recently tested
+asset/runtime bytes from `1ee4de1`; metadata-only preparation does not require
+repeating the unchanged browser/input/device/website suites.
+Hosted CI, fresh multi-arch images, actual-phone GPU performance and deployed
+upgrade/rollback acceptance remain separate publication/operator checks.
+
+Smoke-test after deployment:
+
+1. Verify migrations 024–027 complete and existing rooms retain Standard/saved
+   room choices, table dimensions, finish, sky/lighting and saved content.
+2. Switch all room styles, join/leave/change seats, use matching finishes explicitly,
+   and inspect doors/windows, corner nook and outside/overhead cutaways. Try narrow,
+   large, round and hex tables on desktop/touch.
+3. With two users, draw/show/return cards, exercise concealed/restricted content,
+   switch roles, reconnect/refresh, save/restart and reclaim private hands using
+   the coordinated 0.18 server/client pair.
+4. Check shelf/window/table GPU performance on representative phones, local skybox
+   controls, library tile previews and the separately deployed website slideshow.
 
 ## Upgrading to 0.22.0
 

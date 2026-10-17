@@ -138,7 +138,7 @@ catalog or alter Blender masters as incidental dependency cleanup.
 1. Runtime alignment is implemented in source: minimum Node 24, `.nvmrc`/CI and
    Docker target 24, fresh Debian/Ubuntu provisioning selects 24, and native updates
    enforce the minimum. Node/npm patch pins remain separate work. See the
-   [runtime upgrade notes](RELEASING.md#unreleased-node-runtime-alignment) for
+   [runtime upgrade notes](RELEASING.md#0230-node-runtime-alignment) for
    validation and remaining hosted/native/container acceptance.
 2. Colyseus 0.18 is implemented locally as one server/schema/browser upgrade.
    Exact stable versions, peer constraints, transitive changes and acceptance limits
